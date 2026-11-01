@@ -37,7 +37,7 @@ export function* inventoryContributions(entity,workspaceId){
 
 // The same delta algebra serves transactional maintenance and the independent
 // full-ledger reconciliation. Only the latter reads every retained fact.
-async function applyContribution(change,item,direction){
+export async function applyInventoryContribution(change,item,direction){
  const place=placeKey(item.place),q='quantity:'+item.resource+':'+place,t='total:'+item.resource;
  const adjust=(value,delta)=>add(value,direction===1?delta:negate(delta));
  const reference=async key=>{let transition;await change(key,previous=>{const before=previous?.count??0,after=count(before,direction);transition=Number(after>0)-Number(before>0);return after?{count:after}:null;});return transition;};
@@ -79,8 +79,8 @@ export class InventoryProjection{
    await writeCatalogueRows(this.store.db,'state',[[slot,wrapped===null?null:this.store.encode('state',slot,wrapped)]]);
    root=await this.tree.change(root,id,wrapped===null?null:hash(wrapped));if(this.tree.writes.size>=128||this.tree.pendingBytes>=1024*1024)await this.flush();
   };
-  if(before)for(const item of inventoryContributions(before,workspaceId))await applyContribution(change,item,-1);
-  if(after)for(const item of inventoryContributions(after,workspaceId))await applyContribution(change,item,1);
+  if(before)for(const item of inventoryContributions(before,workspaceId))await applyInventoryContribution(change,item,-1);
+  if(after)for(const item of inventoryContributions(after,workspaceId))await applyInventoryContribution(change,item,1);
   await this.flush();return root;
  }
  async prepare(head){
@@ -91,7 +91,7 @@ export class InventoryProjection{
   this.check(head);if(!head.stockIndex)return;
   await withScratch(async work=>{
    let count=0;const change=async(id,update)=>{const prior=await work.get(id),value=update(prior?.value??null);count+=Number(value!==null)-Number(!!prior);if(value===null)await work.remove(id);else await work.put(id,{id,value});};
-   for await(const member of this.catalogue.members(head))for(const item of inventoryContributions(await this.catalogue.constraint(head,member),head.workspaceId))await applyContribution(change,item,1);
+   for await(const member of this.catalogue.members(head))for(const item of inventoryContributions(await this.catalogue.constraint(head,member),head.workspaceId))await applyInventoryContribution(change,item,1);
    if(count!==(head.stockIndex.root?.count??0))fail();
    for await(const expected of work.items()){const actual=await this.get(head,expected.id);if(hash(actual)!==hash(expected.value))fail();}
   });

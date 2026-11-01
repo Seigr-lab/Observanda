@@ -105,6 +105,7 @@ import {DashboardTypeQuery} from './dashboard-type-query.js';
 import {RecordTypeQuery} from './record-type-query.js';
 import {DashboardDiscovery} from './dashboard-discovery.js';
 import {workspaceJobs,websitePublisher} from './workspace-jobs.js';
+import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './inventory-maintenance-jobs.js';
 import {WebsiteSites} from './website-sites.js';
 import {WebsiteEditor} from './website-editor.js';
 import {websiteWorkspace,websiteJobQueue,websiteRequest} from './website-workspace.js';
@@ -1253,6 +1254,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation==='status')return json({job:jobSummary(job)});
         if(['retry','cancel'].includes(operation)){const next=await queue.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
         throw new AppError('INVALID');
+      }
+      const maintenance=inventoryMaintenanceRequest(url.pathname,req.method);
+      if(maintenance){
+        const data=await body(req,maintenance.limit);startJobs(context);if(!context.jobs)throw new AppError('ACCESS_LOCKED');
+        return json(await executeInventoryMaintenance(workspace,context.jobs,maintenance.maintenance,data),maintenance.maintenance==='start'?202:200);
       }
       if (req.method === 'POST' && url.pathname.startsWith('/api/publishing/')) {
         const data = await body(req);

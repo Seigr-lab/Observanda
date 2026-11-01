@@ -1,9 +1,11 @@
 import {projectDirectoryChoices} from './project-directory-choices.js';
+import {inventoryMaintenanceUI} from './inventory-maintenance-ui.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('labBookStorage');
 // A selected book owns its commands. Durable status survives navigation;
 // progress is rendered by the activity owner in this same book view.
 export function labBookStorageUI({state,api,esc,field,showDialog,access=operation=>operation(),moved=async()=>{}}){
+ const maintenance=inventoryMaintenanceUI({state,api,esc,access,actions:'lab-book-storage-maintenance',owner:()=>{const owner=state.projectOwner;return owner?.labBookId?{id:owner.labBookId,prefix:'/api/projects/'+owner.projectId+'/lab-books/'+owner.labBookId}:null;}});
  const choices=projectDirectoryChoices({state,api,esc,changed:paintChoices});
  function paintChoices(){const form=document.getElementById('lab-book-storage-form');if(!form||dialogCommand?.kind!=='move')return;const select=form.elements.projectId,previous=select.value,rows=choices.rows('book-parents');select.innerHTML='<option value="">'+esc(text('selectProject'))+'</option>'+rows.map(row=>'<option value="'+row.projectId+'">'+esc(row.summary?.title??row.projectId)+'</option>').join('');select.value=previous;choices.paint(form,'book-parents');}
  let context,entries=new Map(),dialogCommand=null;
@@ -37,9 +39,10 @@ export function labBookStorageUI({state,api,esc,field,showDialog,access=operatio
  }
  setInterval(()=>{for(const entry of entries.values())if(host(entry)&&!entry.pending&&active(entry))void load(entry);},1500);
  return {
-  view(){const entry=selected();return entry?'<details class="panel" data-lab-book-storage="'+entry.id+'"'+(entry.open?' open':'')+'><summary>'+esc(text('title'))+'</summary><div data-transfer-fields></div></details>':'';},
-  bind(){const entry=selected(),node=entry&&host(entry);if(!node||node.dataset.bound)return;node.dataset.bound='true';paint(entry);node.addEventListener('toggle',()=>{if(!node.isConnected)return;entry.open=node.open;if(node.open)void load(entry);});if(entry.open)void load(entry);},
+  view(){const entry=selected();return entry?'<details class="panel" data-lab-book-storage="'+entry.id+'"'+(entry.open?' open':'')+'><summary>'+esc(text('title'))+'</summary><div data-transfer-fields></div></details>'+maintenance.view():'';},
+  bind(){maintenance.bind();const entry=selected(),node=entry&&host(entry);if(!node||node.dataset.bound)return;node.dataset.bound='true';paint(entry);node.addEventListener('toggle',()=>{if(!node.isConnected)return;entry.open=node.open;if(node.open)void load(entry);});if(entry.open)void load(entry);},
   async action(node){
+   if(await maintenance.action(node))return true;
    const action=node.dataset.action;if(!action?.startsWith('lab-book-storage-'))return false;const entry=selected();if(!entry||active(entry))return true;
    if(action==='lab-book-storage-refresh'){await load(entry);return true;}
    const kind=node.dataset.kind,receipt=entry.data?.[kind];

@@ -17,6 +17,7 @@ function title(kind,view){
  if(/^\/api\/projects\/[a-f0-9-]{36}\/directory\/reparent$/.test(kind))return text('projectPlacement');
  if(activityResource(kind).startsWith('project:')&&(activityCommand(kind).startsWith('/api/workspace/')||activityCommand(kind)==='/api/settings/save'))return text('projectStructure');
  kind=activityCommand(kind);
+ if(kind.startsWith('/api/maintenance/inventory/'))return text('job:inventory.reconcile');
  if(kind.startsWith('/api/research/records/transfer/'))return text('location');
  if(kind.startsWith('job:'))return optional('activity',kind)||text('operation');
  if(kind.startsWith('/api/storage/')){
@@ -33,6 +34,7 @@ function title(kind,view){
  return optional('activity',kind.split('/').at(-1))||text(kind.startsWith('/api/research/records/')?'record':'operation');
 }
 function stageName(kind,stage){
+ if(kind==='job:inventory.reconcile'){const label=optional('activity','inventoryStage:'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('lab-book:')||activityCommand(kind).startsWith('/api/lab-books/import')){const label=optional('storageProgress','book-'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('project:')||kind.startsWith('/api/projects/open')){const label=optional('storageProgress','project-'+stage);if(label)return label;}
  for(const namespace of ['storageProgress','recordSaveProgress','activity']){const label=optional(namespace,stage);if(label)return label;}

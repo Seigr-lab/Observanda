@@ -1,10 +1,12 @@
 import {projectPlacementUI} from './project-placement-ui.js';
+import {inventoryMaintenanceUI} from './inventory-maintenance-ui.js';
 import {projectAccessSettingsUI} from './project-access-settings-ui.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectStorage');
 // Project storage owns its commands and selected location. A transfer may
 // outlive this view; returning reads its durable command status.
 export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,accessProject=operation=>operation(),projectRoot=()=>null,projectDirectory,rootBook,moved=async()=>{}}){
+ const maintenance=inventoryMaintenanceUI({state,api,esc,access:accessProject,actions:'project-storage-maintenance',owner:()=>{const id=state.projectOwner?.projectId;return id&&id===state.project&&!state.projectOwner.labBookId?{id,prefix:'/api/projects/'+id}:null;}});
  const accessSettings=projectAccessSettingsUI({state,api,esc,field});
  const entries=new Map();let dialogCommand=null;
  const placement=projectPlacementUI({state,api,esc,field,accessProject,projectDirectory,rootBook,changed:id=>paint(current(id)),finished:async(id,result,targetPath)=>{if(result?.workspaceId){await moved(result,targetPath);return;}const entry=current(id);entry.data=null;entry.version++;await load(entry);}});
@@ -37,10 +39,11 @@ export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,a
  }
  setInterval(()=>{for(const entry of entries.values())if(host(entry)&&!entry.pending&&(entry.data?.copy?.running||entry.data?.move?.running||entry.data?.export?.running))void load(entry);},1500);
  return {
-  view(){const id=state.projectOwner?.projectId;return id&&id===state.project?'<section class="panel" data-project-storage="'+id+'"></section>'+placement.view(id)+accessSettings.view(id):'';},
-  bind(){const id=state.projectOwner?.projectId;if(!id)return;placement.bind(id);accessSettings.bind(id);const entry=current(id);if(!host(entry))return;const root=projectRoot(id);if(root&&root!==entry.root){entry.root=root;entry.version++;entry.data=null;entry.error='';}if(!entry.data&&!entry.loading&&!entry.error)void load(entry);else paint(entry);},
+  view(){const id=state.projectOwner?.projectId;return id&&id===state.project?'<section class="panel" data-project-storage="'+id+'"></section>'+placement.view(id)+accessSettings.view(id)+maintenance.view():'';},
+  bind(){maintenance.bind();const id=state.projectOwner?.projectId;if(!id)return;placement.bind(id);accessSettings.bind(id);const entry=current(id);if(!host(entry))return;const root=projectRoot(id);if(root&&root!==entry.root){entry.root=root;entry.version++;entry.data=null;entry.error='';}if(!entry.data&&!entry.loading&&!entry.error)void load(entry);else paint(entry);},
   choiceAction:node=>placement.choiceAction(node),input:element=>placement.input(element),
   async action(node){
+   if(await maintenance.action(node))return true;
    if(await placement.action(node))return true;
    const action=node.dataset.action;if(!action?.startsWith('project-storage-'))return false;
    const id=state.projectOwner?.projectId;if(!id)return true;const entry=current(id);if(entry.pending||placement.busy(entry.id)||entry.data?.copy?.running||entry.data?.move?.running||entry.data?.export?.running)return true;

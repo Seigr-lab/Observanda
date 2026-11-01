@@ -794,7 +794,7 @@ function render() {
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
   const reviewFrame=document.querySelector('iframe.preview-frame');
   reviewFrame?.addEventListener('load',()=>publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message)));
-  syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
+  syncRoute();storageControls.workspaces.bind();storageControls.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();configurationRecord?.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
   if (state.page === 'appearance') void designPreview.update();
 }
