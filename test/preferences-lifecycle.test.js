@@ -6,10 +6,11 @@ import os from 'node:os';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {defaultPreferences,preferencesSnapshot,readPreferences,rememberInterface,rememberLocation,resetPreferences} from '../src/preferences.js';
-import {testServer as startServer} from './device-fixture.js';
+import {testServer as startServer,TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,workspaceManifest} from '../src/locations.js';
 import {createNotebook} from '../src/model.js';
-import {createAccess} from '../src/access.js';
+import {createAccess,createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
 
 async function fixture(){const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reset-'));return {parent,root:path.join(parent,'research'),file:path.join(parent,'preferences.json')};}
 async function client(app){
@@ -45,11 +46,13 @@ test('a detached session never implicitly selects a folder and requires a chosen
 });
 
 test('reset preserves all research files, invalidates stale writes and preview URLs, and supports a fresh persisted setup',async t=>{
- const {parent,root,file}=await fixture();await initializeLocation(root,createNotebook(path.basename(root)),await createAccess());await rememberLocation(file,root);await rememberInterface(file,{fontSize:22,lineHeight:1.8});
- const before=await workspaceManifest(root),prefs=await readFile(file);
+ const {parent,root,file}=await fixture(),deviceStore=new TestDeviceStore({file:file+'.device-key'}),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);
+ try{await initializeLocation(root,createNotebook(path.basename(root)),access,vault);}finally{clearVault(vault);}
+ await rememberLocation(file,root);await rememberInterface(file,{fontSize:22,lineHeight:1.8});
  const app=await startServer({root,port:0,preferencesFile:file,expectedExisting:true});t.after(()=>app.close());const c=await client(app),old=await client(app);
- const book=await (await c.request('/api/notebook')).json(),preview=await (await c.request('/api/design-preview',{mode:'examples',book:book.book})).json();
- const setting=await (await c.request('/api/preferences')).json();assert.equal(setting.file,file);
+ const book=await (await c.request('/api/notebook')).json(),responsePreview=await c.request('/api/design-preview',{mode:'examples',book:book.book});
+ assert.equal(responsePreview.status,200);const preview=await responsePreview.json();assert.ok(preview.url);assert.equal((await c.request(preview.url)).status,200);
+ const before=await workspaceManifest(root),prefs=await readFile(file),setting=await (await c.request('/api/preferences')).json();assert.equal(setting.file,file);
  assert.equal((await c.request('/api/preferences/reset',{etag:setting.etag})).status,422);
  assert.equal((await c.request('/api/preferences/reset',{etag:setting.etag,confirmed:true},{Origin:'https://foreign.invalid'})).status,403);
  assert.equal((await fetch(app.origin+'/api/preferences/reset',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({etag:setting.etag,confirmed:true})})).status,401);
