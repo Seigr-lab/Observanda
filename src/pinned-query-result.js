@@ -28,7 +28,8 @@ export class PinnedQueryResults{
  }
  track(entry,operation){const promise=Promise.resolve().then(operation);entry.pending.add(promise);promise.then(()=>entry.pending.delete(promise),()=>entry.pending.delete(promise));return promise;}
  async clear(){const result=await Promise.allSettled([...this.entries.values()].map(entry=>this.dispose(entry)).concat([...this.disposals]));const failed=result.find(value=>value.status==='rejected');if(failed)throw failed.reason;}
- async window({workspace,ownerId,snapshotId,queryHash,order,point,after=null,limit=25,includeEqual=true,preceding=false,reuse=true,signal},produce){
+ async window({workspace,ownerId,snapshotId,queryHash,order,point,after=null,offset=null,limit=25,includeEqual=true,preceding=false,reuse=true,signal},produce){
+  if(offset!==null&&(!Number.isSafeInteger(offset)||offset<0||after!==null))throw new AppError('INVALID');
   signal?.throwIfAborted();if(typeof workspace?.root!=='string'||!Buffer.isBuffer(workspace?.vault?.key)||queryCacheSuspended(workspace.root))return null;
   const scope=currentQueryCacheScope(),vault=workspace.vault,key=vault.key,fingerprint=hash(key),root=workspace.root,projectId=workspace.projectId??null,labBookId=workspace.labBookId??null,lifetimeVault=scope?.vault??vault,lifetimeKey=lifetimeVault?.key;
   if(!Buffer.isBuffer(lifetimeKey))return null;const lifetimeFingerprint=hash(lifetimeKey);let generation=generations.get(lifetimeVault);if(!generation||generation.key!==lifetimeKey||generation.fingerprint!==lifetimeFingerprint){generation={key:lifetimeKey,fingerprint:lifetimeFingerprint,id:++serial};generations.set(lifetimeVault,generation);}
@@ -62,7 +63,7 @@ export class PinnedQueryResults{
     // New callbacks check this request's signal. The builder's request context
     // is never retained as the lifetime of a completed result.
     const check=()=>{admitted();entry.controller.signal.throwIfAborted();},sort=new QueryResultSort(entry.files,entry.key,entry.files.id,{check}),receipt=entry.receipt;
-    const skipped=after?await sort.rank(receipt,after,order,{includeEqual}):0,records=await sort.page(receipt,skipped,limit),prior=preceding?await sort.page(receipt,Math.max(0,skipped-limit-1),Math.min(limit+1,skipped)):[];check();await entry.files.assertNamed();
+    const skipped=offset!==null?Math.min(offset,receipt.total):after?await sort.rank(receipt,after,order,{includeEqual}):0,records=await sort.page(receipt,skipped,limit),prior=preceding?await sort.page(receipt,Math.max(0,skipped-limit-1),Math.min(limit+1,skipped)):[];check();await entry.files.assertNamed();
     return {...structuredClone(entry.metadata),total:receipt.total,skipped,records,preceding:prior.map(point)};
     }finally{this.reading--;permit?.release();}
    });

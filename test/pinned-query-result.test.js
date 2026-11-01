@@ -73,3 +73,14 @@ test('a fresh query revalidates source facts while a cursor continuation reuses 
  const f=fixture();await f.cache.window({...f.options,reuse:false},f.produce);await f.cache.window(f.options,()=>{throw Error('Continuation rescanned');});
  await assert.rejects(f.cache.window({...f.options,reuse:false},()=>{throw Object.assign(Error('Damaged source summary'),{code:'CATALOGUE_DAMAGED'});}),{code:'CATALOGUE_DAMAGED'});assert.equal(f.cache.stats().entries,0);
 });
+
+test('ordinal windows reuse only the same owner query and accept exhausted offsets',async()=>{
+ const f=fixture();try{
+  const expected=[...f.rows].sort(order);await f.cache.window(f.options,f.produce);
+  const page=await f.cache.window({...f.options,offset:225},f.produce);assert.equal(page.skipped,225);assert.deepEqual(page.records,expected.slice(225,250));assert.equal(f.stats().produced,1);
+  const empty=await f.cache.window({...f.options,offset:1000},f.produce);assert.deepEqual(empty.records,[]);assert.equal(empty.total,400);
+  await f.cache.window({...f.options,queryHash:'changed',offset:25},f.produce);await f.cache.window({...f.options,ownerId:randomUUID(),offset:25},f.produce);assert.equal(f.stats().produced,3);
+  for(const offset of [-1,1.5,Number.MAX_SAFE_INTEGER+1])await assert.rejects(f.cache.window({...f.options,offset},f.produce),{code:'INVALID'});
+  await assert.rejects(f.cache.window({...f.options,offset:0,after:expected[0]},f.produce),{code:'INVALID'});
+ }finally{await f.cache.clear();}
+});

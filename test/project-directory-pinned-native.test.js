@@ -1,0 +1,26 @@
+import '../src/storage.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {NativeOwnerDirectory} from '../src/owner-directory.js';
+import {projectDirectoryChoices} from '../src/project-directory-query.js';
+import {clearVault} from '../src/encryption.js';
+test('native project choices reuse admitted revisions and reject changed parent ancestry',{timeout:120000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-choice-cache-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);let f;
+ t.after(async()=>{await clearVault(f?.vault);await runtime.close();detach();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-choice-cache-'));await rm(directory,{recursive:true,force:true});});
+ f=await encryptedFixture(path.join(directory,'workspace'),createNotebook('Directory'));const id=(await f.workspace.outline()).metadata.id,registry=new ProjectRegistry(f.workspace,id),parent={projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),parentId:null,root:path.join(f.workspace.root,'Habitat'),summary:{title:'Habitat',description:'',kind:'Project',templateName:null}};
+ const entries=[parent,...Array.from({length:80},(_,i)=>({projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),parentId:parent.projectId,root:path.join(parent.root,'Project '+i),summary:{title:'Project '+i,description:'',kind:'Project',templateName:null}}))];
+ await registry.apply(await registry.version(),entries.map(entry=>({state:'active',entry})));const rows=NativeOwnerDirectory.prototype.rows;let streamed=0;t.mock.method(NativeOwnerDirectory.prototype,'rows',async function*(...args){for await(const row of rows.apply(this,args)){streamed++;yield row;}});
+ const input={kind:'record-parents',exclude:null,query:'habitat',offset:0,limit:25,revision:null},first=await projectDirectoryChoices(registry,input);assert.equal(first.total,81);assert.equal(streamed,81);streamed=0;
+ const second=await projectDirectoryChoices(registry,{...input,revision:first.revision,offset:25});assert.equal(second.total,81);assert.equal(second.projects.length,25);assert.equal(streamed,0);assert.ok(second.projects.every(row=>row.ancestors[0]==='Habitat'));assert.ok(second.projects.every(row=>!Object.hasOwn(row,'root')));
+ await registry.apply(await registry.version(),[{state:'active',entry:{...parent,summary:{...parent.summary,title:'Renamed parent'}}}]);await assert.rejects(projectDirectoryChoices(registry,{...input,revision:first.revision,offset:25}),{code:'CONFLICT'});assert.equal((await projectDirectoryChoices(registry,input)).total,0);
+ t.diagnostic(JSON.stringify({owners:81,page:25,continuedDirectoryRows:0}));
+});

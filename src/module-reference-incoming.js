@@ -5,6 +5,7 @@ import {ModuleReader} from './modules/reader.js';
 import {moduleDomainOf} from './modules/domains.js';
 import {uuid} from './modules/validation.js';
 import {recordReferenceNamespaces} from './research-reference-namespace.js';
+import {queryResultWindow} from './query-result-window.js';
 const referenceValid=value=>value&&Object.keys(value).sort().join()==='id,type,workspaceId'&&uuid(value.workspaceId)&&uuid(value.id)&&(['record','project','notebook'].includes(value.type)||moduleDomainOf(value.type));
 const key=reference=>[reference.workspaceId,reference.type,reference.id].join('/');
 const order=(a,b)=>{const x=a.title.toLowerCase(),y=b.title.toLowerCase();return x<y?-1:x>y?1:a.key<b.key?-1:a.key>b.key?1:0;};
@@ -29,11 +30,12 @@ export async function moduleReferenceIncoming(pages,client,command,{visit,collec
    const source=new ModuleReader(storage,{domains});
    await source.context(address.workspaceId,async context=>{
     if(context.book.id!==address.workspaceId)throw new AppError('DATABASE_LOCATION');
-    retain(address.workspaceId,context.head.revision);
     const reader=new ModuleReader(storage,{context:(_id,consume)=>consume(context)}),owner={workspaceId:address.workspaceId,projectId:address.projectId??null,labBookId:address.labBookId??null,projectTitle:address.projectTitle??'',notebookTitle:address.labBookId?context.book.notebooks.find(book=>book.id===address.labBookId)?.title??'':''};
-    await reader.list({workspaceId:address.workspaceId,types,reference:canonical,query,limit:1},{signal,referenceNamespaces,collect:view=>{
-     const reference={workspaceId:address.workspaceId,type:view.type,id:view.id};
-     page.add({...view,key:key(reference),reference,owner});
+    await reader.list({workspaceId:address.workspaceId,types,reference:canonical,query,limit:1},{signal,referenceNamespaces,consume:async({source,revision,queryHash})=>{
+     retain(address.workspaceId,revision);
+     const rows=async function*(check){for await(const view of source(check)){const reference={workspaceId:address.workspaceId,type:view.type,id:view.id};yield {...view,key:key(reference),reference};}};
+     const cached=await queryResultWindow({workspace:storage,ownerId:address.workspaceId,snapshotId:revision,queryHash:digest(JSON.stringify(['module-incoming',signature,queryHash])),order,point,after:session.offset?session.after:null,limit,preceding:session.offset>limit,reuse:!!cursor,signal},check=>({rows:rows(check)}));
+     if(cached)page.addIndexed({...cached,records:cached.records.map(row=>({...row,owner}))});else for await(const row of rows())page.add({...row,owner});
     }});
    });
   },{workspaceId:collectionWorkspaceId,scope:null,signal,onUnavailable:async(error,address)=>{

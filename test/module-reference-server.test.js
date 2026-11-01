@@ -77,13 +77,13 @@ test('module reference APIs discover and resolve owner summaries, save links, is
 });
 test('saved legacy research references use the exact authenticated identity witness, never whole namespace equivalence',{timeout:120000},async t=>{
  const f=await fixture(t),namespace=f.project.namespaceId,record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:randomUUID(),title:'Retained target'},book=(await f.parent.read()).book;
- // Seed a retained research summary in the disposable project through its real save path.
+ // Seed historical inline headings as migration input. Public structure
+ // commands intentionally create no new inline owners in current catalogues.
  record.notebookId=book.notebooks[0]?.id;
- if(!record.notebookId){const opened=await result(await f.call(f.base+'/workspace/read/start',{})),notebook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:f.projectId};record.notebookId=notebook.id;await result(await f.call(f.base+'/workspace/structure',{etag:opened.etag,change:{kind:'notebook',value:notebook},response:'outline',commandId:randomUUID()}));}
+ if(!record.notebookId){const notebook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:f.projectId};record.notebookId=notebook.id;await f.parent.update(book=>{book.notebooks.push(notebook);return book;});}
  await result(await f.call(f.base+'/research/records/save',{workspaceId:namespace,changes:[{id:record.id,expectedRevision:null,record}]}));
- const rootRead=await result(await f.call('/api/workspace/read/start',{})),rootProject={...sampleNotebook().projects[0],id:randomUUID()},rootBook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:rootProject.id};
- let structure=await result(await f.call('/api/workspace/structure',{etag:rootRead.etag,change:{kind:'project',value:rootProject},response:'outline',commandId:randomUUID()}));
- structure=await result(await f.call('/api/workspace/structure',{etag:structure.etag,change:{kind:'notebook',value:rootBook},response:'outline',commandId:randomUUID()}));
+ const rootProject={...sampleNotebook().projects[0],id:randomUUID()},rootBook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:rootProject.id};
+ await f.workspace.update(book=>{book.projects.push(rootProject);book.notebooks.push(rootBook);return book;});
  await result(await f.call('/api/research/records/save',{workspaceId:f.initial.id,changes:[{id:record.id,expectedRevision:null,record:{...record,notebookId:rootBook.id,title:'Stale retained copy'}}]}));
  const sourceNamespace=f.initial.id,ref={workspaceId:sourceNamespace,type:'record',id:record.id},witness={version:1,projectId:f.projectId,namespaceId:namespace,sourceNamespace,kind:'record',id:record.id};
  await f.parent.withLock(()=>f.parent.catalogue(async store=>{await store.putObject('project:research-migration',{version:1,projectId:f.projectId,namespaceId:namespace,sourceNamespace});await store.putObject(referenceOriginKey(witness),witness);}));

@@ -1,5 +1,7 @@
+import {moduleQuerySource,moduleQueryRevision} from './query-source.js';
+import {queryResultWindow} from '../query-result-window.js';
 import {moduleDomainContext} from '../module-domain-context.js';
-import {validResourceTags,matchesResourceTags} from '../web/modules/resource-tags.js';
+import {validResourceTags} from '../web/modules/resource-tags.js';
 import {AppError} from '../errors.js';
 import {digest} from '../storage-format.js';
 import {summaryPage} from '../summary-page.js';
@@ -35,7 +37,7 @@ export class ModuleReader{
   return operation({book:(await this.workspace.outline()).metadata,head:data,members:()=>data.entities,member:async id=>data.entities.find(e=>e.id===id)??null,view:async member=>moduleView(member),search:async member=>moduleSearch(member),references:async member=>moduleReferences(member),constraint:async member=>moduleConstraint(member),calendar:async member=>calendarFacts(member),inventory:async member=>inventoryFacts(member),selected:async id=>data.entities.find(e=>e.id===id)??null,
    encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url'))});
  }
- async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,collect,referenceNamespaces=null}={}){
+ async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,consume,referenceNamespaces=null}={}){
   if(!validResourceTags(tags)||!['all','any'].includes(tagMode)||tags.length&&type!=='resource')throw new AppError('RESOURCE_TAGS');
   if(!['title','created-desc'].includes(sort))throw new AppError('INVALID');
   if(type!==null&&!Object.hasOwn(this.modules.definitions.types,type)||typeof query!=='string'||query.length>256||typeof status!=='string'||status.length>80||!Number.isSafeInteger(limit)||limit<1||limit>25||cursor!==null&&(typeof cursor!=='string'||cursor.length>8192))throw new AppError('INVALID');
@@ -45,17 +47,17 @@ export class ModuleReader{
   if(resourceId!==null&&!uuid(resourceId)||keys!==null&&(!Array.isArray(keys)||keys.length>4096||new Set(keys).size!==keys.length||!keys.every(uuid)))throw new AppError('INVALID');
   if(key!==null&&!uuid(key)||scopeIds!==null&&(!Array.isArray(scopeIds)||scopeIds.length>10000||new Set(scopeIds).size!==scopeIds.length||!scopeIds.every(id=>id===null||uuid(id))))throw new AppError('INVALID');
   if(referenceNamespaces!==null&&(!reference||!Array.isArray(referenceNamespaces)||referenceNamespaces.length<1||new Set(referenceNamespaces).size!==referenceNamespaces.length||!referenceNamespaces.every(uuid)))throw new AppError('INVALID');
-  const namespaces=new Set(referenceNamespaces??(reference?[reference.workspaceId]:[]));
+
   const queryHash=digest(JSON.stringify({workspaceId,type,types,reference,referenceNamespaces,query,status,tags,tagMode,kind,archived,moduleId,projectId,scopeIds,key,keys,resourceId,sort,recursive,limit}));
   return this.context(workspaceId,async c=>{
-   let anchor;try{anchor=cursor?c.decode(cursor):{workspaceId,revision:c.head.revision,queryHash,limit,offset:0};}catch{invalid();}
-   if(!anchor||anchor.workspaceId!==workspaceId||anchor.revision!==c.head.revision||anchor.queryHash!==queryHash||anchor.limit!==limit||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>0&&(!uuid(anchor.after?.id)||typeof anchor.after.title!=='string'))invalid();
+   const scopeRevision=moduleQueryRevision(c);let anchor;try{anchor=cursor?c.decode(cursor):{workspaceId,revision:c.head.revision,scopeRevision,queryHash,limit,offset:0};}catch{invalid();}
+   if(!anchor||anchor.workspaceId!==workspaceId||anchor.revision!==c.head.revision||anchor.scopeRevision!==scopeRevision||anchor.queryHash!==queryHash||anchor.limit!==limit||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>0&&(!uuid(anchor.after?.id)||typeof anchor.after.title!=='string'))invalid();
    if(anchor.offset&&sort==='created-desc'&&!Number.isFinite(Date.parse(anchor.after.createdAt)))invalid();
    const compare=sort==='title'?order:(a,b)=>b.createdAt.localeCompare(a.createdAt)||(a.id<b.id?-1:a.id>b.id?1:0);
    const result=({records:items,total,after,previousAfter})=>{const next=anchor.offset+items.length;return {workspaceId,revision:c.head.revision,items,total,offset:anchor.offset,cursor:c.encode(anchor),
     nextCursor:next<total?c.encode({...anchor,offset:next,after}):null,
     previousCursor:anchor.offset?c.encode({...anchor,offset:Math.max(0,anchor.offset-limit),...(anchor.offset>limit?{after:previousAfter}:{after:null})}):null};};
-   const filtered=!!status||kind!==null||tags.length>0,canSeek=!collect&&!reference&&!query&&archived===null&&(moduleId===null||moduleId==='resources'&&recursive)&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null;
+   const filtered=!!status||kind!==null||tags.length>0,canSeek=!consume&&!reference&&!query&&archived===null&&(moduleId===null||moduleId==='resources'&&recursive)&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null;
    const browseOptions={types:type?(types&&!types.includes(type)?[]:[type]):types,sort,status,kind,tags,tagMode,signal};let plans=null;
    if(c.browse&&key===null&&keys===null&&(canSeek||filtered)){
     plans=await c.browse({...browseOptions,after:canSeek&&anchor.offset?anchor.after:null});
@@ -64,68 +66,13 @@ export class ModuleReader{
     // the smaller proved candidate range, including backward-page witnesses.
     if(canSeek&&plans&&anchor.offset)plans=await c.browse({...browseOptions,after:null});
    }
-   const page=summaryPage({...anchor,order:compare,point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})}),needle=query.toLowerCase(),scope=scopeIds&&new Set(scopeIds);
-   const stockScope=moduleId==='resources'?(scope??inventoryScope(c.book,projectId,recursive)):null;
-   // Explicit selections are already bounded by the public query limit. Read
-   // their authenticated members directly, preserving strict keys validation
-   // even when another filter would hide a missing selected item.
-   let selected=null;
-   if(keys){
-    selected=[];
-    for(const id of keys){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('NOT_FOUND');const view=await c.view(member);if(view.type!==type)throw new AppError('NOT_FOUND');selected.push({member,view});}
-   }else if(key){
-    signal?.throwIfAborted();let member;
-    try{member=await c.member(key);}catch(error){if(error.code!=='MODULE_REFERENCE')throw error;}
-    // An ID outside the admitted domain was absent from the old traversal too.
-    selected=member?[{member}]:[];
-   }
-   const stockItems=moduleId==='resources'&&!keys&&(!type||type==='resource')&&(!types||types.includes('resource'))?await inventoryScopeItems(c,stockScope,{signal}):null;
-   async function* candidates(){
-    if(selected)yield* selected;
-    else if(plans){for(const plan of plans){if(plan.candidates)yield* plan.candidates();else for await(const view of plan.rows()){const member=await c.member(view.id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member,view};}}}
-    else if(stockItems&&type==='resource'){for(const id of stockItems){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member};}}
-    else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};
-   }
-   for await(const {member,view:selectedView,constraint:selectedConstraint} of candidates()){
-    signal?.throwIfAborted();if(key&&member.id!==key||keys&&!keys.includes(member.id)||type&&member.type&&member.type!==type||types&&member.type&&!types.includes(member.type))continue;
-    // Facts are immutable within this read context. Reuse only this candidate's
-    // values, so compound filters never re-decode the same supporting object.
-    const facts=new Map(selectedConstraint?[['constraint',selectedConstraint]]:[]),fact=name=>{if(!facts.has(name))facts.set(name,c[name](member));return facts.get(name);};
-    if(resourceId&&(await fact('constraint')).data.resourceId!==resourceId)continue;
-    if(kind!==null&&(await fact('constraint')).data.kind!==kind||archived!==null&&(await fact(type==='category'?'inventory':'calendar'))?.data.archived!==archived)continue;
-    if(moduleId==='resources'){
-     if(stockScope){
-      const constraint=await fact('constraint'),d=constraint.data;
-      if(constraint.type!=='category'&&!stockScope.size)continue;
-      if(constraint.type==='resource'){if(!keys&&stockItems&&!stockItems.has(member.id))continue;}
-      else if(constraint.type!=='category'){
-       if(['stock-transfer','asset-transfer'].includes(constraint.type)){
-        const value=constraint.type==='asset-transfer'?(await fact('inventory')).data:d;
-        if(!stockScope.has(value.fromProjectId)&&!stockScope.has(value.toProjectId))continue;
-       }else{
-        const refs=await fact('references'),parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
-        if(!stockScope.has(owner??null))continue;
-       }
-      }
-     }
-    }else if(moduleId||projectId||scope){
-     const refs=await fact('references'),parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
-     if(moduleId&&!projectUsesTool(c.book,owner,moduleId)||scope&&!scope.has(owner??null)||!inScope(c.book,owner,projectId,recursive))continue;
-    }
-    if(reference){
-     const refs=await fact('references');let linked=refs.links.some(r=>namespaces.has(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
-     if(!linked&&reference.type==='resource'&&reference.workspaceId===workspaceId){const constraint=await fact('constraint');linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
-     if(!linked)continue;
-     if(['task','booking','calendar','event','subscription','calendar-connection'].includes(member.type)){
-      const parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
-      if(!projectUsesTool(c.book,owner,'planning'))continue;
-     }
-    }
-    const view=selectedView??await c.view(member);if(type&&view.type!==type||types&&!types.includes(view.type)||status&&view.status!==status)continue;
-    if(tags.length&&!matchesResourceTags(view.tags,tags,tagMode))continue;
-    if(needle&&!(await c.search(member)).includes(needle))continue;
-    collect?.(view);page.add(view);
-   }
+   const page=summaryPage({...anchor,order:compare,point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})});
+   const source=(check=()=>{})=>moduleQuerySource(c,{workspaceId,type,types,reference,query,status,tags,tagMode,kind,archived,moduleId,projectId,scopeIds,key,keys,resourceId,recursive,plans,referenceNamespaces},{signal,check});
+   const point=view=>({id:view.id,title:view.title,createdAt:view.createdAt});
+   if(consume)return consume({source,context:c,queryHash,revision:scopeRevision,order:compare,point});
+   const cached=key||keys?null:await queryResultWindow({workspace:this.workspace,ownerId:workspaceId,snapshotId:scopeRevision,queryHash:digest('module:'+queryHash),order:compare,point,after:anchor.offset?anchor.after:null,limit,preceding:anchor.offset>limit,reuse:!!cursor,signal},check=>({rows:source(check)}));
+   if(cached){if(cached.skipped!==anchor.offset||anchor.offset&&!cached.records.length)invalid();return result({...cached,after:cached.records.length?point(cached.records.at(-1)):null,previousAfter:cached.preceding[0]??null});}
+   for await(const view of source())page.add(view);
    let pageData;try{pageData=page.finish();}catch(error){if(error.code==='RECORD_QUERY_CURSOR')invalid();throw error;}
    return result(pageData);
   });

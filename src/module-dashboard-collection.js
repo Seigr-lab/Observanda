@@ -5,6 +5,8 @@ import {summaryPage} from './summary-page.js';
 import {ProjectModuleQueries} from './project-module-queries.js';
 import {moduleDashboardContract} from './module-dashboard-contract.js';
 import {dashboardSourceIdentity,dashboardSourceKey} from './web/dashboard-source-key.js';
+import {queryResultWindow} from './query-result-window.js';
+import {moduleQueryRevision} from './modules/query-source.js';
 const compare=(a,b)=>{const x=a.title.toLowerCase(),y=b.title.toLowerCase();return x<y?-1:x>y?1:a.key<b.key?-1:a.key>b.key?1:0;};
 const point=row=>({key:row.key,title:row.title});
 const identity=(key,workspaceId)=>{const value=dashboardSourceIdentity(key);return dashboardSourceKey(value.workspaceId??workspaceId,value.key);};
@@ -18,7 +20,7 @@ export async function moduleDashboardCollection(pages,client,command,{scope=null
  const page=summaryPage({offset:session.offset,after:session.after,limit,order:compare,point}),discovered=[];let total=0,scopeProjects={};
  await visit(async(storage,address,selection)=>new ProjectModuleQueries(storage,address.workspaceId).context(area,type,async(c,reader)=>{
   signal?.throwIfAborted();if(c.book.id!==address.workspaceId)throw new AppError('DATABASE_LOCATION');
-  const revision=c.head.revision;if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==revision)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=revision;
+  const revision=moduleQueryRevision(c);if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==revision)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=revision;
   scopeProjects=selection.projectLabels;for(const book of c.book.notebooks)seenBooks.add(book.id);
   const owner={...address,projectTitle:address.projectTitle??'',notebookTitle:address.labBookId?c.book.notebooks.find(book=>book.id===address.labBookId)?.title??'':''},scopeIds=address.projectId?null:[...selection.projectIds];scopeByOwner.set(address.workspaceId,scopeIds);
   const collect=view=>{
@@ -31,7 +33,17 @@ export async function moduleDashboardCollection(pages,client,command,{scope=null
    for(const id of localKeys){signal?.throwIfAborted();const member=await c.member(id);if(member){const view=await c.view(member);if(view.type===type)collect(view);}}
   }else{
    const allLocations=scopeIds?.includes(null)&&c.book.projects.every(project=>scopeIds.includes(project.id));
-   await reader.list({workspaceId:address.workspaceId,type,moduleId:area==='planning'?'planning':'resources',scopeIds:allLocations?null:scopeIds,key:pinned?source.key:null,keys:localKeys,query:mode==='discovery'?'':options.search??'',status:options.status??'',...(type==='resource'?{kind:options.kind||null}:{}),limit:1},{signal,collect});
+   await reader.list({workspaceId:address.workspaceId,type,moduleId:area==='planning'?'planning':'resources',scopeIds:allLocations?null:scopeIds,key:pinned?source.key:null,keys:localKeys,query:mode==='discovery'?'':options.search??'',status:options.status??'',...(type==='resource'?{kind:options.kind||null}:{}),limit:1},{signal,consume:async({source:matching,revision,queryHash})=>{
+    if(identities||pinned){for await(const view of matching())collect(view);return;}
+    const discovery=mode==='discovery',rows=async function*(check){let position=0;for await(const view of matching(check)){
+     if(discovery&&!discoveryMatches({title:view.title,subtitle:[owner.projectTitle,owner.notebookTitle].filter(Boolean).join(' / ')},options.search??''))continue;
+     yield {...view,key:dashboardSourceKey(address.workspaceId,view.id),...(discovery?{position:position++}:{})};
+    }};
+    const cacheQuery=digest(JSON.stringify(['module-dashboard',scope,{...command,cursor:undefined,offset:undefined},queryHash,discovery?[owner.projectTitle,owner.notebookTitle]:null]));
+    const cached=await queryResultWindow({workspace:storage,ownerId:address.workspaceId,snapshotId:revision,queryHash:cacheQuery,order:discovery?(a,b)=>a.position-b.position:compare,point,after:!discovery&&session.offset?session.after:null,offset:discovery?Math.max(0,offset-total):null,limit:discovery?Math.max(0,limit-discovered.length):limit,preceding:!discovery&&session.offset>limit,reuse:discovery?offset>0:!!cursor,signal},check=>({rows:rows(check)}));
+    if(cached){if(discovery){total+=cached.total;discovered.push(...cached.records.map(row=>({...row,owner})));}else page.addIndexed({...cached,records:cached.records.map(row=>({...row,owner}))});}
+    else for await(const view of matching())collect(view);
+   }});
   }
  },{signal}),{workspaceId,scope,selection,namespaces,includeOwner:owner=>selection.notebookMode!=='selected'||Boolean(owner.labBookId),signal});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');
@@ -42,7 +54,7 @@ export async function moduleDashboardCollection(pages,client,command,{scope=null
  if(mode==='page'&&result.records.length){
   const namespaces=new Set(result.records.map(row=>row.owner.workspaceId));
   await visit(async(storage,owner)=>new ProjectModuleQueries(storage,owner.workspaceId).context(area,type,async(c,_reader,presenter)=>{
-   if(c.head.revision!==snapshots[owner.workspaceId])throw new AppError('RECORD_QUERY_CURSOR');
+   if(moduleQueryRevision(c)!==snapshots[owner.workspaceId])throw new AppError('RECORD_QUERY_CURSOR');
    const rows=result.records.filter(row=>row.owner.workspaceId===owner.workspaceId),values=await presenter.present(c,rows,{type,scopeIds:scopeByOwner.get(owner.workspaceId),signal});
    for(let i=0;i<values.length;i++){const item=values[i],row=rows[i];items.set(row.key,{...item,key:row.key,owner:row.owner,data:{...item.data,owner:owner.projectId?[row.owner.projectTitle,row.owner.notebookTitle].filter(Boolean).join(' / '):item.data.owner},action:{name:'module-open-owned',data:{...item.action.data,workspaceId:owner.workspaceId,projectId:owner.projectId??'',labBookId:owner.labBookId??''}}});}
   },{signal}),{workspaceId,scope,selection,namespaces,signal});
