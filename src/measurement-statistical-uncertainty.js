@@ -1,3 +1,4 @@
+import {cooperativeCheckpoint} from './cooperative-checkpoint.js';
 // Correlated first-order propagation, JCGM 100:2008 sections 5.1 and 5.2:
 // https://www.bipm.org/documents/20126/2071204/JCGM_100_2008_E.pdf
 // The recipe declares covariance of estimates and the adequacy of its supplied
@@ -36,7 +37,7 @@ export async function evaluateStatisticalUncertainty({count,nominal,readInput,re
  // Preserve that consumption; only synchronous numerical slices are timed.
  if(providedBudget!==undefined&&(!(providedBudget instanceof DatasetResourceBudget)||revisionText(providedBudget.scalarPolicy)!==revisionText(resourcePolicy)))fail();
  const budget=providedBudget??new DatasetResourceBudget(resourcePolicy),prefix='statistical-uncertainty:'+randomUUID()+':';let approximateInputs=false;
- const current=async()=>{signal?.throwIfAborted();await check?.();signal?.throwIfAborted();};
+ const cooperate=cooperativeCheckpoint({signal}),current=async()=>{await cooperate();await check?.();signal?.throwIfAborted();};
  const run=(operation,code)=>{signal?.throwIfAborted();return checked(()=>budget.run(()=>operation(budget)),code);};
  const put=async(key,value)=>{await current();await work.put(prefix+key,value);await current();};
  const get=async key=>{await current();const value=await work.get(prefix+key);await current();if(value===undefined)fail('MATERIAL_MISSING');return value;};

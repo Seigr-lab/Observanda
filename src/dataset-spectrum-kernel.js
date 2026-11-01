@@ -1,3 +1,4 @@
+import {cooperativeCheckpoint} from './cooperative-checkpoint.js';
 // Forward, unscaled DFT: exp(-2*pi*i*j*k/N), full bins in ordinary order.
 // https://www.fftw.org/fftw3_doc/The-1d-Discrete-Fourier-Transform-_0028DFT_0029.html
 // A radix-2 DIT traversal uses caller-owned encrypted scratch, never N-sized
@@ -71,7 +72,7 @@ export async function evaluateSpectrum({count,read,readFrequency,work,write}={},
  const enginePolicy={...resourcePolicy,resources:{...resourcePolicy.resources,maxBits:calculationPolicy.resources.maxBits,maxOperations:calculationPolicy.resources.maxOperations,maxMilliseconds:calculationPolicy.resources.maxMilliseconds,maxScalarCharacters:Math.min(65536,calculationPolicy.resources.maxResultCharacters),maxExponent:Math.min(65536,calculationPolicy.resources.maxBits)}},runtime=calculationRuntime({engine:4,policy:calculationPolicy}),math=runtime.math,prefix=execution?'spectrum:':'spectrum:'+randomUUID()+':';
  let resource=providedBudget??new DatasetResourceBudget(resourcePolicy),engineBudget=new DatasetResourceBudget(enginePolicy),budget=combinedBudget(resource,engineBudget);const limits=budget.scalarPolicy.resources;
  let levels=0;for(let n=count;n>1;n/=2)levels++;let approximate=false,approximateInputs=false,amplitudeInputs=false,coordinateInputs=false,contributedCount=0,omittedMissing=0,omittedExcluded=0;
- const current=async()=>{signal?.throwIfAborted();await check?.();signal?.throwIfAborted();};
+ const cooperate=cooperativeCheckpoint({signal}),current=async()=>{await cooperate();await check?.();signal?.throwIfAborted();};
  const run=(operation,code='DATASET_SPECTRUM_INVALID')=>{signal?.throwIfAborted();try{return resource.run(()=>engineBudget.run(()=>operation(budget)));}catch(error){if(error instanceof DatasetSpectrumError||error.name==='AbortError'||isScalarResourceFailure(error)||error.code==='CALCULATION_LIBRARY_UNAVAILABLE')throw error;if(error.code==='CALCULATION_STRUCTURED_RESOURCE')fail('DATASET_CALCULATION_RESOURCE');fail(code,error);}};
  const io=async operation=>{await current();const value=await operation();await current();return value;};
  const report=async value=>{if(progress)await io(()=>progress(value));};
