@@ -12,6 +12,7 @@ import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {withoutWriterWait,backgroundWriterWait} from './writer-wait.js';
 import {JobProgress,validateJobProgress} from './job-progress.js';
 import {jobFailureDiagnostic,jobDiagnosticFile,readJobDiagnostic,withJobDiagnosticContext} from './job-diagnostics.js';
+import {withWorkloadPriority} from './workload-priority.js';
 const terminal=new Set(['completed','failed','cancelled']);
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const same=(a,b)=>digest(serialize(a))===digest(serialize(b));
@@ -174,7 +175,7 @@ export class JobWorker{
   const updates=new JobProgress(progress=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)),{signal:controller.signal,heartbeatMs:Math.max(100,this.queue.leaseMs/3),onError:error=>controller.abort(error)});
   try{
    if(!this.enabled)controller.abort();
-   const prepared=await measuredJobPhase('prepare-job',()=>withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)})));
+   const prepared=await withWorkloadPriority('background',()=>measuredJobPhase('prepare-job',()=>withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)}))));
    await updates.flush();controller.signal.throwIfAborted();await measuredJobPhase('complete-job',()=>withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()}))));
   }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(releaseError=>this.report('worker-release',{error:releaseError}));}
   finally{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
