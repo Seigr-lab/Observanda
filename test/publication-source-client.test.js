@@ -18,6 +18,14 @@ test('selected source queries retain their namespace and snapshot without adopti
  const current=client.current();current.head.title='Mutated client copy';assert.equal(client.current().head.title,'Source');
 });
 
+test('native source browsing survives website saves but still invalidates a research snapshot change',async()=>{
+ const state=setup(),source=owner();state.websiteId=id();state.websiteEditor={};state.websitePin={websiteId:state.websiteId,researchSnapshotId:state.etag,websiteRevision:'c'.repeat(64)};
+ const client=publicationSourceClient({state,api:async(_route,body)=>body.operation==='head'?head(source):{owner:source,value:{workspaceId:source.workspaceId,snapshotId:'b'.repeat(64),items:[]}}});
+ await client.open(source);state.websitePin={...state.websitePin,websiteRevision:'d'.repeat(64)};client.sync();
+ assert.equal(client.current().owner.workspaceId,source.workspaceId);assert.deepEqual((await client.query('content',{})).items,[]);
+ state.etag='e'.repeat(64);client.sync();assert.equal(client.current(),null);
+});
+
 test('switching source cancels obsolete requests even when the transport ignores cancellation',async()=>{
  const state=setup(),a=owner(),b=owner(),pending=deferred(),signals=[];
  const client=publicationSourceClient({state,api:async(_route,body,{signal})=>{signals.push(signal);if(body.sourceId===a.workspaceId)return pending.promise;return head(b);}});

@@ -61,6 +61,7 @@ export async function projectPublicationSource(application,client,command,{scope
     return {workspaceId:sourceId,snapshotId:pinned.snapshotId,title:metadata.title,projects:metadata.projects.map(({id,title,parentId,share})=>({id,title,parentId:parentId??null,share})),notebooks:metadata.notebooks.map(({id,projectId,title,share})=>({id,projectId,title,...(share===undefined?{}:{share})}))};
    }
    const value=await new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
+   if(operation==='content')return {...value,items:value.items.map(record=>({...record,page:publicationSourcePage(reader.host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},snapshot.metadata,{...record,attachments:[]})}))};
    return operation==='record'?{...value,page:publicationSourcePage(reader.host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},snapshot.metadata,value.record)}:value;
   });
   const result=retained?await hostReader.use({workspaceId,projectId:scope,labBookId},undefined,async store=>{

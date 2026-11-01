@@ -20,13 +20,23 @@ for(const count of [65,650])test('website selections and media discovery stay bo
  // The same real evidence may be associated independently with many records.
  // Creation now verifies its retained bytes as well as the record references.
  const f=await encryptedFixture(directory,book,{populate:workspace=>populateImageEvidence(workspace,[imageId])}),service=new WebsiteResearch(f.workspace),sites=new WebsiteSites(f.workspace),site=await sites.read(null),outline=await f.workspace.outline(),base={workspaceId:book.id,snapshotId:outline.etag,websitePin:site.websitePin},projectId=book.notebooks.find(n=>n.id===template.notebookId).projectId;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const original=ResearchCatalogue.prototype.record,reads=[];
  t.mock.method(ResearchCatalogue.prototype,'read',()=>{throw Error('Full website workspace read');});
  t.mock.method(ResearchCatalogue.prototype,'record',function(id,...rest){reads.push(id);return original.call(this,id,...rest);});
  const started=performance.now(),summary=await service.run('summary',{...base,selection:emptyWebsiteSelection(),search:''});
  assert.equal(summary.entries,Math.ceil(count/2));assert.equal(summary.media,0);assert.deepEqual(reads,[]);
  const first=await service.run('content',{...base,projectId,search:'',cursor:null});assert.equal(first.items.length,10);assert.equal(first.total,count);
+ const queryDocuments=ResearchCatalogue.prototype.queryDocuments;let searchedRows=0,attachmentRows=0;
+ const traced=t.mock.method(ResearchCatalogue.prototype,'queryDocuments',function(rows,metadata,options){
+  const selected=async function*(){for await(const row of rows){searchedRows++;if(options.cardSources)attachmentRows++;yield row;}};
+  return queryDocuments.call(this,selected(),metadata,options);
+ });
+ try{
+  const found=await service.run('content',{...base,projectId,search:book.entries.at(-1).title,cursor:null});
+  assert.equal(found.total,1);assert.equal(found.items[0].id,book.entries.at(-1).id);assert.equal(found.items[0].attachmentCount,1);
+  assert.ok(searchedRows<=4,'Search read unrelated summaries: '+searchedRows);assert.equal(attachmentRows,1);
+ }finally{traced.mock.restore();}
  const second=await service.run('content',{...base,projectId,search:'',cursor:first.nextCursor});assert.equal(second.offset,10);
  const reordered=Object.fromEntries(Object.entries({...base,websitePin:Object.fromEntries(Object.entries(base.websitePin).reverse()),projectId,search:'',cursor:first.nextCursor}).reverse());
  assert.deepEqual((await service.run('content',reordered)).items,second.items,'Equivalent JSON field order must not invalidate a content cursor');

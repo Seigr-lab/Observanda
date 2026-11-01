@@ -5,7 +5,7 @@ import {projectPublicationSource} from '../src/project-publication-sources.js';
 const fixture=()=>{
  const workspaceId=randomUUID(),first='a'.repeat(64),second='b'.repeat(64),state={heads:0,reads:[],mismatched:false};
  const store={head:async()=>++state.heads===1?first:second,snapshot:async revision=>{state.reads.push(revision);return {metadata:{id:state.mismatched?randomUUID():workspaceId,title:revision===first?'Before':'After',projects:[],notebooks:[],privateSettings:{secret:'not a publication selector field'}}};}};
- const registry={workspaceId,read:async()=>({revision:'stable',value:{projects:[]}})},application={registry:async()=>registry,workspace:{catalogue:fn=>fn(store)},tracked:fn=>fn()};
+ const session=new Map(),registry={workspaceId,inspect:async consume=>consume({revision:'stable',get:async()=>null}),state:async()=>({revision:'stable',state:null,entry:null}),assertState:value=>assert.equal(value,null),version:async()=>'stable'},application={registry:async()=>registry,workspace:{catalogue:fn=>fn(store)},session:()=>session,tracked:fn=>fn()};
  const command={workspaceId,sourceId:workspaceId,operation:'head',query:{}};return {state,application,command,first};
 };
 test('publication source head returns metadata and revision from the same snapshot',async()=>{

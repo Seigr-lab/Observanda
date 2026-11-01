@@ -1,14 +1,14 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
-async function fixture(page){
+async function fixture(page,{native=false}={}){
  await page.route('https://publication-sources.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<main id="main"></main>'});
   const body=await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8');await route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body});
  });
  await page.goto('https://publication-sources.test/');
- await page.evaluate(async()=>{
+ await page.evaluate(async native=>{
   const {publicationSourcesUI}=await import('/publication-sources-ui.js');const id=()=>crypto.randomUUID();
   window.state={page:'website',book:{id:id(),website:{}},etag:'a'.repeat(64),storage:{contextId:'host'},access:{locked:false}};
   window.owners=['First project','Second project'].map(label=>({workspaceId:id(),projectId:id(),labBookId:null,kind:'project',label,ancestors:[]}));
@@ -28,11 +28,29 @@ async function fixture(page){
    return {owner:identity,value};
   };
   const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
-  window.controls=publicationSourcesUI({state,api,esc,access:run=>run(),checkpoint:()=>{},changed:()=>changes++,notify:message=>messages.push(message)});
+  let documents;
+  if(native){
+   state.websiteId=id();state.websitePin={websiteId:state.websiteId,researchSnapshotId:state.etag,websiteRevision:'c'.repeat(64)};state.websiteEditor={sources:{revision:'0'}};
+   let source=null,revision=0;
+   documents={enabled:()=>true,sources:async()=>({source,sources:source?[source]:[],summary:{revision:String(revision)}}),perform:async([operation])=>{
+    source??={workspaceId:operation.workspaceId,projectIds:[owners[0].projectId],selection:{defaultShare:false,includeProjects:[],records:[]}};
+    const rows=source.selection.records;let record=rows.find(row=>row.id===operation.recordId);if(!record){record={id:operation.recordId,share:null,attachments:[]};rows.push(record);}record.share=operation.share;state.websiteEditor.sources.revision=String(++revision);
+   }};
+  }
+  window.controls=publicationSourcesUI({state,api,documents,esc,access:run=>run(),checkpoint:()=>{},changed:()=>changes++,notify:message=>messages.push(message)});
   document.querySelector('main').innerHTML=controls.view();controls.bind();
- });
+ },native);
 }
 async function open(page,index=0){await page.locator('[data-source-action="open"]').nth(index).click();await page.getByRole('button',{name:'Choose content',exact:true}).click();await expect(page.locator('[data-source-record]')).toHaveCount(10);}
+
+test('saving a native website keeps source choices editable and source search usable',async({page})=>{
+ await fixture(page,{native:true});await open(page);const checkbox=page.locator('[data-source-record]').first();
+ await checkbox.check();await expect.poll(()=>page.evaluate(()=>changes)).toBe(1);await expect(checkbox).toBeEnabled();
+ // Save updates the pin without replacing the current source inspector.
+ await page.evaluate(()=>{state.websitePin={...state.websitePin,websiteRevision:'e'.repeat(64)};});
+ await checkbox.uncheck();await expect.poll(()=>page.evaluate(()=>changes)).toBe(2);await expect(checkbox).not.toBeChecked();await expect(checkbox).toBeEnabled();
+ await page.getByLabel('Search records',{exact:true}).fill('Observation 24');await expect(page.locator('[data-source-record]')).toHaveCount(1);await expect(page.locator('[data-source-record]')).toBeEnabled();expect(await page.evaluate(()=>messages)).toEqual([]);
+});
 
 test('source choices page independently, preserve copied IDs and never write while browsing',async({page})=>{
  await fixture(page);await open(page);
@@ -55,6 +73,18 @@ test('leaving during a source query cancels it and cannot create a pending edit'
  await page.getByRole('button',{name:'Next',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);await expect(page.getByLabel('Include available records in this project',{exact:true})).toBeDisabled();
  await page.evaluate(()=>{state.page='module';controls.sync();document.querySelector('main').innerHTML='<h1>Another section</h1>';release();});
  await expect(page.getByRole('heading',{name:'Another section',exact:true})).toBeVisible();expect(await page.evaluate(()=>requests.at(-1).aborted)).toBe(true);expect(await page.evaluate(()=>changes)).toBe(0);expect(await page.evaluate(()=>state.book.website.researchSources)).toBeUndefined();
+});
+
+test('search retains visible rows and keyboard focus while replacing an obsolete request',async({page})=>{
+ await fixture(page);await open(page);await page.evaluate(()=>{window.delay=true;});
+ const search=page.getByLabel('Search records',{exact:true});await search.fill('Observation 0');
+ await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);
+ await expect(search).toBeFocused();await expect(page.locator('[data-source-record]')).toHaveCount(10);await expect(page.locator('[data-source-record]').first()).toBeDisabled();
+ await page.evaluate(()=>{window.obsolete=window.release;window.pending=false;});
+ await search.press('End');await search.press('Backspace');await search.press('2');
+ await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);await expect(search).toHaveValue('Observation 2');await expect(search).toBeFocused();
+ await page.evaluate(()=>{window.delay=false;window.release();});await expect(page.locator('[data-source-record]')).toHaveCount(5);await expect(page.locator('[data-source-record]').first()).toBeEnabled();
+ await page.evaluate(()=>window.obsolete());await expect(page.locator('[data-source-record]')).toHaveCount(5);await expect(search).toHaveValue('Observation 2');await expect(search).toBeFocused();expect(await page.evaluate(()=>changes)).toBe(0);
 });
 
 

@@ -9,6 +9,7 @@ import {validWebsiteSelection,websiteRecordShare} from './web/website-selection.
 import {compareTitles,compareKey} from './web/query-order.js';
 import {summaryPage} from './summary-page.js';
 import {digest} from './storage-format.js';
+import {RecordSearchIndex} from './record-search-index.js';
 
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const invalid=()=>{throw new AppError('INVALID');};
@@ -78,11 +79,17 @@ export class WebsiteResearch{
     const project=metadata.projects.find(p=>p.id===command.projectId);if(!project)invalid();
     const ids=new Set(metadata.notebooks.filter(n=>n.projectId===project.id).map(n=>n.id)),all=!needle||project.title.toLocaleLowerCase().includes(needle);
     const page=window(10,(a,b)=>compareTitles(a.title,b.title)||compareKey(a.id,b.id),({id,title})=>({id,title}));
-    for await(const record of documents(store.members(snapshot,{signal,notebookIds:ids}))){
+    const candidates=!all&&snapshot.searchIndex?new RecordSearchIndex(store).candidates(snapshot.searchIndex,ids,needle,{signal}):store.members(snapshot,{signal,notebookIds:ids});
+    // Sort/filter lightweight summaries first. Attachment details belong only
+    // to the visible page, never to every record in the source project.
+    for await(const record of store.queryDocuments(candidates,metadata,{signal,search:false})){
      if(!ids.has(record.notebookId)||!all&&!record.title.toLocaleLowerCase().includes(needle))continue;
-     const {id,title,notebookId,type,share}=record;page.add({id,title,notebookId,type,share,attachmentCount:record.cardSources.files.length});
+     const {id,title,notebookId,type,share}=record;page.add({id,title,notebookId,type,share});
     }
-    return {...response,...page.finish()};
+    const result=page.finish(),counts=new Map();
+    async function* selected(){for(const item of result.items){signal?.throwIfAborted();const row=await store.member(snapshot,item.id);if(!row)throw new AppError('CATALOGUE_DAMAGED');yield row;}}
+    for await(const record of store.queryDocuments(selected(),metadata,{signal,search:false,cardSources:true}))counts.set(record.id,record.cardSources.files.length);
+    return {...response,...result,items:result.items.map(item=>({...item,attachmentCount:counts.get(item.id)}))};
    }
    const page=window(12,(a,b)=>compareTitles(a.title,b.title)||compareKey(a.id,b.id),({id,title})=>({id,title}));
    for await(const record of documents(store.members(snapshot,{signal}),{revisions:true}))for(const file of record.cardSources.files){

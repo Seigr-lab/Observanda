@@ -1,4 +1,5 @@
 import {verifyWebsiteTemplateBindings} from './website-template-inheritance.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 // Independent current website heads and immutable retained document revisions.
 // Call mutation methods inside the declared website/membership transaction.
 import {randomUUID} from 'node:crypto';
@@ -133,14 +134,14 @@ export class WebsiteDocumentStore{
   if(head.revision!==expectedRevision)throw new AppError('CONFLICT');if(!revisionId(researchSnapshotId)||document.blocks.store!==this.store||document.blocks.websiteId!==id||document.blocks.readOnly)invalid();
   const previous=await this.revision(id,head.revision,registry),priorDocument=new RecordDocument(new WebsiteDocumentBlockStore(this.store,id,{readOnly:true}),previous.root),previousSite=await websiteDocumentHeader(priorDocument,{signal});
   const snapshot=await this.store.snapshot(researchSnapshotId),presentationOnly=previous.version===3&&previous.researchSnapshotId===researchSnapshotId&&await homepagePresentationChange(priorDocument,document,{signal});
-  const site=presentationOnly?await validateWebsiteDocumentHeader(this.store,snapshot,document,{signal}):(await validateWebsiteDocument(this.store,snapshot,document,{signal,previous:previousSite})).site;
+  const site=await diagnosticPhase('website-validation',async()=>presentationOnly?validateWebsiteDocumentHeader(this.store,snapshot,document,{signal}):(await validateWebsiteDocument(this.store,snapshot,document,{signal,previous:previousSite})).site);
   if(site.id!==id||site.projectId!==head.projectId||snapshot.metadata.id!==registry.workspaceId)invalid();
   await this.assertNameAvailable(site,{previous:head,signal});
   if(previous.root===document.root)return {researchSnapshotId,...this.summary(head,registry)};
   collectionIndexes=await WebsiteCollectionIndex.retainAll(document,collectionIndexes??previous.collectionIndexes,{signal});
   navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes,navigationProjection??previous.navigationProjection,{signal});
   await requireWebsitePresentation(this.store.db);const value={version:3,workspaceId:registry.workspaceId,websiteId:id,researchSnapshotId,root:document.root,collectionIndexes,navigationProjection};
-  const next=await this.#publish(site,value,document.blocks,head);return {researchSnapshotId,...this.summary(next,registry)};
+  const next=await diagnosticPhase('website-persist',()=>this.#publish(site,value,document.blocks,head));return {researchSnapshotId,...this.summary(next,registry)};
  }
  async #publish(site,value,blocks,previous){
   const revision=hash(value),slot=versionSlot(site.id,revision),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);

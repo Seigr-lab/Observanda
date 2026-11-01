@@ -2,6 +2,9 @@ export const activeWebsite=state=>state.websitePin!=null;
 export const explicitWebsite=state=>activeWebsite(state)&&(state.websiteId!=null||state.websiteDefaultRoute===true);
 export const websiteSnapshot=state=>JSON.stringify([websiteContext(state),state.etag,state.websitePin?[state.websitePin.researchSnapshotId,state.websitePin.websiteId,state.websitePin.websiteRevision]:null]);
 export const websiteContext=state=>JSON.stringify([state.storage?.contextId,state.projectOwner?.projectId??null,state.projectOwner?.labBookId??null,activeWebsite(state),state.websiteId??null]);
+// Native source browsing is pinned to research, independently of saving the
+// website draft. Legacy documents still carry their choices in the snapshot.
+export const websiteSourceContext=state=>JSON.stringify([state.websiteEditor?[websiteContext(state),state.websitePin?.researchSnapshotId,state.websitePin?.websiteId]:websiteSnapshot(state),state.book?.id,state.etag]);
 export const websiteRequest=route=>/^\/api\/(?:website\/|publishing(?:\/|$)|publication-|deployment-jobs\/|repository-setup\/|local-export\/|preview$|design-preview$|appearance-preview(?:\/|$)|export(?:\/|$))/.test(route);
 export const websiteRouteId=hash=>/^#\/websites\/([a-f0-9-]{36})\//.exec(hash)?.[1]??null;
 export const websitePages=new Set(['website','publishing','integrations','review','branding','appearance']);
