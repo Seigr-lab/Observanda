@@ -28,7 +28,7 @@ const {desktopLocalization,desktopStartupPage,desktopMenuTemplate}=await import(
 const localized=desktopLocalization({preferencesFile,onChange:refreshNativeLanguage}),dt=localized.text;
 app.on('browser-window-focus',()=>localized.refresh());app.on('will-quit',()=>localized.dispose());
 const supervisor=new ServiceSupervisor({query:()=>{if(!child?.connected)throw Error('Service is disconnected');return serviceState();},
- onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(dt('degradedTitle'));else if(serviceDegraded&&state==='ready')main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
+ onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(dt('degradedTitle'));else if(serviceDegraded&&(state==='starting'||state==='ready'))main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
  onWaiting:async({phase,responding})=>{
   const detail=(responding?(dt(['http-drain','database-stop'].includes(phase)?phase:'shutdownDetail')):dt('shutdownUnresponsive'))+'\n\n'+dt('shutdownRecovery');
   await dialog.showMessageBox({type:'warning',title:dt('shutdownTitle'),message:dt('shutdownMessage'),detail,buttons:[dt('keepWaiting')],defaultId:0,cancelId:0});

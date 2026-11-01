@@ -4,11 +4,12 @@ import {EventEmitter} from 'node:events';
 import {registerHooks} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import {setImmediate} from 'node:timers/promises';
 
 // Execute the real desktop entry point with in-memory Electron and service
 // boundaries. A constructor/ready callback that shows a window is observable
 // immediately, before any automation could attach a late hide listener.
-async function launch({packaged,disposable},check){
+async function launch({packaged,disposable,tag=''},check){
  const home=path.join(os.tmpdir(),'observanda-visibility-synthetic'),calls=[],windows=[],dialogs=[],paths=new Map(),app=new EventEmitter(),nativeTheme=new EventEmitter();
  let ready,started,forked,serviceStart,timer;
  const whenReady=new Promise(resolve=>{ready=resolve;}),serviceStarted=new Promise(resolve=>{started=resolve;});
@@ -19,7 +20,7 @@ async function launch({packaged,disposable},check){
   isDestroyed(){return false;}
   isMinimized(){return this.minimized;}
   setIcon(){}
-  setTitle(){}
+  setTitle(value){this.title=value;}
   show(){calls.push('show');this.visible=true;}
   showInactive(){calls.push('showInactive');this.visible=true;}
   maximize(){calls.push('maximize');this.visible=true;}
@@ -31,10 +32,10 @@ async function launch({packaged,disposable},check){
   destroy(){}
  }
  const isolated=new EventEmitter();Object.assign(isolated,{setPermissionRequestHandler(){},setPermissionCheckHandler(){}});
- const child=new EventEmitter();Object.assign(child,{connected:true,stdout:{resume(){}},stderr:{resume(){}},send(value){if(value.type==='start'){serviceStart=value;started();}}});
+ const child=new EventEmitter();Object.assign(child,{connected:true,stdout:{resume(){}},stderr:{resume(){}},send(value){if(value.type==='start'){serviceStart=value;started();}else if(value.type==='shutdown-status'&&this.responds)queueMicrotask(()=>this.emit('message',{type:'shutdown-status',id:value.id,busy:false,failure:0,phase:'startup'}));}});
  const boundary={app,BrowserWindow,nativeTheme,Menu:{buildFromTemplate:items=>items,setApplicationMenu(){},getApplicationMenu:()=>null},dialog:{async showMessageBox(...args){dialogs.push(args);return {response:0};},showMessageBoxSync(...args){dialogs.push(args);return 0;}},shell:{},session:{fromPartition:()=>isolated},safeStorage:{isEncryptionAvailable:()=>false},spawn:(...args)=>{forked=args;return child;},os:{homedir:()=>home}};
  const key='__observandaVisibilityBoundary',prior=globalThis[key],previousHome=process.env.OBSERVANDA_DESKTOP_TEST_HOME,resourceDescriptor=Object.getOwnPropertyDescriptor(process,'resourcesPath'),resources=path.join(home,'application','resources');
- const id=(packaged?'packaged':'source')+(disposable?'-test':'-normal'),exports={electron:['app','BrowserWindow','Menu','dialog','shell','session','safeStorage','nativeTheme'],'node:child_process':['spawn'],'node:os':['default']};
+ const id=(packaged?'packaged':'source')+(disposable?'-test':'-normal')+tag,exports={electron:['app','BrowserWindow','Menu','dialog','shell','session','safeStorage','nativeTheme'],'node:child_process':['spawn'],'node:os':['default']};
  globalThis[key]=boundary;if(disposable)process.env.OBSERVANDA_DESKTOP_TEST_HOME=home;else delete process.env.OBSERVANDA_DESKTOP_TEST_HOME;
  Object.defineProperty(process,'resourcesPath',{value:resources,configurable:true});
  const hooks=registerHooks({
@@ -53,6 +54,18 @@ async function launch({packaged,disposable},check){
   if(resourceDescriptor)Object.defineProperty(process,'resourcesPath',resourceDescriptor);else delete process.resourcesPath;
  }
 }
+
+test('a startup heartbeat recovery clears the real window warning before application readiness',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','setInterval']});
+ await launch({packaged:false,disposable:true,tag:'-heartbeat'},async({windows,child})=>{
+  t.mock.timers.tick(5000);await setImmediate();t.mock.timers.tick(5000);await setImmediate();
+  assert.match(windows[0].title,/service needs attention/);
+  child.responds=true;t.mock.timers.tick(5000);await setImmediate();
+  assert.equal(windows[0].title,'Observanda');
+  child.emit('message',{type:'ready',url:'http://127.0.0.1:4173/#'+'a'.repeat(64)});await setImmediate();
+  assert.equal(windows[0].title,'Observanda');
+ });
+});
 
 test('real desktop startup keeps disposable source and packaged windows hidden before every show boundary while ordinary launches remain visible',async()=>{
  for(const packaged of [false,true])for(const disposable of [false,true])await launch({packaged,disposable},async({home,resources,paths,calls,windows,app,child,dialogs,forked,serviceStart,BrowserWindow})=>{
