@@ -8,6 +8,8 @@ import {AppError} from '../errors.js';
 
 const magic=Buffer.from('OBSSHARE1\n'),block=1024*1024,maxFrame=block+512;
 const maxDeclaration=2*1024*1024+16384;
+const minimumTransferRate=64*1024,admissionTimeoutMs=30000;
+export function exchangeTransferDuration(bytes){if(!Number.isSafeInteger(bytes)||bytes<0)fail();const duration=admissionTimeoutMs+Math.ceil(bytes/minimumTransferRate)*1000;if(!Number.isSafeInteger(duration))fail();return duration;}
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const digest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const fail=()=>{throw new AppError('COLLABORATION_PACKAGE');};
@@ -58,11 +60,13 @@ function validateEntry(info){
 }
 async function* blocks(source){let empty=0;for await(const part of source){const bytes=Buffer.from(part);if(!bytes.length){if(++empty>64)fail();continue;}empty=0;for(let at=0;at<bytes.length;at+=block)yield bytes.subarray(at,at+block);}}
 class Input{
- constructor(source,{signal,idleTimeoutMs=15000,timeoutMs=30*60*1000}={}){
-  for(const value of [idleTimeoutMs,timeoutMs])if(!Number.isSafeInteger(value)||value<1||value>2147483647)fail();
+ constructor(source,{signal,idleTimeoutMs=15000,timeoutMs}={}){
+  for(const value of [idleTimeoutMs,timeoutMs??admissionTimeoutMs])if(!Number.isSafeInteger(value)||value<1||value>2147483647)fail();
   this.source=source;this.iterator=blocks(source)[Symbol.asyncIterator]();this.buffer=Buffer.alloc(0);this.controller=new AbortController();this.signal=signal?AbortSignal.any([signal,this.controller.signal]):this.controller.signal;this.idleTimeoutMs=idleTimeoutMs;
-  this.timer=setTimeout(()=>this.controller.abort(new AppError('COLLABORATION_PACKAGE')),timeoutMs);this.timer.unref?.();
+  this.started=performance.now();this.createdAt=Date.now();this.timeoutMs=timeoutMs;this.deadline(timeoutMs??admissionTimeoutMs);
  }
+ deadline(duration){clearTimeout(this.timer);this.until=this.started+duration;this.expiresAt=this.createdAt+duration;const expire=()=>{const left=this.until-performance.now();if(left<=0)this.controller.abort(new AppError('COLLABORATION_PACKAGE'));else{this.timer=setTimeout(expire,Math.min(2147483647,left));this.timer.unref?.();}};expire();}
+ admit(bytes){this.signal.throwIfAborted();this.deadline(this.timeoutMs??exchangeTransferDuration(bytes));this.signal.throwIfAborted();return this.expiresAt;}
  async wait(pending){
   let timer,abort;
   try{return await Promise.race([pending,new Promise((_,reject)=>{
@@ -100,7 +104,9 @@ export async function readExchange(identity,source,consume,{signal,expectedSende
    if(!exact(value,['kind','headerHash','entries','bytes','manifestHash','selection'])||value.kind!=='collaboration.package.declaration'||value.headerHash!==headerHash||expectedSender&&signed.identity.id!==expectedSender)fail();
    const {kind,headerHash:bound,...declared}=value;void kind;void bound;validateDeclaration(declared);declaration=declared;sender=signed.identity;
    if(declaration.entries>maxEntries||declaration.bytes>maxBytes)throw new AppError('LIMIT');
-   await authorizeDeclaration?.({id:header.id,sender,declaration});signal?.throwIfAborted();
+   // Only the authenticated declaration can enlarge the initial deadline.
+   // Subsequent network activity never renews this fixed transfer budget.
+   const expiresAt=input.admit(declaration.bytes);await authorizeDeclaration?.({id:header.id,sender,declaration,expiresAt});signal?.throwIfAborted();
   }
   for(;;){
    const plain=await next();

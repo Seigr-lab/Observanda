@@ -26,6 +26,7 @@ import {workspaceJobs} from '../src/workspace-jobs.js';
 import {WorkspaceFonts} from '../src/workspace-fonts.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
+import {withStagingAuthority} from '../src/staging-reservations.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-shared-research-')),vaults=[];
@@ -47,8 +48,33 @@ test('incoming research packages preserve free disk space and discard rejected s
  const probe=t.mock.method(diskCapacity,'probe',async()=>({id:'synthetic-full-volume',available:BigInt(256*1024*1024-1)}));
  try{await assert.rejects(f.sb.receive(bytes),{code:'STORAGE_FULL'});}finally{probe.mock.restore();}
  assert.deepEqual(await f.member.workspace.listMetadata('.observanda/collaboration/staging'),[]);
- assert.deepEqual(await readdir(path.join(f.member.workspace.root,'.observanda/collaboration/staging')),[]);
+ assert.deepEqual(await readdir(path.join(f.member.workspace.root,'.observanda/collaboration/staging')).catch(error=>{if(error.code==='ENOENT')return [];throw error;}),[]);
  const accepted=await f.sb.receive(bytes);assert.equal(accepted.notebooks.length,1);
+});
+
+test('an incoming stream yields the workspace writer and fences handoff until cancellation cleanup',async t=>{
+ const f=await fixture(t),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),bytes=await Array.fromAsync(await f.sa.outgoing(prepared.id)),controller=new AbortController();
+ let arrived,resume;const first=new Promise(resolve=>{arrived=resolve;}),pause=new Promise(resolve=>{resume=resolve;}),original=ExchangeParts.prototype.receive;
+ const mock=t.mock.method(ExchangeParts.prototype,'receive',async function(...args){const result=await original.apply(this,args);if(this.workspace===f.member.workspace&&this.count===1){arrived();await pause;}return result;});
+ const pending=f.sb.receive(bytes,{signal:controller.signal}),rejected=assert.rejects(pending,{name:'AbortError'});await first;
+ try{
+  await f.member.workspace.withLock(()=>f.member.workspace.writeMetadata('.observanda/staging-test.json','{"available":true}'));
+  assert.equal(await f.member.workspace.readMetadata('.observanda/staging-test.json',100),'{"available":true}');
+  let copied=false;await assert.rejects(f.member.workspace.withStorageHandoff(()=>{copied=true;}),{code:'LOCKED'});assert.equal(copied,false);
+ }finally{controller.abort();resume();mock.mock.restore();}await rejected;
+ await withStagingAuthority(f.member.workspace,async authority=>assert.equal((await authority.status()).active,0));
+ await f.member.workspace.withStorageHandoff(()=>{});assert.deepEqual(await f.member.workspace.listMetadata('.observanda/collaboration/staging'),[]);
+});
+
+test('revoking a grant during an incoming return prevents publication and removes its abandoned stage',async t=>{
+ const f=await fixture(t),offer=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),incoming=await f.sb.receive(await f.sa.outgoing(offer.id)),destination=path.join(f.directory,'revoked-during-return');await f.sb.acceptCopy(incoming.id,destination);
+ const vault=await verifyAccess(await readAccess(destination),'','',{deviceStore:f.member.deviceStore});f.vaults.push(vault);const sender=new ResearchExchange(new Workspace(destination,vault),f.member.deviceStore),prepared=await sender.prepareChanges(),bytes=await Array.fromAsync(await sender.outgoing(prepared.id));
+ let arrived,resume,stagedId;const first=new Promise(resolve=>{arrived=resolve;}),pause=new Promise(resolve=>{resume=resolve;}),original=ExchangeParts.prototype.receive;
+ const mock=t.mock.method(ExchangeParts.prototype,'receive',async function(...args){const result=await original.apply(this,args);if(this.workspace===f.author.workspace&&this.count===1){stagedId=this.id;arrived();await pause;}return result;});
+ const pending=f.sa.receive(bytes),rejected=assert.rejects(pending,{code:'COLLABORATION_DENIED'});await first;
+ try{await f.sa.access.saveLocal(await f.a.identity.public(),{workspaceId:f.book.id,expectedRevision:1,active:false,scopes:f.grant.scopes,organizationId:f.org.id,id:f.grant.id,recipient:f.grant.recipient,role:'editor'});}finally{resume();mock.mock.restore();}
+ await rejected;assert.equal(await f.author.workspace.readMetadata('.observanda/collaboration/staging/'+stagedId+'/head.json',8192),null);assert.deepEqual(await f.author.workspace.listMetadata('.observanda/collaboration/staging/'+stagedId),[]);
+ await withStagingAuthority(f.author.workspace,async authority=>assert.equal((await authority.status()).active,0));
 });
 
 test('encrypted selected books open with independent keys and retain editable records without unrelated content',async t=>{
@@ -92,7 +118,7 @@ test('successive owner editions update the same workspace, preserve local edits 
  const third=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),latest=await member.receive(await f.sa.outgoing(third.id)),ack=await reviewer.review(latest.id);assert.equal(ack.rows[0].conflict,false);await reviewer.apply({reviewId:ack.id,choices:ack.rows.map(r=>({id:r.id,choice:'incoming'}))});
  // A further unchanged edition must still advance the base, including readers.
  const fourth=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),unchanged=await member.receive(await f.sa.outgoing(fourth.id)),empty=await reviewer.review(unchanged.id);assert.equal(empty.rows.length,0);await reviewer.apply({reviewId:empty.id,choices:[]});assert.equal((await member.working()).selection.id,fourth.id);
- const backup=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'continuing-backup')),{vault}),restored=new ResearchExchange(new Workspace(backup,vault),f.member.deviceStore);assert.deepEqual(await restored.working(),await member.working());
+ const backup=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'continuing-backup'),{vault}),{vault}),restored=new ResearchExchange(new Workspace(backup,vault),f.member.deviceStore);assert.deepEqual(await restored.working(),await member.working());
 });
 
 test('scope updates add books and retain declined removals as local research outside future returns',async t=>{
@@ -126,7 +152,7 @@ test('reader grants cannot prepare returned edits and native backup retains the 
  const f=await fixture(t);await f.sa.access.saveLocal(await f.a.identity.public(),{workspaceId:f.book.id,expectedRevision:1,id:f.grant.id,organizationId:f.org.id,scopes:f.grant.scopes,recipient:f.grant.recipient,role:'reader',active:true});
  const offer=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),incoming=await f.sb.receive(await f.sa.outgoing(offer.id)),destination=path.join(f.directory,'read-copy');await f.sb.acceptCopy(incoming.id,destination);
  const access=await readAccess(destination),vault=await verifyAccess(access,'','',{deviceStore:f.member.deviceStore});f.vaults.push(vault);const ws=new Workspace(destination,vault),sender=new ResearchExchange(ws,f.member.deviceStore);await assert.rejects(sender.prepareChanges(),{code:'COLLABORATION_DENIED'});
- const restored=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'restored')),{vault}),after=new ResearchExchange(new Workspace(restored,vault),f.member.deviceStore);assert.deepEqual(await after.working(),await sender.working());await assert.rejects(after.prepareChanges(),{code:'COLLABORATION_DENIED'});
+ const restored=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'restored'),{vault}),{vault}),after=new ResearchExchange(new Workspace(restored,vault),f.member.deviceStore);assert.deepEqual(await after.working(),await sender.working());await assert.rejects(after.prepareChanges(),{code:'COLLABORATION_DENIED'});
 });
 
 test('a signed collaborator file cannot replace access files or introduce records outside the offered books',async t=>{
@@ -200,7 +226,7 @@ test('interrupted receives leave no staged plaintext; accepted additions and del
  try{await assert.rejects(reviewer.apply(command),/Synthetic receipt failure/);}finally{f.author.workspace.writeMetadata=write;}
  assert.deepEqual(await f.author.workspace.read(),before);await reviewer.apply(command);const after=(await f.author.workspace.read()).book;assert.equal(after.entries.find(r=>r.id===added.id).share,false);assert.ok(!after.entries.some(r=>r.id===removed.id));
  const staged=new ExchangeParts(f.author.workspace,incoming.id);await staged.open();const item=await staged.descriptor('description','selection'),file=staged.content(item).file,ciphertext=await readFile(file),damaged=Buffer.from(ciphertext);damaged[damaged.length-1]^=1;await writeFile(file,damaged);
- try{await assert.rejects(copyWorkspace(await copyPlan(f.author.workspace.root,path.join(f.directory,'damaged-backup')),{vault:f.author.vault}),{code:'ENCRYPTION_DAMAGED'});}finally{await writeFile(file,ciphertext);}
+ try{await assert.rejects(copyWorkspace(await copyPlan(f.author.workspace.root,path.join(f.directory,'damaged-backup'),{vault:f.author.vault}),{vault:f.author.vault}),{code:'ENCRYPTION_DAMAGED'});}finally{await writeFile(file,ciphertext);}
  const head=await staged.open(),forged=structuredClone(head);forged.attestation.value.manifestHash='0'.repeat(64);await f.author.workspace.withLock(()=>f.author.workspace.writeMetadata(staged.prefix+'/head.json',JSON.stringify(forged)));
- try{await assert.rejects(copyWorkspace(await copyPlan(f.author.workspace.root,path.join(f.directory,'forged-backup')),{vault:f.author.vault}),{code:'COLLABORATION_SIGNATURE'});}finally{await f.author.workspace.withLock(()=>f.author.workspace.writeMetadata(staged.prefix+'/head.json',JSON.stringify(head)));}
+ try{await assert.rejects(copyWorkspace(await copyPlan(f.author.workspace.root,path.join(f.directory,'forged-backup'),{vault:f.author.vault}),{vault:f.author.vault}),{code:'COLLABORATION_SIGNATURE'});}finally{await f.author.workspace.withLock(()=>f.author.workspace.writeMetadata(staged.prefix+'/head.json',JSON.stringify(head)));}
 });

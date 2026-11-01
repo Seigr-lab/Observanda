@@ -13,6 +13,9 @@ import {selectedMetadata,validateSelection} from './selection.js';
 import {collectResearch,packageSelection,populateSharedWorkspace} from './research-package.js';
 import {identityHash} from './identity.js';
 import {workingFile,retainWorkingBase} from './working-copy.js';
+import {withStagingAuthority,recoverStaging} from '../staging-reservations.js';
+import {declaredStagingBytes,STAGING_FREE_BYTES} from '../staging-reservation-model.js';
+import {onVaultRetire} from '../vault-lifecycle.js';
 
 const valid=(condition,code='COLLABORATION_DENIED')=>{if(!condition)throw new AppError(code);};
 class RepeatedExchange extends Error{constructor(summary){super('Previously received exchange');this.summary=summary;}}
@@ -50,18 +53,28 @@ export class ResearchExchange{
   return writeExchange(this.identity,recipient,parts.entries(),{id:selection.id,declaration});
  }
  async receive(source,{signal}={}){
-  const parts=new ExchangeParts(this.workspace);return this.workspace.withLock(async()=>{
-   const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,{...options,reserveBytes:256*1024*1024}),{signal,requireDeclaration:true,authorizeDeclaration:async({id,sender,declaration})=>{
-    const selection=validateSelection(declaration.selection);valid(selection.id===id,'COLLABORATION_PACKAGE');await this.authorizeIncoming(selection,sender);
-   }}),selection=await packageSelection(parts);
-   valid(selection.id===result.id,'COLLABORATION_PACKAGE');
-   await this.authorizeIncoming(selection,result.sender);
-   // Authenticate the entire incoming stream and current authority first.
-   // Re-encryption changes the transport signature, not its selected content.
-   const receiptPath='.observanda/collaboration/received/'+selection.id+'.json',raw=await this.workspace.readMetadata(receiptPath,8192),receipt={id:parts.id,sender:result.sender.id,selectionHash:identityHash(selection),manifestHash:result.attestation.value.manifestHash};
-   if(raw){const previous=JSON.parse(raw);valid(previous.sender===receipt.sender&&previous.selectionHash===receipt.selectionHash&&previous.manifestHash===receipt.manifestHash,'COLLABORATION_PACKAGE');const retained=new ExchangeParts(this.workspace,previous.id);await retained.open();throw new RepeatedExchange(this.summary(retained,selection));}
-   await parts.finish({direction:'incoming',selectionHash:receipt.selectionHash,sender:result.sender.id,signatureHash:result.signatureHash,attestation:result.attestation});await this.workspace.writeMetadata(receiptPath,JSON.stringify(receipt));return this.summary(parts,selection);
-  }).catch(async error=>{await parts.discardUncommitted();if(error instanceof RepeatedExchange)return {...error.summary,replayed:true};throw error;});
+  const workspace=this.workspace;if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');const controller=new AbortController();signal=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+  let drained;const done=new Promise(resolve=>{drained=resolve;}),retire=onVaultRetire(workspace.vault,()=>{controller.abort(new AppError('ACCESS_LOCKED'));return done;});
+  try{return await withStagingAuthority(workspace,async authority=>{
+   let claim,admitted,sender;const parts=new ExchangeParts(workspace,undefined,{capacity:options=>{if(!claim)throw new AppError('COLLABORATION_PACKAGE');return claim.capacity(options);},write:operation=>workspace.withLock(async()=>{await claim.check();await this.authorizeIncoming(admitted,sender);return operation();})});
+   try{
+    const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,{...options,reserveBytes:STAGING_FREE_BYTES}),{signal,requireDeclaration:true,authorizeDeclaration:async declaration=>{
+     admitted=validateSelection(declaration.declaration.selection);sender=declaration.sender;valid(admitted.id===declaration.id,'COLLABORATION_PACKAGE');await workspace.withLock(()=>this.authorizeIncoming(admitted,sender));await recoverStaging(workspace,{signal});
+     await workspace.withLock(async()=>{await this.authorizeIncoming(admitted,sender);claim=await authority.reserve({id:parts.id,principalId:admitted.grant.principalId,ownerId:(await workspace.outline()).metadata.id,grantGeneration:admitted.grant.generation,entries:declaration.declaration.entries,expectedBytes:declaredStagingBytes(declaration.declaration.bytes,declaration.declaration.entries),expiresAt:declaration.expiresAt});});
+    }}),selection=await packageSelection(parts);valid(selection.id===result.id,'COLLABORATION_PACKAGE');await claim.preparing();
+    const summary=await workspace.withLock(async()=>{
+     await claim.check();await this.authorizeIncoming(selection,result.sender);
+     // Complete stream attestation and current authority precede publication.
+     // The claim remains live until this database transaction has committed.
+     const receiptPath='.observanda/collaboration/received/'+selection.id+'.json',raw=await workspace.readMetadata(receiptPath,8192),receipt={id:parts.id,sender:result.sender.id,selectionHash:identityHash(selection),manifestHash:result.attestation.value.manifestHash};
+     if(raw){const previous=JSON.parse(raw);valid(previous.sender===receipt.sender&&previous.selectionHash===receipt.selectionHash&&previous.manifestHash===receipt.manifestHash,'COLLABORATION_PACKAGE');const retained=new ExchangeParts(workspace,previous.id);await retained.open();throw new RepeatedExchange(this.summary(retained,selection));}
+     await parts.finish({direction:'incoming',selectionHash:receipt.selectionHash,sender:result.sender.id,signatureHash:result.signatureHash,attestation:result.attestation},{write:operation=>operation()});await workspace.writeMetadata(receiptPath,JSON.stringify(receipt));return this.summary(parts,selection);
+    });await claim.committed();await recoverStaging(workspace,{id:parts.id,signal});return summary;
+   }catch(error){
+    await claim?.close();if(workspace.vault?.key)await recoverStaging(workspace,{id:parts.id});
+    if(error instanceof RepeatedExchange)return {...error.summary,replayed:true};throw error;
+   }finally{await claim?.close();}
+  },{signal});}finally{retire();drained();}
  }
  async authorizeIncoming(selection,sender){
    const local=(await this.identity.signer.public()).id;

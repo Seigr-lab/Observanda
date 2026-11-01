@@ -17,7 +17,7 @@ const descriptor=(value,scope)=>{
 // Transport staging is local and encrypted. Research metadata and immutable
 // originals are admitted only after the complete package has authenticated.
 export class ExchangeParts{
- constructor(workspace,id=randomUUID(),{scope='collaboration',write=operation=>operation()}={}){if(!uuid(id)||!['collaboration','reviews'].includes(scope))throw new AppError('INVALID');this.workspace=workspace;this.id=id;this.scope=scope;this.write=write;this.prefix=(scope==='reviews'?'.observanda/reviews/parts/':'.observanda/collaboration/staging/')+id;this.count=0;this.bytes=0;}
+ constructor(workspace,id=randomUUID(),{scope='collaboration',write=operation=>operation(),capacity}={}){if(!uuid(id)||!['collaboration','reviews'].includes(scope))throw new AppError('INVALID');this.workspace=workspace;this.id=id;this.scope=scope;this.write=write;this.capacity=capacity;this.prefix=(scope==='reviews'?'.observanda/reviews/parts/':'.observanda/collaboration/staging/')+id;this.count=0;this.bytes=0;}
  async descriptor(kind,name){valid(validPart(kind,name,this.scope));const raw=await this.workspace.readMetadata(this.prefix+'/names/'+digest(kind+'/'+name)+'.json',2048);if(raw===null)return null;const item=descriptor(JSON.parse(raw),this.scope);valid(item.kind===kind&&item.name===name);return item;}
  async add({kind,name,content}){
   const old=await this.descriptor(kind,name),size=contentSize(content),sha256=contentHash(content);
@@ -29,7 +29,7 @@ export class ExchangeParts{
   if(await this.descriptor(info.kind,info.name))throw new AppError('COLLABORATION_PACKAGE');
   if(['description','record','metadata'].includes(info.kind)&&info.size>(info.kind==='metadata'?16:2)*1024*1024)throw new AppError('LIMIT');
   const directory=await privateDirectory(this.workspace.root,this.prefix),index=this.count++,file=path.join(directory,index+'.blob');
-  const saved=await writeContent(this.workspace,file,source,{signal,reserveBytes,maxBytes:info.size||1,expected:{size:info.size,sha256:info.sha256}});
+  const saved=await writeContent(this.workspace,file,source,{signal,reserveBytes,maxBytes:info.size||1,expected:{size:info.size,sha256:info.sha256},capacity:this.capacity});
   if(saved.size!==info.size||saved.sha256!==info.sha256)throw new AppError('COLLABORATION_PACKAGE');
   const entry={...info,index};await this.write(async()=>{await this.workspace.writeMetadata(this.prefix+'/items/'+index+'.json',JSON.stringify(entry));await this.workspace.writeMetadata(this.prefix+'/names/'+digest(info.kind+'/'+info.name)+'.json',JSON.stringify(entry));});this.bytes+=saved.size;return entry;
  }
