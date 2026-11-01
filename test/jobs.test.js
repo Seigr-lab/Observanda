@@ -158,9 +158,9 @@ test('a killed process leaves a recoverable lease and encrypted staged bytes for
 });
 
 test('queued imports and completed jobs survive verified backup and rekeyed restore without duplicate artifacts',async t=>{
- const f=await fixture(t),u=await uploaded(f),backup=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const f=await fixture(t),u=await uploaded(f),backup=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const accessRecord=await createAccess('','different worker password'),key=takeCreatedVault(accessRecord);t.after(()=>clearVault(key));
- const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'rekeyed')),accessRecord,key,f.vault);
+ const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'rekeyed'),{vault:f.vault}),accessRecord,key,f.vault);
  for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
   const workspace=new Workspace(root,vault),r=workspaceJobs(workspace);r.worker.start();
   let done;try{done=await finished(r.queue,u.job.id);assert.equal(done.state,'completed');}finally{await r.worker.stop();}
@@ -168,7 +168,7 @@ test('queued imports and completed jobs survive verified backup and rekeyed rest
  }
  assert.equal((await f.queue.read(u.job.id)).state,'queued');
  f.worker.start();const completed=await finished(f.queue,u.job.id);await f.worker.stop();
- const completedCopy=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'completed-copy')),{vault:f.vault});
+ const completedCopy=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'completed-copy'),{vault:f.vault}),{vault:f.vault});
  const restored=workspaceJobs(new Workspace(completedCopy,f.vault));assert.deepEqual(await restored.queue.read(u.job.id),completed);
  assert.deepEqual((await restored.queue.enqueue(u.input)).result,completed.result);assert.equal(await restored.queue.hasActive(),false);
 });

@@ -99,12 +99,16 @@ export class DurableJobs{
   const {job}=await this.held(id,token),until=job.lease.until,result=await operation();
   // Admission required a live lease. The writer lock has fenced every other
   // claimant throughout this transaction, including slow durable flushes.
-  // Renew before releasing it instead of making the next heartbeat observe
-  // the pre-checkpoint deadline. Never revive a replaced or modified lease.
+  // Renew before releasing a slow writer. Fast checkpoints can retain the
+  // existing durable deadline until one heartbeat interval has elapsed, instead
+  // of rewriting the job and queue indexes for every small evidence batch.
+  // Never revive a replaced or modified lease.
   const current=await this.read(id);
   if(!current||current.state!=='running'||current.lease.token!==token||current.lease.until!==until)throw new AppError('JOB_LEASE');
   if(current.cancelRequested)throw new AppError('JOB_CANCELLED');
-  const now=await this.now();current.lease.until=now+this.leaseMs;current.updatedAt=new Date(now).toISOString();await this.write(current);return result;
+  const now=await this.now();
+  if(until-now<=this.leaseMs*2/3){current.lease.until=now+this.leaseMs;current.updatedAt=new Date(now).toISOString();await this.write(current);}
+  return result;
  },{retryLocked:false});}
  async complete(id,token,prepared,{signal,beforeCommit,progress}={}){
   // Opted-in domains may finish expensive immutable-source proofs without

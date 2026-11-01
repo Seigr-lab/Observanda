@@ -26,3 +26,26 @@ test('job checkpoints reuse bounded background connections without borrowing the
  assert.ok(phases.length<=3,'Repeated checkpoint connection opens: '+phases.length);assert.ok(phases.length>=2);assert.ok(phases.every(value=>value==='background'));
  assert.equal(opened,closed,'Settled jobs release every admitted control connection');
 });
+
+test('short checkpoints retain their durable lease without rewriting queue indexes and still fence replacement',async t=>{
+ const {ws,queue,record}=await intakeFixture(t);let clock=Date.now(),writes=0;
+ queue.leaseMs=9000;queue.now=async()=>clock;
+ queue.definitions['test.renewal']={authorize:async()=>{},prepare:async()=>({}),commit:async()=>({})};
+ const queued=await queue.enqueue({id:randomUUID(),type:'test.renewal',scope:record.id,input:{}}),job=await queue.claim(),write=queue.write.bind(queue);
+ assert.equal(job.id,queued.id);queue.write=async value=>{writes++;return write(value);};
+ await ws.withCatalogueConnections(async()=>{
+  for(let value=1;value<=40;value++)await queue.checkpoint(job.id,job.lease.token,()=>ws.catalogue(store=>store.putObject('checkpoint-renewal-fixture',{value})));
+  assert.equal(writes,0,'Durable evidence writes do not renew a freshly held lease');
+  assert.equal((await queue.held(job.id,job.lease.token)).job.lease.until,job.lease.until);
+  assert.deepEqual(await ws.catalogue(store=>store.object('checkpoint-renewal-fixture')),{value:40});
+  clock+=queue.leaseMs/3;
+  await queue.checkpoint(job.id,job.lease.token,async()=>{});
+  assert.equal(writes,1);assert.equal((await queue.read(job.id)).lease.until,clock+queue.leaseMs);
+  await assert.rejects(queue.checkpoint(job.id,job.lease.token,async()=>{
+   const changed=await queue.read(job.id);changed.lease.token=randomUUID();await queue.write(changed);
+   await ws.catalogue(store=>store.putObject('checkpoint-renewal-fixture',{value:99}));
+  }),{code:'JOB_LEASE'});
+  assert.equal((await queue.held(job.id,job.lease.token)).job.lease.token,job.lease.token);
+  assert.deepEqual(await ws.catalogue(store=>store.object('checkpoint-renewal-fixture')),{value:40},'Rejected replacement rolls back its evidence');
+ });
+});
