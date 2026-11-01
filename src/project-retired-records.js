@@ -7,9 +7,22 @@ import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
+import {catalogueContext} from './catalogue-context.js';
+import {catalogueReadToken} from './catalogue-format-read.js';
 const readers=new AsyncLocalStorage(),format='observanda-retired-record';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
+const readTokens=new WeakMap();let nextReadToken=0;
+async function readProof(store,kind,receipt,verify){
+ const token=catalogueReadToken(store.db),cache=store.readCache;
+ if(!token||!cache||catalogueContext.getStore())return verify();
+ const vault=store.workspace.vault;if(!Buffer.isBuffer(vault?.key)||vault.key.length!==32)throw new AppError('ACCESS_LOCKED');
+ let id=readTokens.get(token);if(id===undefined){id=++nextReadToken;readTokens.set(token,id);}
+ // Credentials may be retired while a read transaction still drains. Never
+ // let a successful control proof bypass a changed key or a different owner.
+ const identity=['retired-project',kind,id,vault.id,digest(vault.key),hash(receipt)].join(':');
+ return cache.proof(identity,async()=>{await verify();return '';});
+}
 export const retiredProjectRecord=value=>value?.format===format;
 export function projectRecordLocation(receipt,id,revision,notebookId){
  if(!validProjectSourceAuthority(receipt)||!researchId(id)||!revisionId(revision)||!researchId(notebookId))throw new AppError('INVALID');
@@ -24,12 +37,17 @@ export function withRetiredProjectRecords(source,router,operation){
 }
 export async function withRetiredProjectCatalogue(store,receipt,target,consume){
  if(store.workspace.projectId||!validProjectSourceAuthority(receipt))fail();
- const authority=new ProjectSourceAuthority(store),source=await authority.receipt(receipt.projectId);
- if(!source||hash(source)!==hash(receipt)||(await store.snapshot()).metadata.id!==receipt.sourceNamespace)fail();
+ await readProof(store,'source',receipt,async()=>{
+  const source=await new ProjectSourceAuthority(store).receipt(receipt.projectId);
+  if(!source||hash(source)!==hash(receipt)||(await store.snapshot()).metadata.id!==receipt.sourceNamespace)fail();
+ });
  const context=readers.getStore();if(context?.source.root!==store.workspace.root||context.source.vault!==store.workspace.vault)throw new AppError('ACCESS_LOCKED');
  return context.router.withProject(receipt.projectId,storage=>storage.catalogue(async selected=>{
-  if(storage.projectId!==receipt.projectId||storage.vault.id!==receipt.vaultId||(await selected.snapshot()).metadata.id!==receipt.namespaceId)fail();
-  const adoption=await selected.object('project:adoption');if(adoption?.version!==1||adoption.ready!==true||hash(adoption.receipt)!==hash(receipt))fail();
+  if(storage.projectId!==receipt.projectId||storage.vault.id!==receipt.vaultId)fail();
+  await readProof(selected,'adoption',receipt,async()=>{
+   if((await selected.snapshot()).metadata.id!==receipt.namespaceId)fail();
+   const adoption=await selected.object('project:adoption');if(adoption?.version!==1||adoption.ready!==true||hash(adoption.receipt)!==hash(receipt))fail();
+  });
   return consume(selected);
  }),{action:'read',target:{projectId:receipt.projectId,domain:'research',...target}});
 }
