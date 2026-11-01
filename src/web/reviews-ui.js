@@ -78,7 +78,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
     frame('readTitle','<p>'+esc(q.message)+'</p><p>'+esc(tr('readHelp'))+'</p><form id="review-response-form" data-request-id="'+q.id+'">'+q.records.map((r,i)=>'<fieldset data-review-record="'+r.id+'"><legend>'+esc(r.record.title)+'</legend><code class="tool-hash">'+esc(tr('revision',{revision:r.revision}))+'</code><div class="review-readable">'+recordRevisionView(r.record,esc,{figureSources:false,retainedFigureAction:sharedFigureControls(esc)})+'</div><details><summary>'+esc(tr('inspect'))+'</summary><pre class="review-snapshot">'+esc(JSON.stringify(r.record,null,2))+'</pre></details>'+(p.direction==='incoming'&&!p.response?'<label>'+esc(tr('decision'))+'<select name="decision-'+i+'" aria-label="'+esc(tr('decision'))+'">'+decisions.map(k=>'<option value="'+k+'">'+esc(tr(k))+'</option>').join('')+'</select></label><label>'+esc(tr('comments'))+'<textarea name="comment-'+i+'" maxlength="8000" rows="3"></textarea></label>':'<p>'+esc(p.response?.value.decisions.find(d=>d.id===r.id)?.comment??tr('awaiting'))+'</p>')+'</fieldset>').join('')+(p.direction==='incoming'&&!p.response?'<label class="checkbox"><input type="checkbox" name="confirm" required>'+esc(tr('confirm'))+'</label><p>'+esc(tr('timeHelp'))+'</p><p role="alert" data-review-error></p><button class="button primary" type="submit">'+esc(tr('sign'))+'</button>':'')+'</form>');
     const dialog=document.getElementById('dialog');for(const selected of q.records){const host=dialog.querySelector('[data-review-record="'+selected.id+'"]');if(host)figureViews.push(mountSharedFigures(host,{selector:{workspaceId:state.book.id,id:q.id,recordId:selected.id,recordRevision:selected.revision},request:(fields,options)=>call('figure',fields,options),downloadURL:fields=>url('figure-export',fields)}));}dialog.addEventListener('close',disposeFigures,{once:true});
    }
-   else if(op==='export'){const result=await call('export',{id:node.dataset.id});downloadResult(result,'review-'+node.dataset.id+'.observanda-review');}
+   else if(op==='export'){const result=await call('export',{id:node.dataset.id});await downloadResult(result,'review-'+node.dataset.id+'.observanda-review');}
    else if(op==='untrust'){await call('untrust',{fingerprint:node.dataset.fingerprint});await refresh();render();}
    else if(['refresh','previous','next'].includes(op)){
     await refresh(op==='previous'?list.previousCursor:op==='next'?list.nextCursor:null);
@@ -107,7 +107,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    }
    if(form.id==='review-request-form'){
     if(state.dirty)throw Error(tr('saveFirst'));if(!plan||d.get('scope')!==plan.scope.kind+':'+plan.scope.id)throw Error(tr('previewFirst'));
-    const result=await call('create',{id:form.dataset.requestId,recipient:d.get('recipient'),message:d.get('message'),scope:plan.scope,records:plan.records.map(({id,revision})=>({id,revision}))});downloadResult(result,'request-'+form.dataset.requestId+'.observanda-review');
+    const result=await call('create',{id:form.dataset.requestId,recipient:d.get('recipient'),message:d.get('message'),scope:plan.scope,records:plan.records.map(({id,revision})=>({id,revision}))});await downloadResult(result,'request-'+form.dataset.requestId+'.observanda-review');
    }
    if(form.id==='review-response-form'){
     if(!d.has('confirm'))throw Error(tr('confirmFirst'));
