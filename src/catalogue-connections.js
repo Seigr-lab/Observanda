@@ -4,6 +4,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
+import {withWorkloadPriority,validWorkloadPriority} from './workload-priority.js';
 const scopes=new AsyncLocalStorage();
 function validate(scope,workspace){
  if(scope.root!==workspace.root||scope.projectId!==(workspace.projectId??null)||scope.labBookId!==(workspace.labBookId??null))throw new AppError('DATABASE_LOCATION');
@@ -11,9 +12,10 @@ function validate(scope,workspace){
 }
 // The explicit owner spans sequential callbacks, but no transaction spans them.
 // It is request-owned, and may retain only its selected workspace's connections.
-function connectionOwner(workspace,{lateIndependent=false}={}){
+function connectionOwner(workspace,{lateIndependent=false,priority}={}){
  if(!Buffer.isBuffer(workspace.vault?.key))throw new AppError('ACCESS_LOCKED');
- const scope={root:workspace.root,projectId:workspace.projectId??null,labBookId:workspace.labBookId??null,vaultId:workspace.vault.id,key:Buffer.from(workspace.vault.key),entries:new Map(),closed:false,lateIndependent};
+ if(priority!==undefined&&!validWorkloadPriority(priority))throw new AppError('INVALID');
+ const scope={root:workspace.root,projectId:workspace.projectId??null,labBookId:workspace.labBookId??null,vaultId:workspace.vault.id,key:Buffer.from(workspace.vault.key),entries:new Map(),closed:false,lateIndependent,priority};
  const pending=new Set(),running=new AsyncLocalStorage();let closing=false,closed;
  return {
   async run(operation){
@@ -40,7 +42,7 @@ function connectionOwner(workspace,{lateIndependent=false}={}){
   }
  };
 }
-export function createCatalogueConnections(workspace){return connectionOwner(workspace);}
+export function createCatalogueConnections(workspace,{priority}={}){return connectionOwner(workspace,{priority});}
 export function withoutCatalogueConnections(operation){return scopes.exit(operation);}
 export async function withCatalogueConnections(workspace,operation){
  const prior=scopes.getStore()?.get(workspace);
@@ -69,7 +71,7 @@ export async function catalogueConnection(workspace,kind,options,operation){
   // Fresh opens perform their own lifecycle admission; reused connections
   // must recheck it before every transaction.
   if(entry.db)await assertWorkspaceAvailable(workspace.root,{moveId:options.moveId});
-  else entry.db=await workspace.openCatalogue(options);
+  else entry.db=await (scope.priority?withWorkloadPriority(scope.priority,()=>workspace.openCatalogue(options)):workspace.openCatalogue(options));
   try{return await operation(entry.db);}
   catch(error){const db=entry.db;entry.db=null;await db.close().catch(()=>{});throw error;}
  });

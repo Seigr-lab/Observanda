@@ -13,6 +13,7 @@ import {withoutWriterWait,backgroundWriterWait} from './writer-wait.js';
 import {JobProgress,validateJobProgress} from './job-progress.js';
 import {jobFailureDiagnostic,jobDiagnosticFile,readJobDiagnostic,withJobDiagnosticContext} from './job-diagnostics.js';
 import {withWorkloadPriority} from './workload-priority.js';
+import {createCatalogueConnections} from './catalogue-connections.js';
 const terminal=new Set(['completed','failed','cancelled']);
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const same=(a,b)=>digest(serialize(a))===digest(serialize(b));
@@ -170,15 +171,20 @@ export class JobWorker{
  }
  async runOnce(){
   const job=await this.queue.claim();if(!job)return false;this.active=job;const controller=this.controller=new AbortController(),context=AsyncLocalStorage.snapshot();
-  const wait=operation=>context(()=>backgroundWriterWait(operation,{signal:controller.signal,check:()=>this.queue.held(job.id,job.lease.token)}));
+  let controls;
+  // Control reads must escape a preparation snapshot, but need not reconnect
+  // for every lease check and short checkpoint. This owner keeps separate fresh
+  // read/write transactions and releases both connections when the job settles.
+  const wait=operation=>context(()=>{const run=()=>backgroundWriterWait(operation,{signal:controller.signal,check:()=>this.queue.held(job.id,job.lease.token)});return controls?controls.run(run):run();});
   const write=operation=>wait(()=>this.queue.checkpoint(job.id,job.lease.token,async()=>{controller.signal.throwIfAborted();const result=await operation();controller.signal.throwIfAborted();return result;}));
   const updates=new JobProgress(progress=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)),{signal:controller.signal,heartbeatMs:Math.max(100,this.queue.leaseMs/3),onError:error=>controller.abort(error)});
   try{
+   if(Buffer.isBuffer(this.queue.workspace?.vault?.key))controls=createCatalogueConnections(this.queue.workspace,{priority:'background'});
    if(!this.enabled)controller.abort();
    const prepared=await withWorkloadPriority('background',()=>measuredJobPhase('prepare-job',()=>withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)}))));
    await updates.flush();controller.signal.throwIfAborted();await measuredJobPhase('complete-job',()=>withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()}))));
   }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(releaseError=>this.report('worker-release',{error:releaseError}));}
-  finally{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
+  finally{try{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});}finally{try{await controls?.close();}finally{this.active=null;this.controller=null;}}}
   return true;
  }
  async stop(){this.enabled=false;clearTimeout(this.timer);this.controller?.abort();await this.running;}
