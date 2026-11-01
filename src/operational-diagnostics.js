@@ -9,6 +9,7 @@ const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job','session-access','session-device','session-workers','workspace-identity','session-location']);
 for(const stage of ['startup-modules','runtime-permissions','runtime-version','runtime-status','runtime-start','runtime-connect','website-source-selections','website-source-owners','website-source-counts'])phases.add(stage);
+for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
 for(const stage of ['website-source-entry','website-source-find','website-source-describe','website-source-neighbours','website-source-body','website-source-references'])phases.add(stage);
 for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])phases.add(stage);
 for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist'])phases.add(stage);

@@ -1,4 +1,5 @@
 import {initializeManagedApplication} from './postgres-runtime-bootstrap.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 import {verifyManagedApplication} from './postgres-runtime-readiness.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // PostgreSQL process lifecycle. Portable clusters belong to their workspace;
@@ -108,7 +109,7 @@ export async function outsideWorkspace(directory){
 }
 async function privateRoot(directory){
  await mkdir(directory,{recursive:true,mode:0o700});await assertRegular(directory,{directory:true});
- if(windows)await runtimeCommand(path.join(process.env.SystemRoot??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/private-directory.ps1',import.meta.url)),'-Directory',directory]);
+ if(windows)await diagnosticPhase('runtime-permissions',()=>runtimeCommand(path.join(process.env.SystemRoot??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/private-directory.ps1',import.meta.url)),'-Directory',directory]));
  else await chmod(directory,0o700);
 }
 async function listener(port){const server=createServer(socket=>socket.destroy());await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});return server;}
@@ -180,7 +181,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
  let config,verifiedCluster=false,freshCluster=false,reservation,mayBeRunning=false;
  const releaseCapacity=()=>{if(mayBeRunning)reservation?.uncertainExit();else{reservation?.release();if(verifiedCluster)budget.stopped(directory);}};
  const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await files.write(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
- const ctl=(args,options={})=>guard.run(executable(config.bin,'pg_ctl'),['-D',data,...args],options);
+ const ctl=(args,options={})=>{const run=()=>guard.run(executable(config.bin,'pg_ctl'),['-D',data,...args],options);return args.includes('start')?diagnosticPhase('runtime-start',run):args.includes('status')?diagnosticPhase('runtime-status',run):run();};
  try{
   if(!stopOnly){reservation=budget.reserve('database',databaseMemoryReservation(sharedBuffers),{key:directory});mayBeRunning=reservation.uncertain;}
   if(workspace){
@@ -199,7 +200,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    // Never stop a PostgreSQL process owned by another installation sharing
    // this folder. A clean shutdown makes an ordinary disk transfer portable.
    if(workspace&&config.running&&(config.ownerId!==workspace.ownerId||config.activeDirectory!==directory))throw new AppError('DATABASE_WORKSPACE_RUNNING');
-   config.bin=await compatibleManagedRuntime(config,env.OBSERVANDA_POSTGRES_BIN,checkVersion);
+   config.bin=await diagnosticPhase('runtime-version',()=>compatibleManagedRuntime(config,env.OBSERVANDA_POSTGRES_BIN,checkVersion));
   }else{
    if(existingOnly||stopOnly||await files.stat(data,{directory:true,missing:true}))throw new AppError('DATABASE_RUNTIME');
    let runtime;
@@ -242,7 +243,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});
   const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:5000});admin.on('error',()=>{});
   try{
-   await admin.connect();
+   await diagnosticPhase('runtime-connect',()=>admin.connect());
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
   }finally{await admin.end();}
   await verifyManagedApplication(config,{signal});
