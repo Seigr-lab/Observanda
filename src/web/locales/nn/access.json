@@ -9,7 +9,7 @@
   "copyDone": "Verifisert kopi er opna. Det opphavlege arbeidsområdet er framleis i den førre mappa.",
   "moveCleanupTitle": "Fullfør fjerninga av det opphavlege arbeidsområdet",
   "moveSourceChanged": "Originalen vart endra etter kopieringa. Han er bevart intakt. Sjå gjennom endringane før du prøver å fjerne han på nytt.",
-  "moveCleanupHint": "Den verifiserte målmappa er open. Fjerninga av originalen er ikkje fullført. Eit nytt forsøk kontrollerer originalen før han blir fjerna, utan å gjenta filoverføringa.",
+  "moveCleanupHint": "Den verifiserte målmappa er open. Fjerninga av originalen er ikkje fullført. Observanda prøver den godkjende oppryddinga på nytt når du opnar dette arbeidsområdet igjen. Kvart forsøk kontrollerer dei bevarte dataa før fjerning, utan å gjenta overføringa. Du kan òg prøve igjen no.",
   "finishMove": "Prøv opprydding av originalen igjen",
   "moveProgress": "Flyttar og verifiserer...",
   "copyProgress": "Kopierer og verifiserer...",

@@ -16,6 +16,7 @@ import {CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {ResearchCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
 import {withOperationProgress} from '../src/operation-progress.js';
 import {planWorkspaceMove,moveWorkspace,moveWorkspaceTo,finishWorkspaceMove,readMoveReceipt} from '../src/workspace-move.js';
+import {WORKSPACE_MOVE_AUTHORIZATION} from '../src/workspace-transfer-controls.js';
 
 async function fixture(t,encrypted=false){
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'observanda-move-test-'));
@@ -133,6 +134,7 @@ test('a moved workspace supports subsequent independent backups and moves withou
  const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination);
  await moveWorkspace(plan,{vault:f.vault,activate:async()=>{}});
  const backup=path.join(f.directory,'backup');await copyWorkspace(await copyPlan(f.destination,backup),{vault:f.vault});
+ await assert.rejects(fs.access(path.join(backup,WORKSPACE_MOVE_AUTHORIZATION)),{code:'ENOENT'});
  assert.equal(await readMoveReceipt(backup),null);assert.equal((await new Workspace(backup,f.vault).read()).book.id,(await new Workspace(f.destination,f.vault).read()).book.id);
  const next=path.join(f.directory,'next');assert.equal((await moveWorkspace(await planWorkspaceMove(f.destination,next),{vault:f.vault,activate:async()=>{}})).phase,'complete');
  assert.equal((await readMoveReceipt(next)).source,f.destination);await fs.access(backup);await assert.rejects(fs.access(f.destination),{code:'ENOENT'});

@@ -12,6 +12,7 @@ import {researchJobDefinitions} from './research-jobs.js';
 import {mediaJobDefinitions} from './media-imports.js';
 import {intakeJobDefinitions} from './intake/jobs.js';
 import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
+import {workspaceMoveJobDefinitions,recoverWorkspaceMove} from './workspace-move-jobs.js';
 export function websitePublisher(publisher,workspace){
  if(publisher.workspace===workspace)return publisher;
  const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,liveRequest:publisher.liveRequest,ssh:publisher.ssh,connection:publisher.connection},workspace.vault);
@@ -26,9 +27,13 @@ function publicationDefinitions(workspace,publisher,current,services){
   return services[type][method](job,...args);
  }]));return result;
 }
-export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current,services),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
+export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...workspaceMoveJobDefinitions(workspace),...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current,services),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
 export function workspaceJobs(workspace,publisher=new Publisher(workspace.root,{},workspace.vault),options={}){
  const current=()=>queue,comparisonAccess=options.comparisonAccess??new ComparisonJobAccess();
  const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current,{sourceAccess:options.sourceAccess,comparisonAccess}),options);
- return {queue,worker:new JobWorker(queue),comparisonAccess};
+ const worker=new JobWorker(queue);let recovery;
+ return {queue,worker,comparisonAccess,
+  recover:()=>recovery??=recoverWorkspaceMove(workspace,queue).then(job=>{if(job)worker.wake();return job;}),
+  async stop(){await worker.stop();await recovery?.catch(()=>{});recovery=null;}
+ };
 }

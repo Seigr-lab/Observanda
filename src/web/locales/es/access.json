@@ -9,7 +9,7 @@
   "copyDone": "Copia verificada abierta. El espacio de trabajo original permanece en su carpeta anterior.",
   "moveCleanupTitle": "Terminar de eliminar el espacio de trabajo original",
   "moveSourceChanged": "El original ha cambiado después de copiarse. Se ha conservado intacto. Revisa los cambios antes de volver a intentar eliminarlo.",
-  "moveCleanupHint": "El destino verificado está abierto. La eliminación del original no ha terminado. El reintento comprueba el original antes de eliminarlo y no repite la transferencia de archivos.",
+  "moveCleanupHint": "El destino verificado está abierto. La eliminación del original no ha terminado. Observanda reintenta la limpieza autorizada cuando vuelves a abrir este espacio de trabajo. Cada intento verifica los datos conservados antes de eliminarlos y no repite la transferencia. También puedes reintentarlo ahora.",
   "finishMove": "Reintentar la limpieza del original",
   "moveProgress": "Moviendo y verificando...",
   "copyProgress": "Copiando y verificando...",

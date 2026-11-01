@@ -36,6 +36,7 @@
   "sharing": "S'està intercanviant treball compartit",
   "pin": "S'estan conservant les evidències del registre",
   "reviewRecords": "S'estan revisant els canvis dels registres",
+  "job:storage.move-cleanup": "Acaba d'eliminar l'espai de treball original",
   "job:analysis.compare": "S'estan comparant les mesures",
   "job:figure.calculate": "S'està calculant la figura",
   "job:dataset.prepare": "S'està preparant el conjunt de dades",

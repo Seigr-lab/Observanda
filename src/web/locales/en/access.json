@@ -9,7 +9,7 @@
   "copyDone": "Verified copy opened. The original workspace remains in its previous folder.",
   "moveCleanupTitle": "Finish removing the original workspace",
   "moveSourceChanged": "The original changed after it was copied. It has been kept intact. Review those changes before attempting removal again.",
-  "moveCleanupHint": "The verified destination is open. Removal of the original has not finished. Retry checks the original before removing it and does not repeat the file transfer.",
+  "moveCleanupHint": "The verified destination is open. Removal of the original has not finished. Observanda retries authorized cleanup when you reopen this workspace. Each retry verifies retained data before removal and does not repeat the transfer. You can also retry now.",
   "finishMove": "Retry original cleanup",
   "moveProgress": "Moving and verifying...",
   "copyProgress": "Copying and verifying...",

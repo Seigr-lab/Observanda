@@ -8,6 +8,7 @@ import {removeNativeDeletion,removeNativeMove} from '../src/native-storage-clean
 import {retireNativeDirectory,nativeControl} from '../src/native-storage-tree.js';
 import {DELETE_MARKER} from '../src/workspace-delete-state.js';
 import {MOVE_SOURCE} from '../src/workspace-move-state.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
 const windows={skip:!['win32','linux','darwin'].includes(process.platform)};
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-cleanup-')),root=path.join(parent,'retired'),outside=path.join(parent,'outside');await mkdir(path.join(root,'.observanda','media'),{recursive:true});await mkdir(outside);await writeFile(path.join(outside,'sentinel'),'keep');
@@ -41,4 +42,16 @@ test('native retirement preserves identity and refuses a replacement of the admi
  const f=await fixture(t),target=path.join(f.parent,'renamed');
  await retireNativeDirectory(f.root,target,async root=>{assert.equal((await nativeControl(root,DELETE_MARKER)).value.id,f.value.id);});await access(path.join(target,DELETE_MARKER));
  await assert.rejects(retireNativeDirectory(target,f.root,async()=>{await rename(target,path.join(f.parent,'original'));await symlink(f.outside,target,'junction');}),{code:'UNSAFE'});assert.deepEqual(await readdir(f.outside),['sentinel']);
+});
+
+test('verified cleanup reuses bounded destination ancestry as file counts grow',windows,async t=>{
+ const counts=[];
+ for(const count of [16,128]){
+  const f=await fixture(t),destination=path.join(f.parent,'destination');await mkdir(path.join(destination,'.observanda','media'),{recursive:true});await unlink(path.join(f.root,DELETE_MARKER));
+  const receipt={id:f.value.id,destination};await writeFile(path.join(f.root,MOVE_SOURCE),JSON.stringify(receipt));
+  for(const name of ['one','two',...Array.from({length:count},(_,i)=>'file-'+i)]){await writeFile(path.join(f.root,'.observanda','media',name),name);await writeFile(path.join(destination,'.observanda','media',name),name);}
+  const controller=new AbortController();controller.abort();await assert.rejects(removeNativeMove(f.root,receipt,{verifyDestination:true,signal:controller.signal}),{name:'AbortError'});await access(path.join(f.root,'.observanda','media','one'));
+  const sink=new OperationalDiagnostics();await withDiagnostics(sink,async()=>{await removeNativeMove(f.root,receipt,{verifyDestination:true});diagnostic('request',{route:'storage',method:'POST'});});counts.push((await sink.snapshot()).entries.at(-1).nativeDirectoryRequests);await sink.close();await assert.rejects(access(f.root),{code:'ENOENT'});
+ }
+ assert.ok(counts[1]<=counts[0]+2);assert.ok(counts[1]<32);t.diagnostic(JSON.stringify({files:[18,130],directoryRequests:counts}));
 });

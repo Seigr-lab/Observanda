@@ -267,8 +267,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     }).finally(()=>{ctx.dashboardTask=null;dashboardTasks.delete(task);});
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
-  const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
-  const stopWorkspaceJobs=async ctx=>{await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
+  const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();void ctx.jobs.recover().catch(error=>diagnostic('worker-claim',{error}));startDashboardEdits(ctx);}};
+  const stopWorkspaceJobs=async ctx=>{await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
   const stopJobs=async ctx=>{await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;

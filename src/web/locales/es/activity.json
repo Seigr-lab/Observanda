@@ -36,6 +36,7 @@
   "sharing": "Intercambiando trabajo compartido",
   "pin": "Conservando las evidencias del registro",
   "reviewRecords": "Revisando los cambios de los registros",
+  "job:storage.move-cleanup": "Terminar de eliminar el espacio de trabajo original",
   "job:analysis.compare": "Comparando las mediciones",
   "job:figure.calculate": "Calculando la figura",
   "job:dataset.prepare": "Preparando el conjunto de datos",

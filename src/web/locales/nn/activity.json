@@ -36,6 +36,7 @@
   "sharing": "Utvekslar delt arbeid",
   "pin": "Bevarer oppføringsdokumentasjon",
   "reviewRecords": "Gjennomgår oppføringsendringar",
+  "job:storage.move-cleanup": "Fullfør fjerninga av det opphavlege arbeidsområdet",
   "job:analysis.compare": "Samanliknar målingar",
   "job:figure.calculate": "Reknar ut figur",
   "job:dataset.prepare": "Klargjer datasett",

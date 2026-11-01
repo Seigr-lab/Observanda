@@ -9,7 +9,7 @@
   "copyDone": "S'ha obert la còpia verificada. L'espai de treball original es manté a la carpeta anterior.",
   "moveCleanupTitle": "Acaba d'eliminar l'espai de treball original",
   "moveSourceChanged": "L'original ha canviat després de copiar-lo. S'ha mantingut intacte. Revisa aquests canvis abans de tornar a intentar eliminar-lo.",
-  "moveCleanupHint": "La destinació verificada està oberta. L'eliminació de l'original no s'ha acabat. Tornar-ho a provar comprova l'original abans d'eliminar-lo i no repeteix la transferència de fitxers.",
+  "moveCleanupHint": "La destinació verificada està oberta. L'eliminació de l'original no s'ha acabat. Observanda torna a provar la neteja autoritzada quan tornes a obrir aquest espai de treball. Cada intent verifica les dades conservades abans d'eliminar-les i no repeteix la transferència. També ho pots tornar a provar ara.",
   "finishMove": "Torna a provar la neteja de l'original",
   "moveProgress": "S'està movent i verificant...",
   "copyProgress": "S'està copiant i verificant...",

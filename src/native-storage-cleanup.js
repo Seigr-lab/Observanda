@@ -1,4 +1,4 @@
-import {withNativeTree,nativeControl,nativeTreeFiles,nativeMember,removeNativeTree} from './native-storage-tree.js';
+import {withNativeTree,nativeControl,nativeTreeFiles,nativeMemberCursor,removeNativeTree} from './native-storage-tree.js';
 import {operationStage,operationItem,operationAdvance,operationWork} from './operation-progress.js';
 import {DELETE_MARKER,MOVE_SOURCE,MOVE_RECEIPT} from './storage-lifecycle-markers.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
@@ -20,24 +20,28 @@ export async function removeNativeDeletion(directory,value,{checkpoint=async()=>
   });
  },{missing:true});
 }
-export async function removeNativeMove(directory,receipt,{verifyDestination=false}={}){
+export async function removeNativeMove(directory,receipt,{verifyDestination=false,signal}={}){
  return withNativeTree(directory,async(root,context)=>{
   if(!root)return;
+  signal?.throwIfAborted();
+  if(receipt.sourceIdentity&&root.identity!==receipt.sourceIdentity)throw new AppError('STORAGE_MOVE_STATE');
   const marker=await nativeControl(root,MOVE_SOURCE,{limit:65536,code:'STORAGE_MOVE_STATE'});
   if(marker&&(marker.value?.id!==receipt.id||marker.value.destination!==receipt.destination))throw new AppError('STORAGE_MOVE_STATE');
   if(!marker)return removeNativeTree(root,context,MOVE_SOURCE);
   // Reject an already present link or invalid entry before removing anything.
-  for await(const file of nativeTreeFiles(root))operationItem(file.name);
-  let destination;
+  for await(const file of nativeTreeFiles(root)){signal?.throwIfAborted();operationItem(file.name);}
+  let destination,cursor;
   try{
-   if(verifyDestination)destination=await context.service.open(receipt.destination);
+   if(verifyDestination){destination=await context.service.open(receipt.destination);cursor=nativeMemberCursor(destination);}
    await removeNativeTree(root,context,MOVE_SOURCE,{identity:marker.identity,beforeFile:async(parent,name,relative,stat)=>{
+    signal?.throwIfAborted();
     const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||['.observanda/research.observanda','.observanda/database-conversion.observanda'].includes(relative));
     if(verifyDestination&&!databaseInternal&&!workspaceTransferControl(relative)&&relative!==MOVE_RECEIPT&&!ownedStorageLeaseFile(relative)&&!isStorageTemporary(name)){
-     const source=await parent.hash(name),copy=await nativeMember(destination,relative,(directory,member)=>directory.hash(member));
+     const source=await parent.hash(name),target=await cursor.member(relative),copy=await target.directory.hash(target.name);
      if(source.identity!==stat.identity||source.bytes!==copy.bytes||source.sha256!==copy.sha256)throw new AppError('STORAGE_COPY');
     }
+    signal?.throwIfAborted();
    },afterFile:async name=>{operationItem(name);operationAdvance();}});
-  }finally{await destination?.close();}
+  }finally{try{await cursor?.close();}finally{await destination?.close();}}
  },{missing:true});
 }
