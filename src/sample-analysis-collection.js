@@ -7,6 +7,8 @@ import {researchId} from './web/research-reference.js';
 import {defaultDashboard,createPanel,validDashboard} from './web/dashboard-model.js';
 import {dashboardSelection} from './web/dashboard-scope.js';
 import {dashboardSourceIdentity,dashboardSourceKey} from './web/dashboard-source-key.js';
+import {queryResultWindow} from './query-result-window.js';
+import {queryCallbackSource} from './query-callback-source.js';
 const counts=()=>({samples:0,analyses:0,review:0,archive:0,approved:0,events:0});
 const order=(a,b)=>a.owner.workspaceId<b.owner.workspaceId?-1:a.owner.workspaceId>b.owner.workspaceId?1:a.id<b.id?-1:a.id>b.id?1:0;
 const point=row=>({owner:{workspaceId:row.owner.workspaceId},id:row.id});
@@ -23,12 +25,21 @@ export async function sampleAnalysisCollection(pages,client,command,{scope=null,
  await visit(async(storage,address,selected)=>{
   scopeProjects=selected?.projectLabels??scopeProjects;const outline=await storage.outline();if(outline.metadata.id!==address.workspaceId)throw new AppError('DATABASE_LOCATION');for(const book of outline.metadata.notebooks)seenBooks.add(book.id);
   const owner={...address,projectTitle:address.projectTitle??(!address.projectId?outline.metadata.title:''),notebookTitle:address.labBookId?outline.metadata.notebooks.find(book=>book.id===address.labBookId)?.title??'':''};
-  const reader=new SampleAnalysisReader(new Laboratory(storage)),result=await reader.query({workspaceId:address.workspaceId,view,search:options.search??'',limit:1,key:source.key??null},{signal,...(mode==='counts'?{}:{collect:row=>{
+  const collect=row=>{
    const collectionKey=dashboardSourceKey(address.workspaceId,row.id);if(pinned&&collectionKey!==pinned)return;const value={...row,collectionKey,owner};
    if(mode==='discovery'){if(total++>=offset&&discovered.length<limit)discovered.push(value);}else page.add(value);
-  }})});
-  if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==result.etag)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=result.etag;
-  for(const key of Object.keys(totals))totals[key]+=result.counts[key];
+  };
+  const reader=new SampleAnalysisReader(new Laboratory(storage));await reader.query({workspaceId:address.workspaceId,view,search:options.search??'',limit:1,key:source.key??null},{signal,consume:async({etag,counts,read})=>{
+   if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==etag)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=etag;
+   for(const key of Object.keys(totals))totals[key]+=counts[key];if(mode==='counts')return;
+   if(pinned){await read(collect,signal);return;}
+   const discovery=mode==='discovery',queryHash=digest(JSON.stringify(['sample-analysis',scope,{...command,cursor:undefined,offset:undefined}]));
+   const cached=await queryResultWindow({workspace:storage,ownerId:address.workspaceId,snapshotId:etag,queryHash,order:discovery?(a,b)=>a.position-b.position:order,point,offset:discovery?Math.max(0,offset-total):null,after:!discovery&&session.offset?session.after:null,limit:discovery?Math.max(0,limit-discovered.length):limit,preceding:!discovery&&session.offset>limit,reuse:discovery?offset>0:!!cursor,signal},check=>queryCallbackSource(async(emit,sourceSignal)=>{
+    let position=0;await read(row=>emit({...row,collectionKey:dashboardSourceKey(address.workspaceId,row.id),owner:{workspaceId:address.workspaceId},...(discovery?{position:position++}:{})}),sourceSignal);return {};
+   },{signal,check}));
+   if(cached){const rows=cached.records.map(row=>{const {position,...value}=row;void position;return {...value,owner};});if(discovery){total+=cached.total;discovered.push(...rows);}else page.addIndexed({...cached,records:rows});}
+   else await read(collect,signal);
+  }});
  },{workspaceId,scope,selection,namespaces,includeOwner:owner=>selection.notebookMode!=='selected'||Boolean(owner.labBookId),signal});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');
  if(!namespaces&&selection.notebookMode==='selected'&&selection.notebookIds.some(id=>!seenBooks.has(id)))throw new AppError('RECORD_VIEW_SCOPE');
