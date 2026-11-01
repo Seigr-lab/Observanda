@@ -17,7 +17,7 @@ import {sampleCollectionQuery} from '../src/web/sample-analysis-collection.js';
 
 test('combined sample cards retain one page and no originals at 65 and 650 samples per owner',async t=>{
  for(const count of [65,650]){
-  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sample-collection-')),owners=[];t.after(async()=>{owners.forEach(o=>clearVault(o.vault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sample-collection-')),owners=[];t.after(async()=>{await Promise.all(owners.map(o=>clearVault(o.vault)));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
   const samples=Array.from({length:count},(_,i)=>({id:randomUUID(),code:'S-'+i,material:'Synthetic',source:'Fixture',collectedOn:'2026-10-01',receivedOn:'2026-10-01'})),analyses=samples.map((sample,i)=>({id:randomUUID(),code:'A-'+i,sampleId:sample.id,result:{method:'Method 1',analyte:'Absorbance',kind:'numeric',value:1,unit:'AU',lower:0,upper:2,notes:'PRIVATE ORIGINAL '.repeat(100)},status:'draft',review:null,updatedAt:'2026-10-01T00:00:00.000Z'}));
   for(let i=0;i<2;i++){await mkdir(path.join(directory,String(i)));const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,String(i)),book);owners.push({...f,workspaceId:book.id,projectId:null,labBookId:null});await new Laboratory(f.workspace).catalogue(store=>seedSampleAnalysis(store,{formatVersion:1,revision:0,samples,analyses,events:[]}),{write:true});}
   const pages=new RecordCollectionPages({reuse:true}),client={},command={workspaceId:owners[0].workspaceId,view:'all',config:defaultPanelConfig(),options:{},mode:'page',key:null,cursor:null,offset:0,limit:25};

@@ -57,5 +57,5 @@ test('every saved workspace has deletion; closed device, password and legacy own
   expect((await readPreferences(prefs)).workspace).toBe(f.workspace.root);expect(await f.workspace.read()).toEqual(before);expect(await readFile(f.deviceStore.file)).toEqual(device);
   expect(opened).toEqual([]);expect(errors).toEqual([]);expect(await page.evaluate(()=>window.deletionTestMarker)).toBe('same document');
   await preferences(page,'General');await expect(page.locator('#create-form')).toHaveCount(0);await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('workspace');await expect(page.locator('#leave-dialog')).not.toBeVisible();
- }finally{await app.close();await owner.close();detach();await clearVault(projectVault);await clearVault(f.vault);targets.forEach(t=>clearVault(t.vault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await owner.close();detach();await clearVault(projectVault);await clearVault(f.vault);await Promise.all(targets.map(t=>clearVault(t.vault)));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
