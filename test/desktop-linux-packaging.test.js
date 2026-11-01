@@ -9,7 +9,8 @@ import {sealPreparedRuntime} from '../scripts/runtime-input-trust.js';
 import {pdfValidationRuntimeFiles} from '../scripts/pdf-validation-runtime.js';
 import {pdfJavaArtifacts} from '../src/pdf-validation-dependencies.js';
 import configuration from '../electron-builder.config.js';
-import FpmTargetModule from 'app-builder-lib/out/targets/FpmTarget.js';
+import {packagerInternal} from './packager-fixture.js';
+const {default:FpmTarget}=await packagerInternal('targets/linux/FpmTarget.js');
 
 const write=async(root,name,value)=>{const file=path.join(root,name);await mkdir(path.dirname(file),{recursive:true});await writeFile(file,value,{mode:0o755});return file;};
 // These synthetic ELF fixtures never execute. Production callers must obtain
@@ -47,7 +48,7 @@ test('Ubuntu packaging admits only its declared host and preserves the Windows t
  assert.deepEqual(configuration.win.target,[{target:'nsis',arch:['x64']}]);assert.deepEqual(configuration.linux.target,[{target:'deb',arch:['x64']}]);
  assert.ok(configuration.extraMetadata.homepage);assert.ok(configuration.linux.maintainer);
  assert.ok(pdfJavaArtifacts['linux-x64']);assert.ok(pdfValidationRuntimeFiles('linux').includes('pdf-validation/java/bin/java'));
- for(const dependency of FpmTargetModule.default.prototype.getDefaultDepends('deb'))assert.ok(configuration.deb.depends.includes(dependency),'Explicit runtime dependencies must preserve electron-builder default '+dependency);
+ for(const dependency of FpmTarget.prototype.getDefaultDepends('deb'))assert.ok(configuration.deb.depends.includes(dependency),'Explicit runtime dependencies must preserve electron-builder default '+dependency);
 });
 
 test('Linux PostgreSQL configures a public prefix and installs through a disposable DESTDIR',()=>{
