@@ -14,6 +14,7 @@ import {researchReference} from './web/research-reference.js';
 import {websiteReferenceCandidates} from './website-preview-references.js';
 import {publicationDescriptor} from './publication-record-descriptor.js';
 import {digest,serialize} from './storage-format.js';
+import {websitePreviewOwnerDemand} from './website-preview-owner-demand.js';
 
 // Page-local federation. Owners supply bounded derivatives; only the selected
 // record bodies and page assets survive into the authenticated canvas.
@@ -23,7 +24,8 @@ export class WebsitePreviewSources{
   this.metadata=structuredClone(local.metadata);this.identities=new PublicationOwnerIdentities(this.metadata.id);
   this.owners=[];this.rows=new Map();this.descriptors=new Map();this.mediaOrigins=new Map();
  }
- async initialize(sources,{entryId=null}={}){
+ async initialize(sources,{entryId=null,designTarget}={}){
+  const demand=websitePreviewOwnerDemand(this.metadata,designTarget);
   if(entryId&&await this.local.row(entryId))entryId=null;
   for(const kind of ['projects','notebooks'])for(const item of this.metadata[kind]){
    this.identities.identity(this.metadata.id,kind==='projects'?'project':'notebook',item.id);
@@ -31,6 +33,7 @@ export class WebsitePreviewSources{
    item.sourceId=item.id;item.sourceWorkspaceId=namespace;item.referenceNamespaces=[...new Set([this.metadata.id,namespace])];
   }
   for await(const source of Array.isArray(sources)?sources:sources.items()){
+   this.signal?.throwIfAborted();if(!demand.includes(source))continue;
    const owner=await diagnosticPhase('website-source-owners',()=>new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({entryId}));
    appendPublicationCollections(this.metadata,owner.projected);this.owners.push(owner);
    if(owner.entryId){for(const [id,descriptor] of owner.descriptors)this.remember(owner.rows.get(id),{publicationCard:descriptor});entryId=null;}
