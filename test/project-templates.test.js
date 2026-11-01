@@ -7,13 +7,24 @@ import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
-import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateChoices,newLabBookConfiguration} from '../src/web/project-templates.js';
+import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateChoices,newLabBookConfiguration,retainedTemplateAvailable} from '../src/web/project-templates.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {buildPublication,publicProjection} from '../src/publication.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
+
+test('retained template availability checks bounded profile pages and releases readers without changing saved content',async()=>{
+ const template={name:'Saved types',configuration:{format:'observanda-configuration',owner:{workspaceId:randomUUID(),projectId:randomUUID(),notebookId:null,slot:'labBookTemplate'}}},before=structuredClone(template),calls=[];
+ let closed=0,enabled=false;
+ const reader={async open(owner,options){assert.deepEqual(owner,template.configuration.owner);assert.deepEqual(options,{saved:true});},async window(collection,options){calls.push(options);assert.equal(collection,'profiles');assert.equal(options.limit,32);return options.offset===0?{rows:Array.from({length:32},()=>({value:{id:'custom-disabled',enabled:false}})),next:32}:{rows:[{value:{id:'computer-it',enabled}}],next:null};},stop(){closed++;}};
+ assert.equal(await retainedTemplateAvailable(template,{enabledModules:[]},reader),true);enabled=true;
+ assert.equal(await retainedTemplateAvailable(template,{enabledModules:[]},reader),false);
+ assert.equal(await retainedTemplateAvailable(template,{enabledModules:['laboratory-computer-it']},reader),true);
+ assert.equal(closed,3);assert.deepEqual(calls.map(call=>call.offset),[0,32,0,32,0,32]);assert.deepEqual(template,before);
+ reader.window=async()=>{throw Error('Interrupted profiles');};await assert.rejects(retainedTemplateAvailable(template,{},reader),/Interrupted profiles/);assert.equal(closed,4);
+});
 
 test('project templates copy into independent lab books without rewriting existing records',()=>{
  const original=sampleNotebook();original.formatVersion=20;const before=JSON.stringify(original),book=upgradeNotebook(original);
