@@ -1,4 +1,4 @@
-import {ownedStorageLeaseFile} from './owned-storage-control.js';
+import {ownedStorageLeaseFile,runtimeUpgradeControlKind} from './owned-storage-control.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
 // Discovery stays ordered; independent hashes share a bounded adaptive budget.
 // Reviews retain counts and a digest, never a complete in-memory inventory.
@@ -34,6 +34,8 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
   if(stat.isDirectory()){
    for await(const item of await opendir(absolute)){
     signal?.throwIfAborted();
+    const upgradeControl=runtimeUpgradeControlKind(path.posix.join(relative,item.name));
+    if(upgradeControl){await assertRegular(path.join(absolute,item.name),{directory:upgradeControl==='directory'});throw new AppError('DATABASE_GUARD_STORAGE');}
     // Active PostgreSQL files are never copied as ordinary files. Their
     // complete contents travel through the transactional catalogue archive.
     if(relative!=='.observanda'&&path.posix.basename(relative.replace(/\/$/,''))==='.observanda'&&item.name==='postgresql')throw new AppError('DATABASE_LOCATION');

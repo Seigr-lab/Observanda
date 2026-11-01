@@ -10,3 +10,6 @@ export const ownedStorageLeaseFile=relative=>roots.has(relative)||bookLease.test
 // Preserve the established inventory fingerprint. Fresh-key copying alone
 // omits these additional plaintext lease controls instead of decrypting them.
 export const workspaceOwnerLeaseFile=relative=>ownedStorageLeaseFile(relative)||relative==='.observanda/project-registry.lock'||projectLease.test(relative)||projectCreationLease.test(relative)||projectRevisionLease.test(relative);
+// A runtime transition is not an ordinary encrypted research file. Refuse an
+// inventory while these recovery controls exist; never hide or retire them.
+export const runtimeUpgradeControlKind=relative=>relative==='.observanda/.postgresql.runtime-upgrade'?'file':/^\.observanda\/\.runtime-(?:upgrade|retired)-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(relative)?'directory':null;
