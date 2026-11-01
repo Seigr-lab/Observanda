@@ -283,6 +283,7 @@ export async function requireWebsiteTemplateInheritance(db){
 // Paged cells and retained table queries share immutable source locators.
 export const catalogueRequiresPagedResearchTables=format=>configurationCatalogueFeatures(format)?.pagedResearchTables===true;
 export async function requirePagedResearchTables(db){
+ if(catalogueRequiresPagedResearchTables(await catalogueFormat(db)))return;
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.pagedResearchTables)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,pagedResearchTables:true}));
 }
@@ -291,6 +292,7 @@ export async function requirePagedResearchTables(db){
 // remain interpretable together through editing, copying and fresh-key recovery.
 export const catalogueRequiresNativeNumericalModels=format=>configurationCatalogueFeatures(format)?.nativeNumericalModels===true;
 export async function requireNativeNumericalModels(db){
+ if(catalogueRequiresNativeNumericalModels(await catalogueFormat(db)))return;
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.nativeNumericalModels)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,nativeNumericalModels:true}));
 }
