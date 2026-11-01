@@ -15,7 +15,7 @@ export async function closeIdleMutationFiles(){const cached=idle;if(cached){idle
 export const nativeMutationSupported=['win32','linux','darwin'].includes(process.platform);
 export async function withMutationFilesSession(operation){
  if(!nativeMutationSupported)throw new Error('Unsupported filesystem target');
- const existing=active.getStore();if(existing)return operation(existing);
- const service=await acquire();let succeeded=false;
- try{const value=await active.run(service,()=>operation(service));succeeded=true;return value;}finally{if(succeeded)release(service);else await service.close();}
+ const existing=active.getStore();if(existing?.active)return operation(existing.service);
+ const service=await acquire(),context={service,active:true};let succeeded=false;
+ try{const value=await active.run(context,()=>operation(service));succeeded=true;return value;}finally{context.active=false;if(succeeded)release(service);else await service.close();}
 }
