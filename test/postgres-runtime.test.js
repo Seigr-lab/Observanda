@@ -108,6 +108,12 @@ test('Windows private directory setup needs no audit privileges and preserves co
  assert.equal(acl.protected,true);
  assert.deepEqual(acl.rules.map(r=>r.sid).sort(),[acl.user,'S-1-5-18'].sort());
  for(const rule of acl.rules){assert.equal(rule.allow,'Allow');assert.equal(rule.rights,2032127);assert.equal(rule.inheritance,3);}
+ const widen=String.raw`$item=Get-Item -LiteralPath $env:OBSERVANDA_TEST_DIRECTORY;$acl=$item.GetAccessControl();$rule=New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier('S-1-1-0')),'ReadAndExecute','ContainerInherit,ObjectInherit','None','Allow');$acl.AddAccessRule($rule);[IO.Directory]::SetAccessControl($item.FullName,$acl)`;
+ await runtimeCommand(powershell,['-NoProfile','-NonInteractive','-Command',widen],{env:{...process.env,OBSERVANDA_TEST_DIRECTORY:directory}});
+ await runtimeCommand(powershell,['-NoProfile','-NonInteractive','-File',helper,'-Directory',directory]);
+ const repaired=JSON.parse(await runtimeCommand(powershell,['-NoProfile','-NonInteractive','-Command',inspect],{env:{...process.env,OBSERVANDA_TEST_DIRECTORY:directory}}));
+ assert.equal(repaired.protected,true);assert.deepEqual(repaired.rules.map(r=>r.sid).sort(),[repaired.user,'S-1-5-18'].sort());
+ assert.equal(await readFile(marker,'utf8'),'existing content');
 });
 
 
