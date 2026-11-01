@@ -1,6 +1,7 @@
 // Complete exports traverse authenticated retained collections to exhaustion.
 // Labels are streamed independently: a short preview is never exported as data.
 import {modelMessages} from './model-messages.js';
+import {csvCellChunks} from './csv-cell.js';
 import compositionMessages from './locales/en/figureComposition.json' with {type:'json'};
 import observationMessages from './locales/en/figureObservations.json' with {type:'json'};
 import {computationLabel} from './measurement-computation.js';
@@ -96,9 +97,9 @@ export async function* retainedFigureTable(reader,{signal,translate}={}){
 }
 const cell=(value,selection={},json=false)=>({value,selection,json});
 async function* csvRow(reader,cells,signal){
- for(let i=0;i<cells.length;i++){check(signal);if(i)yield ',';yield '"';const entry=cells[i]??cell(null),value=entry.value;
+ for(let i=0;i<cells.length;i++){check(signal);if(i)yield ',';const entry=cells[i]??cell(null),value=entry.value;
   const chunks=entry.chunks?entry.chunks():entry.json?jsonValue(reader,value,entry.selection,signal):typeof value==='number'||typeof value==='boolean'?[String(value)]:text(reader,value,entry.selection,signal);
-  yield* encoded(chunks,chunk=>chunk.replaceAll('"','""'));yield '"';
+  yield* csvCellChunks(chunks,{text:typeof value!=='number'&&typeof value!=='boolean'});
  }yield '\r\n';
 }
 async function* rootEncoding(reader,root,signal){yield '{"format":"observanda-retained-figure-csv","version":1,"meaning":"complete retained plot values; source values only when an explicit source receipt is retained","header":';yield* jsonValue(reader,root.header,headerSelection(root.header),signal);yield ',"counts":'+JSON.stringify(root.counts)+',"document":'+JSON.stringify(root.document);if(root.source!==undefined)yield ',"source":'+JSON.stringify(root.source);yield '}';}

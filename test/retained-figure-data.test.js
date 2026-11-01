@@ -10,6 +10,13 @@ import {readDelimitedTable} from '../src/web/tabular-data.js';
 import {exactUnitScalar} from '../src/web/measurement-unit-model.js';
 const collect=async iterator=>{const buffers=[];let maximum=0;for await(const chunk of iterator){assert.equal(typeof chunk,'string');maximum=Math.max(maximum,chunk.length);buffers.push(Buffer.from(chunk,'utf8'));}return {text:Buffer.concat(buffers).toString('utf8'),maximum};};
 const memory=()=>{const values=new Map();return {readMetadata:async key=>values.get(key)??null,writeMetadata:async(key,value)=>{values.set(key,value);}};};
+
+test('retained CSV neutralizes streamed formula labels and keeps exact numeric and JSON encodings',async()=>{
+ const f=createFigure();f.title='=Formula title';f.x.kind='category';f.series[0].name='\t'+' '.repeat(66000)+'=1+1';f.series[0].points=[{x:'@category',y:-3,error:null}];
+ const documents=new RetainedFigureDocuments(memory()),retained=await documents.retain(f),opened=await documents.open(retained),csv=await collect(retainedFigureCSV(opened)),rows=readDelimitedTable(csv.text).rows.map(row=>row.cells);
+ assert.equal(rows.find(row=>row[0]==='figure settings')[5],"'"+f.title);assert.equal(rows.find(row=>row[0]==='series settings')[5],"'"+f.series[0].name);
+ const point=rows.find(row=>row[0]==='measurement');assert.equal(point[6],"'@category");assert.equal(point[7],'-3');assert.equal(JSON.parse(point.at(-1)).x,'@category');assert.ok(csv.maximum<=65536);
+});
 test('complete retained exports traverse real counted documents, preserve hidden series, exact plot contexts and every source-ordered row',async()=>{
  const numeric=createFigure();numeric.kind='scatter';numeric.title='Exact native-scale plot '+('long title '.repeat(180))+'END-TITLE';numeric.x.label='Counter <raw>';numeric.y.label='Amplitude';numeric.x.reversed=true;numeric.x.ticks=[{value:6,label:'Origin <&>'},{value:306,label:'Last point'}];numeric.style={numberFormat:'radix',radix:6};numeric.projection={version:1,x:{origin:exactUnitScalar('1000000000000000000000000000000'),scale:exactUnitScalar('0.1','radix-fraction',6)}};
  numeric.series[0].name='Visible "series", with\nsource order';numeric.series[0].points=Array.from({length:301},(_,i)=>({x:i+6,y:i+10,error:null,xLower:i+5,xUpper:i+7,yLower:i+9,yUpper:i+11,count:i}));const hidden=createSeries('Hidden but retained');hidden.style={visible:false};hidden.points=[{x:6,y:null,error:null},{x:7,y:10,error:.5}];numeric.series.push(hidden);

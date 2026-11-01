@@ -1,4 +1,5 @@
 import {figurePlots} from './figure-composition.js';
+import {csvCell} from './csv-cell.js';
 import {observationPosition,observationAnnotation} from './figure-observation-annotations.js';
 import composition from './locales/en/figureComposition.json' with {type:'json'};
 import intervals from './locales/en/figureIntervals.json' with {type:'json'};
@@ -14,5 +15,5 @@ export function richFigureCSV(figure){
   for(const s of f.series)for(const [index,p] of s.points.entries())rows.push([panel,'measurement',s.name,p.x,p.y,p.error,p.xLower,p.xUpper,p.yLower,p.yUpper,p.count,JSON.stringify({seriesId:s.id,pointIndex:index})]);
   for(const a of f.annotations??[])rows.push([panel,a.kind,a.label,'','','','','','','','',JSON.stringify({...a,...(observationAnnotation(a)?{position:observationPosition(a,f)}:{})})]);
  }
- return rows.map(row=>Array.from({length:rows[0].length},(_,i)=>'"'+String(row[i]??'').replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+ return rows.map(row=>Array.from({length:rows[0].length},(_,i)=>csvCell(row[i])).join(',')).join('\r\n')+'\r\n';
 }

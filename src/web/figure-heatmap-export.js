@@ -1,4 +1,5 @@
 import {modelMessages} from './model-messages.js';
+import {csvCell} from './csv-cell.js';
 import {figureDataNumber} from './figure-number-labels.js';
 import {figureStyle} from './figure-style.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
@@ -15,6 +16,6 @@ export function heatmapCSV(figure){
   if(plot.kind==='heatmap')for(const b of plot.heatmap.thresholds)rows.push([panel,'threshold','','','','',b.max,b.color,b.label,plot.heatmap.valueLabel]);
   for(const a of plot.annotations??[])rows.push([panel,a.kind,a.label,a.start,a.end,'','','',a.axis,'']);
  });
- return rows.map(row=>Array.from({length:rows[0].length},(_,i)=>row[i]??'').map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+ return rows.map(row=>Array.from({length:rows[0].length},(_,i)=>csvCell(row[i])).join(',')).join('\r\n')+'\r\n';
 }
 export function heatmapThresholdTable(figure,esc,{translate}={}){const text=modelMessages('figureHeatmap',messages,translate);if(figure.kind!=='heatmap')return '';return '<table><caption>'+esc(text('thresholds'))+'</caption><thead><tr><th>'+esc(text('label'))+'</th><th>'+esc(text('max'))+'</th><th>'+esc(text('color'))+'</th></tr></thead><tbody>'+figure.heatmap.thresholds.map((b,i)=>'<tr><th scope="row">'+esc(b.label)+'</th><td>'+esc(heatmapThresholdText(figure.heatmap,i,value=>figureDataNumber(value,figureStyle(figure)),{translate}))+'</td><td>'+esc(b.color)+'</td></tr>').join('')+'</tbody></table>';}

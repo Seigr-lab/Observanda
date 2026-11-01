@@ -1,4 +1,5 @@
 import {figureDiagnosticText,figureResourceIssue} from './figure-diagnostics.js';
+import {csvCell} from './csv-cell.js';
 import {validComputation} from './measurement-computation.js';
 import {isRetainedFigure,validRetainedFigure} from './retained-figure-model.js';
 import {validMeasurementProjection} from './measurement-transform.js';
@@ -129,7 +130,7 @@ export function figureCSV(figure){
  if(figurePlots(figure).some(f=>f.kind==='heatmap'))return heatmapCSV(figure);
  const extra=figurePlots(figure).some(f=>f.series.some(s=>s.points.some(p=>INTERVAL_FIELDS.some(k=>p[k]!=null))))?INTERVAL_FIELDS:[];
  const counted=figurePlots(figure).some(f=>f.markerArea||f.series.some(s=>s.points.some(p=>p.count!=null))),countHeaders=counted?[markerMessages.count,markerMessages.unitArea,markerMessages.label]:[],countCells=(p,f)=>counted?[p.count??null,f.markerArea?.unitArea??null,f.markerArea?.label??'']:[];
- const quote=value=>'"'+String(value??'').replaceAll('"','""')+'"';
+ const quote=csvCell;
  if(figure.kind==='panels'||figure.annotations?.length){
   const m=compositionMessages,rows=[[m.panelData,m.dataKind,m.series,m.x,m.y,m.uncertainty,m.axis,m.start,m.end,m.plotTitle,m.coordinateLabel,m.valueLabel,...extra.map(k=>intervalMessages[k]),...countHeaders]];
   figurePlots(figure).forEach((plot,i)=>{
