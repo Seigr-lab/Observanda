@@ -3,7 +3,9 @@ import {databaseSchemaSession} from './database-schema-session.js';
 import {moduleDomains} from './modules/domains.js';
 import {projectDomainSchema,projectDomainSchemas,projectDomainTables,createProjectDomainSchema} from './project-domain-schema.js';
 import {createReadStream} from 'node:fs';
+import {Readable} from 'node:stream';
 import {stat} from 'node:fs/promises';
+import {nativeDestination} from './native-destination.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {encrypted} from './encryption.js';
@@ -69,16 +71,21 @@ export async function writeCatalogueArchive(db,handle,tables,{observe=true,stage
  }finally{session.close();await db.run('SET LOCAL search_path TO "'+db.schema+'", pg_catalog').catch(error=>{if(error.code!=='25P02')throw error;});}
  });
 }
+async function archiveInput(file){
+ const scope=nativeDestination(file),anchored=scope?.directory?scope:null,archiveSize=(await (anchored?anchored.stat(file):stat(file))).size;
+ const stream=anchored?Readable.from(anchored.stream(file,{chunkSize:64*1024}),{objectMode:false,highWaterMark:64*1024}):createReadStream(file,{highWaterMark:64*1024});
+ return {archiveSize,stream};
+}
 export async function readCatalogueArchive(file,db,tables){
- const archiveSize=(await stat(file)).size;
- return readCatalogueStream(createReadStream(file,{highWaterMark:64*1024}),db,tables,{archiveSize});
+ const {archiveSize,stream}=await archiveInput(file);
+ return readCatalogueStream(stream,db,tables,{archiveSize});
 }
 // Inspect an authenticated archive without creating a source database. Consumers
 // receive only validated encrypted rows and expose their result after the footer
 // and whole-file identity have both passed.
 export async function inspectCatalogueArchive(file,tables,inspection,{expectedDigest}={}){
  if(!validHash(expectedDigest)||typeof inspection?.row!=='function')throw new AppError('INVALID');
- const archiveSize=(await stat(file)).size,checksum=createHash('sha256'),stream=createReadStream(file,{highWaterMark:64*1024});
+ const {archiveSize,stream}=await archiveInput(file),checksum=createHash('sha256');
  await readCatalogueStream(stream,null,tables,{archiveSize,inspection,archiveChecksum:checksum});
  if(checksum.digest('hex')!==expectedDigest)fail();
 }
