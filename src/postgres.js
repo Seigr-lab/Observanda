@@ -10,7 +10,10 @@ import {operationStage,operationAdvance} from './operation-progress.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
 import {diskCapacity} from './disk-capacity.js';
 import path from 'node:path';
-import {readFile,open,unlink,realpath} from 'node:fs/promises';
+import {readFile,unlink,realpath} from 'node:fs/promises';
+import {withNativeContentFile} from './native-content-file.js';
+import {nativeDestination} from './native-destination.js';
+import {writeFilePart} from './segmented-file-io.js';
 import {writeCatalogueArchive,readCatalogueArchive,readCatalogueStream} from './postgres-archive.js';
 import {PassThrough} from 'node:stream';
 import {randomUUID,createHash} from 'node:crypto';
@@ -19,7 +22,6 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {AppError} from './errors.js';
 import {assertCatalogueOwner,assertCatalogueEnvironment} from './project-catalogue-owner.js';
 import {assertRegular,serialize} from './storage.js';
-import {atomicReplace} from './atomic-replace.js';
 import {catalogueIndexesSQL,ensureCatalogueIndexes} from './postgres-indexes.js';
 import {catalogueFormat} from './catalogue-format.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION,catalogueBinding,catalogueActivation,beginCatalogueActivation,publishCatalogueBinding,finishCatalogueActivation} from './postgres-activation.js';
@@ -240,26 +242,23 @@ export async function catalogueStamp(root){
  });
 }
 export async function backupCatalogue(root,destination,{connection,capacity=diskCapacity}={}){
- const db=connection??await openCatalogue(root,{detached:true});
- const file=path.join(destination,CATALOGUE_ARCHIVE),temporary=file+'.'+randomUUID()+'.tmp',checksum=createHash('sha256');let handle,reservation,failed=false;
- try{
-  await assertRegular(path.join(destination,'.observanda'),{directory:true});
-  await assertRegular(file,{missing:true});
-  reservation=await capacity.reserve(path.dirname(file),0,{growthBytes:4*1024*1024,refreshBytes:4*1024*1024,signal:databaseRequestSignal()});
-  await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-  handle=await open(temporary,'wx',0o600);
-  await writeCatalogueArchive(db,{writeFile:async value=>{await reservation.write(Buffer.byteLength(value),()=>handle.writeFile(value));checksum.update(value);}},tables);
-  await handle.sync();await handle.close();handle=null;
-  await db.run('COMMIT');await atomicReplace(temporary,file);return checksum.digest('hex');
- }catch(error){failed=true;await withDatabaseRequest(null,()=>db.run('ROLLBACK')).catch(()=>{});throw error;}
- finally{
-  let cleanupError;
-  try{await handle?.close();}catch(error){cleanupError=error;}
-  try{await unlink(temporary);}catch(error){if(error.code!=='ENOENT')cleanupError??=error;}
-  try{if(!connection)await db.close();}catch(error){cleanupError??=error;}
-  finally{reservation?.release();}
-  if(!failed&&cleanupError)throw cleanupError;
- }
+ const db=connection??await openCatalogue(root,{detached:true}),file=path.join(destination,CATALOGUE_ARCHIVE);let failed=false;
+ try{return await withNativeContentFile({root:destination},file,async(parent,name)=>{
+  const temporary=name+'.'+randomUUID()+'.tmp',checksum=createHash('sha256');let handle,reservation,identity,position=0,writeFailed=false;
+  try{
+   await parent.stat(name,{missing:true});
+   reservation=await capacity.reserve(path.dirname(file),0,{growthBytes:4*1024*1024,refreshBytes:4*1024*1024,signal:databaseRequestSignal()});
+   await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+   handle=await parent.file(temporary,{mode:'exclusive'});identity=handle.identity;
+   await writeCatalogueArchive(db,{writeFile:async value=>{const bytes=Buffer.from(value,'utf8');await reservation.write(bytes.length,()=>writeFilePart(handle,bytes,position));position+=bytes.length;checksum.update(bytes);}},tables);
+   await handle.sync();await handle.close();handle=null;
+   await db.run('COMMIT');await parent.rename(temporary,parent,name,{identity,replace:true});return checksum.digest('hex');
+  }catch(error){writeFailed=true;throw error;}finally{
+   try{await handle?.close();if(identity)await parent.remove(temporary,{identity}).catch(error=>{if(error.code!=='ENOENT')throw error;});}catch(error){if(!writeFailed)throw error;}
+   finally{reservation?.release();}
+  }
+ });}catch(error){failed=true;await withDatabaseRequest(null,()=>db.run('ROLLBACK')).catch(()=>{});throw error;}
+ finally{if(!connection)await db.close().catch(error=>{if(!failed)throw error;});}
 }
 
 // Direct conversion retains the existing archive validation contract, but the
@@ -290,7 +289,7 @@ export async function resetCataloguePreparation(root,stagingRoot,id,env){
   await databaseQuery(client,'BEGIN');
   if(!(await databaseQuery(client,'SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',[id])).rows[0].locked)throw new AppError('LOCKED');
   await databaseQuery(client,'DROP SCHEMA IF EXISTS "'+schema+'" CASCADE');await databaseQuery(client,'COMMIT');
-  for(const relative of [CATALOGUE_FILE,CATALOGUE_ACTIVATION]){const file=path.join(stagingRoot,relative);if(await assertRegular(file,{missing:true}))await unlink(file);}
+  for(const relative of [CATALOGUE_FILE,CATALOGUE_ACTIVATION]){const file=path.join(stagingRoot,relative),admitted=nativeDestination(file);if(admitted?.directory)await admitted.remove(file,{missing:true});else if(await assertRegular(file,{missing:true}))await unlink(file);}
  }finally{await databaseQuery(client,'ROLLBACK').catch(()=>{});await client.end();}
 }
 

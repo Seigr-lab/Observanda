@@ -4,10 +4,9 @@ import {accessDevice} from './security/access-context.js';
 import {keyringFingerprint} from './security/access-trust.js';
 import {passwordKey,seal,unseal,clearVault,cloneVault} from './encryption.js';
 import path from 'node:path';
-import {readFile} from 'node:fs/promises';
 import {randomUUID,randomBytes,scrypt,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
-import {Workspace,assertRegular,atomicWrite,digest,serialize} from './storage.js';
+import {Workspace,assertRegular,atomicWrite,digest,serialize,readStorageFile as readFile} from './storage.js';
 import {AppError} from './errors.js';
 
 const derive=promisify(scrypt);

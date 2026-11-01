@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #include <node_api.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -43,14 +44,24 @@ static napi_value root(napi_env env,napi_callback_info info){
 }
 static napi_value child(napi_env env,napi_callback_info info){
  napi_value values[3];if(!args(env,info,3,values))return NULL;Handle *parent=handle(env,values[0]);if(!parent||!directory_fd(env,parent))return NULL;char *name=text(env,values[1],1);if(!name)return NULL;
- int32_t mode;if(napi_get_value_int32(env,values[2],&mode)!=napi_ok||mode<0||mode>4){free(name);return fail(env,"INVALID");}
+ int32_t mode;if(napi_get_value_int32(env,values[2],&mode)!=napi_ok||mode<0||mode>5){free(name);return fail(env,"INVALID");}
  // 0 existing directory, 1 create directory, 2 read file, 3 update file,
- // 4 exclusive new file. Nonblocking prevents a substituted FIFO from hanging.
- if(mode==1){int created=mkdirat(parent->fd,name,0700);if(created<0&&errno!=EEXIST){free(name);return system_error(env);}if(created==0&&fsync(parent->fd)<0){free(name);return system_error(env);}}
- int flags=O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK|(mode<2?O_RDONLY|O_DIRECTORY:mode==2?O_RDONLY:O_RDWR);if(mode==4)flags|=O_CREAT|O_EXCL;
+ // 4 exclusive new file, 5 exclusive new directory. Nonblocking prevents a
+ // substituted FIFO from hanging. Never claim an existing directory as new.
+ int folder=mode<2||mode==5;
+ if(mode==1||mode==5){int created=mkdirat(parent->fd,name,0700);if(created<0&&(errno!=EEXIST||mode==5)){free(name);return system_error(env);}if(created==0&&fsync(parent->fd)<0){free(name);return system_error(env);}}
+ int flags=O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK|(folder?O_RDONLY|O_DIRECTORY:mode==2?O_RDONLY:O_RDWR);if(mode==4)flags|=O_CREAT|O_EXCL;
  int fd=openat(parent->fd,name,flags,0600);free(name);if(fd<0)return system_error(env);struct stat st;
- if(fstat(fd,&st)<0){int error=errno;close(fd);errno=error;return system_error(env);}if(mode<2?!S_ISDIR(st.st_mode):!S_ISREG(st.st_mode)){close(fd);return fail(env,"UNSAFE");}
+ if(fstat(fd,&st)<0){int error=errno;close(fd);errno=error;return system_error(env);}if(folder?!S_ISDIR(st.st_mode):!S_ISREG(st.st_mode)){close(fd);return fail(env,"UNSAFE");}
+ if(mode==5&&(st.st_uid!=geteuid()||(st.st_mode&0077))){close(fd);return fail(env,"UNSAFE");}
  if(mode==4&&fsync(parent->fd)<0){int error=errno;close(fd);errno=error;return system_error(env);}
+ return saved(env,fd);
+}
+static napi_value lease(napi_env env,napi_callback_info info){
+ napi_value values[2];if(!args(env,info,2,values))return NULL;Handle *parent=handle(env,values[0]);if(!parent||!directory_fd(env,parent))return NULL;char *name=text(env,values[1],1);if(!name)return NULL;
+ int fd=openat(parent->fd,name,O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK,0600);free(name);if(fd<0)return system_error(env);struct stat st;
+ if(fstat(fd,&st)<0){int error=errno;close(fd);errno=error;return system_error(env);}if(!S_ISREG(st.st_mode)||st.st_nlink!=1){close(fd);return fail(env,"UNSAFE");}
+ if(flock(fd,LOCK_EX|LOCK_NB)<0){int error=errno;close(fd);if(error==EWOULDBLOCK||error==EAGAIN)return fail(env,"EBUSY");errno=error;return system_error(env);}
  return saved(env,fd);
 }
 static napi_value descriptor(napi_env env,napi_callback_info info){napi_value values[1],result;if(!args(env,info,1,values))return NULL;Handle *file=handle(env,values[0]);if(!file)return NULL;napi_create_int32(env,file->fd,&result);return result;}
@@ -88,6 +99,7 @@ static napi_value mutate(napi_env env,napi_callback_info info){
 static napi_value initialize(napi_env env,napi_value exports){
  napi_property_descriptor methods[]={
   {"root",NULL,root,NULL,NULL,NULL,napi_default,NULL},{"child",NULL,child,NULL,NULL,NULL,napi_default,NULL},
+  {"lease",NULL,lease,NULL,NULL,NULL,napi_default,NULL},
   {"fd",NULL,descriptor,NULL,NULL,NULL,napi_default,NULL},{"close",NULL,close_handle,NULL,NULL,NULL,napi_default,NULL},
   {"entries",NULL,entries,NULL,NULL,NULL,napi_default,NULL},{"mutate",NULL,mutate,NULL,NULL,NULL,napi_default,NULL}
  };napi_define_properties(env,exports,sizeof(methods)/sizeof(methods[0]),methods);return exports;

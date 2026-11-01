@@ -26,9 +26,10 @@ function execute(c){
  if(c.operation==='root')return saved(native.root(c.path),true);
  const parent=handle(c.directory);
  if(c.operation==='close'){native.close(parent);handles.delete(c.directory);return {};}
- if(c.operation==='directory')return saved(opened(parent,c.name,true,c.create?1:0),true);
+ if(c.operation==='directory')return saved(opened(parent,c.name,true,c.exclusive?5:c.create?1:0),true);
  if(c.operation==='list')return native.entries(parent,c.restart);
  if(c.operation==='file-open')return saved(opened(parent,c.name,false,c.mode==='exclusive'?4:c.mode==='update'?3:2),false);
+ if(c.operation==='lease')return saved(native.lease(parent,c.name),false);
  if(c.operation.startsWith('file-')){
   const before=stat(parent),fd=native.fd(parent);
   if(c.operation==='file-stat')return {dev:String(before.dev),ino:String(before.ino),size:String(before.size),nlink:String(before.nlink),mtimeNs:String(before.mtimeNs),ctimeNs:String(before.ctimeNs)};

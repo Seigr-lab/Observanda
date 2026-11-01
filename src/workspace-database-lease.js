@@ -5,8 +5,25 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {AppError} from './errors.js';
 import {assertRegular} from './storage.js';
+import {nativeDestination} from './native-destination.js';
+import {windowsMutationFiles} from './windows-mutation-files.js';
+import {posixMutationFiles} from './posix-mutation-files.js';
+async function destinationLease(scope,file,busyCode){
+ // Leases can outlive a destination operation. A dedicated helper must own
+ // them, rather than the operation's pooled helper with its idle shutdown.
+ const service=await (process.platform==='win32'?windowsMutationFiles():posixMutationFiles());let lease;
+ try{
+  await scope.member(file,async(admitted,name)=>{
+   const parent=await service.open(path.dirname(file));
+   try{if(parent.identity!==admitted.identity)throw new AppError('STORAGE_COPY');lease=await parent.lease(name);}
+   finally{await parent.close();}
+  });
+  let closing;return {close:()=>closing??=(async()=>{try{await lease.close();}finally{await service.close();}})()};
+ }catch(error){await service.close();if(error.code==='EBUSY')throw new AppError(busyCode);throw error;}
+}
 export async function workspaceDatabaseLease(directory,{file,busyCode='DATABASE_RUNNING'}={}){
- const lock=file??path.join(directory,'owner.lock');await assertRegular(lock,{missing:true});
+ const lock=file??path.join(directory,'owner.lock'),scope=nativeDestination(lock);if(scope)return destinationLease(scope,lock,busyCode);
+ await assertRegular(lock,{missing:true});
  const windows=process.platform==='win32',command=windows?path.join(process.env.SystemRoot??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'):'/usr/bin/perl';
  const args=windows?['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/workspace-database-lock.ps1',import.meta.url)),'-LockFile',lock]:[fileURLToPath(new URL('./security/database-lock.pl',import.meta.url)),lock];
  const child=spawn(command,args,{windowsHide:true,shell:false,stdio:['pipe','pipe','ignore']});

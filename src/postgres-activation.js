@@ -1,9 +1,10 @@
 import path from 'node:path';
-import {readFile,unlink} from 'node:fs/promises';
-import {assertRegular,atomicWrite,serialize} from './storage.js';
+import {unlink} from 'node:fs/promises';
+import {assertRegular,atomicWrite,serialize,readStorageFile} from './storage.js';
 import {AppError} from './errors.js';
 import {projectCatalogueBinding,validProjectCatalogueBinding} from './project-catalogue-owner.js';
 import {labBookCatalogueBinding,validLabBookCatalogueBinding} from './lab-book-catalogue-owner.js';
+import {nativeDestination} from './native-destination.js';
 
 export const CATALOGUE_FILE='.observanda/research.observanda';
 export const CATALOGUE_ARCHIVE='.observanda/research-archive.observanda';
@@ -14,7 +15,7 @@ async function readIdentity(root,relative,format){
  const file=path.join(root,relative),stat=await assertRegular(file,{missing:true});
  if(!stat)return null;
  if(stat.size>1024)throw new AppError('CATALOGUE_DAMAGED');
- let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw new AppError('CATALOGUE_DAMAGED');}
+ let value;try{value=JSON.parse(await readStorageFile(file,'utf8',1024));}catch(error){if(error.code==='ENOENT')return null;throw new AppError('CATALOGUE_DAMAGED');}
  if(format==='observanda-postgresql'&&(validProjectCatalogueBinding(value)||validLabBookCatalogueBinding(value)))return value;
  const portable=format==='observanda-postgresql'&&value?.version===2&&value?.placement==='workspace';
  if(!value||Object.keys(value).sort().join()!==(portable?'format,id,placement,version':'format,id,version')||value.format!==format||(!portable&&value.version!==1)||
@@ -41,6 +42,6 @@ export async function finishCatalogueActivation(root){
  // the old archive is gone, preventing authoring against a half-finished restore.
  for(const relative of [CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION]){
   const file=path.join(root,relative);
-  if(await assertRegular(file,{missing:true}))await unlink(file);
+  const admitted=nativeDestination(file);if(admitted)await admitted.remove(file,{missing:true});else if(await assertRegular(file,{missing:true}))await unlink(file);
  }
 }

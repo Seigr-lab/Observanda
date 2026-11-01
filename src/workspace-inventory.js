@@ -14,10 +14,11 @@ import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import {MOVE_RECEIPT,MOVE_SOURCE} from './workspace-move-state.js';
 import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
+import {nativeDestination} from './native-destination.js';
 export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  const stat=await assertRegular(file);
  const run=async()=>{
-  signal?.throwIfAborted();const hash=createHash('sha256');for await(const chunk of createReadStream(file,{signal})){hash.update(chunk);if(reportProgress)operationAdvance(chunk.length);operationWork({bytes:chunk.length});}return hash.digest('hex');
+  signal?.throwIfAborted();const hash=createHash('sha256'),admitted=nativeDestination(file),stream=admitted?.directory?admitted.stream(file,{signal}):createReadStream(file,{signal});for await(const chunk of stream){hash.update(chunk);if(reportProgress)operationAdvance(chunk.length);operationWork({bytes:chunk.length});}return hash.digest('hex');
  };
  return reportProgress?operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},run):run();
 }

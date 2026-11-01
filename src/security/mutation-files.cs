@@ -26,6 +26,7 @@ namespace Observanda {
   [DllImport("ntdll.dll")] static extern int NtSetInformationFile(SafeFileHandle handle,out IoStatus status,IntPtr data,uint length,int kind);
   [DllImport("ntdll.dll")] static extern int NtQueryDirectoryFile(SafeFileHandle handle,IntPtr evt,IntPtr apc,IntPtr context,out IoStatus status,IntPtr data,uint length,int kind,[MarshalAs(UnmanagedType.U1)]bool single,IntPtr pattern,[MarshalAs(UnmanagedType.U1)]bool restart);
   static Dictionary<int,SafeFileHandle> directories=new Dictionary<int,SafeFileHandle>();
+  static Dictionary<int,SafeFileHandle> leases=new Dictionary<int,SafeFileHandle>();
   class OpenFile {public SafeFileHandle Handle;public FileStream Stream;}
   class Binary {public int Count;public Binary(int count){Count=count;}}
   static Dictionary<int,OpenFile> files=new Dictionary<int,OpenFile>();
@@ -56,11 +57,11 @@ namespace Observanda {
   }
   static Info Information(SafeFileHandle handle,bool directory,bool links=false){Info info;if(!GetFileInformationByHandle(handle,out info))throw new Win32Exception();if((info.Attributes&0x400)!=0||((info.Attributes&0x10)!=0)!=directory||!directory&&(info.Links<1||info.Links>(links?2:1)))throw new Failure("UNSAFE");return info;}
   static SafeFileHandle Directory(Dictionary<string,object> command,string key="directory",bool validate=true){SafeFileHandle value;if(!directories.TryGetValue(Number(command,key),out value))throw new Failure("UNSAFE");if(validate)Information(value,true);return value;}
-  static SafeFileHandle Open(SafeFileHandle parent,string name,bool directory,uint access,uint disposition=1){
+  static SafeFileHandle Open(SafeFileHandle parent,string name,bool directory,uint access,uint disposition=1,uint share=7){
    Name(name);Information(parent,true);IntPtr buffer=Marshal.StringToHGlobalUni(name),unicode=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Unicode)));
    try{Marshal.StructureToPtr(new Unicode{Length=(ushort)(name.Length*2),MaximumLength=(ushort)(name.Length*2+2),Buffer=buffer},unicode,false);
     var attrs=new Attributes{Length=(uint)Marshal.SizeOf(typeof(Attributes)),RootDirectory=parent.DangerousGetHandle(),ObjectName=unicode,Flags=0x40};IoStatus status;SafeFileHandle result;
-    int code=NtCreateFile(out result,access|0x100000|0x80,ref attrs,out status,IntPtr.Zero,0x80,7,disposition,0x200000|0x20|(directory?1u:0x40u),IntPtr.Zero,0);
+    int code=NtCreateFile(out result,access|0x100000|0x80,ref attrs,out status,IntPtr.Zero,0x80,share,disposition,0x200000|0x20|(directory?1u:0x40u),IntPtr.Zero,0);
     if(code<0){if(result!=null)result.Dispose();Native(code);}try{Information(result,directory,true);return result;}catch{result.Dispose();throw;}
    }finally{Marshal.FreeHGlobal(unicode);Marshal.FreeHGlobal(buffer);}
   }
@@ -145,14 +146,21 @@ namespace Observanda {
   }
   static object Execute(Dictionary<string,object> command){
    string operation=Text(command,"operation");if(operation=="root")return Root(Text(command,"path"));
-   int handleId=Number(command,"directory");OpenFile opened;
+   int handleId=Number(command,"directory");OpenFile opened;SafeFileHandle leased;
+   if(leases.TryGetValue(handleId,out leased)){
+    if(operation!="close")throw new Failure("INVALID");leases.Remove(handleId);leased.Dispose();return new {ok=true};
+   }
    if(files.TryGetValue(handleId,out opened)){
     if(operation=="close"){files.Remove(handleId);opened.Stream.Dispose();return new {ok=true};}
     return FileCommand(command,operation,opened);
    }
    SafeFileHandle parent=Directory(command,"directory",operation!="close");
    if(operation=="close"){directories.Remove(Number(command,"directory"));parent.Dispose();return new {ok=true};}
-   if(operation=="directory")return Saved(Open(parent,Text(command,"name"),true,0x80000000,Flag(command,"create")?3u:1u));
+   if(operation=="directory")return Saved(Open(parent,Text(command,"name"),true,0x80000000,Flag(command,"exclusive")?2u:Flag(command,"create")?3u:1u));
+   if(operation=="lease"){
+    var handle=Open(parent,Text(command,"name"),false,0xC0000000,3,0);
+    try{Info info=Information(handle,false);int id=++next;leases.Add(id,handle);return new {id=id,identity=Identity(info)};}catch{handle.Dispose();throw;}
+   }
    if(operation=="file-open"){
     string mode=Text(command,"mode");if(mode!="read"&&mode!="update"&&mode!="exclusive")throw new Failure("INVALID");
     var handle=Open(parent,Text(command,"name"),false,mode=="read"?0x80000000u:0xC0000000u,mode=="exclusive"?2u:1u);
@@ -178,7 +186,7 @@ namespace Observanda {
      }
      catch(Exception error){Send(new {error=Error(error)});if(inputPayload)return;}
     }
-   }finally{foreach(var file in files.Values)file.Stream.Dispose();files.Clear();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}
+   }finally{foreach(var file in files.Values)file.Stream.Dispose();files.Clear();foreach(var handle in leases.Values)handle.Dispose();leases.Clear();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}
   }
  }
 }

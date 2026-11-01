@@ -9,8 +9,8 @@ export {WORKSPACE_COPY_RECEIPT,WORKSPACE_COPY_LEASE} from './workspace-transfer-
 // payloads and their resumable transfer receipts remain with each project owner.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {unlink,readdir,readFile} from 'node:fs/promises';
-import {Workspace,assertRegular,privateDirectory,serialize,workspaceFile,atomicWrite} from './storage.js';
+import {unlink,readdir} from 'node:fs/promises';
+import {Workspace,assertRegular,privateDirectory,serialize,workspaceFile,atomicWrite,readStorageFile as readFile} from './storage.js';
 import {resolveLocation,prepareCopyDestination} from './locations.js';
 import {withWriterLease} from './writer-lease.js';
 import {hashWorkspaceFile} from './workspace-inventory.js';
@@ -21,6 +21,7 @@ import {operationTransferred} from './operation-progress.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
+import {nativeDestination,withNativeDestination,removeDestinationFile} from './native-destination.js';
 const inside=(parent,child)=>{const r=path.relative(parent,child);return r===''||r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r);};
 const MAX_RECEIPT=32*1024*1024;
 const abandonedReceipt=name=>name.startsWith('.write-')&&isStorageTemporary(name);
@@ -43,6 +44,7 @@ export class WorkspaceCopyRecovery {
   if(value.adoptions!==undefined&&(!Array.isArray(value.adoptions)||value.adoptions.some(item=>!validProjectSourceAuthority(item))))throw new AppError('STORAGE_COPY');
   if(value.version!==4)for(const entry of value.directory.value.projects)if(!researchId(value.transfers[entry.projectId]))throw new AppError('STORAGE_COPY');
   if(value.version===4&&(value.plan.projectRoots!==undefined||value.adoptions!==undefined||value.plan.projectRegistryRevision!==value.directory.revision))throw new AppError('STORAGE_COPY');
+  if([value.destinationIdentity,value.internalIdentity].some(value=>value!==undefined&&!/^\d+:\d+$/.test(value)))throw new AppError('STORAGE_COPY');
   return value;
  }
  async emptyPreparation(){
@@ -64,15 +66,20 @@ export class WorkspaceCopyRecovery {
   return {...state.plan,resume:true};
  }
  async run(plan,directory,operation){
+  return withNativeDestination(this.target.root,async admitted=>{
   let state=await this.read();
-  if(!state){if(this.prepareDestination)await this.prepareDestination();else if(await this.emptyPreparation())await atomicWrite(this.marker,'incomplete\n');else await prepareCopyDestination(this.target.root);}
+  if(state){if(!state.destinationIdentity||!state.internalIdentity)throw new AppError('STORAGE_COPY');await admitted.admit({identity:state.destinationIdentity,internalIdentity:state.internalIdentity});}
+  else if(this.prepareDestination){await admitted.admit();await this.prepareDestination();}
+  else if(await this.emptyPreparation()){await admitted.admit();await atomicWrite(this.marker,'incomplete\n');}
+  else await prepareCopyDestination(this.target.root);
+  await admitted.assertNamed();
   return withWriterLease(path.join(this.target.root,WORKSPACE_COPY_LEASE),async()=>{
    state=await this.read();
-   if(state){if(!await assertRegular(this.marker,{missing:true})||state.id!==plan.inventorySalt||!!state.plan.encrypted!==!!plan.encrypted||plan.encrypted&&serialize(state.encryptionAccess)!==serialize(this.encryptionAccess))throw new AppError('CONFLICT');}
+   if(state){if(state.destinationIdentity!==admitted.identity||state.internalIdentity!==admitted.internalIdentity||!await assertRegular(this.marker,{missing:true})||state.id!==plan.inventorySalt||!!state.plan.encrypted!==!!plan.encrypted||plan.encrypted&&serialize(state.encryptionAccess)!==serialize(this.encryptionAccess))throw new AppError('CONFLICT');}
    else {if(plan.encrypted){validateKeyring(this.encryptionAccess);if(plan.portable)throw new AppError('INVALID');}
     const native=validWorkspaceCopyDirectory(directory);if(native&&(plan.projectPlacement!==2||plan.projectRoots!==undefined))throw new AppError('INVALID');
-    state={version:native?4:plan.projectPlacement===2?3:plan.encrypted?2:1,...(plan.encrypted?{encryptionAccess:structuredClone(this.encryptionAccess)}:{}),id:plan.inventorySalt,vaultId:this.source.vault?.id??null,phase:'files',plan:savedPlan(plan),directory:structuredClone(directory),...(native?{}:{transfers:Object.fromEntries(directory.value.projects.map(entry=>[entry.projectId,randomUUID()]))})};await this.save(state);
-    for(const name of await readdir(path.dirname(this.file)))if(abandonedReceipt(name)){const file=path.join(path.dirname(this.file),name);await assertRegular(file);await unlink(file);}
+    state={version:native?4:plan.projectPlacement===2?3:plan.encrypted?2:1,...(plan.encrypted?{encryptionAccess:structuredClone(this.encryptionAccess)}:{}),id:plan.inventorySalt,vaultId:this.source.vault?.id??null,phase:'files',destinationIdentity:admitted.identity,internalIdentity:admitted.internalIdentity,plan:savedPlan(plan),directory:structuredClone(directory),...(native?{}:{transfers:Object.fromEntries(directory.value.projects.map(entry=>[entry.projectId,randomUUID()]))})};await this.save(state);
+    for await(const entry of admitted.internalDirectory.entries())if(abandonedReceipt(entry.name)){if(entry.directory)throw new AppError('UNSAFE');await removeDestinationFile(path.join(path.dirname(this.file),entry.name));}
    }
    this.state=state;
    if(this.snapshotReady){
@@ -80,11 +87,13 @@ export class WorkspaceCopyRecovery {
    }
    return operation(this);
   });
+  });
  }
  async save(state=this.state){const raw=serialize(state);if(Buffer.byteLength(raw)>MAX_RECEIPT-128)throw new AppError('LIMIT');if(this.source.vault?.id)await this.target.writeFile(this.file,raw);else{await this.source.requireStorageKey();await atomicWrite(this.file,raw);}}
  get snapshotReady(){return ['snapshot','published'].includes(this.state?.phase);}
  get databaseReady(){return this.state?.phase!=='files';}
  async prepare(plan){
+  const admitted=nativeDestination(this.target.root);if(!admitted||admitted.identity!==this.state.destinationIdentity||admitted.internalIdentity!==this.state.internalIdentity)throw new AppError('STORAGE_COPY');await admitted.assertNamed();
   if(this.state.plan.fingerprint&&this.state.plan.fingerprint!==plan.fingerprint)throw new AppError('CONFLICT');
   this.state.plan=savedPlan(plan);await this.save();return {destination:this.target.root,marker:this.marker};
  }

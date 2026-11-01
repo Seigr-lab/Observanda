@@ -8,6 +8,7 @@ import {workspaceFolderName} from './workspace-names.js';
 import {assertNotRenaming} from './workspace-rename-state.js';
 import {digest,serialize} from './storage-format.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {constants as bufferConstants} from 'node:buffer';
 import {requireDatabase} from './postgres.js';
 import {hasCatalogue,catalogueContext,openCatalogue,ResearchCatalogue,isCatalogue,catalogueDescriptor} from './research-catalogue.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
@@ -23,6 +24,7 @@ import {assertNotDeleting} from './workspace-delete-state.js';
 import {legacyWriterLock,withWriterLease} from './writer-lease.js';
 import {waitForWriter,queuedWriter} from './writer-wait.js';
 import { validateNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
+import {nativeDestination} from './native-destination.js';
 
 const catalogueReads=new AsyncLocalStorage();
 let requireMetadataFormat,metadataFormatLoading;
@@ -55,6 +57,7 @@ export async function workspaceFile(root,{secure=false}={}){
 export {digest,serialize} from './storage-format.js';
 
 export async function assertRegular(file, { missing = false, directory = false } = {}) {
+  const admitted=nativeDestination(file);if(admitted?.directory)return admitted.stat(file,{missing,directory});
   try {
     const stat = await lstat(file);
     if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile()) || (!directory && stat.nlink > 1)) throw new AppError('UNSAFE');
@@ -62,7 +65,12 @@ export async function assertRegular(file, { missing = false, directory = false }
   } catch (error) { if (missing && error.code === 'ENOENT') return null; throw error; }
 }
 
+export async function readStorageFile(file,encoding,limit=bufferConstants.MAX_LENGTH){
+ const admitted=nativeDestination(file);return admitted?.directory?admitted.read(file,{encoding,limit}):readFile(file,encoding);
+}
+
 export async function privateDirectory(root, relative) {
+  const admitted=nativeDestination(path.resolve(root,relative));if(admitted)return admitted.ensure(path.relative(admitted.root,path.resolve(root,relative)));
   let current = root;
   for (const segment of relative.split('/')) {
     current = path.join(current, segment);
@@ -77,6 +85,7 @@ export async function privateDirectory(root, relative) {
 }
 
 export async function atomicWrite(file, content) {
+  const admitted=nativeDestination(file);if(admitted)return admitted.write(file,content);
   const temporary = path.join(path.dirname(file), temporaryWriteName());
   let handle;
   try {
@@ -100,12 +109,12 @@ export class Workspace {
     const data=await workspaceFile(this.root);
     const dataStat=await assertRegular(data,{missing:true});
     if(dataStat){
-     const handle=await open(data,'r');try{const header=Buffer.alloc(8);await handle.read(header,0,8,0);if(encrypted(header))throw new AppError('ACCESS_LOCKED');}finally{await handle.close();}
+     const admitted=nativeDestination(data);const handle=admitted?.directory?await admitted.member(data,(parent,name)=>parent.file(name)):await open(data,'r');try{const header=Buffer.alloc(8);await handle.read(header,0,8,0);if(encrypted(header))throw new AppError('ACCESS_LOCKED');}finally{await handle.close();}
     }
     const file=path.join(this.root,'.observanda','access.json');
     const stat=await assertRegular(file,{missing:true});if(!stat)return;
     if(stat.size>262144)throw new AppError('ACCESS_FORMAT');
-    let header;try{header=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('ACCESS_FORMAT');}
+    let header;try{header=JSON.parse(await readStorageFile(file,'utf8',262144));}catch{throw new AppError('ACCESS_FORMAT');}
     if([2,3].includes(header?.formatVersion))throw new AppError('ACCESS_LOCKED');
     if(header?.formatVersion!==1)throw new AppError('ACCESS_FORMAT');
   }
@@ -119,7 +128,7 @@ export class Workspace {
     }
     await this.requireStorageKey();
   }
-  async readFile(file,encoding){await this.requireStorageKey();const stored=await readFile(file);let bytes=stored;if(encrypted(stored)||this.vault?.id){if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');bytes=unseal(stored,this.vault.key,this.fileAAD(file));}return encoding?bytes.toString(encoding):bytes;}
+  async readFile(file,encoding){await this.requireStorageKey();const stored=await readStorageFile(file);let bytes=stored;if(encrypted(stored)||this.vault?.id){if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');bytes=unseal(stored,this.vault.key,this.fileAAD(file));}return encoding?bytes.toString(encoding):bytes;}
   async writeFile(file,content){await this.requireStorageKey();const bytes=Buffer.from(content);await atomicWrite(file,this.vault?.id?seal(bytes,this.vault.key,this.fileAAD(file)):bytes);}
   metadataPath(relative){
     if(typeof relative!=='string'||!/^\.observanda\/[a-zA-Z0-9./-]+$/.test(relative)||relative.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('UNSAFE');

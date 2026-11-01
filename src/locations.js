@@ -1,5 +1,6 @@
 import {workspaceOwnerLeaseFile} from './owned-storage-control.js';
 import {withNativeWorkspaceCopy} from './native-workspace-copy.js';
+import {withNativeDestination,removeDestinationFile} from './native-destination.js';
 import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
@@ -13,12 +14,12 @@ import {describeContent} from './file-content.js';
 import {clearVault} from './encryption.js';
 import path from 'node:path';
 import os from 'node:os';
-import {readdir,readFile,open,rename,rmdir,realpath} from 'node:fs/promises';
+import {readdir,open,rename,rmdir,realpath} from 'node:fs/promises';
 import {createPersistentDirectory as mkdir,unlinkPersistent as unlink} from './filesystem-persistence.js';
 import {copyFileProgress} from './copy-file-progress.js';
 import {withOperationProgress,operationStage,operationAdvance,operationTransfer,operationTransferred} from './operation-progress.js';
 import {randomUUID} from 'node:crypto';
-import {Workspace,workspaceFile,WORKSPACE_FILE,assertRegular,atomicWrite,serialize} from './storage.js';
+import {Workspace,workspaceFile,WORKSPACE_FILE,assertRegular,atomicWrite,serialize,readStorageFile as readFile} from './storage.js';
 import {validateNotebook} from './model.js';
 import {validDashboard} from './web/dashboard-model.js';
 import {AppError} from './errors.js';
@@ -147,18 +148,17 @@ export async function copyWorkspaceTo(root,input,options={}){
 export async function prepareCopyDestination(expected){
   const destination=await resolveLocation(expected);
   if(destination!==expected)throw new AppError('EXISTS');
-  if(await assertRegular(destination,{missing:true,directory:true})){
-    if((await readdir(destination)).length)throw new AppError('EXISTS');
-  }else await mkdir(destination,{mode:0o700});
-  try{await mkdir(path.join(destination,'.observanda'),{mode:0o700});}catch(error){if(error.code==='EEXIST')throw new AppError('EXISTS');throw error;}
-  const marker=path.join(destination,'.observanda','copy-in-progress');await atomicWrite(marker,'incomplete\n');
-  if((await readdir(destination)).some(name=>name!=='.observanda'))throw new AppError('EXISTS');
-  return {destination,marker};
+  return withNativeDestination(destination,async admitted=>{
+   try{await admitted.admit({prepare:true});}catch(error){if(error.code==='EEXIST')throw new AppError('EXISTS');throw error;}
+   const marker=path.join(destination,'.observanda','copy-in-progress');await admitted.write(marker,'incomplete\n');await admitted.assertNamed();
+   for await(const entry of admitted.directory.entries())if(entry.name!=='.observanda'||!entry.directory)throw new AppError('EXISTS');
+   return {destination,marker,destinationIdentity:admitted.identity,internalIdentity:admitted.internalIdentity};
+  });
 }
 export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified,relocation=false,excludeProject}={}){
   if(typeof relocation!=='boolean')throw new AppError('INVALID');
   if(reuseCatalogue&&(activateCatalogue||beforePublish||recovery))throw new AppError('INVALID');
-  return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
+  return withNativeDestination(plan.destination,admitted=>withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
    let publication;
    const result=recovery?.snapshotReady?(publication={destination:plan.destination,marker:recovery.marker},plan.destination):await new Workspace(plan.source,vault).withStorageHandoff(async()=>{
     if(!relocation)await assertInventoryObligationsSettled(new Workspace(plan.source,vault));
@@ -186,6 +186,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
      }}));
     }});
     operationTransfer({phase:'verifying'});
+    await admitted.assertNamed();
     await reviewedInventory(plan,{excludeProject});
     if(catalogue&&reuseCatalogue){
       // A move keeps the installation's database. Verify that database against
@@ -222,20 +223,20 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     if(afterSnapshotVerified)await afterSnapshotVerified(destination);
     if(recovery)await recovery.snapshot();
     if(beforePublish){publication={destination,marker};return destination;}
-    await unlink(marker);if(afterVerified)await afterVerified(destination);return destination;
+    await admitted.assertNamed();await removeDestinationFile(marker);if(afterVerified)await afterVerified(destination);return destination;
    },{detached:true,existing:true});
-   if(publication){await beforePublish(new Workspace(publication.destination,vault));if(recovery)await recovery.published();await unlink(publication.marker);if(afterVerified)await afterVerified(publication.destination);}
+   if(publication){await beforePublish(new Workspace(publication.destination,vault));if(recovery)await recovery.published();await admitted.assertNamed();await removeDestinationFile(publication.marker);if(afterVerified)await afterVerified(publication.destination);}
    // Stop or relocate an owned database only after its source transaction and
    // connection have closed. A commit cannot be made against a stopped server.
    return afterCopy?afterCopy(result):result;
-  }));
+  })));
 }
 
 // A fresh-key successor remains marked incomplete until its independently
 // authorized owners and relative registry have also been published.
 export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress,recovery,beforeSnapshot,afterSnapshotVerified,beforePublish,afterVerified,excludeProject}={}){
   if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
-  return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
+  return withNativeDestination(plan.destination,admitted=>withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
     const source=new Workspace(plan.source,sourceVault),target=new Workspace(plan.destination,vault);
     let publication;
     if(recovery?.snapshotReady)publication={destination:plan.destination,marker:recovery.marker};
@@ -265,7 +266,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
           operationTransferred({files:1,bytes:file.bytes});
         }
       }});
-      await reviewedInventory(plan,{excludeProject});
+      await admitted.assertNamed();await reviewedInventory(plan,{excludeProject});
       operationTransfer({phase:'verifying'});
       const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
       if(catalogue){
@@ -280,8 +281,8 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
     },{detached:true,existing:true});
     if(beforePublish)await beforePublish(target);
     if(recovery)await recovery.published();
-    await unlink(publication.marker);
+    await admitted.assertNamed();await removeDestinationFile(publication.marker);
     if(afterVerified)await afterVerified(publication.destination);
     return publication.destination;
-  }));
+  })));
 }
