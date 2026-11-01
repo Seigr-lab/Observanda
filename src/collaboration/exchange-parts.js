@@ -56,10 +56,32 @@ export class ExchangeParts{
   if(await this.workspace.readMetadata(this.prefix+'/head.json',8192)!==null)return;
   let directory=this.workspace.root;
   for(const component of this.prefix.split('/')){directory=path.join(directory,component);if(!await assertRegular(directory,{directory:true,missing:true}))return;}
+  // Filesystem metadata uses these two directories; catalogue-backed metadata
+  // does not. Only this operation's known files may be removed. An unexpected
+  // entry is retained and reported, without abandoning other legitimate parts.
+  let failure;
+  const removeFiles=async(parent,allowed)=>{
+   for await(const entry of await opendir(parent)){
+    try{
+     if(!allowed(entry.name)&&!isStorageTemporary(entry.name))throw new AppError('UNSAFE');
+     const file=path.join(parent,entry.name);await assertRegular(file);await unlink(file);
+    }catch(error){failure??=error;}
+   }
+  };
   for await(const entry of await opendir(directory)){
-   if(!/^\d+\.blob$/.test(entry.name)&&!isStorageTemporary(entry.name))throw new AppError('UNSAFE');
-   const file=path.join(directory,entry.name);await assertRegular(file);await unlink(file);
+   const file=path.join(directory,entry.name);
+   try{
+    if(['items','names'].includes(entry.name)){
+     await assertRegular(file,{directory:true});
+     await removeFiles(file,name=>entry.name==='items'?/^\d+\.json$/.test(name):/^[a-f0-9]{64}\.json$/.test(name));
+     await rmdir(file);
+    }else{
+     if(!/^\d+\.blob$/.test(entry.name)&&!isStorageTemporary(entry.name))throw new AppError('UNSAFE');
+     await assertRegular(file);await unlink(file);
+    }
+   }catch(error){failure??=error;}
   }
+  if(failure)throw failure;
   await rmdir(directory);
  }
 }
