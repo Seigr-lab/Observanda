@@ -6,24 +6,30 @@ import {digest,serialize} from './storage-format.js';
 import {blank,validateLab,validateSampleAnalysisEvent,applySampleAnalysisCommand} from './sample-analysis-model.js';
 import {randomUUID} from 'node:crypto';
 import {operationAdvance} from './operation-progress.js';
+import {sampleAnalysisOrder} from './sample-analysis-order.js';
+import {contentBufferAdmission} from './content-buffer-admission.js';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('LAB_INVALID');};
-const pad=value=>String(value).padStart(5,'0');
 const countKeys=['samples','analyses','review','archive','approved','events'];
-const empty=()=>({formatVersion:2,revision:0,root:null,counts:Object.fromEntries(countKeys.map(k=>[k,0])),bytes:{samples:0,analyses:0,events:0},lastEventHash:''});
+const empty=()=>({formatVersion:3,revision:0,root:null,counts:Object.fromEntries(countKeys.map(k=>[k,0])),bytes:{samples:0,analyses:0,events:0},lastEventHash:''});
 // Size of an item in the unchanged, human-readable v1 representation, including
 // its indentation but excluding the array separator. No growing serialization.
 const itemBytes=value=>Buffer.byteLength(JSON.stringify(value,null,2).split('\n').map(line=>'    '+line).join('\n'));
 function logicalBytes(head){
- let size=Buffer.byteLength(serialize({...blank(),revision:head.revision}));
- for(const kind of ['samples','analyses','events']){const count=kind==='analyses'?head.counts.analyses+head.counts.archive:head.counts[kind];if(count)size+=head.bytes[kind]+2*(count-1)+4;}
- return size;
+ let size=BigInt(Buffer.byteLength(serialize({...blank(),revision:head.revision})));
+ for(const kind of ['samples','analyses','events']){const count=kind==='analyses'?BigInt(head.counts.analyses)+BigInt(head.counts.archive):BigInt(head.counts[kind]);if(count)size+=BigInt(head.bytes[kind])+2n*(count-1n)+4n;}
+ if(size>BigInt(Number.MAX_SAFE_INTEGER))fail();return Number(size);
 }
 function validHead(head){
  if(!head||Object.keys(head).sort().join()!=='bytes,counts,formatVersion,lastEventHash,revision,root')fail();
- if(!head||head.formatVersion!==2||!Number.isSafeInteger(head.revision)||head.revision<0||!validIndexRef(head.root)||!head.counts||Object.keys(head.counts).sort().join()!==[...countKeys].sort().join()||Object.values(head.counts).some(v=>!Number.isSafeInteger(v)||v<0)||!head.bytes||Object.keys(head.bytes).sort().join()!=='analyses,events,samples'||Object.values(head.bytes).some(v=>!Number.isSafeInteger(v)||v<0)||typeof head.lastEventHash!=='string'||(head.counts.events?!/^[a-f0-9]{64}$/.test(head.lastEventHash):head.lastEventHash!==''))fail();
- if(head.counts.samples>5000||head.counts.analyses+head.counts.archive>10000||head.counts.events>50000||head.counts.review+head.counts.approved>head.counts.analyses)fail();
- if(logicalBytes(head)>16*1024*1024)throw new AppError('LIMIT');return head;
+ if(!head||![2,3].includes(head.formatVersion)||!Number.isSafeInteger(head.revision)||head.revision<0||!validIndexRef(head.root)||!head.counts||Object.keys(head.counts).sort().join()!==[...countKeys].sort().join()||Object.values(head.counts).some(v=>!Number.isSafeInteger(v)||v<0)||!head.bytes||Object.keys(head.bytes).sort().join()!=='analyses,events,samples'||Object.values(head.bytes).some(v=>!Number.isSafeInteger(v)||v<0)||typeof head.lastEventHash!=='string'||(head.counts.events?!/^[a-f0-9]{64}$/.test(head.lastEventHash):head.lastEventHash!==''))fail();
+ if(!Number.isSafeInteger(head.counts.analyses+head.counts.archive)||!Number.isSafeInteger(head.counts.review+head.counts.approved)||head.counts.review+head.counts.approved>head.counts.analyses)fail();
+ const size=logicalBytes(head);
+ if(head.formatVersion===2){
+  if(head.counts.samples>5000||head.counts.analyses+head.counts.archive>10000||head.counts.events>50000)fail();
+  if(size>16*1024*1024)throw new AppError('LIMIT');
+ }
+ return head;
 }
 export class SampleAnalysisCatalogue{
  constructor(store){this.store=store;this.index=new ObjectIndex(store,{namespace:'sample-analysis-index:',immutable:true});}
@@ -34,7 +40,7 @@ export class SampleAnalysisCatalogue{
    if(etag==='new')return {head:empty(),etag:'new'};
    value=await this.store.object('laboratory-history/'+etag);if(!value)throw new AppError('NOT_FOUND');if(hash(value)!==etag)fail();current=etag;
   }
-  if(value&&value.formatVersion!==2)return null;
+  if(value&&![2,3].includes(value.formatVersion))return null;
   return {head:value?validHead(value):empty(),etag:current};
  }
  async retain(value){
@@ -59,7 +65,7 @@ export class SampleAnalysisCatalogue{
   if(record.id!==id)fail();return {record,revision:member.revision,...(original?{sample:original}:{})};
  }
  keys(member){
-  const {kind,id,position,summary:s}=member,order=pad(position)+':'+id;
+  const {kind,id,position,summary:s}=member,order=sampleAnalysisOrder(position)+':'+id;
   if(kind==='event')return ['list:events:'+order,'record-events:'+s.recordId+':'+order];
   const keys=[kind+':'+id,'code:'+kind+':'+digest(s.code.toLowerCase()),'list:'+(kind==='sample'?'samples':'all')+':'+order];
   if(kind==='analysis'){
@@ -90,6 +96,9 @@ export class SampleAnalysisCatalogue{
   const before=create?null:await this.member(head,kind,data.id);
   if(expectedRecordRevision!==undefined){if(!before||before.revision!==expectedRecordRevision)throw new AppError('LAB_STALE');}
   else if(data.etag!==source.etag)throw new AppError('LAB_STALE');
+  // Existing keys remain canonical; the first successful edit atomically lifts
+  // the old head's corpus limits while retaining its exact immutable history.
+  head.formatVersion=3;
   const existing=before?await this.value(before.revision):null,sampleId=data.analysis?.sampleId??existing?.sampleId;
   const sourceSample=sampleId?await this.selected(source,'sample',sampleId):null;
   const now=new Date().toISOString(),{record,actor,reason}=applySampleAnalysisCommand(data,{existing,sourceSample:sourceSample?.record,now});
@@ -98,7 +107,7 @@ export class SampleAnalysisCatalogue{
   const group=kind==='sample'?'samples':'analyses',position=before?.position??(kind==='sample'?head.counts.samples:head.counts.analyses+head.counts.archive);
   if(kind==='sample')head.counts.samples++;else{this.count(head,existing,-1);this.count(head,record,1);}
   head.bytes[group]+=itemBytes(record)-(existing?itemBytes(existing):0);head.bytes.events+=itemBytes(event);head.counts.events++;head.revision++;head.lastEventHash=event.hash;
-  // Validate capacity before attempting any persistent write.
+  // Reject unsafe counter/byte arithmetic before attempting persistent writes.
   validHead(head);
   await this.retain(record);await this.put(head,this.describe(kind,record,position,sourceSample?.record),before);
   await this.retain(event);await this.put(head,this.describe('event',event,head.counts.events-1));await this.index.flush(head.root);
@@ -119,7 +128,8 @@ export class SampleAnalysisCatalogue{
   async function* members(){
    if(key){const member=await owner.member(head,kind,key);if(member)yield member;return;}
    if(collect||filter){for await(const entry of owner.index.entries(head,prefix)){const member=await owner.value(entry.revision);if(!owner.keys(member).includes(entry.id))fail();yield member;}return;}
-   for(let at=range.lower+offset;at<Math.min(range.upper,range.lower+offset+limit);at++){
+   const start=range.lower+Math.min(offset,range.total),end=start+Math.min(limit,range.upper-start);
+   for(let at=start;at<end;at++){
     const entry=await owner.index.entryAt(head,at),member=await owner.value(entry.revision);if(!owner.keys(member).includes(entry.id))fail();yield member;
    }
   }
@@ -136,11 +146,17 @@ export class SampleAnalysisCatalogue{
   return {items,total,counts:head.counts};
  }
  async assemble(source){
+  const head=validHead(source.head),bytes=logicalBytes(head),working=8*bytes+256*(head.counts.samples+head.counts.analyses+head.counts.archive+head.counts.events);
+  if(!Number.isSafeInteger(working))throw new AppError('MEDIA_RESOURCE_LIMIT');
+  const release=await contentBufferAdmission.acquire(working);
+  try{return await this.#assemble(source);}finally{release();}
+ }
+ async #assemble(source){
   const lab={...blank(),revision:source.head.revision};
   for(const [field,view] of [['samples','samples'],['analyses','all'],['events','events']])for await(const entry of this.index.entries(source.head,'list:'+view+':')){
    const member=await this.value(entry.revision);if(!this.keys(member).includes(entry.id))fail();lab[field].push(await this.value(member.revision));
   }
-  validateLab(lab);
+  validateLab(lab,{bounded:false});
   if(lab.samples.length!==source.head.counts.samples||lab.analyses.length!==source.head.counts.analyses+source.head.counts.archive||lab.events.length!==source.head.counts.events||Buffer.byteLength(serialize(lab))!==logicalBytes(source.head)||(lab.events.at(-1)?.hash??'')!==source.head.lastEventHash)fail();return lab;
  }
  // Complete integrity qualification belongs to backup/audit, not every edit.
@@ -164,7 +180,7 @@ export class SampleAnalysisCatalogue{
 }
 export async function verifySampleAnalysisCatalogue(store){
  const owner=new SampleAnalysisCatalogue(store);
- const check=async(value)=>{if(value.formatVersion===2)await owner.verify({head:value,etag:hash(value)});else validateLab(value);operationAdvance();};
+ const check=async(value)=>{if([2,3].includes(value.formatVersion))await owner.verify({head:value,etag:hash(value)});else validateLab(value);operationAdvance();};
  const current=await store.object('laboratory');if(current)await check(current);
  for await(const id of store.objectIdEntries('laboratory-history/')){
   const value=await store.object(id);if(!value||id!=='laboratory-history/'+hash(value))fail();await check(value);

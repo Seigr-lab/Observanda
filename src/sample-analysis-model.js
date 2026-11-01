@@ -27,8 +27,8 @@ export function validateSampleAnalysisEvent(event,previous){
  const {hash,...payload}=event;if(hash!==digest(serialize(payload)))fail();
 }
 
-export function validateLab(lab) {
-  if (!keys(lab, ['formatVersion', 'revision', 'samples', 'analyses', 'events']) || lab.formatVersion !== 1 || !Number.isSafeInteger(lab.revision) || lab.revision < 0 || ![lab.samples, lab.analyses, lab.events].every(Array.isArray) || lab.samples.length > 5000 || lab.analyses.length > 10000 || lab.events.length > 50000) fail();
+export function validateLab(lab,{bounded=true}={}) {
+  if (!keys(lab, ['formatVersion', 'revision', 'samples', 'analyses', 'events']) || lab.formatVersion !== 1 || !Number.isSafeInteger(lab.revision) || lab.revision < 0 || ![lab.samples, lab.analyses, lab.events].every(Array.isArray) || bounded&&(lab.samples.length > 5000 || lab.analyses.length > 10000 || lab.events.length > 50000)) fail();
   const ids = new Set(), codes = new Set();
   for (const s of lab.samples) { validateSample(s); if (ids.has(s.id) || codes.has(s.code.toLowerCase())) fail(); ids.add(s.id); codes.add(s.code.toLowerCase()); }
   const sampleIds = new Set(ids);
@@ -49,7 +49,7 @@ export function validateLab(lab) {
   for (const event of lab.events) {
     validateSampleAnalysisEvent(event,previous);if(!ids.has(event.recordId))fail();previous=event.hash;
   }
-  if (Buffer.byteLength(serialize(lab)) > 16 * 1024 * 1024) throw new AppError('LIMIT');
+  if (bounded&&Buffer.byteLength(serialize(lab)) > 16 * 1024 * 1024) throw new AppError('LIMIT');
   return lab;
 }
 

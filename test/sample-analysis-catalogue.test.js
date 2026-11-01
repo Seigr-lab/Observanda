@@ -28,7 +28,7 @@ async function fixture(t,count=0){
 test('new installations retain separate originals; commands, reviews, reports and event pages share the same pinned indexes',async t=>{
  const f=await fixture(t),save=(command,options={})=>f.service.change(command,{compact:true,commandId:randomUUID(),...options});
  const first=await save({action:'create-sample',etag:'new',sample});
- const head=await f.service.catalogue(s=>s.object('laboratory'));assert.equal(head.formatVersion,2);assert.ok(Buffer.byteLength(serialize(head))<1000);
+ const head=await f.service.catalogue(s=>s.object('laboratory'));assert.equal(head.formatVersion,3);assert.ok(Buffer.byteLength(serialize(head))<1000);
  const idempotency=randomUUID(),create={action:'create-analysis',etag:'new',analysis:{code:'A-01',sampleId:first.selectedId,result}};
  const a=await save(create,{commandId:idempotency});assert.deepEqual(await save(create,{commandId:idempotency}),a);
  const selected=await f.reader.selected({workspaceId:f.book.id,kind:'analysis',id:a.selectedId});

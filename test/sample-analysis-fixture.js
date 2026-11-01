@@ -6,7 +6,7 @@ import {SampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
 import {validateLab} from '../src/sample-analysis-model.js';
 import {buildIndex} from '../src/index-builder.js';
 export async function seedSampleAnalysis(store,lab){
- validateLab(lab);const owner=new SampleAnalysisCatalogue(store),head=(await owner.source('new')).head;
+ validateLab(lab,{bounded:false});const owner=new SampleAnalysisCatalogue(store),head=(await owner.source('new')).head;
  head.revision=lab.revision;head.lastEventHash=lab.events.at(-1)?.hash??'';
  const samples=new Map(lab.samples.map(s=>[s.id,s]));
  async function* entries(){
