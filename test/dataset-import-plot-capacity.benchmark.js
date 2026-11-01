@@ -15,6 +15,7 @@ import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 import {MaterialSequence} from '../src/material-sequence.js';
 import {sampleWorkloadCpu} from './workload-cpu-sample.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
 
 // Focused diagnostic; the normal adoption test covers the combined workload.
 // Run explicitly with: node scripts/test.js --test-concurrency=1 test/dataset-import-plot-capacity.benchmark.js
@@ -34,20 +35,21 @@ test('tenfold long-cell dataset preparation and reduction meet their declared wo
   artifact=await materials.finishImport(upload.id);
  }finally{await source.close();}
  const perform=async id=>{t.signal.throwIfAborted();jobs.worker.enabled=true;try{activeRun=jobs.worker.runOnce();await activeRun;}finally{jobs.worker.enabled=false;}const job=await jobs.queue.read(id);assert.equal(job.state,'completed',JSON.stringify(job));return job.result;};
+ const measured=async(label,operation)=>{const sink=new OperationalDiagnostics();try{return await withDiagnostics(sink,async()=>{try{return await operation();}finally{diagnostic('request');}});}finally{const {entries}=await sink.snapshot();t.diagnostic(JSON.stringify({label,work:entries.filter(entry=>entry.event==='request'||entry.event==='phase'&&['prepare-job','complete-job'].includes(entry.phase))}));await sink.close();}};
  const columns=names.map((name,index)=>({...defaultColumn({label:name}),representation:index===3?'text':index===2?'radix':'integer',radix:index===2?6:10}));
  process.stdout.write('Dataset capacity: preparing 43440 rows\n');let at=performance.now();const datasetId=randomUUID();
  await enqueueDataset(materials,jobs.queue,{recordId,title:'Acquired observations',artifact,sourceMapping:{format:'jsonl',fields:names.map(name=>({name,path:'/'+name}))},columns},datasetId);
  // Distinguish parsing from retained writes in a failed capacity report.
  const build=MaterialSequence.prototype.builder;let retaining=0,parsedMs=null,dataset;
  MaterialSequence.prototype.builder=function(kind,...args){if(kind==='cells'){if(parsedMs===null){parsedMs=Math.round(performance.now()-at);process.stdout.write('Dataset capacity: parsed in '+parsedMs+' ms\n');}if(++retaining%10000===0)process.stdout.write('Dataset capacity: retaining row '+retaining+'\n');}return build.call(this,kind,...args);};
- try{dataset=await perform(datasetId);}finally{MaterialSequence.prototype.builder=build;}
+ try{dataset=await measured('dataset',()=>perform(datasetId));}finally{MaterialSequence.prototype.builder=build;}
  const datasetMs=Math.round(performance.now()-at);process.stdout.write('Dataset capacity: preparation '+datasetMs+' ms\n');
  at=performance.now();const retained=await materials.read(dataset);assert.equal(retained.content.rowCount,rows);const last=await materials.datasetPage(dataset,retained.content.pageIndex.count-1);assert.deepEqual(last.rows.at(-1).cells.slice(0,3),['3','18446744073709551615','105']);
  let notes='';for(let offset=0;offset!==null;){const part=await materials.readDatasetCell(last.rows.at(-1).cells[3],{offset,limit:4096});notes+=part.text;offset=part.next;}assert.equal(notes,'Synthetic acquired detail. '.repeat(165));
  const datasetReadMs=Math.round(performance.now()-at);process.stdout.write('Dataset capacity: inspected last page in '+datasetReadMs+' ms\n');
  process.stdout.write('Dataset capacity: calculating all rows\n');at=performance.now();const figureId=randomUUID();
  await enqueuePlot(materials,jobs.queue,{recordId,title:'Observed mean',dataset,mapping:{x:2,xKind:'category',values:[{column:0,error:null}],group:null,operation:'mean',kind:'bar',order:'source',mode:'replace',decimal:'.'}},figureId);
- const figure=await perform(figureId),calculationMs=Math.round(performance.now()-at);process.stdout.write('Dataset capacity: calculation '+calculationMs+' ms\n');
+ const figure=await measured('plot',()=>perform(figureId)),calculationMs=Math.round(performance.now()-at);process.stdout.write('Dataset capacity: calculation '+calculationMs+' ms\n');
  const result=await materials.read(figure),reader=await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(result.content.figure),points=await reader.window({collection:'points',limit:2});
  assert.equal(result.content.denominator.included,rows);assert.equal(points.total,1);assert.equal(points.items[0].value.x,'105');assert.equal(points.items[0].value.y,1.5);assert.equal(result.content.plotMembersIndex.count,rows);
  assert.deepEqual((await reader.rawPoint({offset:0})).value.source.members,{offset:0,count:rows});let member=0;
