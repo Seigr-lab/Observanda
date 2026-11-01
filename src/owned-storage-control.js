@@ -1,6 +1,6 @@
 // Operating-system leases coordinate owners; their files contain no research.
 // Match only exact internal locations, never arbitrary user attachment names.
-const roots=new Set(['.observanda/write.lock','.observanda/project-retention.lock','.observanda/lab-books.lock']);
+const roots=new Set(['.observanda/write.lock','.observanda/project-retention.lock','.observanda/lab-books.lock','.observanda/.postgresql.runtime-upgrade.lock']);
 const bookLease=/^\.observanda\/lab-book-creation\/(?:[a-f0-9-]{36}|book-[a-f0-9-]{36}|name-[a-f0-9]{64})\.lock$/;
 const projectLease=/^\.observanda\/(?:lab-book-directory|project-import-addresses|project-imports|project-incoming-owners|project-membership|project-lifecycle|project-copies|project-archives|project-moves|project-deletions)\/[a-f0-9-]{36}\.lock$/;
 const projectCreationLease=/^\.observanda\/project-creation\/(?:owner-)?[a-f0-9-]{36}\.lock$/;
