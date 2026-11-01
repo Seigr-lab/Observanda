@@ -2,7 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
-import {projectDirectoryChoices} from '../src/project-directory-query.js';
+import {projectDirectoryChoices as choices} from '../src/project-directory-query.js';
+import {projectChoiceMemoryWork} from './fixtures/project-choice-work.js';
+const projectDirectoryChoices=(registry,input,options={})=>choices(registry,input,{withWork:projectChoiceMemoryWork,...options});
 import {projectChoiceAncestry} from '../src/project-choice-ancestry.js';
 import {ownerDirectorySortKey} from '../src/owner-directory-model.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
@@ -34,10 +36,10 @@ test('streamed ancestor search preserves cross-label matches and excludes the en
   const parents=await projectDirectoryChoices(f.registry,request({kind:'parents',query:'',exclude:parent.projectId}));assert.deepEqual(parents.projects.map(row=>row.projectId),[f.first.projectId]);
  }finally{await clearVault(f.workspace.vault);}
 });
-test('bounded ancestry traversal detects deep cycles, missing parents and cancellation',async()=>{
+test('bounded ancestry memoization detects deep cycles, missing parents and cancellation',async()=>{
  const entries=Array.from({length:4000},(_,i)=>({projectId:String(i),parentId:i===3999?null:String(i+1)})),byId=new Map(entries.map(row=>[row.projectId,row]));let reads=0;const view={get:async id=>{reads++;return byId.has(id)?{state:'active',entry:byId.get(id)}:null;}};
- let count=0;for await(const _row of projectChoiceAncestry(view)(entries[0]))count++;assert.equal(count,4000);assert.equal(reads,3999);
- entries.at(-1).parentId='2000';await assert.rejects(async()=>{for await(const _row of projectChoiceAncestry(view)(entries[0])){}},{code:'FORMAT'});
- entries.at(-1).parentId='missing';await assert.rejects(async()=>{for await(const _row of projectChoiceAncestry(view)(entries[0])){}},{code:'NOT_FOUND'});
- const controller=new AbortController();await assert.rejects(async()=>{for await(const _row of projectChoiceAncestry(view,{signal:controller.signal})(entries[0]))controller.abort();},{name:'AbortError'});
+ await projectChoiceMemoryWork(null,async work=>{const ancestry=projectChoiceAncestry(view,work,{query:'3999'});for(const entry of entries)assert.equal((await ancestry(entry.projectId)).matched,true);});assert.equal(reads,4000);
+ entries.at(-1).parentId='2000';await assert.rejects(projectChoiceMemoryWork(null,work=>projectChoiceAncestry(view,work)('0')),{code:'FORMAT'});await assert.rejects(projectChoiceAncestry(view,null)('0'),{code:'FORMAT'});
+ entries.at(-1).parentId='missing';await assert.rejects(projectChoiceMemoryWork(null,work=>projectChoiceAncestry(view,work)('0')),{code:'NOT_FOUND'});
+ const controller=new AbortController();await assert.rejects(projectChoiceMemoryWork(null,work=>projectChoiceAncestry(view,work,{signal:controller.signal,check:()=>controller.abort()})('0')),{name:'AbortError'});
 });

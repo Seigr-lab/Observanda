@@ -1,0 +1,1 @@
+export function projectChoiceMemoryWork(_workspace,operation){const rows=new Map();return operation({get:async key=>structuredClone(rows.get(key)),put:async(key,value)=>{rows.set(key,structuredClone(value));}});}

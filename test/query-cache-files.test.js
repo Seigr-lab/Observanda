@@ -8,7 +8,19 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {openQueryCacheFiles,verifiedQueryCacheNamespace} from '../src/query-cache-files.js';
 import {QueryResultSort,QueryCachePressure} from '../src/query-result-sort.js';
+import {withStagingAuthority} from '../src/staging-reservations.js';
+import {diskCapacity} from '../src/disk-capacity.js';
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-query-cache-'));await mkdir(path.join(root,'.observanda'));const workspace={root,vault:{id:randomUUID(),key:randomBytes(32)},cleanup:[]};t.after(async()=>{const results=await Promise.allSettled(workspace.cleanup.map(value=>value.close()));workspace.vault.key.fill(0);await rm(root,{recursive:true,force:true});for(const result of results)if(result.status==='rejected')throw result.reason;});return workspace;}
+
+test('query cache allocations honor durable staging claims and recover after their retirement',async t=>{
+ const workspace=await fixture(t);Object.assign(workspace,{storageKind:async()=>'catalogue',readMetadata:async()=>null,metadataPage:async()=>({items:[]}),removeMetadata:async()=>{}});t.mock.method(diskCapacity,'probe',async()=>({id:'query-and-staging-volume',available:320n*1024n*1024n}));
+ await withStagingAuthority(workspace,async authority=>{
+  const claim=await authority.reserve({id:randomUUID(),principalId:randomUUID(),ownerId:randomUUID(),grantGeneration:1,expectedBytes:32*1024*1024,entries:1,expiresAt:Date.now()+60000});
+  await assert.rejects(openQueryCacheFiles(workspace),QueryCachePressure);assert.equal(diskCapacity.stats().active,0);assert.equal((await authority.status()).remainingBytes,32*1024*1024);
+  await claim.close();while(await authority.recover()){};
+ });
+ const files=await openQueryCacheFiles(workspace);workspace.cleanup.push(files);await files.write('a.data',0,Buffer.from('admitted encrypted frame'));await files.finish();await files.close();assert.equal(diskCapacity.stats().active,0);
+});
 test('native query cache retains independent leases and removes only its authenticated fixed files',async t=>{
  const workspace=await fixture(t),first=await openQueryCacheFiles(workspace);workspace.cleanup.push(first);const sort=new QueryResultSort(first,randomBytes(32),first.id),rows=Array.from({length:1000},(_,i)=>({id:String(i),title:'PRIVATE_OBSERVATION_'+String(1000-i).padStart(4,'0')})),order=(a,b)=>a.title<b.title?-1:a.title>b.title?1:0;
  const receipt=await sort.build(rows,order);await first.finish();assert.deepEqual(await sort.page(receipt,128,25),[...rows].sort(order).slice(128,153));

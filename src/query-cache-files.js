@@ -7,6 +7,7 @@ import {diskCapacity} from './disk-capacity.js';
 import {seal,unseal} from './encryption.js';
 import {QueryCachePressure} from './query-result-sort.js';
 import {AppError} from './errors.js';
+import {stagingCapacityAdmission} from './staging-reservations.js';
 const FILES=['a.data','a.runs','b.data','b.runs','pages'],ALLOCATION=64*1024*1024,WORKSPACE_BYTES=512*1024*1024,MAX_ENTRIES=8,OVERHEAD=128*1024;
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value),pressure=()=>{throw new QueryCachePressure();};
 const aad=(vault,id)=>'Observanda/query-cache-owner/v1/'+vault.id+'/'+id;
@@ -72,7 +73,7 @@ export async function openQueryCacheFiles(workspace,{check=()=>{},signal}={}){
    }finally{await oldLease?.close();await child.close();}
   }
   if(count>=MAX_ENTRIES||reserved+ALLOCATION>WORKSPACE_BYTES)pressure();
-  ticket=await diskCapacity.reserve(workspace.root,ALLOCATION,{reserveBytes:64*1024*1024,refreshBytes:4*1024*1024,signal});check();
+  ticket=await diskCapacity.reserve(workspace.root,ALLOCATION,{reserveBytes:64*1024*1024,refreshBytes:4*1024*1024,signal,admission:stagingCapacityAdmission(workspace,{signal})});check();
   id=randomUUID();directory=await cache.directory(id,{create:true,exclusive:true});lease=await directory.lease('lease');const files={};
   for(const file of FILES){const handle=await directory.file(file,{mode:'exclusive'});handles.set(file,handle);sizes.set(file,0);files[file]=handle.identity;}
   const value={version:1,id,rootIdentity:root.identity,cacheIdentity:cache.identity,directoryIdentity:directory.identity,leaseIdentity:lease.identity,createdAt:Date.now(),allocation:ALLOCATION,files},owner=await directory.file('owner',{mode:'exclusive'});

@@ -4,6 +4,8 @@ import {digest,serialize} from './storage-format.js';
 import {ownerDirectorySortKey} from './owner-directory-model.js';
 import {queryResultWindow} from './query-result-window.js';
 import {projectChoiceAncestry} from './project-choice-ancestry.js';
+import {withProjectChoiceWork} from './project-choice-work.js';
+import {queryCallbackSource} from './query-callback-source.js';
 const normalize=value=>String(value??'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase();
 const signature=view=>digest(serialize({registry:view.revision,legacy:view.legacy??[]}));
 const label=(entry,index)=>index==='template'?entry.summary?.templateName:entry.summary?.title??entry.projectId;
@@ -16,30 +18,30 @@ async function* ordered(view,index,legacy){
   yield row.entry;
  }while(position<legacy.length)yield legacy[position++];
 }
-export async function projectDirectoryChoices(registry,input,{signal}={}){
+export async function projectDirectoryChoices(registry,input,{signal,withWork=withProjectChoiceWork}={}){
  if(!input||Object.keys(input).sort().join()!=='exclude,kind,limit,offset,query,revision'||!['parents','templates','book-parents','record-parents'].includes(input.kind)||input.exclude!==null&&!researchId(input.exclude)||typeof input.query!=='string'||input.query.length>160||!Number.isSafeInteger(input.offset)||input.offset<0||!Number.isSafeInteger(input.limit)||input.limit<1||input.limit>50||input.revision!==null&&typeof input.revision!=='string')throw new AppError('INVALID');
  return registry.inspect(async view=>{
   signal?.throwIfAborted();const revision=input.kind==='book-parents'?view.revision:signature(view);if(input.revision!==null&&input.revision!==revision)throw new AppError('CONFLICT');
   const index=input.kind==='templates'?'template':'label',query=normalize(input.query.trim()),legacy=(view.legacy??[]).filter(entry=>index!=='template'||entry.summary?.templateName).sort((a,b)=>key(a,index)<key(b,index)?-1:1),projects=[];
   const present=async entry=>({projectId:entry.projectId,parentId:entry.parentId,summary:entry.summary??null,...(input.kind==='record-parents'?{legacy:entry.legacy===true,ancestors:(await view.ancestors(entry.projectId)).slice(1).reverse().map(parent=>parent.summary?.title??parent.projectId)}:{})});
   if(!query&&!input.exclude&&!legacy.length){const page=await view.page({index,offset:input.offset,limit:input.limit,signal});for(const row of page.items)projects.push(await present(row.entry));return {revision,total:page.total,projects};}
-  const matches=async function*(check=()=>{}){
-   const ancestors=projectChoiceAncestry(view,{signal,check});
+  const needsAncestry=input.kind==='parents'&&input.exclude||input.kind==='record-parents'&&query;
+  const source=(check=()=>{})=>queryCallbackSource((emit,sourceSignal)=>{
+   const produce=async work=>{
+   const ancestors=projectChoiceAncestry(view,work,{query:input.kind==='record-parents'?query:'',exclude:input.kind==='parents'?input.exclude:null,normalize,signal:sourceSignal,check});
    for await(const entry of ordered(view,index,legacy)){
-    check();signal?.throwIfAborted();if(entry.projectId===input.exclude)continue;let excluded=false;
-    let text=normalize([entry.summary?.title,label(entry,index),entry.projectId].join(' ')),matched=!query||text.includes(query);text=text.slice(-Math.max(1,query.length));
-    if(input.kind==='parents'&&input.exclude||input.kind==='record-parents'&&query){let first=true;for await(const parent of ancestors(entry)){
-     if(input.kind==='parents'&&parent.projectId===input.exclude)excluded=true;
-     if(!first&&input.kind==='record-parents'){const part=text+' '+normalize(parent.summary?.title??parent.projectId);matched||=part.includes(query);text=part.slice(-Math.max(1,query.length));}first=false;
-    }}
-    if(!excluded&&matched)yield {id:entry.projectId,title:key(entry,index),entry};
+    check();sourceSignal.throwIfAborted();if(entry.projectId===input.exclude)continue;let excluded=false;
+    const text=normalize([entry.summary?.title,label(entry,index),entry.projectId].join(' '));let matched=!query||text.includes(query);
+    if(needsAncestry){const inherited=await ancestors(entry.parentId);excluded=inherited.excluded;if(input.kind==='record-parents')matched||=inherited.matched||inherited.present&&(text.slice(-Math.max(0,query.length-1))+' '+inherited.prefix).includes(query);}
+    if(!excluded&&matched)await emit({id:entry.projectId,title:key(entry,index),entry});
    }
-  };
-  const cached=await queryResultWindow({workspace:registry.workspace,ownerId:registry.workspaceId,snapshotId:revision,queryHash:digest(JSON.stringify(['project-choices',input.kind,input.exclude,query])),order:(a,b)=>a.title<b.title?-1:a.title>b.title?1:0,point:value=>({id:value.id,title:value.title}),offset:input.offset,limit:input.limit,reuse:input.revision!==null,signal},check=>({rows:matches(check)}));
+   };return needsAncestry?withWork(registry.workspace,produce,{signal:sourceSignal}):produce(null);
+  },{signal,check});
+  const cached=await queryResultWindow({workspace:registry.workspace,ownerId:registry.workspaceId,snapshotId:revision,queryHash:digest(JSON.stringify(['project-choices',input.kind,input.exclude,query])),order:(a,b)=>a.title<b.title?-1:a.title>b.title?1:0,point:value=>({id:value.id,title:value.title}),offset:input.offset,limit:input.limit,reuse:input.revision!==null,signal},source);
   if(cached){for(const row of cached.records)projects.push(await present(row.entry));return {revision,total:cached.total,projects};}
   let total=0;const unfiltered=!query&&!input.exclude;
   const knownTotal=unfiltered?(await view.page({index,limit:1})).total+legacy.length:null;
-  for await(const {entry} of matches()){
+  for await(const {entry} of source().rows){
    if(total++>=input.offset&&projects.length<input.limit)projects.push(await present(entry));
    if(unfiltered&&projects.length===input.limit)break;
   }
