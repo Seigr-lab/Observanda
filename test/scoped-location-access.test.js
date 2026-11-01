@@ -48,11 +48,11 @@ test('native rename refuses a captured book grant revoked before publication wit
 test('scoped installation binds replacement applications to the staged workspace destination',async()=>{
  const client={},session=new Map(),source=path.resolve('Source Workspace'),destination=path.resolve('Renamed Workspace');let reads=0;
  const application={workspace:{root:source},session:()=>session,registry:async()=>{reads++;return {};}};
- const scoped=new ScopedLocationAccess(application,client,{},null,{async *items(){}});scoped.destination=destination;
+ const scoped=new ScopedLocationAccess(application,client,{},null,{size:0,async *items(){}});scoped.destination=destination;
  const replacement={...application,workspace:{root:path.resolve('Unrelated Workspace')}};
  await assert.rejects(scoped.install(replacement),{code:'ACCESS_DENIED'});assert.equal(reads,0);
- replacement.workspace.root=destination;await scoped.install(replacement);assert.equal(reads,1);
- await scoped.install();assert.equal(reads,2);
+ replacement.workspace.root=destination;await scoped.install(replacement);assert.equal(reads,0);
+ await scoped.install();assert.equal(reads,0);
 });
 
 test('project grant relocation lookup cannot revive or forget a concurrently revoked grant',async t=>{

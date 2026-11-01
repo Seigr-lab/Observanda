@@ -66,7 +66,10 @@ export class ScopedLocationAccess{
   await this.renamed(owners,scope.source,scope.destination);await this.install();
  }
  async install(application=this.application,client=this.client){
-  if(client!==this.client||this.closed||application.closed||!this.destination||application!==this.application&&application.workspace.root!==this.destination)throw new AppError('ACCESS_DENIED');const session=application.session(client),registry=await application.registry();
+  if(client!==this.client||this.closed||application.closed||!this.destination||application!==this.application&&application.workspace.root!==this.destination)throw new AppError('ACCESS_DENIED');const session=application.session(client);
+  // A document workspace has no independent project credentials to install.
+  // Resolve a native registry only when transferring actual owner grants.
+  const registry=this.grants.size?await application.registry():null;
   await this.copy?.beginInstall(application,client,registry);
   try{for(const kind of ['project','lab-book'])for await(const grant of this.grants.items()){
    if(grant.kind!==kind)continue;this.copy?.assertGrant(grant);const proof={id:grant.id,token:grant.token},book=kind==='lab-book';if(!this.valid(proof)||grant.expires<=Date.now()||book&&(identity(this.session.get(grant.projectId))!==grant.parentToken||!live(this.session.get(grant.projectId))))continue;

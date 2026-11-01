@@ -76,9 +76,10 @@ export class ScopedCopyGrants{
  }
  async seal(destination){
   if(this.sealed)throw new AppError('CONFLICT');await this.prepareMove(destination);await this.scope.check();
-  const registry=this.registry??await this.scope.application.registry();
+  let registry=this.registry;
   for await(const proof of this.scope.proofs.items()){
    if(!proof.admitted||!proof.source)continue;const grant=await this.scope.grants.get(proof.id);if(!grant||!within(destination,grant.root))throw new AppError('STORAGE_COPY');this.assertGrant(grant);
+   registry??=await this.scope.application.registry();
    if(proof.source.kind==='project'){const entry=await registry.locate(proof.source.projectId);if(entry.namespaceId!==proof.source.namespaceId||entry.vaultId!==proof.source.vaultId||![proof.source.root,grant.root].includes(entry.root)||(await readAccess(entry.root)).etag!==proof.source.etag)throw new AppError('ACCESS_LOCKED');}
    else{const parentProof=await this.scope.proofs.get(proof.source.projectId),parentGrant=await this.scope.grants.get(proof.source.projectId),parent=await registry.locate(proof.source.projectId);if(!parentProof?.source||!parentGrant||![parentProof.source.root,parentGrant.root].includes(parent.root))throw new AppError('ACCESS_LOCKED');const root=parent.root===parentGrant.root?grant.root:proof.source.root;if(path.dirname(root)!==parent.root)throw new AppError('DATABASE_LOCATION');const access=await readAccess(root);if(access.etag!==proof.source.etag||access.value.vaultId!==proof.source.vaultId)throw new AppError('ACCESS_LOCKED');}
   }
@@ -86,7 +87,7 @@ export class ScopedCopyGrants{
  }
  validGrant(grant){return this.scope.valid({id:grant.id,token:grant.token})&&grant.expires>Date.now()&&(grant.kind!=='lab-book'||this.identity(this.scope.session.get(grant.projectId))===grant.parentToken&&this.live(this.scope.session.get(grant.projectId)));}
  assertGrant(grant){if(grant.kind==='project'&&!this.validGrant(grant))throw new AppError('ACCESS_LOCKED');}
- async beginInstall(application,client,registry){if(!this.sealed||this.installed||client!==this.scope.client||application===this.scope.application||application.workspace.root!==this.scope.destination)throw new AppError('ACCESS_DENIED');this.installRevision=await registry.version();}
+ async beginInstall(application,client,registry){if(!this.sealed||this.installed||client!==this.scope.client||application===this.scope.application||application.workspace.root!==this.scope.destination||!registry&&this.scope.grants.size)throw new AppError('ACCESS_DENIED');this.installRevision=registry?await registry.version():null;}
  async installGrant(application,grant,saved){
   const session=application.session(this.scope.client);let installed=false;
   try{await this.scope.grants.put(grant.id,{...grant,installedToken:this.identity(saved)});this.assertGrant(grant);if(application.closed)throw new AppError('ACCESS_LOCKED');if(!this.validGrant(grant))return;if(session.has(grant.id))throw new AppError('CONFLICT');session.set(grant.id,saved);application.credentials.add(saved);installed=true;}
@@ -94,7 +95,7 @@ export class ScopedCopyGrants{
  }
  removeInstalled(application,grant){const session=application.session(this.scope.client),saved=session.get(grant.id);if(grant.installedToken&&this.identity(saved)===grant.installedToken){session.delete(grant.id);application.credentials.delete(saved);clearVault(saved.vault);}}
  async finishInstall(application,registry){
-  if(application.closed||await registry.version()!==this.installRevision)throw new AppError('CONFLICT');
+  if(application.closed||!registry&&this.scope.grants.size||(registry?await registry.version():null)!==this.installRevision)throw new AppError('CONFLICT');
   for await(const grant of this.scope.grants.items())if(grant.installedToken&&!this.validGrant(grant)){if(grant.kind==='project')throw new AppError('ACCESS_LOCKED');this.removeInstalled(application,grant);}
   this.installed=true;
  }
