@@ -14,5 +14,5 @@ export async function workspaceEncryptedCopyAccess(source,plan,{username='',pass
   const existing=await readAccess(plan.destination);
   if(existing.etag!=='none'&&serialize(existing.value)!==serialize(access))throw new AppError('CONFLICT');
   return {access,vault};
- }catch(error){clearVault(vault);throw error;}
+ }catch(error){await clearVault(vault);throw error;}
 }

@@ -59,7 +59,7 @@ export class ProjectRenameApplication{
     if(result&&session.get(value.projectId)===saved&&saved?.vault&&!saved.locked&&saved.expires>Date.now()){saved.root=result.project.root;saved.etag=(await readAccess(result.project.root)).etag;}
    }
   }catch(error){if(error.code==='STORAGE_RENAME_VOLUME'&&(await renames.read())?.phase==='cancelled')return;if(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=value.projectId;throw error;}
-  finally{clearVault(vault);}
+  finally{await clearVault(vault);}
  }
  async withParent(client,parentId,check,operation,skipRenameId=null){
   if(parentId===null)return operation(check);

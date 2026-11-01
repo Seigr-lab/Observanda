@@ -21,7 +21,7 @@ async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-discovery-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,body:'BODY MUST NOT LEAVE DISCOVERY',sections:[],attachments:[],figures:[],relations:[],contributors:[{id:randomUUID(),name:'Artist '+i,role:'Performer'}]}));
  const f=await encryptedFixture(directory,book),etag=(await f.workspace.read()).etag;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,service:new DashboardDiscovery(f.workspace),command:{workspaceId:book.id,etag,provider:'contributors',offset:0,limit:12,search:''}};
 }
 test('card discovery retains a label-only page and reads no bodies across tenfold record growth',async t=>{

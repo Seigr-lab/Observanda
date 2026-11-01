@@ -64,6 +64,6 @@ export class ProjectOpening{
    }
    await checkpoint('registered');await currentOwner();await opened(saved,access,vault);return {project:saved};
   });
-  }finally{clearVault(vault);}
+  }finally{await clearVault(vault);}
  }
 }

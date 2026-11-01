@@ -95,7 +95,7 @@ export class LabBookCreation{
      try{await this.registry.attach(storage,{expected:current.revision});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
     }
     return this.acknowledge(command.id,intent);
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   }))));
  }
 }

@@ -2,6 +2,7 @@ import {SEGMENTED_ENVELOPE,unsealSegmentedFile} from './segmented-file-format.js
 import {createCipheriv,createDecipheriv,randomBytes,scrypt} from 'node:crypto';
 import {promisify} from 'node:util';
 import {AppError} from './errors.js';
+import {retireVault,drainRetiredVault} from './vault-lifecycle.js';
 
 const derive=promisify(scrypt);
 export const ENVELOPE=Buffer.from('OBSENC01');
@@ -24,5 +25,5 @@ export function unseal(bytes,key,aad){
     return Buffer.concat([decipher.update(bytes.subarray(36)),decipher.final()]);
   }catch{throw new AppError('ENCRYPTION_DAMAGED');}
 }
-export function clearVault(vault){vault?.key?.fill(0);if(vault)vault.key=null;}
+export function clearVault(vault){retireVault(vault);vault?.key?.fill(0);if(vault)vault.key=null;const drained=drainRetiredVault(vault);void drained.catch(()=>{});return drained;}
 export const cloneVault=vault=>vault?.key?{id:vault.id,key:Buffer.from(vault.key)}:{id:vault?.id??null,key:null};

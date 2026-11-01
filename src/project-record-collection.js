@@ -9,6 +9,7 @@ import {readAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
 import {createCatalogueConnections} from './catalogue-connections.js';
+import {withQueryCacheScope} from './query-cache-scope.js';
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
 const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','STORAGE_INCOMPLETE']);
 export function projectRecordCollection(application,client,check){
@@ -22,7 +23,7 @@ export function projectRecordCollection(application,client,check){
   try{return await connections.run(async()=>{
   const checks=[];
   await check();signal?.throwIfAborted();
-  if(directory.includeRoot&&includeOwner({workspaceId:registry.workspaceId,projectId:null,labBookId:null})&&(!namespaces||namespaces.has(registry.workspaceId)))await consume(application.workspace,{workspaceId:registry.workspaceId,projectId:null,labBookId:null},await directory.ownerScope(null)??directory.chosen);
+  if(directory.includeRoot&&includeOwner({workspaceId:registry.workspaceId,projectId:null,labBookId:null})&&(!namespaces||namespaces.has(registry.workspaceId)))await withQueryCacheScope(application,client,[],async()=>consume(application.workspace,{workspaceId:registry.workspaceId,projectId:null,labBookId:null},await directory.ownerScope(null)??directory.chosen));
   for await(const entry of directory.projects()){
    const selectedScope=await directory.ownerScope(entry);
    signal?.throwIfAborted();await check();
@@ -42,10 +43,10 @@ export function projectRecordCollection(application,client,check){
        const access=new LabBookAccessSession(application,client,project,book.labBookId,current);let vault,accessEtag,bookRoot,bookAdmitted=false;
        try{
         const router=new LabBookRouter(books,{authorize:async()=>{await access.check();return true;},unlock:async(value,saved)=>{bookRoot=value.root;accessEtag=saved.etag;return vault=await access.key(value.root);}});
-        await application.tracked(()=>router.withLabBook(book.labBookId,storage=>{bookAdmitted=true;return consume(storage,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId,projectTitle:entry.summary.title},selectedScope);}),entry.projectId,book.labBookId);
+        await application.tracked(()=>router.withLabBook(book.labBookId,storage=>{bookAdmitted=true;return withQueryCacheScope(application,client,[access.expected],()=>consume(storage,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId,projectTitle:entry.summary.title},selectedScope));}),entry.projectId,book.labBookId);
         const assertBook=async()=>{await access.check();if((await readAccess(bookRoot)).etag!==accessEtag)throw access.error(new AppError('ACCESS_LOCKED'));};
         await assertBook();checks.push(assertBook);
-       }catch(error){const failure=access.error(error);if(bookAdmitted||!await unavailable(failure,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId}))throw failure;}finally{clearVault(vault);}
+       }catch(error){const failure=access.error(error);if(bookAdmitted||!await unavailable(failure,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId}))throw failure;}finally{await clearVault(vault);}
       }
       });
       if(await books.version()!==stamp)throw new AppError('RECORD_QUERY_CURSOR');

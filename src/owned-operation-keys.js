@@ -43,6 +43,6 @@ export async function loadOwnerKeys(workspace,id,expected,selectedFile=RENAME_KE
    keys.set(projectId,{id:vaultId,key:Buffer.from(plain.subarray(offset+72,offset+width))});
   }
   return keys;
- }catch(error){for(const key of keys.values())clearVault(key);throw error;}
+ }catch(error){for(const key of keys.values())await clearVault(key);throw error;}
  finally{plain.fill(0);}
 }

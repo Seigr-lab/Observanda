@@ -1,6 +1,7 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 const scope=new AsyncLocalStorage();let provider=null;
+export const withoutDatabaseScope=operation=>scope.exit(operation);
 export function installDatabaseProvider(value){
  if(provider)throw new AppError('DATABASE_RUNNING');provider=value;
  return ()=>{if(provider===value)provider=null;};

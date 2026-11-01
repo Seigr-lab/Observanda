@@ -53,13 +53,13 @@ test('English title order, date ties and recent cards agree across English and N
 
 test('record, dashboard and timeline cursors survive a restored workspace with another host locale',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portable-order-')),book=fixtureBook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const etag=await f.workspace.catalogue(s=>s.head()),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse({sort:'title'})};
  const records={workspaceId:book.id,query,limit:2},cards={workspaceId:book.id,etag,config:defaultPanelConfig(),options:{},limit:2,key:null,provider:'records'},timeline={workspaceId:book.id,query:timelineQuery(timelineDefaults()),limit:2};
  const readers=workspace=>[command=>new RecordQuery(workspace).list(command),command=>new DashboardRecords(workspace).read(command),command=>new TimelineQuery(workspace).list(command)];
  const commands=[records,cards,timeline],expected=[[ids[2],ids[0],ids[1],ids[3]],ids,ids],first=[];
  await defaultLocale('nb',async()=>{for(const [i,read] of readers(f.workspace).entries())first.push(await read(commands[i]));});
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new Workspace(destination,f.vault);
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(destination,f.vault);
  await defaultLocale('en',async()=>{
   for(const [i,read] of readers(restored).entries()){
    const second=await read({...commands[i],cursor:first[i].nextCursor});

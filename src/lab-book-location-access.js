@@ -31,9 +31,9 @@ export class LabBookLocationAccess{
     const pending=await renames.pending(id),root=pending&&pending.phase!=='complete'?await renames.locate(pending):entry.root;
     vault=await access.key(root);await access.check();if(vault.id!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
     if(pending){await this.application.jobs.invalidateBook(project.projectId,id);await renames.resume(id,vault,{check:()=>access.check()});entry=await registry.locate(id);}
-    const etag=(await readAccess(entry.root)).etag;if(retain){const previous=this.owners.get(access.id);clearVault(previous?.vault);this.owners.set(access.id,{projectId:project.projectId,id,parent,entry,access,etag,vault:cloneVault(vault)});}if(onOwner)await onOwner({projectId:project.projectId,id,parent,entry,access,etag,vault});
+    const etag=(await readAccess(entry.root)).etag;if(retain){const previous=this.owners.get(access.id);await clearVault(previous?.vault);this.owners.set(access.id,{projectId:project.projectId,id,parent,entry,access,etag,vault:cloneVault(vault)});}if(onOwner)await onOwner({projectId:project.projectId,id,parent,entry,access,etag,vault});
     const result=await new LabBookRouter(registry,{authorize:async()=>true,unlock:async()=>vault}).withLabBook(id,operation);await access.check();return result;
-   }catch(error){access.error(error);if(error.labBookId)error.labBookName=entry.directory;throw error;}finally{clearVault(vault);}
+   }catch(error){access.error(error);if(error.labBookId)error.labBookName=entry.directory;throw error;}finally{await clearVault(vault);}
   },project.projectId,id);
  }
  valid(owner){const saved=owner.access.expected;return owner.access.session.get(owner.access.id)===saved&&!saved?.locked&&(!saved?.vault||saved.expires>Date.now())&&owner.parent.session.get(owner.projectId)===owner.parent.sessionEntry&&!owner.parent.sessionEntry?.locked&&(!owner.parent.sessionEntry?.vault||owner.parent.sessionEntry.expires>Date.now());}
@@ -41,7 +41,7 @@ export class LabBookLocationAccess{
   const receipt=await labBookTransferReceipt(storage),owner=[...this.owners.values()].find(item=>item.id===storage.labBookId&&item.entry.root===receipt?.source);
   if(!owner||!this.valid(owner)||receipt.phase!=='verified'||receipt.vaultId!==owner.vault.id||receipt.namespaceId!==owner.entry.namespaceId)throw new AppError('ACCESS_LOCKED');
   await owner.access.check();const access=await readAccess(storage.root);if(access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
-  const id=owner.access.id;clearVault(this.grants.get(id)?.vault);this.grants.set(id,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:Math.min(owner.access.expected?.expires??Infinity,owner.parent.sessionEntry?.expires??Infinity,Date.now()+8*60*60*1000)});
+  const id=owner.access.id;await clearVault(this.grants.get(id)?.vault);this.grants.set(id,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:Math.min(owner.access.expected?.expires??Infinity,owner.parent.sessionEntry?.expires??Infinity,Date.now()+8*60*60*1000)});
  }
  // An interrupted move may have completed copying before this transfer session
  // opened. Recover only its caller's live explicit grants, never recovery keys.
@@ -56,7 +56,7 @@ export class LabBookLocationAccess{
    const storage=new LabBookStorage(entry.root,book.labBookId,saved.vault),receipt=await labBookTransferReceipt(storage);
    if(receipt?.phase!=='verified'||receipt.source!==previous||receipt.vaultId!==book.vaultId||receipt.namespaceId!==book.namespaceId)throw new AppError('STORAGE_MOVE_STATE');
    await access.check();const owner={projectId:project.projectId,id:book.labBookId,parent,entry,access,etag:keyring.etag,vault:cloneVault(saved.vault)};
-   clearVault(this.owners.get(id)?.vault);this.owners.set(id,owner);
+   await clearVault(this.owners.get(id)?.vault);this.owners.set(id,owner);
    this.grants.set(id,{root:entry.root,namespaceId:book.namespaceId,etag:keyring.etag,vault:cloneVault(saved.vault),expires:Math.min(saved.expires,parent.sessionEntry?.expires??Infinity)});
   }});
  }
@@ -66,7 +66,7 @@ export class LabBookLocationAccess{
    if(!book||book.vaultId!==owner.vault.id||book.namespaceId!==owner.entry.namespaceId||path.resolve(source,...project.relative.split('/'),book.directory)!==owner.entry.root)throw new AppError('STORAGE_RENAME_STATE');
    const root=path.resolve(destination,...project.relative.split('/'),book.directory),access=await readAccess(root);if(access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
    const storage=new LabBookStorage(root,owner.id,owner.vault);if((await storage.outline()).metadata.id!==book.namespaceId)throw new AppError('DATABASE_LOCATION');
-   clearVault(this.grants.get(id)?.vault);this.grants.set(id,{root,namespaceId:book.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:Math.min(owner.access.expected?.expires??Infinity,owner.parent.sessionEntry?.expires??Infinity,Date.now()+8*60*60*1000)});
+   await clearVault(this.grants.get(id)?.vault);this.grants.set(id,{root,namespaceId:book.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:Math.min(owner.access.expected?.expires??Infinity,owner.parent.sessionEntry?.expires??Infinity,Date.now()+8*60*60*1000)});
   }
  }
  async install(application,client){
@@ -94,8 +94,8 @@ export class LabBookLocationAccess{
     prepared.push([id,{root:entry.root,etag:access.etag,vault:cloneVault(grant.vault),expires:grant.expires}]);
    }
    if(application.closed)throw new AppError('ACCESS_LOCKED');
-   for(const [id,grant] of prepared){if(!this.valid(this.owners.get(id))||grant.expires<=Date.now()){clearVault(grant.vault);continue;}if(session.has(id))throw new AppError('CONFLICT');session.set(id,grant);application.credentials.add(grant);}
-  }catch(error){for(const [id,grant] of prepared){if(session.get(id)===grant){session.delete(id);application.credentials.delete(grant);}clearVault(grant.vault);}throw error;}
+   for(const [id,grant] of prepared){if(!this.valid(this.owners.get(id))||grant.expires<=Date.now()){await clearVault(grant.vault);continue;}if(session.has(id))throw new AppError('CONFLICT');session.set(id,grant);application.credentials.add(grant);}
+  }catch(error){for(const [id,grant] of prepared){if(session.get(id)===grant){session.delete(id);application.credentials.delete(grant);}await clearVault(grant.vault);}throw error;}
  }
  relocateGrants(){
   const session=this.application.session(this.client);

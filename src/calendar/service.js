@@ -21,9 +21,9 @@ export class CalendarSources{
   try{
    const workspace=new Workspace(root,vault),{metadata:book}=await workspace.outline();
    if(this.generation!==generation||(await readAccess(root)).etag!==access.etag)throw new AppError('WORKSPACE_CHANGED');
-   const old=this.connections.get(entity.id);if(old)clearVault(old.vault);
+   const old=this.connections.get(entity.id);if(old)await clearVault(old.vault);
    this.connections.set(entity.id,{vault,root,etag:access.etag,workspaceId:book.id});return book.title;
-  }catch(e){clearVault(vault);throw e;}
+  }catch(e){await clearVault(vault);throw e;}
  }
  reconcile(entities,{partial=false}={}){
   for(const [id,c] of this.connections){const e=entities.find(e=>e.id===id);if(partial&&!e)continue;if(!e?.data.enabled||path.resolve(e.data.path)!==c.root){clearVault(c.vault);this.connections.delete(id);}}
@@ -39,7 +39,7 @@ export class CalendarSources{
  async data(workspace,range,{refresh=false,detail=null,signal,emit=null,serial=false,emitSource=null,eventSources=false}={}){
   const generation=this.generation,{metadata:book}=await workspace.outline(),snapshot=await this.read(workspace,book,range,{signal,emit,emitSource,eventSources,detailId:detail?.eventId??null}),result={sources:snapshot.sources,events:snapshot.events,scopeVersion:calendarScopeVersion(book)},versions=new Map([['scope',calendarScopeVersion(book)],['local',snapshot.revision]]),matches=calendarWindow(range);
   const live=new Set(snapshot.connections.map(e=>e.id));
-  for(const [id,c] of this.connections)if(!live.has(id)){clearVault(c.vault);this.connections.delete(id);}
+  for(const [id,c] of this.connections)if(!live.has(id)){await clearVault(c.vault);this.connections.delete(id);}
   for(const id of this.cache.keys())if(!live.has(id))this.cache.delete(id);
   const queue=snapshot.connections.filter(e=>!detail||detail.sourceId===e.id);
   const collect=async entity=>{
@@ -61,12 +61,12 @@ export class CalendarSources{
     }else{
      const connected=this.connections.get(entity.id);
      if(!connected||connected.root!==path.resolve(d.path))throw new AppError('CALENDAR_LOCKED');
-     if((await readAccess(connected.root)).etag!==connected.etag){clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
+     if((await readAccess(connected.root)).etag!==connected.etag){await clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
      const ws=new Workspace(connected.root,connected.vault),{metadata:other}=await ws.outline();
      if(other.id!==connected.workspaceId||other.id===book.id)throw new AppError('CALENDAR_SELF');
      const detailId=detail?.eventId.startsWith(other.id+':')?detail.eventId.slice(other.id.length+1):null;
      const projected=await readCalendar(ws,other,range,{signal,detailId,includeConnections:false,includeSources:false,emit:emit?e=>{emitted=true;emit({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId),sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})});}:null});
-     if((await readAccess(connected.root)).etag!==connected.etag){clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
+     if((await readAccess(connected.root)).etag!==connected.etag){await clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
      if(emit&&calendarScopeVersion((await ws.outline()).metadata)!==calendarScopeVersion(other))throw new AppError('CALENDAR_CURSOR');
      events=projected.events.map(e=>({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId)}));source.checkedAt=new Date().toISOString();versions.set(entity.id,[other.id,projected.revision,calendarScopeVersion(other),connected.etag]);
     }
@@ -85,7 +85,7 @@ export class CalendarSources{
    if(!after||JSON.stringify(before.data)!==JSON.stringify(after.data)){
     if(emit)throw new AppError('CALENDAR_CURSOR');
     result.events=result.events.filter(e=>e.sourceId!==s.id);s.error=messages.sourceChanged;s.errorKey='sourceChanged';this.cache.delete(s.id);
-    const c=this.connections.get(s.id);if(c){clearVault(c.vault);this.connections.delete(s.id);}
+    const c=this.connections.get(s.id);if(c){await clearVault(c.vault);this.connections.delete(s.id);}
    }
    if(emitSource)await emitSource(s);
   }

@@ -131,7 +131,7 @@ export class ProjectCreation{
     }
     await this.finish(command.id,intent,file);return {project:entry};
     });
-   }finally{active.delete(file);clearVault(vault);}
+   }finally{active.delete(file);await clearVault(vault);}
   }));
  }
 }

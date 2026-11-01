@@ -41,7 +41,7 @@ test('linked history stays paged, private and revision-anchored across saves and
  for(let i=0;i<24;i++){const r=record('inspection','Visit '+i,'2026-09-'+String(i+1).padStart(2,'0'));r.status=i===23?'incomplete':'completed';r.body='PRIVATE BODY '.repeat(200);documentRecord(book.id,r,hive);book.entries.push(r);}
  const external=record('inspection','Same ID in another workspace');documentRecord(randomUUID(),external,hive);book.entries.push(external);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-')),f=await encryptedFixture(directory,book),queries=new RecordQuery(f.workspace),records=new ResearchRecords(f.workspace,{});
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const command={workspaceId:book.id,query:query(),relatedTo:relatedTo(book,hive.id),limit:10},read=ResearchCatalogue.prototype.read,load=ResearchCatalogue.prototype.record;let first;
  ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace loaded for hive history');};ResearchCatalogue.prototype.record=()=>{throw Error('Record body loaded for hive history');};
  try{
@@ -63,7 +63,7 @@ test('old query summaries fall back for linked histories without silently droppi
  const original=ResearchCatalogue.prototype.putQuery;
  ResearchCatalogue.prototype.putQuery=async function(record){const value=recordQueryDocument(record);delete value.referenceTargets;const revision=digest(serialize(value)),slot='record-query:'+record.id+':'+revision;await this.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO NOTHING',slot,this.encode('state',slot,value));return {queryRevision:revision};};
  let f;try{f=await encryptedFixture(directory,book);}finally{ResearchCatalogue.prototype.putQuery=original;}
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  assert.equal((await new RecordQuery(f.workspace).list({workspaceId:book.id,query:query(),relatedTo:relatedTo(book,hive.id)})).total,1);
  await f.workspace.catalogue(store=>store.verify({format:'observanda-research-catalogue',version:2,workspaceId:book.id}));
 });

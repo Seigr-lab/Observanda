@@ -153,7 +153,7 @@ export class NativeProjectBookCopy{
      const saved=await labBookTransferReceipt(owner);
      if(saved?.phase!=='verified'||saved.id!==projectBookCopyTransferId(receipt,entry.labBookId)||saved.source!==storage.root||saved.namespaceId!==entry.namespaceId||saved.vaultId!==entry.vaultId)throw new AppError('STORAGE_COPY');
      await onCopiedBook(owner);
-    }finally{clearVault(key);}
+    }finally{await clearVault(key);}
    });
   }});
  }

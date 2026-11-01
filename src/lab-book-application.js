@@ -26,6 +26,7 @@ import {researchRequest,executeResearchRequest} from './research-requests.js';
 import {researchId} from './web/research-reference.js';
 import {MAX_BYTES} from './model.js';
 import {AppError} from './errors.js';
+import {withQueryCacheScope} from './query-cache-scope.js';
 export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&['lab-books/import','lab-books/import/resume','lab-books/import/cancel','lab-books/import/pending'].includes(suffix))return {bookOperation:'import',operation:suffix,write:!suffix.endsWith('/pending'),limit:16384};
  if(method==='POST'&&suffix==='lab-books/move/pending')return {bookOperation:'placements',operation:suffix,write:false,limit:16384};
@@ -65,18 +66,18 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
   if(!data||Object.keys(data).sort().join()!=='expectedName,id')throw new AppError('INVALID');
   if(selected.operation.endsWith('/resume')&&receipt?.id!==data.id)throw new AppError('NOT_FOUND');
   const root=receipt?.id===data.id?await deletions.authenticationRoot(receipt):(await registry.locate(selected.labBookId)).root;
-  let key;try{if(root)key=await keyFor(root);await check();await stopJobs();return await deletions.run(key,{...data,check:bookAccess?()=>bookAccess.check():check,onProgress:options.onProgress});}finally{clearVault(key);}
+  let key;try{if(root)key=await keyFor(root);await check();await stopJobs();return await deletions.run(key,{...data,check:bookAccess?()=>bookAccess.check():check,onProgress:options.onProgress});}finally{await clearVault(key);}
  }
  if(!['research','rename','settings','access','transfer','reference'].includes(selected.bookOperation))throw new AppError('NOT_FOUND');
  const placement=selected.operation==='lab-books/storage/details'?await options.placementStatus?.():null;
  if(selected.operation==='lab-books/storage/details'&&placement?.canResume){
-  if(!data||Object.keys(data).length)throw new AppError('INVALID');const root=await options.placementRoot(),key=await keyFor(root);try{await check();return {path:root,move:placement};}finally{clearVault(key);}
+  if(!data||Object.keys(data).length)throw new AppError('INVALID');const root=await options.placementRoot(),key=await keyFor(root);try{await check();return {path:root,move:placement};}finally{await clearVault(key);}
  }
  const renames=new LabBookRenames(project),pending=await renames.pending(selected.labBookId);
  if(pending){
   await stopJobs();const root=pending.phase==='complete'?(await registry.locate(selected.labBookId)).root:await renames.locate(pending);
   const key=await keyFor(root);
-  try{await renames.resume(selected.labBookId,key,{check:bookAccess?()=>bookAccess.check():check});}finally{clearVault(key);}
+  try{await renames.resume(selected.labBookId,key,{check:bookAccess?()=>bookAccess.check():check});}finally{await clearVault(key);}
  }
  let vault,entry,etag;
  const current=async(directory=registry)=>{
@@ -92,10 +93,11 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
  // project key is cleared when its response ends, independently of that worker.
  const retain=async()=>{
   const parent=new ProjectStorage(project.root,project.projectId,cloneVault(project.vault)),directory=new LabBookRegistry(parent);let closed=false;
-  return {check:async()=>{if(closed)throw new AppError('ACCESS_LOCKED');await current(directory);},close(){closed=true;clearVault(parent.vault);}};
+  return {check:async()=>{if(closed)throw new AppError('ACCESS_LOCKED');await current(directory);},async close(){closed=true;await clearVault(parent.vault);}};
  };
  try{
-  const result=await router.withLabBook(selected.labBookId,async storage=>{
+  const scoped=operation=>bookAccess?withQueryCacheScope(bookAccess.application,bookAccess.client,[bookAccess.expected],operation):operation();
+  const result=await router.withLabBook(selected.labBookId,storage=>scoped(async()=>{
    if(selected.bookOperation==='reference'){
     if(!validTarget(data)||data.kind==='workspace')throw new AppError('INVALID');
     return (selected.operation.endsWith('-location')?locateResearchReference:resolveResearchReference)(storage,data,{namespaceId:entry.namespaceId});
@@ -133,7 +135,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
    if(selected.calendar)return options.calendar(storage,etag,selected.calendar,data);
    if(selected.run&&projectModuleRequest(selected.route)){const response=await selected.run(storage,data,{...options,check:()=>current()});if(selected.route==='/api/modules/command'&&response.entities)options.reconcileModules?.(response.entities);return response;}
    return executeResearchRequest(storage,selected.route,data,options);
-  },{action:selected.write?'write':'read'});
+  }),{action:selected.write?'write':'read'});
   await current();return result;
- }finally{clearVault(vault);}
+ }finally{await clearVault(vault);}
 }

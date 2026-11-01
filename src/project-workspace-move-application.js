@@ -51,13 +51,13 @@ export class ProjectWorkspaceMoveApplication{
     owners=new ProjectLocationAccess(app,client,{check:checkTarget});const storage=await owners.withProject(projectId,storage=>storage);saved=session.get(projectId);
     await app.jobs.invalidateProject(projectId);return await owners.withScopedAccess(scoped=>command.run(storage,{...data,check:async owner=>{await current();await scoped.check(owner);},withParent,withProject:(id,use)=>scoped.withProject(id,use),withBook:(parent,id,use)=>scoped.withBook(parent,id,use)}));
    }catch(error){if(accessCodes.includes(error.code)){error.projectId??=projectId;error.projectName??=prior?path.posix.basename(prior.source):path.basename((await registry.locate(projectId)).root);}throw error;}
-   finally{if(owners)await owners.close();await parentOwner?.close();clearVault(vault);}
+   finally{if(owners)await owners.close();await parentOwner?.close();await clearVault(vault);}
   },{check}).catch(async error=>{const receipt=await readProjectWorkspaceMove(registry,projectId).catch(()=>undefined);if(receipt===null||receipt&&receipt.id!==data.id)error.operationNotStarted=true;throw error;});
  }
  async unlockRecovery(client,projectId,data,{check=async()=>{}}={}){
   const app=this.application,registry=await app.registry(),value=await readProjectWorkspaceMove(registry,projectId);if(!value||value.phase==='cancelled'||value.phase==='complete'&&value.released===true)return null;
   if(!data||Object.keys(data).some(key=>!['username','password','recovery'].includes(key))||Object.values(data).some(item=>typeof item!=='string'||item.length>1024))throw new AppError('INVALID');
   const root=await locateWorkspaceProjectMove(registry,value),access=await readAccess(root),session=app.session(client),previous=session.get(projectId);let vault;
-  try{await check();vault=await app.authenticate(root,access,data.username??'',data.password??'',data.recovery??'');authenticateKeyring(access.value,vault);await check();if(app.closed||session.get(projectId)!==previous||(await readAccess(root)).etag!==access.etag)throw new AppError('ACCESS_LOCKED');app.forget(session,projectId);const saved={root,etag:access.etag,vault:cloneVault(vault),expires:Date.now()+8*60*60*1000};session.set(projectId,saved);app.credentials.add(saved);return {projectId,locked:false};}finally{clearVault(vault);}
+  try{await check();vault=await app.authenticate(root,access,data.username??'',data.password??'',data.recovery??'');authenticateKeyring(access.value,vault);await check();if(app.closed||session.get(projectId)!==previous||(await readAccess(root)).etag!==access.etag)throw new AppError('ACCESS_LOCKED');app.forget(session,projectId);const saved={root,etag:access.etag,vault:cloneVault(vault),expires:Date.now()+8*60*60*1000};session.set(projectId,saved);app.credentials.add(saved);return {projectId,locked:false};}finally{await clearVault(vault);}
  }
 }

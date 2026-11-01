@@ -6,6 +6,7 @@ import {researchId} from './web/research-reference.js';
 import {timelineMatch,timelineOrder,validTimelineQuery} from './web/tools/timeline-model.js';
 import {timelineCollectionScope} from './timeline-collection-scope.js';
 import {recordDateWindow} from './record-date-window.js';
+import {queryResultWindow} from './query-result-window.js';
 export async function timelineCollectionQuery(pages,client,command,{scope=null,registry,visit,signal}){
  if(!command||Object.keys(command).sort().join()!=='cursor,limit,query,workspaceId')throw new AppError('INVALID');
  const {workspaceId,query,limit,cursor}=command;
@@ -23,6 +24,11 @@ export async function timelineCollectionQuery(pages,client,command,{scope=null,r
    const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,ascending:!query.descending,signal});
    if(indexed){page.addIndexed({...indexed,records:indexed.records.map(owned)});return;}
   }
+  const cached=await queryResultWindow({reuse:!!cursor,workspace:storage,ownerId:owner.workspaceId,snapshotId,queryHash:digest(JSON.stringify(['timeline-collection',signature,[...ids].sort()])),order:timelineOrder(query),point:record=>({id:record.id,title:record.title,occurredOn:record.occurredOn,owner:{workspaceId:owner.workspaceId}}),after:session.offset?session.after:null,includeEqual:!session.after||owner.workspaceId<=session.after.owner.workspaceId,limit,preceding:session.offset>limit,signal},check=>{
+   async function* matching(){for await(const record of store.queryDocuments(store.searchMembers(snapshot,ids,'',{signal}),metadata,{signal,search:false})){check();if(!ids.has(record.notebookId)||!matches(record))continue;const {id,notebookId,title,occurredOn,status}=record;yield {id,notebookId,title,occurredOn,status};}}
+   return {rows:matching()};
+  });
+  if(cached){page.addIndexed({...cached,records:cached.records.map(owned)});return;}
   for await(const record of store.queryDocuments(store.searchMembers(snapshot,ids,'',{signal}),metadata,{signal,search:false})){
    signal?.throwIfAborted();if(!ids.has(record.notebookId)||!matches(record))continue;
    page.add(owned(record));

@@ -31,7 +31,7 @@ test('large private vocabulary spills exactly; matching and audits never assembl
  let vocabulary='';for(let i=0;i<3500;i++)vocabulary+=String.fromCharCode(0x4e00+i);
  const seed={...book.entries[0],type:'note',title:'Long field book',body:vocabulary+'x'.repeat(24000)+' a bridge 🌿 with "quotes" and \\ escapes',sections:[],attachments:[],figures:[],relations:[],contributors:[],tags:[]};
  seed.sections=Array.from({length:8},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Repeated observations. '.repeat(500)}));
- book.entries=[seed];const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ book.entries=[seed];const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const selected=RecordValueTree.prototype.selected;
  t.mock.method(RecordValueTree.prototype,'selected',function(root,path){if(path[0]==='searchText')throw Error('Loaded complete search text');return selected.call(this,root,path);});
  const expected=documentTerms(recordQueryDocument(seed),2);assert.ok(expected.size>8192);

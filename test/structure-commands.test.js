@@ -33,7 +33,7 @@ async function fixture(t,count=12){
  book.branding=[];
  book.website.layouts=[defaultPageLayout('entry:'+book.entries.at(-1).id),defaultPageLayout('entry:'+book.entries[0].id)];
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault,base:await ws.read(),service:new StructureCommands(ws)};
 }
 const command=(f,base,kind,value)=>f.service.execute('structure',{etag:base.etag,change:{kind,value}});

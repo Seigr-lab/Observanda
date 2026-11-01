@@ -1,4 +1,5 @@
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
+import {withQueryCacheHandoff} from './query-cache-lifecycle.js';
 import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
@@ -27,6 +28,7 @@ import { validateNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
 import {nativeDestination} from './native-destination.js';
 
 const catalogueReads=new AsyncLocalStorage();
+export const withoutCatalogueReadContext=operation=>catalogueReads.exit(operation);
 let requireMetadataFormat,metadataFormatLoading;
 function ownedCatalogue(context,workspace){
  if(context?.root!==workspace.root)return null;
@@ -338,7 +340,7 @@ export class Workspace {
     if(held?.root===this.root){held.afterCommit.push(operation);return;}
     await operation();
   }
-  withStorageHandoff(operation,options){return this.withLock(async internal=>{const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options);}
+  withStorageHandoff(operation,options){return withQueryCacheHandoff(this.root,()=>this.withLock(async internal=>{const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options));}
   async withLock(operation,{detached=false,moveId,existing=false}={}) {
     assertCatalogueWritable(this);
     await assertWorkspaceAvailable(this.root,{moveId});

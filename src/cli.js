@@ -75,9 +75,9 @@ try {
     const workspace=root?new Workspace(root,vault):null;
     if(command==='intake'){
       try{const result=await intakeCLI(workspace,values,{signal:startup.signal});console.log(JSON.stringify({version:1,ok:!['failed','cancelled'].includes(result.job?.state),result}));if(['failed','cancelled'].includes(result.job?.state))process.exitCode=2;}
-      finally{clearVault(vault);password='';}
+      finally{await clearVault(vault);password='';}
     }
-    if (command === 'init') { const access=await createWorkspaceAccess('',password,deviceStore);vault=takeCreatedVault(access);try{await new WorkspaceDirectory(preferencesFile+'.workspace-directory.json',{seed:async()=>(await readPreferences(preferencesFile)).recent.map(item=>item.path)}).using(root,{},()=>initializeLocation(root,createNotebook(creationName),access,vault));}finally{clearVault(vault);} console.log(text('created')); }
+    if (command === 'init') { const access=await createWorkspaceAccess('',password,deviceStore);vault=takeCreatedVault(access);try{await new WorkspaceDirectory(preferencesFile+'.workspace-directory.json',{seed:async()=>(await readPreferences(preferencesFile)).recent.map(item=>item.path)}).using(root,{},()=>initializeLocation(root,createNotebook(creationName),access,vault));}finally{await clearVault(vault);} console.log(text('created')); }
     if (command === 'validate') {
      const outline=await withConsoleProgress(async()=>{
       const outline=await workspace.outline();
@@ -95,7 +95,7 @@ try {
         console.log(text('exported',{entries:candidate.entries.length,files:candidate.files.size,release:candidate.id.slice(0,12)}));
       }
     }
-    clearVault(vault);password='';
+    await clearVault(vault);password='';
     if (command === 'open') {
       const port = values.port === undefined ? 4173 : Number(values.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port');

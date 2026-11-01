@@ -23,7 +23,7 @@ import {digest,serialize} from '../src/storage-format.js';
 const query=(extra={})=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse(),...extra});
 async function fixture(t,book=upgradeNotebook(queryFixture())){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-browse-')),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,queries:new RecordQuery(f.workspace),records:new ResearchRecords(f.workspace,{})};
 }
 const visible=records=>records.map(record=>{const {searchText,referenceTargets,cardSources,...value}=recordQueryDocument(record);return value;});
@@ -114,8 +114,8 @@ test('derived search documents stay encrypted, roll back with failed saves, surv
   assert.equal(await store.head(),before.head);assert.equal(Number((await store.db.get("SELECT count(*) AS n FROM state WHERE starts_with(slot,'record-query:')")).n),before.rows);
   for(const row of await store.db.all("SELECT payload FROM state WHERE starts_with(slot,'record-query:')")){assert.ok(encrypted(Buffer.from(row.payload)));assert.ok(!Buffer.from(row.payload).includes(Buffer.from('Shared measurement notes')));}
  });
- const command={workspaceId:f.book.id,query:query(),limit:2},first=await f.queries.list(command);
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const command={workspaceId:f.book.id,query:query({browse:recordBrowse({sort:'title'})}),limit:2},first=await f.queries.list(command);
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const copy=new RecordQuery(new Workspace(backup,f.vault));
  assert.deepEqual((await copy.list({...command,cursor:first.nextCursor})).records,(await f.queries.list({...command,cursor:first.nextCursor})).records);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{

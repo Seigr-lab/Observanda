@@ -145,7 +145,7 @@ export class ProjectImportAccess{
    const source=path.join(value.source,...relative.split('/')),destination=path.join(value.destination,...relative.split('/'));if(root!==source&&(value.access.intent==='cancel'||root!==destination))throw new AppError('DATABASE_LOCATION');
    if(root===source&&!same(identity(await assertRegular(root,{directory:true})),row.identity))throw new AppError('CONFLICT');
    const vault={id:row.owner.vaultId,key:unseal(Buffer.from(row.sealed,'base64'),session.key,'Observanda/import-access/'+id+'/'+stamp+'/'+relative)};
-   try{authenticateKeyring(access.value,vault);await check();this.session(client,id,stamp);return vault;}catch(error){clearVault(vault);throw error;}
+   try{authenticateKeyring(access.value,vault);await check();this.session(client,id,stamp);return vault;}catch(error){await clearVault(vault);throw error;}
   }};
  }
  async finish(client,data,options={}){

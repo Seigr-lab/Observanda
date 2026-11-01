@@ -26,7 +26,7 @@ async function fixture(t,count=16){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-snapshot-index-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,n)=>({...structuredClone(seed),id:randomUUID(),title:'Private source '+n,attachments:[],relations:[],sections:[{id:randomUUID(),title:'Evidence',body:''}]}));
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault,service:new ResearchRecords(ws,{}),base:await ws.read()};
 }
 const save=(f,base,records)=>f.service.save({workspaceId:base.book.id,baseEtag:base.etag,changes:records.map(record=>({id:record.id,expectedRevision:base.book.entries.some(r=>r.id===record.id)?recordRevision(base.book.entries.find(r=>r.id===record.id)):null,record}))},{compact:true});

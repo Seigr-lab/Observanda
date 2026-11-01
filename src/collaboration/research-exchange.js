@@ -91,7 +91,7 @@ export class ResearchExchange{
     await populateSharedWorkspace(workspace,parts);
     await retainWorkingBase(workspace,parts,selection);
    }});
-  }finally{clearVault(vault);}
+  }finally{await clearVault(vault);}
  }
  async working(){const raw=await this.workspace.readMetadata(workingFile,2*1024*1024);return raw?JSON.parse(raw):null;}
  async prepareChanges(){

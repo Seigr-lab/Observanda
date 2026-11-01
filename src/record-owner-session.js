@@ -10,6 +10,7 @@ import {readAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {validRecordOwner} from './record-owner-transfer-state.js';
 import {AppError} from './errors.js';
+import {withQueryCacheScope} from './query-cache-scope.js';
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
 export class RecordOwnerSession{
  constructor(application,client,owner,{check=async()=>{}}={}){
@@ -27,7 +28,7 @@ export class RecordOwnerSession{
  annotate(error){if(accessCodes.has(error.code)&&this.owner.projectId&&!error.projectId){error.projectId=this.owner.projectId;if(this.bookAccess)error.labBookId=this.owner.labBookId;}return error;}
  async selected(storage,operation){
   if((await storage.outline()).metadata.id!==this.owner.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  await this.check();const result=await operation(storage,()=>this.check());await this.check();return result;
+  await this.check();const result=await withQueryCacheScope(this.application,this.client,[this.bookAccess?.expected],()=>operation(storage,()=>this.check()));await this.check();return result;
  }
  async use(operation){
   await this.requestCheck();if(this.closed||this.application.closed)throw new AppError('ACCESS_LOCKED');
@@ -47,5 +48,5 @@ export class RecordOwnerSession{
    });
   }catch(error){throw this.annotate(error);}
  }
- async close(){this.closed=true;try{await this.project?.close();}finally{clearVault(this.vault);this.vault=null;}}
+ async close(){this.closed=true;try{await this.project?.close();}finally{await clearVault(this.vault);this.vault=null;}}
 }

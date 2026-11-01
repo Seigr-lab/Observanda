@@ -75,6 +75,7 @@ import {ProjectReferences} from './project-references.js';
 import {workspaceFile,assertRegular} from './storage.js';
 import {readAccess,verifyAccess} from './access.js';
 import {cloneVault,clearVault} from './encryption.js';
+import {retireQueryCacheScope,withQueryCacheScope} from './query-cache-scope.js';
 import {researchId,validTarget} from './web/research-reference.js';
 import {executeResearchRequest,researchRequest} from './research-requests.js';
 import {AppError} from './errors.js';
@@ -128,13 +129,13 @@ export class ProjectApplication{
   return this.registryOwner??=new ProjectRegistry(this.workspace,value.workspaceId);
  }
  session(client){if(!client||typeof client!=='object')throw new AppError('AUTH');let session=this.sessions.get(client);if(!session){session=new Map();this.sessions.set(client,session);}return session;}
- forget(session,id){if(researchId(id))for(const [key,value] of session)if(key.startsWith('book:'+id+':')&&!value.locked)this.forget(session,key);this.calendars.forget(session,id);const old=session.get(id);if(old?.vault){clearVault(old.vault);this.credentials.delete(old);}session.delete(id);}
+ forget(session,id){const caches=retireQueryCacheScope(session);if(researchId(id))for(const [key,value] of session)if(key.startsWith('book:'+id+':')&&!value.locked)this.forget(session,key);this.calendars.forget(session,id);const old=session.get(id);if(old?.vault){clearVault(old.vault);this.credentials.delete(old);}session.delete(id);return caches;}
  async tracked(operation,projectId,labBookId){
   if(this.closed)throw new AppError('ACCESS_LOCKED');let release;const active=new Promise(resolve=>release=resolve);this.active.set(active,{projectId,labBookId});
   try{return await operation();}finally{this.active.delete(active);release();}
  }
  expire(now=Date.now()){this.importAccess.expire();this.inventoryConnections.expire();this.moveTargets.expire();this.recordCollections.expire();this.dashboardCollections.expire();this.jobs.expire(now);this.calendars.expire(now);for(const entry of this.credentials)if(entry.expires<=now){clearVault(entry.vault);this.credentials.delete(entry);}}
- async close(){this.closed=true;this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;await this.inventoryConnections.close();await this.moveTargets.close();await this.importAccess.close();this.calendars.clear();for(const entry of this.credentials)clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
+ async close(){this.closed=true;const caches=retireQueryCacheScope(this);this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;await caches;await this.inventoryConnections.close();await this.moveTargets.close();await this.importAccess.close();this.calendars.clear();for(const entry of this.credentials)await clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
  async unlock(client,projectId,data,{check=async()=>{}}={}){
   const recovery=await this.workspaceMoves.unlockRecovery(client,projectId,data,{check});if(recovery)return recovery;
   if(!data||Object.keys(data).some(key=>!['username','password','recovery'].includes(key))||Object.values(data).some(value=>typeof value!=='string'||value.length>1024))throw new AppError('INVALID');
@@ -148,10 +149,10 @@ export class ProjectApplication{
     if(current.root!==entry.root||(await readAccess(entry.root)).etag!==access.etag)throw new AppError('CONFLICT');
     if(session.get(projectId)!==previous)throw new AppError('CONFLICT');await this.jobs.forget(session,projectId);this.forget(session,projectId);
     const saved={root:entry.root,etag:access.etag,vault:cloneVault(vault),expires:Date.now()+8*60*60*1000};session.set(projectId,saved);this.credentials.add(saved);return {projectId,locked:false};
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   },projectId);
  }
- async lock(client,projectId){if(!researchId(projectId))throw new AppError('INVALID');const session=this.session(client);const stopped=this.jobs.forget(session,projectId);this.forget(session,projectId);session.set(projectId,{locked:true});await stopped;await Promise.all([...this.active].filter(([,owner])=>owner.projectId===projectId).map(([pending])=>pending));return {projectId,locked:true};}
+ async lock(client,projectId){if(!researchId(projectId))throw new AppError('INVALID');const session=this.session(client);const stopped=this.jobs.forget(session,projectId),caches=this.forget(session,projectId);session.set(projectId,{locked:true});await stopped;await caches;await Promise.all([...this.active].filter(([,owner])=>owner.projectId===projectId).map(([pending])=>pending));return {projectId,locked:true};}
  withSourceHistory(client,operation,options){return withProjectHistoryAccess(this,client,operation,options);}
  async run(client,selected,data,options={}){
   try{return await withDatabaseRequest(options.signal,()=>{
@@ -183,7 +184,7 @@ export class ProjectApplication{
     owners=new ProjectLocationAccess(this,client,{check:root?current:check});
     return await deletions.run(vault,{id:data.id,...(!resume?{expectedRoot:data.expectedRoot}:{}),check:root?current:check,onProgress,withProject:(id,use)=>owners.withProject(id,use),placeChild:(child,placement)=>this.renames.reparent(client,child.projectId,{id:child.id,...placement},{check:root?current:check}),withBook:(project,id,use)=>owners.withProject(project.projectId,parent=>owners.withBook(parent,id,use)),onFrozen:async value=>{
      this.calendars.invalidateProject(selected.projectId);
-     for(const saved of this.credentials)if(saved.root===value.source||saved.root?.startsWith(value.source+path.sep)){clearVault(saved.vault);saved.expires=0;this.credentials.delete(saved);}
+     for(const saved of this.credentials)if(saved.root===value.source||saved.root?.startsWith(value.source+path.sep)){await clearVault(saved.vault);saved.expires=0;this.credentials.delete(saved);}
     }});
    }catch(error){
     if(['ACCESS_LOCKED','ACCESS_DENIED','AUTH','DEVICE_UNKNOWN'].includes(error.code)){
@@ -193,7 +194,7 @@ export class ProjectApplication{
      if(!await deletions.receipt())error.operationNotStarted=true;
     }
     throw error;
-   }finally{await owners?.close();clearVault(vault);}
+   }finally{await owners?.close();await clearVault(vault);}
   },selected.projectId);
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,websitePin,websiteContext,binary,headless,query,contentLength,calendarSources,check=async()=>{},setCheck=()=>{}}={}){
@@ -316,8 +317,8 @@ export class ProjectApplication{
       const destination=await resolveLocation(data.path);await assertProjectTransferDestination(registry,destination);
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
-     if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
      if(selected.maintenance){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent);return executeInventoryMaintenance(jobs.storage,jobs,selected.maintenance,data);}
+     if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
      if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data,{signal,download,stream,check:assertCurrent});
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});
@@ -330,7 +331,7 @@ export class ProjectApplication{
      if(selected.route==='/api/modules/command'&&response.entities)this.calendars.reconcile(session,storage.projectId,response.entities);
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
-     };return reuseRequestConnections(selected)?storage.withCatalogueConnections(execute):execute();
+     };return withQueryCacheScope(this,client,[owner.sessionEntry],()=>reuseRequestConnections(selected)?storage.withCatalogueConnections(execute):execute());
     },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}

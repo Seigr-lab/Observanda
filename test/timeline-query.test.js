@@ -20,7 +20,7 @@ import {Workspace} from '../src/storage.js';
 async function fixture(t,count=63){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-timeline-')),book=upgradeNotebook(queryFixture()),seeds=book.entries;
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seeds[i%seeds.length]),id:randomUUID(),title:'Take '+String(i).padStart(3,'0'),body:'PRIVATE_ORIGINAL_'+i,occurredOn:i%7===0?{kind:'unknown'}:i%7===1?{kind:'month',value:'2026-06',estimated:true}:seeds[i%seeds.length].occurredOn}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,service:new TimelineQuery(f.workspace),command:{workspaceId:book.id,query:timelineQuery(timelineDefaults()),limit:20}};
 }
 async function summariesOnly(fn){

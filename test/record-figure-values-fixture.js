@@ -23,5 +23,5 @@ export async function figureValueFixture({large=false,tags=null}={}){
  figure.source=analysis;await f.workspace.save(ready.book,ready.etag);
  if(large){const writing=new RecordWriting(f.workspace),target={workspaceId:source.id,recordId:saved.id,sectionId:null},base=await writing.read(target);saved.body.content.push({type:'paragraph',content:[{type:'text',text:'Extended observations '.repeat(2500)}]});await writing.save({...target,expectedRevision:base.revision,value:{body:saved.body}});}
  const values=new RecordValues(f.workspace),target=id=>({workspaceId:source.id,recordId:saved.id,field:'figure:'+id});
- return {...f,directory,book:ready.book,record:saved,materials,analysis,values,target,save:(base,value)=>values.save({...target(base.field.slice(7)),expectedRevision:base.revision,value:{value}}),async close(){clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
+ return {...f,directory,book:ready.book,record:saved,materials,analysis,values,target,save:(base,value)=>values.save({...target(base.field.slice(7)),expectedRevision:base.revision,value:{value}}),async close(){await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
 }

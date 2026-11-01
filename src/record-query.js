@@ -17,6 +17,7 @@ import {validRecordDate} from './web/record-date.js';
 import {recordRevision,historicalBook} from './research.js';
 import {activityContext} from './web/record-activity.js';
 import {indexedRecordDateQuery,recordDatePage} from './record-date-page.js';
+import {queryResultWindow} from './query-result-window.js';
 const invalidCursor=()=>{throw new AppError('RECORD_QUERY_CURSOR');};
 export class RecordQuery{
  constructor(workspace){this.workspace=workspace;}
@@ -28,7 +29,7 @@ export class RecordQuery{
   if(runOf!==null&&(!researchId(runOf)||relatedTo!==null))throw new AppError('INVALID');
   if(selection!==null&&(!selection||Object.keys(selection).sort().join()!==['excludeId','recordType',...(Object.hasOwn(selection,'includeRevisions')?['includeRevisions']:[])].sort().join()||Object.hasOwn(selection,'includeRevisions')&&typeof selection.includeRevisions!=='boolean'||selection.excludeId!==null&&!researchId(selection.excludeId)||!['all','run','non-run','subject'].includes(selection.recordType)))throw new AppError('INVALID');
   const queryHash=digest(JSON.stringify({order:QUERY_ORDER_VERSION,scope:runOf?{query,relatedTo,selection,runOf}:selection?{query,relatedTo,selection}:relatedTo?{query,relatedTo}:query}));
-  const run=async({head,manifest,documents,encode,decode,resolveRevision,indexedPage,matchedSearch=false,referenceNamespaces=null})=>{
+  const run=async({head,manifest,documents,encode,decode,resolveRevision,indexedPage,cacheWorkspace,matchedSearch=false,referenceNamespaces=null})=>{
    let anchor;
    if(cursor){try{anchor=decode(cursor);}catch{invalidCursor();}}
    else anchor={workspaceId,snapshotId:snapshotId??head,queryHash,offset:0,limit};
@@ -45,10 +46,10 @@ export class RecordQuery{
      return {workspaceId,snapshotId:anchor.snapshotId,records,recordTypes:[],domains,total,counts,offset:anchor.offset,cursor:encode(anchor),previousCursor:previous?encode(previous):null,nextCursor:next<total?encode({...anchor,offset:next,after}):null,changed:head!==anchor.snapshotId};
     }
    }
-   const domains=new Set();
-   const matches=recordQueryMatcher({...query,...(matchedSearch?{search:''}:{}),relatedTo,referenceNamespaces,notebook:query.notebookId??'all'}),order=recordQueryOrder(query.browse),page=summaryPage({...anchor,order}),counts=recordCounts([]);
-   for await(const value of documents(source,notebookIds)){
-    signal?.throwIfAborted();
+   let domains=new Set(),counts=recordCounts([]);
+   const matches=recordQueryMatcher({...query,...(matchedSearch?{search:''}:{}),relatedTo,referenceNamespaces,notebook:query.notebookId??'all'}),order=recordQueryOrder(query.browse),page=summaryPage({...anchor,order}),point=value=>({id:value.id,title:value.title,occurredOn:value.occurredOn});
+   async function* matching(check=()=>{}){for await(const value of documents(source,notebookIds)){
+    check();signal?.throwIfAborted();
     if(!notebookIds.has(value.notebookId))continue;
     // Pickers need one bounded page, not a growing catalogue of all templates.
     if(selection&&(value.id===selection.excludeId||selection.recordType==='run'&&value.type!=='run'||selection.recordType==='non-run'&&value.type==='run'))continue;
@@ -57,9 +58,13 @@ export class RecordQuery{
     if(!matches(value))continue;
     const increment=recordCounts([value]);for(const key of Object.keys(counts))counts[key]+=increment[key];
     const {searchText,referenceTargets,cardSources,...summary}=value;void cardSources;if(relatedTo)summary.linkedBy=referenceTargets.filter(t=>(referenceNamespaces??[relatedTo.workspaceId]).includes(t.workspaceId)&&t.id===relatedTo.id).map(({type,revision})=>({type,...(revision?{revision}:{})}));
-    page.add(summary);
-   }
-   const {records:found,total,after,previousAfter}=page.finish();
+    yield summary;
+   }}
+   const cached=cacheWorkspace?await queryResultWindow({reuse:!!cursor,workspace:cacheWorkspace,ownerId:workspaceId,snapshotId:anchor.snapshotId,queryHash,order,point,after:anchor.offset?anchor.after:null,limit,preceding:anchor.offset>limit,signal},check=>({rows:matching(check),finish:()=>({counts,domains:[...domains].sort()})})):null;
+   let result;
+   if(cached){if(cached.skipped!==anchor.offset||anchor.offset&&!cached.records.length)invalidCursor();counts=cached.counts;domains=new Set(cached.domains);result={records:cached.records,total:cached.total,after:cached.records.length?point(cached.records.at(-1)):null,previousAfter:cached.preceding[0]??null};}
+   else{domains=new Set();counts=recordCounts([]);for await(const summary of matching())page.add(summary);result=page.finish();}
+   const {records:found,total,after,previousAfter}=result;
    if(selection)for(const item of found){
     signal?.throwIfAborted();
     // Older summaries may lack a canonical revision. Read only this selected
@@ -76,7 +81,7 @@ export class RecordQuery{
    const head=await store.head();if((await store.snapshot(head)).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const referenceNamespaces=relatedTo?await recordReferenceNamespaces(store,relatedTo):null;
    const rows=(source,ids)=>runOf?recordRunMembers(store,source,runOf,{signal,notebookIds:ids}):relatedTo?recordReferenceCandidates({store,snapshot:source,notebooks:ids,workspaceId:relatedTo.workspaceId,signal,search:query.search,fallback:()=>store.members(source,{signal,notebookIds:ids})},relatedTo.id):store.searchMembers(source,ids,query.search,{signal});
-   return run({head,matchedSearch:true,referenceNamespaces,indexedPage:indexedRecordDateQuery(query,{selection,relatedTo,runOf})?(source,ids,anchor)=>recordDatePage(store,source,ids,anchor,{signal,ascending:recordBrowse(query.browse).sort==='date-asc'}):null,manifest:id=>store.snapshot(id),documents:(source,ids)=>store.queryDocuments(rows(source,ids),source.metadata,{signal,search:false,matching:query.search,references:!!relatedTo,revisions:!!selection&&selection.includeRevisions!==false}),
+   return run({head,cacheWorkspace:this.workspace,matchedSearch:true,referenceNamespaces,indexedPage:indexedRecordDateQuery(query,{selection,relatedTo,runOf})?(source,ids,anchor)=>recordDatePage(store,source,ids,anchor,{signal,ascending:recordBrowse(query.browse).sort==='date-asc'}):null,manifest:id=>store.snapshot(id),documents:(source,ids)=>store.queryDocuments(rows(source,ids),source.metadata,{signal,search:false,matching:query.search,references:!!relatedTo,revisions:!!selection&&selection.includeRevisions!==false}),
     resolveRevision:async(source,item)=>recordRevision(historicalBook(source.metadata,await store.record(item.id,item.storageRevision)).entries[0]),
     encode:value=>store.encode('record-query-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('record-query-page',workspaceId,Buffer.from(value,'base64url'))});
   });

@@ -32,7 +32,7 @@ const search=(workspace,workspaceId,text)=>new RecordQuery(workspace).list({work
 test('old flattened queries retain their exact searches and upgrade on the next edit with strict joined-text binding',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-query-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];record.figures=[];record.attachments=[];record.relations=[];record.sections=[];
  record.attempt=attemptFixture();
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),row=await store.member(snapshot,record.id),queries=new RecordQueryDocuments(store);
   await withRecordDocument(store,row.id,row.revision,async document=>{
@@ -57,7 +57,7 @@ test('old flattened queries retain their exact searches and upgrade on the next 
 
 test('verification reads vocabulary contributions even for small records without collection references',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-small-vocabulary-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];record.figures=[];record.attachments=[];record.relations=[];record.sections=[];
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const values=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'title'},base=await values.read(target);await values.save({...target,expectedRevision:base.revision,value:{value:'Small retained vocabulary'}});
  await f.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),record.id);assert.ok(row.bytes<65535);assert.equal(row.collections,undefined);await store.verifySnapshot(undefined,book.id);});
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
@@ -70,7 +70,7 @@ test('verification reads vocabulary contributions even for small records without
 
 test('selected text saves use retained vocabulary and recover exact searches through both copy modes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-vocabulary-storage-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];record.figures=[];record.attachments=[];record.relations=[];record.title='Original quartz';record.sections=Array.from({length:72},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Repeated quartz observation'}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const values=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'title'},base=await values.read(target),before=(await f.workspace.outline()).etag,generation=await f.workspace.catalogue(s=>catalogueFormat(s.db));assert.ok(generation<16);
  const finish=ResearchCatalogue.prototype.finishRecordChanges;t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);assert.equal(await catalogueFormat(this.db),20);throw Error('Interrupted vocabulary upgrade');});
  await assert.rejects(values.save({...target,expectedRevision:base.revision,value:{value:'Interim quartz'}}),/Interrupted vocabulary upgrade/);ResearchCatalogue.prototype.finishRecordChanges.mock.restore();assert.equal((await f.workspace.outline()).etag,before);assert.equal(await f.workspace.catalogue(s=>catalogueFormat(s.db)),generation);

@@ -12,6 +12,7 @@ import {researchId} from './web/research-reference.js';
 import {notebooksIn} from './web/workspace-structure.js';
 import {indexedRecordDateQuery} from './record-date-page.js';
 import {recordDateWindow} from './record-date-window.js';
+import {queryResultWindow} from './query-result-window.js';
 export async function recordCollectionQuery(pages,client,command,{scope,visit,signal}){
  if(!command||Object.keys(command).sort().join()!=='cursor,limit,mode,query,workspaceId')throw new AppError('INVALID');
  const {workspaceId,query,limit,cursor,mode}=command;
@@ -40,6 +41,14 @@ export async function recordCollectionQuery(pages,client,command,{scope,visit,si
    if(mode==='browse'&&indexedRecordDateQuery(query)){
     const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,signal,ascending:recordBrowse(query.browse).sort==='date-asc'});
     if(indexed){for(const key of Object.keys(counts))counts[key]+=indexed.counts[key];for(const domain of indexed.domains)domains.add(domain);page.addIndexed({...indexed,records:indexed.records.map(document=>owned(document))});return;}
+   }
+   if(mode==='browse'){
+    const cached=await queryResultWindow({reuse:!!cursor,workspace:storage,ownerId:owner.workspaceId,snapshotId,queryHash:digest(JSON.stringify(['record-collection',signature,[...ids].sort()])),order:orderRecord,point:value=>({...point(owned(value)),owner:{workspaceId:owner.workspaceId}}),after:session.offset?session.after:null,includeEqual:!session.after||owner.workspaceId<=session.after.owner.workspaceId,limit,preceding:session.offset>limit,signal},check=>{
+     const ownCounts=recordCounts([]),ownDomains=new Set();
+     async function* matching(){for await(const doc of store.queryDocuments(store.searchMembers(snapshot,ids,query.search,{signal}),metadata,{signal,search:false,matching:query.search})){check();if(doc.template?.profileId)ownDomains.add(doc.template.profileId);if(!matches(doc))continue;const increment=recordCounts([doc]);for(const key of Object.keys(ownCounts))ownCounts[key]+=increment[key];yield doc;}}
+     return {rows:matching(),finish:()=>({counts:ownCounts,domains:[...ownDomains].sort()})};
+    });
+    if(cached){for(const key of Object.keys(counts))counts[key]+=cached.counts[key];for(const domain of cached.domains)domains.add(domain);page.addIndexed({...cached,records:cached.records.map(document=>owned(document))});return;}
    }
    // The overview needs only the first page. Ordered indexes avoid scanning a
    // whole book merely to show its ten most recently changed records.

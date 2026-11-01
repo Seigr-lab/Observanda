@@ -81,7 +81,7 @@ export class ScopedLocationAccess{
     if(application.closed||!this.valid(proof)||grant.expires<=Date.now()||book&&(identity(this.session.get(grant.projectId))!==grant.parentToken||!live(this.session.get(grant.projectId))))continue;
     const current=session.get(grant.id);if(application===this.application){if(current!==this.session.get(grant.id)||!current?.vault)continue;current.root=grant.root;current.etag=grant.etag;current.expires=Math.min(current.expires,grant.expires);}
     else{if(current)throw new AppError('CONFLICT');const saved={root:grant.root,etag:grant.etag,vault:{id:vault.id,key:Buffer.from(vault.key)},expires:grant.expires};if(this.copy)await this.copy.installGrant(application,grant,saved);else{session.set(grant.id,saved);application.credentials.add(saved);}}
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   }await this.copy?.finishInstall(application,registry);}
   catch(error){await this.copy?.rollbackInstall(application);throw error;}
  }

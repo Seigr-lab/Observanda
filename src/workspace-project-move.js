@@ -76,7 +76,7 @@ export class WorkspaceProjectMove{
   for(const name of await readdir(path.join(destination,'.observanda')))if(name.startsWith('.write-')&&isStorageTemporary(name)){const file=path.join(destination,'.observanda',name);await assertRegular(file);await unlink(file);}
   await save(target,value);await this.checkpoint('prepared');return {target,value};
  }
- async run(input,options={}){const vault=cloneVault(this.source.vault),source=new Workspace(this.source.root,vault);try{return await withRetiredRecordCopy(this.source,source,()=>new WorkspaceProjectMove(source,this).perform(input,options));}finally{clearVault(vault);}}
+ async run(input,options={}){const vault=cloneVault(this.source.vault),source=new Workspace(this.source.root,vault);try{return await withRetiredRecordCopy(this.source,source,()=>new WorkspaceProjectMove(source,this).perform(input,options));}finally{await clearVault(vault);}}
  async perform(input,{activate}={}){
   if(typeof activate!=='function')throw new AppError('INVALID');await this.check();const {target}=await this.prepare(input);
   return withWriterLease(path.join(target.root,lease),async()=>{

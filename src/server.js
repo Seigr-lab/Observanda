@@ -289,7 +289,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   };
   const detachDeleted=async(source,client)=>{
     if(context.root!==source)return;
-    await stopJobs(context);cancelFolderRequests();context.calendarSources.clear();clearVault(context.vault);context=makeContext(null);contextRequired=true;plans.clear();
+    await stopJobs(context);cancelFolderRequests();context.calendarSources.clear();await clearVault(context.vault);context=makeContext(null);contextRequired=true;plans.clear();
     for(const session of sessions.values())session.access=null;
     client.access='none';client.expires=Date.now()+8*60*60*1000;
   };
@@ -328,7 +328,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     if(followSettings&&context.workspace&&context.vault.key&&vault?.key)await dashboardEdits.relocate(context.workspace,new Workspace(location,vault));
     if(context.root&&context.root!==location)await databaseProvider()?.closeWorkspace(context.root);
     savedDeletion.assertAvailable(location);
-    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;context.calendarSources.clear();clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=requiresAccess(access.value);client.access=access.etag;client.expires=Date.now()+8*60*60*1000;activities.relocate(priorContextId,context.id);startJobs(context);
+    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;context.calendarSources.clear();await clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=requiresAccess(access.value);client.access=access.etag;client.expires=Date.now()+8*60*60*1000;activities.relocate(priorContextId,context.id);startJobs(context);
     }finally{priorContext.adopting=false;if(context===priorContext)priorContext.readers.open();}
   });
   const metadata=async()=>{
@@ -401,10 +401,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
          try{
           const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
           const latest=await diagnosticPhase('session-access',contextAccess);
-          if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}
-          if(context.manualLock||latest.etag!==access.etag){clearVault(vault);}
-          else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){clearVault(vault);local.access=access.etag;}
-          else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
+          if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}
+          if(context.manualLock||latest.etag!==access.etag){await clearVault(vault);}
+          else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){await clearVault(vault);local.access=access.etag;}
+          else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){await clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
          }
          catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
         }
@@ -511,17 +511,17 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        }finally{
         // An interrupted file write may already have advanced trusted grants.
         // Invalidate old sessions and jobs on both success and failure.
-        selectedContext.manualLock=true;for(const local of sessions.values())local.access=null;selectedContext.calendarSources.clear();clearVault(selectedContext.vault);
+        selectedContext.manualLock=true;for(const local of sessions.values())local.access=null;selectedContext.calendarSources.clear();await clearVault(selectedContext.vault);
         selectedContext.readers.open();loginBusy=false;
        }
       }
       if(req.method==='POST'&&url.pathname==='/api/access/unlock'){
         if(changing||loginBusy)throw new AppError('LOCKED');
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(changing||loginBusy)throw new AppError('LOCKED');loginBusy=true;
-        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);context.calendarSources.clear();clearVault(context.vault);Object.assign(context.vault,vault);}await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;startJobs(context);return json({ok:true});}
+        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;startJobs(context);return json({ok:true});}
         finally{selectedContext.readers.open();loginBusy=false;}
       }
-      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;context.calendarSources.clear();clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
+      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
       const accessState=await status(client);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(accessState.locked)throw new AppError('ACCESS_LOCKED');
       // Reading observations never opens the catalogue or competes for its lock.
       if(req.method==='GET'&&url.pathname==='/api/activity')return json({contextId:context.id,busy:changing||loginBusy||activeWrites>0,readable:context.readers.accepting&&!loginBusy&&(!changing||!!context.concurrentReads),operations:activities.list(context.id)});
@@ -643,7 +643,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const result=await resetPreferences(preferencesFile,data.etag);
           cancelFolderRequests();
           if(context.publisher)context.publisher.token=null;
-          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();clearVault(context.vault);context.candidates.clear();context.designCandidates.clear();context.appearancePreviews.clear();plans.clear();
+          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();await clearVault(context.vault);context.candidates.clear();context.designCandidates.clear();context.appearancePreviews.clear();plans.clear();
           context=makeContext(null);contextRequired=true;Object.assign(localPreferences,result.value);
           for(const session of sessions.values())session.access=null;
           client.access='none';client.expires=Date.now()+8*60*60*1000;
@@ -713,7 +713,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
                 const result=await deletions.finish(data.id,{vault});
                 if(result.complete){await forgetDeleted(result.source);await deletions.acknowledge(data.id);}
                 return {result,storage:await metadata()};
-              }finally{clearVault(vault);}
+              }finally{await clearVault(vault);}
             },json);
           }
           if(url.pathname==='/api/storage/rename'){
@@ -728,7 +728,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
               await activate(result.destination,client,vault,{movingFrom:source});
               await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
              });
-            }catch(error){clearVault(vault);throw error;}
+            }catch(error){await clearVault(vault);throw error;}
            },json);
           }
           if(url.pathname==='/api/storage/rename/resume'){
@@ -741,7 +741,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
              const result=await workspaceDirectory.using(receipt.destination,{replacing:receipt.source,allowExisting:true},async()=>rename.resume(renames,data.id,{checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=receipt.destination;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==receipt.source).map(item=>item.path)]}));
              await activate(result.destination,client,vault,{movingFrom:receipt.source});
              await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
-            });}catch(error){clearVault(vault);throw error;}
+            });}catch(error){await clearVault(vault);throw error;}
            },json);
           }
           if(url.pathname==='/api/storage/folder')return json(await createFolder(data.parent,data.name),201);
@@ -752,7 +752,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             const vault=await authenticate(info.root,await readAccess(info.root),data.username??'',data.password??'',data.recovery??'');
             const moved=context.root?await moveSource(context.root):null,receipt=moved?.destination===info.root?await readMoveReceipt(info.root):null;
             const movingFrom=receipt?.id===moved?.id&&receipt?.source===context.root?context.root:undefined;
-            try{let pending=await renames.pending(info.root);if(['preparing','prepared'].includes(pending?.phase)&&!await workspaceRename(pending.source)){await renames.resume(info.root,vault);pending=null;}await workspaceDirectory.using(pending?.destination??info.root,{replacing:pending?.source??movingFrom??null,allowExisting:true},async()=>{const result=await renames.resume(info.root,vault);await activate(result.destination,client,vault,{movingFrom:pending?.source??movingFrom,followSettings:!!movingFrom});});}catch(error){clearVault(vault);throw error;};return metadata();
+            try{let pending=await renames.pending(info.root);if(['preparing','prepared'].includes(pending?.phase)&&!await workspaceRename(pending.source)){await renames.resume(info.root,vault);pending=null;}await workspaceDirectory.using(pending?.destination??info.root,{replacing:pending?.source??movingFrom??null,allowExisting:true},async()=>{const result=await renames.resume(info.root,vault);await activate(result.destination,client,vault,{movingFrom:pending?.source??movingFrom,followSettings:!!movingFrom});});}catch(error){await clearVault(vault);throw error;};return metadata();
            },json);
           }
           if(!workspace)throw new AppError('MISSING');
@@ -772,7 +772,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
                 const result=await withWorkspaceDeletionSession(historyProjects,client,owners=>deletions.begin(target,plan.plan,{...owners,onFrozen:receipt=>detachDeleted(receipt.source,client)}));
                 await forgetDeleted(result.source);await deletions.acknowledge(result.id);return {result,storage:await metadata()};
               }finally{
-                try{if(await workspaceDeletion(target.root))await detachDeleted(target.root,client);}finally{clearVault(vault);}
+                try{if(await workspaceDeletion(target.root))await detachDeleted(target.root,client);}finally{await clearVault(vault);}
               }
             },json);
           }
@@ -809,7 +809,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
                 await activate(location,client,vault);adopted=true;
                 await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));
                 return metadata();
-              });}catch(error){if(!adopted)clearVault(vault);throw error;}
+              });}catch(error){if(!adopted)await clearVault(vault);throw error;}
             });
            },json);
           }
@@ -847,7 +847,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/access/change'){
         if(!workspace)throw new AppError('MISSING');
         if(changing||loginBusy||activeWrites)throw new AppError('LOCKED');changing=true;
-        try{const data=await body(req);if(accessState.access.value.formatVersion!==3){const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword??'');clearVault(verified);}const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce ||= requiresAccess(next.value);client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
+        try{const data=await body(req);if(accessState.access.value.formatVersion!==3){const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword??'');await clearVault(verified);}const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce ||= requiresAccess(next.value);client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
         finally{changing=false;}
       }
       if(!releaseRead)await waitForWriter(async()=>{if(changing||loginBusy)throw new AppError('LOCKED');});
@@ -1478,7 +1478,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    for(const id of sessions.keys())liveSession(id);
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
-   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);expiring.calendarSources.clear();clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
+   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);expiring.calendarSources.clear();await clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
   },30000);expiry.unref();
   const shutdownStatus=()=>{
    const operations=activities.list(context.id);
@@ -1489,7 +1489,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}
-    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
+    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();await clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
   })()};
 }
 

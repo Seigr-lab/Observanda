@@ -28,8 +28,8 @@ export class ProjectImportInventory{
   const access=await readAccess(root),credential=Array.isArray(this.credentials)?this.credentials.find(item=>item.relative===relative)??{username:'',password:'',recovery:''}:null;let vault;
   try{vault=credential?await verifyAccess(access,credential.username,credential.password,{deviceStore:this.deviceStore,recovery:credential.recovery}):await this.credentials.unlock(root,relative,access,expected);}
   catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN','AUTH'].includes(error.code)){const failure=new AppError('PROJECT_IMPORT_ACCESS',[relative,path.basename(root)]);failure.operationNotStarted=true;throw failure;}throw error;}
-  if(expected&&(vault.id!==expected.vaultId||typeof expected.accessEtag==='string'&&access.etag!==expected.accessEtag)){clearVault(vault);throw new AppError('CONFLICT');}
-  clearVault(this.keys.get(relative));this.keys.set(relative,vault);return {access,vault};
+  if(expected&&(vault.id!==expected.vaultId||typeof expected.accessEtag==='string'&&access.etag!==expected.accessEtag)){await clearVault(vault);throw new AppError('CONFLICT');}
+  await clearVault(this.keys.get(relative));this.keys.set(relative,vault);return {access,vault};
  }
  async owner(root,relative,kind,expected){
   validateStorageName(path.basename(root));await assertNotDeleting(root);await assertNotMoving(root);

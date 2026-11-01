@@ -50,7 +50,7 @@ export class ProjectLocationAccess {
     const receipt=await projectTransferReceipt(storage),access=await readAccess(storage.root);
     if(receipt?.phase!=='verified'||receipt.source!==owner.entry.root||receipt.projectId!==owner.projectId||receipt.namespaceId!==owner.entry.namespaceId||storage.vault.id!==owner.vault.id)throw new AppError('STORAGE_COPY');
     authenticateKeyring(access.value,owner.vault);
-    clearVault(this.#grants.get(storage.projectId)?.vault);
+    await clearVault(this.#grants.get(storage.projectId)?.vault);
     this.#grants.set(storage.projectId,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:owner.sessionEntry?.expires??Date.now()+8*60*60*1000});
   }
   async moved(storage,source,latest) {
@@ -59,7 +59,7 @@ export class ProjectLocationAccess {
     const receipt=await projectTransferReceipt(storage),access=await readAccess(storage.root);
     if(receipt?.phase!=='verified'||receipt.source!==source||receipt.projectId!==owner.projectId||receipt.namespaceId!==owner.entry.namespaceId||storage.vault.id!==owner.vault.id||latest.root!==storage.root)throw new AppError('STORAGE_MOVE_STATE');
     authenticateKeyring(access.value,owner.vault);await owner.relocated(latest);await this.books.moved(storage,source,owner);this.books.relocateGrants();await owner.check();
-    clearVault(this.#grants.get(storage.projectId)?.vault);
+    await clearVault(this.#grants.get(storage.projectId)?.vault);
     this.#grants.set(storage.projectId,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:owner.sessionEntry?.expires??Date.now()+8*60*60*1000});
   }
   async renamed(renames,id,source,destination,{includeRoot=false}={}) {
@@ -135,16 +135,16 @@ export class ProjectLocationAccess {
       for(let index=prepared.length-1;index>=0;index--){
         const [id,value]=prepared[index],owner=this.#owners.get(id);
         if(owner.session.get(id)!==owner.sessionEntry||owner.sessionEntry?.locked||value.expires<=Date.now()){
-          if(!this.#rename)throw new AppError('ACCESS_LOCKED');clearVault(value.vault);prepared.splice(index,1);continue;
+          if(!this.#rename)throw new AppError('ACCESS_LOCKED');await clearVault(value.vault);prepared.splice(index,1);continue;
         }
         if(session.has(id))throw new AppError('CONFLICT');
       }
       for(const [id,value] of prepared){session.set(id,value);application.credentials.add(value);}await this.books.install(application,client);this.#installed=true;
-    } catch(error){for(const [id,value] of prepared){if(session.get(id)===value){session.delete(id);application.credentials.delete(value);}clearVault(value.vault);}throw error;}
+    } catch(error){for(const [id,value] of prepared){if(session.get(id)===value){session.delete(id);application.credentials.delete(value);}await clearVault(value.vault);}throw error;}
   }
   async close(){
     if(this.#closed)return;this.#closed=true;
     try {const results=await Promise.allSettled([...this.#owners.values()].map(owner=>owner.close()));const failure=results.find(result=>result.status==='rejected');if(failure)throw failure.reason;}
-    finally {this.books.close();for(const grant of this.#grants.values())clearVault(grant.vault);this.#owners.clear();this.#grants.clear();}
+    finally {this.books.close();for(const grant of this.#grants.values())await clearVault(grant.vault);this.#owners.clear();this.#grants.clear();}
   }
 }

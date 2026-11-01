@@ -4,6 +4,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {catalogueContext} from './research-catalogue.js';
 import {AppError} from './errors.js';
 const pairs=new AsyncLocalStorage(),reading=new AsyncLocalStorage();
+export const withoutCatalogueInspection=operation=>pairs.exit(()=>reading.exit(operation));
 export async function withCatalogueInspection(before,after,operation){
  const held=catalogueContext.getStore(),workspace=after.workspace;
  if(held?.root!==workspace.root||held.vault!==workspace.vault||held.db!==after.db||before.db===after.db||before.workspace.root!==workspace.root||before.workspace.vault!==workspace.vault)throw new AppError('INVALID');

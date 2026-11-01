@@ -1,0 +1,37 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {sampleNotebook} from '../src/sample.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {drainRetiredVault} from '../src/vault-lifecycle.js';
+import {RecordQuery} from '../src/record-query.js';
+import {TimelineQuery} from '../src/timeline-query.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {ResearchRecords,recordRevision} from '../src/research.js';
+import {recordBrowse,queryRecords} from '../src/web/record-query.js';
+import {timelineDefaults,timelineQuery} from '../src/web/tools/timeline-model.js';
+import {workspaceFiles} from '../src/workspace-inventory.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
+import {copyPlan} from '../src/locations.js';
+
+test('filtered numeric-title and timeline pages reuse pinned encrypted results and drain before handoff',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pinned-query-')),book=sampleNotebook(),seed=book.entries[0];
+ book.entries=Array.from({length:500},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Sample '+(500-i),body:'',sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:['batch'],status:i%3?'completed':'incomplete',occurredOn:'2026-06-'+String(1+i%28).padStart(2,'0')}));
+ const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await drainRetiredVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
+ const original=ResearchCatalogue.prototype.queryDocuments;let decoded=0;t.mock.method(ResearchCatalogue.prototype,'queryDocuments',async function*(...args){for await(const value of original.apply(this,args)){decoded++;yield value;}});
+ const reader=new RecordQuery(f.workspace),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse({sort:'title',tags:'batch',status:'completed'})},command={workspaceId:book.id,query,limit:25},expected=queryRecords(book.entries,query).map(record=>record.id);
+ const first=await reader.list(command);assert.deepEqual(first.records.map(record=>record.id),expected.slice(0,25));assert.equal(first.total,expected.length);assert.ok(decoded>=500);const initialDecoded=decoded;decoded=0;
+ const second=await reader.list({...command,cursor:first.nextCursor});assert.deepEqual(second.records.map(record=>record.id),expected.slice(25,50));assert.equal(decoded,0);
+ const third=await reader.list({...command,cursor:second.nextCursor});assert.deepEqual(third.records.map(record=>record.id),expected.slice(50,75));assert.deepEqual((await reader.list({...command,cursor:third.previousCursor})).records,second.records);assert.equal(decoded,0);
+ const changed=book.entries[2];await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:changed.id,expectedRevision:recordRevision(changed),record:{...changed,title:'Changed title'}}]},{recordIds:[changed.id]});decoded=0;
+ const pinned=await reader.list({...command,cursor:first.nextCursor});assert.deepEqual(pinned.records,second.records);assert.equal(pinned.changed,true);assert.equal(decoded,0);
+ const timeline=new TimelineQuery(f.workspace),timelineCommand={workspaceId:book.id,query:timelineQuery({...timelineDefaults(),status:'completed'}),limit:25},timelineFirst=await timeline.list(timelineCommand);decoded=0;
+ const timelineSecond=await timeline.list({...timelineCommand,cursor:timelineFirst.nextCursor});assert.equal(timelineSecond.offset,25);assert.equal(decoded,0);
+ assert.ok(pinnedQueryResults.stats().entries>=2);await assert.rejects(copyPlan(f.workspace.root,path.join(directory,'unauthenticated-copy')),{code:'ACCESS_LOCKED'});
+ await f.workspace.withStorageHandoff(async()=>{assert.equal(pinnedQueryResults.stats().entries,0);const inventory=await Array.fromAsync(workspaceFiles(f.workspace.root,{hashFiles:false,includeDatabase:false}));assert.equal(inventory.some(file=>file.path.startsWith('.observanda/query-cache/')),false);});
+ t.diagnostic(JSON.stringify({records:500,initialDecoded,repeatRecordSummaryReads:0,repeatTimelineSummaryReads:0,page:25}));
+});

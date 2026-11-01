@@ -27,7 +27,7 @@ async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-writing-')),book=sampleNotebook(),record=book.entries[0];
  record.sections=Array.from({length:40},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Original '+i+' '+('retained '.repeat(1000))}));
  const f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,book,record,writing:new RecordWriting(f.workspace),target:i=>({workspaceId:book.id,recordId:record.id,sectionId:i===null?null:record.sections[i].id})};
 }
 test('selected writing edits retain other sections, compose concurrent edits, reject conflicts and update search/history',async t=>{
@@ -60,7 +60,7 @@ test('a selected edit can cross the old record envelope budget and survive verif
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writing-capacity-')),book=sampleNotebook(),record=book.entries[2];
  book.entries=[record];record.body='';record.sections=Array.from({length:39},(_,i)=>({id:randomUUID(),title:'Section '+i,body:i<37?'e'.repeat(55000):''}));
  assert.ok(Buffer.byteLength(serialize(record))<2*1024*1024);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id,sectionId:record.sections[38].id},base=await writing.read(target);
  const drafts=new RecordWritingDrafts(f.workspace),command={id:randomUUID(),workspaceId:book.id,recordId:record.id,expectedRevision:null,writing:{sectionId:target.sectionId,revision:base.revision,storageRevision:base.storageRevision},value:{title:'Beyond the old envelope',body:'v'.repeat(60000),share:false}};
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Capacity or recovery assembled a whole original');});

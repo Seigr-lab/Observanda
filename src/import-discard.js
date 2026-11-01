@@ -130,7 +130,7 @@ export class ImportDiscard extends OwnedStorageDeletions{
     const lease=await workspaceDatabaseLease(database);try{await (entry.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(folder,entry.kind==='project'?entry.projectId:entry.labBookId,vault);}finally{await lease.close();}
     if(native(value)&&!entry.stopped){await owners.update(entry.relative,{stopped:true});await this.save(value);}
     await checkpoint('cancel-owner-stopped',entry.relative);
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   }});
  }
  async run(value,keys,options={}){

@@ -14,7 +14,7 @@ const fields=(data,names)=>{if(!data||Array.isArray(data)||Object.keys(data).som
 export class ProjectWorkspaceTargets{
  constructor(application,locations=async()=>[]){this.application=application;this.locations=locations;this.entries=new Map();this.disposals=new Set();}
  async list(){return {workspaces:(await this.locations()).filter(item=>item.path!==this.application.workspace.root).map(({path,title})=>({path,title}))};}
- async dispose(entry){try{await entry.application.close();}finally{clearVault(entry.vault);}}
+ async dispose(entry){try{await entry.application.close();}finally{await clearVault(entry.vault);}}
  expire(){for(const [id,entry] of this.entries)if(entry.expires<=Date.now()&&!entry.active){this.entries.delete(id);const done=this.dispose(entry).finally(()=>this.disposals.delete(done));this.disposals.add(done);done.catch(()=>{});}}
  async close(){const values=[...this.entries.values()];this.entries.clear();const results=await Promise.allSettled([...values.map(entry=>this.dispose(entry)),...this.disposals]);const failure=results.find(result=>result.status==='rejected');if(failure)throw failure.reason;}
  async open(client,data,{check=async()=>{}}={}){
@@ -30,7 +30,7 @@ export class ProjectWorkspaceTargets{
    await check();if(this.application.closed||(await readAccess(location.root)).etag!==access.etag)throw new AppError('ACCESS_LOCKED');
    const id=randomBytes(24).toString('hex'),entry={client,application,vault,registry,access:access.etag,identity:await projectMoveDirectory(location.root),expires:Date.now()+30*60*1000,active:0};this.entries.set(id,entry);vault=null;application=null;
    return {id,workspaceId:registry.workspaceId,title:path.basename(location.root)};
-  }finally{if(application)await application.close();clearVault(vault);}
+  }finally{if(application)await application.close();await clearVault(vault);}
  }
  async use(client,id,operation,{check=async()=>{}}={}){
   const entry=typeof id==='string'&&this.entries.get(id);if(!entry||entry.client!==client)throw new AppError('PROJECT_MOVE_DESTINATION_ACCESS');

@@ -117,7 +117,7 @@ export async function initializeLocation(input,book,access,suppliedVault,{dashbo
     await unlink(marker);
   });
   return info.root;
-  }finally{if(!suppliedVault)clearVault(vault);}
+  }finally{if(!suppliedVault)await clearVault(vault);}
 }
 const within=(parent,child)=>{const relative=path.relative(parent,child);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
 export async function workspaceManifest(root){
@@ -136,6 +136,9 @@ export async function transferDestination(root,input){
 }
 export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[],excludeProject}={}){
  return withOperationProgress(onProgress,async()=>{
+  // A review must authenticate the same transient-file policy as its copy.
+  // Unknown cache-shaped content remains ordinary data once access is proved.
+  if(!vault?.key&&await assertRegular(path.join(root,'.observanda','query-cache'),{missing:true,directory:true}))throw new AppError('ACCESS_LOCKED');
   const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject}),{detached:true,existing:true}));
   return {...plan,...inventory,...(projectRoots.length?{projectRoots}: {})};
  });

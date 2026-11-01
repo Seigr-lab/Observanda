@@ -87,7 +87,7 @@ export class NativeWorkspaceRename{
  async use(item,operation){
   const saved=await portabilityCollection(this.workspace,this.value.ownerKeys).get(item.relative);if(!saved||fields.some(key=>saved[key]!==item[key])||typeof saved.key!=='string'||!/^[A-Za-z0-9+/]{43}=$/.test(saved.key))throw new AppError('STORAGE_RENAME_STATE');const vault={id:saved.vaultId,key:Buffer.from(saved.key,'base64')};
   try{const root=nestedRenameRoot(this.workspace.root,item.relative);await assertProjectMoveDirectory(root,item.identity);if(await realpath(root)!==root||await fingerprint(path.join(root,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');authenticateKeyring((await readAccess(root)).value,vault);const binding=await catalogueBinding(root);if(binding?.id!==item.sourceId||binding.placement!==item.kind||binding[item.kind==='project'?'projectId':'labBookId']!==(item.labBookId??item.projectId))throw new AppError('DATABASE_LOCATION');const storage=item.kind==='project'?new ProjectStorage(root,item.projectId,vault):new LabBookStorage(root,item.labBookId,vault),metadata=(await storage.outline()).metadata;if(metadata.id!==item.namespaceId||item.kind==='lab-book'&&metadata.notebooks[0].projectId!==item.projectId)throw new AppError('DATABASE_LOCATION');return await operation(storage);
-  }finally{clearVault(vault);}
+  }finally{await clearVault(vault);}
  }
  async current(){
   await this.registry.inspect(async view=>{if(view.revision!==this.value.projectDirectory.revision)throw new AppError('CONFLICT');let count=0;

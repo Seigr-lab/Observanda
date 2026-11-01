@@ -23,7 +23,7 @@ export function projectCollectionReader(application,client,check){
   let failure;
   try{await saved?.connections?.close();}catch(error){failure=error;}
   finally{
-   clearVault(saved?.vault);
+   await clearVault(saved?.vault);
    if(!keepParent||failure){
     try{await saved?.parentConnections?.close();}catch(error){failure??=error;}
     try{await saved?.owner?.close();}catch(error){failure??=error;}

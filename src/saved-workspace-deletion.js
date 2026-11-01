@@ -34,7 +34,7 @@ export class SavedWorkspaceDeletion{
  assertClient(client){if(this.revoked.has(client))throw new AppError('AUTH');this.checkClient(client);}
  dispose(plan){
   const pending=this.disposals.get(plan);if(pending)return pending;
-  const cleanup=(async()=>{try{await plan.projects?.close();}finally{clearVault(plan.vault);}})();
+  const cleanup=(async()=>{try{await plan.projects?.close();}finally{await clearVault(plan.vault);}})();
   this.disposals.set(plan,cleanup);cleanup.then(()=>this.disposals.delete(plan),()=>this.disposals.set(plan,null));return cleanup;
  }
  async close(){
@@ -67,7 +67,7 @@ export class SavedWorkspaceDeletion{
     while(this.plans.size>=5){const available=[...this.plans].find(([,prior])=>!this.running.has(prior.plan.source));if(!available)throw new AppError('STORAGE_DELETE_BUSY');const [id,prior]=available;this.plans.delete(id);await this.dispose(prior);}
     this.assertClient(client);const id=randomBytes(24).toString('hex');this.plans.set(id,{client,plan,vault,access:access.etag,expires:Date.now()+10*60*1000});vault=null;
     return {id,source:plan.source,title:plan.title,database:plan.binding?.placement==='workspace'?'workspace':plan.binding?'catalogue':'files'};
-   }finally{if(vault){clearVault(vault);await databaseProvider()?.closeWorkspace(root);}}
+   }finally{if(vault){await clearVault(vault);await databaseProvider()?.closeWorkspace(root);}}
   });
  }
  async confirm(client,data){
@@ -115,7 +115,7 @@ export class SavedWorkspaceDeletion{
     const result=await this.deletions.finish(data.id,{vault});
     if(result.complete){await this.forget(result.source);await this.deletions.acknowledge(data.id);}
     return {result,selectedWorkspace:true};
-   }finally{try{if(!retired)await databaseProvider()?.closeWorkspace(receipt.source);}finally{clearVault(vault);}}
+   }finally{try{if(!retired)await databaseProvider()?.closeWorkspace(receipt.source);}finally{await clearVault(vault);}}
   },{retired});
  }
 }

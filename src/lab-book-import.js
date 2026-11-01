@@ -83,7 +83,7 @@ export class LabBookImports{
     if(value.vaultId!==vault.id)throw new AppError('ACCESS_DENIED');
     const names=await privateDirectory(this.project.root,'.observanda/lab-book-creation'),addresses=await privateDirectory(this.workspaceRegistry.workspace.root,'.observanda/lab-book-directory'),locks=[path.join(addresses,value.namespaceId+'.lock'),path.join(names,'book-'+value.labBookId+'.lock'),path.join(names,'name-'+digest(nameKey(value.directory))+'.lock')];
     const take=index=>index===locks.length?this.perform(value,vault,{check,checkpoint,opened,onProgress}):withWriterLease(locks[index],()=>take(index+1),{wait:false});return await take(0);
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   }));
  }
  async perform(value,vault,{check,checkpoint,opened,onProgress}){
@@ -154,7 +154,7 @@ export class LabBookImports{
      await discard.run({...value,destination,owners:[{kind:'lab-book',relative:'',projectId:value.projectId,labBookId:value.labBookId,vaultId:value.vaultId}]},new Map([['',vault]]),{check,checkpoint,onProgress});
     }
     value.phase='cancelled';await this.save(value);await checkpoint('cancelled',value);return this.cancelled(value);
-   }finally{clearVault(vault);}
+   }finally{await clearVault(vault);}
   },{wait:false}));
  }
  async copyArchive(source,target,value,checkpoint){

@@ -15,6 +15,7 @@ import {isStorageTemporary} from './storage-temporary.js';
 import {MOVE_RECEIPT,MOVE_SOURCE} from './workspace-move-state.js';
 import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
 import {nativeDestination} from './native-destination.js';
+import {catalogueContext} from './catalogue-context.js';
 export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  const stat=await assertRegular(file);
  const run=async()=>{
@@ -36,6 +37,10 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
     // Active PostgreSQL files are never copied as ordinary files. Their
     // complete contents travel through the transactional catalogue archive.
     if(relative!=='.observanda'&&path.posix.basename(relative.replace(/\/$/,''))==='.observanda'&&item.name==='postgresql')throw new AppError('DATABASE_LOCATION');
+    if(relative==='.observanda'&&item.name==='query-cache'){
+     await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore();
+     if(held?.root===root){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,held.vault))continue;}
+    }
     if(relative==='.observanda'&&['postgresql','database-transition','project-transfer-files','lab-book-transfer-files'].includes(item.name)){await assertRegular(path.join(absolute,item.name),{directory:true});continue;}
     if(relative==='.observanda'&&item.name==='database-conversion.observanda'){await assertRegular(path.join(absolute,item.name));continue;}
     if(workspaceTransferControl(path.posix.join(relative,item.name))){await assertRegular(path.join(absolute,item.name));continue;}

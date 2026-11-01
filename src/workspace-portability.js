@@ -9,5 +9,5 @@ export async function verifyPortableAccess(root,{username='',password='',recover
  if(!isEncryptedAccess(access.value))return;
  if(!password&&!recovery)throw new AppError('STORAGE_PORTABLE_ACCESS');
  const vault=await verifyAccess(access,username,password,{recovery});
- clearVault(vault);
+ await clearVault(vault);
 }

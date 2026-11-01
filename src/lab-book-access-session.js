@@ -10,7 +10,7 @@ const accessErrors=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH'
 // Parent access is checked separately; a parent's key never opens book data.
 export class LabBookAccessSession{
  constructor(application,client,project,labBookId,check){
-  this.application=application;this.project=project;this.labBookId=labBookId;this.parentCheck=async()=>{try{await check();}catch(error){if(accessErrors.has(error.code))error.projectId=project.projectId;throw error;}};this.session=application.session(client);this.id='book:'+project.projectId+':'+labBookId;this.expected=this.session.get(this.id);
+  this.application=application;this.client=client;this.project=project;this.labBookId=labBookId;this.parentCheck=async()=>{try{await check();}catch(error){if(accessErrors.has(error.code))error.projectId=project.projectId;throw error;}};this.session=application.session(client);this.id='book:'+project.projectId+':'+labBookId;this.expected=this.session.get(this.id);
  }
  async check(){
   await this.parentCheck();const saved=this.session.get(this.id);
@@ -24,7 +24,7 @@ export class LabBookAccessSession{
    if(saved?.vault&&saved.etag===access.etag&&saved.vault.id===access.value.vaultId&&saved.expires>Date.now()){this.expected=saved;await this.check();saved.root=root;return cloneVault(saved.vault);}
    if(saved)this.application.forget(this.session,this.id);this.expected=undefined;
    const vault=await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});
-   try{await this.check();return vault;}catch(error){clearVault(vault);throw error;}
+   try{await this.check();return vault;}catch(error){await clearVault(vault);throw error;}
   }catch(error){throw this.error(error);}
  }
  async location(){
@@ -46,7 +46,7 @@ export class LabBookAccessSession{
    if(this.application.closed||this.session.get(this.id)!==previous||(await this.location()).root!==entry.root||(await readAccess(entry.root)).etag!==access.etag)throw new AppError('CONFLICT');
    await this.application.jobs.forgetBook(this.session,this.project.projectId,this.labBookId);this.save(entry.root,access.etag,vault);
    return {projectId:this.project.projectId,labBookId:this.labBookId,locked:false};
-  }catch(error){throw this.error(error);}finally{clearVault(vault);}
+  }catch(error){throw this.error(error);}finally{await clearVault(vault);}
  }
  save(root,etag,vault){
   this.application.forget(this.session,this.id);const saved={root,etag,vault:cloneVault(vault),expires:Date.now()+8*60*60*1000};this.session.set(this.id,saved);this.application.credentials.add(saved);this.expected=saved;
@@ -54,13 +54,13 @@ export class LabBookAccessSession{
  async changed(root,etag,vault){
   await this.parentCheck();if(this.application.closed||this.session.get(this.id)!==this.expected)throw new AppError('ACCESS_LOCKED');
   const access=await readAccess(root);if(access.etag!==etag)throw new AppError('CONFLICT');authenticateKeyring(access.value,vault);
-  for(const saved of this.application.credentials)if(saved.vault?.id===vault.id){clearVault(saved.vault);saved.expires=0;this.application.credentials.delete(saved);}
+  for(const saved of this.application.credentials)if(saved.vault?.id===vault.id){await clearVault(saved.vault);saved.expires=0;this.application.credentials.delete(saved);}
   this.save(root,etag,vault);
  }
  async lock(){
-  await this.parentCheck();this.application.forget(this.session,this.id);this.session.set(this.id,{locked:true});
+  await this.parentCheck();const caches=this.application.forget(this.session,this.id);this.session.set(this.id,{locked:true});
   await this.application.jobs.forgetBook(this.session,this.project.projectId,this.labBookId);
-  await Promise.all([...this.application.active].filter(([,owner])=>owner.projectId===this.project.projectId&&owner.labBookId===this.labBookId).map(([pending])=>pending));
+  await caches;await Promise.all([...this.application.active].filter(([,owner])=>owner.projectId===this.project.projectId&&owner.labBookId===this.labBookId).map(([pending])=>pending));
   return {projectId:this.project.projectId,labBookId:this.labBookId,locked:true};
  }
 }

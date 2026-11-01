@@ -42,7 +42,7 @@ export class LabBookReparentApplication{
     const current=async()=>{await sourceOwner.check();await targetOwner.check();await access.check();};await current();await app.jobs.invalidateBook(sourceId,labBookId);await app.jobs.invalidateBook(targetId,labBookId);
     started=true;const result=await command.run(source,target,vault,{id:data.id,check:current,checkpoint});await current();
     nextAccess.save(result.book.root,(await readAccess(result.book.root)).etag,vault);if(access.id!==nextAccess.id)app.forget(app.session(client),access.id);return result;
-   }));}catch(error){if(!started&&accessErrors.includes(error.code))error.operationNotStarted=true;throw error;}finally{clearVault(vault);await sourceOwner.close();await targetOwner.close();}
+   }));}catch(error){if(!started&&accessErrors.includes(error.code))error.operationNotStarted=true;throw error;}finally{await clearVault(vault);await sourceOwner.close();await targetOwner.close();}
   }))),sourceId,labBookId);
  }
 }

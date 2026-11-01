@@ -39,7 +39,7 @@ export class LabBookPostgres{
     }
     return entry.env;
    },{manual});
-  }finally{clearVault(key);}
+  }finally{await clearVault(key);}
  }
  acquire(root,labBookId,vault,options){return this.#lease(root,labBookId,vault,options);}
  async open(root,labBookId,vault,options={}){const lease=await this.#lease(root,labBookId,vault,{...options,manual:true});lease.release();return lease.env;}
@@ -51,15 +51,15 @@ export class LabBookPostgres{
  async closeLabBook(root){root=await realpath(root).catch(error=>{if(error.code==='ENOENT')return path.resolve(root);throw error;});await this.#pool.close(root);}
  async stopForRename(root,labBookId,vault,renameId){
   const key=runtimeVault(labBookId,vault);
-  try{await this.#runtime.authorizeRename(root,key,renameId);await this.closeLabBook(root);await this.#runtime.stopForRename(root,key,renameId);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeRename(root,key,renameId);await this.closeLabBook(root);await this.#runtime.stopForRename(root,key,renameId);}finally{await clearVault(key);}
  }
  async stopForDeletion(root,labBookId,vault,deleteId){
   const key=runtimeVault(labBookId,vault);
-  try{await this.#runtime.authorizeDeletion(root,key,deleteId);await this.closeLabBook(root);await this.#runtime.stopForDeletion(root,key,deleteId);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeDeletion(root,key,deleteId);await this.closeLabBook(root);await this.#runtime.stopForDeletion(root,key,deleteId);}finally{await clearVault(key);}
  }
  async stopForMove(root,labBookId,vault,moveId){
   const key=runtimeVault(labBookId,vault);
-  try{await this.#runtime.authorizeMove(root,key,moveId);await this.closeLabBook(root);await this.#runtime.stopForMove(root,key,moveId);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeMove(root,key,moveId);await this.closeLabBook(root);await this.#runtime.stopForMove(root,key,moveId);}finally{await clearVault(key);}
  }
  stats(){return this.#pool.stats();}
  async close(){
@@ -79,5 +79,5 @@ export async function assertLabBookDatabaseStopped(root,labBookId,vault){
   bytes=unseal(await readFile(file),key.key,'Observanda/workspace-postgresql/v1/'+key.id);
   const state=JSON.parse(bytes.toString('utf8'));
   if(state.workspaceId!==labBookId||state.running!==false)throw new AppError('DATABASE_WORKSPACE_RUNNING');
- }finally{bytes?.fill(0);clearVault(key);}
+ }finally{bytes?.fill(0);await clearVault(key);}
 }

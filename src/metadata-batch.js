@@ -9,6 +9,7 @@ import {writeCatalogueRows} from './catalogue-writes.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withCatalogueCacheBoundary} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
+export const withoutMetadataBatch=operation=>batches.exit(operation);
 // Call inside the workspace's writer lock. Legacy file workspaces keep their
 // existing write path; only PostgreSQL has shared index branches to coalesce.
 export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchIds=[],signal}={}){

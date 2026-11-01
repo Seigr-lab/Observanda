@@ -46,5 +46,5 @@ export async function importAccessCheckpoint(root,checkpoint,{verifiedFingerprin
    await deviceStore.accessTrust.installCheckpoint(value,vault,{expected:trusted?.sha256??null,obsolete:original.value,write:()=>atomicWrite(path.join(root,'.observanda/access.json'),serialize(value))});
   },{existing:true}));
   return {ok:true};
- }finally{clearVault(vault);}
+ }finally{await clearVault(vault);}
 }

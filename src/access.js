@@ -66,7 +66,7 @@ export async function verifyAccess(access,username,password,{deviceStore=accessD
   access=await resolveAccess(access,{deviceStore});
   if(access.value.formatVersion===3){
    const vault=await unlockKeyring(access.value,{username,password,recovery,deviceStore});
-   try{await deviceStore.accessTrust.remember(access.value,vault);return vault;}catch(error){clearVault(vault);throw error;}
+   try{await deviceStore.accessTrust.remember(access.value,vault);return vault;}catch(error){await clearVault(vault);throw error;}
   }
   if(!access.value.password)return null;
   if(!usernameOK(username)||typeof password!=='string'||password.length>1024)throw new AppError('ACCESS_DENIED');
@@ -93,6 +93,6 @@ export async function changeAccess(root,{username,password,currentPassword},expe
       if(vault&&!password)throw new AppError('ENCRYPT_PASSWORD');
       const next=await createAccess(username,password,vault);takeCreatedVault(next);
       await atomicWrite(path.join(workspace.root,'.observanda','access.json'),serialize(next));return readAccess(root);
-    }finally{clearVault(vault);}
+    }finally{await clearVault(vault);}
   });
 }

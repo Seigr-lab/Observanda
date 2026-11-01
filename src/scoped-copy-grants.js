@@ -91,7 +91,7 @@ export class ScopedCopyGrants{
  async installGrant(application,grant,saved){
   const session=application.session(this.scope.client);let installed=false;
   try{await this.scope.grants.put(grant.id,{...grant,installedToken:this.identity(saved)});this.assertGrant(grant);if(application.closed)throw new AppError('ACCESS_LOCKED');if(!this.validGrant(grant))return;if(session.has(grant.id))throw new AppError('CONFLICT');session.set(grant.id,saved);application.credentials.add(saved);installed=true;}
-  finally{if(!installed)clearVault(saved.vault);}
+  finally{if(!installed)await clearVault(saved.vault);}
  }
  removeInstalled(application,grant){const session=application.session(this.scope.client),saved=session.get(grant.id);if(grant.installedToken&&this.identity(saved)===grant.installedToken){session.delete(grant.id);application.credentials.delete(saved);clearVault(saved.vault);}}
  async finishInstall(application,registry){

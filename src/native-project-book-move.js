@@ -66,7 +66,7 @@ export class NativeProjectMoveBooks{
   if(!saved||['relative','labBookId','namespaceId','vaultId'].some(key=>saved[key]!==item[key])||typeof saved.key!=='string'||!/^[A-Za-z0-9+/]{43}=$/.test(saved.key))throw new AppError('STORAGE_MOVE_STATE');const vault={id:item.vaultId,key:Buffer.from(saved.key,'base64')};
   try{const location=path.join(root,item.directory),storage=new LabBookStorage(location,item.labBookId,vault),binding=await catalogueBinding(location);if(await realpath(location)!==location||await hash(location)!==item.accessHash)throw new AppError('STORAGE_MOVE_STATE');if(identity)await assertProjectMoveDirectory(location,root===value.source?item.identity:item.destinationIdentity);authenticateKeyring((await readAccess(location)).value,vault);
    if(binding?.placement!=='lab-book'||binding.labBookId!==item.labBookId||binding.id!==(root===value.source?item.sourceId:item.destinationId)||(await storage.catalogue(async store=>(await store.snapshot()).metadata)).id!==item.namespaceId)throw new AppError('DATABASE_LOCATION');return await operation(storage);
-  }finally{clearVault(vault);}
+  }finally{await clearVault(vault);}
  }
  async freeze(checkpoint){
   const value=this.value,directory=await privateDirectory(value.source,'.observanda/lab-book-creation');

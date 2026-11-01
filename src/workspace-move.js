@@ -167,7 +167,7 @@ export async function moveWorkspace(plan,{vault,onProgress,activate,recovery,mov
  if(typeof activate!=='function')throw new AppError('INVALID');
  return withOperationProgress(onProgress,async()=>{
   if(plan.ownedDatabase||(await catalogueBinding(plan.source))?.placement==='workspace'){
-   const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate,recovery,moveDirectory}));}finally{clearVault(retainedVault);}
+   const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate,recovery,moveDirectory}));}finally{await clearVault(retainedVault);}
   }
   let receipt;
   const freeze=async destination=>{

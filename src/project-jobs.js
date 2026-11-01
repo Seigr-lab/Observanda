@@ -31,7 +31,7 @@ export class ProjectJobs{
  constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
  stop(entry){
   if(entry.stopped)return entry.stopped;entry.closed=true;entry.sourceAccess?.clear();entry.publications?.clear();this.entries.delete(entry);
-  const pending=Promise.all([entry.worker.stop(),entry.pdfs?.close()]).then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(()=>{clearVault(entry.storage.vault);entry.grant?.close();this.stopping.delete(pending);});
+  const pending=Promise.all([entry.worker.stop(),entry.pdfs?.close()]).then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(async()=>{try{try{await clearVault(entry.storage.vault);}finally{await entry.grant?.close();}}finally{this.stopping.delete(pending);}});
   this.stopping.add(pending);entry.stopped=pending;return pending;
  }
  async forget(session,id){const owners=this.sessions.get(session);if(!owners)return;const pending=[];for(const [key,entry] of owners)if(entry.projectId===id){owners.delete(key);pending.push(this.stop(entry));}await Promise.all(pending);}
@@ -51,7 +51,7 @@ export class ProjectJobs{
    const owned=book?new LabBookStorage(storage.root,storage.labBookId,cloneVault(storage.vault)):new ProjectStorage(storage.root,storage.projectId,cloneVault(storage.vault));
    let grant;
    try{grant=retain?await retain():null;await (grant?.check??check)();}
-   catch(error){grant?.close();clearVault(owned.vault);throw error;}
+   catch(error){try{await grant?.close();}finally{await clearVault(owned.vault);}throw error;}
    entry={storage:owned,projectId,grant,routePrefix:'/api/projects/'+projectId+(book?'/lab-books/'+storage.labBookId:''),etag,lastUsed:Date.now(),expires:Date.now()+8*60*60*1000,closed:false};
    try{
    const current=()=>entry.queue;entry.sourceAccess=new PublicationSourceAccess();entry.comparisonAccess=this.comparisonAccess;
@@ -60,7 +60,7 @@ export class ProjectJobs{
     try{if(entry.closed||entry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
    entry.pdfs=new PdfExportService(owned,{check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue,{inactive:()=>Date.now()-entry.lastUsed>=60000});entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
-   }catch(error){grant?.close();clearVault(owned.vault);throw error;}
+   }catch(error){try{await grant?.close();}finally{await clearVault(owned.vault);}throw error;}
   }
   const wasInactive=Date.now()-entry.lastUsed>=60000;entry.lastUsed=Date.now();entry.expires=entry.lastUsed+8*60*60*1000;
   // A request's abort signal, writer queue and response activity do not belong

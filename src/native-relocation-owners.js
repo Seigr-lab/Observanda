@@ -61,7 +61,7 @@ export class NativeRelocationOwners{
   try{const location=relocationOwnerRoot(root,item),storage=item.kind==='project'?new ProjectStorage(location,item.projectId,vault):new LabBookStorage(location,item.labBookId,vault);
    if(vault?.id!==item.vaultId)throw new AppError('ACCESS_LOCKED');if(identity)await assertProjectMoveDirectory(location,item.destinationIdentity??item.identity);if(await realpath(location)!==location||await fingerprint(path.join(location,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');authenticateKeyring((await readAccess(location)).value,vault);
    const binding=await catalogueBinding(location),scope=this.command.scope(this.value),expected=root===scope.destination?item.destinationId??item.sourceId:item.sourceId;if(binding?.id!==expected||binding.placement!==item.kind||binding[item.kind==='project'?'projectId':'labBookId']!==relocationOwnerId(item))throw new AppError('DATABASE_LOCATION');if((await storage.outline()).metadata.id!==item.namespaceId)throw new AppError('DATABASE_LOCATION');return await operation(storage);
-  }finally{if(item.relative)clearVault(vault);}
+  }finally{if(item.relative)await clearVault(vault);}
  }
  static async prepare(command,storage,value,{withProject,withBook,check=async()=>{}}={}){
   const registry=command.registry;value.ownerDirectoryVersion=2;value.owners=new NativePortabilityCollection(null,randomUUID()).empty();value.ownerKeys=new NativePortabilityCollection(null,randomUUID()).empty();value.projectRegistryRevision=await registry.version();value.phase='preparing';await command.save(value);

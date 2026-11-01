@@ -9,6 +9,7 @@ import {readAccess,verifyAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {AppError} from './errors.js';
+import {withQueryCacheScope} from './query-cache-scope.js';
 export class ProjectSessionOwner{
  constructor(application,client,projectId,{check=async()=>{},recoverRenames=true,deferPreparedRename=false,skipRenameId=null,registry=()=>application.registry()}={}){
   this.application=application;this.registrySource=registry;this.client=client;this.recoverRenames=recoverRenames;this.deferPreparedRename=deferPreparedRename;this.skipRenameId=skipRenameId;this.projectId=projectId;this.session=application.session(client);this.sessionEntry=this.session.get(projectId);this.checkRequest=check;
@@ -29,7 +30,7 @@ export class ProjectSessionOwner{
   const app=this.application;if(app.closed||this.session.get(this.projectId)!==this.sessionEntry)throw new AppError('ACCESS_LOCKED');
   const latest=await this.registry.locate(this.projectId),access=await readAccess(latest.root);
   if(latest.root!==this.entry.root||latest.vaultId!==this.entry.vaultId||latest.namespaceId!==this.entry.namespaceId||access.etag!==etag)throw new AppError('CONFLICT');authenticateKeyring(access.value,this.vault);
-  for(const saved of app.credentials)if(saved.root===latest.root){clearVault(saved.vault);saved.expires=0;app.credentials.delete(saved);}
+  for(const saved of app.credentials)if(saved.root===latest.root){await clearVault(saved.vault);saved.expires=0;app.credentials.delete(saved);}
   app.calendars.invalidateProject(this.projectId);
   const saved={root:latest.root,etag,vault:cloneVault(this.vault),expires:Date.now()+8*60*60*1000};
   this.session.set(this.projectId,saved);app.credentials.add(saved);this.sessionEntry=saved;this.etag=etag;
@@ -62,7 +63,7 @@ export class ProjectSessionOwner{
      const relocated=await projectGrantRelocation(this.registry,entry,access,saved);
      if(this.application.closed||this.session.get(entry.projectId)!==saved||this.sessionEntry!==saved||saved.locked||saved.expires<=Date.now())throw new AppError('ACCESS_LOCKED');if(relocated)saved.root=entry.root;
     }
-    clearVault(this.vault);this.vault=null;
+    await clearVault(this.vault);this.vault=null;
     if(saved?.vault&&saved.root===entry.root&&saved.etag===access.etag&&saved.expires>Date.now())this.vault=cloneVault(saved.vault);
     else{if(saved)this.application.forget(this.session,entry.projectId);this.sessionEntry=undefined;this.vault=await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});}
     this.entry=entry;this.etag=access.etag;await this.check();return this.vault;
@@ -74,7 +75,7 @@ export class ProjectSessionOwner{
  async use(operation,options={}){
   if(this.closed)throw new AppError('ACCESS_LOCKED');if(!this.opened)await this.router();await this.check();
   this.opened??=(async()=>{const router=await this.router();return router.withProject(this.projectId,storage=>storage,{...options,action:'read'});})();
-  const storage=await this.opened;await this.check();const result=await operation(storage);await this.check();return result;
+  const storage=await this.opened;await this.check();const result=await withQueryCacheScope(this.application,this.client,[this.sessionEntry],()=>operation(storage));await this.check();return result;
  }
  async read(operation,options={}){
   if(this.closed)throw new AppError('ACCESS_LOCKED');if(!this.opened)await this.router();await this.check();
@@ -90,6 +91,6 @@ export class ProjectSessionOwner{
  async close(){
   this.closed=true;
   try{const snapshot=await this.snapshot?.catch(()=>null);if(snapshot){try{await snapshot.db.close();}finally{snapshot.cache.clear();}}}
-  finally{clearVault(this.vault);this.vault=null;}
+  finally{await clearVault(this.vault);this.vault=null;}
  }
 }

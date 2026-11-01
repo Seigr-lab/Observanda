@@ -18,7 +18,7 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 async function fixture(t,options){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-outline-')),f=await legacyCatalogueFixture(directory,options);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,reader:new WorkspaceReader(f.workspace)};
 }
 test('flat catalogues beyond legacy count and byte budgets open an outline and select only requested originals',async t=>{

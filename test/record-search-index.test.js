@@ -26,7 +26,7 @@ async function fixture(t,count=12,body='Ordinary field notes'){
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i}));
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Listening sessions'});
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,book,ws,vault,queries:new RecordQuery(ws),service:new ResearchRecords(ws,{})};
 }
 const save=(f,base,records)=>f.service.save({workspaceId:f.book.id,baseEtag:base.etag,changes:records.map(record=>({id:record.id,expectedRevision:recordRevision(base.book.entries.find(r=>r.id===record.id)),record}))},{compact:true});

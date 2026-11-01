@@ -42,7 +42,7 @@ export class ProjectPostgres{
     }
     return entry.env;
    },{manual});
-  }finally{clearVault(key);}
+  }finally{await clearVault(key);}
  }
  acquire(root,projectId,vault,options){return this.#lease(root,projectId,vault,options);}
  // Explicit environment consumers own a manual service lifetime. Normal
@@ -56,15 +56,15 @@ export class ProjectPostgres{
  async closeProject(root){root=await realpath(root).catch(error=>{if(error.code==='ENOENT')return path.resolve(root);throw error;});await this.#pool.close(root);}
  async stopForRename(root,projectId,vault,renameId){
   const key=runtimeVault(projectId,vault);
-  try{await this.#runtime.authorizeRename(root,key,renameId);await this.closeProject(root);await this.#runtime.stopForRename(root,key,renameId);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeRename(root,key,renameId);await this.closeProject(root);await this.#runtime.stopForRename(root,key,renameId);}finally{await clearVault(key);}
  }
  async stopForMove(root,projectId,vault,id){
   const key=runtimeVault(projectId,vault);
-  try{await this.#runtime.authorizeMove(root,key,id);await this.closeProject(root);await this.#runtime.stopForMove(root,key,id);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeMove(root,key,id);await this.closeProject(root);await this.#runtime.stopForMove(root,key,id);}finally{await clearVault(key);}
  }
  async stopForDeletion(root,projectId,vault,deleteId){
   const key=runtimeVault(projectId,vault);
-  try{await this.#runtime.authorizeDeletion(root,key,deleteId);await this.closeProject(root);await this.#runtime.stopForDeletion(root,key,deleteId);}finally{clearVault(key);}
+  try{await this.#runtime.authorizeDeletion(root,key,deleteId);await this.closeProject(root);await this.#runtime.stopForDeletion(root,key,deleteId);}finally{await clearVault(key);}
  }
  stats(){return this.#pool.stats();}
  async close(){
@@ -85,5 +85,5 @@ export async function assertProjectDatabaseStopped(root,projectId,vault){
   bytes=unseal(await readFile(file),key.key,'Observanda/workspace-postgresql/v1/'+key.id);
   const state=JSON.parse(bytes.toString('utf8'));
   if(state.workspaceId!==projectId||state.running!==false)throw new AppError('DATABASE_WORKSPACE_RUNNING');
- }finally{bytes?.fill(0);clearVault(key);}
+ }finally{bytes?.fill(0);await clearVault(key);}
 }

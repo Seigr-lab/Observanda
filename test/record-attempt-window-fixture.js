@@ -13,5 +13,5 @@ export async function attemptWindowFixture({preparationCount=9,eventCount=15,ass
  const assessments=Array.from({length:assessmentCount-1},(_,i)=>assessment(preparations.at(-3),i%2,{observed:'Assessment window '+i}));assessments.push({...assessments[0],id:randomUUID(),supersedes:assessments[0].id,reason:'Later assessment',observed:'Corrected assessment zero'});
  record.attempt={version:1,preparations,events,assessments};
  const f=await encryptedFixture(directory,book),saved=await f.workspace.read();
- return {...f,directory,book:saved.book,record:saved.book.entries.find(r=>r.id===record.id),async close(){clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
+ return {...f,directory,book:saved.book,record:saved.book.entries.find(r=>r.id===record.id),async close(){await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
 }

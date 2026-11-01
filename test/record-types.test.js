@@ -20,7 +20,7 @@ test('record pages omit the type catalogue; independent discovery is scoped, pin
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Second book'});
  book.entries=Array.from({length:65},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Take '+i,notebookId:book.notebooks[i%2].id,body:'Private original',sections:[],attachments:[],figures:[],relations:[],
   template:{id:randomUUID(),profileId:null,label:'Type '+i,description:'',fields:[],values:{}}}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const records=new RecordQuery(f.workspace),types=new RecordTypeQuery(f.workspace),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()},etag=await f.workspace.catalogue(s=>s.head());
  const command={workspaceId:book.id,etag,projectId:null,notebookId:null,selected:'all',limit:25,search:'',cursor:null};
  const methods={record:ResearchCatalogue.prototype.record,read:ResearchCatalogue.prototype.read};let first,second;

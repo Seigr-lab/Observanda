@@ -53,7 +53,7 @@ export async function preparePdfImage(input,{signal}={}){
   const canonical=canonicalPNG(await contentBuffer(new FileContent(workspace,output,result.bytes,result.sha256),{signal,maxBytes:PDF_IMAGE_MAX_BYTES}));signal?.throwIfAborted();
   const metadata=Object.freeze({asset:digest(canonical.content),mime:'image/png',size:canonical.content.length,width:canonical.width,height:canonical.height});preparedImages.set(metadata,canonical.content);return metadata;
  }finally{
-  clearVault(vault);bytes.fill(0);
+  await clearVault(vault);bytes.fill(0);
   if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-image-'))fail('UNSAFE');
   await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});
  }
