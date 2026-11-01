@@ -3,6 +3,7 @@ import '../i18n/catalogues/moduleRecovery.js';
 import {moduleReferencesUI} from './references-ui.js';
 import {moduleReferenceLinks} from './reference-links.js';
 import {t} from '../i18n/index.js';
+import {moduleErrorMessage,moduleErrorDetail} from './module-validation-presentation.js';
 import {researchKindLabel} from '../research-reference.js';
 import {projectUsesTool} from '../project-tools.js';
 import {scopePath,parseScope,ownerOf,scopedItems} from './scope.js';
@@ -218,7 +219,7 @@ export async function moduleEditor(services,definition){
     const [type,id]=path.split('/');
     if(id&&definition.types.some(t=>t.id===type)&&!drafts.has(id)){
      if(!busy&&failedId!==id)void openExisting(id,type);
-     return `<section class="module-workbench"><h1>${esc(definition.label)}</h1>${error?`<p role="alert">${esc(error.message)}</p>${button(currentText('retry'),'open-item-retry',`data-id="${esc(id)}" data-type="${type}"`)}`:`<p role="status">${esc(currentText('loadingItem'))}</p>`}${recoveryView()}</section>`;
+     return `<section class="module-workbench"><h1>${esc(definition.label)}</h1>${error?`<p role="alert">${esc(moduleErrorMessage(error))}</p>${button(currentText('retry'),'open-item-retry',`data-id="${esc(id)}" data-type="${type}"`)}`:`<p role="status">${esc(currentText('loadingItem'))}</p>`}${recoveryView()}</section>`;
     }
    }
    const [type,id]=path.split('/');if(definition.types.some(t=>t.id===type)){listType=type;if(id&&id!==currentId){const entity=get(id);if(entity&&!drafts.has(id))drafts.set(id,{id,type:entity.type,expectedRevision:entity.revision,base:structuredClone(entity.data),data:structuredClone(entity.data)});currentId=entity||drafts.has(id)?id:null;if(currentId)section=definition.openSection?.(context.current)??'details';}else if(!id)currentId=null;}
@@ -230,7 +231,7 @@ export async function moduleEditor(services,definition){
   return `<div class="module-workbench" aria-busy="${busy}" ${busy?'inert':''}><header class="module-heading"><div><p class="eyebrow">${esc(definition.label)}</p><h1>${esc(d?(d.data.name||d.data.title||m('newItem',{type:type.singular})):(definition.listTitle?.(type,context)??type.label))}</h1></div><div class="module-actions">${d?button(definition.backLabel?.(d)??m('backTo',{type:type.label}),'list'):button(m('newItem',{type:type.singular}),'new',definition.canCreate?.(type,context)===false?'disabled':'','primary')}${button(m('refresh'),'refresh')}</div></header>
    ${navigation()}
    ${definition.scoped?(definition.scopeControl?.(context)??scopeControl(state.book,scopeId,esc,{recursive,moduleId:definition.id})):''}${definition.tools?.(context)??''}
-   ${error?`<div class="module-error" role="alert"><strong>${esc(error.message??m('saveInterrupted'))}</strong>${(error.details??[]).map(e=>'<p>'+esc(e.field)+'</p>').join('')}${error.code==='MODULE_CHANGED'&&!operation?button(m('compareSaved'),'compare'):''}</div>`:''}
+   ${error?`<div class="module-error" role="alert"><strong>${esc(moduleErrorMessage(error)??m('saveInterrupted'))}</strong>${(error.details??[]).map(e=>'<p>'+esc(moduleErrorDetail(e))+'</p>').join('')}${error.code==='MODULE_CHANGED'&&!operation?button(m('compareSaved'),'compare'):''}</div>`:''}
    <p class="module-recovery-status" data-recovery-status role="status"></p>
    ${recoveryView()}
    ${unsaved.length?`<div class="module-drafts">${esc(m('drafts'))} ${unsaved.map(d=>button(d.data.name||d.data.title||m('newItem',{type:definition.types.find(type=>type.id===d.type)?.singular??m('itemName')}),'edit',`data-id="${d.id}" data-type="${d.type}"`,'subtle')).join('')}</div>`:''}

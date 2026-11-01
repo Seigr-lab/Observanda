@@ -264,5 +264,7 @@
   "deploymentArchive": "Archivos anteriores conservados en la rama {branch}, commit {commit}.",
   "repositoryReviewStarting": "Iniciando la revisión del repositorio",
   "repositoryReviewStop": "Detener revisión",
-  "repositoryReviewResume": "Reanudar revisión"
+  "repositoryReviewResume": "Reanudar revisión",
+  "selectionResponseInvalid": "La respuesta de selección de contenido para publicar no es válida.",
+  "selectionChoiceSize": "Esta selección individual de contenido supera el tamaño admitido."
 }

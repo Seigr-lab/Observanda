@@ -2,16 +2,18 @@ import {withOperationProgress} from './operation-progress.js';
 import messages from './web/locales/en/storageProgress.json' with {type:'json'};
 import common from './web/locales/en/operationProgress.json' with {type:'json'};
 import {translator} from './web/i18n/runtime.js';
-const text=translator('en',{...common,...messages});
+const catalogues={operationProgress:translator('en',common),storageProgress:translator('en',messages)};
+const english=(namespace,key,parameters)=>catalogues[namespace](key,parameters);
 
 // Keep machine-readable results on stdout. Repeated stderr observations expose
 // inactivity as well as work; neither the timer nor a stage change claims success.
-export async function withConsoleProgress(operation,{write=line=>process.stderr.write(line+'\n')}={}){
+export async function withConsoleProgress(operation,{write=line=>process.stderr.write(line+'\n'),translate=english}={}){
+ const text=(key,parameters)=>translate('operationProgress',key,parameters);
  let latest,observed=Date.now(),printed=false;
  const render=()=>{
   if(!latest)return;const now=Date.now(),total=latest.total,known=Number.isSafeInteger(total);
   write(text('consoleLine',{
-   stage:text(latest.stage),count:text(known?'countTotal':'count',{count:latest.completed??0,...(known?{total}:{}),unit:text(latest.unit??'items')}),
+   stage:translate('storageProgress',latest.stage),count:text(known?'countTotal':'count',{count:latest.completed??0,...(known?{total}:{}),unit:text(latest.unit??'items')}),
    objects:latest.activity?.objects??0,bytes:latest.activity?.bytes??0,
    seconds:Math.floor(((latest.elapsedMs??0)+now-observed)/1000),quiet:Math.floor(Math.max(0,now-(latest.advancedAt??observed))/1000)
   }));printed=true;

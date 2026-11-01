@@ -2,6 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {publicationEditionSelectionClient} from '../src/web/publication-edition-selection-client.js';
+import {readFile} from 'node:fs/promises';
+import {prepareLanguage,activateLanguage,t} from '../src/web/i18n/index.js';
 function service(){let revision=0,lost=false;const id=randomUUID(),source='a'.repeat(64),rows=new Map(),receipts=new Map(),calls=[];const pin=()=>({version:2,id,source,revision:String(revision).padStart(64,'0')});return {calls,rows,loseReply(){lost=true;},async api(url,data){const op=url.split('/').at(-1);calls.push({op,data:structuredClone(data)});if(op==='open')return {selection:pin()};if(op==='checkpoint'){if(receipts.has(data.commandId))return receipts.get(data.commandId);assert.deepEqual(data.selection,pin());for(const change of data.changes)if(change.value===null)rows.delete(change.id);else rows.set(change.id,change.value);revision++;const result={selection:pin()};receipts.set(data.commandId,result);if(lost){lost=false;throw Error('Lost acknowledgement');}return result;}if(op==='read')return {selection:pin(),items:data.keys.map(key=>({...key,value:rows.get(key.id)??null}))};if(op==='discard'){assert.deepEqual(data.selection,pin());rows.clear();return {discarded:true};}throw Error('Unexpected operation '+op);}};}
 test('selection client checkpoints only changed rows, retries exact uncertain commands and drains before discard',async()=>{
  const remote=service(),client=publicationEditionSelectionClient(remote.api),id=randomUUID();await client.open({});await client.read([{collection:'records',id}]);await client.save([{collection:'records',id,value:null}]);assert.equal(remote.calls.filter(c=>c.op==='checkpoint').length,0);
@@ -11,4 +13,16 @@ test('selection client checkpoints only changed rows, retries exact uncertain co
 });
 test('selection client splits large deliberate choices into bounded checkpoint requests',async()=>{
  const remote=service(),client=publicationEditionSelectionClient(remote.api);await client.open({});const changes=Array.from({length:70},()=>({collection:'records',id:randomUUID(),value:{text:'A'.repeat(40000)}}));await client.save(changes);assert.equal(remote.rows.size,70);const writes=remote.calls.filter(c=>c.op==='checkpoint');assert.ok(writes.length>3);for(const write of writes){assert.ok(write.data.changes.length<=32);assert.ok(Buffer.byteLength(JSON.stringify(write.data))<1024*1024);}assert.ok(changes.reduce((n,c)=>n+JSON.stringify(c).length,0)>2*1024*1024);
+});
+test('selection failures follow the selected language without submitting oversized choices',async context=>{
+ context.after(()=>activateLanguage('en'));
+ for(const locale of ['en','ca','es','nb','nn']){
+  await prepareLanguage(locale,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});activateLanguage(locale);
+  const remote=service(),client=publicationEditionSelectionClient(remote.api);await client.open({});
+  await assert.rejects(client.save([{collection:'records',id:randomUUID(),value:{text:'A'.repeat(900001)}}]),{message:t('publication','selectionChoiceSize')});
+  assert.equal(remote.calls.filter(call=>call.op==='checkpoint').length,0);assert.equal(remote.rows.size,0);
+  await assert.rejects(publicationEditionSelectionClient(async()=>({})).open({}),{message:t('publication','selectionResponseInvalid')});
+  const malformedRead=publicationEditionSelectionClient(async(url,data)=>{const response=await remote.api(url,data);if(url.endsWith('/read'))delete response.items;return response;});
+  await malformedRead.open({});await assert.rejects(malformedRead.read([{collection:'records',id:randomUUID()}]),{message:t('publication','selectionResponseInvalid')});
+ }
 });

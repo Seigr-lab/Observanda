@@ -264,5 +264,7 @@
   "deploymentArchive": "Previous files retained in branch {branch} at commit {commit}.",
   "repositoryReviewStarting": "Starting repository review",
   "repositoryReviewStop": "Stop review",
-  "repositoryReviewResume": "Resume review"
+  "repositoryReviewResume": "Resume review",
+  "selectionResponseInvalid": "Invalid publication selection response",
+  "selectionChoiceSize": "This individual content choice exceeds the supported size."
 }

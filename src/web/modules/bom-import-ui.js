@@ -3,6 +3,8 @@ import {materialSourcePicker} from '../material-source-picker.js';
 import {TABLE_DELIMITERS} from '../tabular-data.js';
 import {BOM_COLUMNS,suggestedBOMMapping,mapBOMTable} from './bom-import-model.js';
 import {bomLine} from './bom-model.js';
+import {t} from '../i18n/index.js';
+import {moduleErrorMessage,moduleErrorDetail,bomImportColumns} from './module-validation-presentation.js';
 
 // Import is a separate review dialog. The BOM stays untouched until confirmation.
 export async function openBOMImport(c){
@@ -20,7 +22,7 @@ export async function openBOMImport(c){
  const dialog=document.getElementById('dialog'),root=dialog.querySelector('.bom-import'),load=root.querySelector('[data-bom-load]'),apply=root.querySelector('[data-bom-apply]'),message=root.querySelector('[data-bom-message]'),mappingRoot=root.querySelector('[data-bom-mapping]'),review=root.querySelector('[data-bom-review]');
  const abort=()=>{disposed=true;picker?.dispose();request?.abort();};
  dialog.addEventListener('close',abort,{once:true});
- const report=e=>{if(!disposed&&e.name!=='AbortError')message.textContent=[e.message,...(e.details??[]).map(d=>d.field)].filter(Boolean).join(' ');};
+ const report=e=>{if(!disposed&&e.name!=='AbortError')message.textContent=[moduleErrorMessage(e),...(e.details??[]).map(moduleErrorDetail)].filter(Boolean).join(' ');};
  const invalidate=()=>{preview=null;apply.disabled=true;review.innerHTML='';};
  const clear=()=>{request?.abort();loaded=null;mappingRoot.innerHTML='';invalidate();};
  root.querySelector('[data-bom-delimiter]').addEventListener('change',clear);
@@ -32,14 +34,15 @@ export async function openBOMImport(c){
   try{
    guard();invalidate();
    if(!loaded)throw Error(m('readColumnsFirst'));
-   const mapped=mapBOMTable(loaded.table,mapping(),{referenceSeparator:separator()});
+   const mapped=mapBOMTable(loaded.table,mapping(),{referenceSeparator:separator(),translate:t});
+   const unmapped=bomImportColumns(loaded.table).filter(column=>!Object.values(mapping()).includes(column.index)).map(column=>column.label);
    preview={...mapped,mapping:mapping(),referenceSeparator:separator()};
    const fields=[['row',m('sourceLine')],['references',m('references')],['value',m('value')],['quantity',m('perBuild')],['unit',m('unit')],['dnp','DNP'],['footprint',m('footprint')],['partNumber',m('partNumber')]];
    review.innerHTML='<h3>'+esc(m('reviewComponents'))+'</h3><p>'+esc(m('componentRowSummary',{rows:mapped.lines.length,dnp:mapped.lines.filter(l=>l.dnp).length,excluded:mapped.excluded.length}))+'</p>'+
     '<p>'+esc(m('componentReviewHelp'))+'</p>'+
     (preview.mapping.dnp===null?'<p><strong>'+esc(m('noDnp'))+'</strong></p>':'')+
     (preview.mapping.exclude===null?'<p>'+esc(m('noExclusion'))+'</p>':'')+
-    (mapped.unmapped.length?'<p>'+esc(m('unmappedColumns',{columns:mapped.unmapped.join(', ')}))+'</p>':'')+
+    (unmapped.length?'<p>'+esc(m('unmappedColumns',{columns:unmapped.join(', ')}))+'</p>':'')+
     '<div class="bom-import-table" tabindex="0" role="region" aria-label="'+esc(m('importedComponents'))+'"><table><thead><tr>'+fields.map(([,label])=>'<th scope="col">'+esc(label)+'</th>').join('')+'</tr></thead><tbody>'+
     mapped.lines.map(line=>'<tr>'+fields.map(([key,label])=>'<td data-label="'+esc(label)+'">'+esc(key==='dnp'?(line.dnp?m('yes'):m('no')):line[key])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
     (mapped.excluded.length?'<details><summary>'+esc(m('excludedRows'))+'</summary><ul>'+mapped.excluded.map(r=>'<li>'+esc(m('excludedRow',{row:r.row,references:r.references,value:r.value}))+'</li>').join('')+'</ul></details>':'')+
@@ -54,7 +57,7 @@ export async function openBOMImport(c){
    guard();const artifact=picker.values()[0];message.textContent=m('readingOriginal');
    const result=await api('/api/modules/bom-source',{artifact,delimiter:root.querySelector('[data-bom-delimiter]').value},{signal:active.signal});
    guard();if(request!==active||active.signal.aborted)return;loaded=result;
-   const suggested=suggestedBOMMapping(loaded.table),columns=loaded.table.columns.map(col=>[col.index,col.label]);
+   const suggested=suggestedBOMMapping(loaded.table),columns=bomImportColumns(loaded.table).map(col=>[col.index,col.label]);
    mappingRoot.innerHTML='<h3>'+esc(m('mapColumns'))+'</h3><div class="form-grid">'+BOM_COLUMNS.map(([key])=>select(key,m(({references:'references',value:'valueDescription',quantity:'quantityPerBuild',footprint:'footprintPackage',partNumber:'manufacturerPart',unit:'unit',dnp:'dnp',exclude:'excludeFromBom',notes:'notes'})[key]),suggested[key]??'',[['',key==='unit'?m('useItems'):key==='dnp'?m('allPopulated'):key==='exclude'?m('excludeNone'):m('notMapped')],...columns])).join('')+
     field(esc(m('referenceSeparator')),'<select name="bom-reference-separator" data-bom-reference-separator><option value=",">'+esc(m('comma'))+'</option><option value=";">'+esc(m('semicolon'))+'</option><option value="space">'+esc(m('spaces'))+'</option></select>')+'</div>'+
     '<button type="button" class="button" data-bom-preview>'+esc(m('reviewMapped'))+'</button>';

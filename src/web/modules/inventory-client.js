@@ -40,7 +40,7 @@ export function inventoryClient(c,{card,stock,bom}){
   if(!active())return;
   for(const node of document.querySelectorAll('[data-inventory-card]')){const item=values.get(node.dataset.inventoryCard);node.innerHTML=item?card(item,c):message();}
   const region=document.querySelector('[data-inventory-stock]');if(region&&!c.operation)region.innerHTML=loading||error?message():stock(c);
-  const preview=document.querySelector('[data-bom-preview]');if(preview){if(c.bomSources?.handles(c.current.data))c.bomSources.paint();else preview.innerHTML=loading||error?message():bom(c.current.data,c);}
+  const preview=c.current?.type==='bom'?document.querySelector('.module-workbench [data-bom-preview]'):null;if(preview){if(c.bomSources?.handles(c.current.data))c.bomSources.paint();else preview.innerHTML=loading||error?message():bom(c.current.data,c);}
   const reserve=document.querySelector('[data-command="bom-reserve"]');if(reserve)reserve.disabled=loading||Boolean(error);
   void c.bindItemLabels();
  }

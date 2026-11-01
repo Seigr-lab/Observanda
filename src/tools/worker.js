@@ -1,5 +1,6 @@
 import {calculationRuntime,calculateDetailed,calculationPreview,convertBase,spreadsheet} from './math.js';
 import {chemicalPreview} from './chemistry.js';
+import {chemistryTranslator} from './chemistry-localization.js';
 self.onmessage=({data})=>{try{
  if(data.kind==='calculator'&&data.value.mode!=='bases'&&data.value.expression.split(/\r?\n/).filter(v=>v.trim()).length>100)throw Error('Use up to 100 expressions in one worksheet.');
  const options=data.kind==='chemical'?null:{engine:data.value.engine??1,policy:data.value.policy};if([3,4].includes(options?.engine))options.runtime=calculationRuntime(options);
@@ -8,6 +9,6 @@ self.onmessage=({data})=>{try{
   result=value.mode==='bases'?convertBase(value.digits,Number(value.fromBase),Number(value.toBase),options):rows.map(expression=>{if(!expression.trim())return {expression,empty:true};try{return {expression,...calculateDetailed(expression,{...options,angle:value.angle}),tex:calculationPreview(expression,options)};}catch(e){return {expression,error:e.message,...(e.code?{errorCode:e.code}:{})};}});
  }else if(data.kind==='calculator')result=data.value.mode==='bases'?convertBase(data.value.digits,Number(data.value.fromBase),Number(data.value.toBase),options):data.value.expression.split(/\r?\n/).filter(v=>v.trim()).map(expression=>{try{return {expression,...calculateDetailed(expression,{...options,angle:data.value.angle})};}catch(e){return {expression,error:e.message,...(e.code?{errorCode:e.code}:{})};}});
  else if(data.kind==='spreadsheet')result=spreadsheet(data.value.cells,options);
- else if(data.kind==='chemical')result=chemicalPreview(data.value.source,data.value.format);
+ else if(data.kind==='chemical')result=chemicalPreview(data.value.source,data.value.format,data.language===undefined?{}:{translate:chemistryTranslator(data.language)});
  else throw Error('Unknown tool');self.postMessage({result});
  }catch(e){self.postMessage({error:e.message,...(e.code?{errorCode:e.code}:{})});}};

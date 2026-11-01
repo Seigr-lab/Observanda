@@ -32,6 +32,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
   await main.getByRole('switch',{name:'Enable Inventory',exact:true}).check();
   await page.goto(app.origin+'/#/records/'+book.entries[0].id);
+  await expect(main.locator('[data-create-type="bom"]')).toBeAttached();const evidence=main.locator('[data-disclosure="record-evidence"], [data-disclosure="draft-evidence"]');if(await evidence.count()&&await evidence.getAttribute('open')===null)await evidence.locator(':scope > summary').click();
   await main.getByRole('button',{name:'New bill of materials',exact:true}).click();
   await main.getByLabel('BOM title',{exact:true}).fill('Board A');
   await main.getByRole('button',{name:'Import retained BOM table',exact:true}).click();
@@ -101,7 +102,8 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await page.setViewportSize({width:1280,height:900});
   await page.evaluate(()=>document.documentElement.style.fontSize='');
   await navigate(page,'Dashboard');
-  await main.getByRole('button',{name:'+ Add cards',exact:true}).click();
+  await main.locator('[data-disclosure="dashboard-customization"] > summary').click();
+  await main.locator('[data-action="dashboard-library"]').click();
   await page.locator('.desk-library').getByLabel('Show',{exact:true}).selectOption('resources');
   await page.locator('.desk-library [data-action="dashboard-add"]').first().click();
   await main.getByRole('button',{name:'Settings for Inventory',exact:true}).click();

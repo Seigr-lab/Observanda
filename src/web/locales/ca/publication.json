@@ -264,5 +264,7 @@
   "deploymentArchive": "Fitxers anteriors conservats a la branca {branch}, al commit {commit}.",
   "repositoryReviewStarting": "S'està iniciant la revisió del repositori",
   "repositoryReviewStop": "Atura la revisió",
-  "repositoryReviewResume": "Reprèn la revisió"
+  "repositoryReviewResume": "Reprèn la revisió",
+  "selectionResponseInvalid": "La resposta de selecció de contingut per publicar no és vàlida.",
+  "selectionChoiceSize": "Aquesta selecció individual de contingut supera la mida admesa."
 }

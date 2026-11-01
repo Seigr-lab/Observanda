@@ -264,5 +264,7 @@
   "deploymentArchive": "Tidlegare filer er bevarte i greina {branch} ved commit {commit}.",
   "repositoryReviewStarting": "Startar repositoriegjennomgang",
   "repositoryReviewStop": "Stopp gjennomgang",
-  "repositoryReviewResume": "Hald fram med gjennomgang"
+  "repositoryReviewResume": "Hald fram med gjennomgang",
+  "selectionResponseInvalid": "Ugyldig svar for val av publiseringsinnhald.",
+  "selectionChoiceSize": "Dette enkeltvalet av innhald overstig storleiksgrensa."
 }

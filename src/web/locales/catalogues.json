@@ -1139,5 +1139,26 @@
     "es",
     "nb",
     "nn"
+  ],
+  "bomImport": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "chemistryDiagnostics": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "commandLine": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ]
 }

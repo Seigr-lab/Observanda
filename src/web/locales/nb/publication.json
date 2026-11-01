@@ -264,5 +264,7 @@
   "deploymentArchive": "Tidligere filer er bevart i grenen {branch} ved commit {commit}.",
   "repositoryReviewStarting": "Starter repositoriegjennomgang",
   "repositoryReviewStop": "Stopp gjennomgang",
-  "repositoryReviewResume": "Fortsett gjennomgang"
+  "repositoryReviewResume": "Fortsett gjennomgang",
+  "selectionResponseInvalid": "Ugyldig svar for valg av publiseringsinnhold.",
+  "selectionChoiceSize": "Dette enkeltvalget av innhold overstiger størrelsesgrensen."
 }
