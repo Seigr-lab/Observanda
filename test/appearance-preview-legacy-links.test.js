@@ -21,7 +21,7 @@ import {Workspace} from '../src/storage.js';
 test('older preview backlink discovery retains only related public descriptors as the corpus grows',async t=>{
  for(const {count,missingReferences=false} of [{count:20},{count:200},{count:20,missingReferences:true}]){
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-preview-links-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];book.entries=[];
-  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   const records=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Visible observation '+i,body:'Original observation '+i+' '+'.'.repeat(4000),share:true,sections:[],attachments:[],figures:[],relations:[]}));
   const target=records[count/2],related=records[0],privateRecord=records.at(-1);
   const link=()=>({id:randomUUID(),type:'Related observation',target:{workspaceId:book.id,kind:'record',id:target.id},label:target.title});

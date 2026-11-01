@@ -37,5 +37,5 @@ test('author independent chapter and page indexes, reuse them and navigate the s
    await left.locator('summary').click();await expect(left.locator('a')).toBeVisible();await visitor.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await visitor.screenshot({path:info.outputPath('chapter-and-contents-mobile.png'),fullPage:true});
   }finally{await visitorContext.close();}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

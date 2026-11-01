@@ -13,7 +13,7 @@ import {digest,serialize} from '../src/storage-format.js';
 
 test('authenticated leaf batches reduce dense record reads without increasing cache or transport bounds',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-block-prefetch-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),record=structuredClone(book.entries[0]);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  record.notebookId=book.notebooks[0].id;record.sections=Array.from({length:1025},(_,i)=>({id:crypto.randomUUID(),title:'Section '+i,body:('Measurement '+i+'; ').repeat(30)}));
  let retained,member;
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
@@ -53,7 +53,7 @@ test('authenticated leaf batches reduce dense record reads without increasing ca
 
 test('audit readers reuse unchanged encrypted blocks across owners without sharing notebook-key authority or trusting later audits',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-block-audit-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),record=structuredClone(book.entries[0]);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  record.sections=Array.from({length:130},(_,i)=>({id:crypto.randomUUID(),title:'Section '+i,body:('Original measurement '+i+'; ').repeat(20)}));let retained,cache;
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const key=await store.scopeKey(record.notebookId);try{retained=await new RecordBlockStore(store,record.notebookId,1,key).retain(record);}finally{key.fill(0);}}));
  async function scan(shared){return f.workspace.catalogue(store=>withCatalogueVerification(store,async()=>{

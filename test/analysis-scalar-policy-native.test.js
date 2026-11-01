@@ -20,7 +20,7 @@ const policy=resources=>({...defaultDatasetResourcePolicy(),resources:{...defaul
 
 test('policy comparisons retain exact full values and expected matches through interrupted preparation, revisions and copy verification',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-comparison-policy-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const stage=message=>process.stdout.write('# '+message+'\n'),spelling='9'.repeat(9001),bytes=Buffer.from('Key,Value,Lower,Upper\na,'+spelling+',0,'+spelling+'\nb,2,1,3\n');
  const upload=await m.startImport({recordId,name:'declared-comparison.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const artifact=await m.finishImport(upload.id);
  const columns=['Key','Value','Lower','Upper'].map((label,index)=>({...defaultColumn({label}),...(index?{representation:'integer',resourcePolicy:policy()}:{} )}));

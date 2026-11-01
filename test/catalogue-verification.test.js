@@ -18,7 +18,7 @@ import {withWorkspaceMetadataBatch} from '../src/metadata-batch.js';
 
 test('metadata point reads reuse authenticated branches within one snapshot and reject changed bounds and later corruption',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-metadata-node-reuse-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,async()=>{for(let i=0;i<80;i++)await f.workspace.writeMetadata('.observanda/reuse/item-'+i+'.json',JSON.stringify({i}));}));
  let oldCache,slot;
  await f.workspace.catalogue(async store=>{
@@ -37,7 +37,7 @@ test('metadata point reads reuse authenticated branches within one snapshot and 
 test('a fixed catalogue audit checks unchanged record content once across retained snapshots and never trusts a later audit',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-verification-reuse-')),book=sampleNotebook(),seed=book.entries[0];
  book.entries=Array.from({length:42},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Trial '+i,body:'Retained observation. '.repeat(100),relations:[],sections:[],attachments:[],figures:[],contributors:[]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  let current=(await f.workspace.read()).book.entries[0];const service=new ResearchRecords(f.workspace,{});
  for(let i=0;i<10;i++){
   const result=await service.save({workspaceId:book.id,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,title:'Edited '+i}}]},{recordIds:[current.id]});
@@ -64,7 +64,7 @@ test('a fixed catalogue audit checks unchanged record content once across retain
 
 test('verification receipts are recorded only after success and are disabled without a fixed database snapshot',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-verification-receipts-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.catalogue(store=>withCatalogueVerification(store,async receipts=>{
   let calls=0;const verify=async()=>{calls++;};
   await receipts.once(['same'],verify);await receipts.once(['same'],verify);assert.equal(calls,1);
@@ -81,7 +81,7 @@ test('verification receipts are recorded only after success and are disabled wit
 test('bounded index read-ahead reduces audit round trips without trusting a later corrupted row',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-verification-batches-')),book=sampleNotebook(),seed=book.entries[0];
  book.entries=Array.from({length:80},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Inspection '+i,body:'Independent observation '+i,relations:[],sections:[],attachments:[],figures:[],contributors:[]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  async function audit(readAhead){return f.workspace.catalogue(store=>withCatalogueVerification(store,async receipts=>{
   store.readCache.readAhead=readAhead;const run=store.db.run;let queries=0;
   store.db.run=function(...args){queries++;return run.apply(this,args);};
@@ -101,7 +101,7 @@ test('bounded index read-ahead reduces audit round trips without trusting a late
 
 test('shared immutable nodes avoid duplicate decryption but retain independent hash and bound checks',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-verification-nodes-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.catalogue(store=>withCatalogueVerification(store,async()=>{
   const snapshot=await store.snapshot(),ref=snapshot.membership,slot='snapshot-index:'+ref.hash,decode=store.decode;let reads=0;
   store.decode=function(table,id,...args){if(id===slot)reads++;return decode.call(this,table,id,...args);};
@@ -116,7 +116,7 @@ test('shared immutable nodes avoid duplicate decryption but retain independent h
 
 test('incremental membership and recent audits reject unrelated corruption, forged totals and omitted edits',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-index-audit-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const before=await f.workspace.catalogue(store=>store.snapshot()),book=(await f.workspace.read()).book,current=book.entries[0],service=new ResearchRecords(f.workspace,{});
  await service.save({workspaceId:book.id,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,title:'Changed investigation'}}]},{recordIds:[current.id]});
  await f.workspace.catalogue(async store=>{
@@ -143,7 +143,7 @@ test('incremental record verification still checks dependent runs and rechecks u
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-verification-dependencies-')),book=sampleNotebook();
   const parent={...structuredClone(book.entries[0]),relations:[],sections:[],type:'experiment'},child={...structuredClone(parent),id:randomUUID(),type:'run',relations:[{id:randomUUID(),type:'Run / take of',role:'run-of',target:{workspaceId:book.id,kind:'record',id:parent.id},label:parent.title}]};
   book.entries=[parent,child];const f=await encryptedFixture(directory,book);
-  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   await f.workspace.catalogue(store=>store.verify(catalogueDescriptor(book)));
   // Write authenticated but invalid content beneath the ordinary command
   // validator, as a damaged archive might contain. All derived roots match.

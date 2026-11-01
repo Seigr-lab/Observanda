@@ -18,7 +18,7 @@ async function fixture(t,size=3*BLOCK+17){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-range-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original'),bytes=randomBytes(size),hash=digest(bytes);
  const rawHeader=createSegmentedHeader(size,hash,vault.key,workspace.fileAAD(file)),header=readSegmentedHeader(rawHeader,vault.key,workspace.fileAAD(file)),parts=[rawHeader];
  for(let index=0;index<header.count;index++)parts.push(sealSegment(bytes.subarray(index*BLOCK,(index+1)*BLOCK),index,header,vault.key,workspace.fileAAD(file)));
- const stored=Buffer.concat(parts);await writeFile(file,stored);t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-range-'));await rm(root,{recursive:true,force:true});});
+ const stored=Buffer.concat(parts);await writeFile(file,stored);t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-range-'));await rm(root,{recursive:true,force:true});});
  return {root,vault,workspace,file,bytes,stored,content:new FileContent(workspace,file,size,hash),hash};
 }
 async function collect(iterator){const parts=[];for await(const bytes of iterator)parts.push(bytes);return Buffer.concat(parts);}

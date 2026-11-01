@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 test('source inspection is authenticated, context-bound, cancellable and leaves the encrypted workspace unchanged',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-http-')),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook()),source=path.join(directory,'source');
  await migrationFixture(source,{creative:true});const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
- t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ t.after(async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  const route=app.origin+'/api/migration/inventory',payload=JSON.stringify({source});
  assert.equal((await fetch(route,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:payload})).status,401);
  const login=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});

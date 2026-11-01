@@ -27,7 +27,7 @@ async function fixture(page,count){
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[],bodies=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push({path:new URL(r.url()).pathname,data:r.postData()});});
- return {...f,app,book,reviews,contact,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);clearVault(other.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,app,book,reviews,contact,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await clearVault(other.vault);await rm(directory,{recursive:true,force:true});}};
 }
 for(const count of [42,420])test('review workflow reads only its selected records among '+count+' originals',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page,count);

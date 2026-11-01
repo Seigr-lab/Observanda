@@ -63,5 +63,5 @@ test('cached calculator errors and exact results follow language changes without
    }
   }
   expect(writes).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

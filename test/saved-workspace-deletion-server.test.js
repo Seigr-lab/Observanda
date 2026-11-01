@@ -30,7 +30,7 @@ async function fixture(t,{owned=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-saved-delete-')),prefs=path.join(directory,'settings.json'),deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),vaults=[];
  let owner,detach,app;
  if(owned){owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(owner);}
- t.after(async()=>{await app?.close();await owner?.close();detach?.();vaults.forEach(clearVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app?.close();await owner?.close();detach?.();await Promise.all(vaults.map(clearVault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const create=async(name,{password='',plain=false,legacy=false}={})=>{
   const book={...sampleNotebook(),id:randomUUID(),title:name},root=path.join(directory,name),access=plain||legacy?await createAccess('',password):await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
   await initializeLocation(root,book,access,vault);await rememberLocation(prefs,root,{title:name,label:'Workspace'});return new Workspace(root,vault);

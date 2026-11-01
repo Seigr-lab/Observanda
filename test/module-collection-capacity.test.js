@@ -17,7 +17,7 @@ import {largestSheet} from './module-capacity-fixture.js';
 
 test('indexed module collections grow past the response budget and remain editable and verifiable',{timeout:300000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-collection-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largestSheet();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const modules=workspaceModules(f.workspace),now='2026-11-01T00:00:00.000Z';
  const itemBytes=moduleEntityBytes({id:randomUUID(),type:'sheet',revision:1,createdAt:now,updatedAt:now,data});
  // This is a workload measurement point just above the old aggregate ceiling,

@@ -23,7 +23,7 @@ import {serialize} from '../src/storage-format.js';
 
 for(const count of [1,10])test('maximum Unicode sheets checkpoint and recover among '+count+' full-size items',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-capacity-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largestSheet(),modules=workspaceModules(f.workspace),drafts=moduleDraftOwners(f.workspace,book.id,'spreadsheet').drafts;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  assert.equal(JSON.stringify(data.cells).length,600000);assert.ok(Buffer.byteLength(JSON.stringify(data))>2*1024*1024);
  const ids=Array.from({length:count},()=>randomUUID()),save=(id,expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'sheet.save',payload:{id,expectedRevision,data:value}});
  for(const id of ids)await modules.execute(save(id,null,data),{compact:true});

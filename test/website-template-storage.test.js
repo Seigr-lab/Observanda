@@ -23,7 +23,7 @@ async function fixture(t,{research=false}={}){
  const temporary=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-inherited-template-')),book=createNotebook('Inherited website layouts');
  if(research){book.projects=[{id:randomUUID(),title:'Research project',description:'',share:false,logoId:null}];book.notebooks=[{id:randomUUID(),projectId:book.projects[0].id,title:'Research notebook',share:false}];}
  const f=await encryptedFixture(directory,book),vaults=[f.vault];
- t.after(async()=>{for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-inherited-template-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-inherited-template-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const sites=new WebsiteSites(f.workspace),created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Independent design'}),id=created.id,editor=new WebsiteEditor(f.workspace);
  const execute=(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId:id,...data});
  const command=(state,operations)=>({websitePin:state.websitePin,draftId:state.draft?.id??null,expectedRevision:state.draft?.revision??null,commandId:randomUUID(),operations});

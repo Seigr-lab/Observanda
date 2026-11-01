@@ -52,5 +52,5 @@ test('encrypted indexed searches keep old pages, refresh edits, recover errors a
   await search.fill('no matching crystals');await expect(page.getByRole('heading',{name:'No records match these filters',exact:true})).toBeVisible();
   await page.locator('.workspace-empty').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(25);
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

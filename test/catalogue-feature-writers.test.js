@@ -11,7 +11,7 @@ import {backgroundWriterWait} from '../src/writer-wait.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feature-writers-')),value=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(value.vault);await rm(directory,{recursive:true,force:true});});return value.workspace;
+ t.after(async()=>{await clearVault(value.vault);await rm(directory,{recursive:true,force:true});});return value.workspace;
 }
 
 test('a website feature upgrade does not block behind an existing catalogue reader',async t=>{

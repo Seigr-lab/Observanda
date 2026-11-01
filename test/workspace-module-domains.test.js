@@ -30,7 +30,7 @@ function gate(){let enter,release;return {started:new Promise(r=>enter=r),hold:n
 async function setup(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-domains-'));
  const runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[];
- t.after(async()=>{await runtime.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-domains-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-domains-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),f=await encryptedFixture(directory,book);vaults.push(f.vault);
  return {...f,directory,runtime,vaults,book,projectId:null,storage:f.workspace,domains:new ProjectDomains(f.workspace,book.id)};
 }

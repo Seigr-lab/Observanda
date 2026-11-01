@@ -12,7 +12,7 @@ import {writerLeaseHeld} from '../src/writer-lease.js';
 
 test('ownership revision reads reuse only their held project lease',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-revisions-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),namespace=randomUUID(),id=randomUUID(),other=randomUUID();await mkdir(path.join(root,'.observanda'));
- t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-revisions-'));await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-revisions-'));await rm(root,{recursive:true,force:true});});
  const owner=new ProjectOwnerRevisions(workspace,namespace);assert.equal(await owner.revision(id),'new');
  await owner.checked(id,'new',async()=>{
   assert.equal(writerLeaseHeld(owner.file(id)+'.lock'),true);assert.equal(await new ProjectOwnerRevisions(workspace,namespace).revision(id),'new');
@@ -25,7 +25,7 @@ test('ownership revision reads reuse only their held project lease',async t=>{
 
 test('ownership history rejects a discontinuous chain and remains scoped to its namespace',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-history-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),namespace=randomUUID(),id=randomUUID(),item=randomUUID();await mkdir(path.join(root,'.observanda'));
- t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-history-'));await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-history-'));await rm(root,{recursive:true,force:true});});
  const owner=new ProjectOwnerRevisions(workspace,namespace),history=new ProjectOwnerHistory(workspace,namespace),first=await owner.withProjects([id],()=>owner.advanceLocked(id,{domain:'media',id:item,before:'new'})),second=await owner.withProjects([id],()=>owner.advanceLocked(id,{domain:'media',id:item,before:'a'.repeat(64)}));
  const changes=[];for await(const change of history.since(id,'new',second))changes.push(change);assert.equal(changes.length,2);assert.equal(changes[1].before,'new');
  await assert.rejects(new ProjectOwnerHistory(workspace,randomUUID()).read(id,second),{code:'FORMAT'});

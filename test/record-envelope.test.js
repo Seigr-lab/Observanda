@@ -21,7 +21,7 @@ test('a valid dense record saves, indexes, retains, restores and survives a veri
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-envelope-')),book=upgradeNotebook(sampleNotebook());
  book.entries=book.entries.slice(0,1);book.entries[0].attachments=[];
  const f=await encryptedFixture(path.join(directory,'source'),book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const original=book.entries[0],figure=createFigure();figure.series[0].points=Array.from({length:18000},(_,i)=>({x:i,y:i%37,error:null}));
  const record={...original,figures:[figure]},envelope={...book,entries:[record]};
  assert.ok(Buffer.byteLength(JSON.stringify(record,null,2)+'\n')<MAX_RECORD_BYTES);

@@ -21,7 +21,7 @@ import {Workspace} from '../src/storage.js';
 const collect=async stream=>{let result='';for await(const chunk of stream)result+=chunk;return result;};
 test('retained figure requests, selected record drafts and fresh-key recovery preserve exact documents',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-figure-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);const record=book.entries[0];record.figures=[];const fixture=await encryptedFixture(directory,book),{workspace,vault}=fixture;let recoveredVault=null;
- t.after(async()=>{clearVault(vault);if(recoveredVault)clearVault(recoveredVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(vault);if(recoveredVault)await clearVault(recoveredVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const materials=new ResearchMaterials(workspace),figure=createFigure();figure.title='Indexed native acquisition';figure.series[0].points=Array.from({length:66},(_,i)=>({x:i,y:i%11,error:i===65?1:null}));figure.series.push({...createSeries('Second acquisition'),points:[{x:1,y:12,error:null}]});
  const retained=await workspace.withLock(()=>new RetainedFigureDocuments(workspace).retain(figure)),ref=await workspace.withLock(()=>materials.commit({kind:'analysis',recordId:record.id,title:figure.title,content:{inputs:[],outputs:[],tool:'Synthetic retained figure',version:'1',parameters:'Known observations',figure:retained}}));
  await workspace.catalogue(async store=>assert.equal(catalogueRequiresRetainedFigures(await catalogueFormat(store.db)),true));

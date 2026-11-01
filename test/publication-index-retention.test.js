@@ -15,7 +15,7 @@ import {collectionPagePath} from '../src/web/public-collection-pages.js';
 
 test('retained static index continuation files survive a fresh-key backup and preserve their edition',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-index-edition-')),f=await encryptedFixture(directory,indexedBook(53)),releases=new PublicationJobs(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const candidate=await releases.inline(await releases.workspace.outline()),names=['browse.html','browse-1.html','browse-2.html'],original=[];
  for(const [index,name]of names.entries()){const text=(await contentBuffer(await candidate.files.get(name))).toString();original.push(text);assert.equal([...text.matchAll(/data-public-record=/g)].length,index===2?5:24);assert.ok(!text.includes('PRIVATE_RECORD_SENTINEL'));}
  const {metadata}=await f.workspace.outline();

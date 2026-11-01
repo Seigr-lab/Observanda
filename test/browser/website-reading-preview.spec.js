@@ -89,5 +89,5 @@ for(const bundled of [false,true])test('browse unsaved website changes without s
    const target='**/'+compiled.manifest.entry;await page.route(target,route=>route.abort());await page.reload();await expect(page.getByRole('heading',{name:'Observanda could not load',exact:true})).toBeVisible();
    await page.unroute(target);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(canvas.locator('.site-header p')).toHaveText('Unsaved preview introduction');
   }
- }finally{release?.();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(parent);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release?.();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(parent);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

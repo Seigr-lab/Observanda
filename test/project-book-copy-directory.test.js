@@ -21,7 +21,7 @@ import {LabBookStorage} from '../src/lab-book-storage.js';
 const uuid=(kind,index)=>kind+'0000000-0000-4000-8000-'+String(index).padStart(12,'0');
 test('project book copy pins more than 8192 native owners without aggregate transfer receipts',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-book-directory-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
- t.after(async()=>{await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device);vault=takeCreatedVault(access);
  const metadata=createNotebook('Directory project'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);
@@ -51,7 +51,7 @@ test('project book copy pins more than 8192 native owners without aggregate tran
 
 test('pending project copies retain original book transfer IDs across verified native directory adoption',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-book-legacy-copy-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-legacy-copy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-legacy-copy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const metadata=createNotebook('Earlier directory'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);

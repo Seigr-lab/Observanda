@@ -25,7 +25,7 @@ for(const mode of ['output','progress','completion','stop','expired','callback-f
   commit:async(_job,value)=>{assert.deepEqual(value,{ready:true});return {ready:true};},
   afterComplete:async()=>f.workspace.withLock(()=>{cleanups++;})
  }}),worker=new JobWorker(queue),now=queue.now,open=f.workspace.openCatalogue;
- t.after(async()=>{begin.resolve();await contender?.close();await worker.stop();clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-job-admission-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{begin.resolve();await contender?.close();await worker.stop();await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-job-admission-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  t.mock.method(queue,'now',async()=>await now.call(queue)+(expired?2*queue.leaseMs:0));
  t.mock.method(f.workspace,'openCatalogue',async function(...args){const db=await open.apply(this,args),lock=db.lock;db.lock=async function(){try{return await lock.call(this);}catch(error){if(error.code==='LOCKED')contended.resolve();throw error;}};return db;});
  const job=await queue.enqueue({id:randomUUID(),type:'test.prepare',scope:book.id,input:{}});

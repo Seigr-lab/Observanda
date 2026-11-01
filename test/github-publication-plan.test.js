@@ -21,7 +21,7 @@ async function fixture(t,{directory='',files={'index.html':'Existing site','READ
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ownership-'));
  const book=sampleNotebook();book.website.home.enabled=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
  const f=await encryptedFixture(root,book),ws=f.workspace,saved=await publicationWorkspace(ws).read(),candidate=buildPublication(saved.book);candidate.etag=saved.etag;candidate.websitePin=saved.websitePin;
- t.after(async()=>{clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(ws.root,{workspace:ws,request:remote.request},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',directory});const settings=await publisher.save(config,'new');await publisher.connect(token);
  return {ws,remote,publisher,config,candidate,etag:settings.etag,book:saved.book};

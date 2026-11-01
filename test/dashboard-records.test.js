@@ -27,7 +27,7 @@ async function fixture(t,count,decorate=()=>{}){
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),notebookId:book.notebooks[i%book.notebooks.length].id,
   title:'Take '+i,body:'Private evidence '.repeat(40),tags:i%2?['field']:['bench'],status:i%2?'draft':'completed',updatedAt:new Date(Date.UTC(2026,0,1,0,i)).toISOString(),attachments:[],sections:[],relations:[],figures:[]}));
  decorate(book);const f=await encryptedFixture(directory,book,{populate:workspace=>populateImageEvidence(workspace,book.entries.flatMap(r=>r.attachments.filter(a=>a.kind==='image').map(a=>a.id)))});
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,reader:new WorkspaceReader(f.workspace),cards:new DashboardRecords(f.workspace)};
 }
 

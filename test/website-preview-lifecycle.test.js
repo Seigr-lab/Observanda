@@ -14,7 +14,7 @@ test('closing cancels an unfinished draft preview without treating it as unsaved
  const parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-preview-close-')),book=createNotebook('Preview close');book.website.home.enabled=true;
  const f=await encryptedFixture(root,book);let app;
  const entered=Promise.withResolvers(),cancelled=Promise.withResolvers();
- t.after(async()=>{await app?.close();clearVault(f.vault);assert.equal(path.dirname(root),parent);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app?.close();await clearVault(f.vault);assert.equal(path.dirname(root),parent);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const editor=await new WebsiteEditor(f.workspace).execute('open',{workspaceId:book.id,websiteId:null});
  app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);

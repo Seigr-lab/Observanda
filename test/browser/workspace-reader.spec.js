@@ -24,7 +24,7 @@ async function fixture(page){
  page.on('response',r=>{if(r.status()>=400&&r.request().resourceType()==='script')errors.push(new URL(r.url()).pathname+': '+r.status());});
 page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().includes('/api/workspace/read/'))requests.push({url:r.url(),data:r.postDataJSON()});});
- return {book,ws,app,errors,requests,fullReads,async close(){if(errors.length)console.error('Application load diagnostics:',JSON.stringify(errors));ResearchCatalogue.prototype.read=read;await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {book,ws,app,errors,requests,fullReads,async close(){if(errors.length)console.error('Application load diagnostics:',JSON.stringify(errors));ResearchCatalogue.prototype.read=read;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const opened=async(page,f)=>{try{await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();}catch(error){throw Error(error.message+'\nApplication errors: '+JSON.stringify(f?.errors));}};
 const openComparison=async(page,f)=>{await page.goto(f.app.url,{waitUntil:'commit'});await opened(page,f);await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Take 0');await page.getByText('Organize runs or takes',{exact:true}).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();};

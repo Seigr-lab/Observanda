@@ -13,7 +13,7 @@ import {writeExchange,readExchange} from '../src/collaboration/exchange-stream.j
 
 async function fixture(t){
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-parts-cleanup-')),root=path.join(directory,'workspace'),vault={id:randomUUID(),key:randomBytes(32)};await mkdir(root);
- t.after(async()=>{clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-parts-cleanup-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-parts-cleanup-'));await rm(directory,{recursive:true,force:true});});
  const workspace=new Workspace(root,vault),parts=new ExchangeParts(workspace);
  return {workspace,parts,directory,staging:path.join(root,parts.prefix)};
 }

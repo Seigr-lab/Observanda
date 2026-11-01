@@ -21,7 +21,7 @@ import {catalogueObjectPrefixCount,objectPrefixUpper,catalogueIndexedCount,catal
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-pg-contract-'));
  const access=await createAccess('','synthetic PostgreSQL password'),vault=takeCreatedVault(access);
- t.after(async()=>{clearVault(vault);await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});
  const source=path.join(root,'source');await initializeLocation(source,sampleNotebook(),access,vault);
  return {root,source,vault,ws:new Workspace(source,vault)};
 }

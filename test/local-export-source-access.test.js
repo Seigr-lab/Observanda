@@ -25,7 +25,7 @@ import {contentBuffer} from '../src/file-content.js';
 
 test('named website folder exports retain foreign-source access and refuse withdrawn consent before writing',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-export-source-')),keys=[];let runtime,detach,application;
- t.after(async()=>{await application?.close();await runtime?.close();detach?.();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-export-source-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await application?.close();await runtime?.close();detach?.();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-export-source-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(runtime);
  const host=createNotebook('Publication workspace'),f=await encryptedFixture(directory,host);keys.push(f.vault);
  const book=sampleNotebook();book.title=book.projects[0].title='Source project';book.entries=[{...book.entries[0],body:'Public source observation',sections:[],attachments:[],relations:[],figures:[]}];

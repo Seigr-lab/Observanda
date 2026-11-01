@@ -23,7 +23,7 @@ test('resource tags are explicit, bounded and compare complete Unicode-normalize
  for(const invalid of [null,'PCB',[''],['a','A'],['bad,tag'],['bad\nline'],[' space '],['x'.repeat(81)],Array.from({length:25},(_,i)=>'tag'+i)])assert.equal(validResourceTags(invalid),false);
 });
 test('tag edits retain stock, old revisions, conflict checks and encrypted recovery',async t=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tags-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,modules=workspaceModules(f.workspace),id=randomUUID();t.after(async()=>{clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
+ const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tags-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,modules=workspaceModules(f.workspace),id=randomUUID();t.after(async()=>{await clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
  const command=(action,payload)=>modules.execute({workspaceId,commandId:randomUUID(),action,payload});
  await command('resource.create',{id,data:data(),openingStock:{quantity:'40.000000000000000001',projectId:null}});
  const reader=new ModuleReader(f.workspace),before=await reader.selected({workspaceId,id});assert.equal(before.entity.data.tags,undefined);
@@ -35,7 +35,7 @@ test('tag edits retain stock, old revisions, conflict checks and encrypted recov
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(dir,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault);const selected=await new ModuleReader(restored).selected({workspaceId,id});assert.deepEqual(selected.entity,current.entity);assert.equal((await new ModuleReader(restored).list({workspaceId,type:'resource',tags:['pcb']})).total,1);
 });
 test('650-item tag queries use authenticated summaries, retain exact filters across pages and preserve legacy views',async t=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tag-page-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,now=new Date().toISOString();t.after(async()=>{clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
+ const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tag-page-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,now=new Date().toISOString();t.after(async()=>{await clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
  const entities=Array.from({length:650},(_,i)=>({id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{...data('Item '+String(i).padStart(3,'0')),description:'Retained unabridged body. '.repeat(400),...(i%3?{tags:i%2?['PCB','field work']:['PCB']}:{})}}));await seedModuleCurrent(f.workspace,workspaceId,entities);
  const original=ModuleCatalogue.prototype.selected;ModuleCatalogue.prototype.selected=()=>{throw Error('Tag filtering loaded original resource bodies');};t.after(()=>{ModuleCatalogue.prototype.selected=original;});
  const reader=new ModuleReader(f.workspace),started=performance.now(),query={workspaceId,type:'resource',tags:['pcb','field work'],tagMode:'all',limit:7},first=await reader.list(query),second=await reader.list({...query,cursor:first.nextCursor});

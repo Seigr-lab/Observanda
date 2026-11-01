@@ -41,7 +41,7 @@ test('fact-wise validation retains exact domain and correction semantics, includ
 test('stored admission, replacement, restore and verification never assemble a complete run history',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-attempt-document-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];record.status='draft';
  const p=preparation();record.attempt={...emptyAttempt(),preparations:[p],events:Array.from({length:96},(_,i)=>event(p,{label:'Acquisition '+i})),assessments:Array.from({length:96},(_,i)=>assessment(p,i%2,{observed:'Exact observation '+i}))};
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const initial=await f.workspace.read(),original=initial.book.entries[0],target={workspaceId:book.id,recordId:record.id},values=new RecordValues(f.workspace),history=new RecordHistory(f.workspace,{}),field=RecordDocument.prototype.field;
  t.mock.method(RecordDocument.prototype,'field',function(path,...args){if(path[0]==='attempt'&&(path.length===1||path.length===2&&path[1]!=='version'))throw Error('Assembled a complete run history');return field.call(this,path,...args);});
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Assembled a complete record');});

@@ -22,7 +22,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 
 test('configuration larger than the former metadata budget supports a bounded selected edit and durable reopen',{timeout:180000},async t=>{
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-configuration-growth-')),databases=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(databases),book=sampleNotebook(),f=await encryptedFixture(directory,book),workspace=f.workspace,notebook=book.notebooks[0],owner={workspaceId:book.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'};
- t.after(async()=>{await databases.close();detach();clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-growth-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await databases.close();detach();await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-growth-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  // This owner fixture is retained directly, rather than sent as a whole-book
  // request. The public selected command below is the authoring boundary.
  const configuration={profiles:[],sections:Array.from({length:1100},(_,i)=>({id:randomUUID(),profileId:null,key:'section-'+i,label:'Observation '+i,description:String(i).padStart(4,'0')+'x'.repeat(1996),enabled:true,fields:[]}))},last=configuration.sections.at(-1);
@@ -55,7 +55,7 @@ test('configuration larger than the former metadata budget supports a bounded se
 
 test('complete workspace reads expand small retained configurations and refuse oversized schemas before hydration',{timeout:180000},async t=>{
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-configuration-read-')),databases=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(databases),book=sampleNotebook(),f=await encryptedFixture(directory,book),workspace=f.workspace,notebook=book.notebooks[0],owner={workspaceId:book.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'};
- t.after(async()=>{await databases.close();detach();clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-read-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await databases.close();detach();await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-read-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const section=i=>({id:randomUUID(),profileId:null,key:'section-'+i,label:'Observation '+i,description:'Retained schema',enabled:true,fields:[]}),small={profiles:[],sections:[section(0)]};
  const configure=value=>workspace.withLock(()=>workspace.catalogue(async store=>{
   const head=await store.head(),snapshot=await store.indexed(await store.snapshot(head)),metadata=structuredClone(snapshot.metadata),documents=new ConfigurationDocuments(store);

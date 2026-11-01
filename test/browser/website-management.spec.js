@@ -49,7 +49,7 @@ test('workspace website manager creates, names, saves and reopens independent we
   await card('Original design').getByRole('button',{name:'Publishing destination',exact:true}).click();await expect(page).toHaveURL(/#\/websites\/default\/settings$/);await expect(page.getByRole('heading',{name:'Publishing destination',exact:true})).toBeVisible();await expect(page.locator('.preferences-heading')).toHaveCount(0);await page.reload();await expect(page.getByRole('heading',{name:'Publishing destination',exact:true})).toBeVisible();
   await navigate(page,'Preferences');await preferences(page,'Appearance');await expect(page.locator('.preferences-heading')).toBeVisible();await expect(page).toHaveURL(/#\/preferences\/appearance$/);await expect(page.locator('#main-navigation [data-action=preferences]')).toHaveAttribute('aria-current','page');await page.reload();await expect(page.locator('.preferences-heading')).toBeVisible();
   expect((await sites.read(firstId)).book.pages.map(value=>value.title)).toEqual(['Field observations']);expect((await sites.list()).sites).toHaveLength(2);expect((await f.workspace.read()).book.entries).toEqual(book.entries);expect(errors).toEqual([]);
- }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
@@ -82,5 +82,5 @@ test('manager rename asks before saving or discarding a retained website draft',
   await expect(renameForm()).toBeVisible();expect((await execute('open')).draft).toBeNull();expect((await sites.read(websiteId)).book.pages).toEqual([draft]);
   await page.getByLabel('Website name',{exact:true}).fill('Finished journal');await page.getByRole('button',{name:'Save name',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText('Finished journal');
   const saved=await sites.read(websiteId);expect(saved.site.name).toBe('Finished journal');expect(saved.book.pages).toEqual([draft]);expect((await execute('open')).draft).toBeNull();
- }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

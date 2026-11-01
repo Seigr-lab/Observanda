@@ -20,7 +20,7 @@ const rich=(ids,target)=>({type:'doc',content:ids.flatMap((id,i)=>[{type:'headin
 test('selected rich-text corrections preserve grouped links in earlier revisions and both encrypted copy modes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-grouped-links-')),book=sampleNotebook(),record=book.entries[0],target={workspaceId:book.id,kind:'record',id:book.entries[1].id};
  record.figures=[];record.attachments=[];record.relations=[];record.body=rich([randomUUID()],target);record.sections=Array.from({length:70},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Unchanged evidence '.repeat(60)}));record.sections[69].body=rich([randomUUID()],target);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const writing=new RecordWriting(f.workspace),selection={workspaceId:book.id,recordId:record.id,sectionId:record.sections[1].id},first=await writing.read(selection),beforeBody=rich([randomUUID(),randomUUID(),randomUUID()],target);
  const before=await writing.save({...selection,expectedRevision:first.revision,value:{title:'Selected section',body:beforeBody}}),initial=structuredClone(record);initial.sections[1]={...initial.sections[1],title:'Selected section',body:beforeBody};
  const next=await writing.read(selection),body=rich([randomUUID()],target),command={...selection,expectedRevision:next.revision,value:{title:'Corrected section',body}},saved=await writing.save(command);assert.deepEqual(await writing.save(command),saved);

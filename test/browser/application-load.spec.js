@@ -32,7 +32,7 @@ for(const failure of ['session-request','session-response','preferences','worksp
   expect(attempts).toBe(1);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toBeVisible();expect(attempts).toBe(2);
   await page.context().unroute(route);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(page.url()).not.toContain(app.launchToken);expect(await page.locator('body').innerText()).not.toContain(app.launchToken);
   expect(await f.workspace.read()).toEqual(before);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });
 
 test('dependency failure during an authenticated reload keeps the requested record route',async({page})=>{
@@ -41,7 +41,7 @@ test('dependency failure during an authenticated reload keeps the requested reco
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id+'/read',id);await expect(page.locator('.record-reader')).toContainText(before.book.entries[0].title);
   await page.route('**/record-history-ui.js',route=>route.abort('internetdisconnected'));await page.reload();await expect(page.getByRole('heading',{name:'Observanda could not load',exact:true})).toBeVisible();expect(new URL(page.url()).hash).toBe('#/records/'+id+'/read');
   await page.unroute('**/record-history-ui.js');await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.locator('.record-reader')).toContainText(before.book.entries[0].title);expect(await f.workspace.read()).toEqual(before);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });
 
 test('a record route chosen while session establishment is pending survives the acknowledgement',async({page})=>{
@@ -50,5 +50,5 @@ test('a record route chosen while session establishment is pending survives the 
  try{
   await page.route('**/api/session',async route=>{const response=await route.fetch();arrived();await hold;await route.fulfill({response});});await page.goto(app.url);await pending;
   await page.evaluate(id=>location.hash='#/records/'+id+'/read',record.id);release();await expect(page.locator('.record-reader')).toContainText(record.title);expect(new URL(page.url()).hash).toBe('#/records/'+record.id+'/read');
- }finally{release();await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
+ }finally{release();await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });

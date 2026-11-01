@@ -43,5 +43,5 @@ test('application artwork follows the actual surface and browser icons follow br
   await page.locator('[data-appearance="text"]').fill('#17283f');
   await page.locator('#main-navigation .brand').screenshot({path:test.info().outputPath('logo-light-surface.png')});
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

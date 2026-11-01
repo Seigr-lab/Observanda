@@ -24,5 +24,5 @@ test('legacy markers are recovered inside the app without altering identity or r
   await dialog.getByRole('button',{name:'Continue',exact:true}).click();await expect(dialog).toHaveCount(0);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   for(const file of files)expect((await lstat(file)).isFile()).toBe(true);
   expect(await readFile(f.deviceStore.file)).toEqual(identity);expect((await f.workspace.read()).etag).toBe(before);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

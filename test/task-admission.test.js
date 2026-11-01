@@ -99,7 +99,7 @@ test('competing graph closures leave database headroom and reject an unreserved 
  // The test runner supplies one isolated external PostgreSQL profile. Route
  // separate owned schemas to it so this test truly shares an endpoint.
  const detach=installDatabaseProvider({environment:async(root,{projectId})=>({...process.env,OBSERVANDA_PROJECT_DATABASE_ROOT:root,OBSERVANDA_PROJECT_ID:projectId}),scratch:async()=>process.env});
- t.after(async()=>{detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-task-headroom-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-task-headroom-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  for(let i=0;i<5;i++){
   const book=sampleNotebook(),access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device'+i)})),vault=takeCreatedVault(access);vaults.push(vault);
   book.title=book.projects[0].title='Owner '+i;

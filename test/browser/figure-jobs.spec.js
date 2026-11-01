@@ -84,5 +84,5 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
   expect((await f.workspace.read()).book.entries.find(e=>e.id===record.id).figures.find(v=>v.id===saved.content.figure.id)).toEqual({...saved.content.figure,source:{kind:'analysis',id:first.id,revision:first.revision}});
   expect(errors).toEqual([]);
- }finally{await app.close();ResearchMaterials.prototype.preparePlot=prepare;clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();ResearchMaterials.prototype.preparePlot=prepare;await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

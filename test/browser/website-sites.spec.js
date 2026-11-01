@@ -53,7 +53,7 @@ test('create two independent websites, edit and publish their own saved content 
   await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toBeVisible();await expect(page.locator('.website-site-context')).toContainText((await new WebsiteSites(f.workspace).read(null)).site.name);await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText(project.title);await page.screenshot({path:info.outputPath('project-website.png'),fullPage:false});
   await page.setViewportSize({width:390,height:844});await expect(page.locator('.website-site-context')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('project-website-narrow.png'),fullPage:false});
   const after=await f.workspace.read();expect(after.book.entries).toEqual(original.book.entries);expect(after.book.website).toEqual(original.book.website);expect((await new WebsiteSites(f.workspace).list()).sites.filter(site=>site.id!==null)).toHaveLength(2);expect(errors).toEqual([]);
- }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -92,5 +92,5 @@ test('default and named website editors save independently and refresh their own
   await page.getByLabel('Accent',{exact:true}).fill('#334455');await expect(page.frameLocator('#design-preview').locator('body')).toHaveCSS('--accent','#334455');
   await page.getByRole('button',{name:'Save appearance',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await sites.read(ids[0])).book.appearance.accent).toBe('#334455');
   expect((await sites.read(null)).book.appearance).toEqual(defaultBefore.book.appearance);expect((await fixture.workspace.outline()).etag).toBe(research.etag);
- }finally{await second?.close();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{await second?.close();await page.close();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

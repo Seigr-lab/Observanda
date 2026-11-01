@@ -89,7 +89,7 @@ test('unfinished selections survive lost replies and reload, and completion atta
   await dialog.getByRole('button',{name:'Next inputs',exact:true}).click();
   await expect(dialog.locator('#material-input-references')).toContainText('21–40');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('external analysis saves exact input and output pages and preserves its tool and procedure',async({page})=>{
@@ -130,5 +130,5 @@ test('external analysis saves exact input and output pages and preserves its too
   const result=(await materials.list({recordId:owner,kind:'analysis'})).items[0];
   const refs=async slot=>(await materials.referencePage(result,{slot})).items.map(({kind,id,revision})=>({kind,id,revision}));
   expect(await refs('inputs')).toEqual([input]);expect(await refs('outputs')).toEqual([output]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

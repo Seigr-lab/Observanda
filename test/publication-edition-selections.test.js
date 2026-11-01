@@ -17,7 +17,7 @@ import {contentBuffer} from '../src/file-content.js';
 import {openPublicationInput} from '../src/publication-input-reader.js';
 import {Workspace} from '../src/storage.js';
 
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-edition-')),data=selectionBook(),f=await encryptedFixture(directory,data.book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();return {...f,...data,releases,source:{workspaceId:data.book.id,etag,websitePin}};}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-edition-')),data=selectionBook(),f=await encryptedFixture(directory,data.book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();return {...f,...data,releases,source:{workspaceId:data.book.id,etag,websitePin}};}
 const change=(collection,value,id)=>({collection,id:id??(collection==='records'?value.id:collection==='history'?editionRevisionKey(value):editionAvailabilityKey(value)),value});
 
 test('native edition checkpoints exceed aggregate request and count limits with bounded reads, restart, replay and discard', {timeout:600000},async t=>{

@@ -22,5 +22,5 @@ export async function mediaValueFixture({large=false,shared=false,count=9}={}){
  await f.workspace.save(ready.book,ready.etag);
  if(large){const writing=new RecordWriting(f.workspace),target={workspaceId:source.id,recordId:id,sectionId:null},base=await writing.read(target);record.body='Extended observations '.repeat(2500);await writing.save({...target,expectedRevision:base.revision,value:{body:record.body}});}
  const values=new RecordValues(f.workspace),target=assetId=>({workspaceId:source.id,recordId:id,field:'media:'+assetId});
- return {...f,directory,book:ready.book,record,media,files,values,target,save:(base,value)=>values.save({...target(base.field.slice(6)),expectedRevision:base.revision,value:{value}}),async close(){clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
+ return {...f,directory,book:ready.book,record,media,files,values,target,save:(base,value)=>values.save({...target(base.field.slice(6)),expectedRevision:base.revision,value:{value}}),async close(){await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
 }

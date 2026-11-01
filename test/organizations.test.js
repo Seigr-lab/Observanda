@@ -16,7 +16,7 @@ import {readAccess} from '../src/access.js';
 
 async function fixture(t){
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-organizations-')),devices=[];
-  t.after(async()=>{for(const f of devices)clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
+  t.after(async()=>{for(const f of devices)await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
   for(const name of ['author','member','other'])devices.push(await encryptedFixture(path.join(directory,name),sampleNotebook()));
   const identities=devices.map(f=>new OrganizationIdentity(f.deviceStore)),keys=await Promise.all(identities.map(i=>i.public())),service=new Organizations(devices[0].workspace);
   const state=()=>service.load(),run=async(who,operation,payload,options={})=>{

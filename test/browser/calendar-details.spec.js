@@ -43,5 +43,5 @@ test('connected calendar opens selected notes with retry and cancels a closed de
   await eventButton.click();await waiting;await expect(dialog).toContainText('Loading event notes');await page.keyboard.press('Escape');release();await expect(dialog).not.toBeVisible();
   await eventButton.click();await expect(dialog.locator('.calendar-notes')).toHaveText(notes);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(errors).toEqual([]);
- }finally{release();ModuleCatalogue.prototype.read=original;ModuleCatalogue.prototype.selected=selected;await app.close();clearVault(vault);clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release();ModuleCatalogue.prototype.read=original;ModuleCatalogue.prototype.selected=selected;await app.close();await clearVault(vault);await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

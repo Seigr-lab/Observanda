@@ -50,7 +50,7 @@ test('author a support popup with links and exact copy addresses; visitors use k
   const fallback=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,fallback);const reader=await fallback.newPage();
   try{await reader.goto(url);await reader.locator('[data-public-popup]>summary').click();await expect(reader.getByRole('textbox',{name:'Ethereum example',exact:true})).toHaveValue(addresses[0][2]);await expect(reader.getByRole('link',{name:'PayPal',exact:false})).toBeVisible();await expect(reader.locator('.public-copy button').first()).toBeHidden();}finally{await fallback.close();}
   const saved=(await new WebsiteSites(f.workspace).read(null)).book.pages.find(p=>'pages/'+p.id+'.html'===target);expect(saved.sections.filter(s=>s.parentId===saved.sections[0].id)).toHaveLength(6);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('copy values keep whitespace and CRLF exactly; nested popups close independently and unsupported dialogs keep fallback access',async({page})=>{

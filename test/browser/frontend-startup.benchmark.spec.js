@@ -66,7 +66,7 @@ test('compiled authenticated frontend meets declared repeated cold and warm cach
   const report={format:1,scope:'Authenticated frontend; cold and warm browser caches; running local service and warm owner; shared host',platform:process.platform,arch:process.arch,node:process.versions.node,browser:page.context().browser()?.version(),cpu:os.cpus()[0]?.model,logicalCpus:os.cpus().length,totalMemoryBytes:os.totalmem(),initialJavaScriptBytes:compiled?.initialJavaScriptBytes,initialJavaScriptFiles:compiled?.initialJavaScriptFiles,summary,rows,errors};
   await info.attach('frontend-startup.json',{body:JSON.stringify(report,null,2),contentType:'application/json'});
   console.info('Frontend startup '+JSON.stringify(summary));
-  await cdp?.detach();await app?.close();if(fixture)clearVault(fixture.vault);
+  await cdp?.detach();await app?.close();if(fixture)await clearVault(fixture.vault);
   if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-frontend-benchmark-'))throw Error('Unexpected disposable directory');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

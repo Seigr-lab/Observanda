@@ -15,7 +15,7 @@ import {bookSelectors} from '../src/web/book-selectors.js';
 test('saved reference destinations bind cursors to workspace, snapshot, record and search',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selectors-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0];
  record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Visit '+i,body:'Kept observations '.repeat(200)}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const reader=new RecordSelectors(f.workspace),command={workspaceId:book.id,recordId:record.id},read=RecordValueTree.prototype.read;
  t.mock.method(RecordValueTree.prototype,'read',async function(ref){assert.notEqual((await this.node(ref)).type,'array','Hydrated full collection');return read.call(this,ref);});
  const first=await reader.read(command);assert.equal(first.revision,recordRevision(record));assert.deepEqual(first.items,bookSelectors(record).slice(0,20));
@@ -31,6 +31,6 @@ test('saved reference destinations bind cursors to workspace, snapshot, record a
  await assert.rejects(reader.read({...next,snapshotId:latest.etag}),{code:'WORKSPACE_READ_CURSOR'});
 });
 test('small original envelopes and empty records use the same reference contract',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-small-selectors-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-small-selectors-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const reader=new RecordSelectors(f.workspace);for(const record of book.entries){const page=await reader.read({workspaceId:book.id,recordId:record.id});assert.deepEqual(page.items,bookSelectors(record));assert.equal(page.next,null);}
 });

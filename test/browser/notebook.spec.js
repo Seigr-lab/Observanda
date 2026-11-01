@@ -51,7 +51,7 @@ async function includeLabBook(page,projectName,bookName){
 async function saveChanges(page){const save=page.locator('.section-save [data-action=save]');if(await save.isEnabled())await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');}
 test.beforeEach(async () => { parent=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-'));root=path.join(parent,'A closer look');deviceStore=new DeviceStore({file:path.join(parent,'device.key')});app=await startServer(serverOptions()); });
 test.afterEach(async () => {
-  try{await app.close();}finally{try{await databaseOwner?.close();}finally{detachDatabase?.();databaseOwner=detachDatabase=null;clearVault(workspaceVault);workspaceVault=null;}}
+  try{await app.close();}finally{try{await databaseOwner?.close();}finally{detachDatabase?.();databaseOwner=detachDatabase=null;await clearVault(workspaceVault);workspaceVault=null;}}
   expect(path.dirname(parent)).toBe(path.resolve(os.tmpdir()));expect(path.basename(parent)).toMatch(/^observanda-browser-/);
   await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});
 });

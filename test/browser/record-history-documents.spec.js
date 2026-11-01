@@ -35,5 +35,5 @@ test('reader history pages and restores a saved document without entering the fu
   await dialog.getByRole('button',{name:'Restore record',exact:true}).click();await expect(dialog).not.toBeVisible();await refreshed;
   await expect(page.locator('.record-reader h1')).toHaveText(record.title);expect((await values.read(target)).value.value).toBe(record.title);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

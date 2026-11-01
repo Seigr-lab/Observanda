@@ -39,5 +39,5 @@ test('authors choose gallery inspection; visitors enlarge, navigate, download an
   }finally{await visitor.close();}
   const fallback=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,fallback);const reader=await fallback.newPage();try{await reader.goto(url);const image=reader.locator('[data-gallery-image]').first();const target=await image.getAttribute('href');await image.click();expect(new URL(reader.url()).pathname.endsWith(target)).toBe(true);await expect(reader.locator('img')).toBeVisible();}finally{await fallback.close();}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

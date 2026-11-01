@@ -37,5 +37,5 @@ test('workspace management is a routed page with back, reload and setup access w
   await page.setViewportSize({width:390,height:844});await expect(management.getByRole('button',{name:'New workspace',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('workspace-management-mobile.png'),fullPage:true});
   expect(await f.workspace.read()).toEqual(before);expect(writes).toEqual([]);expect(errors).toEqual([]);
- }finally{release?.();await holding;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release?.();await holding;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

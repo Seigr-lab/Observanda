@@ -23,7 +23,7 @@ const mapping={format:'json',rowsPath:'/measurements',fields:[{name:'Counter',pa
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-dataset-jobs-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
  const materials=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,...jobs,materials,directory,recordId:book.entries[0].id};
 }
 async function upload(f,bytes){

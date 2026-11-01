@@ -19,7 +19,7 @@ import {catalogueBinding} from '../src/postgres-activation.js';
 
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-book-creation-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(parent,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
- t.after(async()=>{await owner.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-creation-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-creation-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const book=sampleNotebook();book.title='Field Project 1';book.projects[0].title=book.title;book.notebooks=[];book.entries=[];
  const root=path.join(parent,'Research Workspace 1',book.title);await mkdir(path.dirname(root),{recursive:true});const project=await initializeProjectLocation(root,book.projects[0].id,book,access,vault),creation=new LabBookCreation(project,device);

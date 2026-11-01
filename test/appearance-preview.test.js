@@ -21,7 +21,7 @@ async function fixture(t){
  const hidden={...structuredClone(book.projects[0]),id:randomUUID(),title:'Private project',share:false};book.projects.push(hidden);
  const notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:hidden.id};book.notebooks.push(notebook);book.entries[100].notebookId=notebook.id;
  const f=await encryptedFixture(directory,book),{etag,websitePin}=await websiteWorkspace(f.workspace).outline();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,command:{workspaceId:book.id,etag,websitePin,mode:'auto',appearance:{...book.appearance,accent:'#123456'}}};
 }
 

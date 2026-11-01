@@ -71,7 +71,7 @@ test('PDF outline navigation and movement retain history while bounded thumbnail
   await ui.getByRole('button',{name:'Close preview',exact:true}).click();await expect(ui.locator('[data-pdf-preview]')).toHaveCount(0);await ui.getByRole('button',{name:'Preview PDF',exact:true}).click();await expect(pages.locator('[data-pdf-page-number]')).toHaveAttribute('max',String(count));await painted(canvases,6);expect(rendered).toHaveLength(2);
   await page.screenshot({path:test.info().outputPath('pdf-navigation.png'),fullPage:true});expect(errors).toEqual([]);
  }finally{
-  releaseWorker.resolve();await app.close();removeRenderer();clearVault(fixture.vault);
+  releaseWorker.resolve();await app.close();removeRenderer();await clearVault(fixture.vault);
   if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-navigation-ui-'))throw Error('Unexpected test directory');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

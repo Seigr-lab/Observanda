@@ -28,5 +28,5 @@ test('positional preparation rejects a short schedule and then retains 432 align
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('control-0-0',{timeout:40000});
   const head=(await materials.heads()).find(h=>h.kind==='dataset'),doc=await materials.read(head);expect(doc.content.sourceMapping.joins.every(j=>j.mode==='position')).toBe(true);
   let count=0;for await(const row of materials.iterateDataset(head)){void row;count++;}expect(count).toBe(432);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -79,7 +79,7 @@ test('navigation has one project tree; history belongs only to the open record a
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await nav.getByRole('button',{name:'Dashboard',exact:true}).click();
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('retained history pages keep navigation and selected reference inspection through a failed request',async({page})=>{
@@ -104,7 +104,7 @@ test('retained history pages keep navigation and selected reference inspection t
   await dialog.getByRole('button',{name:'Older versions',exact:true}).click();await expect(page.locator('#notice')).toContainText('history');await expect(dialog).toContainText('Versions 21–40.');
   await dialog.getByRole('button',{name:'Refresh history',exact:true}).click();await expect(dialog).toContainText('Versions 1–20.');await expect(dialog.getByRole('button',{name:'Newer versions',exact:true})).toBeDisabled();
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('duplicate-only history windows continue and finish without hiding saved revisions',async({page})=>{
@@ -126,5 +126,5 @@ test('duplicate-only history windows continue and finish without hiding saved re
   await dialog.getByRole('button',{name:'Newer versions',exact:true}).click();await expect(dialog).toContainText('These references point to versions already shown.');
   await dialog.getByRole('button',{name:'Newer versions',exact:true}).click();await expect(items).toHaveCount(20);await expect(dialog).toContainText('Versions 241–260.');
   await items.last().getByRole('button',{name:'Review version',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Review record version',exact:true})).toBeVisible();await expect(dialog).toContainText(versions[0].title);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

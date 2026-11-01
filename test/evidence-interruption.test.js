@@ -19,7 +19,7 @@ import {interruptWorkspace} from './fixtures/interrupt-workspace.js';
 test('a killed evidence upload can be backed up and resumed without copying unfinished bytes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-crash-')),root=path.join(directory,'source');
  const access=await createAccess('','synthetic upload recovery'),vault=takeCreatedVault(access),book=sampleNotebook();
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(root,book,access,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),original=Buffer.alloc(EVIDENCE_CHUNK+8192,0x5a);
  const session=await materials.startImport({recordId:book.entries[0].id,name:'returned-capture.bin',size:original.length});
@@ -48,7 +48,7 @@ test('a killed intake worker and an exhausted checkpoint resume 161 MiB without 
  const fixture=await encryptedFixture(directory,book),originals=new ResearchMaterials(fixture.workspace),initial=workspaceJobs(fixture.workspace);
  let resumed,running;
  t.after(async()=>{
-  await initial.worker.stop();await resumed?.worker.stop();await running;clearVault(fixture.vault);
+  await initial.worker.stop();await resumed?.worker.stop();await running;await clearVault(fixture.vault);
   assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-intake-crash-'));
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });

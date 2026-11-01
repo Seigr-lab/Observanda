@@ -46,5 +46,5 @@ test('analysis record drafts recover after a rejected checkpoint, restart and co
   await expect(edit.getByLabel('Record title',{exact:true})).toHaveValue('Recoverable analysis edit');
   await edit.getByRole('button',{name:'Save changes',exact:true}).click();await expect(edit).not.toBeVisible();
   const saved=(await f.workspace.read()).book.entries[0];expect(saved.title).toBe('Recoverable analysis edit');expect(saved.results).toEqual(remote.results);expect(errors.filter(message=>!message.includes('net::ERR_FAILED'))).toEqual([]);
- }finally{await page.unrouteAll({behavior:'ignoreErrors'});await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await page.unrouteAll({behavior:'ignoreErrors'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

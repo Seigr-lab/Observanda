@@ -65,5 +65,5 @@ test('websites reopen selected projects and books imported into different worksp
    assert.equal(edition.files.output.count('entries'),1);const html=(await contentBuffer(await edition.files.get(originalPage.path))).toString();assert.match(html,/Selected original evidence/);assert.doesNotMatch(html,/WITHHELD_RECORD|Private image/);assert.deepEqual(await contentBuffer(await edition.files.get('media/'+media.value.items[0].asset.id+'.png')),png);
    assert.deepEqual((await owned.outline()).metadata.website.researchSources,[source]);await application.close();application=null;
   });
- }finally{await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-imports-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-imports-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

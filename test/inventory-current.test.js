@@ -18,7 +18,7 @@ import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 
 for(const count of [65,650])test('inventory queries include all ledger facts while opening only a page of '+count+' item originals',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-current-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString(),projectId=book.projects[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entity=(type,data)=>({id:randomUUID(),type,revision:1,createdAt:now,updatedAt:now,data});
  const resources=Array.from({length:count},(_,i)=>entity('resource',{projectId:null,placementId:null,name:'Item '+String(i).padStart(3,'0'),code:'PART-'+i,kind:'material',description:'Private inventory notes. '.repeat(2800),categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Bench',unit:'pieces',capacity:1,status:'available',links:[]}));
  const movements=resources.map(r=>entity('movement',{resourceId:r.id,projectId:null,delta:'100.000000000000000001',unit:'pieces',reason:'Opening stock',links:[],reservationId:null}));
@@ -43,7 +43,7 @@ for(const count of [65,650])test('inventory queries include all ledger facts whi
 
 test('inventory filter facts survive ordinary and fresh-key restore, support older heads, and fail closed on damage',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-facts-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entity=(type,data)=>({id:randomUUID(),type,revision:1,createdAt:now,updatedAt:now,data}),projectId=book.projects[0].id;
  const category=entity('category',{name:'Active category',description:'Private schema notes',archived:false,fields:[]}),archived=entity('category',{name:'Archived category',description:'',archived:true,fields:[]});
  const resource=entity('resource',{projectId:null,placementId:projectId,name:'Shared scope',code:'',kind:'object',description:'Private item',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'',capacity:1,status:'available',links:[]});

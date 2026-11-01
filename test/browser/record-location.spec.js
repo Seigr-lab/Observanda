@@ -34,5 +34,5 @@ test('reader moves recover conflicts and lost commit responses without reconstru
   let ready;const started=new Promise(resolve=>ready=resolve),gate=new Promise(resolve=>release=resolve);await page.route('**/api/research/records/location',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});await move();await started;
   await expect(dialog.getByRole('status').first()).toContainText('Closing this window does not cancel');await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.goto(app.origin+'/#/records/'+book.entries[1].id+'/read');release();await page.unrouteAll({behavior:'wait'});await expect(dialog).not.toBeVisible();await expect(page.locator('.record-reader h1')).toHaveText(book.entries[1].title);
   expect(reads).toEqual([]);expect(errors).toEqual([]);
- }finally{release?.();await page.unrouteAll({behavior:'wait'});ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release?.();await page.unrouteAll({behavior:'wait'});ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

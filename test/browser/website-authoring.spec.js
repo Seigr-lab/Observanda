@@ -16,7 +16,7 @@ const preview=page=>page.frameLocator('#website-draft-preview');
 const save=async page=>{await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
 const blocks=page=>page.locator('#website-section-order>li');
 test.beforeEach(async({page})=>{root=await mkdtemp(path.join(os.tmpdir(),'observanda-authoring-'));book=sampleNotebook();book.website.description='';fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');});
-test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 
 for(const kind of ['journal','portfolio'])test('complete '+kind+' site can be composed, saved, reopened and exported through the app',async({page,browser})=>{
  test.setTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));

@@ -33,5 +33,5 @@ test('portable copy exposes measured verification progress inline and completes 
   await progress.locator('[data-wait]').scrollIntoViewIfNeeded();await expect(progress.locator('[data-wait]')).toBeInViewport();await page.screenshot({path:'.local/storage-progress.png'});
   release();await expect(dialog.getByRole('heading',{name:'Portable copy ready'})).toBeVisible();await expect(progress).toHaveCount(0);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.storage-path').first()).toHaveText(f.workspace.root);
- }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

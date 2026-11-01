@@ -73,5 +73,5 @@ test('module and template switches save independently, retain failed edits and k
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('templates-narrow.png')});
   await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
   expect((await f.workspace.read()).book).toEqual(configured);expect(errors).toEqual([]);
- }finally{if(writer){await writer.run('ROLLBACK');await writer.close();}await app?.close();await runtime.close();detach();if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{if(writer){await writer.run('ROLLBACK');await writer.close();}await app?.close();await runtime.close();detach();if(f)await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

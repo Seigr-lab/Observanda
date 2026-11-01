@@ -22,7 +22,7 @@ async function fixture(page){
  const service=new RecordValues(f.workspace),target=field=>({workspaceId:book.id,recordId:active.id,field});
  return {...f,book,active,app,service,target,requests,errors,
   async change(field,value){const base=await service.read(target(field));return service.save({...target(field),expectedRevision:base.revision,value:{value}});},
-  async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});},
+  async close(){ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});},
   async read(){ResearchCatalogue.prototype.record=original;return (await f.workspace.read()).book;},
   scoped(){expect(requests.filter(route=>['/api/workspace/read/selection','/api/workspace/read/page','/api/research/records/save'].includes(route))).toEqual([]);expect(errors).toEqual([]);}
  };

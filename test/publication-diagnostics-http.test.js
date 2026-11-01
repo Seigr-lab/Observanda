@@ -20,7 +20,7 @@ test('publication failure details require authentication and survive HTTP restar
   if(fault)return withJobDiagnosticContext({operation:'capture-retained-figures',recordId:book.entries[0].id},()=>{const error=new Error('PRIVATE_DIAGNOSTIC_SENTINEL');error.code='25006';throw error;});
   return pin.apply(this,args);
  });
- t.after(async()=>{mocked.mock.restore();await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{mocked.mock.restore();await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const request=(operation,data)=>fetch(app.origin+'/api/publication-jobs/'+operation,{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json','X-Observanda-Workspace':context},body:JSON.stringify(data)});
  const call=async(operation,data)=>{const response=await request(operation,data),result=await response.json();assert.equal(response.ok,true,JSON.stringify(result));return result;};
  async function open(){

@@ -37,7 +37,7 @@ test('module edits remain usable through copy, navigation, reload and verified d
   expect((await readWorkspaceDashboard(f.workspace)).etag).toBe(initial.etag);
   await preferences(page,'Modules');await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();await expect(page.locator('#desk-save-state')).toHaveText('');
   expect(errors).toEqual([]);
- }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('module choices can be reversed with their toggles while the preferences writer is occupied',async({page})=>{
@@ -49,7 +49,7 @@ test('module choices can be reversed with their toggles while the preferences wr
   await expect(page.getByRole('button',{name:'Discard pending changes',exact:true})).toBeHidden();
   await page.getByRole('switch',{name:'Enable Inventory',exact:true}).uncheck();
   await holder.run('ROLLBACK');await expect(page.locator('#desk-save-state')).toHaveText('');expect((await readWorkspaceDashboard(f.workspace)).settings).toEqual(initial.settings);
- }finally{await holder?.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await holder?.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('retained module settings survive a service restart before their writer becomes available',async({page})=>{
@@ -66,7 +66,7 @@ test('retained module settings survive a service restart before their writer bec
   await holder.run('ROLLBACK');await expect(page.locator('#desk-save-state')).toHaveText('');
   expect((await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('resources');
   await page.reload();await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
- }finally{await holder?.close();await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await holder?.close();await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('another window sees and reverses retained module changes through ordinary toggles',async({page,context})=>{
@@ -84,7 +84,7 @@ test('another window sees and reverses retained module changes through ordinary 
   await expect(other.getByRole('switch',{name:'Enable Inventory',exact:true})).not.toBeChecked();
   await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).not.toBeChecked();await expect(page.getByRole('switch',{name:'Enable Planning',exact:true})).not.toBeChecked();await expect(page.locator('#desk-save-state')).toHaveText('');
   await holder.run('ROLLBACK');expect((await readWorkspaceDashboard(f.workspace)).settings.enabledModules).not.toContain('resources');
- }finally{await holder?.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await holder?.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
@@ -103,5 +103,5 @@ test('module choices save while the research writer is held and remain after rel
   await page.reload();await preferences(page,'Modules');await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
   await expect(page.locator('#desk-save-state')).toHaveText('');
   const activity=await page.evaluate(()=>fetch('/api/activity').then(response=>response.json()));expect(activity.operations.filter(item=>['running','queued'].includes(item.state)&&item.kind==='/api/dashboard')).toEqual([]);
- }finally{await holder?.close();await app?.close();clearVault(f.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-independent-settings-ui-')).toBe(true);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await holder?.close();await app?.close();await clearVault(f.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-independent-settings-ui-')).toBe(true);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

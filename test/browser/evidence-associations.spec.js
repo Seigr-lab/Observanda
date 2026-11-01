@@ -38,7 +38,7 @@ test('attach a stored disk image to another run from the reader and download fro
   const materials=new ResearchMaterials(f.workspace);expect(await readdir(await materials.directory('originals'))).toHaveLength(1);
   await page.setViewportSize({width:390,height:844});await expect(dialog.locator('.material-list')).toBeVisible();expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('shared-original-phone.png')});
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('select files across pages and resume attachment after a lost committed reply and application reload',async({page},info)=>{
@@ -100,5 +100,5 @@ test('select files across pages and resume attachment after a lost committed rep
   await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();
   expect((await materials.associations.list({recordId:second.id})).items).toEqual([]);
   expect(await readdir(await materials.directory('originals'))).toHaveLength(45);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

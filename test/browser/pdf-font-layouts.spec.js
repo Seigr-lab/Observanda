@@ -27,5 +27,5 @@ test('custom-font layouts remain reusable after the source font is removed and p
   await page.reload();await expect(ui.getByLabel('Section title',{exact:true})).toHaveValue('Retained observation');const saved=await documents.read('open',{id:second});expect(saved.header.fonts).toHaveLength(1);
   const compiled=await documents.domains.run(['pdf'],async get=>{const store=get('pdf'),owner=new PdfDocumentStore(store),fonts=new Map();for(const pin of saved.header.fonts)fonts.set(pin.id,await readPdfDocumentFont(store,second,pin));return embedPdfFonts(await compilePdfDocument(saved.header,owner.content(second,saved.revision)),{customFonts:fonts});});
   expect(compiled.html.includes('1.1 Retained observation')).toBe(true);expect(compiled.html.includes('class="pdf-contents ')).toBe(true);expect(compiled.html.includes('data:font/')).toBe(true);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

@@ -39,7 +39,7 @@ test('named workspace publication jobs remain writable under source authority wh
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-job-owner-')),book=sampleNotebook(),projectId=book.projects[0].id,projectSiteId=randomUUID(),named={id:randomUUID()};
  book.websites=[{id:projectSiteId,name:'Retained project website',projectId},{id:named.id,name:'Independent publication',projectId:null}].map(site=>({...site,document:websiteDocument(book),projects:[{id:projectId,share:true,logoId:null}],selection:{defaultShare:false,includeProjects:[projectId],records:[]}}));
  const f=await encryptedFixture(directory,book),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const active='project-source-authority:active';
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>store.db.run('INSERT INTO state VALUES ($1,$2)',active,store.encode('state',active,{version:1}))));
  const enqueue=async id=>{const workspace=websiteWorkspace(f.workspace,id);return new PublicationJobs(workspace).start(await workspace.outline(),websiteJobQueue(jobs.queue,id));};

@@ -64,5 +64,5 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
    expect(resource.data.values).toEqual({part:'Changed last choice',field_23:'Required value from last page'});
   }
   expect(Math.max(...sizes)).toBeLessThan(2*1024*1024);expect(errors).toEqual([]);
- }finally{ModuleCatalogue.prototype.read=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.read=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

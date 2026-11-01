@@ -14,7 +14,7 @@ import {projectDomainLock} from '../src/project-domain-lock.js';
 import {copyWorkspaceTo} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-settings-')),f=await encryptedFixture(directory,sampleNotebook()),queue=new DashboardEdits(path.join(directory,'pending'));t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {...f,directory,queue};}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-settings-')),f=await encryptedFixture(directory,sampleNotebook()),queue=new DashboardEdits(path.join(directory,'pending'));t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {...f,directory,queue};}
 const change=(settings,id)=>({...structuredClone(settings),enabledModules:[...new Set([...settings.enabledModules,id])]});
 
 test('settings are retained while the settings writer is occupied and resume after service restart',async t=>{

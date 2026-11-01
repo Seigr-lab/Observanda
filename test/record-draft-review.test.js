@@ -25,7 +25,7 @@ test('paged checkpoint review retains decisions, composes independent changes an
  const mine=structuredClone(base),stored=structuredClone(base);mine.title='Draft title';stored.outcome='Independent saved outcome';
  for(let i=0;i<7;i++){mine.sections[i].body='Draft '+i+' '+('a'.repeat(29000));stored.sections[i].body='Saved '+i+' '+('b'.repeat(28000));}
  mine.sections.push(...Array.from({length:12},(_,i)=>({id:randomUUID(),title:'Added '+i,body:'z'.repeat(28000)})));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const draft=await retainedDraft(f.workspace,book.id,base,mine);assert.ok(draft.draft.content.bytes>2*1024*1024);
  await new ResearchRecords(f.workspace,media).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:stored}]},{receipt:true});
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Recovery reconstructed a full record');});
@@ -43,7 +43,7 @@ test('paged checkpoint review retains decisions, composes independent changes an
 });
 test('stale and failed recovery retain checkpoints and all saved review choices',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-conflict-')),book=sampleNotebook(),base=book.entries[0],mine={...base,title:'Recovered title'};
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const draft=await retainedDraft(f.workspace,book.id,base,mine),review=new RecordDraftReview(f.workspace,media),prepare={workspaceId:book.id,id:draft.draft.id,expectedRevision:draft.revision};
  let plan=await review.prepare(prepare);const before=await f.workspace.outline(),finish=ResearchCatalogue.prototype.finishRecordChanges;
  t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);throw Error('Injected failure');});
@@ -56,7 +56,7 @@ test('stale and failed recovery retain checkpoints and all saved review choices'
 
 test('review decisions survive a fresh-key backup and verification rejects contradictory conflicts',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-backup-')),book=sampleNotebook(),base=book.entries[0],mine={...base,title:'Draft title'};
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const draft=await retainedDraft(f.workspace,book.id,base,mine),review=new RecordDraftReview(f.workspace,media),prepare={workspaceId:book.id,id:draft.draft.id,expectedRevision:draft.revision};
  await new ResearchRecords(f.workspace,media).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:{...base,title:'Saved title'}}]},{receipt:true});
  let plan=await review.prepare(prepare);const choose={...target(plan),position:0,version:'mine'};plan=await review.choose(choose);assert.deepEqual(await review.choose(choose),plan);

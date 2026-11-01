@@ -43,7 +43,7 @@ test('author original downloads, recover a library file, style each action, and 
    await visitor.screenshot({path:info.outputPath('downloads-desktop.png')});await visitor.setViewportSize({width:390,height:844});await visitor.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await visitor.screenshot({path:info.outputPath('downloads-mobile.png')});
   }finally{await visitor.close();}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('completion after a website switch stays private until explicitly placed in that website',async({page})=>{
@@ -57,5 +57,5 @@ test('completion after a website switch stays private until explicitly placed in
   release();await expect(page.locator('#notice')).toContainText('Media is ready');await expect(page.locator('[data-library-asset]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'File imports',exact:true}).click();const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Use file',exact:true})).toBeVisible();await dialog.getByRole('button',{name:'Use file',exact:true}).click();await expect(page.locator('.website-file-name')).toContainText('delayed.img');await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const sites=new WebsiteSites(f.workspace),named=(await sites.list()).sites.find(site=>site.name==='Another site');expect((await sites.read(null)).book.website.assets).toHaveLength(0);expect((await sites.read(named.id)).book.website.assets.map(a=>a.name)).toEqual(['delayed.img']);
- }finally{release();MediaImports.prototype.prepare=prepare;await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();MediaImports.prototype.prepare=prepare;await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

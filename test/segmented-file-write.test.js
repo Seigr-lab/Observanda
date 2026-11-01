@@ -21,7 +21,7 @@ test('concurrent known originals cannot promise the same remaining disk space',{
   await writeContent(f.workspace,path.join(f.root,'other'),[bytes],{expected});assert.equal(diskCapacity.stats().active,0);
  }finally{gate.resolve();await writing.catch(()=>{});diskCapacity.probe=probe;}
 });
-async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-segmented-write-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original');t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-segmented-write-'));await rm(root,{recursive:true,force:true});});return {root,vault,workspace,file};}
+async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-segmented-write-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original');t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-segmented-write-'));await rm(root,{recursive:true,force:true});});return {root,vault,workspace,file};}
 for(const known of [true,false])for(const size of [0,1,BLOCK,BLOCK+1,3*BLOCK+27])test((known?'declared immutable content':'unknown input stream')+' writes the seekable format at boundary '+size,async t=>{
  const f=await fixture(t),bytes=randomBytes(size),expected={size,sha256:digest(bytes)};let checkpoints=0;
  async function* source(){for(let offset=0;offset<size;offset+=713)yield bytes.subarray(offset,offset+713);}

@@ -26,5 +26,5 @@ test('local diagnostics require an unlocked session and are reviewed before a pr
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   const locked=await page.evaluate(async()=>{const context=window.observandaWorkspaceContext;const status=await(await fetch('/api/storage')).json();return (await fetch('/api/access/lock',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context??status.contextId},body:'{}'})).status;});expect(locked).toBe(200);
   expect(await page.evaluate(async()=>(await fetch('/api/diagnostics')).status)).toBe(401);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(fixture.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(fixture.vault);await rm(directory,{recursive:true,force:true});}
 });

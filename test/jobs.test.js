@@ -25,7 +25,7 @@ async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-jobs-')),root=path.join(directory,'workspace');
  const a=await createAccess('','synthetic worker password'),vault=takeCreatedVault(a);await initializeLocation(root,sampleNotebook(),a,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),{queue,worker}=workspaceJobs(workspace),book=(await workspace.read()).book;
- t.after(async()=>{await worker.stop();clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await worker.stop();await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,root,vault,workspace,materials,queue,worker,recordId:book.entries[0].id};
 }
 async function uploaded(f,bytes=Buffer.from('Synthetic original'),name='original.bin'){

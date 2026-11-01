@@ -27,7 +27,7 @@ test('inspection subject search pages only saved hives and colonies without load
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Inspection with unfinished notes');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   expect(fullReads).toEqual([]);expect(new Set(bodies)).toEqual(new Set([inspection.id]));ResearchCatalogue.prototype.record=load;
   const saved=(await f.workspace.read()).book.entries.find(r=>r.id===inspection.id);expect(saved.relations).toHaveLength(3);expect(saved.relations.at(-1).target.id).toBe(book.entries.at(-1).id);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=load;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ResearchCatalogue.prototype.record=load;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('enable beekeeping, record distinct inspections, reopen hive history and retain a failed save',async({page})=>{
@@ -80,7 +80,7 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
   await navigate(page,'Preferences');await preferences(page,'Templates');const disabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).uncheck();await disabled;
   await open(hive.id);await expect(history().getByRole('button',{name:'New inspection',exact:true})).toHaveCount(0);await expect(history().getByRole('link',{name:created.title,exact:true})).toBeVisible();
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('hive history pages navigate backwards and recover a failed page request',async({page})=>{
@@ -97,7 +97,7 @@ test('hive history pages navigate backwards and recover a failed page request',a
   await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(second);await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(first);
   await page.route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic history unavailable'})}),{times:1});
   await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(history.getByRole('alert')).toContainText('Synthetic history unavailable');await history.getByRole('button',{name:'Retry linked records',exact:true}).click();await expect(links).toHaveText(first);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('ordinary records use the same linked history and dedicated creation workflow',async({page})=>{
@@ -114,5 +114,5 @@ test('ordinary records use the same linked history and dedicated creation workfl
   const created=(await f.workspace.read()).book.entries.find(e=>e.title==='Interpretation after a second visit');expect(created.relations).toEqual([expect.objectContaining({type:'Documents',target:{workspaceId:book.id,kind:'record',id:hive.id}})]);
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results')).toBeVisible();
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await history.getByRole('button',{name:'Show linked records',exact:true}).click();await history.getByRole('link',{name:created.title,exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText(created.title);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

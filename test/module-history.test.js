@@ -14,7 +14,7 @@ import {ModuleHistory} from '../src/modules/history.js';
 const task=title=>({title,description:'Private task body',status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]});
 async function fixture(t,count=45){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-history-')),f=await encryptedFixture(directory,sampleNotebook()),modules=workspaceModules(f.workspace),workspaceId=(await f.workspace.outline()).metadata.id,id=randomUUID();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const save=(revision,entityId=id)=>modules.execute({workspaceId,commandId:randomUUID(),action:'task.save',payload:{id:entityId,expectedRevision:revision||null,data:task('Take '+(revision+1))}});
  for(let i=0;i<count;i++)await save(i);
  return {...f,modules,workspaceId,id,save,history:new ModuleHistory(f.workspace),write:operation=>moduleDomainStore(f.workspace,workspaceId,'tasks',operation,{write:true})};

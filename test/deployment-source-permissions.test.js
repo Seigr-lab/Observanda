@@ -42,7 +42,7 @@ async function changeSource(workspace,patch){
 }
 async function fixture(t,{ssh=false,pages=false,foreign=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deployment-consent-')),book=sourceBook(),keys=[];let runtime,detach,application,jobs;
- t.after(async()=>{await jobs?.worker.stop();await application?.close();await runtime?.close();detach?.();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-deployment-consent-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs?.worker.stop();await application?.close();await runtime?.close();detach?.();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-deployment-consent-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(foreign){book.title=book.projects[0].title='Source project';runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(runtime);}
  const host=foreign?{...sampleNotebook(),entries:[],projects:[],notebooks:[]}:book;
  if(foreign)host.website.researchSources=[{workspaceId:book.id,projectIds:[book.projects[0].id],selection:{defaultShare:false,includeProjects:[book.projects[0].id],records:[]}}];

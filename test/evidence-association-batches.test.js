@@ -15,7 +15,7 @@ import {contentBuffer} from '../src/file-content.js';
 
 async function fixture(t,count=67){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-batches-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,[first,second]=book.entries,refs=[],bytes=[];
  for(let i=0;i<count;i++){
   const buffer=Buffer.from('Original preparation file '+i),upload=await m.startImport({recordId:first.id,name:'preparation-'+i+'.bin',size:buffer.length,provenance:'Acquired once'});

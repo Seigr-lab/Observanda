@@ -43,7 +43,7 @@ test('nested mappings reject ambiguous joins and invalid bindings, preserving nu
 
 test('nested cell sources survive revisions and backup and inspect their exact parent and lookup locations',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-nested-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const bytes=Buffer.from('{"visits":[{"acquisitions":[{"count":9007199254740993,"control":"c"}],"controls":[{"id":"c","expected":1.250}],"id":"v"}],"configuration":{"hz":48000000}}');
  const upload=await m.startImport({recordId,name:'visits.json',size:bytes.length});for(let i=0;i<bytes.length;i+=EVIDENCE_CHUNK)await m.appendImport(upload.id,i/EVIDENCE_CHUNK,[bytes.subarray(i,i+EVIDENCE_CHUNK)]);
  const artifact=await m.finishImport(upload.id),command={recordId,title:'Nested visits',artifact,sourceMapping:mapping};

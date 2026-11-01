@@ -18,7 +18,7 @@ export async function historicalFixture(t,{chain=false,title}={}){
  if(linked){linked.share=true;book.entries[2].share=true;linked.title='Earlier result';linked.body='Retained precursor result';linked.sections=[];method.relations=[{id:randomUUID(),type:'Prior result',target:{workspaceId:book.id,kind:'record',id:linked.id,revision:recordRevision(linked)},label:'PRIVATE_PRECURSOR_LABEL'}];}
  const old=structuredClone(method),revision=recordRevision(old),target={workspaceId:book.id,kind:'record',id:method.id,revision};
  run.relations=[{id:randomUUID(),type:'Method used',target,label:'PRIVATE_REFERENCE_LABEL'}];method.title='Current method';method.body='New procedure';method.sections=[];
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>new ResearchMaterials(f.workspace).retainRecord(old));
  if(linked)await f.workspace.withLock(()=>new ResearchMaterials(f.workspace).retainRecord(linked));
  const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();

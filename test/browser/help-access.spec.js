@@ -20,7 +20,7 @@ async function fixture(mode='setup'){
   await initializeLocation(root,book,access,vault);
  }
  const app=await testServer({root,deviceStore,port:0,headless:true,expectedExisting:mode==='missing',preferencesFile:path.join(directory,'preferences.json')});
- return {app,root,password,recovery,close:async()=>{await app.close();if(vault)clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {app,root,password,recovery,close:async()=>{await app.close();if(vault)await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 function watch(page){
  const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));

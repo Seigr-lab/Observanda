@@ -45,5 +45,5 @@ test('inspect native bytes, declare exact fractions and clock metadata, retain p
   await dialog.getByRole('button',{name:'Inspect source',exact:true}).first().focus();await page.keyboard.press('Enter');await expect(dialog.getByRole('button',{name:'Download displayed byte slice'})).toBeVisible();
   const current=await materials.current(data.id),doc=await materials.read(current),columns=await materials.datasetColumns(doc);expect(columns[0].time.clock.width).toBe(8);expect(columns[0].time.clock.reset).toBe('observed');expect(columns[1].radix).toBe(6);expect((await materials.datasetPage(current)).rows[1].cells[0]).toBe('0');
   expect(requests.filter(p=>p==='/api/workspace/read/page'||p==='/api/notebook')).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

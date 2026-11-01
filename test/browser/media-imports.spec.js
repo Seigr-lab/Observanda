@@ -41,7 +41,7 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
   await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();await expect(media).toBeVisible();
   await page.getByRole('button',{name:'Read record',exact:true}).click();await page.reload();
   await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);await expect(media).toHaveCount(1);await expect(media).toBeVisible();expect(errors).toEqual([]);
- }finally{MediaStore.prototype.prepare=prepare;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{MediaStore.prototype.prepare=prepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('durable SVG branding upload adds a draft, persists on Save and can be inspected on a narrow screen',async({page})=>{
@@ -57,7 +57,7 @@ test('durable SVG branding upload adds a draft, persists on Save and can be insp
   const dialog=page.locator('#dialog');await expect(dialog).toContainText('completed');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('media-imports-narrow.png')});
   await dialog.getByRole('button',{name:'Close',exact:true}).focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('an interrupted upload can be reselected and used in the website editor without duplication',async({page})=>{
@@ -81,7 +81,7 @@ test('an interrupted upload can be reselected and used in the website editor wit
   await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();await expect(page.locator('#save-status')).toHaveText('Saved');
   expect((await f.workspace.read()).book.website.assets).toHaveLength(1);
   expect((await imports.list()).map(s=>s.id)).toEqual([session.id]);expect((await f.workspace.read()).book.website.assets[0].id).toBe(session.id);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('older imports remain selectable with keyboard paging while processing completes',async({page})=>{
@@ -96,5 +96,5 @@ test('older imports remain selectable with keyboard paging while processing comp
   const row=dialog.locator('[data-media-import-row="'+oldest.id+'"]');await row.getByRole('button',{name:'Prepare media'}).click();await expect(row.getByRole('button',{name:'Use media'})).toBeVisible({timeout:15000});await expect(dialog).toContainText('Page 2');
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();await page.screenshot({path:test.info().outputPath('media-pages-narrow.png')});
   await row.getByRole('button',{name:'Use media'}).click();await expect(page.locator('.logo-editor img')).toBeVisible();expect((await f.workspace.read()).book.branding).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

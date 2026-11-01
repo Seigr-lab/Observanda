@@ -31,7 +31,7 @@ test.beforeEach(async()=>{
  await sites.save(null,{workspaceId:book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{...site.site.selection,records:[...site.site.selection.records.filter(row=>row.id!==book.entries[1].id),{id:book.entries[1].id,share:false,attachments:[]}]}});
  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});
 });
-test.afterEach(async()=>{await app?.close();if(vault){clearVault(vault);vault=null;}await rm(root,{recursive:true,force:true});});
+test.afterEach(async()=>{await app?.close();if(vault){await clearVault(vault);vault=null;}await rm(root,{recursive:true,force:true});});
 const targetPath=id=>'entries/'+id+'.html';
 
 test('indexed website previews send only unsaved edits and survive save and reopen',async({page},testInfo)=>{

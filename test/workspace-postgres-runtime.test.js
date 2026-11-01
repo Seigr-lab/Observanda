@@ -15,7 +15,7 @@ const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process
 async function query(env,sql){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL});await client.connect();try{return (await client.query(sql)).rows;}finally{await client.end();}}
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-database-')),active=new Set(),vaults=[];
- t.after(async()=>{for(const service of active)await service.close();for(const vault of vaults)clearVault(vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{for(const service of active)await service.close();for(const vault of vaults)await clearVault(vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  async function create(name){const root=path.join(parent,name),vault={id:randomUUID(),key:randomBytes(32)},ownerId=randomUUID();vaults.push(vault);await mkdir(path.join(root,'.observanda'),{recursive:true});return {root,vault,ownerId};}
  async function start(workspace,options={}){const env=environment(),service=await startManagedPostgres({directory:path.join(workspace.root,'.observanda','postgresql'),env,workspace,...options});active.add(service);return {env,close:async()=>{await service.close();active.delete(service);}};}
  return {parent,create,start};

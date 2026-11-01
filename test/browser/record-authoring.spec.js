@@ -23,7 +23,7 @@ async function fixture(page,count=42){
   if(request.url().endsWith('/api/notebook')||request.url().endsWith('/api/workspace/read/page'))fullReads.push(request.url());
   if(/\/api\/research\/records\/(save|remove)$/.test(request.url()))writes.push(request.postDataJSON());
  });
- return {...f,book,app,errors,fullReads,writes,loaded,stopTracking:()=>{ResearchCatalogue.prototype.record=read;},close:async()=>{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book,app,errors,fullReads,writes,loaded,stopTracking:()=>{ResearchCatalogue.prototype.record=read;},close:async()=>{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 async function create(page,f){
  await page.goto(f.app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);

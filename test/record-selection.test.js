@@ -22,7 +22,7 @@ import {largeRecordBook} from './record-capacity-fixture.js';
 async function fixture(t,count=4){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-selection-')),book=upgradeNotebook(sampleNotebook()),source=book.entries[2];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(source),id:randomUUID(),title:'Selected work '+i,body:'Original observation '+i,relations:[],figures:[],attachments:[]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,reader:new WorkspaceReader(f.workspace),records:new ResearchRecords(f.workspace,{})};
 }
 

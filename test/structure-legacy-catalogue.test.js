@@ -15,7 +15,7 @@ import {completeSnapshotOwnership} from '../src/snapshot-ownership.js';
 
 async function fixture(t,options){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-structure-')),f=await legacyCatalogueFixture(directory,options);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,service:new StructureCommands(f.workspace)};
 }
 const counts=workspace=>workspace.catalogue(async store=>({states:(await store.db.get('SELECT COUNT(*) AS count FROM state')).count,snapshots:(await store.db.get('SELECT COUNT(*) AS count FROM snapshots')).count}));

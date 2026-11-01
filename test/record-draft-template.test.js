@@ -50,7 +50,7 @@ test('template transport retains exact draft choice rules at arbitrary property 
 
 test('saved choice pins and format4 template checkpoints preserve selected reads, validation and exact transport verification',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-template-choice-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];record.template=schema();record.template.values.observed=record.template.fields[0].choices.at(-1);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const choicesReference=await f.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),record.id);return withRecordDocument(store,row.id,row.revision,document=>document.reference(['template','fields','0','choices']));});
  const readValue=RecordValueTree.prototype.read,readField=RecordDocument.prototype.field;
  t.mock.method(RecordValueTree.prototype,'read',function(revision,...options){assert.notEqual(revision,choicesReference,'Selected Save or Read hydrated the choice collection');return readValue.call(this,revision,...options);});

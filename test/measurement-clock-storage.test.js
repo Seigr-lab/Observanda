@@ -24,7 +24,7 @@ const definition={version:1,modulus:scalar('100000','radix',6),rate:{counts:scal
 const declared=(c,refs={model:null,referenceData:null})=>({...c,time:{...c.time,clock:{...blankClock(),width:16,frequency:'1000',wrap:'modulo',reset:'observed',epoch:'Boundary after observation 2',...refs,definition}}});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-clock-retention-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,keys=[f.vault];
- t.after(async()=>{for(const key of keys)clearVault(key);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{for(const key of keys)await clearVault(key);await rm(directory,{recursive:true,force:true});});
  const upload=async(name,bytes)=>{const s=await m.startImport({recordId,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
  return {...f,directory,m,recordId,keys,upload};
 }

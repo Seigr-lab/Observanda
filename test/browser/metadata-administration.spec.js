@@ -30,5 +30,5 @@ for(const count of [65,650])test('storage, access and source inspection retain n
   await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
   expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page'||p==='/api/workspace/read/selection')).toEqual([]);expect(errors).toEqual([]);expect(await f.workspace.catalogue(s=>s.head())).toBe(before);expect(heap).toBeLessThan(96*1024*1024);
   console.log(JSON.stringify({records:count,sampledBrowserHeapMiB:Math.round(heap/1024**2),originalReads:0}));
- }finally{ResearchCatalogue.prototype.read=original.read;ResearchCatalogue.prototype.record=original.record;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ResearchCatalogue.prototype.read=original.read;ResearchCatalogue.prototype.record=original.record;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

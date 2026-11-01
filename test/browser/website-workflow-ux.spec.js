@@ -38,5 +38,5 @@ test('long-page authoring keeps save reachable, supports direct selection and sa
    await expect.poll(()=>page.getByRole('button',{name:'Edit text on page',exact:true}).evaluate(button=>button.getBoundingClientRect().bottom<=document.querySelector('.section-save').getBoundingClientRect().top)).toBe(true);
   }
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

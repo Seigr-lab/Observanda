@@ -100,5 +100,5 @@ test('calendar dates open a scoped day plan and create dated drafts without savi
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(await page.evaluate(()=>window.keptNavigation===document.querySelector('#main-navigation'))).toBe(true);
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

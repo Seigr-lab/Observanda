@@ -37,7 +37,7 @@ async function fixture(t,count=601,configure=()=>{}){
  const sidebar=createRegion(book.website,'sidebar','Independent view',{makeId:randomUUID});sidebar.sections=[feed(7,'even')];assignRegion(book.website,'home','sidebar',sidebar.id);
  configure(book);
  const f=await encryptedFixture(directory,book),etag=(await f.workspace.outline()).etag;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,command:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
 }
 const navigation=(page,cursor,visitor=page.visitor)=>{

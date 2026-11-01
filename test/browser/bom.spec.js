@@ -120,5 +120,5 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await expect(main).toContainText('All reservations were released');
   expect((await stock()).physical).toBe('97');
   expect(errors).toEqual([]);expect(requestErrors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

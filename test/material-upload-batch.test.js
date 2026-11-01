@@ -20,7 +20,7 @@ import {databaseCapacity} from '../src/postgres.js';
 import {requestWriterWait} from '../src/writer-wait.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-upload-batch-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-upload-batch-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-upload-batch-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,materials,recordId};
 }
 const frame=(id,index,bytes)=>({id,index,blob:new Blob([bytes])});

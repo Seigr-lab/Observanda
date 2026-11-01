@@ -24,7 +24,7 @@ function corpus(samples,analyses=samples*2,events=samples*8){
 }
 async function fixture(t,lab,{indexed=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-laboratory-growth-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await legacySampleAnalysisFixture(f.workspace);
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>indexed?seedSampleAnalysis(store,lab):store.putObject('laboratory',lab)));
  return {...f,directory,service:new Laboratory(f.workspace.root,f.vault)};

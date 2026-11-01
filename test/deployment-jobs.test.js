@@ -40,7 +40,7 @@ async function fixture(t,{nested=false,extraRecords=0}={}){
  const book=sampleNotebook(),seed=book.entries[0];
  for(let i=0;i<extraRecords;i++)book.entries.push({...structuredClone(seed),id:randomUUID(),title:'Public observation '+i,body:'A retained observation.',share:true,figures:[],sections:[],attachments:[],relations:[]});
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deploy-')),f=await encryptedFixture(directory,book),remote=githubFixture(nested?{branch:'main',initialFiles:{'index.html':'Existing home','lab/handwritten.html':'Existing notes'}}:{}),publisher=new Publisher(f.workspace.root,{request:remote.request,liveRequest:remote.request},f.vault),jobs=workspaceJobs(f.workspace,publisher);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:nested?'main':'observanda-site',directory:nested?'lab/field-notes':'',pages:true});config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');await publisher.connect(token);
  const releases=new PublicationJobs(f.workspace);await releases.start(await releases.workspace.outline(),jobs.queue);const prepared=await run(jobs.queue);assert.equal(prepared.state,'completed',prepared.error);
  const deployments=new DeploymentJobs(f.workspace,publisher,jobs.queue),candidate=await releases.read(prepared.result.id),intent={id:prepared.result.id,configEtag:saved.etag,reviewed:true};

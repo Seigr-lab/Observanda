@@ -27,7 +27,7 @@ import {contentBuffer} from '../src/file-content.js';
 async function run(jobs,id){jobs.worker.enabled=true;try{await jobs.worker.runOnce();}finally{jobs.worker.enabled=false;}return jobs.queue.read(id);}
 test('queued named-site preparations retain only their initiating source access and require fresh access after restart or cancellation',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-preparation-source-')),keys=[];let runtime,detach,application,jobs;
- t.after(async()=>{await jobs?.worker.stop();await application?.close();await runtime?.close();detach?.();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-preparation-source-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs?.worker.stop();await application?.close();await runtime?.close();detach?.();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-preparation-source-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(runtime);
  const host=createNotebook('Publication workspace'),f=await encryptedFixture(directory,host);keys.push(f.vault);
  const book=sampleNotebook();book.title=book.projects[0].title='Source project';book.entries=[{...book.entries[0],body:'Public source observation',sections:[],attachments:[],relations:[],figures:[]}];

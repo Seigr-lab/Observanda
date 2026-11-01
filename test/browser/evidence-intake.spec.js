@@ -25,7 +25,7 @@ test('a selection above ten thousand files reaches paged registration and recove
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Verify and attach file set'})).toBeEnabled({timeout:30000});await dialog.getByRole('button',{name:'Verify and attach file set'}).click();
   await expect(dialog.getByRole('heading',{name:'File set attached',exact:true})).toBeVisible({timeout:30000});
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('folder selection retains paths, purpose and downloads in the evidence reader',async({page})=>{
@@ -57,7 +57,7 @@ test('folder selection retains paths, purpose and downloads in the evidence read
   await expect(dialog.getByText('source-tree/current/analysis.json',{exact:true})).toBeVisible();
   const event=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download original',exact:true}).click();const download=await event;
   expect(await readFile(await download.path(),'utf8')).toBe('{}');await materials.verify();
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 test('file sets resume after lost upload replies and reload, then attach together with per-file hashes',async({page},testInfo)=>{
  test.setTimeout(120000);
@@ -110,7 +110,7 @@ test('file sets resume after lost upload replies and reload, then attach togethe
   await expect(dialog.getByRole('heading',{name:'Private recording session',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Inspect imported file set',exact:true}).click();await expect(dialog.getByRole('heading',{name:'File set attached',exact:true})).toBeVisible();
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('single originals resume after a lost chunk reply, reject a changed prefix, and download exact bytes',async({page})=>{
@@ -148,5 +148,5 @@ test('single originals resume after a lost chunk reply, reject a changed prefix,
   await dialog.locator('.material-list > li').filter({hasText:'capture.raw'}).getByRole('button',{name:'Inspect',exact:true}).click();
   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download original'}).click();const download=await downloadEvent;
   expect(await readFile(await download.path())).toEqual(buffer);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

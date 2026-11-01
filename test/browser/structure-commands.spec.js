@@ -20,7 +20,7 @@ async function fixture(page){
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const navigate=async projectId=>{await page.evaluate(id=>location.hash='#/projects/'+id,projectId);await expect(page.locator('main h1')).toBeVisible();};
  await page.goto(app.url);await navigate(book.projects[0].id);
- return {book,ws,app,errors,navigate,async close(){await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {book,ws,app,errors,navigate,async close(){await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const saved=async(page,fn,workspace)=>{
  const response=page.waitForResponse(r=>r.url().endsWith('/api/workspace/structure')&&r.request().method()==='POST');

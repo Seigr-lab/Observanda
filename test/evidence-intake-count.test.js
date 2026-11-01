@@ -18,7 +18,7 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 
 test('an indexed file set grows past 10000 acquisitions and retains every association through attachment and backup',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-intake-count-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const owner=(await f.workspace.read()).book.entries[0].id;
  const count=10017,fingerprint=await fileFingerprint(0,[],digest),choices=new EvidenceFileChoices(f.workspace),started=performance.now();let source={recordId:owner,selection:null,count:0,bytes:0};
  const descriptor=i=>({name:'reading-'+String(i).padStart(6,'0')+'.txt',size:0,fingerprint,sourcePath:'capture/window-'+String(Math.floor(i/37)).padStart(4,'0')+'/reading-'+String(i).padStart(6,'0')+'.txt'});

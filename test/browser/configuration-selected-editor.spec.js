@@ -87,5 +87,5 @@ test('selected configuration pages preserve late edits and create from the saved
   expect(requests.some(request=>/\/api\/(?:research\/records\/save|workspace\/read\/(?:page|selection))$/.test(request.route))).toBe(false);
   const seeds=requests.filter(request=>request.route.endsWith('/configurations/seed'));expect(seeds).toHaveLength(1);expect(seeds[0].body.record.template).toBeUndefined();expect(Buffer.byteLength(JSON.stringify(seeds[0].body))).toBeLessThan(16384);
   expect(requests.filter(request=>request.route.endsWith('/configurations/window')).every(request=>request.body.limit<=32)).toBe(true);expect(errors).toEqual([]);
- }finally{await page.unrouteAll({behavior:'wait'});await app.close();clearVault(fixture.vault);expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory)).toMatch(/^observanda-selected-configuration-/);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory)).toMatch(/^observanda-selected-configuration-/);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

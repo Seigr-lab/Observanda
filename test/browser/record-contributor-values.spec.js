@@ -50,7 +50,7 @@ test('reader contributor authoring recovers additions and removals, reviews conf
   await save();await expect(dialog).not.toBeVisible();expect((await values.read(target(created.id))).value.value).toBeNull();
   await expect.poll(async()=>(await new ResearchDrafts(f.workspace).list({workspaceId:book.id})).drafts.length).toBe(0);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('an empty reader offers contributor creation without entering the full record editor',async({page})=>{
@@ -62,5 +62,5 @@ test('an empty reader offers contributor creation without entering the full reco
   await page.getByRole('button',{name:'Add contributor',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit Contributor',exact:true});
   await dialog.getByLabel('Name',{exact:true}).fill('First contributor');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('button',{name:'Edit contributor First contributor',exact:true})).toBeVisible();
- }finally{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

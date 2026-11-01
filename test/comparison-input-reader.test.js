@@ -26,7 +26,7 @@ import {Workspace} from '../src/storage.js';
 const addressed=(ref,owner)=>({...ref,workspaceId:owner.book.id});
 async function fixture(t,{rows=3}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-comparison-owners-')),template=upgradeNotebook(sampleNotebook()),owners=[];
- t.after(async()=>{for(const owner of owners)clearVault(owner.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{for(const owner of owners)await clearVault(owner.vault);await rm(directory,{recursive:true,force:true});});
  for(let i=0;i<3;i++){
   const book={...structuredClone(template),id:randomUUID()},f=await encryptedFixture(path.join(directory,String(i)),book),m=new ResearchMaterials(f.workspace);owners.push({...f,book,m,recordId:book.entries[0].id});
  }
@@ -156,7 +156,7 @@ test('owned comparison integrity and portable copies retain external addresses w
 
 test('owned comparison integrity preserves long retained context and exact margins beyond input spelling lengths',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-comparison-exact-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const value='7'.repeat(3999)+'/'+'9'.repeat(4000),lower='0.'+'0'.repeat(8000)+'1e-8192',sequence='Retained context \t'+'.'.repeat(20000),text=['Value,Lower,Sequence,State',[value,lower,sequence,'correct'].join(',')].join('\n'),bytes=Buffer.from(text),recordId=book.entries[0].id;
  const upload=await materials.startImport({recordId,name:'exact-context.csv',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id);
  const columns=['Value','Lower','Sequence','State'].map(label=>defaultColumn({label}));columns[0].representation='rational';columns[1].representation='decimal';

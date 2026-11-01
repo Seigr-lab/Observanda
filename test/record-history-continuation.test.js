@@ -17,7 +17,7 @@ const contents=({cursor,nextCursor,...result})=>({...result,hasCursor:!!cursor,h
 
 test('retained reference history continues without scanning all references or loading unselected bodies',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-history-')),book=sampleNotebook(),{workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  const records=new ResearchRecords(ws,{}),materials=new ResearchMaterials(ws),history=new RecordHistory(ws,{}),command={workspaceId:book.id,recordId:book.entries[0].id,limit:5};
  let current=(await ws.read()).book.entries[0];const versions=[current];
  for(let i=1;i<270;i++){
@@ -71,7 +71,7 @@ test('retained reference history continues without scanning all references or lo
 
 test('legacy retained history needs no read-time rewrite and changed-token failures roll back with their reference',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-history-state-')),book=sampleNotebook(),{workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  const materials=new ResearchMaterials(ws),history=new RecordHistory(ws,{}),record=(await ws.read()).book.entries[0],command={workspaceId:book.id,recordId:record.id,limit:1},slot='retained-record-history:'+record.id;
  const retained={...record,title:'Reference from an earlier installation'};await ws.withLock(()=>materials.retainRecord(retained));
  await ws.withLock(()=>ws.catalogue(store=>store.db.run('DELETE FROM state WHERE slot=$1',slot)));

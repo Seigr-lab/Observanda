@@ -23,7 +23,7 @@ import {defaultColumn} from '../src/web/dataset-schema.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-facts-')),source=path.join(directory,'source'),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(path.join(directory,'app'),book),declared=await migrationFixture(source,{creative:true});
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const facts=portableResearch();declared.manifest.objects[1].attributes={privateMarker:'PRIVATE_UNMAPPED_METADATA',facts};
  return {...f,directory,source,book,declared,facts,service:new MigrationImport(f.workspace)};
 }

@@ -70,7 +70,7 @@ test('named workspace release prepares with saved provenance exclusions and reta
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-provenance-')),d=data(),websiteId=randomUUID();
  d.book.websites=[{id:websiteId,name:'Independent research website',projectId:null,document:websiteDocument(d.book),projects:d.book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:{defaultShare:false,includeProjects:d.book.projects.map(row=>row.id),records:[]}}];
  const f=await encryptedFixture(directory,d.book),jobs=workspaceJobs(f.workspace),site=websiteWorkspace(f.workspace,websiteId),releases=new PublicationJobs(site);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const active='project-source-authority:active';
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>store.db.run('INSERT INTO state VALUES ($1,$2)',active,store.encode('state',active,{version:1}))));
  const before=await f.workspace.read(),record=before.book.entries.find(row=>row.id===d.record.id),source={workspaceId:d.book.id,...await site.outline()},choices=new PublicationEditionSelections(site),opened=await choices.operate('open',{source});

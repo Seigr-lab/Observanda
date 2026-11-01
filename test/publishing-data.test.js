@@ -14,7 +14,7 @@ function provider(){const providers=new Map();registerPublishingData({register:v
 
 test('dashboard website counts resolve an explicit default website revision without opening the editor',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publishing-data-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const outline=await f.workspace.outline(),context={book:outline.metadata,etag:outline.etag,outline:true},sites=new WebsiteSites(f.workspace),research=new WebsiteResearch(f.workspace),calls=[];
  const api=async(route,data,options)=>{
   calls.push({route,data,options});

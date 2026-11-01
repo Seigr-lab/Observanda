@@ -42,7 +42,7 @@ test('authors set independent feed counts, try their controls on the canvas and 
   await page.getByLabel('Show previous and next controls',{exact:true}).uncheck();await expect(first.locator('[data-feed-next]')).toHaveCount(0);await expect(second.locator('[data-feed-next]')).toHaveCount(1);
   await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(first.locator('[data-feed-next]')).toHaveCount(1);
   await page.getByLabel('Paginate this feed',{exact:true}).uncheck();await expect(first.locator('.publication-card')).toHaveCount(23);await expect(second.locator('[data-feed-item]')).toHaveCount(7);
- }finally{await app.close();clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('indexed canvas feeds keep independent reading states through design changes, failures and directory navigation',async({page},info)=>{
@@ -96,5 +96,5 @@ test('indexed canvas feeds keep independent reading states through design change
    return document.documentElement.scrollWidth<=innerWidth+1?null:{width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow};
   })).toBeNull();
   await page.screenshot({path:info.outputPath('continued-canvas-directory.png')});expect(errors).toEqual([]);
- }finally{if(test.info().status!==test.info().expectedStatus)console.log(JSON.stringify({errors,status:await page.locator('#website-preview-status').textContent().catch(()=>null),commands:commands.slice(-2),canvas:await page.locator('#website-draft-preview').evaluate(f=>({pointer:f.style.pointerEvents,inert:f.contentDocument?.body.inert,page:f.contentDocument?.body.dataset.page,navigation:f.contentDocument?.querySelector('[data-record-collection=body]')?.outerHTML})).catch(()=>null)}));await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
+ }finally{if(test.info().status!==test.info().expectedStatus)console.log(JSON.stringify({errors,status:await page.locator('#website-preview-status').textContent().catch(()=>null),commands:commands.slice(-2),canvas:await page.locator('#website-draft-preview').evaluate(f=>({pointer:f.style.pointerEvents,inert:f.contentDocument?.body.inert,page:f.contentDocument?.body.dataset.page,navigation:f.contentDocument?.querySelector('[data-record-collection=body]')?.outerHTML})).catch(()=>null)}));await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });

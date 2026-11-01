@@ -67,5 +67,5 @@ test('a retained project website preserves editing preview and export through re
  }catch(error){
   await test.info().attach('publication-requests',{body:JSON.stringify({errors,requests},null,2),contentType:'application/json'});
   await test.info().attach('publication-before-cleanup',{body:await page.screenshot(),contentType:'image/png'});throw error;
- }finally{await db?.close();await app?.close();await owner.close();detach();for(const vault of vaults)clearVault(vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-publication-ui-'))throw Error('Invalid test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await db?.close();await app?.close();await owner.close();detach();for(const vault of vaults)await clearVault(vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-publication-ui-'))throw Error('Invalid test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

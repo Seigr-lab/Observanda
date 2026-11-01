@@ -23,7 +23,7 @@ import {randomUUID} from 'node:crypto';
 const column=(name,representation='text',extra={})=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},...extra});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-measurement-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const materials=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
  const upload=async(name,bytes)=>{const s=await materials.startImport({recordId,name,size:bytes.length});for(let at=0;at<bytes.length;at+=EVIDENCE_CHUNK)await materials.appendImport(s.id,at/EVIDENCE_CHUNK,[bytes.subarray(at,at+EVIDENCE_CHUNK)]);return materials.finishImport(s.id);};
  return {...f,directory,book,materials,recordId,upload};

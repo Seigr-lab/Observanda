@@ -10,7 +10,7 @@ import {withMetadataBatch,withWorkspaceMetadataBatch,metadataBatchIndex} from '.
 import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-metadata-transaction-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;
 }
 
 test('reader prefetch authenticates selected payloads within one snapshot and expires before the next read',async t=>{

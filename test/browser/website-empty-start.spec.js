@@ -41,5 +41,5 @@ test('unused website stays empty beside research, and explicit pages survive sav
   await page.reload();await expect(canvas.locator('main')).toContainText('Written by the author.');await expect(canvas.locator('#page-records,#page-notebooks,[data-book-index]')).toHaveCount(0);
   expect((await sites.read(site.id)).book.pages[0].body).toBe('Written by the author.');expect((await sites.read(null)).websitePin.websiteRevision).toEqual(before.websitePin.websiteRevision);
   expect(errors).toEqual([]);
- }finally{await page.close();await app.close();clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app.close();await clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

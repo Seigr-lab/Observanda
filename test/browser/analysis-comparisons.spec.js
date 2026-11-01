@@ -38,5 +38,5 @@ test('author and revise a comparison, inspect exceptions, retain a result statem
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP'}).click();const download=await downloading,bytes=await readFile(await download.path());
   expect(bytes.includes(Buffer.from('One of two assessed readings matched.'))).toBe(true);expect(bytes.includes(Buffer.from('Signal result · Retained analysis</a>'))).toBe(true);expect(bytes.includes(Buffer.from('readings.csv'))).toBe(false);expect(bytes.includes(Buffer.from(f.workspace.root))).toBe(false);
   expect(requests.filter(p=>p==='/api/workspace/read/page'||p==='/api/notebook')).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

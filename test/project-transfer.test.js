@@ -22,7 +22,7 @@ import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js'
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-transfer-')),book=sampleNotebook(),id=book.projects[0].id,device=new TestDeviceStore({file:path.join(root,'device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);
  const owner=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
- t.after(async()=>{await owner.close();detach();clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-transfer-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();await clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-transfer-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  book.title=book.projects[0].title='source';
  const source=await initializeProjectLocation(path.join(root,'source'),id,book,access,vault),target={workspaceId:book.id,recordId:book.entries[0].id,sectionId:null};
  const first=await new RecordWriting(source).read(target);await new RecordWriting(source).save({...target,expectedRevision:first.revision,value:{body:'Retained project writing'}});

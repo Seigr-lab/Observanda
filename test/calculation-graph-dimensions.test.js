@@ -26,7 +26,7 @@ const selection={columns:'all',offset:0,count:null,includeExcluded:true};
 test('graph dimensions grow independently while paged reads and complete exports preserve retained evidence',{timeout:300000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-graph-dimensions-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);
  let f,jobs;
- t.after(async()=>{await jobs?.worker.stop();await provider.close();detach();if(f)clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-graph-dimensions-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs?.worker.stop();await provider.close();detach();if(f)await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-graph-dimensions-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook();f=await encryptedFixture(directory,book);jobs=workspaceJobs(f.workspace);
  const m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,request=(operation,data)=>executeMaterialRequest(f.workspace,{material:operation},data,{signal:t.signal});
  const stage=(name,facts)=>{t.diagnostic(JSON.stringify({dimension:name,...facts}));process.stdout.write('# '+name+' passed\n');};

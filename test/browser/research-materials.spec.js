@@ -103,7 +103,7 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   expect(next.relations.some(r=>r.target.id===method.id&&r.target.revision===pinned.revision)).toBe(true);
   expect(after.entries.find(e=>e.id===method.id).body).toBe('Now use a different room.');
   expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page')).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('verification can be reopened after reload, cancelled and retried without selecting the original again',async({page})=>{
@@ -138,5 +138,5 @@ test('verification can be reopened after reload, cancelled and retried without s
   await dialog.locator('.material-list li').filter({hasText:'retained-take.csv'}).getByRole('button',{name:'Inspect',exact:true}).click();
   const event=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download original'}).click();const download=await event;expect(await readFile(await download.path())).toEqual(bytes);
   expect((await store.heads()).length).toBe(1);expect(errors).toEqual([]);
- }finally{await app.close();ResearchMaterials.prototype.prepareImport=prepare;clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();ResearchMaterials.prototype.prepareImport=prepare;await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

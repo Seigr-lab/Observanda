@@ -14,7 +14,7 @@ const column=(name,representation='text',radix=10)=>({name,representation,radix,
 
 test('retained plotting reduces exact counter differences and native fractions before projection, preserving revisions and recovery',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-exact-plot-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const bytes=Buffer.from('Group,Counter,Fraction\nA,9007199254740993/1,0.1\nA,-9007199254740992/1,0.5\nB,1/3,0.1\nB,2/3,0.5\nC,,\nA,999/1,555\n');
  const upload=await m.startImport({recordId,name:'exact-readings.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const artifact=await m.finishImport(upload.id);
  const dataset=await m.dataset({recordId,title:'Exact mixed-domain values',artifact,columns:[column('Group'),column('Counter','rational'),column('Native fraction','radix-fraction',6)],exclusions:{[artifact.id+':7']:'Interrupted acquisition'}});

@@ -125,6 +125,6 @@ test('both subscription entry points persist feeds and calendar navigation suppo
   expect(errors).toEqual([]);
  }finally{
   CalendarSources.prototype.data=originalData;
-  await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});
+  await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});
  }
 });

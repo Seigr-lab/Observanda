@@ -14,7 +14,7 @@ import {AppError} from '../src/errors.js';
 
 test('paged provenance inspection reuses one scoped connection and closes it on success or denied reads',{timeout:90000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inspection-')),book=sampleNotebook(),{workspace,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const materials=new ResearchMaterials(workspace),recordId=book.entries[0].id,columns=Array.from({length:17},(_,i)=>({...defaultColumn({label:'C'+i}),representation:'integer'})),bytes=Buffer.from(JSON.stringify({rows:[Object.fromEntries(columns.map((column,i)=>[column.name,i+1]))]}));
  const upload=await materials.startImport({recordId,name:'observations.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id),source=await materials.dataset({recordId,title:'Selected observations',artifact,sourceMapping:{format:'json',rowsPath:'/rows',fields:columns.map(column=>({name:column.name,path:'/'+column.name}))},columns},{signal:t.signal});
  const request=(material,data)=>executeMaterialRequest(workspace,{material},data,{signal:t.signal});let graph=(await request('calculation-graph-create',{recordId,title:'Broad selected provenance',source})).ref;

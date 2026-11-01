@@ -39,5 +39,5 @@ test('retained template choices recover without losing typed names, focus or sav
   await open();release();await expect(dialog.getByRole('button',{name:'Save lab book',exact:true})).toBeEnabled();await expect(name).toHaveValue('');await expect(dialog.locator('[data-notebook-error]')).toBeHidden();
   expect((await f.workspace.outline()).metadata.projects[0].labBookTemplate).toEqual(before.metadata.projects[0].labBookTemplate);
   expect(errors).toEqual([]);
- }finally{release();await app?.close();clearVault(f.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-retained-template-')).toBe(true);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();await app?.close();await clearVault(f.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-retained-template-')).toBe(true);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

@@ -15,7 +15,7 @@ import {documentTerms,referenceTerm} from '../src/record-search-terms.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-search-changes-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,book,record:book.entries[0]};
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,book,record:book.entries[0]};
 }
 const target=workspaceId=>({workspaceId,id:randomUUID(),type:'Mentioned in text'});
 const difference=(own,other,version)=>{const opposite=documentTerms(other,version);return new Set([...documentTerms(own,version)].filter(term=>!opposite.has(term)));};

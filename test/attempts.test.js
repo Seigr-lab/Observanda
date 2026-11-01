@@ -34,7 +34,7 @@ async function fixture(t){
  const materials=new ResearchMaterials(ws),ref={...await materials.pinRecord(method.id,recordRevision(method)),label:method.title};
  const run=createRun(book,investigation);run.attempt=attemptFixture({protocols:[ref]});run.share=true;
  const service=new ResearchRecords(ws,{});await service.save({workspaceId:book.id,changes:[{id:run.id,expectedRevision:null,record:run}]});
- t.after(async()=>{clearVault(encrypted.vault);await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(encrypted.vault);await rm(root,{recursive:true,force:true});});
  return {root,vault:encrypted.vault,book,investigation,method,ref,run,ws,materials,service,save:async next=>{
   const current=(await ws.read()).book.entries.find(e=>e.id===next.id);
   return service.save({workspaceId:book.id,changes:[{id:next.id,expectedRevision:current?recordRevision(current):null,record:next}]});

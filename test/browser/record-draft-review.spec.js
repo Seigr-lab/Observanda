@@ -33,5 +33,5 @@ for(const dedicated of [false,true])test((dedicated?'project: ':'workspace: ')+'
   await dialog.locator('[data-review=choose-mine]').click();await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog).toHaveCount(0);
   await expect(page.locator('.record-reader h1')).toHaveText(mine.title);expect(await new ResearchDrafts(f.workspace).read(draft.draft.id,{header:true})).toBe(null);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);if(dedicated)expect(requests.filter(route=>route.includes('/research/drafts/')).every(route=>route.startsWith('/api/projects/'+book.projects[0].id+'/'))).toBe(true);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=read;await app.close();if(f.close)await f.close();else clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();if(f.close)await f.close();else await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

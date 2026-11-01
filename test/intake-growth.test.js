@@ -65,7 +65,7 @@ for(const profile of profiles)for(const copies of [1,10])test(copies+'x physical
  const baselineConnections=databaseCapacity().active,metrics={opens:0,closes:0,openMs:0,queries:0,sqlMs:0,writerCount:0,writerMs:0,maximumWriterMs:0},foreground=[];
  let finishedJob,failedJob;const completion=new Promise((resolve,reject)=>{finishedJob=resolve;failedJob=reject;});completion.catch(()=>{});
  const jobs=workspaceJobs(f.workspace,undefined,{observe:job=>{if(job.state==='completed')finishedJob(job);else if(job.state==='failed')failedJob(Error('Intake failed: '+job.error));}});
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-intake-growth-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-intake-growth-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const before=await storageSize(f.workspace);measureConnections(t,f.workspace,metrics);
  let peakHeap=0,peakRSS=0,peakConnections=baselineConnections,commitMs=0,commitQueries=0,commitSqlMs=0,authoring=null,stopAuthoring=false,phase='manifest',authoringError=null;
  const sample=()=>{const usage=process.memoryUsage();peakHeap=Math.max(peakHeap,usage.heapUsed);peakRSS=Math.max(peakRSS,usage.rss);peakConnections=Math.max(peakConnections,databaseCapacity().active);};

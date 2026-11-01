@@ -18,7 +18,7 @@ import {researchReference} from '../src/web/research-reference.js';
 const task=title=>({title,description:'Private task body. '.repeat(4500),status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]});
 async function fixture(t,count=3,decorate=(entity)=>entity,prepareBook=book=>book){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-current-')),book=prepareBook(sampleNotebook()),f=await encryptedFixture(directory,book),modules=workspaceModules(f.workspace),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>decorate({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:task('Task '+i)},i,book));
  const data=await seedModuleCurrent(f.workspace,book.id,entities);
  const command=(entity,values={})=>({workspaceId:book.id,commandId:randomUUID(),action:'task.save',payload:{id:entity.id,expectedRevision:entity.revision,data:{...entity.data,...values}}});

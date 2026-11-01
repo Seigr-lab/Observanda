@@ -25,7 +25,7 @@ async function fixture(t,count=70,decorate=()=>{}){
   updatedAt:new Date(Date.UTC(2026,0,1,0,i)).toISOString(),attachments:[],sections:[],relations:[],figures:[],
   template:{id:randomUUID(),profileId:null,label:'Type '+i,description:'',fields:[],values:{}}}));
  decorate(book);const f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const etag=await f.workspace.catalogue(store=>store.head());
  return {...f,book,query:new DashboardTypeQuery(f.workspace),command:{workspaceId:book.id,etag,config:defaultPanelConfig(),options:{},search:'',cursor:null,limit:25}};
 }

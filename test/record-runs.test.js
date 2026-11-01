@@ -14,7 +14,7 @@ import {validRunPage} from '../src/web/record-runs.js';
 
 async function fixture(t,count=23,unrelated=5){
  const data=runFixture(count,unrelated),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-run-pages-')),f=await encryptedFixture(directory,data.book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,...data,service:new RecordRuns(f.workspace),command:{workspaceId:data.book.id,recordId:data.parent.id}};
 }
 test('run summaries and selected comparison fields never assemble record bodies across corpus growth',async t=>{

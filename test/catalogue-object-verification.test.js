@@ -14,7 +14,7 @@ import {digest,serialize} from '../src/storage-format.js';
 
 test('metadata audit batches all payloads with bounded transport; analysis checks only its own originals',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-object-audit-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,()=>f.workspace.catalogue(async store=>{
   for(let i=0;i<161;i++)await store.putObject('unrelated/'+i,{value:'Small retained value '+i});
   await store.putObject('unrelated/large',{value:'Oversized for a batch. '.repeat(20000)});

@@ -22,7 +22,7 @@ async function fixture({compiled=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-ui-')),book=upgradeNotebook({...sampleNotebook(),title:'workspace'}),f=await encryptedFixture(directory,book),preferencesFile=path.join(directory,'preferences.json');
  let browserAssets;if(compiled){const out=path.join(directory,'frontend');await buildBrowser({out});browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});}
  const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile,browserAssets});
- return {...f,book:(await f.workspace.read()).book,app,close:async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book:(await f.workspace.read()).book,app,close:async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 test('Help searches the bundled manual, follows stable anchors, changes language and retains it after reload',async({page},testInfo)=>{
  const f=await fixture({compiled:true}),errors=[],reads=[];

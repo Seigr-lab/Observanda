@@ -12,7 +12,7 @@ import {WebsiteEditor} from '../src/website-editor.js';
 
 test('website names are unique across create and rename, including draft saves and competing requests',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-names-')),book=createNotebook('Workspace website'),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const etag=(await f.workspace.outline()).etag,create=name=>sites.change({workspaceId:book.id,etag,operation:'create',name});
  const first=await create('Field journal');
  await assert.rejects(create('  FIELD   JOURNAL  '),{code:'WEBSITE_NAME_EXISTS'});

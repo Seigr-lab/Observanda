@@ -28,7 +28,7 @@ async function fixture(page,count){
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),bodies=[],requests=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push({path:new URL(r.url()).pathname,data:r.postData()});});
- return {...f,app,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await page.unrouteAll({behavior:'wait'});await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,app,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await page.unrouteAll({behavior:'wait'});await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 
 test('recovery pages preserve unfinished calculations, retry failed navigation and restore only the chosen checkpoint',async({page})=>{

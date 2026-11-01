@@ -31,7 +31,7 @@ import {resolveResearchReference} from '../src/research-owner-reference.js';
 
 test('selected book import restores once at its nested destination and resumes without its source',{timeout:480000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-import-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
- t.after(async()=>{await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-import-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-import-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')});
  async function credentials(){const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  async function workspace(title){const metadata=createNotebook(title),key=await credentials(),root=path.join(directory,title);await initializeLocation(root,metadata,key.access,key.vault);const storage=new Workspace(root,key.vault);return {storage,registry:new ProjectRegistry(storage,metadata.id)};}

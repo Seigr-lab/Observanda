@@ -39,7 +39,7 @@ async function fixture(t,{durableCapture=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-capture-')),book=sampleNotebook();
  book.entries=Array.from({length:72},(_,index)=>({...structuredClone(book.entries[0]),id:randomUUID(),title:'Observation '+index,body:durableCapture?('Retained observation '+index).padEnd(27000,' observation'):'Retained observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
  let f,jobs,runtime,detach,placement;
- t.after(async()=>{await jobs?.worker.stop();await runtime?.close();detach?.();if(f?.vault)clearVault(f.vault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-capture-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs?.worker.stop();await runtime?.close();detach?.();if(f?.vault)await clearVault(f.vault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-capture-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(process.env.OBSERVANDA_TEST_SECOND_VOLUME){
   placement=await workspaceDestinationFixture(directory);
   runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});

@@ -48,7 +48,7 @@ test('deleting from Workspaces confirms the name, clears local bindings, and lea
   expect(await readFile(f.deviceStore.file)).toEqual(deviceBefore);expect((await other.workspace.read()).book.title).toBe(sampleNotebook().title);
   await page.getByRole('button',{name:'Workspaces',exact:true}).click();await expect(page.locator('.workspace-management').getByText(other.workspace.root,{exact:true})).toBeVisible();await expect(page.locator('.workspace-management').getByText(f.workspace.root,{exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);
- }finally{await app.close();await owner.close();detach();clearVault(f.vault);clearVault(other.vault);clearVault(projectVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await owner.close();detach();await clearVault(f.vault);await clearVault(other.vault);await clearVault(projectVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 for(const interruption of ['frozen','retired'])test('restart exposes unfinished deletion after '+interruption+' and Finish deletion removes its remaining data',async({page})=>{
@@ -65,5 +65,5 @@ for(const interruption of ['frozen','retired'])test('restart exposes unfinished 
   await page.setViewportSize({width:760,height:950});await dialog.getByRole('button',{name:'Finish deletion',exact:true}).click();
   await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('.workspace-management').getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Unfinished workspace deletions',exact:true})).toHaveCount(0);
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});expect(await deletion.list()).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

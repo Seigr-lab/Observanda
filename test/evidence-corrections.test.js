@@ -18,7 +18,7 @@ import {Workspace} from '../src/storage.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-correct-')),book=upgradeNotebook(sampleNotebook());
- const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
+ const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
  const bytes=Buffer.from('Synthetic original disk image; shared immutable bytes'),upload=await materials.startImport({recordId:book.entries[0].id,name:'returned.img',size:bytes.length,provenance:'Original acquisition'});await materials.appendImport(upload.id,0,[bytes]);const source=await materials.finishImport(upload.id);
  const second=await associateOriginal(materials,{recordId:book.entries[1].id,ref:source}),mistake=await associateOriginal(materials,{recordId:book.entries[2].id,ref:source});
  return {...f,directory,book,materials,corrections:new EvidenceCorrections(materials),source,second,mistake,bytes};

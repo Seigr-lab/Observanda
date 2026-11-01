@@ -31,7 +31,7 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  async function restartDatabases(){await provider.close();detach();provider=new WorkspaceDatabases(runtime);detach=installDatabaseProvider(provider);}
  let server,release,pending;
  t.after(async()=>{
-  release?.();await pending?.catch(()=>{});await server?.close();await provider.close();detach();keys.forEach(clearVault);
+  release?.();await pending?.catch(()=>{});await server?.close();await provider.close();detach();await Promise.all(keys.map(clearVault));
   assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-nested-lifecycle-'));
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });

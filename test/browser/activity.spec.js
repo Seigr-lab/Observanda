@@ -92,7 +92,7 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
   expect(await page.evaluate(async()=>(await fetch('/api/activity')).status)).toBe(401);
   await expect(page.locator('.app-activity')).toBeHidden();
   expect(errors).toEqual([]);
- }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;RecordWriting.prototype.save=save;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;RecordWriting.prototype.save=save;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('queued and cancelled saves stay compact and never count as running work',async({page})=>{
@@ -117,5 +117,5 @@ test('queued and cancelled saves stay compact and never count as running work',a
   await page.evaluate(()=>window.queuedSave.abort());await expect(panel.locator('article').last().locator('[data-status]')).toHaveText('Cancelled');
   await expect(panel.locator('article').last().locator('[data-error]')).toBeHidden();await expect(page.locator('.app-activity [data-toggle]')).toHaveText('Activity (1 running)');
   release();await expect(panel.locator('article').filter({has:page.locator('[data-title]',{hasText:'Copying workspace'})}).locator('[data-status]')).toHaveText('Completed',{timeout:45000});
- }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

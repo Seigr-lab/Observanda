@@ -15,7 +15,7 @@ import {contentBuffer} from '../src/file-content.js';
 test('a verified backup requires the recorded evidence bytes and received upload chunks',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-backup-evidence-')),root=path.join(directory,'source');
  const access=await createAccess('','synthetic evidence integrity'),vault=takeCreatedVault(access),book=sampleNotebook();
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(root,book,access,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),bytes=Buffer.alloc(1024*1024,0xa7);
  const session=await materials.startImport({recordId:book.entries[0].id,name:'original.bin',size:bytes.length});

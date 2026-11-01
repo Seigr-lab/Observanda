@@ -27,5 +27,5 @@ test('record type edits recover and resolve conflicts without replacing research
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog.locator('.record-writing-conflict')).toContainText('Protocol');await dialog.getByRole('button',{name:'Keep my edit after review',exact:true}).click();await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();expect((await service.read(target)).value.value).toBe('analysis');
   await expect(page.locator('#record-section-'+record.sections[0].id)).toContainText('Retained body 0');await expect.poll(async()=>(await new ResearchDrafts(f.workspace).list({workspaceId:book.id})).drafts.length).toBe(0);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

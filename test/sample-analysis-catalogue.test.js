@@ -17,7 +17,7 @@ const sample={code:'S-01',material:'Synthetic solution',source:'Test',collectedO
 const result={method:'Method 1',analyte:'Absorbance',kind:'numeric',value:0.3,unit:'AU',lower:0,upper:1,notes:'Private original notes'};
 async function fixture(t,count=0){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sample-index-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),lab={formatVersion:1,revision:0,samples:[],analyses:[],events:[]};
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  for(let i=0;i<count;i++){
   const s={...sample,id:randomUUID(),code:'S-'+i};lab.samples.push(s);
   for(let j=0;j<2;j++)lab.analyses.push({id:randomUUID(),code:'A-'+i+'-'+j,sampleId:s.id,result:{...result,notes:'private-result '.repeat(120)},status:'draft',review:null,updatedAt:'2026-10-01T00:00:00.000Z'});

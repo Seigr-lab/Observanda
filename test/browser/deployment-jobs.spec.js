@@ -43,7 +43,7 @@ test('repository conflicts are visible and a chosen subfolder preserves the exis
   await page.getByRole('link',{name:'Field journal',exact:true}).first().click();await expect(page).toHaveURL(/\/lab\/field-notes\/notebooks\//);
   await page.getByRole('link',{name:'Watching a seed unfold',exact:true}).first().click();await expect(page).toHaveURL(/\/lab\/field-notes\/entries\//);await expect(page.getByRole('heading',{name:'Watching a seed unfold',exact:true})).toBeVisible();
   await page.goto('https://published.example/news.html');await expect(page.locator('body')).toHaveText('Existing news');expect(errors).toEqual([]);expect(adapter.reads.some(route=>!route.includes('?'))).toBe(true);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('reviewed GitHub deployment resumes in the UI after restart and verifies the live manifest separately',async({page})=>{
@@ -65,7 +65,7 @@ test('reviewed GitHub deployment resumes in the UI after restart and verifies th
   for(const bytes of remote.blobs.values()){expect(bytes.includes(Buffer.from('PRIVATE_CAPTURE_SENTINEL'))).toBe(false);expect(bytes.includes(Buffer.from(f.workspace.root))).toBe(false);}
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('deployment-narrow.png'),fullPage:true});
   expect((await fetch(new URL('/api/deployment-jobs/list',app.url),{method:'POST',headers:{Origin:app.origin,'content-type':'application/json'},body:'{}'})).status).toBe(401);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('upload-only selection persists, labels the review accurately and never calls Pages',async({page})=>{
@@ -84,7 +84,7 @@ test('upload-only selection persists, labels the review accurately and never cal
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();
   await expect(page.locator('#publishing-deployments')).toContainText('Repository files verified. Pages settings were left unchanged.',{timeout:60000});
   expect(remote.calls.some(c=>c.route.endsWith('/pages'))).toBe(false);expect(remote.head).toBeTruthy();
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('first upload to main reviews existing files and configures Pages from the app',async({page})=>{
@@ -105,7 +105,7 @@ test('first upload to main reviews existing files and configures Pages from the 
   await expect(page.locator('#publishing-deployments')).toContainText('Push: confirmed',{timeout:60000});await expect(page.locator('#publishing-deployments button[data-action="publish-job-cancel"]')).toHaveCount(0,{timeout:60000});
   expect(remote.commits.get(remote.head).parents).toEqual([initial]);expect(remote.calls.some(c=>c.route.endsWith('/pages')&&c.data?.source.branch==='main')).toBe(true);
   expect(remote.calls.some(c=>c.route.endsWith('/git/refs')&&c.method==='POST')).toBe(false);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('an existing empty repository is reviewed, initialized and resumed from the app before upload',async({page})=>{
@@ -132,7 +132,7 @@ test('an existing empty repository is reviewed, initialized and resumed from the
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();
   await expect(page.locator('#publishing-deployments')).toContainText('Repository files verified. Pages settings were left unchanged.',{timeout:60000});expect(remote.commits.get(remote.head).parents).toEqual([seed]);
   expect(remote.calls.some(call=>call.route.endsWith('/pages')||call.data?.force)).toBe(false);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -185,7 +185,7 @@ test('a named website explicitly replaces an old app, archives its branch and pr
   await page.locator('#destination-confirm').check();await page.getByRole('button',{name:'Publish to GitHub Pages',exact:true}).click();await expect(page.locator('#publishing-deployments')).toContainText('Push: confirmed',{timeout:30000});
   const after=remote.trees.get(remote.commits.get(remote.head).tree);expect(after.some(row=>row.path.startsWith('old-app/'))).toBe(false);for(const name of ['CNAME','LICENSE.md'])expect(after.find(row=>row.path===name)).toEqual(before.find(row=>row.path===name));expect(remote.branches.get('previous-application')).toBe(parent);expect(remote.commits.get(remote.head).parents).toEqual([parent]);
   await expect.poll(()=>remote.pages.build_type).toBe('legacy');expect(remote.pages.cname).toBe('field.example');expect(remote.pages.https_enforced).toBe(true);expect((await new Publisher(f.workspace.root,{},f.vault).read()).configured).toBe(false);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('users create a named website repository in the app, publish it and see automatic live verification',async({page})=>{
@@ -210,7 +210,7 @@ test('users create a named website repository in the app, publish it and see aut
   remote.setServed('styles.css',[...remote.blobs.values()].find(b=>createHash('sha256').update(b).digest('hex')===expected.sha256));
   await expect(page.locator('#publish-outcome')).toContainText('The live website is verified',{timeout:20000});await expect(page.locator('#publishing-deployments')).toContainText('files verified');
   await page.reload();await expect(page.locator('#publish-outcome')).toContainText('The live website is verified');expect((await new Publisher(f.workspace.root,{},f.vault).read()).configured).toBe(false);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -235,5 +235,5 @@ test('an older retained edition can be explicitly reviewed and republished from 
   await page.getByRole('button',{name:'Website preparations',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Open review',exact:true}).last().click();await expect(page.getByRole('button',{name:'Review this retained edition for publishing'})).toBeVisible();await page.getByRole('button',{name:'Review this retained edition for publishing'}).click();await expect(page.getByRole('heading',{name:'Republish a retained edition'})).toBeVisible();
   await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();await expect(page.locator('#notice')).toContainText('I approve replacing');expect(remote.head).toBe(second);
   await page.getByLabel('I approve replacing the published website with this retained edition.').check();await publish();expect(remote.commits.get(remote.head).parents).toEqual([second]);expect(remote.trees.get(remote.commits.get(remote.head).tree)).toEqual(remote.trees.get(remote.commits.get(first).tree));expect((await site.sites.read(site.id)).book.website.footer).toBe('Second edition footer');expect((await new Publisher(f.workspace.root,{},f.vault).read()).configured).toBe(false);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -46,5 +46,5 @@ test('source media pages span records and attachments without original reads and
    limited.edition.records=[{...choice,include:false}];limited.edition.history=[choice];const history=await run({source:limited});assert.equal(history.items.length,1);assert.equal(history.items[0].sourceAttachmentId,raw.attachments[26].id);assert.notEqual(history.items[0].entryId,edition.items[0].entryId);
   });
   assert.equal((await fixture.workspace.outline()).etag,head.etag);
- }finally{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

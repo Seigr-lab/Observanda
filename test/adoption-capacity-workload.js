@@ -49,7 +49,7 @@ async function workload(copies,t){
    try{await workload;}catch{}
    clearInterval(sampler);t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()}));
    assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-adoption-capacity-'));
-   if(f)clearVault(f.vault);if(freshVault)clearVault(freshVault);await rm(directory,{recursive:true,force:true});
+   if(f)await clearVault(f.vault);if(freshVault)await clearVault(freshVault);await rm(directory,{recursive:true,force:true});
   });
   workload=(async()=>{
   f=await authoringGrowthFixture(directory,{copies});

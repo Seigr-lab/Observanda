@@ -19,7 +19,7 @@ async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-project-postgres-')),keys=[],owners=[];
  const manager=(Class=ProjectPostgres,options={})=>{const value=new Class({ownerId:randomUUID(),env:environment(),...options});owners.push(value);return value;};
  t.after(async()=>{
-  for(const owner of owners)await owner.close();for(const key of keys)clearVault(key);
+  for(const owner of owners)await owner.close();for(const key of keys)await clearVault(key);
   const resolved=path.resolve(parent);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('observanda-project-postgres-'));
   await rm(resolved,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });

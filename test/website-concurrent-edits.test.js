@@ -34,5 +34,5 @@ test('website edits conflict only with changes to that website and preserve conc
   const stale=await sites.read(ids[0]);await sites.change({workspaceId:stale.book.id,etag:stale.etag,websitePin:stale.websitePin,operation:'rename',id:ids[0],name:'Revised field journal'});
   await assert.rejects(sites.save(ids[0],edit(stale,'Overwrite after same website changed')),{code:'CONFLICT'});
   assert.equal((await sites.read(ids[0])).book.website.footer,'Saved after another website was renamed');
- }finally{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-site-edits-'));await rm(directory,{recursive:true,force:true});}
+ }finally{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-site-edits-'));await rm(directory,{recursive:true,force:true});}
 });

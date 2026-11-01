@@ -69,7 +69,7 @@ test('preparation, assessment, amendment and repeat are dedicated app journeys w
   await publicPage.goto('https://attempt.invalid/entries/'+first.id+'.html');await expect(publicPage.locator('.attempt-details')).toContainText('Recognition — Unresolved');await expect(publicPage.locator('.attempt-details')).toContainText('Evidence acquired — Complete');await publicPage.screenshot({path:testInfo.outputPath('attempt-public.png'),fullPage:true});await publicContext.close();
   expect(errors).toEqual([]);expect(wholeReads).toEqual([]);
  }catch(error){await testInfo.attach('attempt-dom',{body:await page.content(),contentType:'text/html'});throw error;}
- finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('conflicting assessment corrections retain the checkpoint and cannot overwrite saved facts',async({page})=>{
@@ -88,5 +88,5 @@ test('conflicting assessment corrections retain the checkpoint and cannot overwr
   await versions.filter({has:page.getByRole('heading',{name:'Your draft',exact:true})}).getByRole('button',{name:'Keep this version',exact:true}).click();await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog.getByRole('alert')).toContainText('cannot be overwritten or removed');expect((await f.workspace.read()).book.entries[0].attempt).toEqual(stored.attempt);expect((await drafts.read(checkpoint)).draft.changes[0].record).toEqual(mine);
   await dialog.getByRole('button',{name:'Close review',exact:true}).click();await open();await page.locator('.record-draft-preview').getByRole('button',{name:'Recover this draft',exact:true}).click();await versions.filter({has:page.getByRole('heading',{name:'Current saved version',exact:true})}).getByRole('button',{name:'Keep this version',exact:true}).click();await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog).not.toBeVisible();expect(await drafts.read(checkpoint)).toBeNull();
   expect((await f.workspace.read()).book.entries[0].attempt).toEqual(stored.attempt);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

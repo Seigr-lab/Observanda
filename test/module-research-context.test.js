@@ -22,7 +22,7 @@ async function fixture(t,count,{sections=0}={}){
  ResearchCatalogue.prototype.read=()=>{throw Error('Complete research read');};
  ResearchCatalogue.prototype.members=()=>{throw Error('Research membership scan');};
  ResearchCatalogue.prototype.record=function(id,...args){loaded.push(id);return original.call(this,id,...args);};
- t.after(async()=>{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.members=members;clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.members=members;await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const command=(action,payload,commandId=randomUUID())=>store.execute({workspaceId:book.id,action,payload,commandId});
  return {...f,book,store,command,loaded};
 }

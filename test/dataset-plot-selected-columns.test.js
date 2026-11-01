@@ -18,7 +18,7 @@ import {verifySelectedPlot} from '../src/dataset-plot-selection.js';
 
 test('plotting and reopened provenance ignore unselected retained text while validating selected cells',{timeout:90000},async t=>{
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-selected-plot-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-selected-plot-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-selected-plot-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const notes='Synthetic acquired detail. '.repeat(165),names=['reading','counter','native','notes'],bytes=Buffer.from(Array.from({length:4},(_,reading)=>JSON.stringify({reading,counter:'18446744073709551615',native:'105',notes})).join('\n'));
  const upload=await materials.startImport({recordId,name:'selected-values.jsonl',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id);
  const columns=names.map((name,index)=>({...defaultColumn({label:name}),representation:index===3?'text':index===2?'radix':'integer',radix:index===2?6:10}));

@@ -22,7 +22,7 @@ const col=(name,representation='text',unit='')=>({...defaultColumn({label:name})
 const recipe=source=>({version:1,source,keys:[0],values:[{column:1,operation:'median',name:'Reference median'}],missing:'skip',note:'Median of reference readings per state.'});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-aggregation-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  async function dataset(text,columns){const bytes=Buffer.from(text),upload=await m.startImport({recordId,name:'readings.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const artifact=await m.finishImport(upload.id);return m.dataset({recordId,title:'Reference readings',artifact,columns});}
  return {...f,m,recordId,dataset,directory};
 }

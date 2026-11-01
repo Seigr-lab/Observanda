@@ -16,7 +16,7 @@ import {clearVault,cloneVault} from '../src/encryption.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-catalogue-admission-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-catalogue-admission-'));await rm(directory,{recursive:true,force:true});});return f;
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-catalogue-admission-'));await rm(directory,{recursive:true,force:true});});return f;
 }
 
 test('metadata reuses admitted transactions while raw files and fresh readers honor relocation fences',async t=>{

@@ -15,7 +15,7 @@ import {interruptWorkspace as interrupt} from './fixtures/interrupt-workspace.js
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-activation-crash-'));
  const access=await createAccess('','synthetic recovery password'),vault=takeCreatedVault(access),source=path.join(directory,'source');
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(source,sampleNotebook(),access,vault);
  const workspace=new Workspace(source,vault),before=await workspace.read();
  const backup=await copyWorkspace(await copyPlan(source,path.join(directory,'backup')),{vault});

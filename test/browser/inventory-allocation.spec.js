@@ -118,5 +118,5 @@ test('workspace inventory owns stock, allocates it to opted-in wings and keeps o
   expect(inventoryQuantity(saved,entities,item.id,b.id).physical).toBe('35');
   expect(entities.filter(e=>e.type==='resource')).toHaveLength(1);
   expect(saved.notebooks).toHaveLength(0);expect(saved.entries).toHaveLength(0);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

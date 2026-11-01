@@ -18,7 +18,7 @@ const token = 'synthetic_session_secret_1234567890';
 async function setup(t,options) {
   const book=sampleNotebook();book.website.home.sections=[newElement('text',randomUUID)];
   const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
-  t.after(async t=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async t=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   const saved = await new WebsiteSites(ws).read(null), candidate = buildPublication(saved.book); candidate.etag = saved.etag;candidate.websitePin=saved.websitePin;
   return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, options,f.vault) };
 }

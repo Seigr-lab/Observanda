@@ -19,7 +19,7 @@ test('record header collections page independently and visible prose resolves la
  record.relations=Array.from({length:257},(_,i)=>({id:randomUUID(),type:'Related to',label:'Reference '+i,target:{workspaceId:book.id,kind:'record',id:book.entries[1].id}}));
  record.template={id:randomUUID(),profileId:null,label:'Measurements',description:'',fields:Array.from({length:257},(_,i)=>({key:'v'+i,label:'Value '+i,type:'number',unit:'',required:false,choices:[]})),values:Object.fromEntries(Array.from({length:257},(_,i)=>['v'+i,String(9000+i)]))};
  record.body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'The figure belongs here.'}]},{type:'book_figure',attrs:{version:1,id:randomUUID(),figureId:record.figures[256].id,alternative:'Retained figure in its narrative position'}}]};
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const reader=new RecordContent(f.workspace),target={workspaceId:book.id,recordId:record.id,pagedHeader:true},etag=(await f.workspace.outline()).etag;
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Reader assembled a full original');});
  const read=RecordValueTree.prototype.read,forbidden=new Set();

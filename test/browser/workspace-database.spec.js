@@ -40,7 +40,7 @@ test('existing workspace converts in the app, locks its owned database and moves
   await page.setViewportSize({width:760,height:950});await page.evaluate(()=>document.documentElement.style.fontSize='24px');
   expect(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await page.screenshot({path:'.local/workspace-database-ui.png'});expect(errors).toEqual([]);
- }finally{await app.close();await owner.close();detach();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await owner.close();detach();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('restarting after interrupted move offers the verified destination and finishes cleanup',async({page})=>{
@@ -58,5 +58,5 @@ test('restarting after interrupted move offers the verified destination and fini
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Retry original cleanup',exact:true}).click();
   await dialog.getByRole('button',{name:'Retry original cleanup',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:45000});
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});
- }finally{await app?.close();await owner.close();detach();clearVault(f?.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app?.close();await owner.close();detach();await clearVault(f?.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

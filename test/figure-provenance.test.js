@@ -17,7 +17,7 @@ import {preparation,assessment} from './fixtures/attempts.js';
 
 test('a copied panel retains its exact analysis and edited measurements are identified before publication',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-panel-provenance-')),book=upgradeNotebook(sampleNotebook()),[record,method]=book.entries,plot=createFigure();plot.series[0].points=[{x:0,y:2,error:.1},{x:1,y:3,error:.2}];record.figures=[plot];
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});const materials=new ResearchMaterials(f.workspace);
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});const materials=new ResearchMaterials(f.workspace);
  const analysis=await f.workspace.withLock(async()=>materials.commit({kind:'analysis',recordId:record.id,title:'Retained calculation',content:{inputs:[await materials.retainRecord(method)],outputs:[],tool:'Synthetic calculator',version:'1',parameters:'Declared two-row projection',figure:plot}}));
  const sourceResults={version:1,statements:[{id:randomUUID(),kind:'figure',figureId:plot.id,title:'Exact calculation source',text:'Two retained points.',limitations:'Synthetic verification only.',basis:'retained',source:analysis}]},compound=createComposition([plot,plot]);
  record.figures.push(compound);record.results=copyFigureResults(sourceResults,[[plot,compound.panels[0].figure],[plot,compound.panels[1].figure]]);

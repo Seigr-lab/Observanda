@@ -33,7 +33,7 @@ async function fixture(page,{count=45,cards=null,prepare=async()=>{},decorate=()
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return record.call(this,id,...args);};
  page.on('pageerror',error=>errors.push(error.message));
  page.on('request',r=>{if(r.url().includes('/api/workspace/read/')||r.url().includes('/dashboard-collection/'))requests.push({url:r.url(),data:r.postDataJSON()});});
- return {book,ws,app,requests,errors,bodies,async close(){ResearchCatalogue.prototype.record=record;await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {book,ws,app,requests,errors,bodies,async close(){ResearchCatalogue.prototype.record=record;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const card=(page,id)=>page.locator('[data-desk-card="'+id+'"]');
 

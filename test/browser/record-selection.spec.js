@@ -18,7 +18,7 @@ async function fixture(){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-record-ui-')),book=upgradeNotebook(sampleNotebook()),source=book.entries[2];
  book.entries=Array.from({length:61},(_,i)=>({...structuredClone(source),id:randomUUID(),title:'Observation '+String(i).padStart(2,'0'),type:'note',body:'Original notes '+i,sections:[],relations:[],figures:[],attachments:[]}));
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- return {...f,book,app,close:async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book,app,close:async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 const openRecord=async(page,id)=>{await page.evaluate(id=>location.hash='#/records/'+id,id);await expect(page.locator('.record-editing h1')).toHaveText(/Observation/);};
 

@@ -13,7 +13,7 @@ import {materialRequest,executeMaterialRequest} from '../src/material-requests.j
 
 test('evidence pages and retained reads remain available while recursive dependency review is blocked',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-review-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  let source;const refs=[];
  await f.workspace.withLock(async()=>{
   source=await m.commit({kind:'collection',recordId,title:'Acquisition source',content:{inputs:[]}});

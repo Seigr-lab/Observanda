@@ -38,6 +38,6 @@ test('source startup and Help survive a cold asset queue already occupied by lan
   await expect(page.getByRole('heading',{name:'Innstillinger',exact:true})).toBeVisible();
   expect(errors).toEqual([]);expect(responses).toEqual([]);
  }finally{
-  gate.resolve();fs.lstat=originalStat;syncBuiltinESMExports();await Promise.allSettled(reads);await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});
+  gate.resolve();fs.lstat=originalStat;syncBuiltinESMExports();await Promise.allSettled(reads);await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});
  }
 });

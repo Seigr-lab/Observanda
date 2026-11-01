@@ -20,7 +20,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-transfer-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {drafts,transfer,run:draftContext}=moduleDraftOwners(f.workspace,book.id,'resources'),data={name:'Large category',description:'',archived:false,fields:[{key:'part',label:'Part',type:'select',unit:'',required:false,choices:Array.from({length:30000},(_,i)=>String(i).padStart(8,'0')+'x'.repeat(150))}]};
  const itemId=randomUUID();await workspaceModules(f.workspace).execute({workspaceId:book.id,commandId:randomUUID(),action:'category.save',payload:{id:itemId,expectedRevision:null,data}},{compact:true});
  const command={workspaceId:book.id,id:randomUUID(),moduleId:'resources',etag:null,drafts:[{id:itemId,type:'category',expectedRevision:1,baseRevision:1,data:{...data,name:'Unfinished large category'}}]},calls=[];

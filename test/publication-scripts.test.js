@@ -12,7 +12,7 @@ import {sampleNotebook} from '../src/sample.js';
 
 test('reviewed earlier public scripts remain readable with exact retained bytes; modified code is rejected',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-script-')),f=await encryptedFixture(root,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(root,{recursive:true,force:true});});
  const previous=await readFile(new URL('./fixtures/public-book-v1.txt',import.meta.url),'utf8');
  for(const source of [previous,previous.replaceAll('\n','\r\n'),PUBLIC_BOOK_SCRIPT]){
   assert.doesNotThrow(()=>assertPublicFiles(new Map([['public-book.js',source]])));

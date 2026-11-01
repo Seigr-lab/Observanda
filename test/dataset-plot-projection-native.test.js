@@ -23,7 +23,7 @@ const q=spelling=>({spelling,representation:'decimal',radix:10}),transform=(orig
 
 test('transformed wide plots retain sorted exact cells, paged reduction members and errors through fresh-key recovery',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-plot-projection-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {source,valueColumn,errorColumn,count}=await transformedPlotDataset(m,recordId),mapping={x:0,xKind:'number',group:null,values:[{column:valueColumn,error:errorColumn}],kind:'scatter',operation:'raw',order:'ascending',projection:{version:1,x:transform(plotCounterOrigin,'.001'),y:transform('1000','.1')}};
  const command={recordId,title:'Adjacent exact counters',dataset:source,mapping,base:createFigure()},raw=await m.plot(command),doc=await m.read(raw.ref);assert.equal(doc.content.version,'9');assert.deepEqual(doc.content.denominator.columnIndices,[0,valueColumn,errorColumn]);const reader=await new RetainedFigureDocuments(m.workspace,{readOnly:true}).open(doc.content.figure),points=await reader.window({collection:'points',limit:128});assert.deepEqual(points.items.map(p=>p.value.x),Array.from({length:count},(_,i)=>i+1));assert.equal(Object.hasOwn(doc.content,'plotPointsIndex'),false);assert.equal(Object.hasOwn(doc.content.figure,'series'),false);
  const listed=await plotPointPage(m,raw.ref);assert.equal(listed.items.length,16);assert.equal(listed.next,16);assert.equal(Object.hasOwn(listed.items[0],'coordinates'),false);
@@ -53,7 +53,7 @@ test('transformed wide plots retain sorted exact cells, paged reduction members 
 
 test('retained presentation forks discarded and historical sources and replays exact commands after reopen',{timeout:60000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-presentation-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const figure=createFigure();figure.series[0].points=[{x:1,y:2,error:null},{x:2,y:3,error:null}];
  const retained=await f.workspace.withLock(()=>new RetainedFigureDocuments(f.workspace).retain(figure)),source=await f.workspace.withLock(()=>m.commit({kind:'analysis',recordId,title:'Presentation source',content:{inputs:[],tool:'Retained presentation fixture',version:'1',parameters:'Known measurements',figure:retained}}));
  const command={operationId:randomUUID(),recordId,ref:{...source,workspaceId:book.id},operation:{type:'text',collection:'header',field:'title',offset:0,remove:figure.title.length,text:'Documented observations'}},first=await changeRetainedFigureRequest(m,command);assert.equal(first.ref.id,source.id);assert.equal((await m.current(source.id)).revision,first.ref.revision);
@@ -85,7 +85,7 @@ const collectPlotText=async chunks=>{let text='';for await(const chunk of chunks
 test('plot resource policies retain complete scalar cells, recover refused jobs, and preserve source-free projections through fresh-key recovery',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-plot-policy-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);const recordId=book.entries[0].id;book.entries[0].figures=[];
  const f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),vaults=[f.vault];let worker;
- t.after(async()=>{await worker?.stop();vaults.forEach(clearVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await worker?.stop();await Promise.all(vaults.map(clearVault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const stage=text=>process.stdout.write('# '+text+'\n'),high=defaultDatasetResourcePolicy();Object.assign(high.resources,{maxScalarCharacters:12000,maxExponent:12000,maxOperations:200000});
  const note='Independent retained text '+('z'.repeat(5000)),bytes=Buffer.from('Order,Small,Note\n2,2,'+note+'\n1,1,'+note),upload=await m.startImport({recordId,name:'projection-policy.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const artifact=await m.finishImport(upload.id),source=await m.dataset({recordId,title:'Exact lexical inputs',artifact,columns:[{...defaultColumn({label:'Order'}),representation:'integer'},{...defaultColumn({label:'Small'}),representation:'integer'},defaultColumn({label:'Note'})]},{signal:t.signal});
  const request=(material,data)=>executeMaterialRequest(f.workspace,{material},data,{signal:t.signal});let graph=(await request('calculation-graph-create',{recordId,title:'Complete scalar source',source,graphVersion:5,policy:high})).ref;

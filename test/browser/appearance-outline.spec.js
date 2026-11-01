@@ -26,7 +26,7 @@ async function fixture(page,count,{publicRecord=false,publicRecords=false,feeds=
  const app=await startServer({root:ws.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[],bodies=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push({path:new URL(r.url()).pathname,data:r.postData()});});
- return {app,ws,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {app,ws,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 async function open(page,f){await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();await page.evaluate(()=>location.hash='#/preferences/appearance');}
 

@@ -32,7 +32,7 @@ test('portable copy can be prepared and retried from the app without consuming t
   expect((await readPreferences(preferencesFile)).workspace).toBe(f.workspace.root);expect(await f.workspace.read()).toEqual(before);
   await page.setViewportSize({width:760,height:900});expect(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.storage-path').first()).toHaveText(f.workspace.root);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('the launcher reconnects a moved folder and persists its new location',async({page})=>{
@@ -47,7 +47,7 @@ test('the launcher reconnects a moved folder and persists its new location',asyn
   await expect(dialog).not.toBeVisible();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
   expect((await readPreferences(preferencesFile)).recent.map(item=>item.path)).toEqual([destination]);
   await page.reload();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('a folder without its database offers recovery guidance instead of a broken loading screen',async({page})=>{
@@ -63,5 +63,5 @@ test('a folder without its database offers recovery guidance instead of a broken
   await page.getByRole('button',{name:'Open workspace',exact:true}).click();const dialog=page.locator('#dialog');
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(backup);await dialog.getByRole('button',{name:'Open workspace',exact:true}).click();
   await expect(page.locator('.workspace-name')).toHaveText(path.basename(backup));
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

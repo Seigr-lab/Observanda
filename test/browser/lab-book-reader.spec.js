@@ -36,7 +36,7 @@ async function fixture(page,{figures=false,large=false}={}){
  const before=await f.workspace.outline(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[],selections=[],windows=[],fullReads=[],writes=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{const url=new URL(r.url()).pathname;if(url==='/api/workspace/read/selection')selections.push(r.postDataJSON());if(url==='/api/workspace/read/record-content')windows.push(r.postDataJSON());if(['/api/notebook','/api/workspace/read/page'].includes(url))fullReads.push(url);if(url==='/api/research/records/save')writes.push(url);});
  await page.goto(app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);await expect(page.locator('.records-table tbody tr')).toHaveCount(7);
- return {...f,app,book,before,href,errors,selections,windows,fullReads,writes,close:async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,app,book,before,href,errors,selections,windows,fullReads,writes,close:async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 
 test('read full lab-book pages, follow visible links, return to the book and explicitly enter editing',async({page},info)=>{

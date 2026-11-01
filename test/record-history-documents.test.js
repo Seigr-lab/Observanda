@@ -20,7 +20,7 @@ test('large record history inspects selected windows and restores retained block
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-history-doc-')),book=sampleNotebook(),record=book.entries[0];
  record.sections=Array.from({length:73},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Recorded '+i+' '+('exact'.repeat(5600))}));
  record.contributors=Array.from({length:73},(_,i)=>({id:randomUUID(),name:'Observer '+i,role:'Acquisition'}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const history=new RecordHistory(f.workspace,media),values=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id};
  const writing=new RecordWriting(f.workspace),summary=await writing.read({...target,sectionId:null});record.body='Extended observations '.repeat(2500);
  await writing.save({...target,sectionId:null,expectedRevision:summary.revision,value:{body:record.body}});
@@ -44,7 +44,7 @@ test('large record history inspects selected windows and restores retained block
 
 test('restoration keeps current notebook keys and execution facts after a record moves',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-history-moved-')),book=sampleNotebook(),record=book.entries[0],other={...book.notebooks[0],id:randomUUID(),title:'Current location'};book.notebooks.push(other);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const records=new ResearchRecords(f.workspace,media),history=new RecordHistory(f.workspace,media),target={workspaceId:book.id,recordId:record.id},attempt=attemptFixture();
  await records.save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Later version',notebookId:other.id,attempt}}]},{receipt:true});
  const listing=await history.list(target),old=listing.versions.find(v=>!v.current);
@@ -60,7 +60,7 @@ test('restoration keeps current notebook keys and execution facts after a record
 
 test('failed block restoration rolls back its current version, history and retry receipt',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-history-rollback-')),book=sampleNotebook(),record=book.entries[0];
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const values=new RecordValues(f.workspace),history=new RecordHistory(f.workspace,media),target={workspaceId:book.id,recordId:record.id},before=await values.read({...target,field:'title'});
  await values.save({...target,field:'title',expectedRevision:before.revision,value:{value:'Current title'}});
  const listing=await history.list(target),old=listing.versions.find(version=>!version.current),command={...target,...old,expectedRevision:listing.currentRevision},state=await f.workspace.outline();

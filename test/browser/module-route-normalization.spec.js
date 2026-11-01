@@ -27,5 +27,5 @@ test('old unscoped module deep links replace history for cold and reused editors
    await page.goBack();await expect(page).toHaveURL(previous);await expect(page.locator('.preferences-heading')).toBeVisible();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   }
   expect(errors).toEqual([]);
- }finally{await page.close();await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

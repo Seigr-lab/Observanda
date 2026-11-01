@@ -65,7 +65,7 @@ async function measuredReconciliation(workspace,expected,label,t){
 test('complete research reconciliation reports source and reopened ordinary-copy read costs',{timeout:600000},async t=>{
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-reconciliation-')),cpu=sampleWorkloadCpu();let fixture,active;
  // A timeout must not remove files while an awaited copy or scan still owns them.
- t.after(async()=>{await active?.catch(()=>{});t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()}));if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-reconciliation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await active?.catch(()=>{});t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()}));if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-reconciliation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  active=(async()=>{
  fixture=await authoringGrowthFixture(directory,{copies:1});
  const evidence=await adoptionEvidenceFixture(fixture,directory,{copies:1,exerciseRecovery:false,onStage:stage=>process.stdout.write('Reconciliation fixture: '+stage+'\n')});

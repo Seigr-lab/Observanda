@@ -15,7 +15,7 @@ async function fixture(){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-picker-')),data=richBook(),record=data.concept;
  record.sections=Array.from({length:81},(_,i)=>({id:randomUUID(),title:'Observation '+(i+1),body:'Retained observations '.repeat(40)}));
  const f=await encryptedFixture(directory,data.book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- return {...data,record,f,app,async close(){await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...data,record,f,app,async close(){await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 test('reference picker searches saved destinations, pins exact references and never hydrates the record editor',async({page},info)=>{
  test.setTimeout(120000);const f=await fixture(),errors=[],requests=[],dialog=page.locator('.record-reference-picker');page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));

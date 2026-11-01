@@ -26,7 +26,7 @@ import {WebsiteEditor} from '../src/website-editor.js';
 // Exercise actual independent host/project/book owners; all data is synthetic.
 test('page, section and media selectors resolve the exact website draft without sending aggregate choices',{timeout:180000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-source-selector-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;
- t.after(async()=>{await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-source-selector-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-source-selector-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const host=createNotebook('Website selector host'),f=await encryptedFixture(directory,host);keys.push(f.vault);
  const registry=new ProjectRegistry(f.workspace,host.id),addresses=new LabBookDirectory(registry),metadata=createNotebook('Selected source project'),projectId=id();metadata.projects=[{id:projectId,title:metadata.title,description:'',share:false,logoId:null}];
  const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);keys.push(vault);

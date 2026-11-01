@@ -50,7 +50,7 @@ test('project-only templates stay private even when the project and its records 
 
 test('encrypted project templates survive restart, conflict rejection and portable backup',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-template-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const initial=await f.workspace.read(),project={...initial.book.projects[0],kind:'Sound ecology wing',labBookTemplate:starterTemplate('arts-creative')};
  project.labBookTemplate.name='Private listening practice';
  const saved=await f.workspace.save(saveStructure(initial.book,{kind:'project',value:project}).book,initial.etag);
@@ -84,7 +84,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 
 test('initial template selections survive backup; failed settings writes never expose a partial workspace',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-type-initialization-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const access=(await readAccess(f.workspace.root)).value,dashboard=defaultDashboard(),destination=path.join(directory,'initialized');dashboard.enabledModules.push('laboratory-computer-it');
  await initializeLocation(destination,sampleNotebook(),access,f.vault,{dashboard});const workspace=new Workspace(destination,f.vault);assert.deepEqual((await readWorkspaceDashboard(workspace)).settings,dashboard);
  const backup=path.join(directory,'backup');await copyWorkspace(await copyPlan(destination,backup),{vault:f.vault});assert.deepEqual((await readWorkspaceDashboard(new Workspace(backup,f.vault))).settings,dashboard);

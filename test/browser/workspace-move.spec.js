@@ -28,7 +28,7 @@ test('Move starts from one action, survives a lost completion response, and leav
   expect(transfers).toBe(1);await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});expect(await catalogueBinding(destination)).toEqual(before);
   const remembered=await readPreferences(preferencesFile);expect(remembered.workspace).toBe(destination);expect(remembered.recent.some(item=>item.path===f.workspace.root)).toBe(false);
   await preferences(page,'Storage & access');await expect(page.locator('.storage-path').first()).toHaveText(destination);await page.reload();await expect(page.locator('.workspace-name')).toHaveText('moved');
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('unfinished source cleanup is visible and retry completes without another transfer',async({page})=>{
@@ -43,7 +43,7 @@ test('unfinished source cleanup is visible and retry completes without another t
   await expect(dialog.getByRole('heading',{name:'Finish removing the original workspace',exact:true})).toBeVisible({timeout:45000});await expect(dialog).toContainText('The original changed after it was copied');
   expect(await readFile(original,'utf8')).toBe('Changed source evidence');await writeFile(original,'Reviewed evidence');
   await dialog.getByRole('button',{name:'Retry original cleanup',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:30000});expect(transfers).toBe(1);await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});
- }finally{Workspace.prototype.outline=outline;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{Workspace.prototype.outline=outline;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('storage progress keeps dialog bounds stable across long paths, wrapped counters and unknown totals',async({page})=>{
@@ -74,5 +74,5 @@ test('storage progress keeps dialog bounds stable across long paths, wrapped cou
    await page.locator('[data-item]').focus();expect(await page.locator('[data-item]').evaluate(el=>el.scrollHeight>=el.clientHeight)).toBe(true);
    await page.evaluate(()=>{window.testProgress.close();document.querySelector('#dialog').close();});
   }
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

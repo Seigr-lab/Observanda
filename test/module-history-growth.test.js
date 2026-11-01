@@ -15,7 +15,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
 for(const count of [75,750])test('module history retains '+count+' full revisions with bounded current reads, pages and audit memory',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-growth-')),f=await encryptedFixture(directory,sampleNotebook()),modules=workspaceModules(f.workspace),workspaceId=(await f.workspace.outline()).metadata.id,id=randomUUID(),history=new ModuleHistory(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const description='Private original field observations. '.repeat(2700),command=revision=>({workspaceId,commandId:randomUUID(),action:'task.save',payload:{id,expectedRevision:revision||null,data:{title:'Revision '+(revision+1),description,status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]}}});
  let peakHeap=0;const sampler=setInterval(()=>{peakHeap=Math.max(peakHeap,process.memoryUsage().heapUsed);},25);sampler.unref();
  try{

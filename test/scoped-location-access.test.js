@@ -21,7 +21,7 @@ import {workspaceRename} from '../src/workspace-rename-state.js';
 
 test('scoped location admission releases every borrowed key and checks recorded parent/book revocation',{timeout:120000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-scoped-access-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);let vault;
- t.after(async()=>{await runtime.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-scoped-access-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-scoped-access-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const fixture=await encryptedFixture(path.join(directory,'Scoped Access Workspace'),createNotebook('Scoped Access Workspace'));vault=fixture.vault;await fixture.workspace.outline();
  const session=new Map(),application={closed:false,session:()=>session,tracked:operation=>operation()},client={};let active=0,peak=0,last;
  const close=ProjectSessionOwner.prototype.close;

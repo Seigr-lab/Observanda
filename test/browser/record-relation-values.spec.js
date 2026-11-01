@@ -48,7 +48,7 @@ test('research links recover incomplete references, retain chosen methods, resol
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('research-link-mobile.png')});
   await save();await expect(dialog).not.toBeVisible();expect((await values.read(target(created.id))).value.value).toBeNull();
   await expect.poll(async()=>(await new ResearchDrafts(f.workspace).list({workspaceId:book.id})).drafts.length).toBe(0);expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('closing discovery cancels a pending exact choice without changing another editor',async({page})=>{
@@ -62,7 +62,7 @@ test('closing discovery cancels a pending exact choice without changing another 
   await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.getByRole('button',{name:'Add contributor',exact:true}).click();const contributor=page.getByRole('dialog',{name:'Edit Contributor',exact:true});await expect(contributor.getByLabel('Name',{exact:true})).toHaveValue('');releasePin();await finished;
   await expect(contributor.getByLabel('Name',{exact:true})).toHaveValue('');await expect(contributor.getByRole('button',{name:'Save changes',exact:true})).toBeDisabled();await contributor.getByRole('button',{name:'Close',exact:true}).click();
   const drafts=await new ResearchDrafts(f.workspace).list({workspaceId:book.id});expect(drafts.drafts).toHaveLength(1);const content=await new RecordContent(f.workspace).read({workspaceId:book.id,recordId:record.id,pagedHeader:true});expect(content.header.relations).toHaveLength(0);
- }finally{releasePin();await page.unrouteAll({behavior:'wait'});await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{releasePin();await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('reader links select structural targets and preserve cross-workspace section references',async({page})=>{
@@ -75,5 +75,5 @@ test('reader links select structural targets and preserve cross-workspace sectio
   await page.getByRole('button',{name:'Add research link',exact:true}).click();const reference=researchReference({workspaceId:randomUUID(),kind:'record',id:randomUUID(),revision:'a'.repeat(64),selector:{version:1,kind:'section',id:randomUUID()}});
   await dialog.getByLabel('Link label',{exact:true}).fill('Another workspace section');await dialog.getByLabel('Observanda reference',{exact:true}).fill(reference);await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   const read=await new RecordContent(f.workspace).read({workspaceId:book.id,recordId:record.id,pagedHeader:true});expect(read.header.relations).toHaveLength(2);expect(researchReference(read.header.relations[1].target)).toBe(reference);
- }finally{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

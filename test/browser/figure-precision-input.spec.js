@@ -40,5 +40,5 @@ test('numeric authoring and CSV review refuse silent rounding while preserving t
   await editor.getByLabel('Horizontal coordinates',{exact:true}).selectOption('category');await editor.getByLabel('Coordinate 1',{exact:true}).fill('9007199254740993.0');
   await editor.getByLabel('Horizontal coordinates',{exact:true}).selectOption('number');await expect(editor.getByLabel('Horizontal coordinates',{exact:true})).toHaveValue('category');await expect(editor.getByLabel('Coordinate 1',{exact:true})).toHaveValue('9007199254740993.0');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

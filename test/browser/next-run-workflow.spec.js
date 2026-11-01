@@ -104,5 +104,5 @@ test('ordinary next run connects preparation, native evidence, measurements, res
   await openRecord(runId,'Apparatus run one');await evidence();await expect(dialog.locator('.material-file-summary')).toHaveCount(files.size);await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await app.close();app=null;await recoverResearch({browser,directory,root:destination,recovery,before,runId,protocol,files,analysis,analysisDoc,originalAnalysis,originalCalculation,exported,editionId});
   expect(await f.workspace.read()).toEqual(before);expect(errors).toEqual([]);
- }finally{await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

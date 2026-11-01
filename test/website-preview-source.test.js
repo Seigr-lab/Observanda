@@ -26,7 +26,7 @@ async function fixture(t,configure=()=>{}){
  const seed=book.entries[0];book.entries=Array.from({length:42},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Record '+i,body:'Original '+i,attachments:[],figures:[],relations:[]}));
  configure(book);
  const f=await encryptedFixture(directory,book),{etag,websitePin}=await new PublicationJobs(f.workspace).workspace.outline();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,etag,websitePin,saved:await f.workspace.read(),request:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
 }
 

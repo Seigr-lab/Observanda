@@ -16,7 +16,7 @@ test('full-record title saves reuse unchanged derived data within a database que
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-save-cost-')),book=sampleNotebook();
  const record=book.entries[0];record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Section '+i,body:('Exact observation '+i+' ').repeat(50)}));
  const f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const records=new ResearchRecords(f.workspace,{}),initial=await f.workspace.read(),previous=initial.book.entries[0];
  const changed={...previous,title:'Corrected synthetic protocol title'};
  let queries=0;const query=Client.prototype.query;
@@ -43,7 +43,7 @@ test('document windows batch authenticated reads without reading outside the req
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-document-window-')),book=sampleNotebook();
  const record=book.entries[0];record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Section '+i,body:('Window observation '+i+' ').repeat(50)}));
  const f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await f.workspace.catalogue(async store=>{
   const row=await store.member(await store.snapshot(),record.id);
   await withRecordDocument(store,row.id,row.revision,async document=>{

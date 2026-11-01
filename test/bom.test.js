@@ -28,7 +28,7 @@ async function setup(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bom-')),book=upgradeNotebook(sampleNotebook());
  book.title='Synthetic prototypes';book.entries[0].title='PRIVATE board build';book.entries[0].share=false;
  const f=await encryptedFixture(directory,book),store=workspaceModules(f.workspace),project=book.projects[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const cmd=(action,payload,commandId=randomUUID())=>store.execute({workspaceId:book.id,commandId,action,payload});
  const get=async id=>(await store.current()).entities.find(e=>e.id===id);
  const item=async(name,quantity='100',unit='items')=>{

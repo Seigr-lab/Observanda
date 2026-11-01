@@ -14,7 +14,7 @@ import {AppError} from '../src/errors.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-save-progress-')),f=await encryptedFixture(directory,sampleNotebook());
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,headless:true,port:0});
- t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=auth.headers.get('x-observanda-session').split(';')[0],before=await f.workspace.read(),previous=before.book.entries[0];
  const record={...previous,title:'A measurable save',sections:Array.from({length:129},(_,i)=>({id:crypto.randomUUID(),title:'Section '+i,body:('Exact observation '+i+' ').repeat(50)}))};
  const command=(record,base=previous)=>({workspaceId:before.book.id,receipt:true,changes:[{id:record.id,record,expectedRevision:recordRevision(base)}]});

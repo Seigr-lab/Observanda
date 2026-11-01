@@ -19,7 +19,7 @@ async function fixture(page){
   if(request.url().endsWith('/api/research/records/save'))commands.push(request.postDataJSON());
  });
  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,data.parent.id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(data.parent.title,{timeout:15000});
- return {...f,...data,app,errors,fullReads,loaded,commands,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,...data,app,errors,fullReads,loaded,commands,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 const area=page=>page.locator('[data-run-pages]');
 

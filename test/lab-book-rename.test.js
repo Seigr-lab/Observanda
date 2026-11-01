@@ -23,7 +23,7 @@ import {workspaceRename} from '../src/workspace-rename-state.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-rename-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-rename-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-rename-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const model=createNotebook('Field Project 1'),projectId=randomUUID();model.projects=[{id:projectId,title:model.title,parentId:null,description:'',share:false,logoId:null}];
  const project=await initializeProjectLocation(path.join(directory,model.title),projectId,model,access,vault),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);

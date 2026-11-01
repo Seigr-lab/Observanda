@@ -18,7 +18,7 @@ async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-lab-book-owner-')),owners=[],keys=[];
  const manager=(Class=LabBookPostgres,options={})=>{const owner=new Class({ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN},...options});owners.push(owner);return owner;};
  t.after(async()=>{
-  for(const owner of owners)await owner.close();for(const key of keys)clearVault(key);
+  for(const owner of owners)await owner.close();for(const key of keys)await clearVault(key);
   const resolved=path.resolve(parent);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('observanda-lab-book-owner-'));
   await rm(resolved,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });

@@ -67,5 +67,5 @@ test('evidence sources page, search and cross records without losing exact selec
   const result=(await materials.list({recordId:owner,query:'Chosen exact sources'})).items[0];
   expect((await materials.referencePage(result)).items.map(({kind,id,revision})=>({kind,id,revision}))).toEqual(expected);
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

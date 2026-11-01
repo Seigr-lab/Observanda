@@ -21,7 +21,7 @@ import {copyPlan} from '../src/locations.js';
 test('filtered numeric-title and timeline pages reuse pinned encrypted results and drain before handoff',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pinned-query-')),book=sampleNotebook(),seed=book.entries[0];
  book.entries=Array.from({length:500},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Sample '+(500-i),body:'',sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:['batch'],status:i%3?'completed':'incomplete',occurredOn:'2026-06-'+String(1+i%28).padStart(2,'0')}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await drainRetiredVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await drainRetiredVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const original=ResearchCatalogue.prototype.queryDocuments;let decoded=0;t.mock.method(ResearchCatalogue.prototype,'queryDocuments',async function*(...args){for await(const value of original.apply(this,args)){decoded++;yield value;}});
  const reader=new RecordQuery(f.workspace),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse({sort:'title',tags:'batch',status:'completed'})},command={workspaceId:book.id,query,limit:25},expected=queryRecords(book.entries,query).map(record=>record.id);
  const first=await reader.list(command);assert.deepEqual(first.records.map(record=>record.id),expected.slice(0,25));assert.equal(first.total,expected.length);assert.ok(decoded>=500);const initialDecoded=decoded;decoded=0;

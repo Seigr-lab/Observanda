@@ -26,7 +26,7 @@ async function fixture(page){
    const record={...structuredClone(snapshot.book.entries[0]),id:randomUUID(),notebookId:notebook.id,title:'External article',sections:[],attachments:[],figures:[],relations:[],share:false};
    await new ResearchRecords(writer,{}).save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:null,record}]});return {notebook,record};},
   async rename(record,title){const current=(await writer.read()).book.entries.find(r=>r.id===record.id);await new ResearchRecords(writer,{}).save({workspaceId:initial.book.id,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,title}}]});},
-  async close(){await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});expect(errors).toEqual([]);}
+  async close(){await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});expect(errors).toEqual([]);}
  };
 }
 const logo=page=>page.getByRole('link',{name:'Observanda — refresh saved workspace',exact:true});

@@ -12,7 +12,7 @@ import {digest,serialize} from '../src/storage-format.js';
 
 test('native capture avoids writers for absent nodes and preserves flushed reads and failed captures',{timeout:60000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-capture-blocks-')),book=createNotebook('Retained blocks'),fixture=await encryptedFixture(directory,book),workspace=fixture.workspace;
- t.after(async()=>{clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-capture-blocks-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-capture-blocks-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const withLock=workspace.withLock,open=workspace.openCatalogue;let writers=0,opened=0,closed=0;
  workspace.openCatalogue=async function(options){const db=await open.call(this,options),close=db.close;opened++;db.close=async function(){try{return await close.call(this);}finally{closed++;}};return db;};
  workspace.withLock=function(...args){writers++;return withLock.apply(this,args);};

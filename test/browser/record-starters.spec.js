@@ -40,7 +40,7 @@ for(const dedicated of [false,true])test((dedicated?'project: ':'workspace: ')+'
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
   await page.screenshot({path:path.join(test.info().outputDir,'template-editor-narrow.png')});
   expect(errors).toEqual([]);
- }finally{await app.close();await fixture.close?.();clearVault(vault);expect(path.dirname(dir)).toBe(path.resolve(os.tmpdir()));expect(path.basename(dir).startsWith('observanda-starter-ui-')).toBe(true);await rm(dir,{recursive:true,force:true});}
+ }finally{await app.close();await fixture.close?.();await clearVault(vault);expect(path.dirname(dir)).toBe(path.resolve(os.tmpdir()));expect(path.basename(dir).startsWith('observanda-starter-ui-')).toBe(true);await rm(dir,{recursive:true,force:true});}
 });
 
 test('large template pages and late edits survive lost acknowledgements without duplicating sections',async({page},info)=>{
@@ -55,7 +55,7 @@ test('large template pages and late edits survive lost acknowledgements without 
   await click('Back to sections');await click('Add section');await expect(dialog.getByLabel('Section title',{exact:true})).toHaveValue('New section');await dialog.getByLabel('Section title',{exact:true}).fill('Next independent instruction');await click('Save draft');await click('Back to sections');await expect(dialog).toContainText('Sections 66–66 of 66');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);await dialog.getByRole('button',{name:'Edit section',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('large-template-narrow.png')});
   expect(requests.some(op=>['read','release','export','preview','import'].includes(op))).toBe(false);const saved=await store.read({workspaceId:book.id,id});expect(saved.draft.sections).toHaveLength(66);expect(saved.draft.sections[64].title).toBe('Reviewed final step');expect(saved.draft.sections[64].body).toBe(draft.sections[64].body);
- }finally{await app.close();clearVault(vault);await rm(dir,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(dir,{recursive:true,force:true});}
 });
 
 test('capture is selective, structural edits remain guarded and conflicts preserve the draft',async({page})=>{
@@ -74,5 +74,5 @@ test('capture is selective, structural edits remain guarded and conflicts preser
   const {items}=await store.list({workspaceId:book.id,cursor:null}),current=await store.read({workspaceId:book.id,id:items[0].id});await store.save({workspaceId:book.id,id:items[0].id,expectedRevision:current.header.revision,draft:{...current.draft,name:'Changed by another window'}});
   await click('Save draft');await expect(page.locator('#notice')).toContainText('changed in another window');await expect(dialog.getByLabel('Section title',{exact:true})).toHaveValue('Unsaved method label');
   await click('Back to sections');await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Changed by another window',exact:true})).toBeVisible();
- }finally{await app.close();clearVault(vault);await rm(dir,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(dir,{recursive:true,force:true});}
 });

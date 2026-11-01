@@ -18,7 +18,7 @@ import {TestDeviceStore} from './device-fixture.js';
 export async function result(response,status=200){const value=await response.json();assert.equal(response.status,status,JSON.stringify(value));return value;}
 export async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-task-prerequisites-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];let app;
- t.after(async()=>{await app?.close();await provider.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-task-prerequisites-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app?.close();await provider.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-task-prerequisites-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const root=path.join(directory,'Research Workspace'),initial=createNotebook('Research Workspace');await initializeLocation(root,initial,access,vault);const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,initial.id);
  app=await startServer({root,port:0,headless:true,deviceStore:device});

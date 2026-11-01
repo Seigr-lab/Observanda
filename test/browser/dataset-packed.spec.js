@@ -29,5 +29,5 @@ test('packed-array controls prepare two full timing runs and reject truncated or
   await dialog.locator('summary').filter({hasText:'Source mapping'}).click();await expect(dialog.getByText(/3888 records per window, 6 array elements per record, starting at offset 384/)).toBeVisible();
   const head=(await materials.heads()).find(h=>h.kind==='dataset'),ref={kind:head.kind,id:head.id,revision:head.revision},doc=await materials.read(ref);expect(doc.content.rowCount).toBe(7776);expect(doc.content.sourceMapping).toEqual(packedMapping());
   const inspected=await materials.measurements.inspect({ref,selector:{kind:'cell',page:0,row:37,column:6}});expect(inspected.original.selector.pointer).toBe('/runs/0/packed/611');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

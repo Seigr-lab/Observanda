@@ -59,5 +59,5 @@ test('linked layouts review conflicts, retain local work and survive undo, savin
   await binding.getByRole('button',{name:'Detach layout',exact:true}).click();await expect(binding).toHaveCount(0);await expect(canvas.getByText('My page text',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const saved=(await sites.read(id)).book;expect(saved.pages[0].templateLink).toBeUndefined();expect(saved.pages[0].sections.map(section=>section.body)).toEqual(['My page text','New layout section']);expect(saved.website.templates.find(item=>item.name==='Derived field layout').templateLink.templateId).toBe(base.id);expect(errors).toEqual([]);
- }finally{releaseReview?.();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{releaseReview?.();await page.close();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

@@ -25,7 +25,7 @@ test('Workspaces opens a private inventory preview, accounts for blocked items a
   await page.getByRole('button',{name:'Inspect external logbook',exact:true}).click();await page.getByLabel('Source folder',{exact:true}).fill(source+'-missing');
   await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   expect((await f.workspace.read()).etag).toBe(before.etag);expect(scans).toBe(2);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });
 
 test('source target problems are reviewable in the app and correcting the declaration clears them',async({page})=>{
@@ -54,7 +54,7 @@ test('source target problems are reviewable in the app and correcting the declar
   await row.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:test.info().outputPath('inventory-targets-phone.png')});
   expect((await f.workspace.read()).etag).toBe(before.etag);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });
 
 test('leaving an inspection ignores its late result and cancellation permits a fresh scan',async({page})=>{
@@ -77,7 +77,7 @@ test('leaving an inspection ignores its late result and cancellation permits a f
   await page.getByRole('button',{name:'Inspect source',exact:true}).click();await cancelledRequest;await page.getByRole('button',{name:'Cancel inspection',exact:true}).click();releaseCancelled();
   await expect(page.locator('#inventory-progress')).toHaveText('Inspection cancelled. No records were imported.');
   await page.getByRole('button',{name:'Inspect source',exact:true}).click();await expect(page.getByRole('heading',{name:'Inventory fully accounted for'})).toBeVisible();
- }finally{release();releaseCancelled();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ }finally{release();releaseCancelled();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });
 
 test('tenfold physical inventory is usable through the app with bounded result pages',async({page})=>{
@@ -112,5 +112,5 @@ test('tenfold physical inventory is usable through the app with bounded result p
   console.log(JSON.stringify({workload:'A1 tenfold app inventory',elapsedMs:Date.now()-start,initialHeapBytes:initialHeap,finalHeapBytes:finalHeap,objects:expected.objects,files:expected.files,bytes:expected.bytes}));
   await page.screenshot({path:test.info().outputPath('inventory-growth-desktop.png')});
   expect((await f.workspace.read()).etag).toBe(before.etag);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });

@@ -29,7 +29,7 @@ test('cancelled record allocations restore native and legacy history, drafts and
  for(const record of book.entries){record.attachments=[];record.figures=[];record.share=false;}
  const sourceFixture=await encryptedFixture(path.join(directory,'source'),book),targetBook={...structuredClone(book),id:randomUUID()},targetFixture=await encryptedFixture(path.join(directory,'target'),targetBook);
  const source=sourceFixture.workspace,target=targetFixture.workspace;
- t.after(async()=>{clearVault(sourceFixture.vault);clearVault(targetFixture.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-reclaim-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(sourceFixture.vault);await clearVault(targetFixture.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-reclaim-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const initial=(await source.read()).book.entries[0],sibling=(await target.read()).book.entries[1],records=new ResearchRecords(source,media),targetRecords=new ResearchRecords(target,media);
  await targetRecords.remove({workspaceId:targetBook.id,recordId:initial.id,expectedRevision:recordRevision(initial)});
  const originalState=await target.catalogue(async store=>{const history=store.historyIndex(initial.id),head=await history.head();return {head,raw:await history.get(history.root),rows:await Array.fromAsync(history.items(head)),revision:recordEncoding(initial).revision,generation:await retainedHistoryGeneration(store,initial.id)};});

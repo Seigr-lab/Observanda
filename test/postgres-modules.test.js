@@ -20,7 +20,7 @@ import {databaseCapacity,openCatalogue} from '../src/postgres.js';
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-module-sql-')),root=path.join(parent,'workspace'),a=await createAccess('','synthetic module password'),vault=takeCreatedVault(a);
  await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),book=(await ws.read()).book,store=workspaceModules(ws);
- t.after(async()=>{clearVault(vault);await rm(parent,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  return {parent,root,vault,ws,book,store,command:(action,payload)=>({workspaceId:book.id,commandId:randomUUID(),action,payload})};
 }
 const task=()=>({title:'Private task sentinel',description:'',status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]});

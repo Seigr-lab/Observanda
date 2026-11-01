@@ -21,7 +21,7 @@ test('HTTP import verification returns a durable job, survives lock/restart and 
  const originalPrepare=ResearchMaterials.prototype.prepareImport;let allow=false,entered;
  const ready=new Promise(resolve=>entered=resolve);
  ResearchMaterials.prototype.prepareImport=async function(id,options){entered();if(!allow)await delay(60000,null,{signal:options.signal});return originalPrepare.call(this,id,options);};
- t.after(async()=>{ResearchMaterials.prototype.prepareImport=originalPrepare;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{ResearchMaterials.prototype.prepareImport=originalPrepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await login();const bytes=Buffer.from('Retained server original'),session=await materials.startImport({recordId:book.entries[0].id,name:'server.bin',size:bytes.length});await materials.appendImport(session.id,0,[bytes]);
  const queued=await api('finish',{id:session.id});assert.equal(queued.status,202);assert.equal(queued.data.job.state,'queued');await ready;
  const status=await api('job',{id:session.id});assert.equal(status.data.job.state,'running');assert.equal(status.data.job.lease,undefined);assert.equal(status.data.job.input,undefined);

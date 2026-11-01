@@ -24,7 +24,7 @@ async function fixture(t){
  const f=await encryptedFixture(directory,book),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><circle cx="4" cy="4" r="3"/></svg>'),'image');
  const saved=await f.workspace.read();saved.book.entries[0].attachments=[{id:asset.id,kind:'image',caption:'Selected observation',alt:'Circle',transcript:'',share:true}];await f.workspace.save(saved.book,saved.etag);
  const jobs=new PublicationJobs(f.workspace),outline=await jobs.workspace.outline();let app;
- t.after(async()=>{await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,book,record,page,media,asset,jobs,outline,directory,start:async()=>app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),change:async edit=>{const saved=await f.workspace.read();edit(saved.book);await f.workspace.save(saved.book,saved.etag);}};
 }
 const withdrawals=[

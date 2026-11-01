@@ -22,7 +22,7 @@ import {clearVault} from '../src/encryption.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 async function fixture(t,{encrypted=false}={}){
  const testParent=await realpath(process.env.OBSERVANDA_RENAME_TEST_PARENT??os.tmpdir()),parent=await mkdtemp(path.join(testParent,'observanda-rename-test-'));let provider,detach,f;
- t.after(async()=>{await provider?.close();detach?.();clearVault(f?.vault);if(path.resolve(path.dirname(parent))!==path.resolve(testParent)||!path.basename(parent).startsWith('observanda-rename-test-'))throw Error('Unexpected test directory');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider?.close();detach?.();await clearVault(f?.vault);if(path.resolve(path.dirname(parent))!==path.resolve(testParent)||!path.basename(parent).startsWith('observanda-rename-test-'))throw Error('Unexpected test directory');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(encrypted){provider=new WorkspaceDatabases({directory:path.join(parent,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(provider);f=await encryptedFixture(parent,sampleNotebook());}
  else f={workspace:new Workspace(await initializeLocation(path.join(parent,'old folder'),sampleNotebook(),await createAccess()))};
  return {...f,parent,renames:new WorkspaceRenames(path.join(parent,'renames')),provider};

@@ -25,7 +25,7 @@ import {clearVault} from '../src/encryption.js';
 
 test('native move worklist retains exact order and boundaries beyond the old aggregate receipt size',{timeout:120000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-move-directory-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
- t.after(async()=>{await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-move-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-move-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'Source'),createNotebook('Workspace'));vault=f.vault;const owner=f.workspace,registry=new ProjectRegistry(owner,(await owner.outline()).metadata.id),destination=path.join(directory,'Destination');
  const make=(root,parentId=null)=>({projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),root,parentId,summary:null});
  const parent=make(path.join(directory,'External parent')),child=make(path.join(parent.root,'Child'),parent.projectId),internal=make(path.join(owner.root,'Nested folder','Internal project'));

@@ -32,5 +32,5 @@ test('a prepared website remains downloadable after editing another website but 
   await other.goto(new URL('/#/websites/'+ids[0]+'/editor',app.url).href);await expect(other.locator('.website-site-context')).toContainText('Field journal');await task(other,'Site');
   await other.getByLabel('Website title',{exact:true}).fill('Changed journal title');await other.getByRole('button',{name:'Save website',exact:true}).click();await expect(other.locator('#save-status')).toHaveText('Saved');
   await page.reload();await expect(stale).toBeVisible();await expect(page.getByRole('button',{name:'Download website ZIP',exact:true})).toBeDisabled();
- }finally{await other?.close();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-site-edition-ui-')).toBe(true);await rm(directory,{recursive:true,force:true});}
+ }finally{await other?.close();await page.close();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-site-edition-ui-')).toBe(true);await rm(directory,{recursive:true,force:true});}
 });

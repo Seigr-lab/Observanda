@@ -18,7 +18,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 const source='metadata:.observanda/drafts/';
 async function fixture(t,count=14){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-pages-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const drafts=new ResearchDrafts(f.workspace),commands=[];
  for(let i=0;i<count;i++){
   const base=book.entries[0],command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[{base,expectedRevision:recordRevision(base),record:{...base,title:'Draft '+i,body:'Private working source '.repeat(1800)}}]};

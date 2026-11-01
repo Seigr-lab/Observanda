@@ -23,7 +23,7 @@ const branding=target=>({target,logos:[]});
 const page=()=>({id:randomUUID(),title:'Selected page',body:'Authored prose',share:true,sections:[]});
 async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-presentation-collections-')),book=createNotebook('Presentation collections'),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-presentation-collections-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-presentation-collections-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const sites=new WebsiteSites(f.workspace),editor=new WebsiteEditor(f.workspace),created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Selected presentation'}),websiteId=created.id;
  return {...f,book,sites,websiteId,execute:(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId,...data})};
 }

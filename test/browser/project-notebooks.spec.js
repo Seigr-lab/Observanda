@@ -50,5 +50,5 @@ test('authenticated appearance preview searches and retries lab-book continuatio
   await feed.getByRole('button',{name:'Retry',exact:true}).click();await expect(rows.first()).toHaveText('Lab book 0024');expect(await ids()).toEqual(before);
   await feed.getByLabel('Search lab books',{exact:true}).fill('Lab book 0052');await feed.getByRole('button',{name:'Apply filters',exact:true}).click();await expect(rows).toHaveCount(1);await expect(rows).toHaveText('Lab book 0052');expect(await ids()).toEqual(before);
   await expect(page.locator('#design-preview')).toHaveAttribute('sandbox','allow-same-origin');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

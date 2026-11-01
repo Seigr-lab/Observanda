@@ -14,7 +14,7 @@ import {Workspace} from '../src/storage.js';
 
 test('retained reference continuation files restore byte for byte under a fresh encryption key',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-edition-')),book=referenceBook(),f=await encryptedFixture(directory,book),jobs=new PublicationJobs(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const candidate=await jobs.inline(await jobs.workspace.outline()),names=(await Array.fromAsync(candidate.files.keys())).filter(name=>name.startsWith('entries/references-'+book.entries[0].id+'-'));
  assert.equal(names.length,2);const original=await Promise.all(names.map(async name=>(await contentBuffer(await candidate.files.get(name))).toString()));
  const access=await createAccess('','reference edition restore'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));

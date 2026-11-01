@@ -85,12 +85,12 @@ test('encrypted saved views survive verified copies and never enter publication 
   assert.equal((await ws.read()).etag,etag);assert.equal((await restored.read()).etag,etag);
   const output=buildPublication((await restored.read()).book),text=[...output.files.values()].filter(v=>typeof v==='string').join('\n');
   assert.ok(!text.includes(value.name));assert.ok(!text.includes(value.query.search));assert.ok(![...output.files.keys()].some(k=>k.includes('record-views')));
- }finally{clearVault(vault);if(restoredVault)clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
+ }finally{await clearVault(vault);if(restoredVault)await clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
 });
 
 test('saved-view endpoints use authenticated workspace context, reject conflicts, and stop while locked',async t=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-service-')),root=path.join(parent,'source'),book=queryFixture(),password='synthetic service password',access=await createAccess('',password),vault=takeCreatedVault(access);
- await initializeLocation(root,book,access,vault);const app=await testServer({root,port:0,headless:true});t.after(async()=>{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});});
+ await initializeLocation(root,book,access,vault);const app=await testServer({root,port:0,headless:true});t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  const post=(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)});

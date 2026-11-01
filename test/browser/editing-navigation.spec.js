@@ -11,7 +11,7 @@ import {WebsiteSites} from '../../src/website-sites.js';
 import {sampleNotebook} from '../../src/sample.js';
 let app,parent,book,fixture;
 test.beforeEach(async({page})=>{test.setTimeout(90000);page.setDefaultTimeout(10000);parent=await mkdtemp(path.join(os.tmpdir(),'observanda-editing-'));const seed=sampleNotebook();seed.title='workspace';fixture=await encryptedFixture(parent,seed);book=(await fixture.workspace.read()).book;app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);});
-test.afterEach(async()=>{await app?.close();clearVault(fixture?.vault);if(parent&&path.dirname(parent)===path.resolve(os.tmpdir()))await rm(parent,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+test.afterEach(async()=>{await app?.close();await clearVault(fixture?.vault);if(parent&&path.dirname(parent)===path.resolve(os.tmpdir()))await rm(parent,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
 const guard=page=>page.getByRole('dialog',{name:'Unsaved changes',exact:true});
 const choose=(page,name)=>guard(page).getByRole('button',{name,exact:true}).click();
 async function editWebsite(page){await navigate(page,'Website editor');await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Navigation page');await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');}

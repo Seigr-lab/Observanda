@@ -30,7 +30,7 @@ async function fixture(t,count=8){
  book.branding=[{target:'entry:'+book.entries.at(-1).id,logos:[]}];
  book.website.layouts=[defaultPageLayout('entry:'+book.entries.at(-1).id)];
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  const media=new MediaStore(ws.root,vault),logo=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>'),'image'),saved=await ws.read();
  saved.book.branding[0].logos=[{id:logo.id,alt:'Private mark'}];await ws.save(saved.book,saved.etag);
  return {directory,ws,vault,base:await ws.read(),service:new WorkspaceEdits(ws,{get:async()=>{throw Object.assign(Error('Missing original'),{code:'MEDIA_MISSING'});}})};

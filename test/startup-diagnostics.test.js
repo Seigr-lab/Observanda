@@ -11,7 +11,7 @@ import {sampleNotebook} from '../src/sample.js';
 
 test('encrypted session startup reports categorized phases without retaining access credentials or locations',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-startup-diagnostics-')),diagnostics=new OperationalDiagnostics();let app,f;
- t.after(async()=>{await app?.close();clearVault(f?.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await app?.close();await clearVault(f?.vault);await rm(directory,{recursive:true,force:true});});
  f=await encryptedFixture(directory,sampleNotebook());
  app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),diagnostics});
  const request=token=>fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token})});

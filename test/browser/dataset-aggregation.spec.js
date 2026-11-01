@@ -43,5 +43,5 @@ test('retain grouped medians, inspect all readings, recalculate and subtract fro
   for(let i=0;i<4;i++)await graphOutput('Band '+(i+1)+' difference',i+6);
   await dialog.getByRole('button',{name:'Preview outputs',exact:true}).click();for(const expected of ['10/1','20/1','30/1','40/1'])await expect(dialog.locator('[data-graph-preview]')).toContainText(expected);await dialog.getByRole('button',{name:'Retain dataset',exact:true}).click();for(const expected of ['10/1','20/1','30/1','40/1'])await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText(expected,{timeout:30000});
   await dialog.getByRole('button',{name:'Create reproducible figure'}).click();for(let i=1;i<=4;i++)await dialog.getByLabel('Band '+i+' difference · rational',{exact:true}).check();await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();await expect(dialog.locator('svg')).toBeVisible();expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

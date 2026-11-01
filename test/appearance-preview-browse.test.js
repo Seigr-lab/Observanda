@@ -22,7 +22,7 @@ async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-preview-browse-')),book=sampleNotebook(),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:i===count-1?'End only':'Observation '+i,body:'Original body '+i,share:true,type:i%2?'run':'protocol',tags:[i%3?'field':'control'],occurredOn:'2026-09-'+String(i%28+1).padStart(2,'0'),sections:[],attachments:[],figures:[],relations:[]}));
  book.entries.push({...structuredClone(book.entries.at(-1)),id:randomUUID(),title:'PRIVATE_TITLE',share:false});
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const browse=(f,query='')=>appearancePreviewPage(f.workspace,f.command,'browse.html'+(query?'?'+query:''));

@@ -13,7 +13,7 @@ const definitions={'analysis.compare':{authorize:async()=>{},commit:async()=>({d
 const intent=f=>({id:randomUUID(),type:'analysis.compare',scope:f.book.entries[0].id,input:{command:{recordId:f.book.entries[0].id}}});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-job-relocations-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-job-relocations-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-job-relocations-'));await rm(directory,{recursive:true,force:true});});
  return {...f,book,plan:{id:randomUUID(),projectId:book.projects[0].id,namespaceId:randomUUID()}};
 }
 

@@ -15,7 +15,7 @@ async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-block-')),book=upgradeNotebook(sampleNotebook());
  const access=await createAccess('','synthetic block password'),vault=takeCreatedVault(access);
  await initializeLocation(root,book,access,vault);const workspace=new Workspace(root,vault);
- t.after(async()=>{clearVault(vault);await rm(root,{recursive:true,force:true});});return {workspace,book};
+ t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});return {workspace,book};
 }
 test('record blocks keep notebook isolation, bounded payloads, immutable revisions and fresh-key recovery',async t=>{
  const source=await fixture(t),target=await fixture(t),record=structuredClone(source.book.entries[0]);

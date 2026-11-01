@@ -24,7 +24,7 @@ async function fixture(t,{large=false,count=73}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-contributor-values-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];
  record.contributors=Array.from({length:count},(_,i)=>({id:randomUUID(),name:'Contributor '+i,role:'Role '+i}));
  record.sections=Array.from({length:large?73:2},(_,i)=>({id:randomUUID(),title:'Section '+i,body:large?'exact'.repeat(5600):'Original observation '+i}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(large){const writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id,sectionId:null},base=await writing.read(target);record.body='Extended observations '.repeat(2500);await writing.save({...target,expectedRevision:base.revision,value:{body:record.body}});assert.ok(Buffer.byteLength(JSON.stringify(record))>2*1024*1024);}
  const values=new RecordValues(f.workspace),drafts=new RecordValueDrafts(f.workspace),target=id=>({workspaceId:book.id,recordId:record.id,field:'contributor:'+id});
  return {...f,directory,book,record,values,drafts,target,save:(base,value)=>values.save({...target(base.field.slice(12)),expectedRevision:base.revision,value:{value}})};

@@ -19,7 +19,7 @@ const mapping={x:0,xKind:'category',values:[{column:1,error:null}],group:null,op
 async function fixture(t,count=43440){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-plot-jobs-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
  const materials=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const expected=new Map(),bytes=Buffer.from(Array.from({length:count},(_,i)=>{
   const group='Take '+(i%3),reading=i%101===0?null:((i*17)%701)-350;
   if(i!==99&&reading!==null){if(!expected.has(group))expected.set(group,[]);expected.get(group).push(reading);}

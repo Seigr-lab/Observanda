@@ -15,7 +15,7 @@ import {workspaceModules} from '../src/modules/index.js';
 import {verifiedCalendarPage} from '../src/web/modules/calendar-page.js';
 for(const count of [65,650])test(count+' calendar sources remain searchable and complete while schedule pages retain their own labels',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-source-pages-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entity=(type,data)=>({id:randomUUID(),type,revision:1,createdAt:now,updatedAt:now,data});
  const calendars=Array.from({length:count},(_,i)=>entity('calendar',{name:'Calendar '+String(i).padStart(3,'0'),color:'#3958ba',projectId:null,archived:false}));
  const events=calendars.map((calendar,i)=>entity('event',{title:'Event '+String(i).padStart(3,'0'),calendarId:calendar.id,startsAt:'2026-10-15',endsAt:'2026-10-16',allDay:true,timeZone:'UTC',location:'',notes:'Private original',status:'confirmed'}));

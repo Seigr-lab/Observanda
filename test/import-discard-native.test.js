@@ -15,7 +15,7 @@ import {serialize} from '../src/storage-format.js';
 
 test('native import cancellation retains bounded receipts and erases keys across interrupted cleanup',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-discard-native-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[];
- t.after(async()=>{await runtime.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-discard-native-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-discard-native-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'Receiver'),createNotebook('Receiver'));vaults.push(f.vault);
  const destination=path.join(directory,'Unpublished Project');await mkdir(path.join(destination,'.observanda'),{recursive:true});await writeFile(path.join(destination,'workspace.observanda'),'Disposable unpublished descriptor');
  const pinned=await stat(destination),owners=[],keys=new Map();

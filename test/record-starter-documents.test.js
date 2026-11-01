@@ -21,7 +21,7 @@ const password='separate template test password',sha=bytes=>createHash('sha256')
 const blueprint=count=>({name:'Wide native template',title:'Next declared experiment',type:'experiment',body:'Reviewed instructions',tags:['precision'],sections:Array.from({length:count},(_,i)=>({title:'Section '+(i+1),body:'Instruction '+i+' '+('exact measurement '.repeat(700))}))});
 async function fixture(t){
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-template-doc-')),book=sampleNotebook(),f=await encryptedFixture(dir,book);
- t.after(async()=>{clearVault(f.vault);await rm(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,dir,book,workspaceId:book.id,owner:new RecordStarterTransfer(f.workspace)};
 }
 async function save(f,count=65){const id=randomUUID(),result=await f.owner.save({workspaceId:f.workspaceId,id,expectedRevision:null,draft:blueprint(count)});return {id,...result};}

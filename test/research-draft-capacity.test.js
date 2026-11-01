@@ -17,7 +17,7 @@ import {MAX_BYTES} from '../src/model.js';
 
 test('near-limit record checkpoints pin one base and survive concurrency, failed writes and both recovery modes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-capacity-')),book=largeRecordBook(),f=await encryptedFixture(directory,book),base=book.entries[0],drafts=new ResearchDrafts(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const change={record:{...base,title:'Unfinished large record'},expectedRevision:recordRevision(base),baseRevision:recordRevision(base)},command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[change]};
  const record=ResearchCatalogue.prototype.record,reads=[];t.mock.method(ResearchCatalogue.prototype,'record',function(id,...args){reads.push(id);return record.call(this,id,...args);});
  const start=performance.now(),saved=await drafts.write(command),elapsed=performance.now()-start;

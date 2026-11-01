@@ -34,7 +34,7 @@ async function fixture(t,configure=()=>{},count=37){
  selected.sections=[{id:visible,title:'Selected section',body:'Visible details'},{id:hidden,title:'Private section',body:'Private details'}];
  selected.attachments=[{id:randomUUID(),kind:'image',share:true,caption:'Original cover',alt:'Original',transcript:''},{id:randomUUID(),kind:'image',share:false,caption:'Chosen cover',alt:'Chosen',transcript:''}];
  configure(book);
- let f;t.after(async()=>{if(f)clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});});
+ let f;t.after(async()=>{if(f)await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});});
  f=await encryptedFixture(directory,{...book,entries:[]});
  const bytes=await readFile(new URL('../src/preview-assets/image.png',import.meta.url));
  for(const attachment of selected.attachments){

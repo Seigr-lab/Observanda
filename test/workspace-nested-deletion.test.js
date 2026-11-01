@@ -24,7 +24,7 @@ import {workspaceDeletion} from '../src/workspace-delete-state.js';
 
 test('workspace deletion stops nested project and book owners and preserves external owners across restart',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-nested-delete-')),keys=[],device=new TestDeviceStore({file:path.join(directory,'device')}),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);
- t.after(async()=>{await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-nested-delete-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-nested-delete-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const grant=async()=>{const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};};
  const workspaceKey=await grant(),metadata=createNotebook('Research Workspace 1'),root=path.join(directory,metadata.title);await initializeLocation(root,metadata,workspaceKey.access,workspaceKey.vault);const workspace=new Workspace(root,workspaceKey.vault),registry=new ProjectRegistry(workspace,metadata.id),projects=new Map(),books=new Map();
  async function project(name,parent=null,{external=false}={}){

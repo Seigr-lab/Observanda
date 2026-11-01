@@ -57,5 +57,5 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await setRecordTitle(page,'Work continues after recovery');await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Work continues after recovery');
   expect((await f.workspace.read()).book.entries[0].title).toBe(book.entries[0].title);expect(errors).toEqual([]);
- }finally{await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

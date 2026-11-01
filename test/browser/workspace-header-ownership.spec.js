@@ -42,5 +42,5 @@ test('copying workspace details creates a dedicated project at the selected pare
   }
   const proposed={...full.book,notebooks:[{id:randomUUID(),projectId:entry.projectId,title:'Unowned book'}]};expect((await post('/api/notebook/save',{etag:full.etag,book:proposed})).status()).toBe(422);expect(await f.workspace.outline()).toEqual(before);
   const updated=await post('/api/notebook/save',{etag:full.etag,book:{...full.book,description:'Existing workspace metadata remains editable.'}});expect(updated.status()).toBe(200);expect((await f.workspace.outline()).metadata.description).toBe('Existing workspace metadata remains editable.');expect((await post('/api/notebook/save',full)).status()).toBe(409);
- }finally{await page.close();await app?.close();await runtime.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-header-route-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app?.close();await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-header-route-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

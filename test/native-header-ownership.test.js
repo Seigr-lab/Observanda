@@ -27,7 +27,7 @@ import {MAX_METADATA_BYTES} from '../src/web/research-capacity.js';
 // their parent research snapshots do not duplicate child metadata or content.
 test('dedicated creation and larger referenced settings keep native headers bounded through startup and recovery',{timeout:240000},async t=>{
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-native-headers-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[];
- t.after(async()=>{await runtime.close();detach();for(const key of vaults)clearVault(key);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-native-headers-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();for(const key of vaults)await clearVault(key);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-native-headers-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'fixture'),createNotebook('Root','Parent details'));vaults.push(f.vault);const root=await f.workspace.outline(),registry=new ProjectRegistry(f.workspace,root.metadata.id),creation=new ProjectCreation(registry,f.deviceStore),projects=[];
  async function keyFor(root){const key=await verifyAccess(await readAccess(root),'','',{deviceStore:f.deviceStore});vaults.push(key);return key;}
  for(let i=0;i<2;i++){

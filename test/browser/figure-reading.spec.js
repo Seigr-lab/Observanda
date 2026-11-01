@@ -47,7 +47,7 @@ test('record and lab-book readers enlarge precise figures without entering editi
   await page.emulateMedia({media:'print'});await expect(toggle).not.toBeVisible();await noOverflow(page);await page.emulateMedia({media:'screen'});
   await page.evaluate(id=>location.hash='#/notebooks/'+id+'/read',record.notebookId);const records=page.locator('[data-reading-record]');await expect(records).toHaveCount(1);await inspect(page,records);
   await expect(page.locator('[contenteditable=true]')).toHaveCount(0);expect((await f.workspace.read()).etag).toBe(before.etag);expect(writes).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('exported scientific figures can be inspected at native size with JavaScript disabled',async({browser},info)=>{
@@ -80,5 +80,5 @@ test('historical comparisons keep each figure revision bound to its own clipping
   const columns=dialog.locator('.record-revision-columns');await expect(columns.locator('.figure-reading-view').first().locator('.figure-value-tick').first()).toHaveAttribute('font-size','12');
   await expect(columns.locator('>div').last().locator('.figure-reading-view').first().locator('.figure-value-tick').first()).toHaveAttribute('font-size','24');
   expect((await f.workspace.read()).etag).toBe(before.etag);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

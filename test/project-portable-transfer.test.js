@@ -19,7 +19,7 @@ import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js'
 test('portable project archives resume verification and open without either source database or device',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portable-project-')),book=sampleNotebook(),id=book.projects[0].id,password='Independent project export password',device=new TestDeviceStore({file:path.join(directory,'device')}),grant=await createWorkspaceAccess('',password,device),vault=takeCreatedVault(grant);
  const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
- t.after(async()=>{await owner.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-portable-project-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-portable-project-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  book.title=book.projects[0].title='source';
  const source=await initializeProjectLocation(path.join(directory,'source'),id,book,grant,vault),destination=path.join(directory,'export',book.title),command=randomUUID();await mkdir(path.dirname(destination));
  await source.writeFile(path.join(source.root,'.observanda/evidence.bin'),'Retained project evidence');const before=await source.read();

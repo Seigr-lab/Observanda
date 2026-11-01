@@ -38,7 +38,7 @@ test('bundled editions match original hashes and actual variable axes, weights a
 });
 test('custom variable fonts survive encrypted backup; only publicly used font bytes are exported',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-fonts-')),root=path.join(directory,'workspace'),access=await createAccess('','Synthetic font test password'),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),fonts=new WorkspaceFonts(ws),original=await bytes();
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),fonts=new WorkspaceFonts(ws),original=await bytes();
  const added=await fonts.import(original);assert.equal(added.embed,false);assert.equal((await fonts.import(original)).id,added.id);assert.equal((await fonts.list()).length,1);assert.deepEqual((await fonts.get(added.id)).bytes,original);
  book.appearance.font=added.id;book.appearance.headingFont='dm-sans';book.appearance.fontAxes={wght:475,opsz:18};validateNotebook(book);
  assert.throws(()=>buildPublication(book,{fontFiles:new Map([[added.id,{...added,bytes:original}]])}),{code:'FONT_EMBED'});

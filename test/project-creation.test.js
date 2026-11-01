@@ -20,7 +20,7 @@ import {clearVault} from '../src/encryption.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-creation-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];
- t.after(async()=>{await owner.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-creation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-creation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'workspace'),sampleNotebook());vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id),creation=new ProjectCreation(registry,f.deviceStore);
  const command=name=>({id:randomUUID(),path:path.join(f.workspace.root,name),project:{id:randomUUID(),title:name,description:'Private project description',parentId:null,share:false,logoId:null,kind:'Custom project',tools:[]},username:'',password:''});
  const open=async entry=>{const vault=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(vault);return new ProjectStorage(entry.root,entry.projectId,vault);};

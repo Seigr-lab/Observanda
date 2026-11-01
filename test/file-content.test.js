@@ -31,7 +31,7 @@ test('prepared encrypted writes resolve only after durable replacement',{timeout
  await workspace.writeFile(file,previous);
  const prepared=Promise.withResolvers(),continuePreparation=Promise.withResolvers(),syncStarted=Promise.withResolvers(),continueSync=Promise.withResolvers();
  let pending,settled=false;
- t.after(async()=>{continuePreparation.resolve();continueSync.resolve();await pending?.catch(()=>{});clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{continuePreparation.resolve();continueSync.resolve();await pending?.catch(()=>{});await clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});
  pending=withMutationFilesSession(async service=>{const open=service.open;service.open=async location=>{const directory=await open.call(service,location);if(location===root){const file=directory.file;directory.file=async function(...args){const handle=await file.apply(this,args);if(args[1]?.mode==='exclusive'){const sync=handle.sync;handle.sync=async function(){syncStarted.resolve();await continueSync.promise;return sync.call(this);};}return handle;};}return directory;};try{return await writeContent(workspace,file,[bytes],{beforeCommit:async saved=>{prepared.resolve(saved);await continuePreparation.promise;}});}finally{service.open=open;}});
  pending.then(()=>{settled=true;},()=>{settled=true;});
  assert.deepEqual(await prepared.promise,{size:bytes.length,sha256:digest(bytes)});assert.equal(settled,false);assert.deepEqual(await workspace.readFile(file),previous);
@@ -40,7 +40,7 @@ test('prepared encrypted writes resolve only after durable replacement',{timeout
 });
 test('rejected or cancelled prepared writes preserve the original and remove their temporary',{timeout:10000},async t=>{
  const parent=path.resolve(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-stream-finalization-')),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),file=path.join(root,'asset'),previous=Buffer.from('retained original'),bytes=Buffer.from('replacement');
- t.after(async()=>{clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});
  await workspace.writeFile(file,previous);
  for(const cancel of [false,true]){
   const reason=new Error(cancel?'Cancelled after preparation':'Preparation refused'),controller=new AbortController();

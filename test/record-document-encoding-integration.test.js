@@ -43,7 +43,7 @@ async function measured(t,sources,operation){
 
 test('one native audit shares exact encodings across snapshots, history and retained materials without sharing semantic admission',async t=>{
  const temporary=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-encoding-audit-'));let f;
- t.after(async()=>{if(f)clearVault(f.vault);assert.equal(path.dirname(directory),temporary);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{if(f)await clearVault(f.vault);assert.equal(path.dirname(directory),temporary);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=upgradeNotebook(sampleNotebook()),record={...book.entries[0],relations:[],figures:[],attachments:[],contributors:[],sections:Array.from({length:8},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:('Exact observation '+i+' \ud83d\udd2c\n').repeat(700)}))};book.entries=[record];
  f=await encryptedFixture(directory,book);const {workspace}=f,materials=new ResearchMaterials(workspace),retained=new RetainedRecordDocuments(workspace),references=[];
  let current=(await workspace.read()).book.entries[0];references.push(await materials.pinRecord(record.id,recordRevision(current)));

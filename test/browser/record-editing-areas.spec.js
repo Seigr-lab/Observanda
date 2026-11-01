@@ -45,7 +45,7 @@ test('saved editing opens directly, browses areas and retains late writing acros
   expect((await writingService.read({...target,sectionId:record.sections[0].id})).value.body).toEqual(record.sections[0].body);
   expect((await new RecordValues(f.workspace).read({...target,field:'title'})).value.value).toBe('Amended field record');
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('new drafts keep their authoring form and saved records reopen in editing areas, including empty writing',async({page})=>{
@@ -62,5 +62,5 @@ test('new drafts keep their authoring form and saved records reopen in editing a
   await expect(page.getByRole('heading',{name:'First field visit',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/records/'+randomUUID());await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Try again',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/records/'+id);await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

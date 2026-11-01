@@ -28,7 +28,7 @@ test('retained live inventories grow past their former envelope and seek directl
 
 test('inventory preparation preserves removals, fences changes and survives fresh-key recovery',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-live-inventory-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {workspace}=f,key=digest('destination'),file='.observanda/publication-live/'+key+'.json',firstReceipt={commit:'a'.repeat(40),releaseId:'old-edition'},receipt={commit:'b'.repeat(40),releaseId:'new-edition'};
  const legacy={version:1,...firstReceipt,files:['publication.json','old.html','kept.html'],removed:['older.html']};await workspace.withLock(()=>workspace.writeMetadata(file,serialize(legacy)));
  let steps=0;await assert.rejects(prepareDeploymentInventory(workspace,key,Array.from({length:100},(_,i)=>i+'.html'),{guard:async()=>{if(++steps===3)throw Error('Synthetic interruption');}}),/Synthetic interruption/);

@@ -31,7 +31,7 @@ test('scientific metadata admission examines only declared bounded content and q
 });
 test('typed schemas, exact source contexts and pinned methods survive revisions, inspection, ordinary copy and fresh-key recovery',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-unit-retention-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,keys=[f.vault];
- t.after(async()=>{for(const key of keys)clearVault(key);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{for(const key of keys)await clearVault(key);await rm(directory,{recursive:true,force:true});});
  const upload=async(name,bytes)=>{const s=await m.startImport({recordId,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
  const original=Buffer.from(Array.from({length:18},(_,i)=>'C'+i).join(',')+'\n'+Array.from({length:18},()=> '15.3').join(',')),artifact=await upload('exact.csv',original),method=await upload('method.txt',Buffer.from('Declared reference; no accuracy claim'));
  const columns=Array.from({length:18},(_,i)=>column('C'+i)),old=await m.dataset({recordId,title:'Exact columns',artifact,columns});

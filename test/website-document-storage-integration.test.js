@@ -37,7 +37,7 @@ async function read(workspace,id,options){return workspace.catalogue(store=>new 
 async function fixture(t){
  const temporary=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-website-storage-')),book=upgradeNotebook(sampleNotebook()),vaults=[];
  book.entries=[{...book.entries[0],attachments:[],figures:[],relations:[],sections:[]}];
- t.after(async()=>{for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-website-storage-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-website-storage-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const value=await encryptedFixture(directory,book);vaults.push(value.vault);return {...value,directory,book,vaults};
 }
 

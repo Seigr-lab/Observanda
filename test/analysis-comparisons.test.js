@@ -24,7 +24,7 @@ import {AppError} from '../src/errors.js';
 const col=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 const columns=[col('key'),col('value','integer'),col('status'),col('lower','integer'),col('upper','integer'),col('exclusion'),col('before'),col('after'),col('concurrent')];
 async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-analysis-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const upload=async(name,text)=>{const bytes=Buffer.from(text),s=await m.startImport({recordId,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
  const one=await upload('first.csv','key,value,status,lower,upper,exclusion,before,after,concurrent\na,9007199254740993,correct,9007199254740992,9007199254740994,,idle,request,read\nb,9007199254740995,mismatched,9007199254740992,9007199254740994,,request,return,write\nc,,correct,9007199254740992,9007199254740994,,return,,read\nd,0,excluded,-1,1,Declared warmup,,,\ne,1,unresolved,0,2,,,,');
  const two=await upload('second.csv','key,value,status,lower,upper,exclusion,before,after,concurrent\na,2,correct,1,3,,,,\nb,4,mismatched,1,3,,,,');

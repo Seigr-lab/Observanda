@@ -25,7 +25,7 @@ const recipe=source=>({version:1,source,view:'observations',joins:[],steps:[],wh
 const step=(name,operation,column,constant=null,format=senary)=>({name,operation,unit:'',left:{column},right:constant===null?null:{constant,unit:'',representation:'rational',radix:10},condition:null,output:format});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-result-formats-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  async function dataset(text,columns){const bytes=Buffer.from(text),upload=await m.startImport({recordId,name:'readings.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);return m.dataset({recordId,title:'Source readings',artifact:await m.finishImport(upload.id),columns});}
  return {...f,m,recordId,directory,dataset};
 }

@@ -13,7 +13,7 @@ import {Workspace} from '../src/storage.js';
 test('directory admission reuses connections without inheriting a pinned snapshot',{timeout:60000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-directory-read-')),book=createNotebook('Research Workspace');
  const {workspace,vault}=await encryptedFixture(directory,book),registry=new ProjectRegistry(workspace,book.id);
- t.after(async()=>{clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-directory-read-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-directory-read-'));await rm(directory,{recursive:true,force:true});});
  const entry={projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),root:path.join(workspace.root,'Field Project'),parentId:null,summary:{title:'Field Project',description:'',kind:'Project',templateName:null}};
  const writer=new ProjectRegistry(new Workspace(workspace.root,vault),book.id);
  const before=(await registry.apply(await registry.version(),[{state:'active',entry}])).revision;

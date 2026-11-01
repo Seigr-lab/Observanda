@@ -11,7 +11,7 @@ import {clearVault} from '../src/encryption.js';
 const root='.observanda/materials/index';
 async function fixture(t,count=1){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-material-audit-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,heads=[];
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(async()=>{for(let i=0;i<count;i++)heads.push(await materials.commit({kind:'collection',recordId:book.entries[i%2].id,title:'Synthetic material '+i,content:{inputs:[]}}));});
  return {...f,materials,book,heads};
 }

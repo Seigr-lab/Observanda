@@ -30,7 +30,7 @@ test('website freshness ignores only unrelated website edits and rejects changed
   const consent=await sites.read(ids[0]),command=edit(consent),saved=await fixture.workspace.read();command.selection={defaultShare:false,includeProjects:[],records:[{id:saved.book.entries[0].id,share:true,attachments:[]}]};await sites.save(ids[0],command);assert.equal(await publicationRevisionCurrent(journal,{etag:consent.etag,websitePin:consent.websitePin}),false);
   const beforeResearch=await journal.outline(),current=await fixture.workspace.read();current.book.entries[0].body='Changed research original';await fixture.workspace.save(current.book,current.etag);assert.equal(await publicationRevisionCurrent(journal,beforeResearch),false);
   const beforeShared=await journal.outline(),shared=await fixture.workspace.read();shared.book.notebooks[0].title='Changed shared collection title';await fixture.workspace.save(shared.book,shared.etag);assert.equal(await publicationRevisionCurrent(journal,beforeShared),false);
- }finally{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-freshness-'));await rm(directory,{recursive:true,force:true});}
+ }finally{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-freshness-'));await rm(directory,{recursive:true,force:true});}
 });
 
 test('freshness propagates damaged authenticated snapshots and keeps legacy workspace checks strict',async()=>{

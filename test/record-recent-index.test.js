@@ -19,7 +19,7 @@ async function fixture(t,count){
  book.notebooks=Array.from({length:3},(_,i)=>({...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Book '+i}));
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Trial '+i,body:'Unabridged original '.repeat(40),sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:[],notebookId:book.notebooks[i%book.notebooks.length].id,
   updatedAt:new Date(Date.UTC(2026,0,1,0,Math.floor(i/3))).toISOString()}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const etag=await f.workspace.catalogue(store=>store.head());
  return {...f,book,query:new DashboardRecords(f.workspace),command:{workspaceId:book.id,etag,config:defaultPanelConfig(),options:{},limit:7,key:null,provider:'records'}};
 }

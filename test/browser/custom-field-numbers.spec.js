@@ -36,5 +36,5 @@ test('native template number formats stay explicit through authoring, save, read
   await expect(dialog).toContainText('Counter (ticks) · Base 6 fractional numeral');await dialog.getByRole('button',{name:'Back to workspace',exact:true}).click();await counter.fill('+15.3');await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.setViewportSize({width:390,height:844});await counter.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('native-number-entry-narrow.png')});
   await page.evaluate(id=>location.hash='#/records/'+id,legacy.id);await expect(page.getByLabel('Counter (ticks)',{exact:true})).toHaveValue('15.30');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

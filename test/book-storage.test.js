@@ -25,7 +25,7 @@ import {assertPublicFields} from '../src/privacy.js';
 
 test('content selectors survive rename, reorder, retained archive and encrypted backup',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-archive-')),f=journeyBook(),storage=await encryptedFixture(directory,f.book),materials=new ResearchMaterials(storage.workspace),records=new ResearchRecords(storage.workspace,{});
- t.after(async()=>{clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
+ t.after(async()=>{await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
  const selector={version:1,kind:'table',id:f.table.attrs.id},old=await storage.workspace.withLock(()=>materials.retainRecord(f.concept)),changed=structuredClone(f.concept);changed.title='Changed definition';changed.body.content.reverse();changed.body.content.find(n=>n.type==='book_table').attrs.title='Changed table heading';
  await records.save({workspaceId:f.book.id,changes:[{id:changed.id,expectedRevision:recordRevision(f.concept),record:changed}]});
  assert.ok(selectorExists(changed,selector));assert.ok(selectorExists(await materials.read(old),selector));assert.equal(bookSelectors(changed).find(s=>s.id===selector.id).label,'Changed table heading');
@@ -38,7 +38,7 @@ test('content selectors survive rename, reorder, retained archive and encrypted 
 
 test('book import requires preservation review and commits source mappings with authenticated original bytes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-import-')),source=path.join(directory,'source'),f=journeyBook(),storage=await encryptedFixture(directory,f.book);
- t.after(async()=>{clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
+ t.after(async()=>{await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
  const declared=await migrationFixture(source,{creative:true}),html='<section id="chapter"><h2>\u00c9vidence</h2><p>Original meaning</p><pre><code class="language-native">  EMIT 105\n\tJOIN 0001  \n</code></pre><table><caption>Readings</caption><tr><th>Code</th><th>Value</th></tr><tr><td>005</td><td>9007199254740993</td></tr></table><svg><path d="M1 2"/></svg></section>',bytes=Buffer.from(html),file={path:'chapter.html',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),selector:{kind:'anchor',value:'chapter'}};
  await writeFile(path.join(source,file.path),bytes);declared.manifest.objects.push({...structuredClone(declared.manifest.objects[0]),id:'chapter',title:'Authored book chapter',kind:'record',mapping:{kind:'record'},files:[file],links:[]});await writeFile(path.join(source,'inventory.observanda-source.json'),JSON.stringify(declared.manifest));
  const report=await inventorySource({source}),service=new MigrationImport(storage.workspace),command={workspaceId:f.book.id,id:randomUUID()};let batch=await service.create({...command,source,expectedPin:report.source.pin,notebookId:f.concept.notebookId});while(batch.state==='staging')batch=await service.stage(command);
@@ -56,7 +56,7 @@ test('retained card excerpts and book pages share public reference and inline fi
  f.concept.attachments=[{id:privateImage,kind:'image',caption:'PRIVATE diagram caption',alt:'PRIVATE image description',transcript:'Private steps',share:false}];
  const linked=record=>({type:'text',text:record.title,marks:[{type:'link',attrs:{href:researchReference({workspaceId:f.book.id,kind:'record',id:record.id}),title:'',target:'_self',nofollow:false}}]});
  f.concept.body.content.unshift(block('figure',{figureId:privateImage,alternative:'PRIVATE inline diagram narrative'}),{type:'paragraph',content:[linked(f.privateRecord),{type:'text',text:' then '},linked(f.method)]});
- const storage=await encryptedFixture(directory,f.book,{populate:workspace=>populateImageEvidence(workspace,[privateImage])});t.after(async()=>{clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
+ const storage=await encryptedFixture(directory,f.book,{populate:workspace=>populateImageEvidence(workspace,[privateImage])});t.after(async()=>{await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
  const snapshot=await storage.workspace.outline(),actual=await new PublicationJobs(storage.workspace).inline({workspaceId:f.book.id,etag:snapshot.etag}),expected=buildPublication(f.book);
  for(const [name,value] of actual.files)if(name.endsWith('.html')){
   const html=(await contentBuffer(value)).toString('utf8');assert.ok(!html.includes('PRIVATE'));assert.ok(!html.includes(privateImage));assert.ok(!html.includes(f.privateRecord.id));assert.equal(html,expected.files.get(name),name);

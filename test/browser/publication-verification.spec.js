@@ -29,5 +29,5 @@ test('live checks can be stopped and resumed from Publishing and a failed rechec
   await page.reload();await navigate(page,'Publishing');await expect(page.locator('#publish-outcome')).not.toContainText('The live website is verified');await page.getByRole('button',{name:'Verify live website',exact:true}).click();await expect(page.locator('#publish-outcome')).toContainText('removed URLs return not found',{timeout:15000});
   mode='cached';await page.getByRole('button',{name:'Verify live website',exact:true}).click();await expect(page.getByRole('button',{name:'Resume live check'})).toBeVisible();await expect(page.locator('#publish-outcome')).not.toContainText('The live website is verified');
   await page.reload();await expect(page.locator('#publish-outcome')).not.toContainText('The live website is verified');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

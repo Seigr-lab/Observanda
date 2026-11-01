@@ -13,7 +13,7 @@ import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 import {catalogueFormat,catalogueRequiresPagedResearchTables} from '../src/catalogue-format.js';
 import {ResearchTransfer} from '../src/collaboration/research-transfer.js';
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-wide-native-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-wide-native-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const upload=async(name,text)=>{const bytes=Buffer.from(text),s=await m.startImport({recordId,name,size:bytes.length});for(let at=0;at<bytes.length;at+=EVIDENCE_CHUNK)await m.appendImport(s.id,at/EVIDENCE_CHUNK,[bytes.subarray(at,at+EVIDENCE_CHUNK)]);return m.finishImport(s.id);};return {...f,book,m,recordId,directory,upload};}
 test('wide native datasets retain bounded schema and exact chunked cells through revisions, copy and packet traversal',async t=>{
  const f=await fixture(t),{m,recordId}=f,long='\u{1f36f}'.repeat(160001),width=321;

@@ -23,7 +23,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {AppError} from '../src/errors.js';
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-release-jobs-')),f=await encryptedFixture(directory,sampleNotebook()),jobs=workspaceJobs(f.workspace);t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,directory,releases:new PublicationJobs(f.workspace)};}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-release-jobs-')),f=await encryptedFixture(directory,sampleNotebook()),jobs=workspaceJobs(f.workspace);t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,directory,releases:new PublicationJobs(f.workspace)};}
 const options=()=>({signal:new AbortController().signal,progress:async()=>{}});
 async function terminal(queue,id){for(let i=0;i<400;i++){const job=await queue.read(id);if(['completed','failed','cancelled'].includes(job.state))return job;await delay(25);}assert.fail('Publication did not finish');}
 

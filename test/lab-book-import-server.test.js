@@ -25,7 +25,7 @@ async function result(response,status=200){assert.equal(response.status,status,a
 test('book import API authenticates its own source and resumes the destination after restart',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-import-api-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];let app;
  const original=LabBookImports.prototype.run;
- t.after(async()=>{LabBookImports.prototype.run=original;await app?.close();await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-import-api-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{LabBookImports.prototype.run=original;await app?.close();await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-import-api-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')});
  async function credentials(){const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  const initial=createNotebook('Research Workspace'),root=path.join(directory,initial.title),key=await credentials();await initializeLocation(root,initial,key.access,key.vault);

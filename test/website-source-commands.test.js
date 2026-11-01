@@ -16,7 +16,7 @@ import {Workspace} from '../src/storage.js';
 
 async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-source-commands-')),book=createNotebook('Source command qualification'),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-source-commands-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-source-commands-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const sites=new WebsiteSites(f.workspace),create=async name=>(await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id;
  const first=await create('First website'),second=await create('Second website'),editor=new WebsiteEditor(f.workspace);
  return {...f,book,first,second,execute:(operation,data={},websiteId=first)=>editor.execute(operation,{workspaceId:book.id,websiteId,...data})};

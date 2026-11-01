@@ -13,7 +13,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-metadata-stream-'));
  const {workspace:ws,vault}=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return ws;
 }
 const base='metadata:.observanda/stream/';

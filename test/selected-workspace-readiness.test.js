@@ -11,7 +11,7 @@ import {workspaceFile} from '../src/storage.js';
 import {openCatalogue} from '../src/postgres.js';
 
 test('selected readiness authenticates bounded metadata independently of scratch and preserves data',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-readiness-')),f=await encryptedFixture(directory,sampleNotebook());let db;t.after(async()=>{await db?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-readiness-')),f=await encryptedFixture(directory,sampleNotebook());let db;t.after(async()=>{await db?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  let scratch=process.env;const provider={healthEnvironments:()=>({scratch,selected:process.env})},options={root:f.workspace.root,workspace:f.workspace,locked:false,provider},head=(await f.workspace.outline()).etag;
  let report=await serviceHealth(options);assert.equal(report.selectedWorkspace.ready,true,JSON.stringify(report));assert.equal(report.selectedWorkspace.scope,'selected-workspace');assert.equal(report.selectedWorkspace.catalogueIntegrity,'selected-metadata-verified');assert.equal(report.selectedWorkspace.retainedContent,'not-checked');assert.equal(report.selectedWorkspace.storageWrites,'not-probed');
  const bad=new URL(process.env.OBSERVANDA_DATABASE_URL);bad.password='wrong-readiness-password';scratch={...process.env,OBSERVANDA_DATABASE_URL:bad.href};report=await serviceHealth(options);assert.equal(report.scratch.ready,false);assert.equal(report.serviceReadiness.ready,false);assert.equal(report.selectedWorkspace.ready,true);scratch=process.env;

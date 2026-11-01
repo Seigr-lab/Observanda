@@ -18,7 +18,7 @@ async function fixture(t,{device=false}={}){
  const protector={available:()=>true,protect:async bytes=>seal(bytes,secret,'Synthetic protected device'),unprotect:async bytes=>unseal(bytes,secret,'Synthetic protected device')};
  const store=new DeviceStore({file:path.join(directory,'device.json'),protector}),created=await createKeyring({password:device?'':oldPassword,deviceStore:store});
  await mkdir(path.dirname(file),{recursive:true});await writeFile(file,JSON.stringify(created.value));
- t.after(async()=>{clearVault(created.vault);secret.fill(0);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(created.vault);secret.fill(0);await rm(directory,{recursive:true,force:true});});
  return {directory,root,file,store,protector,...created};
 }
 async function unlock(root,store,password='',recovery=''){

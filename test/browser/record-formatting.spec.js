@@ -40,7 +40,7 @@ for(const compiled of [false,true])test('saved formatting survives reader, editi
   const saved=await new RecordWriting(fixture.workspace).read({workspaceId:book.id,recordId:record.id,sectionId:id});expect(saved.value.body).toEqual(body);
   expect(errors).toEqual([]);expect(violations).toEqual([]);
  }finally{
-  await app?.close();if(fixture)clearVault(fixture.vault);
+  await app?.close();if(fixture)await clearVault(fixture.vault);
   if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-formatting-ui-'))throw Error('Unexpected disposable folder');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

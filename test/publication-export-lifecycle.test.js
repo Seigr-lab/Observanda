@@ -43,7 +43,7 @@ test('retained ZIP exports survive slow review, preserve review and privacy admi
   const result=await originalAssert.call(this,candidate,options);completedAssertions++;return result;
  });
  t.after(async()=>{
-  assertion.mock.restore();await app?.close();clearVault(f.vault);
+  assertion.mock.restore();await app?.close();await clearVault(f.vault);
   assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-export-lifecycle-'));
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  });

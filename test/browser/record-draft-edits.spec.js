@@ -39,5 +39,5 @@ test('unfinished recovery corrections keep native controls, survive reload and r
   expect((await new RecordValues(f.workspace).read({workspaceId:book.id,recordId:base.id,field:'type'})).value.value).toBe('analysis');
   expect((await new RecordValues(f.workspace).read({workspaceId:book.id,recordId:base.id,field:'result:'+mine.results.statements[0].id})).value.value.figureId).toBe(compound.panels[0].figure.id);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

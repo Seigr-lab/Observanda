@@ -16,7 +16,7 @@ import {workspaceJobs} from '../src/workspace-jobs.js';
 
 test('live verification resumes after cancellation, rejects stale caches and fences a changed deployment',{timeout:60000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-live-jobs-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),candidate=buildPublication(book),config=defaultPublishing();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});Object.assign(config.github,{owner:'example',repository:'notebook'});config.publicUrl='https://example.test/';
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});Object.assign(config.github,{owner:'example',repository:'notebook'});config.publicUrl='https://example.test/';
  let mode='stall',entered,cancelled=false;const started=new Promise(resolve=>entered=resolve);
  const request=async url=>{
   const name=new URL(url).pathname.slice(1);

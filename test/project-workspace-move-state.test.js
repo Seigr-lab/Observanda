@@ -27,7 +27,7 @@ test('workspace handoff journals reject escaping locations, incorrect owner plan
 
 test('encrypted incoming reservations are repeatable, isolate other parents and recover interrupted release',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-handoff-state-')),source=path.join(directory,'Source Workspace'),target=path.join(directory,'Target Workspace'),sourceKey={id:randomUUID(),key:randomBytes(32)},targetKey={id:randomUUID(),key:randomBytes(32)};
- t.after(async()=>{clearVault(sourceKey);clearVault(targetKey);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-handoff-state-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(sourceKey);await clearVault(targetKey);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-handoff-state-'));await rm(directory,{recursive:true,force:true});});
  await mkdir(path.join(source,'.observanda'),{recursive:true});await mkdir(path.join(target,'.observanda'),{recursive:true});const {value}=model(source,target);value.target.vaultId=targetKey.id;
  const from=new ProjectRegistry(new Workspace(source,sourceKey),value.workspaceId),to=new ProjectRegistry(new Workspace(target,targetKey),value.target.workspaceId);
  await saveProjectWorkspaceMove(from,value);assert.deepEqual(await readProjectWorkspaceMove(from,value.projectId),value);assert.ok(!(await readFile(projectWorkspaceMoveFile(from,value.projectId))).includes(Buffer.from(target)));

@@ -99,7 +99,7 @@ test('deep cross-owner traversal remains iterative and detects the final back ed
 });
 test('portable owner verification survives deleting its source owner and rejects retained byte corruption',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-task-prerequisites-')),book=sampleNotebook(),sourceBook=sampleNotebook(),f=await encryptedFixture(directory,book),source=await encryptedFixture(path.join(directory,'source'),sourceBook);
- t.after(async()=>{clearVault(f.vault);clearVault(source.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await clearVault(source.vault);await rm(directory,{recursive:true,force:true});});
  const sourceTask=entity(data([],'done'));await seedModuleCurrent(source.workspace,sourceBook.id,[sourceTask]);
  const foreign=reference(sourceBook.id,sourceTask.id),itemId=randomUUID(),draft=data([foreign],'done');let sourceReads=0;
  const result=await evaluateTaskPrerequisites({workspaceId:book.id,id:itemId,data:taskConstraintDraft(draft)},async ref=>{

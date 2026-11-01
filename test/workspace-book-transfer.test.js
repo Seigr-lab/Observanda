@@ -25,7 +25,7 @@ import {withWorkspaceCopySession} from '../src/workspace-copy-session.js';
 
 test('workspace copy hands protected project and book access to the requesting client only',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-book-copy-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[],applications=[];
- t.after(async()=>{for(const app of applications)await app.close();await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-book-copy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{for(const app of applications)await app.close();await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-book-copy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'workspace'),createNotebook('Workspace 1'));vaults.push(f.vault);
  const metadata=createNotebook('Field Project 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  const access=await createWorkspaceAccess('','Project password',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);

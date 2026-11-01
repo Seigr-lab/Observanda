@@ -68,7 +68,7 @@ test('an older open editor saves alongside new and deleted records and retains t
   expect(saved.book.entries.find(r=>r.id===edited.id).title).toBe('Typing while the save returns');expect(errors).toEqual([]);
  }finally{
   release();Object.assign(ResearchCatalogue.prototype,prior);SnapshotIndex.prototype.members=members;
-  await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});
+  await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});
  }
 });
 
@@ -137,7 +137,7 @@ test('default transactional workspace saves, reopens in the same folder and rest
    expect((await workspace.read()).book.entries[0].title).toBe('Draft survives late settings');
   }finally{release();await page.unroute('**/api/storage');}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});}
 });
 
 
@@ -164,7 +164,7 @@ test('encrypted PostgreSQL copies are verified, opened and edited independently 
   await page.getByLabel('Record title',{exact:true}).fill('Independent restored take');await page.getByRole('button',{name:'Save record',exact:true}).click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
   expect((await copied.read()).book.entries[0].title).toBe('Independent restored take');expect(await original.read()).toEqual(before);
- }finally{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});}
 });
 
 test('unconfigured PostgreSQL shows an actionable setup error and leaves the chosen folder untouched',async({page})=>{
@@ -228,5 +228,5 @@ test('record history pages are usable by keyboard, remain stable across saves an
   saved=await workspace.read();expect(saved.book.entries[0].share).toBe(false);expect(saved.book.entries[1].title).toBe('Concurrent field record');
   await page.evaluate(id=>location.hash='#/records/'+id,other.id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Concurrent field record');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});}
 });

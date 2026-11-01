@@ -84,5 +84,5 @@ test('large saved workspaces open, edit, recover drafts and change lab-book sett
    expect(fullReads).toEqual([]);expect(errors).toEqual([]);expect(Math.max(...sizes)).toBeLessThan(3*1024*1024);if(heap!==null)expect(heap).toBeLessThan(128*1024*1024);
    console.log(JSON.stringify({...f.metrics,browserHeapMiB:heap===null?null:Math.ceil(heap/1024/1024),largestResponseBytes:Math.max(...sizes),completePageRequests:0}));
   }finally{ResearchCatalogue.prototype.read=complete;}
- }finally{await app?.close();if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app?.close();if(f)await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

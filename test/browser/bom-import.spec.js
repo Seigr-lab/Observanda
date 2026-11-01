@@ -121,5 +121,5 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await expect(card.locator('.figure-series-graphic[data-series-name="Scrapped in BOMs"]')).toBeVisible();
   expect(errors).toEqual([]);expect(requestErrors).toEqual([]);
 
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

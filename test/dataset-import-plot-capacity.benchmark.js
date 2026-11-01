@@ -22,7 +22,7 @@ test('tenfold long-cell dataset preparation and reduction meet their declared wo
  const cpu=sampleWorkloadCpu();t.after(()=>t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()})));
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-dataset-capacity-')),book=sampleNotebook();let f,jobs,activeRun,peak=0;
  const sampler=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().heapUsed);},25);sampler.unref();
- t.after(async()=>{clearInterval(sampler);await jobs?.worker.stop();await activeRun?.catch(()=>{});if(f)clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-dataset-capacity-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{clearInterval(sampler);await jobs?.worker.stop();await activeRun?.catch(()=>{});if(f)await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-dataset-capacity-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  f=await encryptedFixture(directory,book);jobs=workspaceJobs(f.workspace);const materials=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,rows=43440;
  const names=['reading','counter','native','notes'],parts=Array.from({length:4},(_,reading)=>Buffer.from(JSON.stringify({reading,counter:'18446744073709551615',native:'105',notes:'Synthetic acquired detail. '.repeat(165)})+'\n')),size=rows*parts[0].length;
  assert.ok(parts.every(part=>part.length===parts[0].length));const source=await open(path.join(directory,'observations.jsonl'),'wx+');let artifact;

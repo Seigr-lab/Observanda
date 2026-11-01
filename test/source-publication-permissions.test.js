@@ -32,7 +32,7 @@ async function fixture(t){
  // to the withheld section (that belongs to publication reference validation).
  data.other.body='Another allowed observation.';data.record.sections[1].body='An initially allowed procedure.';
  const f=await encryptedFixture(directory,data.book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...data,...f,directory};
 }
 

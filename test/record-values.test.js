@@ -26,7 +26,7 @@ import {RecordValueTree} from '../src/record-value-tree.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-values-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];
  record.status='draft';record.sections=Array.from({length:70},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Saved observation '+i}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const values=new RecordValues(f.workspace),target=field=>({workspaceId:book.id,recordId:record.id,field});
  return {...f,directory,book,record,values,target,save:(base,value)=>values.save({...target(base.field),expectedRevision:base.revision,value:{value}})};
 }

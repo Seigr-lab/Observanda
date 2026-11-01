@@ -35,5 +35,5 @@ test('edits made during a streamed checkpoint remain recoverable after reload',a
   await page.getByRole('dialog',{name:'Recover record draft',exact:true}).getByRole('button',{name:'Continue editing',exact:true}).click();
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Written while the checkpoint was uploading');await expect(editor).toHaveText(body);
   await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');expect(errors).toEqual([]);
- }finally{release?.();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release?.();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

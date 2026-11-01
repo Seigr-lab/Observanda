@@ -65,5 +65,5 @@ for(const count of [62,620])test('external analysis discovers and pins exact met
   await picker.getByRole('button',{name:'Cancel',exact:true}).click();await expect(picker).toBeHidden();await expect(dialog.getByRole('heading',{name:'Record external analysis',exact:true})).toBeVisible();
   release();await expect(dialog.locator('[data-method-summary]')).toHaveText('No saved method or run selected.');
   expect([...new Set(bodies)]).toEqual([method.id]);expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page')).toEqual([]);expect(errors).toEqual([]);
- }finally{release?.();ResearchCatalogue.prototype.read=originalRead;ResearchCatalogue.prototype.record=originalRecord;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release?.();ResearchCatalogue.prototype.read=originalRead;ResearchCatalogue.prototype.record=originalRecord;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -21,7 +21,7 @@ test('record membership keeps growing identities in counted references and selec
  book.entries=[first,second];
  first.sections=Array.from({length:65},(_,i)=>({id:randomUUID(),title:'Small '+i,body:''}));
  second.sections=Array.from({length:513},(_,i)=>({id:randomUUID(),title:'Large '+i,body:''}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),a=await store.member(snapshot,first.id),b=await store.member(snapshot,second.id),items=new RecordMemberCollections(store);
   assert.ok(await catalogueFormat(store.db)>=6);assert.equal(a.sections,undefined);assert.equal(b.sections,undefined);
@@ -48,7 +48,7 @@ test('record membership keeps growing identities in counted references and selec
 
 test('membership reference upgrade is transactional and duplicate identities never become visible',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-member-rollback-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const initial=await f.workspace.catalogue(store=>catalogueFormat(store.db));
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const row=await store.member(await store.snapshot(),book.entries[0].id),ids=Array.from({length:65},()=>randomUUID());ids[64]=ids[0];

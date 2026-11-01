@@ -71,7 +71,7 @@ test('selected pages, layouts, logos and media retain independent edits across w
   expect(requests.some(request=>new URL(request.url()).pathname==='/api/websites/save')).toBe(false);
   for(const request of requests.filter(request=>new URL(request.url()).pathname==='/api/websites/editor/window'))expect(request.postDataJSON().limit).toBeLessThanOrEqual(100);
   expect(errors).toEqual([]);
- }finally{await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{await page.close();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -94,5 +94,5 @@ test('branding page-name completion keeps a pressed return control and redo hist
   const retained=await original.evaluate(node=>node.isConnected);await page.mouse.up();expect(retained,'Completing a name lookup replaced the pressed Back button').toBe(true);
   await expect(page.locator('#website-preview-page')).toBeVisible();await expect(page.getByRole('button',{name:'Redo',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Redo',exact:true}).click();
   await expect.poll(async()=>{const current=await editor.execute('open',common);return current.site.document.website.footer;}).toBe('Retained redo');
- }finally{release?.();await page.mouse.up().catch(()=>{});await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{release?.();await page.mouse.up().catch(()=>{});await page.close();await app?.close();if(fixture)await clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

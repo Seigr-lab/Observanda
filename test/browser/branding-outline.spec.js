@@ -21,7 +21,7 @@ async function fixture(page,count){
  const app=await startServer({root:ws.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[],bodies=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push({path:new URL(r.url()).pathname,data:r.postData()});});
- return {app,ws,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {app,ws,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const svg={name:'mark.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="15" fill="teal"/></svg>')};
 for(const count of [42,420])test('branding searches scopes and saves without loading '+count+' record bodies',async({page})=>{

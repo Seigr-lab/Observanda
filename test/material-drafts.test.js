@@ -14,7 +14,7 @@ import {Workspace} from '../src/storage.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 async function fixture(t,count=4){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-draft-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,record=book.entries[0],refs=[];
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(async()=>{for(let i=0;i<count;i++)refs.push(await m.retainRecord({...record,title:'Pinned input '+i}));});
  return {...f,m,directory,recordId:record.id,refs};
 }

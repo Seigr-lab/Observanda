@@ -33,7 +33,7 @@ async function fixture(page,count=61){
  return {...f,book,app,changes,draftId,drafts,errors,selections,saves,loaded,
   assertScoped(){expect(fullReads).toEqual([]);expect(selections.every(c=>c.ids.length<=20)).toBe(true);expect(errors).toEqual([]);},
   read:async()=>{Object.assign(ResearchCatalogue.prototype,original);return f.workspace.read();},
-  close:async()=>{Object.assign(ResearchCatalogue.prototype,original);await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+  close:async()=>{Object.assign(ResearchCatalogue.prototype,original);await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
  };
 }
 const draftList=page=>page.getByRole('dialog',{name:'Recoverable record drafts',exact:true});

@@ -11,7 +11,7 @@ import {clearVault} from '../src/encryption.js';
 import {diskCapacity} from '../src/disk-capacity.js';
 import {readSegmentedHeader} from '../src/segmented-file-format.js';
 const BLOCK=1024*1024,HEADER=96;
-async function fixture(t){const parent=path.resolve(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-stream-seeking-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original');t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-seeking-'));await rm(root,{recursive:true,force:true});});return {root,vault,workspace,file};}
+async function fixture(t){const parent=path.resolve(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-stream-seeking-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original');t.after(async()=>{await clearVault(vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-seeking-'));await rm(root,{recursive:true,force:true});});return {root,vault,workspace,file};}
 const collect=async iterator=>{const parts=[];for await(const bytes of iterator)parts.push(bytes);return Buffer.concat(parts);};
 
 test('existing whole-file envelopes still authenticate the entire file before a partial read',async t=>{

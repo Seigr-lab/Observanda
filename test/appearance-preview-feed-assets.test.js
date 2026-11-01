@@ -19,7 +19,7 @@ test('page and project feeds have independently scoped continuation assets in pi
  book.pages=Array.from({length:5},(_,i)=>({id:randomUUID(),title:'Guide '+i,body:'Shared guide',share:true,sections:[]}));
  const project=book.projects[0];book.projects.push(...Array.from({length:4},(_,i)=>({...structuredClone(project),id:randomUUID(),title:'Project '+i,share:true})));
  book.website.home.sections=['pages','projects'].map(kind=>({id:kind,kind,title:kind,show:true,layout:'list',feed:{...defaultFeed(kind),pageSize:2,visitorOrder:true}}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const sessions=new AppearancePreviewSessions(),command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'};
  const session=await sessions.create(f.workspace,command,{media:new MediaStore(f.workspace.root,f.vault),fonts:new WorkspaceFonts(f.workspace)}),id=session.baseUrl.split('/')[2];
  const html=(await sessions.file(id,'index.html')).content;

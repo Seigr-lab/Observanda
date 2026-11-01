@@ -27,7 +27,7 @@ import {legacyPublicationQuery} from './fixtures/legacy-publication-query.js';
 
 async function fixture(t,book){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-appearance-pages-')),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const dependencies=f=>({media:new MediaStore(f.workspace.root,f.vault),fonts:new WorkspaceFonts(f.workspace)});

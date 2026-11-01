@@ -17,7 +17,7 @@ import {researchReference} from '../src/web/research-reference.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-starter-source-')),book=sampleNotebook(),record=book.entries[0];
  record.body='Completed results must remain separate';record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Method section '+(i+1),body:'Retained instructions '+i+' '+('measurement '.repeat(100))}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const snapshotId=(await f.workspace.outline()).etag;return {...f,book,record,source:new RecordStarterSource(f.workspace),target:{workspaceId:book.id,recordId:record.id,snapshotId}};
 }
 

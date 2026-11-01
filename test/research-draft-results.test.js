@@ -18,7 +18,7 @@ test('native result checkpoints survive restart, concurrent results, rejected wr
  const a={id:randomUUID(),kind:'number',title:'Exact result',text:'9007199254740993/6',basis:'authored',source:null,limitations:'Synthetic measurement scope'},b={...a,id:randomUUID(),title:'Other conclusion',text:'Original statement'};
  base.results={version:1,statements:[a,b]};
  const f=await encryptedFixture(directory,book),drafts=new ResearchDrafts(f.workspace),mine=structuredClone(base);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  mine.body='Unfinished analysis notes';mine.results.statements[0].text='9007199254740995/6';
  const command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[{baseRevision:recordRevision(base),expectedRevision:recordRevision(base),record:mine}]};
  const saved=await drafts.write(command);assert.equal((await drafts.write(command)).revision,saved.revision);

@@ -28,7 +28,7 @@ test('Publishing exports through folder review, preserves existing pages, and in
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await expect(dialog.getByRole('button',{name:'Return to review'})).toBeInViewport();await page.screenshot({path:test.info().outputPath('local-export-narrow.png')});
   expect(await readFile(path.join(destination,'unrelated.html'),'utf8')).toBe('Unrelated page');expect(await readFile(path.join(destination,'index.html'),'utf8')).not.toContain('PRIVATE_EXPORT_SENTINEL');expect(requests).toEqual([]);
   await dialog.getByRole('button',{name:'Return to review'}).click();await page.reload();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Export to local folder'}).click();await expect(dialog.getByText('Edition written and verified.',{exact:true})).toBeVisible();
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('folder navigation returns to the export and file review pages remain bounded',async({page})=>{
@@ -39,7 +39,7 @@ test('folder navigation returns to the export and file review pages remain bound
   await page.keyboard.press('Escape');await expect(dialog.getByRole('heading',{name:'Export to a local website folder'})).toBeVisible();await expect(dialog.getByLabel('Destination folder')).toHaveValue(destination);
   await dialog.getByRole('button',{name:'Choose folder',exact:true}).click();await dialog.getByRole('button',{name:'New folder',exact:true}).click();await dialog.getByLabel('New folder name').fill('lab-book');await dialog.getByRole('button',{name:'Create folder',exact:true}).click();await expect(dialog.locator('.folder-selection')).toContainText('lab-book');await dialog.getByRole('button',{name:'Use this folder'}).click();await expect(dialog.getByLabel('Destination folder')).toHaveValue(path.join(destination,'lab-book'));
   await dialog.getByRole('button',{name:'Review file changes'}).click();await expect(dialog.locator('.local-export-files li')).toHaveCount(50);await dialog.getByRole('button',{name:'Next files'}).click();await expect(dialog.getByText('Page 2',{exact:true})).toBeVisible();expect(await dialog.locator('.local-export-files li').count()).toBeLessThanOrEqual(50);await dialog.getByRole('button',{name:'Previous files'}).click();await expect(dialog.locator('.local-export-files li')).toHaveCount(50);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('an interrupted export reopens after server restart, finishes from its journal and exposes later manual conflicts',async({page})=>{
@@ -51,7 +51,7 @@ test('an interrupted export reopens after server restart, finishes from its jour
   await app.close();app=await startServer(options);await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Website preparations'}).click();await dialog.getByRole('button',{name:'Open review'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Export to local folder'}).click();await expect(dialog.getByRole('button',{name:'Resume export'})).toBeEnabled({timeout:30000});
   await confirm(dialog).check();await dialog.getByRole('button',{name:'Resume export'}).click();await expect(dialog.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:30000});
   await writeFile(path.join(destination,'index.html'),'Manual homepage');await dialog.getByRole('button',{name:'Review file changes'}).click();await expect(dialog.getByText('Conflicts: 1',{exact:true})).toBeVisible();await expect(dialog.getByRole('button',{name:'Write reviewed files'})).toBeDisabled();expect(await readFile(path.join(destination,'index.html'),'utf8')).toBe('Manual homepage');
- }finally{LocalExport.prototype.apply=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{LocalExport.prototype.apply=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('a delayed file review cannot reopen a closed dialog and its saved plan remains available',async({page})=>{
@@ -62,5 +62,5 @@ test('a delayed file review cannot reopen a closed dialog and its saved plan rem
   await page.route('**/api/local-export/plan',async route=>{const response=await route.fetch();reached();await waiting;await route.fulfill({response});});
   await dialog.getByRole('button',{name:'Review file changes'}).click();await ready;await dialog.getByRole('button',{name:'Return to review'}).click();release();await expect(dialog).not.toBeVisible();
   await page.getByRole('button',{name:'Export to local folder'}).click();await expect(dialog.getByRole('button',{name:'Write reviewed files'})).toBeEnabled({timeout:30000});await expect(confirm(dialog)).not.toBeChecked();await expect(dialog.getByLabel('Destination folder')).toHaveValue(destination);
- }finally{release();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

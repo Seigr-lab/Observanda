@@ -19,7 +19,7 @@ import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rekey-archive-')),f=await encryptedFixture(directory,upgradeNotebook(sampleNotebook()));
  const access=await createWorkspaceAccess('','synthetic archive recovery password',f.deviceStore),vault=takeCreatedVault(access),destination=path.join(directory,'fresh');
- t.after(async()=>{clearVault(f.vault);clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-rekey-archive-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-rekey-archive-'));await rm(directory,{recursive:true,force:true});});
  return {...f,directory,destination,access,freshVault:vault,before:await f.workspace.read(),stamp:await catalogueStamp(f.workspace.root)};
 }
 async function sourceUnchanged(f){assert.deepEqual(await f.workspace.read(),f.before);assert.deepEqual(await catalogueStamp(f.workspace.root),f.stamp);}

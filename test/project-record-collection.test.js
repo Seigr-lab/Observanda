@@ -113,5 +113,5 @@ test('project collection reads nested owners, authenticates each book and keeps 
   finally{entered.resolve();await writer;}
   const controller=new AbortController(),reason=Error('Interrupted collection');
   await measured('interrupted collection',()=>assert.rejects(visit(async()=>{controller.abort(reason);},{...selection,signal:controller.signal}),error=>error===reason));
- }finally{ResearchCatalogue.prototype.record=originalRecord;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-collection-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=originalRecord;await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-collection-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

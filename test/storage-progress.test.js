@@ -12,7 +12,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 
 test('copy progress measures files, archive rows and verified revisions while preserving copied research',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-progress-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const file=path.join(f.workspace.root,'.observanda','copy-progress-evidence');await f.workspace.writeFile(file,Buffer.alloc(3*1024*1024,19));const fileBytes=(await readFile(file)).length;
  const planEvents=[],events=[],plan=await copyPlan(f.workspace.root,path.join(directory,'copy'),{onProgress:e=>planEvents.push(e)});
  assert.ok(planEvents.some(e=>e.stage==='database-inventory'&&e.completed>0));

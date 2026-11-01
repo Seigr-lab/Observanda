@@ -63,5 +63,5 @@ test('near-limit records recover newer input after a lost checkpoint reply and c
   await expect.poll(async()=> (await drafts.list({workspaceId:book.id})).drafts.length).toBe(0);
   expect(errors).toEqual([]);
   console.log(JSON.stringify({checkpointBytes:Buffer.byteLength(JSON.stringify(requests[0])),browserHeapMiB:Math.ceil(await page.evaluate(()=>performance.memory?.usedJSHeapSize??0)/1048576)}));
- }finally{release();await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release();await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

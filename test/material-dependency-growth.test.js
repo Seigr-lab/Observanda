@@ -18,7 +18,7 @@ test('dependency review qualifies 65 and 650 pinned records, overlapping graphs 
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-dependency-growth-')),book=sampleNotebook(),seed=book.entries[2];
   book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Acquisition '+i,body:'Retained private source '.repeat(20),relations:[],attachments:[],sections:[],figures:[],contributors:[]}));
   const f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,derived=[];let source;
-  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   await f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,async()=>{
    const refs=m.sequences.builder('references',fn=>fn());
    for(const record of book.entries)await refs.append(await m.retainRecord(record));

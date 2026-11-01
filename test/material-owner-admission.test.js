@@ -14,7 +14,7 @@ import {clearVault} from '../src/encryption.js';
 
 test('retained material membership never bypasses live project handover or scope ownership',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-material-admission-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),record=book.entries[0],notebook=book.notebooks.find(item=>item.id===record.notebookId),materials=new ResearchMaterials(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>withMetadataBatch(store,async()=>{
   await assert.rejects(new ProjectSourceAuthority(store).notebook(notebook.id,{notebooks:[{id:notebook.id,projectId:''}]}),{code:'INVALID'});
   const run=store.db.run;let snapshots=0;

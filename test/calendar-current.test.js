@@ -16,7 +16,7 @@ import {workspaceModules} from '../src/modules/index.js';
 const range={from:'2026-10-01',to:'2026-11-01',timeZone:'Europe/Oslo'};
 for(const count of [65,650])test('calendar discovery excludes '+count+' unrelated task bodies and stale schedule facts fail closed',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calendar-current-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{title:'Task '+i,description:'Private task body. '.repeat(4500),status:'todo',priority:'normal',dueOn:i%2?'2026-12-01':'2026-10-15',assignees:[],checklist:[],dependencies:[],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,entities);
  t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Whole module data loaded for a calendar');});
@@ -34,7 +34,7 @@ for(const count of [65,650])test('calendar discovery excludes '+count+' unrelate
 
 for(const count of [65,650])test('dense calendar pages and month counts stay bounded at '+count+' events',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calendar-pages-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{title:'Task '+String(i).padStart(3,'0'),description:'Unopened private notes. '.repeat(2600),status:'todo',priority:'normal',dueOn:'2026-10-15',assignees:[],checklist:[],dependencies:[],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,entities);
  t.mock.method(ModuleCatalogue.prototype,'read',()=>{throw Error('Whole module data loaded');});

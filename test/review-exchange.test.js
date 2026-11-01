@@ -9,7 +9,7 @@ import {Reviews} from '../src/reviews.js';import {reviewHash,verifySigned} from 
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';import {Workspace} from '../src/storage.js';import {workspaceModules} from '../src/modules/index.js';
 test('two installations exchange pinned, encrypted, signed reviews and preserve them through backup',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-exchange-')),a=await encryptedFixture(path.join(directory,'author'),sampleNotebook()),b=await encryptedFixture(path.join(directory,'reviewer'),sampleNotebook());t.after(async()=>{clearVault(a.vault);clearVault(b.vault);await rm(directory,{recursive:true,force:true});});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-exchange-')),a=await encryptedFixture(path.join(directory,'author'),sampleNotebook()),b=await encryptedFixture(path.join(directory,'reviewer'),sampleNotebook());t.after(async()=>{await clearVault(a.vault);await clearVault(b.vault);await rm(directory,{recursive:true,force:true});});
  const author=new Reviews(a.workspace,a.deviceStore),reviewer=new Reviews(b.workspace,b.deviceStore),book=(await a.workspace.read()).book,other=(await b.workspace.read()).book;
  const run=(service,workspaceId)=>(operation,data={})=>service.run(operation,{workspaceId,...data}),A=run(author,book.id),B=run(reviewer,other.id),ac=(await A('identity')).contact,bc=(await B('identity')).contact;
  await assert.rejects(A('contact',{name:'Reviewer',contact:bc,verified:false}));await A('contact',{name:'Reviewer',contact:bc,verified:true});

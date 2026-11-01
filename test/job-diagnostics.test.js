@@ -29,7 +29,7 @@ test('worker failure diagnostics survive reopening and successful retry without 
  let fail=true,authorized=true;
  const definitions={'test.capture':{authorize:async()=>{if(!authorized)throw new AppError('ACCESS_LOCKED');},prepare:()=>withJobDiagnosticContext({operation:'capture-retained-figures',recordId},()=>{if(fail){const error=new Error('Synthetic private location');error.code='25006';throw error;}return {captured:true};}),commit:async(_job,value)=>value}};
  const queue=new DurableJobs(f.workspace,definitions),worker=new JobWorker(queue),observations=[];queue.observe=value=>observations.push(value);
- t.after(async()=>{await worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const job=await queue.enqueue({id:randomUUID(),type:'test.capture',scope:before.book.id,input:{}});worker.enabled=true;await worker.runOnce();worker.enabled=false;
  const failed=await queue.read(job.id);assert.equal(failed.state,'failed');assert.equal(failed.error,'IO');assert.equal(failed.diagnostic.attempt,1);
  const reopened=new DurableJobs(new Workspace(f.workspace.root,f.vault),definitions),diagnostic=await reopened.diagnostic(job.id);

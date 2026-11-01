@@ -24,7 +24,7 @@ async function fixture(t,count=8){
  book.projects.push({...structuredClone(book.projects[0]),id:randomUUID(),title:'Unrelated project'});
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:book.projects[1].id,title:'Unrelated book'});
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:(i===0?'Selected record ':'Private record ')+i,body:'Original body '+i,share:i===0,sections:[{id:randomUUID(),title:'Exact section',body:'Section content'}],relations:[],figures:[],attachments:[],contributors:[],tags:[],notebookId:book.notebooks[i%2].id}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const sites=new WebsiteSites(f.workspace),site=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Independent website'});
  return {...f,book,directory,sites,id:site.id,scoped:websiteWorkspace(f.workspace,site.id)};
 }

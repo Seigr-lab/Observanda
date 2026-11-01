@@ -27,7 +27,7 @@ import {moveSource} from '../src/workspace-move-state.js';
 
 test('nested book moves recover every handoff boundary and retain later writes without recopying frozen sources',{timeout:360000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-book-move-')),options={directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}},vaults=[];let provider=new WorkspaceDatabases(options),detach=installDatabaseProvider(provider);
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-move-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-move-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const metadata=createNotebook('Field Project Å 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  let project=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault);

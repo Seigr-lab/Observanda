@@ -36,7 +36,7 @@ async function fixture(t){
    }
    assert.equal(path.dirname(root),temporaryRoot);assert.ok(path.basename(root).startsWith('observanda-bootstrap-'));
    await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
-  }finally{clearVault(workspace.vault);}
+  }finally{await clearVault(workspace.vault);}
  });
  await mkdir(path.join(root,'.observanda'));
  return {env,directory,state,

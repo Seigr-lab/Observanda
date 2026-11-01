@@ -31,7 +31,7 @@ test.beforeEach(async({page})=>{
  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');
  await expect(canvas(page).locator('body')).toHaveAttribute('data-page','home');
 });
-test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
+test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
 
 test('media discovery, gallery ordering and uploads retain selections across bounded windows, undo and reopening',async({page},testInfo)=>{
  test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(error.message));

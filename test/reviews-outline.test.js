@@ -23,7 +23,7 @@ async function fixture(t,count=320){
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:second,title:'Other takes'});
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),notebookId:i<2?first:second,title:'Saved take '+i,body:'Private original '+i,sections:[],figures:[],attachments:[],relations:[]}));
  const a=await encryptedFixture(path.join(directory,'author'),book),b=await encryptedFixture(path.join(directory,'reviewer'),sampleNotebook());
- t.after(async()=>{clearVault(a.vault);clearVault(b.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(a.vault);await clearVault(b.vault);await rm(directory,{recursive:true,force:true});});
  const service=new Reviews(a.workspace,a.deviceStore),other=new Reviews(b.workspace,b.deviceStore),ac=await service.identity.contact(),bc=await other.identity.contact();
  const run=(operation,data={})=>service.run(operation,{workspaceId:book.id,...data});
  await run('contact',{name:'Reviewer',contact:bc,verified:true});

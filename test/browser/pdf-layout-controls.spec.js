@@ -44,7 +44,7 @@ test('PDF saved presets, section reset and alignment grids retain exact layout c
   await composition.locator('[data-pdf-composition-grid]').fill('0');await saved();expect(await composition.locator('[data-pdf-composition-canvas]').evaluate(node=>getComputedStyle(node).backgroundImage)).toBe('none');await composition.locator('[data-pdf-composition-grid]').fill('10');await saved();
   const retained=(await read()).section,compiled=await compilePdfDocument((await header()).header,[retained]);expect(compiled.html).toContain('left:21mm');expect(compiled.html).not.toContain('linear-gradient');expect((await documents.read('layouts')).items.find(item=>item.name==='Field report').layout.widthMm).toBe(185);
   await composition.scrollIntoViewIfNeeded();await composition.screenshot({path:info.outputPath('alignment-grid.png')});expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-controls-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-controls-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 const link=(text,href)=>({type:'paragraph',content:[{type:'text',text,marks:[{type:'link',attrs:{href,title:'',target:'_self',nofollow:false}}]}]});

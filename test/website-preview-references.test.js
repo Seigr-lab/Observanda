@@ -20,7 +20,7 @@ import {Workspace} from '../src/storage.js';
 test('canvas reference windows reconcile saved and unsaved links without retaining every source record',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-canvas-references-')),book=referenceBook(600),target=book.entries[0];
  book.entries[300].share=false;delete book.entries[10].relations[0].role;book.entries[10].relations[0].target.revision='0'.repeat(64);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const websitePin=(await new WebsiteSites(f.workspace).read(null)).websitePin,etag=(await f.workspace.outline()).etag,draft=structuredClone(book);draft.entries.splice(2,1);draft.entries.find(r=>r.id===book.entries[4].id).relations=[];
  const added={...structuredClone(book.entries[1]),id:randomUUID(),title:'Unsaved referring record'};draft.entries.push(added);
  const command={...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag},designTarget='entry:'+target.id;
@@ -55,7 +55,7 @@ test('canvas reference windows reconcile saved and unsaved links without retaini
 test('sparse canvas windows continue past obsolete exact links without retaining their descriptors',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-canvas-sparse-')),book=referenceBook(300),target=book.entries[0];
  for(const row of book.entries.slice(1,285)){delete row.relations[0].role;row.relations[0].target.revision='0'.repeat(64);}
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const websitePin=(await new WebsiteSites(f.workspace).read(null)).websitePin,command={...workspaceSaveRequest(book,book,recordRevisions(book)),baseEtag:(await f.workspace.outline()).etag},designTarget='entry:'+target.id;
  const first=(await websitePreviewSource(f.workspace,command,{websitePin,designTarget})).context;assert.deepEqual(first.referencePage.recordIds,[]);assert.equal(first.referencePage.scanned,256);assert.ok(first.entryDestinations.length<=3);
  const next=(await websitePreviewSource(f.workspace,command,{websitePin,designTarget,referenceCursor:first.referencePage.nextCursor})).context;assert.deepEqual(next.referencePage.recordIds,book.entries.slice(285).map(r=>r.id));

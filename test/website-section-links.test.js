@@ -39,7 +39,7 @@ test('buttons, introductions, rich text and images preserve exact local and cros
 
 test('section destinations page pinned headings without full record or prose reads',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-section-destinations-')),book=sampleNotebook(),record=book.entries[0];record.sections=Array.from({length:57},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained evidence '+i}));
- const f=await encryptedFixture(root,book);t.after(async()=>{clearVault(f.vault);await rm(root,{recursive:true,force:true});});const outline=await f.workspace.outline(),base={workspaceId:book.id,snapshotId:outline.etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,recordId:record.id};
+ const f=await encryptedFixture(root,book);t.after(async()=>{await clearVault(f.vault);await rm(root,{recursive:true,force:true});});const outline=await f.workspace.outline(),base={workspaceId:book.id,snapshotId:outline.etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,recordId:record.id};
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Full record read');});const selected=RecordDocument.prototype.field,paths=[];
  t.mock.method(RecordDocument.prototype,'field',function(path,...args){paths.push(path);assert.ok(['id','title'].includes(path.at(-1)));return selected.call(this,path,...args);});
  const service=new WebsiteResearch(f.workspace),first=await service.run('sections',{...base,offset:0}),second=await service.run('sections',{...base,offset:first.next}),last=await service.run('sections',{...base,offset:second.next});

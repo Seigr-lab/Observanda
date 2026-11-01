@@ -95,7 +95,7 @@ test('encrypted save, incomplete draft, exact pins, history and verified workspa
   await new RecordHistory(restored,media).restore({...command,...old,expectedRevision:recordRevision(updated)});
   assert.equal((await restored.read()).book.entries[0].occurredOn,original.occurredOn);
   assert.deepEqual((await ws.read()).book.entries[0].occurredOn,approx);
- }finally{clearVault(vault);if(restoredVault)clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
+ }finally{await clearVault(vault);if(restoredVault)await clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
 });
 test('static output keeps authored uncertainty and excludes private undated records before rendering',()=>{
  const book=sampleNotebook();const [art,field,hidden]=book.entries;

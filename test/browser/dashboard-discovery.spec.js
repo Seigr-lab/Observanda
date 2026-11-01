@@ -21,7 +21,7 @@ async function fixture(page,count=42){
  const original=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('request',request=>{if(request.url().includes('/api/workspace/read/')||request.url().includes('/dashboard-collection/'))requests.push({url:request.url(),data:request.postDataJSON()});});page.on('pageerror',error=>errors.push(error.message));
  await page.goto(app.url);await page.getByRole('button',{name:'+ Add cards',exact:true}).click();
- return {...f,book,app,requests,bodies,errors,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book,app,requests,bodies,errors,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 for(const count of [42,420])test('card search, paging, pinning and restoration stay scoped with '+count+' records',async({page},testInfo)=>{
  test.setTimeout(90000);const f=await fixture(page,count);

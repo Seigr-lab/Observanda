@@ -19,7 +19,7 @@ async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-settings-'));
  const runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);
  const f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{await runtime.close();detach();clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-settings-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-settings-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,runtime};
 }
 test('workspace preferences persist independently of research writes with conflict and lifecycle fencing',{timeout:90000},async t=>{

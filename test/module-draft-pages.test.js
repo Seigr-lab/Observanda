@@ -19,7 +19,7 @@ import {openCatalogue} from '../src/postgres.js';
 const source='metadata:.observanda/module-drafts/',summary='metadata:.observanda/module-draft-list/',moduleId='scientific-calculator';
 async function fixture(t,count=14){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-draft-pages-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {drafts,run:draftContext}=moduleDraftOwners(f.workspace,book.id,moduleId),commands=[];
  for(let i=0;i<count;i++){
   const command={id:randomUUID(),workspaceId:book.id,moduleId,etag:null,drafts:[{id:randomUUID(),type:'calculation',expectedRevision:null,base:null,data:{name:'Recovery '+i,expression:'PRIVATE_CHECKPOINT '.repeat(6000)}}]};

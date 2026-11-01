@@ -26,7 +26,7 @@ import {catalogueBinding} from '../src/postgres-activation.js';
 
 test('selected project copy and export retain the complete independent subtree',{timeout:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-tree-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
- t.after(async()=>{await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-tree-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-tree-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device')}),password='Portable project tree password';
  async function grant(){const access=await createWorkspaceAccess('',password,device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  const wg=await grant(),metadata=createNotebook('Source Workspace'),workspaceRoot=path.join(directory,metadata.title);await initializeLocation(workspaceRoot,metadata,wg.access,wg.vault);const workspace=new Workspace(workspaceRoot,wg.vault),registry=new ProjectRegistry(workspace,metadata.id),projects=new Map(),books=new Map();

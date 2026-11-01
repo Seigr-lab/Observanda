@@ -144,5 +144,5 @@ test('author site button defaults, plain links and independent popup close style
   const fallback=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,fallback);const reader=await fallback.newPage();
   try{await reader.goto(url);await reader.locator('[data-public-popup]>summary').click();await expect(reader.getByRole('link',{name:'Visit the work',exact:true})).toHaveAttribute('href','https://example.org/work');await expect(reader.locator('.public-popup-close')).toBeHidden();}finally{await fallback.close();}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

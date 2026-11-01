@@ -16,7 +16,7 @@ import {clearVault} from '../src/encryption.js';
 import {privateDirectory,digest,serialize} from '../src/storage.js';
 test('native copy reconciles adoption authority from pinned rows without aggregate registry or proof lists',{timeout:120000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-adoption-directory-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
- t.after(async()=>{await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-adoption-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-adoption-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'source'),createNotebook('Source workspace'));vault=f.vault;const owner=f.workspace,outline=await owner.outline(),workspaceId=outline.metadata.id,registry=new ProjectRegistry(owner,workspaceId);
  const entry={projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),root:path.join(owner.root,'Adopted project'),parentId:null,summary:null};
  await registry.apply(await registry.version(),[{state:'active',entry}]);const pin=await captureWorkspaceCopyDirectory(registry);

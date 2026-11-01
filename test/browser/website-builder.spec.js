@@ -17,7 +17,7 @@ const savedBook=async()=>({...((await new WebsiteSites(fixture.workspace).read(n
 const site=page=>page.frameLocator('#website-draft-preview');
 const save=async page=>{await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
 test.beforeEach(async({page})=>{test.setTimeout(120000);await mkdir('.local/screenshots',{recursive:true});root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ui-'));book=sampleNotebook();book.description='';book.projects[0].share=false;fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');});
-test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 
 test('empty selections are explained and independent website identity, ordered homepage text and navigation survive save and reload',async({page})=>{
  const original=(await fixture.workspace.outline()).etag;

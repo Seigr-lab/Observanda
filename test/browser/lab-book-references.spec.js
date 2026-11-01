@@ -54,5 +54,5 @@ test('links open the owning book and its retained revisions after authentication
   const image=page.locator('.retained-record-reader img[alt="Book apparatus"]');await expect(image).toHaveAttribute('src','/api/projects/'+id+'/lab-books/'+b.labBookId+'/media/'+media.id);await expect.poll(()=>image.evaluate(node=>node.complete&&node.naturalWidth>0)).toBe(true);
   await page.locator('#dialog').getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('main h1')).toHaveText('Book A observation');expect(new URL(page.url()).hash).toContain('/books/'+a.labBookId+'/');
   expect(errors).toEqual([]);await page.screenshot({path:test.info().outputPath('book-reference.png'),fullPage:true});
- }finally{await page.close();await app?.close();await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-links-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app?.close();await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-links-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

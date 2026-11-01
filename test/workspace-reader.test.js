@@ -35,7 +35,7 @@ async function fixture(t,count=45,{large=false,formatVersion=21}={}){
   body:'Original '+i,sections:large?Array.from({length:i===0?6:3},()=>({id:randomUUID(),title:'Notes',body:'x'.repeat(59000)})):[],figures:[],attachments:[],relations:[]}));
  book.formatVersion=formatVersion;
  const f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,base:await f.workspace.read(),reader:new WorkspaceReader(f.workspace)};
 }
 const requestFor=reader=>(route,data,options)=>route.endsWith('/start')?reader.start(options):reader.page(data,options);

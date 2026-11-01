@@ -31,7 +31,7 @@ async function fixture(t,count,{limit=0,tag='',regions=false,feed=null}={}){
   assignRegion(book.website,'home','sidebar',sidebar.id);
   book.website.layouts.push({target:'home',showHeading:true,heading:'',description:'',placement:'after',sections:[{...structuredClone(section),filter:{projectId:null,tag:'common',limit:3}}]});
  }
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,directory,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const get=(f,path='index.html')=>appearancePreviewPage(f.workspace,f.command,path);

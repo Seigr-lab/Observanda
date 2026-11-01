@@ -28,7 +28,7 @@ test('native publication freezes complete retained figures with separate data co
  const started=performance.now();let prior=started;const phase=stage=>{const now=performance.now();console.log('Retained publication phase',{stage,elapsedMs:Math.round(now-started),phaseMs:Math.round(now-prior)});prior=now;};
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-edition-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);const record=book.entries[0];record.share=true;record.sections=[];record.attachments=[];record.figures=[];
  const fixture=await encryptedFixture(directory,book),materials=new ResearchMaterials(fixture.workspace);phase('owner ready');
- t.after(async()=>{clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-figure-edition-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-figure-edition-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const figures=[];
  for(const title of ['Complete observations','Chart only']){
   const figure=createFigure();figure.title=title;figure.series[0].points=Array.from({length:137},(_,i)=>({x:i,y:i%17,error:i===136?1:null}));

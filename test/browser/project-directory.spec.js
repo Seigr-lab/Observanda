@@ -41,7 +41,7 @@ test('normal project creation owns its database, directory and independently nav
   await page.locator('#workspace-navigation [data-action=projects]').click();await expect(page.locator('[data-project-directory=root]')).toContainText('Stream observations');
   await expect(page.locator('.app-activity [data-toggle]')).toHaveText('Activity');
   await page.screenshot({path:test.info().outputPath('project-directory.png'),fullPage:true});expect(errors).toEqual([]);
- }finally{await page.close();await app?.close();await owner.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-directory-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-directory-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 

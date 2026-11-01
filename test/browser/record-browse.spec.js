@@ -14,7 +14,7 @@ async function fixture(){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-browse-ui-')),book=upgradeNotebook(sampleNotebook()),source=book.entries[0];
  book.entries=Array.from({length:61},(_,i)=>({...source,id:randomUUID(),title:'Listening take '+String(i).padStart(2,'0'),figures:[],contributors:[],body:i%2?'Forest field recording':'Studio recording',sections:[],tags:[i%2?'field':'studio'],type:'note'}));
  const {workspace,vault,deviceStore}=await encryptedFixture(directory,book),app=await testServer({root:workspace.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- return {book,workspace,app,service:new ResearchRecords(workspace,{}),close:async()=>{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {book,workspace,app,service:new ResearchRecords(workspace,{}),close:async()=>{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 
 test('record pages combine filters, preserve page context and open current saved content',async({page})=>{

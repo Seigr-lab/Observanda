@@ -19,7 +19,7 @@ test.beforeEach(async({page})=>{
  fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});
  await page.goto(app.url);await navigate(page,'Website editor');await expect(canvas(page).locator('main')).toBeVisible();
 });
-test.afterEach(async()=>{await app.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
+test.afterEach(async()=>{await app.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
 
 async function drag(page,kind){
  const from=page.locator(`[data-palette-kind="${kind}"]`),to=canvas(page).locator('[data-drop-parent=""]');

@@ -35,5 +35,5 @@ test('authorization stays on the application origin across native resources, rel
   const media=await preview.locator('img,audio,video').evaluateAll(async elements=>Promise.all(elements.filter(element=>element.currentSrc||element.src).map(async element=>{const response=await fetch(element.currentSrc||element.src,{headers:{Range:'bytes=0-31'}});return response.status;})));expect(media.length).toBeGreaterThan(0);expect(media.every(status=>[200,206].includes(status))).toBe(true);
   const images=await preview.locator('img').evaluateAll(async images=>Promise.all(images.map(image=>image.complete?image.naturalWidth>0:new Promise(resolve=>{image.onload=()=>resolve(true);image.onerror=()=>resolve(false);})))) ;expect(images.every(Boolean)).toBe(true);
   await preview.close();await unrelated.close();
- }finally{await app.close();clearVault(fixture.vault);await new Promise(resolve=>other.close(resolve));expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory)).toMatch(/^observanda-session-browser-/);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(fixture.vault);await new Promise(resolve=>other.close(resolve));expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory)).toMatch(/^observanda-session-browser-/);await rm(directory,{recursive:true,force:true});}
 });

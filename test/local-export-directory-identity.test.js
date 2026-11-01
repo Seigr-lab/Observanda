@@ -11,7 +11,7 @@ import {digest,serialize} from '../src/storage-format.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-export-root-')),f=await encryptedFixture(directory,sampleNotebook()),output=path.join(directory,'output');await mkdir(output);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-export-root-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-export-root-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const candidate={id:digest('synthetic edition'),reviewId:digest('synthetic review'),defaultPage:'index.html',files:new Map([['index.html',Buffer.from('Reviewed homepage')],['assets/detail.txt',Buffer.from('Reviewed detail')]])};
  const service=options=>{const value=new LocalExport(f.workspace,options);value.candidate=async()=>candidate;return value;};
  return {...f,directory,output,candidate,service,plan:()=>service().plan({directory:output,reviewId:candidate.reviewId})};

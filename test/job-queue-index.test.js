@@ -14,7 +14,7 @@ import {AppError} from '../src/errors.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-queue-growth-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),scope=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const definition={authorize:async job=>assert.equal(job.scope,scope),commit:async job=>({id:job.id})},definitions={work:definition,'publication.deploy':definition};
  let clock=Date.now();const create=workspace=>{const queue=new DurableJobs(workspace,definitions);queue.now=async()=>clock;return queue;};
  return {...f,directory,scope,queue:create(f.workspace),create,advance:ms=>{clock+=ms;},intent:(type='work')=>({id:randomUUID(),scope,type,input:{}})};

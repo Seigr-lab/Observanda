@@ -52,5 +52,5 @@ test('project copy and move remain visible in their page across navigation and r
   assert.deepEqual((await new ProjectStorage(destination,id,vault).read()).book,book);assert.deepEqual((await new ProjectStorage(copy,id,vault).read()).book,book);
   await expect(page.locator('#project-recent-records')).toContainText(book.entries[0].title);await expect(page.locator('#project-recent-records [role=alert]')).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('project-storage.png'),fullPage:true});expect(errors).toEqual([]);
- }finally{release();ProjectRenames.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ProjectRenames.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

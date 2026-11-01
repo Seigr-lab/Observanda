@@ -46,5 +46,5 @@ for(const count of [65,650])test('website authoring uses summaries and selected 
   const writes=requests.filter(r=>r.path==='/api/websites/editor/change'),write=requests.find(r=>r.path==='/api/websites/editor/save');expect(write).toBeTruthy();expect(writes.length).toBeGreaterThan(0);expect(JSON.stringify(writes).includes('PRIVATE_BODY')).toBe(false);expect(requests.some(r=>r.path==='/api/workspace/save')).toBe(false);
   const heap=await page.evaluate(()=>performance.memory?.usedJSHeapSize??0);expect(heap).toBeLessThan(128*1024*1024);expect(errors).toEqual([]);
   test.info().annotations.push({type:'capacity',description:JSON.stringify({records:count,heapMiB:Math.round(heap/1048576),writeBytes:Buffer.byteLength(JSON.stringify(write.data)),originalReads:loaded.length})});
- }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

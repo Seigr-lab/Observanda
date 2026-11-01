@@ -14,7 +14,7 @@ import {workspaceModules} from '../src/modules/index.js';
 import {seedModuleCurrent,legacyModuleHead} from './module-current-fixture.js';
 async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-members-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Calculation '+i,links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}));
  await seedModuleCurrent(f.workspace,book.id,entities);return {...f,book,entities};
 }

@@ -50,5 +50,5 @@ test('capacity preflight keeps a refused research save recoverable without sendi
   await section.fill('Reviewed continuation');await checkpoint();
   const continued=await drafts.list({workspaceId:book.id});expect(proseText((await drafts.read(continued.drafts[0].id)).draft.changes[0].record.sections.find(item=>item.id===sectionId).body)).toBe('Reviewed continuation');
   expect(errors).toEqual([]);
- }finally{await testInfo.attach('checkpoint-latency.json',{body:JSON.stringify({checkpointWaitMs:waits}),contentType:'application/json'});await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await testInfo.attach('checkpoint-latency.json',{body:JSON.stringify({checkpointWaitMs:waits}),contentType:'application/json'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -46,5 +46,5 @@ test('BOM import localizes server and preview diagnostics while retaining source
    await dialog.locator('[data-action="close-dialog"]').click();await main.locator('[data-command="discard"]').click();
   }
   expect(errors).toEqual([]);expect((await f.workspace.read()).book).toEqual(original);
- }finally{await app?.close();clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-bom-language-'))throw Error('Invalid test cleanup path');await rm(directory,{recursive:true,force:true});}
+ }finally{await app?.close();await clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-bom-language-'))throw Error('Invalid test cleanup path');await rm(directory,{recursive:true,force:true});}
 });

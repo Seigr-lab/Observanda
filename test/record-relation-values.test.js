@@ -28,7 +28,7 @@ async function fixture(t,{large=false,parentType='experiment'}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-relation-values-')),book=sampleNotebook(),record=book.entries[2],method=book.entries[0],parent=book.entries[1];book.entries=[record,method,parent];record.type='run';parent.type=parentType;
  record.relations=Array.from({length:73},(_,i)=>({id:randomUUID(),type:'Related to',label:'Reference '+i,target:{workspaceId:randomUUID(),kind:'record',id:randomUUID()}}));
  record.sections=Array.from({length:large?73:2},(_,i)=>({id:randomUUID(),title:'Section '+i,body:large?'exact'.repeat(5600):'Original '+i}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(large){const writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id,sectionId:null},base=await writing.read(target);record.body='Extended observations '.repeat(2500);await writing.save({...target,expectedRevision:base.revision,value:{body:record.body}});assert.ok(Buffer.byteLength(JSON.stringify(record))>2*1024*1024);}
  const values=new RecordValues(f.workspace),drafts=new RecordValueDrafts(f.workspace),target=id=>({workspaceId:book.id,recordId:record.id,field:'relation:'+id});
  const original=ResearchCatalogue.prototype.record;t.mock.method(ResearchCatalogue.prototype,'record',function(id,...args){if(id===record.id)throw Error('Research links reconstructed the source record');return original.call(this,id,...args);});

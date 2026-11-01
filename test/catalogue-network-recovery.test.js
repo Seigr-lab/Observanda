@@ -34,7 +34,7 @@ test('socket loss rolls back partial catalogue writes and scoped owners reconnec
  let route,owner;
  t.after(async()=>{
   try{await owner?.close();}finally{try{await route?.close();}finally{
-   for(const vault of vaults)clearVault(vault);
+   for(const vault of vaults)await clearVault(vault);
    assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-connection-loss-'));
    await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
   }}
@@ -83,7 +83,7 @@ for(const mode of ['cancel','deadline'])test(mode+' of a stalled database reply 
  let route,owner,vault,pending,settled=false;
  t.after(async()=>{
   try{if(!settled)await route?.disconnect();await pending;await owner?.close();}finally{
-   try{await route?.close();}finally{if(vault)clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-stalled-reply-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+   try{await route?.close();}finally{if(vault)await clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-stalled-reply-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
   }
  });
  const f=await encryptedFixture(directory,sampleNotebook());vault=f.vault;

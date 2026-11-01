@@ -14,7 +14,7 @@ let app,root,book,errors,fixture;
 const canvas=p=>p.frameLocator('#website-draft-preview');
 const siteTool=async(p,name)=>{await task(p,'Site');await p.locator('.site-tools').getByRole('button',{name,exact:true}).click();};
 test.beforeEach(async({page})=>{errors=[];page.on('pageerror',e=>errors.push(e.message));root=await mkdtemp(path.join(os.tmpdir(),'observanda-redesign-'));book=sampleNotebook();book.website.description='';fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);});
-test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 test('author a page, format text, change site type, preview and export an unsaved draft, then return to edit',async({page})=>{
  test.setTimeout(60000);await navigate(page,'Website editor');await expect(canvas(page).locator('main')).toBeVisible();
  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Field notes');

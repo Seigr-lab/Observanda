@@ -29,7 +29,7 @@ async function fixture(page,count=24){
  ResearchCatalogue.prototype.record=function(id,...args){records.push(id);return record.call(this,id,...args);};
  ResearchCatalogue.prototype.objectValue=function(id,expected){if(id.startsWith('metadata:.observanda/drafts/')&&expected)draftBodies.push(id);return objectValue.call(this,id,expected);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(r.url());});
- return {...f,book,commands,drafts,app,records,draftBodies,requests,errors,async close(){ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.objectValue=objectValue;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book,commands,drafts,app,records,draftBodies,requests,errors,async close(){ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.objectValue=objectValue;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 test('draft discovery pages, retries and recovers one selected original without a full workspace load',async({page},testInfo)=>{
  const f=await fixture(page);test.setTimeout(90000);

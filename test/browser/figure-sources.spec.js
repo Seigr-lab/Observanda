@@ -43,5 +43,5 @@ test('copy a calculated plot into panels and inspect its exact source chain whil
   await dialog.getByRole('button',{name:'Back to previous evidence',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Calculated response',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(reader).toHaveCount(1);expect(writes).toHaveLength(1);expect(await f.workspace.read()).toEqual(saved);expect(errors).toEqual([]);
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await reader.getByRole('button',{name:'Inspect calculation',exact:true}).last().scrollIntoViewIfNeeded();await page.screenshot({path:test.info().outputPath('figure-source-reading-phone.png')});
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

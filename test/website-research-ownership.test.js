@@ -11,7 +11,7 @@ import {clearVault} from '../src/encryption.js';
 
 test('research edit and restore boundaries preserve independent website content and consent',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-boundary-')),original=sampleNotebook(),f=await encryptedFixture(directory,original),sites=new WebsiteSites(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const legacy=await f.workspace.catalogue(async store=>{for(const id of await store.snapshots())if(!(await store.snapshot(id)).websiteDocuments)return id;throw Error('Missing retained inline snapshot');});
  const site=await sites.read(null),recordId=original.entries[0].id;
  const saved=await sites.save(null,{workspaceId:original.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{website:{...site.book.website,footer:'Independent footer'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:recordId,share:false,attachments:[]}]}});

@@ -17,7 +17,7 @@ import {digest} from '../src/storage.js';
 async function fixture(t){
  const temporary=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-evidence-finalize-'));
  const value=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(value.workspace),jobs=workspaceJobs(value.workspace),book=(await value.workspace.read()).book;
- t.after(async()=>{await jobs.worker.stop();clearVault(value.vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-evidence-finalize-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(value.vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-evidence-finalize-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...value,...jobs,materials,book};
 }
 async function listed(materials,recordId){

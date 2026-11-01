@@ -17,7 +17,7 @@ test('copy reviews retain constant-size receipts at 65 and 650 files and replay 
  for(const count of [65,650]){
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-')),destination=path.join(directory,'copy');
   const {workspace,vault}=await encryptedFixture(path.join(directory,'source'),sampleNotebook());const root=workspace.root;
-  t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
   const folder=path.join(root,'.observanda','fixture');await mkdir(folder);
   for(let i=0;i<count;i++)await workspace.writeFile(path.join(folder,String(i).padStart(4,'0')+'.bin'),Buffer.from('Synthetic capture '+i));
   const start=performance.now(),plan=await copyPlan(root,destination);
@@ -34,7 +34,7 @@ test('copy reviews retain constant-size receipts at 65 and 650 files and replay 
 
 test('inventory cancellation closes scratch work; equal-size substitutions invalidate review before copying',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-conflict-'));
- const {workspace,vault}=await encryptedFixture(path.join(directory,'source'),sampleNotebook());const root=workspace.root;t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ const {workspace,vault}=await encryptedFixture(path.join(directory,'source'),sampleNotebook());const root=workspace.root;t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  const file=path.join(root,'.observanda','fixture');await writeFile(file,'First');
  const initial=databaseCapacity().active,controller=new AbortController();
  await assert.rejects(workspaceInventory(root,randomUUID(),{signal:controller.signal,visit:()=>controller.abort()}),{name:'AbortError'});

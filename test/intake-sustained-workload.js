@@ -175,7 +175,7 @@ async function runProfile(profile,t){
   await boundedCleanup((async()=>{await Promise.allSettled(tasks);await stopOnAbort;await jobs?.worker.stop();await jobs?.queue.pendingWrite;})());
   clearInterval(sampler);runSignal?.removeEventListener('abort',stop);
   t.diagnostic(JSON.stringify({profile:profile.name,cpuObserved:cpu.stop(),offeredBatches:counts.offered,enqueuedBatches:counts.enqueued,completedJobs:completed.size,connections:metrics}));
-  if(fixture)clearVault(fixture.vault);
+  if(fixture)await clearVault(fixture.vault);
   assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-intake-sustained-'));
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
   }finally{if(memory)t.diagnostic(JSON.stringify({profile:profile.name,memoryDiagnostics:memory.stop()}));await allocations?.drain();}

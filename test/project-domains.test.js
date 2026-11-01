@@ -22,7 +22,7 @@ const detached=AsyncLocalStorage.snapshot();
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-domains-')),vaults=[];
  const runtime=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);
- t.after(async()=>{await runtime.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-domains-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-domains-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),projectId=book.projects[0].id,access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),vault=takeCreatedVault(access);vaults.push(vault);
  book.title=book.projects[0].title='project';
  const storage=await initializeProjectLocation(path.join(root,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);

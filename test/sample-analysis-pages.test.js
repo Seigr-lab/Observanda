@@ -17,7 +17,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 import {seedSampleAnalysis} from './sample-analysis-fixture.js';
 async function fixture(t,count=65){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sample-pages-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),lab={formatVersion:1,revision:0,samples:[],analyses:[],events:[]};
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  for(let i=0;i<count;i++)lab.samples.push({id:randomUUID(),code:'S-'+String(i).padStart(4,'0'),material:'Synthetic liquid',source:'Declared fixture',collectedOn:'2026-10-01',receivedOn:'2026-10-01'});
  for(let i=0;i<count*2;i++)lab.analyses.push({id:randomUUID(),code:'A-'+String(i).padStart(4,'0'),sampleId:lab.samples[i%count].id,result:{method:'Optical method 1',analyte:'Absorbance',kind:'numeric',value:i/1000,unit:'AU',lower:0,upper:1,notes:'PRIVATE_RESULT_NOTES'.repeat(100)},status:'draft',review:null,updatedAt:'2026-10-01T00:00:00.000Z'});
  for(let i=0;i<count;i++){const e={id:randomUUID(),recordId:lab.analyses[0].id,action:'save-result',at:'2026-10-01T00:00:00.000Z',actor:'',reason:'Recorded correction '+i,previous:lab.events.at(-1)?.hash??''};lab.events.push({...e,hash:digest(serialize(e))});}lab.revision=lab.events.length;

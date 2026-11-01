@@ -22,7 +22,7 @@ import {defaultEditionRecord} from '../src/web/publication-selection.js';
 
 async function fixture(t,{count=65,edition=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-appearance-owners-')),base=upgradeNotebook(sampleNotebook()),seed=base.entries[0],sources=[];
- t.after(async()=>{for(const source of sources)clearVault(source.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{for(const source of sources)await clearVault(source.vault);await rm(directory,{recursive:true,force:true});});
  base.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'First owner '+i,body:'Saved observation '+i,share:i>0,attachments:[],figures:[],sections:[],relations:[]}));
  for(const title of ['First owner','Second owner']){
   const book=structuredClone(base);book.id=randomUUID();book.title=title;book.entries.forEach((record,i)=>record.title=title+' '+i);

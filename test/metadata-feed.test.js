@@ -8,7 +8,7 @@ import {MetadataFeed} from '../src/metadata-feed.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-')),f=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-')),f=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;}
 
 test('chronological metadata pages seek by immutable keys while updates and newer work continue',async t=>{
  const ws=await fixture(t),source='.observanda/synthetic-imports',feed=new MetadataFeed(ws,source),items=Array.from({length:63},(_,i)=>({id:randomUUID(),createdAt:new Date(1700000000000+i*1000).toISOString(),privateText:'Private original '+i}));

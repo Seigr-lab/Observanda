@@ -11,7 +11,7 @@ import {withOperationProgress} from '../src/operation-progress.js';
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-file-copy-')),source=new Workspace(path.join(root,'source'),{id:randomUUID(),key:randomBytes(32)}),target=new Workspace(path.join(root,'target'),{id:randomUUID(),key:randomBytes(32)});
  await mkdir(source.root);await mkdir(target.root);const file=path.join(source.root,'original'),destination=path.join(target.root,'original'),bytes=randomBytes(3*1024*1024+51),written=await writeContent(source,file,[bytes]),content=new FileContent(source,file,written.size,written.sha256);
- t.after(async()=>{clearVault(source.vault);clearVault(target.vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-file-copy-'));await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ t.after(async()=>{await clearVault(source.vault);await clearVault(target.vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-owner-file-copy-'));await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  return {root,source,target,file,destination,bytes,content};
 }
 test('owned encrypted transfer reads the source once and publishes only authenticated content',async t=>{

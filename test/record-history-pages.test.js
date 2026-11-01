@@ -28,7 +28,7 @@ async function fixture(t,count=45){
   const result=await service.save({workspaceId:book.id,baseEtag:etag,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,title:'Take '+i}}]},{compact:true});
   current=result.recordPatch.records.find(r=>r.id===current.id);etag=result.etag;versions.push(current);
  }
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault,history,service,versions,command:{workspaceId:book.id,recordId:current.id},initial};
 }
 

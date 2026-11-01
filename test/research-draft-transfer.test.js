@@ -31,7 +31,7 @@ function apiFor(workspace,observe=()=>{}){
 }
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-blocks-')),book=largeRecordBook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const base=book.entries[0],record={...base,title:'Large unfinished observation',sections:Array.from({length:42},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'界𝛑'.repeat(20000)}))};
  const command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[{record,expectedRevision:recordRevision(base),baseRevision:recordRevision(base)}]};
  return {...f,directory,book,base,command};

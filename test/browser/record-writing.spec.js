@@ -78,5 +78,5 @@ test('enter editing from the reader and recover a late section without loading a
   await expect.poll(async()=>(await read()).sections.total).toBe(129);await expect(newSection).toHaveCount(0);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save'||route==='/api/research/drafts/transfer/readBase')).toEqual([]);
   expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=recordRead;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=recordRead;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

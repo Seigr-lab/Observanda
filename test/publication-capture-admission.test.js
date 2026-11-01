@@ -23,5 +23,5 @@ for(const cancel of [false,true])test('first publication setup behind a retained
   if(!cancel)await pending;
   assert.equal(entered,cancel?0:1,'Only admission may retry; the capture callback runs at most once');
   assert.deepEqual(await f.workspace.listMetadata('.observanda/release-captures'),[]);
- }finally{controller.abort();await reader.close();await pending?.catch(()=>{});clearVault(f.vault);assert.equal(path.dirname(directory),parent);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{controller.abort();await reader.close();await pending?.catch(()=>{});await clearVault(f.vault);assert.equal(path.dirname(directory),parent);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

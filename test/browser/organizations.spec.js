@@ -54,5 +54,5 @@ test('organization membership completes through two app installations with verif
     await a.screenshot({path:test.info().outputPath('organizations-desktop.png'),fullPage:true});
     await a.setViewportSize({width:390,height:844});await expect(a.getByRole('heading',{name:'Organizations & teams',exact:true})).toBeVisible();expect(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);expect(errors).toEqual([]);
     await a.screenshot({path:test.info().outputPath('organizations-phone.png'),fullPage:true});
-  }finally{for(const context of contexts)await context.close().catch(()=>{});for(const app of apps)await app.close();for(const fixture of fixtures)clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}
+  }finally{for(const context of contexts)await context.close().catch(()=>{});for(const app of apps)await app.close();for(const fixture of fixtures)await clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}
 });

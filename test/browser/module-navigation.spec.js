@@ -41,7 +41,7 @@ test('untouched calendars and calculations navigate without draft writes or leav
   await navigate(page,'Preferences');await expect(page.locator('#leave-dialog')).not.toBeVisible();
   await expect.poll(async()=>page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations.map(o=>o.kind))).toEqual(['/api/storage/copy']);
   expect(writes).toEqual([]);expect(errors).toEqual([]);
- }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('a real module draft stays editable while its checkpoint waits and a discarded draft cannot trap navigation',async({page})=>{
@@ -63,5 +63,5 @@ test('a real module draft stays editable while its checkpoint waits and a discar
   await navigate(page,'Preferences');await expect(page.locator('.preferences-heading')).toBeVisible();
   release();await expect(page.locator('#leave-dialog')).not.toBeVisible();await expect.poll(()=>page.evaluate(()=>location.hash)).toContain('/preferences');
   expect(errors).toEqual([]);
- }finally{release();await page.unrouteAll({behavior:'ignoreErrors'});await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();await page.unrouteAll({behavior:'ignoreErrors'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

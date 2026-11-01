@@ -16,7 +16,7 @@ import {readBOMSource} from '../src/bom-import.js';
 
 for(const count of [20,200])test(count+'-line BOM import, reservation and actual use retain exact independent stock balances',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bom-growth-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),modules=workspaceModules(f.workspace),base=(await f.workspace.read()).book;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const command=(action,payload,commandId=randomUUID())=>modules.execute({workspaceId:base.id,commandId,action,payload});
  const ids=Array.from({length:count},()=>randomUUID()),id=randomUUID(),material=new ResearchMaterials(f.workspace);
  const headings=['Reference','Value','Qty',...Array.from({length:61},(_,i)=>'Unmapped '+i)],row=n=>['R'+(n+1),'Component '+n,'1',...Array(61).fill('Original source metadata')].join(',');

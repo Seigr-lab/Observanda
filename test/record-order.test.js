@@ -14,7 +14,7 @@ import {RecordSearchIndex} from '../src/record-search-index.js';
 async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-order-')),book=sampleNotebook(),seed=book.entries[2];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Record '+i,body:'Synthetic observation',attachments:[],relations:[],sections:[],figures:[],contributors:[]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,book};
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,book};
 }
 test('saved ordering streams indexed and retained legacy roots at 65 and 650 records without originals or full membership assembly',async t=>{
  for(const count of [65,650]){

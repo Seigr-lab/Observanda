@@ -27,7 +27,7 @@ async function fixture(t){
  const ws=new Workspace(root,vault),materials=new ResearchMaterials(ws),bytes=Buffer.from('Synthetic original disk image\0\xff'),upload=await materials.startImport({recordId:book.entries[0].id,name:'prepared.img',size:bytes.length,provenance:'Relocation fixture'});
  await materials.appendImport(upload.id,0,[bytes]);const ref=await materials.finishImport(upload.id);
  const servers=[];
- t.after(async()=>{for(const app of servers)await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{for(const app of servers)await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {directory,root,file,deviceStore,ws,vault,materials,bytes,ref,async start(options={}){const app=await startServer({root,preferencesFile:file,deviceStore,port:0,headless:true,...options});servers.push(app);return app;}};
 }
 async function client(app){

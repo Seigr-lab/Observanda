@@ -14,7 +14,7 @@ import {withScratch} from '../src/scratch-work.js';
 
 test('normal workspace creation, editing and scratch queries use independent workspace databases',async t=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-owned-databases-')),owner=new WorkspaceDatabases({directory:path.join(parent,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let a,b;
- t.after(async()=>{await owner.close();detach();clearVault(a?.vault);clearVault(b?.vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();await clearVault(a?.vault);await clearVault(b?.vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  a=await encryptedFixture(path.join(parent,'a'),sampleNotebook());b=await encryptedFixture(path.join(parent,'b'),sampleNotebook());
  for(const f of [a,b])assert.equal((await catalogueBinding(f.workspace.root)).placement,'workspace');
  await a.workspace.update(book=>{book.title='Changed only A';return book;});assert.equal((await a.workspace.read()).book.title,'Changed only A');assert.notEqual((await b.workspace.read()).book.title,'Changed only A');

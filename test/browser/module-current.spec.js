@@ -72,5 +72,5 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   await expect(page).toHaveURL(new RegExp('/records/'+book.entries[1].id+'$'));await expect(main.locator('[data-module-links]')).toBeVisible();
   expect(requests.filter(p=>p==='/api/modules/data')).toEqual([]);expect(errors).toEqual([]);
   console.log(JSON.stringify({items:count,largestPage:Math.max(...sizes),sampledBrowserHeapMiB:Math.round(heap/1024/1024),originalIds:new Set(loaded).size}));
- }finally{ModuleCatalogue.prototype.read=original.read;ModuleCatalogue.prototype.selected=original.selected;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.read=original.read;ModuleCatalogue.prototype.selected=original.selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

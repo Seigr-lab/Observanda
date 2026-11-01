@@ -25,7 +25,7 @@ async function fixture(page,count){
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json'),browserAssets:await builtAssets(directory)}),bodies=[],requests=[],contentReads=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);if(r.url().endsWith('/api/workspace/read/record-content'))contentReads.push(r.postDataJSON().recordId);});
- return {...f,app,book,bodies,requests,contentReads,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,app,book,bodies,requests,contentReads,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 
 for(const count of [62,620])test('timeline pages, combined sources and saved settings load no '+count+'-record corpus',async({page})=>{

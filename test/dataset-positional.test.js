@@ -44,7 +44,7 @@ test('scalar positional rows and mixed keyed joins preserve null, absent and esc
 
 test('positional mapping and every joined cell provenance remain inspectable after dataset revisions and backup',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-positional-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const source={visits:[{windows:[window('first',2)]},{windows:[window('second',2)]}]},bytes=Buffer.from(JSON.stringify(source)),upload=await m.startImport({recordId,name:'parallel-traces.json',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);
  const artifact=await m.finishImport(upload.id),command={recordId,title:'Aligned windows',artifact,sourceMapping:mapping},dataset=await m.dataset(command),page=await m.datasetPage(dataset);
  for(let column=2;column<5;column++){

@@ -31,5 +31,5 @@ test('native figure authoring retains the exact difference of large counters and
   await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await expect(dialog).toContainText('Groups and summaries are calculated with exact rational values.');
   expect((await f.workspace.read()).book.entries.find(r=>r.id===recordId).figures.find(v=>v.id===doc.content.figure.id).series[0].points[0].y).toBe(1);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

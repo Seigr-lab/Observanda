@@ -53,7 +53,7 @@ test('exact field contexts survive ordinary saves, template amendments, immutabl
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-number-fields-')),book=sampleNotebook();
  const section={id:randomUUID(),profileId:null,key:'acquisition',label:'Acquisition',description:'Explicit representations',enabled:true,fields:[field('senary',numeric('radix-fraction',6)),field('fraction',numeric('rational')),field('large',numeric('integer'))]};
  book.notebooks[0].configuration={profiles:[],sections:[section]};const initial=book.entries.find(r=>r.notebookId===book.notebooks[0].id);initial.template={...templateFrom(section),values:{senary:'-15.30',fraction:'1/3',large:'9'.repeat(64)}};initial.share=true;book.projects.find(p=>p.id===book.notebooks[0].projectId).share=true;
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const records=new ResearchRecords(f.workspace,{}),history=new RecordHistory(f.workspace,{}),command={workspaceId:book.id,recordId:initial.id};
  const first=(await f.workspace.read()).book.entries.find(r=>r.id===initial.id),amended=structuredClone(first);amended.template.values.senary='+15.3';
  await records.save({workspaceId:book.id,changes:[{id:first.id,expectedRevision:recordRevision(first),record:amended}]});

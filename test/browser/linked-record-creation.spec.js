@@ -40,9 +40,9 @@ for(const templated of [false,true])test(`create ${templated?'a template inspect
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results')).toBeVisible();
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');if(!templated)await page.getByRole('button',{name:'Show linked records',exact:true}).click();await page.getByRole('region',{name:templated?'Hive history':'Linked records',exact:true}).getByRole('link',{name:'New linked observation',exact:true}).click();await expect(reader.locator('h1')).toHaveText('New linked observation');expect(errors).toEqual([]);
   finished=true;
- }finally{ResearchCatalogue.prototype.record=original;await app.close();if(!finished){clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}}
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();if(!finished){await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}}
  try{
   const saved=(await f.workspace.read()).book;expect(saved.entries.find(r=>r.id===hive.id)).toEqual(hive);expect(saved.entries.find(r=>r.id===other.id)).toEqual(other);
   const record=saved.entries.find(r=>r.id===created);expect(record.relations).toEqual([expect.objectContaining({type:'Documents',target:{workspaceId:book.id,kind:'record',id:hive.id}})]);expect(record.sections.length).toBeLessThan(10);expect(Boolean(record.template)).toBe(templated);expect(record.share).toBe(false);
- }finally{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

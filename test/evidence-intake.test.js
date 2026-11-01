@@ -20,7 +20,7 @@ import {buildPublication,verifyPublication} from '../src/publication.js';
 import {associateOriginal} from '../src/evidence-associations.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-intake-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace),book=(await f.workspace.read()).book;
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,...jobs,m,directory,recordId:book.entries[0].id,otherId:book.entries[1].id};
 }
 async function descriptor(name,bytes){

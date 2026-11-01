@@ -22,7 +22,7 @@ import {AppError} from '../src/errors.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writer-wait-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
- const cleanup=[];t.after(async()=>{await app.close();for(const close of cleanup)await close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const cleanup=[];t.after(async()=>{await app.close();for(const close of cleanup)await close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
  const storage=await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json();
  const call=(route,data,signal)=>fetch(app.origin+route,{signal:signal??AbortSignal.timeout(30000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});

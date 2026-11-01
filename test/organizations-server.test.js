@@ -11,7 +11,7 @@ import {clearVault} from '../src/encryption.js';
 
 test('organization operations require the launch session, correct origin and workspace, and an unlocked vault',async t=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-organization-routes-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
-  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
+  t.after(async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
   const book=(await f.workspace.outline()).metadata;
   const request=(operation,data,headers={})=>fetch(app.origin+'/api/organizations/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify({workspaceId:book.id,...data})});
   assert.equal((await request('state',{})).status,401);

@@ -27,5 +27,5 @@ test('PDF author selects private research, reviews updates, preserves local edit
   await ui.getByRole('button',{name:'Review source update',exact:true}).click();await ui.getByRole('button',{name:'Accept source update',exact:true}).click();await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toHaveText('New source wording');expect((await d.read('section',{id,sectionId,revision:edition})).section.content).toBe(part.body);
   await ui.getByRole('button',{name:'Check PDF layout',exact:true}).click();await expect(ui.locator('[data-pdf-preflight]')).toContainText('No layout problems were detected.');
   await page.reload();await ui.getByRole('navigation',{name:'Sections'}).getByRole('button',{name:part.title,exact:true}).click();await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toHaveText('New source wording');expect(errors).toEqual([]);
- }finally{await app.close();uninstall();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();uninstall();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

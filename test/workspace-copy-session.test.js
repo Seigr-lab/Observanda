@@ -29,5 +29,5 @@ test('encrypting a document workspace completes its empty credential handoff and
   for(const file of await workspaceManifest(destination))if(file.path!=='.observanda/access.json')assert.ok(encrypted(await readFile(path.join(destination,file.path))),file.path);
   reopened=await verifyAccess(await readAccess(destination),'','synthetic copy password',{deviceStore});
   assert.equal((await new Workspace(destination,reopened).read()).book.description,'Retained revision');
- }finally{await targetApplication?.close();await application.close();clearVault(vault);clearVault(reopened);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-session-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await targetApplication?.close();await application.close();await clearVault(vault);await clearVault(reopened);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-session-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

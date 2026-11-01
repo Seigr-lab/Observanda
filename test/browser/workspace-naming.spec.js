@@ -37,5 +37,5 @@ test('existing workspace name, rename form, reopen and delete confirmation follo
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Delete workspace',exact:true}).click();
   const dialog=page.locator('#dialog');await expect(dialog.getByText('Research Workspace 1 – café',{exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect(errors).toEqual([]);
- }finally{await app?.close();await owner.close();detach();clearVault(f.vault);if(path.dirname(parent)!==await realpath(os.tmpdir())||!path.basename(parent).startsWith('observanda-browser-name-'))throw Error('Unexpected fixture root');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app?.close();await owner.close();detach();await clearVault(f.vault);if(path.dirname(parent)!==await realpath(os.tmpdir())||!path.basename(parent).startsWith('observanda-browser-name-'))throw Error('Unexpected fixture root');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

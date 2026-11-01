@@ -30,5 +30,5 @@ test('inline PDF custom fonts save atomically and reopen from retained bytes aft
   // retained FontFace load, rather than the DevTools font-body representation.
   const headers=Object.fromEntries(Object.entries(received.request().headers()).filter(([key])=>key.startsWith('x-observanda-')||key==='content-type')),actual=await page.evaluate(async({url,headers,body})=>{const response=await fetch(url,{method:'POST',headers,body}),bytes=await response.arrayBuffer();return {status:response.status,size:bytes.byteLength,sha256:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('')};},{url:received.url(),headers,body:received.request().postData()});expect(actual).toEqual({status:200,size:bytes.length,sha256:font.id.slice(7)});
   await ui.locator('[data-command="preview"]').click();await expect.poll(()=>rendered.length).toBeGreaterThan(0);expect(rendered.at(-1).bytes).toBeGreaterThan(1000);expect(rendered.at(-1).html).toContain(bytes.toString('base64'));expect(errors).toEqual([]);
- }finally{uninstall();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{uninstall();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

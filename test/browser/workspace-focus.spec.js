@@ -33,7 +33,7 @@ test('skip navigation and selected writing saves retain a useful keyboard destin
   await page.locator('#main-navigation [data-action="preferences"]').focus();await page.keyboard.press('Enter');
   await expect(page.locator('#main-navigation [data-action="preferences"]')).toBeFocused();
  }finally{
-  releaseRecord();await app.close();clearVault(f.vault);
+  releaseRecord();await app.close();await clearVault(f.vault);
   if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-focus-'))throw Error('Unexpected cleanup directory');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }
@@ -56,7 +56,7 @@ test('website palettes leave app controls readable and app theme preferences sur
   await expect(page.getByLabel('App theme',{exact:true})).toHaveValue('studio');
   expect(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-background').trim())).toBe('#f1f6f4');
  }finally{
-  await app.close();clearVault(f.vault);
+  await app.close();await clearVault(f.vault);
   if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-focus-'))throw Error('Unexpected cleanup directory');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

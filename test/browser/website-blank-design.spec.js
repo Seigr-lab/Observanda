@@ -35,5 +35,5 @@ test('blank identity, optional headers and authored navigation remain blank thro
   await page.getByLabel('Preview page',{exact:true}).selectOption(target);const href=await page.locator('#full-public-preview').getAttribute('href'),context=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,context);const visitor=await context.newPage();
   try{await visitor.goto(new URL(href,app.origin).href);await expect(visitor.locator('.site-header,.site-name')).toHaveCount(0);await expect(visitor.locator('.site-menu a')).toHaveText(['Insect Reserve']);await expect(visitor.locator('.site-sidebar a')).toHaveText('Explore the reserve');await expect(visitor.locator('body')).not.toContainText(book.entries[0].title);await expect(visitor).toHaveTitle('Insect Reserve');await visitor.setViewportSize({width:390,height:844});expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}finally{await context.close();}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

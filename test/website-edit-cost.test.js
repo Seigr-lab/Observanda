@@ -40,5 +40,5 @@ test('website checkpoints stay within query budgets and retain exact saved conte
    const samples=reports.filter(value=>value.name.startsWith(prefix)&&value.name!=='preview-before').map(value=>value.ms).sort((a,b)=>a-b);
    t.diagnostic(JSON.stringify({operation:prefix.slice(0,-1),samples:samples.length,p50Ms:samples[Math.ceil(samples.length*.5)-1],p95Ms:samples[Math.ceil(samples.length*.95)-1],p99Ms:samples.at(-1)}));
   }
- }finally{counter.mock.restore();if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{counter.mock.restore();if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

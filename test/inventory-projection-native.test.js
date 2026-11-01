@@ -16,7 +16,7 @@ import {workspaceModules} from '../src/modules/index.js';
 
 test('stock projection upgrades and command effects publish atomically; old readers remain read-only',async t=>{
  const temporaryRoot=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(temporaryRoot,'observanda-stock-projection-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),temporaryRoot);assert.ok(path.basename(directory).startsWith('observanda-stock-projection-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),temporaryRoot);assert.ok(path.basename(directory).startsWith('observanda-stock-projection-'));await rm(directory,{recursive:true,force:true});});
  const resource={id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{projectId:null,placementId:null,name:'Synthetic stock',code:'',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'items',capacity:1,status:'available',links:[]}},movement={id:randomUUID(),type:'movement',revision:1,createdAt:now,updatedAt:now,data:{resourceId:resource.id,projectId:null,delta:'10',unit:'items',reason:'Opening',links:[],reservationId:null}};
  await seedModuleCurrent(f.workspace,book.id,[resource,movement]);
  const run=(operation,write=false)=>moduleDomainStore(f.workspace,book.id,'inventory',operation,{write}),reader=new InventoryReader(f.workspace),stock=()=>reader.stock({workspaceId:book.id,ids:[resource.id]});

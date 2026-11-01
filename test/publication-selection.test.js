@@ -26,7 +26,7 @@ import {publicationText} from './publication-fixture.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {readPublicationRecord} from '../src/publication-input.js';
 
-async function fixture(t,count,configure=()=>{}){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-selection-')),data=selectionBook(count);configure(data.book);const f=await encryptedFixture(directory,data.book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();return {...data,...f,releases,source:{workspaceId:data.book.id,etag,websitePin}};}
+async function fixture(t,count,configure=()=>{}){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-selection-')),data=selectionBook(count);configure(data.book);const f=await encryptedFixture(directory,data.book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();return {...data,...f,releases,source:{workspaceId:data.book.id,etag,websitePin}};}
 
 test('edition choices exclude writing, sections, charts, attachments and CSV before all output surfaces without changing originals',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>'),'image'),before=await f.workspace.read();

@@ -24,7 +24,7 @@ async function setup(t,{large=false}={}){
  book.projects.push({...book.projects[0],id:randomUUID(),title:'Other project'});
  const destination={...book.notebooks[0],id:randomUUID(),title:'Destination'};book.notebooks.push(destination);
  record.sections=Array.from({length:large?73:4},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Recorded '+i+' '+('exact'.repeat(large?5600:1500))}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const workspace=f.workspace,writing=new RecordWriting(workspace),target={workspaceId:book.id,recordId:record.id,sectionId:null},summary=await writing.read(target);
  record.body='Extended observations '.repeat(2500);await writing.save({...target,expectedRevision:summary.revision,value:{body:record.body}});
  return {...f,directory,book,record,destination,workspace,service:new StructureCommands(workspace)};

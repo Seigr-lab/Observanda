@@ -22,7 +22,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 
 test('schema near the 64 MiB single-command boundary can be edited and recovered',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-schema-capacity-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largeCategory({nearLimit:true}),id=randomUUID();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const modules=workspaceModules(f.workspace),command=(expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'category.save',payload:{id,expectedRevision,data:value}}),started=performance.now();
  await modules.execute(command(null,data),{compact:true});const createMs=performance.now()-started;
  const entity=(await new ModuleReader(f.workspace).selected({workspaceId:book.id,id})).entity,admitted=moduleCurrentBytes(book.id,1,{count:1,bytes:moduleEntityBytes(entity)});

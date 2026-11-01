@@ -21,7 +21,7 @@ async function fixture(page,{formatVersion=21}={}){
  const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.method()==='POST'&&['/api/workspace/save','/api/notebook/save'].some(p=>r.url().endsWith(p)))requests.push({url:r.url(),data:r.postDataJSON()});});
  await page.goto(app.url);
- return {book,ws,app,errors,requests,async close(){await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+ return {book,ws,app,errors,requests,async close(){await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 async function save(page,name){
  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/workspace/save')&&r.request().method()==='POST');

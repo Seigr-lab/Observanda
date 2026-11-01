@@ -46,5 +46,5 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
   expect(checkpointBodies.filter(b=>b.drafts.length).every(b=>b.drafts.length===1&&b.drafts[0].base===undefined)).toBe(true);expect(Math.max(...checkpointReplies)).toBeLessThan(200);
   expect(errors).toEqual([]);expect(heap).toBeLessThan(96*1024*1024);
   console.log(JSON.stringify({maximumSheetBytes:Buffer.byteLength(JSON.stringify(data)),largestCheckpointReply:Math.max(...checkpointReplies),sampledBrowserHeapMiB:Math.round(heap/1024/1024)}));
- }finally{ModuleCatalogue.prototype.read=original;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.read=original;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -24,7 +24,7 @@ import {catalogueBinding} from '../src/postgres-activation.js';
 
 test('selected book commands recover independently and serialize only intersecting owner lifecycles',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-book-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];let release,parentTask,copyTask;
- t.after(async()=>{release?.();await Promise.allSettled([parentTask,copyTask]);await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-selected-book-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{release?.();await Promise.allSettled([parentTask,copyTask]);await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-selected-book-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);
  const metadata=createNotebook('Field Project 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  const project=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),books=[];

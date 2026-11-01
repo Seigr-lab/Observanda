@@ -34,7 +34,7 @@ for(const compiled of [false,true])test('figure authoring loads on demand and sa
   const saved=(await fixture.workspace.read()).book.entries.find(record=>record.title==='Retained deferred figure');
   expect(saved.figures).toHaveLength(1);expect(saved.figures[0].series[0].points.map(({x,y})=>({x,y}))).toEqual([{x:1,y:3},{x:2,y:8}]);expect(errors).toEqual([]);
  }finally{
-  await app?.close();if(fixture)clearVault(fixture.vault);
+  await app?.close();if(fixture)await clearVault(fixture.vault);
   if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-deferred-figure-'))throw Error('Unexpected disposable folder');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

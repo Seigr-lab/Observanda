@@ -14,7 +14,7 @@ import {task,openPageSettings,chooseWebsitePage} from './composer-helper.js';
 
 let app,root,book,fixture;
 const savedBook=async()=>({...((await new WebsiteSites(fixture.workspace).read(null)).book),entries:(await fixture.workspace.read()).book.entries});
-test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
+test.afterEach(async()=>{await app?.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
 async function open(page,configure){
  root=await mkdtemp(path.join(os.tmpdir(),'observanda-editor-state-'));book=upgradeNotebook(sampleNotebook());book.website.home.sections=[];configure(book);
  fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});

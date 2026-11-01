@@ -59,7 +59,7 @@ test('another website edit preserves preparation, export, deployment admission a
   const retained=await releases.read(candidate.reviewId);assert.deepEqual(retained.websitePin,websitePin);assert.deepEqual((await releases.source(candidate.jobId)).websitePin,websitePin);assert.equal(await publicationPageText(retained),await publicationPageText(candidate));
   await assert.rejects(publicationSource(workspace,{etag,websitePin}),{code:'CONFLICT'});await assert.rejects(releases.inline({etag,websitePin}),{code:'CONFLICT'});
   await assert.rejects(exporter.candidate(candidate.reviewId,{fresh:true}),{code:'PUBLISH_STALE'});await assert.rejects(deployments.start(intent),{code:'STALE'});await assert.rejects(rollback.authorize(candidate,approval.review.id),{code:'PUBLISH_STALE'});
- }finally{await jobs?.worker.stop();if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-website-freshness-'));await rm(directory,{recursive:true,force:true});}
+ }finally{await jobs?.worker.stop();if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-website-freshness-'));await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -77,7 +77,7 @@ test('direct publishing reuses a named website edition after another website cha
   const writes=()=>remote.calls.filter(call=>call.method!=='GET').length,before=writes(),own=await sites.read(ids[0]),ownChange=edit(own);ownChange.metadata.website={...own.book.website,footer:'Changed journal footer'};await sites.save(ids[0],ownChange);
   await assert.rejects(publisher.deploy(candidate,destination.etag,book.id),{code:'STALE'});assert.equal(writes(),before);
   await publisher.save({...config,github:{...config.github,repository:'changed-destination'}},destination.etag);await assert.rejects(publisher.deploy(candidate,destination.etag,book.id),{code:'PUBLISH_STALE'});assert.equal(writes(),before);
- }finally{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-website-publisher-'));await rm(directory,{recursive:true,force:true});}
+ }finally{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-website-publisher-'));await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -134,5 +134,5 @@ test('default website retains exact appearance and edition pins after a same-hea
   previews.cache.clear();const oldPage=await previews.page(sessionId,entryPage);assert.ok(oldPage.files.has(mediaPath));assert.ok((await publicationPageText(oldPage,entryPage)).includes(asset.id));
   assert.deepEqual(await contentBuffer(await (await releases.read(candidate.reviewId)).files.get(mediaPath)),await contentBuffer(await candidate.files.get(mediaPath)));
   assert.deepEqual((await sites.read(null,{websitePin:saved.websitePin})).site.selection.records.find(value=>value.id===original.id).attachments,[{id:asset.id,share:true}]);
- }finally{previews?.clear();if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-default-website-pin-'));await rm(directory,{recursive:true,force:true});}
+ }finally{previews?.clear();if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-default-website-pin-'));await rm(directory,{recursive:true,force:true});}
 });

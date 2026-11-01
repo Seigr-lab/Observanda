@@ -41,7 +41,7 @@ test('new record save progress stays readable, preserves newer typing and closes
   expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');
   const failure=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Check these fields',exact:true})});await expect(failure).toBeVisible();await failure.getByRole('button',{name:'Back to workspace',exact:true}).click();
   fail=false;await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Retry this title');expect(errors).toEqual([]);
- }finally{release();ResearchCatalogue.prototype.rememberHistory=remember;await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.rememberHistory=remember;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
@@ -70,5 +70,5 @@ test('saved record progress belongs to the selected field and failed edits remai
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();await expect(title).toHaveValue('Retry selected title');
   fail=false;await save.click();await expect(dialog).not.toBeVisible();await expect(page.locator('.record-save-progress')).toHaveCount(0);await expect(page.locator('.record-editing h1')).toHaveText('Retry selected title');expect((await service.read(target)).value.value).toBe('Retry selected title');
   await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Retry selected title');const stored=(await f.workspace.read()).book;expect(stored.entries.find(entry=>entry.id===record.id).body).toEqual(record.body);expect(stored.entries.filter(entry=>entry.id!==record.id)).toEqual(book.entries.filter(entry=>entry.id!==record.id));expect(errors).toEqual([]);
- }finally{release();RecordValues.prototype.save=saveValue;await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();RecordValues.prototype.save=saveValue;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

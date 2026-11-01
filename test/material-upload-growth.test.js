@@ -13,7 +13,7 @@ test('declared 96 MiB capture and tenfold upload resume with bounded checkpoints
  t.diagnostic(JSON.stringify({platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version,totalMemoryGiB:Math.round(os.totalmem()/1024**3)}));
  for(const chunks of [96,960]){
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-upload-growth-')),f=await encryptedFixture(directory,sampleNotebook());
-  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   let m=new ResearchMaterials(f.workspace);
   const recordId=(await f.workspace.read()).book.entries[0].id,session=await m.startImport({recordId,name:'synthetic-capture.bin',size:chunks*EVIDENCE_CHUNK});
   const buffer=Buffer.alloc(EVIDENCE_CHUNK),hash=createHash('sha256'),start=performance.now();let peakHeap=0,peakCheckpoint=0,peakResponse=0;

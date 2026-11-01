@@ -28,7 +28,7 @@ async function fixture(t,count=80,configure=()=>{}){
  const shared=new Set(Array.from({length:43},(_,i)=>Math.floor(i*(count-1)/42)));
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Selection '+i,body:'Private body '+i,sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:[],share:shared.has(i),notebookId:book.notebooks[i%2].id}));
  configure(book);
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,directory,source:{workspaceId:book.id,etag:(await f.workspace.outline()).etag}};
 }
 function source(f,selection,projects=[]){return {etag:f.source.etag,draft:{workspaceId:f.book.id,baseEtag:f.source.etag,metadata:{},projects,changes:[],removed:[],selection}};}

@@ -51,5 +51,5 @@ test('workspace projects and lab books remain usable with every optional type di
   await main.getByText('Lab-book templates',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:test.info().outputPath('lab-book-types-desktop.png')});
   await page.setViewportSize({width:390,height:844});await main.getByText('Lab-book templates',{exact:true}).scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('lab-book-types-narrow.png')});
   expect((await f.workspace.read()).book.entries.map(e=>e.title)).toEqual(['An idea for a song','First rehearsal','A second idea']);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

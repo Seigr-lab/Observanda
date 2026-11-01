@@ -33,5 +33,5 @@ test('calculator and spreadsheet retain their explicit precision, budgets and re
   const old=(await new ProjectModuleReader(f.workspace,book.id).selected({workspaceId:book.id,id:legacy.id})).entity;expect(old.data.engine).toBe(2);expect(old.data.policy).toBeUndefined();
   await button('Use exact vectors, matrices and complex values').click();await openPolicy();await input('Displayed significant digits').fill('5');await expect(input('Result 1')).toHaveText('≈ 1.4142');await button('Save calculation').click();await saved();
   const updated=(await new ProjectModuleReader(f.workspace,book.id).selected({workspaceId:book.id,id:legacy.id})).entity;expect(updated.data.engine).toBe(4);expect(updated.data.policy.displayDigits).toBe(5);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

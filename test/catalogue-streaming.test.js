@@ -24,7 +24,7 @@ async function fixture(t,count=4){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-streaming-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Synthetic trial '+i,body:'A recorded observation.',sections:[{id:randomUUID(),title:'Results',body:''}],attachments:[],figures:[],contributors:[],tags:[],relations:[]}));
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {ws,vault,directory,base:await ws.read()};
 }
 async function edit(f){

@@ -16,7 +16,7 @@ import {workspaceModules} from '../src/modules/index.js';
 
 test('facet upgrades, membership upgrades and edits publish atomically without weakening full integrity checks',async t=>{
  const temporary=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-facet-projection-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-facet-projection-'));await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),temporary);assert.ok(path.basename(directory).startsWith('observanda-facet-projection-'));await rm(directory,{recursive:true,force:true});});
  const resources=Array.from({length:55},(_,index)=>({id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{projectId:null,placementId:null,name:'Stock '+String(index).padStart(3,'0'),code:'',kind:index%2?'equipment':'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'items',capacity:1,status:'available',tags:['sample',...(index%2?['secondary']:[])],links:[]}}));
  await seedModuleCurrent(f.workspace,book.id,resources);
  const run=(operation,write=false)=>moduleDomainStore(f.workspace,book.id,'inventory',operation,{write}),reader=new ModuleReader(f.workspace),modules=workspaceModules(f.workspace),query={workspaceId:book.id,type:'resource',tags:['sample']};

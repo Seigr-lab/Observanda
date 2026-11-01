@@ -35,7 +35,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and e
  const runtime={directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}};
  let provider=new WorkspaceDatabases(runtime),detach=installDatabaseProvider(provider),server,placement;
  const f=await encryptedFixture(directory,createNotebook('workspace')),keys=[f.vault],password='Independent owner credentials',newPassword='Fresh successor credentials';
- t.after(async()=>{await server?.close();await provider.close();detach();keys.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-encrypted-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await server?.close();await provider.close();detach();await Promise.all(keys.map(clearVault));await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-encrypted-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  placement=await workspaceDestinationFixture(directory);
  const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id),projects=[];
  const makeProject=async(root,parentId=null)=>{
@@ -135,5 +135,5 @@ test('legacy plaintext successor keeps exact encrypted credentials across interr
   try{assert.equal(resumed.vault.id,vault.id);await bundle.encrypted(retained.plan,resumed.access,resumed.vault);assert.deepEqual((await new Workspace(destination,resumed.vault).read()).book,book);}finally{clearVault(resumed.vault);}
   assert.deepEqual((await source.read()).book,book);
   await assert.rejects(access(path.join(destination,'.observanda/project-registry.lock')),{code:'ENOENT'});
- }finally{await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-legacy-successor-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-legacy-successor-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

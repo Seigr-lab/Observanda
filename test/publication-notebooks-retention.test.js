@@ -18,7 +18,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 
 test('retained lab-book directories and preview preserve selection and survive encrypted recovery',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-books-edition-')),book=notebookDirectoryBook(),f=await encryptedFixture(directory,book),jobs=new PublicationJobs(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {etag,websitePin}=await jobs.workspace.outline(),candidate=await jobs.inline({etag,websitePin}),target='project:'+book.notebooks[0].projectId;
  const first=(await contentBuffer(await candidate.files.get(collectionPagePath(target)))).toString(),id=/class="project-book-directory"><div id="feed-([a-f0-9]+)"/.exec(first)[1],names=Array.from({length:3},(_,index)=>'projects/feed-'+id+'-'+index+'.html'),original=[];
  for(const [index,name]of names.entries()){

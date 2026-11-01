@@ -25,7 +25,7 @@ function blockSet(){
 
 test('figure block batches coalesce authenticated catalogue writes and preserve rollback, collision checks and retry',{timeout:120000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-figure-batch-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
- t.after(async()=>{await provider.close();detach();if(vault)clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-figure-batch-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();if(vault)await clearVault(vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-figure-batch-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook();book.entries=book.entries.slice(0,1);const fixture=await encryptedFixture(directory,book),workspace=fixture.workspace;vault=fixture.vault;const {items,revision}=blockSet(),rollback=Object.assign(Error('Discard comparison writes'),{code:'SYNTHETIC_ROLLBACK'});
  const head=()=>workspace.catalogue(async store=>serialize(await store.objectIndex().head())),before=await head();
  const measure=async(single,discard)=>{

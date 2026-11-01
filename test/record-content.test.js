@@ -15,7 +15,7 @@ import {RecordValueTree} from '../src/record-value-tree.js';
 test('section reading seeks stored blocks, pins revisions and cannot leak another workspace',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-content-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0];
  record.sections=Array.from({length:1025},(_,i)=>({id:randomUUID(),title:'Visit '+i,body:'Retained measurement '+i+' '+('Exact '.repeat(100))}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const reader=new RecordContent(f.workspace),command={workspaceId:book.id,recordId:record.id,offset:1021},etag=(await f.workspace.outline()).etag;
  const complete=async request=>{let result=await reader.read(request);while(result.search?.nextCursor)result=await reader.read({...request,snapshotId:result.etag,cursor:result.search.nextCursor});return result;};
  const originalRead=RecordValueTree.prototype.read,reads=[];
@@ -46,7 +46,7 @@ test('section reading seeks stored blocks, pins revisions and cannot leak anothe
 
 test('small envelope records use the same reading contract without a storage upgrade',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-small-record-content-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const record=book.entries[0],result=await new RecordContent(f.workspace).read({workspaceId:book.id,recordId:record.id});
  const {sections,...header}=record;assert.deepEqual(result.header,header);assert.deepEqual(result.sections.values,sections.slice(0,4));
 });

@@ -25,7 +25,7 @@ import {Workspace} from '../src/storage.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-method-storage-')),book=sampleNotebook(),record=book.entries[2];record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Unchanged narrative '+i}));book.entries[1].type='protocol';
  const f=await encryptedFixture(directory,book),ready=await f.workspace.read(),method=ready.book.entries[1],linkId=randomUUID(),values=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'relation:'+linkId};
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const base=await values.read(target),command={...target,expectedRevision:base.revision,value:{value:{type:'Uses method',label:'Pinned method',role:'uses-method',reference:researchReference({workspaceId:book.id,kind:'record',id:method.id,revision:recordRevision(method)})}}};
  return {...f,directory,book,record,method,values,target,command};
 }

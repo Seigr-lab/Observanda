@@ -44,5 +44,5 @@ test('an already-open compatibility editor receives bounded saved updates and re
   expect(errors).toEqual([]);
   ResearchCatalogue.prototype.read=read;
   const saved=await f.workspace.read();expect(saved.book.entries[0].title).toBe('Local authored change');expect(saved.book.entries[64].title).toBe('Other window 63');
- }finally{ResearchCatalogue.prototype.read=read;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ResearchCatalogue.prototype.read=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -30,7 +30,7 @@ test('capacity preflight uses UTF-8 storage bytes and separates record, checkpoi
 
 test('an oversized research save preserves its durable draft; a larger rejected checkpoint preserves the prior revision',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-capacity-')),book=largeRecordBook(),f=await encryptedFixture(directory,book),base=book.entries[0],drafts=new ResearchDrafts(f.workspace),source=await f.workspace.outline();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const draftRecord={...base,body:'界'.repeat(50000)},change={record:draftRecord,expectedRevision:recordRevision(base),baseRevision:recordRevision(base)},command={id:randomUUID(),workspaceId:book.id,expectedRevision:null,changes:[change]};
  assert.ok(researchBytes(draftRecord)>MAX_RECORD_BYTES);assert.equal(researchRequestCapacity('/api/research/drafts/write',command),null);
  const saved=await drafts.write(command);
@@ -51,7 +51,7 @@ test('an oversized research save preserves its durable draft; a larger rejected 
 
 test('HTTP capacity admission returns operation details before a write and keeps saved data intact',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-capacity-http-')),f=await encryptedFixture(directory,largeRecordBook()),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
- t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0],before=await f.workspace.outline();
  for(const [route,code,owner] of [['/api/research/records/save','RECORD_COMMAND_LIMIT','recordCommand'],['/api/research/drafts/write','DRAFT_SIZE_LIMIT','checkpointRequest']]){
   const body=JSON.stringify({padding:'界'.repeat(Math.ceil(MAX_RECORD_COMMAND_BYTES/3))});

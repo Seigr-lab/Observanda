@@ -38,5 +38,5 @@ test('an older catalogue above the complete-document budget opens, reads, edits 
   expect(fullPages).toEqual([]);expect(errors).toEqual([]);
   const source=await f.workspace.catalogue(store=>store.recordSelection([selected.id]));
   expect(source.recordScope.total).toBe(80);expect(source.book.entries[0].body).toBe(selected.body);
- }finally{ResearchCatalogue.prototype.read=read;await app?.close();if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ResearchCatalogue.prototype.read=read;await app?.close();if(f)await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

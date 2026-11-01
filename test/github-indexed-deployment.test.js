@@ -14,7 +14,7 @@ import {deployGithub} from '../src/github-deployment.js';
 import {githubFixture} from './github-fixture.js';
 import {truncatedGithubTrees} from './github-tree-fixture.js';
 import {serialize} from '../src/storage-format.js';
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-indexed-deploy-'));const f=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-indexed-deploy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return f;}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-indexed-deploy-'));const f=await encryptedFixture(directory,sampleNotebook());t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-indexed-deploy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return f;}
 const plan=(changes,head=null,baseTree=null)=>({version:2,id:randomUUID(),releaseId:'c'.repeat(64),configEtag:'d'.repeat(64),repositoryId:123,head,baseTree,pages:null,requiresReview:false,...changes});
 test('indexed GitHub reviews exceed the former aggregate envelope without enlarging headers or review pages',async t=>{
  const f=await fixture(t),files=new Map(),prefix=Array.from({length:19},(_,i)=>String(i).padStart(2,'0')+'a'.repeat(197)).join('/')+'/';

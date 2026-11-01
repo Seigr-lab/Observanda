@@ -126,7 +126,7 @@ test('independent websites preview and publish during authoring with bounded sou
   }
   // Authenticated tree depth can grow; selected page work cannot grow with the corpus.
   assert.ok(measurements[1].queries<measurements[0].queries*2,'Tenfold content caused excessive indexed query growth');assert.equal(measurements[1].sourceUses,measurements[0].sourceUses);assert.equal(measurements[1].derivatives,measurements[0].derivatives);
- }finally{releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-source-capacity-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-source-capacity-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
@@ -215,5 +215,5 @@ test('native capture separates private growth, selected output, historical links
   const [small,privateGrowth,selectedGrowth,historyGrowth,heavyPage]=measurements;
   assert.ok(privateGrowth.queries<small.queries*2,'Tenfold private growth exceeded the existing indexed traversal tolerance');for(const key of ['sourceUses','originals','derivatives','files','pages'])assert.equal(privateGrowth[key],small[key],key+' changed solely with private growth');
   assert.ok(selectedGrowth.files>privateGrowth.files);assert.ok(historyGrowth.files>selectedGrowth.files);assert.equal(heavyPage.files,historyGrowth.files);assert.equal(heavyPage.pages,historyGrowth.pages);
- }finally{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-source-dimensions-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-source-dimensions-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

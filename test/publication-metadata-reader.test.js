@@ -15,7 +15,7 @@ import {withPublicationMetadataReader} from '../src/publication-metadata-reader.
 
 async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-publication-reader-')),f=await encryptedFixture(directory,createNotebook('Scoped publication reader'));
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-publication-reader-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-publication-reader-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return f;
 }
 function observe(t,workspace){

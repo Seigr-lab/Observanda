@@ -16,7 +16,7 @@ async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-index-build-'));
  const book=upgradeNotebook(sampleNotebook());book.entries=[];
  const result=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(result.vault);await rm(directory,{recursive:true,force:true});});return result.workspace;
+ t.after(async()=>{await clearVault(result.vault);await rm(directory,{recursive:true,force:true});});return result.workspace;
 }
 test('index construction streams tenfold growth through encrypted scratch and retains only final nodes',async t=>{
  const ws=await fixture(t);

@@ -33,5 +33,5 @@ test('an old backup imports verified current settings and unlocks with the curre
   expect(JSON.parse(await readFile(await downloaded.path(),'utf8'))).toEqual(exported.checkpoint);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.locator('#storage-access-form').getByRole('button',{name:'Lock workspace',exact:true}).click();
   await page.reload();await page.locator('#storage-unlock-form [name=password]').fill(current);await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('workspace');
- }finally{await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

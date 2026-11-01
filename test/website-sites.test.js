@@ -27,7 +27,7 @@ async function run(queue){const job=await queue.claim();const output=await queue
 
 test('independent websites persist separate designs, selections, destinations and retained editions',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sites-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const original=await f.workspace.read(),projectId=book.notebooks.find(n=>n.id===book.entries[0].notebookId).projectId;
  const create=async name=>sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name});
  const a=(await create('Project journal')).id,b=(await create('Help website')).id;
@@ -63,7 +63,7 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  const f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace),remotes=[githubFixture({branch:'main',repository:'site-a',initialFiles:{'README.md':'First site'}}),githubFixture({branch:'main',repository:'site-b',initialFiles:{'README.md':'Second site'}})];
  const publisher=new Publisher(f.workspace.root,{request:(url,options)=>remotes[url.includes('/site-b')?1:0].request(url,options)},f.vault);publisher.token='synthetic_github_token_1234567890';
  let jobs=workspaceJobs(f.workspace,publisher),app=null;
- t.after(async()=>{if(app)await app.close();await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{if(app)await app.close();await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const ids=[];for(const [i,p] of [book.projects[0],project].entries()){
   const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i});ids.push(created.id);
   const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[{id:p.id,share:true,logoId:null}],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
@@ -108,7 +108,7 @@ test('independent websites isolate selections and review IDs and deploy to pinne
 
 test('websites can be created before research projects exist and have no fixed count ceiling',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-independent-sites-')),book=createNotebook('Empty workspace',''),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const head=await f.workspace.outline();assert.deepEqual(head.metadata.projects,[]);
  const created=await sites.change({workspaceId:book.id,etag:head.etag,operation:'create',name:'Public journal'}),first=await sites.read(created.id);
  assert.equal(first.site.projectId,null);assert.deepEqual(first.book.notebooks,[]);assert.equal(first.total,0);
@@ -123,7 +123,7 @@ test('one independent website combines lab books from different projects without
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-mixed-sites-')),book=sampleNotebook(),project={...structuredClone(book.projects[0]),id:randomUUID(),title:'Second research project'},notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:project.id,title:'Second lab book'},record={...structuredClone(book.entries[0]),id:randomUUID(),notebookId:notebook.id,title:'Selected from a second book'};
  book.projects.push(project);book.notebooks.push(notebook);book.entries.push(record);
  const f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const before=await f.workspace.read(),ids=[];
  for(const name of ['Combined website','Different website'])ids.push((await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
  const original=book.entries[0],read=await sites.read(ids[0]);

@@ -47,5 +47,5 @@ test('appearance reference navigation survives theme edits and failed transfers'
   await section.getByRole('link',{name:'Next references',exact:true}).click();await expect(page.locator('[data-action="theme-preview-retry"]')).toBeVisible();
   await page.locator('[data-action="theme-preview-retry"]').click();await expect(links).toHaveCount(5);await expect(frame.locator('.record-page > .prose')).toHaveText(book.entries[0].body);
   await expect(page.locator('#design-preview')).toHaveAttribute('sandbox','allow-same-origin');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

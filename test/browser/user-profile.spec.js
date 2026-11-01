@@ -27,5 +27,5 @@ test('personal profile is editable, survives restart, guards unsaved navigation 
   await page.setViewportSize({width:390,height:844});await expect(form).toBeVisible();expect(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('user-profile-phone.png'),fullPage:true});
   const unauthenticated=await fetch(app.origin+'/api/user-profile',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({operation:'read'})});expect(unauthenticated.status).toBe(401);
   await navigate(page,'Lock workspace');await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();expect((await sessionRequest(page,'post',app.origin+'/api/user-profile',{headers:{Origin:app.origin},data:{operation:'read'}})).status()).toBe(401);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}
 });

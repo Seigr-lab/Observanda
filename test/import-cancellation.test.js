@@ -24,7 +24,7 @@ import {assertProjectImportsSettled} from '../src/project-import-state.js';
 
 test('cancelling unpublished imports preserves sources and recovers only the pinned destination',{timeout:480000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-cancel-')),ownerId=randomUUID(),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
- t.after(async()=>{await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-import-cancel-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-import-cancel-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device')}),password='Independent import password';
  async function grant(){const access=await createWorkspaceAccess('',password,device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  async function workspace(title){const g=await grant(),data=createNotebook(title),root=path.join(directory,title);await initializeLocation(root,data,g.access,g.vault);const storage=new Workspace(root,g.vault);return {storage,registry:new ProjectRegistry(storage,data.id)};}

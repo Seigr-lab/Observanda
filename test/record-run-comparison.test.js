@@ -20,7 +20,7 @@ import {recordRunComparison} from '../src/record-run-comparison.js';
 import {serialize} from '../src/storage-format.js';
 test('heavy run comparisons page current facts and methods without assembling unrelated record content',async t=>{
  const data=runComparisonFixture({heavy:true}),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-run-comparison-')),run=data.runs[0];let f;
- t.after(async()=>{if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});f=await encryptedFixture(directory,data.book);
+ t.after(async()=>{if(f)await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});f=await encryptedFixture(directory,data.book);
  const writing=new RecordSectionCommands(f.workspace),target={workspaceId:data.book.id,recordId:run.id};let structure=(await new RecordContent(f.workspace).read({...target,header:false})).structureRevision;
  for(let i=0;i<4;i++){const section={id:randomUUID(),title:'Other narrative appended '+i,body:'Private unselected prose '.repeat(2400)};const saved=await writing.run({...target,action:'insert',sectionId:section.id,expectedStructureRevision:structure,beforeId:null,value:{title:section.title,body:section.body}});structure=saved.structureRevision;run.sections.push(section);}
  assert.ok(Buffer.byteLength(JSON.stringify(run))>2*1024*1024);

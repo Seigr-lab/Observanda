@@ -27,7 +27,7 @@ import {workspaceCopyTransferId} from '../src/workspace-copy-directory.js';
 
 test('nested project copies and portable exports publish every independently owned book and recover interruption',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-books-transfer-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-books-transfer-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-books-transfer-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),accessDocument=await createWorkspaceAccess('','Project transfer password',device),vault=takeCreatedVault(accessDocument);vaults.push(vault);
  const metadata=createNotebook('Field Project Å 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
  const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,accessDocument,vault),books=[];

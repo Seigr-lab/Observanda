@@ -27,7 +27,7 @@ async function fixture(t,{legacy=false}={}){
  let saved=await ws.read();saved.book.entries[0].title='PRIVATE REVISED SENTINEL';await ws.save(saved.book,saved.etag);
  const before=await workspaceManifest(source),destination=path.join(root,'copy');
  await copyWorkspace(await copyPlan(source,destination),{vault});
- t.after(async()=>{clearVault(vault);await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});
  return {root,source,ws:new Workspace(destination,vault),sourceWorkspace:ws,vault,before};
 }
 

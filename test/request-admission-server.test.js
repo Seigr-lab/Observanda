@@ -22,7 +22,7 @@ test('slow HTTP bodies cannot exhaust controls, queued clients cancel, and rejec
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-http-capacity-')),root=path.join(parent,'workspace'),password='disposable request admission password',access=await createAccess('',password),vault=takeCreatedVault(access);
  await initializeLocation(root,sampleNotebook(),access,vault);
  const admission=new RequestAdmission({active:1,queued:1,controlActive:1,waitMs:200}),app=await testServer({root,port:0,requestAdmission:admission}),ws=new Workspace(root,vault);
- t.after(async()=>{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});});
+ t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
  const headers={Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json'},send=(route,data,signal)=>fetch(app.origin+route,{headers,signal,...(data?{method:'POST',body:JSON.stringify(data)}:{})});
  assert.equal((await send('/api/access/unlock',{username:'',password})).status,200);

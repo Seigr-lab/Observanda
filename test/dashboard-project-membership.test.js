@@ -33,7 +33,7 @@ test('project cards and discovery resolve a retained workspace entry to its dedi
   }
   const discover=await application.run(client,projectRequest('/api/projects/dashboard-collection/discovery','POST'),{workspaceId:root.id,etag:command.etag,provider:'projects',search:'',offset:0,limit:12,cursor:null});assert.equal(discover.total,1);assert.equal(discover.items[0].key,book.id+'/'+project.projectId);
   await assert.rejects(application.run(client,request,{...command,workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
- }finally{await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-dashboard-membership-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-dashboard-membership-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('project cards use current membership and book owners, including deletions and cross-workspace relocation',async t=>{

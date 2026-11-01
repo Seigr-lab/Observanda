@@ -19,7 +19,7 @@ import {randomUUID} from 'node:crypto';
 
 test('verified backups require retained original media, its display copy and prepared website files',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-backup-publication-')),f=await encryptedFixture(directory,sampleNotebook());
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const media=new MediaStore(f.workspace.root,f.vault),original=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="green"/></svg>');
  const asset=await media.import(original,'image'),before=await f.workspace.read();
  // A completed immediate import is accepted evidence even before placement.
@@ -58,7 +58,7 @@ test('verified backups require retained original media, its display copy and pre
 
 test('pending media originals and independent project editions participate in the same restore audit',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-backup-scoped-media-')),f=await encryptedFixture(directory,sampleNotebook()),imports=new MediaImports(f.workspace);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const bytes=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><circle cx="4" cy="4" r="3"/></svg>');
  const pending=await imports.start({name:'pending.svg',size:bytes.length,kind:'image'});await imports.receive(pending.id,[bytes]);
  const rejectMissing=async(file,label)=>{

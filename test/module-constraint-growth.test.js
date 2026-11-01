@@ -14,7 +14,7 @@ const task=dependencies=>({title:'Dependency',description:'',status:'done',prior
 const resource=()=>({name:'Equipment',code:'',kind:'equipment',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'',capacity:2,status:'available',links:[]});
 for(const count of [65,650])test('encrypted constraints validate a '+count+'-task dependency chain and '+count+' adjacent bookings without unrelated originals',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-constraint-growth-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),modules=workspaceModules(f.workspace),now=new Date().toISOString();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const entity=(type,data,id=randomUUID())=>({id,type,revision:1,createdAt:now,updatedAt:now,data}),ids=Array.from({length:count},()=>randomUUID()),equipment=entity('resource',resource());
  const tasks=ids.map((id,i)=>entity('task',task(i?[ids[i-1]]:[]),id));
  const bookings=ids.map((_,i)=>entity('booking',{title:'Instrument run',resourceId:equipment.id,startsAt:new Date(Date.UTC(2026,0,1,0,i)).toISOString(),endsAt:new Date(Date.UTC(2026,0,1,0,i+1)).toISOString(),timeZone:'UTC',places:2,kind:'work',status:'confirmed',notes:'',links:[]}));

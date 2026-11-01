@@ -18,7 +18,7 @@ import {buildPublication} from '../src/publication.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-associations-')),book=upgradeNotebook(sampleNotebook());
  const access=await createAccess('','synthetic association password'),vault=takeCreatedVault(access),root=path.join(directory,'workspace');
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await initializeLocation(root,book,access,vault);const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace);
  return {directory,book,workspace,materials,vault};
 }

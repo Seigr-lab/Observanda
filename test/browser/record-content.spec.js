@@ -63,7 +63,7 @@ test('normal record reading pages stored sections without selection hydration an
   await expect(page.getByRole('button',{name:'History',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'History',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Current saved version');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('paged readers open exact methods and result evidence without entering editing or loading the record body',async({page})=>{
@@ -92,5 +92,5 @@ test('paged readers open exact methods and result evidence without entering edit
   const download=page.waitForEvent('download');await dialog.getByRole('button',{name:/Download original/}).click();const file=await download;expect(file.suggestedFilename()).toBe('source-observations.txt');expect(await readFile(await file.path())).toEqual(bytes);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(reader).toBeVisible();await expect(page.locator('#record-section-'+record.sections[127].id)).toBeVisible();
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect((await f.workspace.outline()).etag).toBe(before.etag);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

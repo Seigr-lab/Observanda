@@ -22,7 +22,7 @@ import {Workspace} from '../src/storage.js';
 test('figures retain exact calculations independently of result statements, source heads and panel identities',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-source-')),book=upgradeNotebook(sampleNotebook()),[record,method]=book.entries,plot=createFigure();
  plot.title='Retained response';plot.series[0].points=[{x:0,y:2,error:.1},{x:1,y:3,error:.2}];record.figures=[plot];delete record.results;method.share=false;
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const materials=new ResearchMaterials(f.workspace),service=new ResearchRecords(f.workspace,{});
  const save=async value=>{const current=(await f.workspace.read()).book.entries.find(r=>r.id===value.id);return service.save({workspaceId:book.id,changes:[{id:value.id,expectedRevision:recordRevision(current),record:value}]});};
  const content={inputs:[],outputs:[],tool:'Synthetic calculator',version:'1',parameters:'Two-row projection',figure:plot};

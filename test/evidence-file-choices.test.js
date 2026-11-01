@@ -12,7 +12,7 @@ import {compareEvidenceFiles} from '../src/web/evidence-files.js';
 import {createFileSelection,fileSelectionPages,registerFileManifest,selectedFiles} from '../src/web/evidence-file-selection.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-file-choices-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const call=async(name,data)=>name==='intake-selection-append'?m.intakes.choices.append(data):name==='intake-selection-page'?m.intakes.choices.page(data):name==='intake-page'?m.intakes.page(data):m.intakes.append(data);
  return {...f,m,call,recordId:book.entries[0].id,other:book.entries[1].id};
 }

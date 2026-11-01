@@ -13,7 +13,7 @@ import {assertRenameDatabaseOwners} from '../src/workspace-rename-inventory.js';
 
 test('move capabilities are encrypted and bound to operation, destination key and lifecycle purpose',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-move-capabilities-')),vault={id:randomUUID(),key:randomBytes(32)},key={id:randomUUID(),key:randomBytes(32)},bookId=randomUUID(),id=randomUUID(),keys=new Map([[bookId,key]]),workspace=new Workspace(root,vault);
- t.after(async()=>{clearVault(vault);clearVault(key);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-move-capabilities-'));await rm(root,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await clearVault(key);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-move-capabilities-'));await rm(root,{recursive:true,force:true});});
  await mkdir(path.join(root,'.observanda'));await assert.rejects(saveOwnerKeys(new Workspace(root),id,keys,MOVE_BOOK_KEYS_FILE),{code:'ACCESS_LOCKED'});
  const hash=await saveOwnerKeys(workspace,id,keys,MOVE_BOOK_KEYS_FILE),file=path.join(root,MOVE_BOOK_KEYS_FILE),stored=await readFile(file);assert.ok(encrypted(stored));assert.ok(!stored.includes(key.key));
  const reopened=await loadOwnerKeys(workspace,id,hash,MOVE_BOOK_KEYS_FILE);assert.deepEqual(reopened.get(bookId),key);for(const value of reopened.values())clearVault(value);

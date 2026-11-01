@@ -37,7 +37,7 @@ for(const count of [65,650])test('dense calendars retain month totals and page t
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   const heap=(await cdp.send('Runtime.getHeapUsage')).usedSize;expect(heap).toBeLessThan(96*1024*1024);expect(requests).not.toContain('/api/modules/data');expect(requests).not.toContain('/api/calendars');expect(errors).toEqual([]);
   console.log(JSON.stringify({events:count,browserHeapMiB:Math.round(heap/1024/1024)}));
- }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 for(const count of [65,650])test('calendar source pages search and filter '+count+' calendars without hiding schedule labels',async({page})=>{
@@ -64,5 +64,5 @@ for(const count of [65,650])test('calendar source pages search and filter '+coun
   await main.getByRole('button',{name:'New event',exact:true}).click();await expect(main.getByLabel('Event title',{exact:true})).toBeVisible();await expect(main.getByRole('heading',{name:'Calendar',exact:true})).toHaveCount(0);
   expect(opened.every(id=>id===calendars[0].id)).toBe(true);
   const heap=(await cdp.send('Runtime.getHeapUsage')).usedSize;expect(heap).toBeLessThan(96*1024*1024);expect(errors).toEqual([]);console.log(JSON.stringify({sources:count,browserHeapMiB:Math.round(heap/1024**2)}));
- }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -22,7 +22,7 @@ async function fixture(t,{owned=false}={}){
  let owner,detach;
  if(owned){owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(owner);}
  const f=await encryptedFixture(directory,sampleNotebook()),deletions=new WorkspaceDeletions(path.join(directory,'deletions'));
- t.after(async()=>{await owner?.close();detach?.();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner?.close();detach?.();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await writeFile(path.join(f.workspace.root,'.observanda','original.img'),Buffer.alloc(70000,37));
  return {...f,directory,deletions,owner};
 }

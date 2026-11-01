@@ -13,7 +13,7 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-material-pages-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,directory,materials,book};
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,directory,materials,book};
 }
 const create=(m,recordId,title,inputs=[])=>m.commit({kind:'collection',recordId,title,content:{inputs}});
 

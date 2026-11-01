@@ -13,7 +13,7 @@ import {createFigure} from '../src/web/figure-model.js';
 import {selectedNumericalDataset} from './fixtures/selected-numerical-dataset.js';
 test('wide retained numerical selections survive calculation, aggregation, comparison, plots and reopen',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-numerical-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const {source}=await selectedNumericalDataset(m,recordId),doc=await m.read(source);assert.equal(doc.content.datasetFormat,3);assert.equal(doc.content.schemaIndex.count,300);
  const originalColumns=m.datasetColumns.bind(m);m.datasetColumns=async value=>{assert.ok((value.content.schemaIndex?.count??value.content.columns?.length)<=256,'wide schema materialized');return originalColumns(value);};
  const originalPage=m.retainedDatasetPage.bind(m);m.retainedDatasetPage=async(value,page,options)=>{if(value.id===doc.id)assert.ok(Array.isArray(options?.columns)||options?.metadataOnly,'whole wide row read');return originalPage(value,page,options);};

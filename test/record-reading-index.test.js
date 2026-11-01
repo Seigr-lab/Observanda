@@ -18,7 +18,7 @@ async function fixture(t,count=135){
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Other book'});
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Reading '+i,body:'',sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:[],notebookId:book.notebooks[i%book.notebooks.length].id,
   occurredOn:[{kind:'unknown'},'2026-01-02',{kind:'year',value:'2025',estimated:true},{kind:'month',value:'2026-01',estimated:false},{kind:'range',from:'2026-01-02',to:'2026-01-09',estimated:true}][i%5]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,book,directory};
 }
 async function rows(workspace,etag=null,options={}){

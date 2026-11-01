@@ -52,7 +52,7 @@ test('project sidebar inventory and planning retain their database while global 
   expect((await reader.selected({workspaceId:book.id,id:item.id})).entity.data.name).toBe('Calibrated bench instrument');expect((await rootReader.list({workspaceId:rootBook.id,type:'resource'})).total).toBe(0);expect(errors).toEqual([]);
   await page.screenshot({path:test.info().outputPath('project-inventory-history.png'),fullPage:true});
  }finally{
-  await page.close();await app?.close();await runtime.close();detach();vaults.forEach(clearVault);
+  await page.close();await app?.close();await runtime.close();detach();await Promise.all(vaults.map(clearVault));
   assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-module-navigation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }
 });

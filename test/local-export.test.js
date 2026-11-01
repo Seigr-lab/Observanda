@@ -25,7 +25,7 @@ async function publicationCommand(releases){const {etag,websitePin,metadata}=awa
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-local-export-')),book=sampleNotebook();book.projects.forEach(p=>p.share=true);book.entries[2].share=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_UNRELEASED_COMPONENT';
  const f=await encryptedFixture(directory,book),destination=path.join(directory,'website'),releases=new PublicationJobs(f.workspace),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await mkdir(destination);await mkdir(path.join(destination,'.git'));await writeFile(path.join(destination,'.git','HEAD'),'Unrelated repository history');await writeFile(path.join(destination,'manual.html'),'An unrelated page');
  const prepare=async()=>{
   const job=await releases.start(await publicationCommand(releases),jobs.queue);jobs.worker.start();

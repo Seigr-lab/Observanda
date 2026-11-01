@@ -49,5 +49,5 @@ test('evidence controls and retained record labels follow each language through 
    await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();
   }
   expect(errors).toEqual([]);expect((await f.workspace.read()).book).toEqual(original);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

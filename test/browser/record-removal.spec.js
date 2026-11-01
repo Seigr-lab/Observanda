@@ -36,5 +36,5 @@ test('reader removal pins the reviewed revision, recovers uncertain replies and 
   let ready;const started=new Promise(resolve=>ready=resolve),gate=new Promise(resolve=>release=resolve);await page.route('**/api/research/records/remove',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});await remove();await started;
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.goto(app.origin+'/#/records/'+book.entries[2].id+'/read');release();await page.unrouteAll({behavior:'wait'});await expect(dialog).not.toBeVisible();await expect(page.locator('.record-reader h1')).toHaveText(book.entries[2].title);
   expect(reads).toEqual([]);expect(errors).toEqual([]);
- }finally{release?.();await page.unrouteAll({behavior:'wait'});ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release?.();await page.unrouteAll({behavior:'wait'});ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

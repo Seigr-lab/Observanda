@@ -57,7 +57,7 @@ test('download references reject changed bytes, names and misleading sizes; bina
 
 test('encrypted original downloads survive cancelled preparation, retry, retained publication, local export and verified workspace copy',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-download-')),f=await encryptedFixture(directory,sampleNotebook()),workspace=f.workspace,imports=new MediaImports(workspace),jobs=workspaceJobs(workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const bytes=Buffer.alloc(1024*1024+29,0xa7);Buffer.from('original metadata is deliberately retained').copy(bytes);const name='capture α.img';
  const session=await imports.start({kind:'file',name,size:bytes.length});await imports.receive(session.id,[bytes]);
  const intent={id:session.id,type:'media.prepare',scope:session.workspaceId,input:{importId:session.id,size:session.size}};

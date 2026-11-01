@@ -34,7 +34,7 @@ async function fixture(t){
  const workspace=new Workspace(root,vault),base=await workspace.read(),record=structuredClone(base.book.entries[0]);
  record.attachments=[];record.figures=[];record.sections=Array.from({length:257},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Exact notes '+i+' '+('α🔬 '.repeat(100))}));
  record.sections[0].body='Long scalar α🔬 \uD800 \n\t\\" '.repeat(2000);
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,workspace,vault,base,record,service:new ResearchRecords(workspace,{})};
 }
 async function save(f,record=f.record,previous=f.base.book.entries[0]){

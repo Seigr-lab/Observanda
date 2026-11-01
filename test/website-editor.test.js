@@ -24,7 +24,7 @@ import {RecordDocument} from '../src/record-document.js';
 
 async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-selected-website-')),book=createNotebook('Website authoring'),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-selected-website-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-selected-website-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const editor=new WebsiteEditor(f.workspace),sites=new WebsiteSites(f.workspace),created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Field journal'}),websiteId=created.id;
  const execute=(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId,...data});
  const edit=(state,operations,commandId=randomUUID())=>({websitePin:state.websitePin,draftId:state.draft?.id??null,expectedRevision:state.draft?.revision??null,commandId,operations});

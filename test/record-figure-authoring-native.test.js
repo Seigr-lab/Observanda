@@ -23,7 +23,7 @@ const collect=async chunks=>{let value='';for await(const chunk of chunks)value+
 test('manual figure checkpoints preserve incomplete data through recovery and save only fully validated figures',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-authoring-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);const record=book.entries[0];record.figures=[];
  const {workspace,vault}=await encryptedFixture(directory,book);let recoveredVault=null;
- t.after(async()=>{clearVault(vault);if(recoveredVault)clearVault(recoveredVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(vault);if(recoveredVault)await clearVault(recoveredVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const values=new RecordValues(workspace),drafts=new RecordFigureDrafts(workspace),figureId=randomUUID(),target={workspaceId:book.id,recordId:record.id,field:'figure:'+figureId},base=await values.read(target),selection={field:target.field,revision:base.revision,storageRevision:base.storageRevision};
  const id=randomUUID(),initial={id,workspaceId:book.id,recordId:record.id,selection,expectedRevision:null,operationId:randomUUID(),create:'plot'};
  let saved=await drafts.start(initial);assert.deepEqual(await drafts.start(initial),saved);assert.equal(saved.value.value.document.format,'figure-authoring');assert.equal(validRetainedFigure(saved.value.value),false);assert.equal(validRetainedFigure(saved.value.value,{draft:true}),true);
@@ -64,7 +64,7 @@ test('manual figure checkpoints preserve incomplete data through recovery and sa
 
 test('imported authored figures retain exact original point references and reject stale source reads',{timeout:90000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-authored-import-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);const record=book.entries[0];record.figures=[];
- const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const materials=new ResearchMaterials(workspace),input=createFigure();input.series[0].points=[{x:1,y:3,error:null},{x:2,y:6,error:null}];
  const retained=await workspace.withLock(()=>new RetainedFigureDocuments(workspace).retain(input)),ref=await workspace.withLock(()=>materials.commit({kind:'analysis',recordId:record.id,title:'Known imported observations',content:{inputs:[],outputs:[],tool:'Synthetic import',version:'1',parameters:'Known observations',figure:retained}}));
  const original=await retainedFigureRequest(materials,{ref,operation:'window',selection:{collection:'points',plotId:input.id,seriesId:input.series[0].id,limit:2}}),values=new RecordValues(workspace),drafts=new RecordFigureDrafts(workspace),figureId=randomUUID(),target={workspaceId:book.id,recordId:record.id,field:'figure:'+figureId},base=await values.read(target),selection={field:target.field,revision:base.revision,storageRevision:base.storageRevision},id=randomUUID();

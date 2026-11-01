@@ -30,7 +30,7 @@ test('nested dataset form combines visits and lookup values with explicit mappin
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('9007199254740993',{timeout:30000});
   const head=(await materials.heads()).find(h=>h.kind==='dataset');expect((await materials.datasetPage(head)).rows.map(r=>r.cells)).toEqual([['9007199254740993','first','4'],['5','second','8']]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained schema are usable on a narrow screen',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(10000);
@@ -95,7 +95,7 @@ test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained sche
   expect((await materials.datasetPage(dataset)).rows[0].cells).toEqual(['18446744073709551615','105']);
   await dialog.screenshot({path:test.info().outputPath('dataset-phone.png')});
   expect(errors).toEqual([]);
- }finally{await app.close();ResearchMaterials.prototype.prepareDataset=prepare;clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();ResearchMaterials.prototype.prepareDataset=prepare;await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('wide dataset inspection and schema paging retain edits, exclusions and exact historical values',async({page})=>{
@@ -162,7 +162,7 @@ test('wide dataset inspection and schema paging retain edits, exclusions and exa
   await dialog.getByRole('button',{name:'Next columns',exact:true}).click();
   await expect(table.locator('thead th')).toHaveCount(6);await expect(table).toContainText('105');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
@@ -183,5 +183,5 @@ test('discovered wide JSON columns retain full values and original source inspec
   await dialog.getByRole('region',{name:'Dataset values'}).getByRole('button',{name:/field300/}).click();await expect(dialog.locator('pre')).toContainText('begin ');await dialog.getByRole('button',{name:'Next characters',exact:true}).click();await expect(dialog.locator('pre')).not.toContainText('begin ');
   await dialog.getByRole('button',{name:'Inspect original',exact:true}).click();await expect(dialog).toContainText('/rows/0/field300');await expect(dialog.locator('pre')).toContainText('"begin ');await dialog.getByRole('button',{name:'Next characters',exact:true}).click();await expect(dialog.locator('pre')).not.toContainText('"begin ');
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

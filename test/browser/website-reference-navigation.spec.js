@@ -41,5 +41,5 @@ test('canvas reference windows preserve design edits, recover failed requests an
   await next.focus();await next.press('Enter');await expect(links.first()).toHaveText(book.entries[25].title);await expect(next).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await expect(page.locator('#website-draft-preview')).toHaveAttribute('sandbox','allow-same-origin');await page.screenshot({path:info.outputPath('canvas-reference-window-phone.png')});expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

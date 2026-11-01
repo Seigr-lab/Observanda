@@ -16,7 +16,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-document-')),f=await encryptedFixture(directory,sampleNotebook()),before=await f.workspace.read();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...f,before,record:before.book.entries[0]};
 }
 test('read-only document selection never writes decomposed legacy envelopes',async t=>{

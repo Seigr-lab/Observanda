@@ -29,7 +29,7 @@ const step=(name,operation,left,right=null,unit='',test=null)=>({name,operation,
 const recipe=source=>({version:1,source,view:'observations',joins:[],steps:[],where:null,selectionReason:'',calibration:null,note:''});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calculations-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const dataset=async(text,columns)=>{const bytes=Buffer.from(text),upload=await m.startImport({recordId,name:'acquisition.csv',size:bytes.length});for(let i=0;i<bytes.length;i+=EVIDENCE_CHUNK)await m.appendImport(upload.id,i/EVIDENCE_CHUNK,[bytes.subarray(i,i+EVIDENCE_CHUNK)]);const artifact=await m.finishImport(upload.id);return m.dataset({recordId,title:'Acquisitions',artifact,columns});};
  return {...f,m,recordId,dataset};
 }

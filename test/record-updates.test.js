@@ -20,7 +20,7 @@ import {createAccess,takeCreatedVault} from '../src/access.js';
 async function fixture(t,count=65,{large=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-updates-')),book=sampleNotebook(),seed=book.entries[2];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Record '+i,body:'Private source '+i,sections:large?Array.from({length:6},()=>({id:randomUUID(),title:'Notes',body:'x'.repeat(59000)})):[],relations:[],attachments:[],figures:[],contributors:[]}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const base=await f.workspace.read();return {...f,directory,base,reader:new WorkspaceReader(f.workspace)};
 }
 async function changeAll(f){const draft=structuredClone(f.base.book);draft.entries.forEach((r,i)=>{r.title='Updated '+i;});return f.workspace.save(draft,f.base.etag);}

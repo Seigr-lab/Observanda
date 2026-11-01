@@ -36,5 +36,5 @@ test('small measurement differences have distinct visible axes in the reader and
   const figure=output.locator('#record-figure-'+plot.id),source=await figure.locator('img').getAttribute('src'),svg=publication.files.get(path.posix.normalize(path.posix.join(path.posix.dirname(filename),source)));
   expect(svg).toBeDefined();await output.setContent(String(svg));await check(output.locator('svg'));await output.close();
   expect((await f.workspace.read()).book.entries[0].figures).toEqual([plot]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

@@ -37,7 +37,7 @@ test('draft conflict review displays numerical figure settings and preserves the
   await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const saved=(await f.workspace.read()).book;expect(saved.entries[0].figures[0].x.min).toBe(0);expect(saved.entries.slice(1)).toEqual(book.entries.slice(1));expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('long conflict values page independently and choosing a version restores its complete evidence',async({page},info)=>{
@@ -67,5 +67,5 @@ test('long conflict values page independently and choosing a version restores it
   await expect(saved.locator('pre')).toContainText('x: 799');await dialog.getByLabel('Saved version',{exact:true}).check();await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();
   await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const result=(await f.workspace.read()).book.entries[0];expect(proseText(result.body)).toBe(mine.body);expect(result.figures).toEqual(remote.figures);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

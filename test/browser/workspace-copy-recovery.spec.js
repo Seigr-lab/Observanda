@@ -29,7 +29,7 @@ for(const fresh of [false,true])test(`${fresh?'fresh-key':'ordinary'} workspace 
   await submit.click();await expect.poll(()=>confirmed).toBe(true);await expect(dialog).not.toBeVisible();expect(attempts).toBe(2);
   expect(await readPreference(preferencesFile)).toBe(destination);await preferences(page,'Storage & access');await expect(page.locator('.storage-path').first()).toHaveText(destination);expect(await f.workspace.read()).toEqual(before);
   await page.reload();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));expect(attempts).toBe(2);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 for(const code of ['ENOSPC','EACCES'])test(`failed backup verification (${code}) keeps the source active and editable`,async({page})=>{
@@ -44,7 +44,7 @@ for(const code of ['ENOSPC','EACCES'])test(`failed backup verification (${code})
   await expect(dialog.getByRole('button',{name:'Copy and use this folder',exact:true})).toBeEnabled();expect(await readPreference(preferencesFile)).toBe(remembered);expect(await f.workspace.read()).toEqual(before);await expect(inspectLocation(destination)).rejects.toMatchObject({code:'STORAGE_INCOMPLETE'});
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await page.evaluate(id=>location.hash='#/records/'+id,before.book.entries[0].id);
   await expect(page.locator('.record-editing h1')).toHaveText(before.book.entries[0].title);await setRecordTitle(page,'Work continues after the failed backup');expect((await f.workspace.read()).book.entries[0].title).toBe('Work continues after the failed backup');
- }finally{ResearchCatalogue.prototype.verify=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.verify=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 for(const fresh of [false,true])test(`${fresh?'fresh-key':'ordinary'} copy stays connected beyond the server idle timeout`,async({page})=>{
@@ -73,7 +73,7 @@ for(const fresh of [false,true])test(`${fresh?'fresh-key':'ordinary'} copy stays
   // the actual server completion, destination activation and subsequent read.
   expect(delayed).toBe(true);expect(requests).toBe(1);expect(completed).toBe(1);expect(earlyDisconnects).toBe(0);expect(await readPreference(preferencesFile)).toBe(destination);
   await preferences(page,'Storage & access');await expect(page.locator('.storage-path').first()).toHaveText(destination);
- }finally{ResearchCatalogue.prototype.verify=verify;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.verify=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
@@ -88,5 +88,5 @@ test('an interrupted workspace copy resumes the same folder after restarting the
   app=await start();const first=await begin();await expect.poll(()=>failed).toBe(true);await expect(first.getByRole('button',{name:'Copy and use this folder',exact:true})).toBeEnabled();await expect(inspectLocation(destination)).rejects.toMatchObject({code:'STORAGE_INCOMPLETE'});
   await app.close();app=await start();const retried=await begin();await expect(retried).not.toBeVisible({timeout:60000});expect(await readPreference(preferencesFile)).toBe(destination);
   await preferences(page,'Storage & access');await expect(page.locator('.storage-path').first()).toHaveText(destination);await page.reload();await expect(page.locator('.workspace-name')).toHaveText('Recovered Workspace 1');
- }finally{ResearchCatalogue.prototype.verify=verify;await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.verify=verify;await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

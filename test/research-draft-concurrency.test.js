@@ -16,7 +16,7 @@ import {RECORD_DRAFT_CHUNK_BYTES as SIZE} from '../src/web/record-draft-protocol
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-concurrency-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const record={...book.entries[0],sections:Array.from({length:40},(_,index)=>({id:randomUUID(),title:'Observation '+index,body:'exact '.repeat(10000)}))};
  const owner={id:randomUUID(),workspaceId:book.id},change={record,baseRevision:recordRevision(book.entries[0]),expectedRevision:recordRevision(book.entries[0])};
  return {...f,book,record,owner,change,transfer:new ResearchDraftTransfer(f.workspace),drafts:new ResearchDrafts(f.workspace)};

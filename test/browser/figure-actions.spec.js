@@ -24,5 +24,5 @@ test('figure source preparation disables conflicting controls and restores them 
   await page.route('**/api/research/materials/figure-sources',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic source interruption'})}));
   await cards.first().getByRole('button',{name:'Duplicate',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic source interruption');
   await expect(add).toBeEnabled();await expect(cards.first().getByLabel('Value 1',{exact:true})).toBeEnabled();await expect(cards).toHaveCount(3);
- }finally{release?.();await page.unrouteAll({behavior:'wait'});await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{release?.();await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

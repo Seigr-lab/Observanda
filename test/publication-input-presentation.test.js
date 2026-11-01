@@ -76,7 +76,7 @@ test('large presentation captures keep bodies outside the manifest and inventory
 
 test('native previews and retained editions select presentation values and keep exact media after draft discard',{timeout:180000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-presentation-input-')),book=createNotebook('Selected presentation'),project={id:randomUUID(),title:'Project fallback',description:'',share:true,logoId:null};book.projects=[project];
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-presentation-input-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-presentation-input-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const media=new MediaStore(f.workspace),images=[];for(const color of ['red','blue','green'])images.push(await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="'+color+'"/></svg>'),'image'));
  const storage=websiteWorkspace(f.workspace,null),editor=new WebsiteEditor(f.workspace),execute=(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId:null,...data}),authored=page(),target='page:'+authored.id;
  let state=await execute('open');state=await execute('change',{websitePin:state.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[

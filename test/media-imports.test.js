@@ -20,7 +20,7 @@ const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-jobs-')),root=path.join(directory,'workspace'),access=await createAccess('','media test password'),vault=takeCreatedVault(access);
  await initializeLocation(root,sampleNotebook(),access,vault);const workspace=new Workspace(root,vault),imports=new MediaImports(workspace),jobs=workspaceJobs(workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,root,vault,workspace,imports,...jobs};
 }
 async function uploaded(f,bytes=svg){

@@ -11,7 +11,7 @@ import {builtAssets} from './built-assets-helper.js';
 async function fixture(run){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-task-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
  const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json'),browserAssets:await builtAssets(directory)});
- try{await run(app,book);}finally{await app.close();clearVault(f.vault);if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-task-ui-'))throw Error('Unexpected cleanup directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ try{await run(app,book);}finally{await app.close();await clearVault(f.vault);if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-task-ui-'))throw Error('Unexpected cleanup directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 }
 test('discover and pin a disabled tool, then return to the filtered record list',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));

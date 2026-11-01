@@ -33,5 +33,5 @@ test('translated discovery and shared controls reflow across presets and enlarge
    }
   }
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(fixture.vault);if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-presentation-'))throw Error('Unexpected cleanup directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(fixture.vault);if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-presentation-'))throw Error('Unexpected cleanup directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

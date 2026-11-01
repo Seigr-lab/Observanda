@@ -22,7 +22,7 @@ import {withScratch} from '../src/scratch-work.js';
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-book-storage-')),vaults=[];
  const owner=new WorkspaceDatabases({directory:path.join(parent,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
- t.after(async()=>{await owner.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-storage-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-storage-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  async function create(name){
   const book=sampleNotebook();book.title=name;book.projects[0].title='Field Project 1';book.notebooks[0].title=name;
   const id=book.notebooks[0].id,device=new TestDeviceStore({file:path.join(parent,randomUUID()+'.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);

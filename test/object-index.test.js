@@ -19,7 +19,7 @@ const key=n=>recordsPrefix+String(n).padStart(5,'0')+'/manifest.json';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-object-index-'));
  const {workspace:ws,vault}=await encryptedFixture(directory,upgradeNotebook(sampleNotebook()));
- t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault};
 }
 const write=(ws,fn)=>ws.withLock(()=>ws.catalogue(fn));

@@ -49,5 +49,5 @@ for(const count of [65,650])test('sample-analysis navigation retains pages and o
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('dialog',{name:'Unsaved changes'}).getByRole('button',{name:'Discard changes',exact:true}).click();await navigate(page,'Dashboard');await measure();
   expect(requests.filter(p=>p==='/api/laboratory')).toEqual([]);const pages=await Promise.all(responses);expect(pages.every(p=>p.items.length<=25&&!JSON.stringify(p).includes('PRIVATE_ANALYSIS_NOTES'))).toBe(true);expect(errors).toEqual([]);expect(peak).toBeLessThan(192*1024*1024);
   console.log(JSON.stringify({samples:count,analyses:count*2,largestPageBytes:Math.max(...pages.map(p=>Buffer.byteLength(JSON.stringify(p)))),sampledBrowserHeapMiB:Math.round(peak/1024**2),sourceBytes:Buffer.byteLength(serialize(lab))}));
- }finally{Laboratory.prototype.read=read;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{Laboratory.prototype.read=read;await cdp.detach();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

@@ -14,7 +14,7 @@ import {ObjectIndex} from '../src/object-index.js';
 import {selectionBatch,selectionSize} from '../src/web/material-selection-pages.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-source-choices-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,m,directory,recordId:book.entries[0].id,other:book.entries[1].id};
 }
 const ref=item=>({kind:item.kind,id:item.id,revision:item.revision});

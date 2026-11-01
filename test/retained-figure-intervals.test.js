@@ -49,7 +49,7 @@ async function exportedSVG(reader,{signal,last,grouped}){
 
 test('dense chronological and many-series interval mappings retain every point, complete exports and exact sources through encrypted restoration',{timeout:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-intervals-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),recordId=book.entries[0].id,m=new ResearchMaterials(f.workspace),started=performance.now();
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  // Counts cover catalogue calls after Workspace admission, including get/all
  // through run; pre-open authentication, scratch and direct archive handles are
  // outside this observation. Only aggregate counts are emitted.

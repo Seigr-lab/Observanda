@@ -16,7 +16,7 @@ test('API requires unlock, matching confirmation, current review and exclusive w
  const github=new GithubConnections({file:prefs+'.github.json'}),other=path.join(directory,'other');
  await github.update(data=>{data.bindings[github.key(f.workspace.root)]={id:37,login:'tester'};data.bindings[github.key(other)]={id:37,login:'tester'};});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,preferencesFile:prefs,deviceStore:f.deviceStore,githubConnections:github});
- t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
  const request=(route,data)=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}});

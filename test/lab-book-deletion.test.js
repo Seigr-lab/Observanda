@@ -21,7 +21,7 @@ import {MediaStore} from '../src/media.js';
 
  test('book deletion recovers frozen and retired states without touching siblings or a reused original path',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-delete-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-delete-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-delete-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),grant=await createWorkspaceAccess('','',device),vault=takeCreatedVault(grant);vaults.push(vault);
  const model=createNotebook('Field Project 1'),projectId=randomUUID();model.projects=[{id:projectId,title:model.title,parentId:null,description:'',share:false,logoId:null}];
  const project=await initializeProjectLocation(path.join(directory,model.title),projectId,model,grant,vault),registry=new LabBookRegistry(project);

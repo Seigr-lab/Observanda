@@ -47,7 +47,7 @@ test('invalid packed ranges fail before yielding, and count alignment remains st
 
 test('packed mapping and source references survive retained revisions, inspection and encrypted restore',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-packed-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const source=packedSource(4),bytes=Buffer.from(JSON.stringify(source)),upload=await materials.startImport({recordId,name:'packed-timing.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id),command={recordId,title:'Packed timing records',artifact,sourceMapping:packedMapping(4)};
  command.columns=packedMapping(4).fields.map(f=>({...defaultColumn({label:f.name}),representation:'integer'}));
  const dataset=await materials.dataset(command),page=await materials.datasetPage(dataset);

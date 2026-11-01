@@ -38,7 +38,7 @@ test('retained page references authenticate original content, teasers and exact 
 
 test('preparing a website beyond the former input envelope reads one pinned custom page at a time',{timeout:180000},async t=>{
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-page-input-')),book=createNotebook('Prepared custom pages'),f=await encryptedFixture(directory,book);
- t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-page-input-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-page-input-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const sites=new WebsiteSites(f.workspace),websiteId=(await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Independent journal'})).id,storage=websiteWorkspace(f.workspace,websiteId),editor=new WebsiteEditor(f.workspace);
  const execute=(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId,...data}),edit=(state,operations)=>({websitePin:state.websitePin,draftId:state.draft?.id??null,expectedRevision:state.draft?.revision??null,commandId:randomUUID(),operations});
  const media=new MediaStore(f.workspace),download=await media.import(Buffer.from('Synthetic downloadable evidence'),'file',{name:'evidence.txt'}),asset={...download,caption:'Evidence file',alt:'',transcript:''};

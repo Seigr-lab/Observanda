@@ -25,5 +25,5 @@ test('linked readers distinguish the displayed revision from an earlier retained
   const values=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'title'},base=await values.read(target);await values.save({...target,expectedRevision:base.revision,value:{value:'Amended observation'}});
   await page.getByRole('link',{name:'Observanda — refresh saved workspace',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Amended observation');await page.getByRole('button',{name:'Show linked records',exact:true}).click();await expect(linked).toContainText('Retained revision '+revision.slice(0,10)+' (different from current)');
   await linked.getByRole('link',{name:book.entries[1].title,exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText(book.entries[1].title);await expect(page.locator('.research-link-list')).toContainText('Retained revision '+revision.slice(0,10));expect(errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

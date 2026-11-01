@@ -17,7 +17,7 @@ test('stored section commands add, move and remove without reconstructing record
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-section-commands-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];
  record.contributors=[];record.relations=[];record.attachments=[];record.figures=[];
  record.sections=Array.from({length:64},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained '+i}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const commands=new RecordSectionCommands(f.workspace),writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id};
  const member=()=>f.workspace.catalogue(async store=>store.member(await store.snapshot(),record.id));
  const before=(await f.workspace.outline()).etag,initial=await member();assert.equal(initial.collections,undefined);

@@ -52,5 +52,5 @@ test('reading is distinct from editing and preserves readable tables and retaine
   await card.getByRole('link',{name:'Follow the related method',exact:true}).first().click();await expect(reader.getByRole('heading',{name:related.title,exact:true})).toBeVisible();await expect(reader.locator(edits)).toHaveCount(0);await expect(page).toHaveURL(/\/read$/);
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(card).toBeVisible();await expect(page).toHaveURL(new RegExp('/notebooks/'+record.notebookId+'/read$'));
   expect((await f.workspace.outline()).etag).toBe(before);expect(wholeReads).toEqual([]);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

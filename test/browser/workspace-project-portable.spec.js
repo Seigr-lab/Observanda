@@ -31,5 +31,5 @@ test('set independent project passwords and export a complete portable workspace
   await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root));const exported=new Workspace(destination,f.vault),entries=(await new ProjectRegistry(exported,book.id).read()).value.projects;expect(entries).toHaveLength(2);
   for(const root of [destination,...entries.map(entry=>entry.root)]){expect(await catalogueBinding(root)).toBe(null);await access(path.join(root,CATALOGUE_ARCHIVE));await expect(access(path.join(root,'.observanda/postgresql'))).rejects.toMatchObject({code:'ENOENT'});}
   for(const project of projects)await project.read();
- }finally{await page.close();await app?.close();await owner.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-portable-owners-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-portable-owners-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

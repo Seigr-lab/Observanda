@@ -35,5 +35,5 @@ test('publication permissions are saved with the lab book and its writing sectio
   expect((await f.workspace.outline()).metadata.notebooks.find(n=>n.id===notebook.id).share).toBe(false);
   await page.reload();await page.locator('.project-notebook').filter({hasText:notebook.title}).getByRole('button',{name:'Lab book settings',exact:true}).click();
   await expect(settings.getByRole('checkbox',{name:'Allow web publishing from this lab book',exact:true})).not.toBeChecked();expect(errors).toEqual([]);
- }finally{await page.close();await app.close();clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-publication-controls-'))throw Error('Unexpected disposable path');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await page.close();await app.close();await clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-publication-controls-'))throw Error('Unexpected disposable path');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

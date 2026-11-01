@@ -16,7 +16,7 @@ test('physical 17 MiB and tenfold JSON datasets retain exact values and independ
  t.diagnostic(JSON.stringify({platform:process.platform,cpu:os.cpus()[0].model,node:process.version,totalMemoryGiB:Math.round(os.totalmem()/1024**3)}));
  for(const count of [4344,43440]){
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-dataset-growth-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
-  t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   const filename=path.join(directory,'synthetic.jsonl'),writer=await open(filename,'wx'),expected=Array.from({length:4},()=>({sum:0,count:0,rows:0,values:[]})),hash=createHash('sha256');
   let bytes=0,missing=0;
   try{

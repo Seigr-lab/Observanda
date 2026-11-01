@@ -23,5 +23,5 @@ test('CLI creation and validation localize human reports while keeping workspace
    const value=JSON.stringify({...defaultPreferences(),language});await writeFile(preferences,value);const localization=commandLineLocalization(preferences),checked=await cli(['validate',...args],password);
    assert.equal(checked.code,0,checked.stderr);assert.ok(checked.stdout.includes(localization.text('validated',{entries:outline.recordCount,revision:outline.metadata.revision})));assert.ok(checked.stderr.includes(localization.translate('storageProgress','verify-copy')));assert.ok(!checked.stderr.includes(password));assert.equal(await readFile(preferences,'utf8'),value);assert.deepEqual(await readFile(path.join(root,'workspace.observanda')),original);
   }
- }finally{clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:3});}
+ }finally{await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:3});}
 });

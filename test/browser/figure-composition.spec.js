@@ -38,5 +38,5 @@ test('author, annotate, compare, save and restore multi-panel figures through th
   await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page.locator('.record-reader .figure-panel')).toHaveCount(2);await page.locator('.record-reader').getByText('Read table row by row',{exact:true}).last().click();await expect(page.locator('.record-reader .figure-annotations-table')).toContainText('Acquisition window');await page.screenshot({path:test.info().outputPath('compound-reading.png')});
   const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=(await new Workspace(backup,f.vault).read()).book.entries.find(r=>r.id===record.id);expect(restored.figures).toEqual(saved.figures);
   const publication=buildPublication({...book,entries:[{...saved,share:true}]});expect([...publication.files.values()].map(String).join('\n')).toContain('Acquisition window');expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

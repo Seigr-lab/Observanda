@@ -13,7 +13,7 @@ import {Workspace} from '../src/storage.js';
 test('authenticated readiness is redacted and shutdown drains an in-flight database save before clearing keys',async t=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-drain-')),root=path.join(parent,'workspace'),password='synthetic lifecycle password',a=await createAccess('',password),vault=takeCreatedVault(a);
  await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),app=await startServer({root,port:0});
- t.after(async()=>{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});});
+ t.after(async()=>{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  assert.equal(app.server.address().address,'127.0.0.1');assert.equal((await fetch(app.origin+'/api/health')).status,401);
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
  const request=(route,data)=>fetch(app.origin+route,{headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});

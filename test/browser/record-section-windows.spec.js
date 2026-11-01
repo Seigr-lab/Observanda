@@ -46,7 +46,7 @@ test('long records keep writing sections, edits and anchored reading in independ
   const access=await createAccess('','record section recovery test password'),restoredVault=takeCreatedVault(access),destination=path.join(directory,'restored');
   try{await encryptedCopy(await copyPlan(f.workspace.root,destination),access,restoredVault,f.vault);const restored=new Workspace(destination,restoredVault);expect((await restored.read()).book.entries[0]).toEqual(saved);expect((await new RecordHistory(restored,{}).read({...command,...version})).record).toEqual(original);}finally{clearVault(restoredVault);}
   expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 test('conflict review keeps choices across windows and cancellation preserves the recoverable draft',async({page})=>{
@@ -63,5 +63,5 @@ test('conflict review keeps choices across windows and cancellation preserves th
   for(let i=2;i<17;i++){await expect(dialog.locator('.record-conflict')).toHaveCount(1);await dialog.getByLabel('Your version',{exact:false}).check();if(i<16)await dialog.getByRole('button',{name:'Next unresolved field',exact:true}).click();}
   await expect(dialog.getByRole('status')).toContainText('17 choices made');await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const saved=(await f.workspace.read()).book.entries[0];expect(saved.sections[0].body).toBe('Combined precise observation');expect(saved.sections[1].body).toBe('Other observation 2');expect(saved.sections.slice(2,17)).toEqual(mine.sections.slice(2,17));expect(saved.sections.slice(17)).toEqual(base.sections.slice(17));
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

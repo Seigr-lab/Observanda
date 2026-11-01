@@ -62,7 +62,7 @@ test('save, reopen, edit, discard and remove a private record view without copyi
   await dialog.getByRole('button',{name:'Remove',exact:true}).click();await dialog.getByRole('button',{name:'Remove view',exact:true}).click();
   await expect(dialog).toContainText('No saved views yet.');await dialog.getByRole('button',{name:'Close',exact:true}).click();
   expect((await ws.read()).book.entries).toHaveLength(7);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(vault);await rm(root,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(root,{recursive:true,force:true});}
 });
 
 test('missing lab books require explicit rebinding; concurrent view edits keep the unsaved form',async({page})=>{
@@ -85,5 +85,5 @@ test('missing lab books require explicit rebinding; concurrent view edits keep t
   await dialog.getByRole('button',{name:'Back to saved views',exact:true}).click();await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes'}).click();
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Saved views',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Other window rename',exact:true})).toBeVisible();
- }finally{await app.close();clearVault(vault);await rm(root,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(root,{recursive:true,force:true});}
 });

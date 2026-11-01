@@ -86,7 +86,7 @@ test('prepared legacy originals keep their storage spelling and independently up
 
 test('public full and selected saves reuse exact encoding identities through query and history storage',async t=>{
  const temporary=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(temporary,'observanda-write-encoding-'));let fixture;
- t.after(async()=>{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),temporary);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),temporary);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  fixture=await encryptedFixture(directory,source());const {workspace}=fixture;let saved=(await workspace.read()).book.entries[0];
  await t.test('full compatibility save hashes its admitted original once in each required order',async t=>{
   const current=await workspace.read();current.book.entries[0].title='Exact compact full save';const put=ResearchCatalogue.prototype.put;let observed,expected;

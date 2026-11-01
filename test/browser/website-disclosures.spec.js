@@ -30,5 +30,5 @@ test('expandable sections support nested authoring, undo, duplication and no-scr
    await visitor.setViewportSize({width:390,height:844});await group.locator('summary').click();await expect(group.getByRole('heading',{name:'Observed behaviour',exact:true})).toBeVisible();expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await visitor.screenshot({path:info.outputPath('expandable-content-mobile.png'),fullPage:true});
   }finally{await context.close();}
   const saved=(await new WebsiteSites(fixture.workspace).read(null)).book.pages.find(p=>'pages/'+p.id+'.html'===target);expect(saved.sections.filter(s=>s.parentId===saved.sections[0].id)).toHaveLength(2);expect(saved.sections[0].open).toBe(false);expect(errors).toEqual([]);
- }finally{await app.close();clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

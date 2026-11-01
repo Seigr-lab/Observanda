@@ -42,5 +42,5 @@ test('PDF image authoring retains selected pixels, text, physical crop and place
   expect(rendered.at(-1)[0]).toMatchObject({alt:stored.alt,caption:stored.caption,fit:'cover',position:'25% 75%',previous:true,following:true});expect(rendered.at(-1)[0].width).toBeCloseTo(70*96/25.4,0);expect(rendered.at(-1)[0].height).toBeCloseTo(45*96/25.4,0);
   const downloadEvent=page.waitForEvent('download');await ui.getByRole('button',{name:'Download PDF',exact:true}).click();const download=await downloadEvent;await download.saveAs(test.info().outputPath('selected-image.pdf'));expect((await readFile(await download.path())).subarray(0,5).toString()).toBe('%PDF-');
   expect(errors).toEqual([]);
- }finally{await app.close();removeRenderer();clearVault(fixture.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-images-ui-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{await app.close();removeRenderer();await clearVault(fixture.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-images-ui-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

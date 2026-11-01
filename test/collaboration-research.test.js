@@ -29,7 +29,7 @@ import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-shared-research-')),vaults=[];
- t.after(async()=>{vaults.forEach(clearVault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
+ t.after(async()=>{await Promise.all(vaults.map(clearVault));await rm(directory,{recursive:true,force:true,maxRetries:5});});
  const book=sampleNotebook(),hidden=randomUUID();book.notebooks.push({id:hidden,projectId:book.projects[0].id,title:'Unrelated private book'});book.entries[2].notebookId=hidden;
  const author=await encryptedFixture(path.join(directory,'author'),book),member=await encryptedFixture(path.join(directory,'member'),sampleNotebook());vaults.push(author.vault,member.vault);
  const a=new OrganizationExchange(author.workspace,author.deviceStore),b=new OrganizationExchange(member.workspace,member.deviceStore),sa=new ResearchExchange(author.workspace,author.deviceStore),sb=new ResearchExchange(member.workspace,member.deviceStore);

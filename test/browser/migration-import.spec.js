@@ -70,5 +70,5 @@ test('app stages, maps, resumes, applies and reverses a private external logbook
   await page.screenshot({path:test.info().outputPath('import-review-phone.png')});
   await page.getByRole('button',{name:'Reverse this batch',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Reverse this batch',exact:true}).click();
   await expect(page.locator('#migration-import-progress')).toHaveText('Batch reversal recorded',{timeout:45000});expect((await f.workspace.read()).book.entries).toEqual(before.book.entries);expect(errors).toEqual([]);expect(wholeReads).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });

@@ -27,7 +27,7 @@ import {contentBuffer} from '../src/file-content.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-')),source=path.join(directory,'source'),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(path.join(directory,'app'),book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  const declared=await migrationFixture(source,{creative:true}),report=await inventorySource({source}),service=new MigrationImport(f.workspace),command={id:randomUUID(),workspaceId:book.id};
  const create=()=>service.create({...command,source,expectedPin:report.source.pin,notebookId:book.notebooks[0].id});
  return {...f,source,book,declared,report,service,command,create};
@@ -266,7 +266,7 @@ test('an interrupted commit rolls back records and receipts; staged work survive
 });
 test('complete adoption fixture preserves distinct attempts, exact methods, criteria, dataset values and exclusions',{timeout:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-adoption-')),source=path.join(directory,'source'),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(path.join(directory,'app'),book);
- t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  const declared=await migrationFixture(source,{full:true}),report=await inventorySource({source}),service=new MigrationImport(f.workspace),command={id:randomUUID(),workspaceId:book.id},start=Date.now();
  let peakRss=process.memoryUsage().rss;const memory=setInterval(()=>{peakRss=Math.max(peakRss,process.memoryUsage().rss);},100);t.after(()=>clearInterval(memory));
  let batch=await service.create({...command,source,expectedPin:report.source.pin,notebookId:book.notebooks[0].id});

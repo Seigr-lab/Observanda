@@ -42,7 +42,7 @@ test('portable location decoding rejects escape paths and ambiguous path syntax'
 
 test('encrypted directory resolves owned projects after its folder moves without rewriting the receipt',async t=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-registry-locations-')),source=path.join(directory,'workspace'),destination=path.join(directory,'Research Workspace 2'),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);let vault;
-  t.after(async()=>{await runtime.close();detach();if(vault)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-registry-locations-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+  t.after(async()=>{await runtime.close();detach();if(vault)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-registry-locations-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
   const book=sampleNotebook();book.title=path.basename(source);book.projects=[];book.notebooks=[];book.entries=[];const fixture=await encryptedFixture(directory,book),workspace=fixture.workspace;vault=fixture.vault;
   const value={...registry([entry(path.join(source,'projects','Example experiments')),entry(path.join(directory,'External project'))]),workspaceId:book.id},owner=new ProjectRegistry(workspace,value.workspaceId);
   await workspace.writeFile(owner.file,JSON.stringify(value));

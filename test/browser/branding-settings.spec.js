@@ -18,7 +18,7 @@ test.beforeEach(async({page})=>{
  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(root,'preferences.json')});
  errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url);
 });
-test.afterEach(async()=>{await app.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});expect(errors).toEqual([]);});
+test.afterEach(async()=>{await app.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});expect(errors).toEqual([]);});
 const header=page=>page.locator('.workspace-heading');
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
 test('SVG logo upload, return to Appearance, header alignment and order persist with explicit save',async({page})=>{
