@@ -38,6 +38,7 @@ export async function verifyDesktopPayload(root,{sourceRoot}={}){
  if(manifest.format!==1||manifest.platform!==process.platform||manifest.arch!==process.arch)throw Error('Build the payload on the matching target architecture first.');
  if(JSON.stringify(await payloadFiles(root))!==JSON.stringify(manifest.files))throw Error('Desktop payload changed after preparation.');
  if(process.platform!=='win32'&&!manifest.files.some(f=>f.path==='service/runtime/mutation-files.node'))throw Error('Missing native filesystem bridge');
+ if(process.platform==='linux'&&!manifest.files.some(f=>f.path==='service/runtime/postgres-confinement'))throw Error('Missing PostgreSQL confinement helper');
  for(const name of [...githubRuntimeFiles(),...pdfValidationRuntimeFiles(),...desktopLocalizationFiles()])if(!manifest.files.some(f=>f.path===name))throw Error('Missing desktop dependency: '+name);
  for(const name of ['service/src/desktop-service.js','service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+(process.platform==='win32'?'.exe':''),'media/bin/ffmpeg'+(process.platform==='win32'?'.exe':''),'media/bin/ffprobe'+(process.platform==='win32'?'.exe':''),'media/LICENSE'])if(!manifest.files.some(f=>f.path===name))throw Error('Missing desktop dependency: '+name);
  if(sourceRoot){
