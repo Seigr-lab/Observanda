@@ -16,6 +16,7 @@ import {waitForWriter} from './writer-wait.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
 import {assertNotMoving} from './workspace-move-state.js';
 import {AppError} from './errors.js';
+import {catalogueConnection} from './catalogue-connections.js';
 
 const selection=(domains,allowEmpty=false)=>{
  if(!Array.isArray(domains)||!allowEmpty&&!domains.length||domains.length>moduleDomains.length||new Set(domains).size!==domains.length||!domains.every(validModuleDomain))throw new AppError('INVALID');
@@ -25,11 +26,12 @@ export class ProjectDomains{
  constructor(storage,namespaceId){moduleDomainOwner(storage,namespaceId);this.storage=storage;this.namespaceId=namespaceId;}
  async connection(){
   await this.storage.requireStorageKey();const db=await this.storage.openCatalogue();
-  try{
-   await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-   if((await this.storage.catalogueStore(db).snapshot()).metadata.id!==this.namespaceId)throw new AppError('WORKSPACE_CHANGED');
-   await db.run('COMMIT');return db;
-  }catch(error){await db.close();throw error;}
+  try{await this.#verifyConnection(db);return db;}catch(error){await db.close();throw error;}
+ }
+ async #verifyConnection(db){
+  await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  if((await this.storage.catalogueStore(db).snapshot()).metadata.id!==this.namespaceId)throw new AppError('WORKSPACE_CHANGED');
+  await db.run('COMMIT');
  }
  async initialize(domains,{commands=false}={}){
   domains=selection(domains);const db=await this.connection(),session=databaseSchemaSession(db),stores=[];
@@ -57,7 +59,9 @@ export class ProjectDomains{
  async run(domains,operation,{write=[],authoring=[],signal,consistent=false,check=async()=>{}}={}){
   domains=selection(domains,Array.isArray(write)&&write.length===0);if(typeof operation!=='function'||typeof check!=='function'||!Array.isArray(write)||new Set(write).size!==write.length||write.some(domain=>!domains.includes(domain)))throw new AppError('INVALID');
   if(!Array.isArray(authoring)||new Set(authoring).size!==authoring.length||authoring.some(id=>!moduleDraftOwners.includes(id)||!domains.includes(moduleDraftDomain(id))))throw new AppError('INVALID');
-  signal?.throwIfAborted();const db=await this.connection(),session=databaseSchemaSession(db),stores=new Map();
+  signal?.throwIfAborted();await this.storage.requireStorageKey();
+  return catalogueConnection(this.storage,write.length||authoring.length?'domain-write':'domain-read',{},async db=>{
+  await this.#verifyConnection(db);const session=databaseSchemaSession(db),stores=new Map();
   try{
    await db.run(write.length||authoring.length?(consistent?'BEGIN ISOLATION LEVEL REPEATABLE READ':'BEGIN'):'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
    // Separate from the research writer. Lifecycle handoff takes this gate
@@ -87,6 +91,7 @@ export class ProjectDomains{
    };
    const participant=domain=>{if(!domains.includes(domain))throw new AppError('INVALID');return get(domain);};
    const result=await db.scope(()=>operation(participant,{research,registry,inspect}));signal?.throwIfAborted();await check();await db.run('COMMIT');return result;
-  }finally{session.close();for(const store of stores.values())store.close();await db.close();}
+  }finally{session.close();for(const store of stores.values())store.close();}
+  });
  }
 }

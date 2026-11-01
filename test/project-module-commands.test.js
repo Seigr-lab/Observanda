@@ -11,11 +11,33 @@ import {blankBOM,bomLine} from '../src/web/modules/bom-model.js';
 import {ProjectModuleIdentities} from '../src/project-module-identities.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {moduleIdentityPrefix} from '../src/project-module-identities.js';
+import {projectModuleDomainReader} from '../src/project-module-domain-reader.js';
 const detached=AsyncLocalStorage.snapshot();
 function gate(){let enter,release;return {started:new Promise(resolve=>enter=resolve),hold:new Promise(resolve=>release=resolve),enter:()=>enter(),release:()=>release()};}
 async function setup(t){const f=await fixture(t);f.commands=new ProjectModuleCommands(f.storage,f.book.id);await f.commands.initialize();return f;}
 const descriptor=f=>({format:'observanda-research-catalogue',version:2,workspaceId:f.book.id});
 async function verify(f){return f.storage.catalogue(store=>store.verify(descriptor(f)));}
+
+test('task commands reuse idle connections across fresh phases without borrowing an enclosing snapshot',{timeout:120000},async t=>{
+ const f=await setup(t),open=f.storage.openCatalogue.bind(f.storage),opened=[],closed=[],id=randomUUID();
+ f.storage.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db);opened.push(db);db.close=async()=>{closed.push(db);return close();};return db;};
+ const command=revision=>({workspaceId:f.book.id,commandId:randomUUID(),action:'task.save',payload:{id,expectedRevision:revision||null,data:{title:'Task '+(revision+1),description:'Retained observations',status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]}}});
+ const first=command(0);assert.equal((await f.commands.execute(first)).replayed,false);
+ assert.equal(opened.length,2,'the absent-task read fails and its client is discarded before the initial writer');assert.equal(closed.length,2);
+ assert.equal((await f.commands.execute(first)).replayed,true);assert.equal(opened.length,3);assert.equal(closed.length,3);
+ await f.storage.catalogue(async research=>{
+  const reader=await projectModuleDomainReader(research);assert.ok(reader);
+  await reader.run(async({inspect})=>{
+   const tasks=new ModuleCatalogue(await inspect('tasks'));
+   assert.equal((await tasks.head(f.book.id)).revision,1);
+   assert.equal((await f.commands.execute(command(1))).revisions.tasks,2);
+   assert.equal((await tasks.head(f.book.id)).revision,1,'the enclosing repeatable-read snapshot remains pinned');
+  });
+ });
+ assert.equal(opened.length,5,'one outer connection and one command connection for receipt, prerequisites and writer');assert.equal(closed.length,5);
+ await f.domains.run(['tasks'],async get=>{assert.equal((await new ModuleCatalogue(get('tasks')).head(f.book.id)).revision,2);});
+ assert.equal(opened.length,closed.length);assert.equal(new Set(closed).size,closed.length);
+});
 
 test('domain command coordinator persists separate revisions, links and exact current replay', {timeout:120000},async t=>{
  const f=await setup(t),first=calculation(f),scheduled=calendar(f);

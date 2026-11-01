@@ -7,10 +7,10 @@ import {ProjectModuleCommands} from '../src/project-module-commands.js';
 test('a task retry discovers the exact receipt committed after its first local preflight',{timeout:60000},async t=>{
  const f=await fixture(t),commands=new ProjectModuleCommands(f.storage,f.book.id);await commands.initialize();
  const command={workspaceId:f.book.id,commandId:randomUUID(),action:'task.save',payload:{id:randomUUID(),expectedRevision:null,data:{title:'Concurrent retry',description:'',status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links:[]}}};
- let enter,release,first=true;const entered=new Promise(resolve=>enter=resolve),held=new Promise(resolve=>release=resolve),catalogue=f.storage.catalogue;
- // ProjectDomains reads the command receipt directly. This gate pauses only
- // the first task-facts read, after that receipt lookup returned absent.
- f.storage.catalogue=async function(...args){if(first){first=false;enter();await held;}return catalogue.apply(this,args);};
+ let enter,release,reads=0;const entered=new Promise(resolve=>enter=resolve),held=new Promise(resolve=>release=resolve),catalogue=f.storage.catalogue;
+ // The first fresh snapshot checks the receipt. Pause the following task-facts
+ // read only after that authoritative receipt lookup has returned absent.
+ f.storage.catalogue=async function(...args){if(++reads===2){enter();await held;}return catalogue.apply(this,args);};
  let pending;
  try{
   pending=commands.execute(command,{taskSourceAccess:()=>assert.fail('A source-free retry opened foreign access')});await entered;

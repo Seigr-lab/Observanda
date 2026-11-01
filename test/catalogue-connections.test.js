@@ -10,6 +10,45 @@ import {MOVE_SOURCE} from '../src/workspace-move-state.js';
 import {RENAME_MARKER} from '../src/workspace-rename-state.js';
 
 const gate=()=>Promise.withResolvers();
+test('idle connections move between operation queues only with matching admission options',{timeout:60000},async t=>{
+ const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws),opened=[],closed=[];
+ ws.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db);opened.push(db);db.close=async()=>{closed.push(db);return close();};return db;};
+ const owner=createCatalogueConnections(ws);t.after(()=>owner.close());
+ await owner.run(async()=>{
+  const first=await catalogueConnection(ws,'read',{},db=>db);
+  assert.equal(await catalogueConnection(ws,'write',{},db=>db),first);
+  assert.equal(await catalogueConnection(ws,'domain-read',{},db=>db),first);
+  assert.equal(opened.length,1);
+  const detached=await catalogueConnection(ws,'detached',{detached:true},db=>db);
+  assert.notEqual(detached,first,'different admission options cannot borrow an idle client');
+  assert.equal(await catalogueConnection(ws,'read',{},db=>db),first);
+  await first.client.end();
+  const recovered=await catalogueConnection(ws,'domain-write',{},async db=>{assert.equal((await db.get('SELECT 7 AS value')).value,7);return db;});
+  assert.notEqual(recovered,first);assert.notEqual(recovered,detached);assert.equal(opened.length,3);
+  assert.deepEqual(closed,[first]);
+ });
+ await owner.close();assert.equal(closed.length,3);assert.equal(new Set(closed).size,3);
+});
+
+test('queued readers keep their connection while concurrent writers use a separate fresh transaction',{timeout:60000},async t=>{
+ const {ws}=await intakeFixture(t),owner=createCatalogueConnections(ws),firstEntered=gate(),releaseFirst=gate(),secondEntered=gate(),releaseSecond=gate();
+ t.after(()=>owner.close());
+ const write=value=>ws.withLock(()=>ws.catalogue(store=>store.putObject('queued-owner',{value})));
+ await write(1);let firstDb,secondDb,writerDb;
+ await owner.run(async()=>{
+  const first=ws.catalogue(async store=>{firstDb=store.db;assert.deepEqual(await store.object('queued-owner'),{value:1});firstEntered.resolve();await releaseFirst.promise;assert.deepEqual(await store.object('queued-owner'),{value:1});});
+  await firstEntered.promise;
+  const second=ws.catalogue(async store=>{secondDb=store.db;assert.deepEqual(await store.object('queued-owner'),{value:2});secondEntered.resolve();await releaseSecond.promise;assert.deepEqual(await store.object('queued-owner'),{value:2});});
+  try{
+   await ws.withLock(()=>ws.catalogue(async store=>{writerDb=store.db;await store.putObject('queued-owner',{value:2});}));
+   assert.notEqual(writerDb,firstDb);releaseFirst.resolve();await first;await secondEntered.promise;
+   assert.equal(secondDb,firstDb,'an accepted reader queue retains its own client');
+   await write(3);
+  }finally{releaseFirst.resolve();releaseSecond.resolve();await Promise.allSettled([first,second]);}
+  assert.deepEqual(await ws.catalogue(store=>store.object('queued-owner')),{value:3});
+ });
+});
+
 test('background work cannot borrow a request catalogue connection',{timeout:60000},async t=>{
  const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws);let opened=0,closed=0;
  ws.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db);opened++;db.close=async()=>{try{return await close();}finally{closed++;}};return db;};
@@ -38,7 +77,7 @@ test('scoped catalogue connections retain transaction isolation, rollback and ow
   assert.deepEqual(await Promise.all([read(),read(),read()]),[{value:2},{value:2},{value:2}]);
   assert.equal(opened,4,'one read and one write connection for successful transactions');
   await assert.rejects(ws.withLock(()=>ws.catalogue(async store=>{await store.putObject('connection-test',{value:99});throw Error('abort write');})),/abort write/);
-  assert.deepEqual(await read(),{value:2});await write(3);assert.deepEqual(await read(),{value:3});assert.equal(opened,5);
+  assert.deepEqual(await read(),{value:2});await write(3);assert.deepEqual(await read(),{value:3});assert.equal(opened,4,'the healthy idle reader can replace the failed writer');
   const root=ws.root,key=ws.vault.key;
   try{
    ws.projectId=randomUUID();await assert.rejects(read(),{code:'DATABASE_LOCATION'});delete ws.projectId;
@@ -49,7 +88,7 @@ test('scoped catalogue connections retain transaction isolation, rollback and ow
   }finally{delete ws.projectId;ws.root=root;ws.vault.key=key;}
   assert.deepEqual(await read(),{value:3});
  });
- assert.equal(opened,closed);assert.deepEqual(await read(),{value:3});assert.equal(opened,6);assert.equal(closed,6);
+ assert.equal(opened,closed);assert.deepEqual(await read(),{value:3});assert.equal(opened,5);assert.equal(closed,5);
  await assert.rejects(ws.withCatalogueConnections(async()=>{await read();await write(4);throw Error('abort operation');}),/abort operation/);
  assert.equal(opened,closed);assert.deepEqual(await read(),{value:4},'completed writes survive a later operation failure');
  // An inherited async context used after its operation ends must open afresh.

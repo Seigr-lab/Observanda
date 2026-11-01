@@ -5,6 +5,7 @@ import {AppError} from './errors.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
 import {withWorkloadPriority,validWorkloadPriority} from './workload-priority.js';
+import {databaseConnectionEnded} from './database-query.js';
 const scopes=new AsyncLocalStorage();
 function validate(scope,workspace){
  if(scope.root!==workspace.root||scope.projectId!==(workspace.projectId??null)||scope.labBookId!==(workspace.labBookId??null))throw new AppError('DATABASE_LOCATION');
@@ -55,6 +56,17 @@ async function independent(workspace,options,operation){
  try{return await operation(db);}catch(error){failed=true;throw error;}
  finally{try{await db.close();}catch(error){if(!failed)throw error;}}
 }
+const unusable=db=>db.client===null||db.client&&databaseConnectionEnded(db.client);
+async function idleConnection(scope,entry){
+ for(const donor of scope.entries.values()){
+  if(donor===entry||donor.queued||donor.key!==entry.key||!donor.db)continue;
+  // Detach before any await: another queue can never borrow this same client.
+  const db=donor.db;donor.db=null;
+  if(unusable(db)){await db.close().catch(()=>{});continue;}
+  return db;
+ }
+ return null;
+}
 export async function catalogueConnection(workspace,kind,options,operation){
  const scope=scopes.getStore()?.get(workspace);
  if(!scope||scope.closed&&scope.lateIndependent)return independent(workspace,options,operation);
@@ -63,18 +75,21 @@ export async function catalogueConnection(workspace,kind,options,operation){
  const key=JSON.stringify({detached:options.detached??false,moveId:options.moveId??null});
  let entry=scope.entries.get(kind);
  if(entry&&entry.key!==key)return independent(workspace,options,operation);
- if(!entry){entry={key,tail:Promise.resolve(),db:null};scope.entries.set(kind,entry);}
+ if(!entry){entry={key,tail:Promise.resolve(),db:null,queued:0};scope.entries.set(kind,entry);}
+ entry.queued++;
  const queued=diagnosticMeasurement('database-queue');
  const pending=entry.tail.then(async()=>{
   queued();
   validate(scope,workspace);
+  if(entry.db&&unusable(entry.db)){const db=entry.db;entry.db=null;await db.close().catch(()=>{});}
+  if(!entry.db)entry.db=await idleConnection(scope,entry);
   // Fresh opens perform their own lifecycle admission; reused connections
   // must recheck it before every transaction.
   if(entry.db)await assertWorkspaceAvailable(workspace.root,{moveId:options.moveId});
   else entry.db=await (scope.priority?withWorkloadPriority(scope.priority,()=>workspace.openCatalogue(options)):workspace.openCatalogue(options));
-  try{return await operation(entry.db);}
+  try{validate(scope,workspace);return await operation(entry.db);}
   catch(error){const db=entry.db;entry.db=null;await db.close().catch(()=>{});throw error;}
- });
+ }).finally(()=>{entry.queued--;});
  // Drain already accepted work before closing, even if its caller stops early.
  entry.tail=pending.then(()=>{},()=>{});return pending;
 }

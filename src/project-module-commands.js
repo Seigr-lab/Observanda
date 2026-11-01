@@ -15,10 +15,21 @@ import {AppError} from './errors.js';
 import {withPlanningTaskAdmission} from './planning-task-admission.js';
 import {executeInventoryOperation,assertNoPendingBOM} from './inventory-operation-coordinator.js';
 import {prepareInventoryBOMResources} from './inventory-bom-resources.js';
+import {createCatalogueConnections} from './catalogue-connections.js';
+import {withoutCatalogueContext} from './catalogue-context.js';
+import {withoutCatalogueReadContext} from './storage.js';
+import {projectModuleDomainReader} from './project-module-domain-reader.js';
 export class ProjectModuleCommands{
  constructor(storage,namespaceId){this.storage=storage;this.namespaceId=namespaceId;this.domains=new ProjectDomains(storage,namespaceId);}
  initialize(){return this.domains.initialize(moduleDomains,{commands:true});}
- async execute(command,{signal,check,referenceAccess,taskSourceAccess,inventorySourceAccess}={}){
+ async execute(command,options={}){
+  const connections=createCatalogueConnections(this.storage);
+  // Preflight and writer phases own fresh transactions. A surrounding caller's
+  // pinned snapshot or queue must not become this command's transaction owner.
+  try{return await connections.run(()=>withoutCatalogueContext(()=>withoutCatalogueReadContext(()=>this.#execute(command,options))));}
+  finally{await connections.close();}
+ }
+ async #execute(command,{signal,check,referenceAccess,taskSourceAccess,inventorySourceAccess}={}){
   if(Buffer.byteLength(JSON.stringify(command))>MODULE_BYTES)throw new AppError('LIMIT');
   requireValue(exact(command,['workspaceId','commandId','action','payload'])&&uuid(command.workspaceId)&&uuid(command.commandId)&&typeof command.action==='string'&&object(command.payload),'command');
   if(command.workspaceId!==this.namespaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -27,7 +38,11 @@ export class ProjectModuleCommands{
   let bomResources=null;
   let references=null;const externalReference=referenceAccess?async ref=>{references??=await referenceAccess(this.namespaceId,{signal});return references.validate(ref);}:null;
   try{
-  const retained=()=>this.domains.run([],async(_get,{research,registry,inspect})=>new ProjectModuleIdentities(research,registry,inspect).locate('command',command.commandId),{signal,check});
+  const retained=async()=>{signal?.throwIfAborted();await check?.();return this.storage.catalogue(async research=>{
+   const reader=await projectModuleDomainReader(research);if(!reader)throw new AppError('ACCESS_UPGRADE');
+   if(reader.registry.namespaceId!==this.namespaceId)throw new AppError('WORKSPACE_CHANGED');
+   const receipt=await reader.run(({identities})=>identities.locate('command',command.commandId));signal?.throwIfAborted();await check?.();return receipt;
+  });};
   const perform=async({taskPrerequisites}={})=>{
   const current=async()=>{await check?.();await references?.verify();await bomResources?.verify();await taskPrerequisites?.verify();};
   // Only this command transaction is retried, never arbitrary caller callbacks.
