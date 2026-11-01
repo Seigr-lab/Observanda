@@ -1,8 +1,10 @@
-import {mkdir,mkdtemp,cp,copyFile,lstat,readFile,readdir,readlink,realpath,open,rm} from 'node:fs/promises';
+import {mkdir,mkdtemp,copyFile,lstat,readFile,readdir,readlink,realpath,open,rm} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import os from 'node:os';
 import path from 'node:path';
+import {admitReviewedRuntime,assertRuntimeAdmission,copyAdmittedRuntime} from './runtime-input-trust.js';
+import {withRuntimeProbeEnvironment} from './runtime-probe-environment.js';
 const executeFile=promisify(execFile);
 
 // Official upstream releases, pinned by SHA-256. No global Git configuration
@@ -31,7 +33,8 @@ export const githubRuntimeFiles=(platform=process.platform)=>[
 ];
 // Ubuntu supplies the C/C++ baseline. Other ELF dependencies must remain in
 // their own relocatable runtime tree rather than leaking build-host packages.
-export async function verifyLinuxRuntime(directory,{executables=[],execute=executeFile}={}){
+export async function verifyLinuxRuntime(directory,{executables=[],execute=executeFile,admission}={}){
+ await assertRuntimeAdmission(directory,admission);
  const base=await realpath(directory),inside=file=>file===base||file.startsWith(base+path.sep),binaries=[];
  for(const name of executables){const file=path.join(base,name);if(!inside(await realpath(file))||!(await lstat(await realpath(file))).isFile())throw Error('Incomplete Linux runtime: '+name);}
  async function walk(folder){for(const entry of await readdir(folder,{withFileTypes:true})){
@@ -52,8 +55,9 @@ export async function verifyLinuxRuntime(directory,{executables=[],execute=execu
  for(const name of executables){
   const file=await realpath(path.join(base,name));if(!binaries.includes(file)||process.platform==='linux'&&((await lstat(file)).mode&0o111)===0)throw Error('Missing executable Linux binary: '+name);
  }
- const env={PATH:'/usr/bin:/bin',LC_ALL:'C'},options={env,timeout:30000,maxBuffer:1024*1024,windowsHide:true};
  const systemLibrary=/^(?:ld-linux-x86-64\.so\.2|lib(?:c|m|pthread|dl|rt|resolv|util)\.so\.[0-9]+|libgcc_s\.so\.1|libstdc\+\+\.so\.6)$/;
+ await withRuntimeProbeEnvironment(async probeOptions=>{
+ const options={...probeOptions,maxBuffer:1024*1024};
  for(const file of binaries){
   const {stdout:dynamic}=await execute('/usr/bin/readelf',['-d',file],options);
   for(const match of dynamic.matchAll(/\((?:RPATH|RUNPATH)\)[^\n]*\[([^\]]*)\]/g))for(const search of match[1].split(':')){
@@ -67,14 +71,16 @@ export async function verifyLinuxRuntime(directory,{executables=[],execute=execu
    if(!inside(await realpath(dependency))&&!systemLibrary.test(path.basename(dependency)))throw Error('Unbundled Linux shared library: '+dependency);
   }
  }
+ },{platform:'linux'});
  return base;
 }
 // The application sets GIT_EXEC_PATH to bin/, so HTTPS helpers must be present
 // there. Supply Git built with RUNTIME_PREFIX=YesPlease and its complete runtime
 // tree, templates and license; copying /usr/bin/git alone is not sufficient.
-export async function verifyLinuxGitRuntime(directory,{execute=executeFile}={}){
+export async function verifyLinuxGitRuntime(directory,{execute=executeFile,admission}={}){
+ await assertRuntimeAdmission(directory,admission);
  for(const name of ['share/git-core/templates/description','LICENSE'])if(!(await lstat(await realpath(path.join(directory,name)))).isFile())throw Error('Incomplete Linux Git runtime: '+name);
- const base=await verifyLinuxRuntime(directory,{executables:['bin/git','bin/git-remote-http','bin/git-remote-https'],execute}),inside=file=>file===base||file.startsWith(base+path.sep);
+ const base=await verifyLinuxRuntime(directory,{executables:['bin/git','bin/git-remote-http','bin/git-remote-https'],execute,admission}),inside=file=>file===base||file.startsWith(base+path.sep);
  const options={timeout:30000,maxBuffer:1024*1024,windowsHide:true},scratch=await mkdtemp(path.join(os.tmpdir(),'observanda-git-runtime-'));
  try{
   const git=path.join(base,'bin/git'),isolated={...options,cwd:scratch,env:{PATH:path.join(base,'bin'),HOME:scratch,XDG_CONFIG_HOME:scratch,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_SYSTEM:'/dev/null',GIT_TERMINAL_PROMPT:'0'}};
@@ -86,9 +92,11 @@ export async function verifyLinuxGitRuntime(directory,{execute=executeFile}={}){
   const {stdout:status}=await execute(git,['-C',repository,'status','--porcelain'],isolated);if(status.trim())throw Error('Linux Git runtime verification did not create an empty repository.');
  }finally{await rm(scratch,{recursive:true,force:true});}
 }
-export async function prepareGithubRuntime({out,download,run,gitRuntime,platform=process.platform,arch=process.arch,verifyGit=verifyLinuxGitRuntime}){
+export async function prepareGithubRuntime({out,download,run,gitRuntime,platform=process.platform,arch=process.arch,verifyGit=verifyLinuxGitRuntime,admitInput=admitReviewedRuntime}){
  const release=githubRuntimeReleases[platform+'-'+arch];if(!release)throw Error('Unsupported GitHub sign-in platform.');
  if(platform==='linux'&&!gitRuntime)throw Error('Supply --git-runtime with a complete relocatable Ubuntu 24.04 x64 Git runtime.');
+ if(platform!=='win32'&&!gitRuntime)throw Error('Supply --git-runtime with a reviewed complete Git runtime.');
+ const inputAdmission=platform==='win32'?null:await admitInput(path.resolve(gitRuntime),'git',{platform,arch});
  const base=path.join(out,'github'),helper=path.join(base,'credential-manager');await mkdir(helper,{recursive:true});
  const archive=await download(release.file,'https://github.com/git-ecosystem/git-credential-manager/releases/download/v'+githubRuntimeReleases.gcmVersion+'/'+release.file,release.sha256);
  await run(platform==='win32'?'tar.exe':'/usr/bin/tar',['-xf',archive,'-C',helper]);
@@ -100,8 +108,8 @@ export async function prepareGithubRuntime({out,download,run,gitRuntime,platform
   await run('tar.exe',['-xf',zip,'-C',git]);
  }else{
   if(!gitRuntime)throw Error('Supply --git-runtime with a redistributable macOS Git runtime containing bin/git and LICENSE. Browser sign-in cannot depend on developer tools on the user’s computer.');
-  await cp(path.resolve(gitRuntime),git,{recursive:true,...(platform==='linux'?{verbatimSymlinks:true}:{})});
-  if(platform==='linux')await verifyGit(git);
+  const admission=await copyAdmittedRuntime(path.resolve(gitRuntime),git,inputAdmission);
+  if(platform==='linux')await verifyGit(git,{admission});
  }
  const root=platform==='linux'?await realpath(out):null;
  for(const file of githubRuntimeFiles(platform)){

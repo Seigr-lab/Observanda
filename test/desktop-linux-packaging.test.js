@@ -4,13 +4,19 @@ import {mkdtemp,mkdir,writeFile,readFile,rm,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {assertDesktopBuildTarget,desktopNodeHashes,linuxPostgresBuildLayout} from '../scripts/desktop-payload.js';
-import {prepareGithubRuntime,verifyLinuxGitRuntime,verifyLinuxRuntime,githubRuntimeReleases,githubRuntimeFiles} from '../scripts/github-runtime.js';
+import {prepareGithubRuntime as prepareNativeGithubRuntime,verifyLinuxGitRuntime as verifyNativeLinuxGitRuntime,verifyLinuxRuntime as verifyNativeLinuxRuntime,githubRuntimeReleases,githubRuntimeFiles} from '../scripts/github-runtime.js';
+import {sealPreparedRuntime} from '../scripts/runtime-input-trust.js';
 import {pdfValidationRuntimeFiles} from '../scripts/pdf-validation-runtime.js';
 import {pdfJavaArtifacts} from '../src/pdf-validation-dependencies.js';
 import configuration from '../electron-builder.config.js';
 import FpmTargetModule from 'app-builder-lib/out/targets/FpmTarget.js';
 
 const write=async(root,name,value)=>{const file=path.join(root,name);await mkdir(path.dirname(file),{recursive:true});await writeFile(file,value,{mode:0o755});return file;};
+// These synthetic ELF fixtures never execute. Production callers must obtain
+// admission from a pinned archive or the reviewed input catalogue instead.
+const prepareGithubRuntime=options=>prepareNativeGithubRuntime({...options,admitInput:sealPreparedRuntime});
+const verifyLinuxGitRuntime=async(directory,options)=>verifyNativeLinuxGitRuntime(directory,{...options,admission:await sealPreparedRuntime(directory)});
+const verifyLinuxRuntime=async(directory,options)=>verifyNativeLinuxRuntime(directory,{...options,admission:await sealPreparedRuntime(directory)});
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-linux-packaging-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const git=path.join(directory,'git'),elf=Buffer.alloc(64);elf.set([127,69,76,70,2,1]);elf.writeUInt16LE(62,18);
@@ -107,7 +113,7 @@ test('Linux Git admission refuses old build paths, missing libraries and externa
 test('Git runtime links cannot escape the supplied tree before any executable is inspected',async t=>{
  const f=await fixture(t),external=path.join(f.directory,'external');await mkdir(external);
  await symlink(external,path.join(f.git,'outside'),process.platform==='win32'?'junction':'dir');
- await assert.rejects(verifyLinuxGitRuntime(f.git,{execute:()=>assert.fail('escaping tree must not execute')}),/Unbundled Linux runtime link/);
+ await assert.rejects(verifyLinuxGitRuntime(f.git,{execute:()=>assert.fail('escaping tree must not execute')}),/Unsafe native runtime link/);
 });
 
 test('Linux runtime verification admits relocated PostgreSQL libraries and the OS C baseline',async t=>{

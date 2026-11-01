@@ -7,6 +7,8 @@ import {createHash} from 'node:crypto';
 import {inspectDotnetRuntime} from './dotnet-inventory.js';
 import {githubRuntimeReleases} from './github-runtime.js';
 import {pdfJavaArtifacts} from '../src/pdf-validation-dependencies.js';
+import {assertRuntimeAdmission,admittedFileDigest} from './runtime-input-trust.js';
+import {withRuntimeProbeEnvironment} from './runtime-probe-environment.js';
 
 const executeFile=promisify(execFile);
 const version=value=>typeof value==='string'&&/^[0-9][0-9A-Za-z.+_-]{0,99}$/.test(value);
@@ -32,16 +34,21 @@ export function dependencyInventory(lock,{productionOnly=false}={}){
  return {bomFormat:'CycloneDX',specVersion:'1.6',version:1,components:components.sort((a,b)=>a['bom-ref'].localeCompare(b['bom-ref'],'en'))};
 }
 
-export async function collectRuntimeInventory(root,{platform=process.platform,arch=process.arch,execute=executeFile,nodeVersion,credentialVersion=githubRuntimeReleases.gcmVersion,read=readFile,digest=fileHash,inspectDotnet=inspectDotnetRuntime}={}){
+export async function collectRuntimeInventory(root,{platform=process.platform,arch=process.arch,execute=executeFile,nodeVersion,credentialVersion=githubRuntimeReleases.gcmVersion,read=readFile,digest=fileHash,inspectDotnet=inspectDotnetRuntime,admission}={}){
+ await assertRuntimeAdmission(root,admission);
+ root=path.resolve(root);
+ return withRuntimeProbeEnvironment(async probeOptions=>{
  const suffix=platform==='win32'?'.exe':'',components=[],hostRequirements=[];
  const binary=async(name,relative,args,parse)=>{
   const file=path.join(root,relative);
+  const sha256=admittedFileDigest(admission,relative);
+  if(await digest(file)!==sha256)throw Error('Runtime changed before version probe: '+name);
   let result;
-  try{result=await execute(file,args,{cwd:root,windowsHide:true,timeout:30000,maxBuffer:65536,env:{...process.env,NODE_OPTIONS:'',ELECTRON_RUN_AS_NODE:'',JAVA_TOOL_OPTIONS:'',_JAVA_OPTIONS:'',JDK_JAVA_OPTIONS:'',GIT_CONFIG_NOSYSTEM:'1'}});}
+  try{result=await execute(file,args,probeOptions);}
   catch{throw Error('Runtime version probe failed: '+name);}
   let detected;try{detected=parse(String(result.stdout??'')+'\n'+String(result.stderr??''));}catch{}
   if(!version(detected))throw Error('Runtime version is not identifiable: '+name);
-  const component={name,version:detected,path:relative,sha256:await digest(file)};components.push(component);return component;
+  const component={name,version:detected,path:relative,sha256};components.push(component);return component;
  };
  let nodeVersions;
  const node=await binary('Node.js',platform==='win32'?'runtime/node.exe':'runtime/bin/node',['-p','JSON.stringify(process.versions)'],output=>{nodeVersions=JSON.parse(output);return nodeVersions.node;});
@@ -68,4 +75,5 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ar
  if(jarHash!==validator.validatorSha256)throw Error('PDF validator digest differs from its pinned release.');
  components.push({name:'veraPDF',version:validator.validatorVersion,path:jar,sha256:jarHash});
  return {format:2,platform,components,hostRequirements};
+ },{platform});
 }
