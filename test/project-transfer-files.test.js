@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';import os from 'node:os';
-import {mkdtemp,mkdir,rm,stat,unlink,readdir,writeFile,rename,symlink} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,stat,unlink,readdir,readFile,writeFile,rename,symlink,cp} from 'node:fs/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {reconcileProjectFiles,PROJECT_TRANSFER_FILES} from '../src/project-transfer-files.js';
@@ -42,4 +42,21 @@ test('removing an obsolete staged file refuses a replaced parent directory',asyn
 test('earlier interrupted transfers retire only their own reserved stream files',async t=>{
  const f=await fixture(t);delete f.receipt.filesVersion;const parent=path.join(f.target.root,'.observanda');const owned=path.join(parent,'.stream-project-'+f.receipt.id),unrelated=path.join(parent,'keep.bin');await writeFile(owned,'Incomplete old stream');await writeFile(unrelated,'Keep this unrelated file');
  await f.run();await assert.rejects(stat(owned),{code:'ENOENT'});assert.equal((await stat(unrelated)).size,24);
+});
+
+for(const remove of [false,true])test('a parent replaced during '+(remove?'deletion':'publication')+' cannot redirect a nested owner transfer',async t=>{
+ const f=await fixture(t),relative='.observanda/evidence',inside=path.join(f.target.root,relative),outside=path.join(path.dirname(f.target.root),'outside'),retained=path.join(path.dirname(f.target.root),'retained');
+ await mkdir(path.join(f.source.root,relative));await f.source.writeFile(path.join(f.source.root,relative,'sample.bin'),'Reviewed source');
+ if(remove){await f.run();await unlink(path.join(f.source.root,relative,'sample.bin'));}
+ await mkdir(outside);await writeFile(path.join(outside,'sample.bin'),'Unrelated outside bytes');let exchanged=false;
+ await assert.rejects(f.run({checkpoint:async stage=>{if(stage==='file-receipt'&&!exchanged){exchanged=true;await rename(inside,retained);await symlink(outside,inside,process.platform==='win32'?'junction':'dir');}}}),error=>['UNSAFE','STORAGE_COPY'].includes(error.code));
+ assert.equal(exchanged,true);assert.equal(await readFile(path.join(outside,'sample.bin'),'utf8'),'Unrelated outside bytes');assert.deepEqual(await readdir(outside),['sample.bin']);
+});
+
+test('interrupted file reconciliation rejects an identical replacement owner root',async t=>{
+ const f=await fixture(t),original=path.join(path.dirname(f.target.root),'original');await f.source.writeFile(path.join(f.source.root,'.observanda/sample.bin'),'Retained source');
+ await assert.rejects(f.run({checkpoint:stage=>{if(stage==='file-receipt')throw Error('Interrupted receipt');}}),/Interrupted receipt/);assert.match(f.receipt.destinationIdentity,/^\d+:\d+$/);
+ await rename(f.target.root,original);await cp(original,f.target.root,{recursive:true});await writeFile(path.join(f.target.root,'unrelated'),'Keep');
+ await assert.rejects(f.run(),{code:'STORAGE_COPY'});assert.equal(await readFile(path.join(f.target.root,'unrelated'),'utf8'),'Keep');
+ await rename(f.target.root,path.join(path.dirname(f.target.root),'replacement'));await rename(original,f.target.root);await f.run();assert.equal(await f.target.readFile(path.join(f.target.root,'.observanda/sample.bin'),'utf8'),'Retained source');
 });

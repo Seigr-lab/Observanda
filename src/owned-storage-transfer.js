@@ -7,11 +7,11 @@ import {verifyCatalogueArchive} from './research-catalogue.js';
 // The destination remains unavailable until its files and database are verified.
 import path from 'node:path';
 import {projectCopyBoundaries,retainedCopyRoots} from './project-copy-boundaries.js';
-import {readdir,realpath} from 'node:fs/promises';
-import {createPersistentDirectory as mkdir,unlinkPersistent as unlink} from './filesystem-persistence.js';
-import {resolveLocation,probeLocation} from './locations.js';
+import {realpath} from 'node:fs/promises';
+import {resolveLocation} from './locations.js';
+import {withNativeDestination} from './native-destination.js';
 import {workspaceFiles,hashWorkspaceFile} from './workspace-inventory.js';
-import {workspaceFile,assertRegular,privateDirectory,atomicWrite,serialize} from './storage.js';
+import {workspaceFile,assertRegular,atomicWrite,serialize} from './storage.js';
 import {catalogueBinding,CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION} from './postgres-activation.js';
 import {transferCatalogue,openCatalogue,catalogueArchiveDigest,backupCatalogue,prepareTransferredCatalogue} from './postgres.js';
 import {readAccess} from './access.js';
@@ -25,11 +25,13 @@ const intentName='.observanda/'+placement+'-transfer.observanda',leaseName='.obs
 const receiptDirectory='.observanda/'+placement+'-transfer-files';
 const controls=new Set([intentName,leaseName,CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION,archiveFile]);
 const within=(parent,child)=>{const relative=path.relative(parent,child);return relative===''||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative);};
+const identity=value=>typeof value==='string'&&/^\d+:\d+$/.test(value);
+function admittedReceipt(receipt,admitted){if(!identity(receipt.destinationIdentity)||!identity(receipt.internalIdentity)||receipt.destinationIdentity!==admitted.identity||receipt.internalIdentity!==admitted.internalIdentity)throw new AppError('STORAGE_COPY');}
 async function intent(storage){
  const file=path.join(storage.root,intentName),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>16*1024*1024)throw new AppError('STORAGE_COPY');
- let value;try{value=JSON.parse(await storage.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_COPY');}
+ let value;try{value=JSON.parse(await storage.readFile(file,'utf8',16*1024*1024));}catch{throw new AppError('STORAGE_COPY');}
  if(![1,2].includes(value?.version)||!researchId(value.id)||value[ownerId]!==storage[ownerId]||value.vaultId!==storage.vault.id||!researchId(value.sourceId)||!researchId(value.namespaceId)||!['files','database','verified'].includes(value.phase)||!path.isAbsolute(value.source??'')||value.source!==path.resolve(value.source)||value.destination!==storage.root||!/^[a-f0-9]{64}$/.test(value.head??'')||value.portable!==undefined&&value.portable!==true||value.relocation!==undefined&&typeof value.relocation!=='boolean'||value.filesVersion!==undefined&&value.filesVersion!==1||[value.archiveDigest,value.nextDigest].some(hash=>hash!==undefined&&!/^[a-f0-9]{64}$/.test(hash)))throw new AppError('STORAGE_COPY');
- if(value.boundaryRevision!==undefined&&!/^[a-f0-9]{64}$/.test(value.boundaryRevision))throw new AppError('STORAGE_COPY');retainedCopyRoots(value);return value;
+ if(value.boundaryRevision!==undefined&&!/^[a-f0-9]{64}$/.test(value.boundaryRevision)||[value.destinationIdentity,value.internalIdentity].some(value=>value!==undefined&&!identity(value)))throw new AppError('STORAGE_COPY');retainedCopyRoots(value);return value;
 }
 
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
@@ -44,15 +46,15 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
  let boundaries=projectCopyBoundaries(sourceRoot,projectRoots);
  const access=await readAccess(sourceRoot);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,source.vault);
  const target=new Storage(destination,source[ownerId],source.vault),marker=path.join(destination,markerName);
- return withOperationProgress(onProgress,()=>operationSequence('copy-'+placement,['copy-files',placement+'-database-import'],async()=>{
-  const exists=await assertRegular(destination,{missing:true,directory:true});
-  if(!exists){await probeLocation(destination);await mkdir(destination,{mode:0o700});}
-  if(!(await assertRegular(path.join(destination,'.observanda'),{missing:true,directory:true}))){
-   if((await readdir(destination)).length)throw new AppError('EXISTS');await mkdir(path.join(destination,'.observanda'),{mode:0o700});
-  }
+ const prior=await intent(target);
+ return withNativeDestination(destination,async admitted=>{
+  if(prior){if(!identity(prior.destinationIdentity)||!identity(prior.internalIdentity))throw new AppError('STORAGE_COPY');await admitted.admit({identity:prior.destinationIdentity,internalIdentity:prior.internalIdentity});}
+  else await admitted.admit({prepare:!await assertRegular(path.join(destination,'.observanda'),{missing:true,directory:true})});
+  return withOperationProgress(onProgress,()=>operationSequence('copy-'+placement,['copy-files',placement+'-database-import'],async()=>{
   return withWriterLease(path.join(destination,leaseName),async()=>{
    let receipt=await intent(target);
    if(receipt){
+    admittedReceipt(receipt,admitted);
     if(receipt.boundaryRevision===undefined&&boundaryRevision!==undefined&&typeof legacyProjectRoots==='function'){boundaries=projectCopyBoundaries(sourceRoot,await legacyProjectRoots());boundaryRevision=undefined;}
     if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
@@ -61,11 +63,12 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
      if(portable){const identity=await readArchive(destination,source.vault);if(binding||identity[ownerId]!==source[ownerId]||identity.namespaceId!==receipt.namespaceId||identity.archiveDigest!==receipt.archiveDigest)throw new AppError('STORAGE_COPY');}
      else{if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');if(!relocation)await assertInventoryObligationsSettled(target);if(retainIncomplete){const metadata=await target.catalogue(async store=>(await store.snapshot()).metadata);if(metadata.id!==receipt.namespaceId)throw new AppError('DATABASE_LOCATION');}else await target.outline();}
      if(onVerified)await onVerified(target,receipt);
-     if(!retainIncomplete)await unlink(marker).catch(error=>{if(error.code!=='ENOENT')throw error;});
+     await admitted.assertNamed();if(!retainIncomplete)await admitted.remove(marker,{missing:true});
      return target;
     }
    }else{
-    if((await readdir(destination)).some(name=>name!=='.observanda')||(await readdir(path.join(destination,'.observanda'))).some(name=>name!==path.basename(leaseName)))throw new AppError('EXISTS');
+    for await(const entry of admitted.directory.entries())if(entry.name!=='.observanda')throw new AppError('EXISTS');
+    for await(const entry of admitted.internalDirectory.entries())if(entry.name!==path.basename(leaseName))throw new AppError('EXISTS');
    }
    const handoff=sourceHandoff??(operation=>source.withStorageHandoff(operation,{existing:true}));
    return handoff(async()=>{
@@ -75,7 +78,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
     if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');
     if(receipt&&(receipt.sourceId!==binding.id||receipt.namespaceId!==outline.metadata.id))throw new AppError('CONFLICT');
     if(!receipt){
-     receipt={version:2,filesVersion:1,relocation,boundaries,...(boundaryRevision?{boundaryRevision}:{}),...(portable?{portable:true}:{}),id,source:sourceRoot,destination,sourceId:binding.id,[ownerId]:source[ownerId],vaultId:source.vault.id,namespaceId:outline.metadata.id,head:outline.etag,phase:'files'};
+     receipt={version:2,filesVersion:1,destinationIdentity:admitted.identity,internalIdentity:admitted.internalIdentity,relocation,boundaries,...(boundaryRevision?{boundaryRevision}:{}),...(portable?{portable:true}:{}),id,source:sourceRoot,destination,sourceId:binding.id,[ownerId]:source[ownerId],vaultId:source.vault.id,namespaceId:outline.metadata.id,head:outline.etag,phase:'files'};
      await save(target,receipt);await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));
     }
     const original=await source.openCatalogue({detached:true});let copied;
@@ -92,7 +95,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
       receipt.head=outline.etag;receipt.phase='files';await save(target,receipt);await atomicWrite(marker,'copying '+placement+'\n');
       operationTransfer({phase:'copying',files:0,bytes:0});
       await operationStage('copy-files',{unit:'files'},()=>reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory,projectRoots:retainedCopyRoots(receipt),excludeProject,checkpoint}));
-      receipt.phase='database';await save(target,receipt);await checkpoint('files');operationTransfer({phase:'verifying'});
+      await admitted.assertNamed();receipt.phase='database';await save(target,receipt);await checkpoint('files');operationTransfer({phase:'verifying'});
       const descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
       const validate=db=>operationStage('verify-'+placement+'-database',{},()=>target.catalogueStore(db).verify(descriptor));
       let digest;
@@ -128,10 +131,11 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
      if(beforeVerified)await beforeVerified(target,receipt,()=>save(target,receipt));
      receipt.archiveDigest=digest;delete receipt.nextDigest;receipt.phase='verified';await save(target,receipt);await checkpoint('verified');if(onVerified)await onVerified(target,receipt);
     }finally{await copied?.close();await original.close();}
-    if(!retainIncomplete)await unlink(marker);if(afterVerified)await afterVerified(target,receipt);return target;
+    await admitted.assertNamed();if(!retainIncomplete)await admitted.remove(marker);if(afterVerified)await afterVerified(target,receipt);return target;
    });
   });
  }));
+ });
 }
 
 // Only recovery rechecks a published transfer against a source which may have
@@ -139,15 +143,19 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
 // it is transferred, without reading the database a second time.
 async function verify(source,target,receipt){
  if(receipt.source!==source.root||receipt.destination!==target.root||receipt[ownerId]!==source[ownerId]||receipt.vaultId!==source.vault.id||!receipt.archiveDigest)throw new AppError('STORAGE_COPY');
+ return withNativeDestination(target.root,async admitted=>{
+ if(!identity(receipt.destinationIdentity)||!identity(receipt.internalIdentity))throw new AppError('STORAGE_COPY');await admitted.admit({identity:receipt.destinationIdentity,internalIdentity:receipt.internalIdentity});admittedReceipt(receipt,admitted);
  for(const storage of [source,target]){
   const db=await storage.openCatalogue({detached:true});
   try{if(await catalogueArchiveDigest(db)!==receipt.archiveDigest)throw new AppError('CONFLICT');}finally{await db.close();}
  }
  for await(const file of workspaceFiles(source.root,{includeDatabase:false,projectRoots:retainedCopyRoots(receipt)})){
   if(controls.has(file.path))continue;
-  const output=path.join(target.root,file.path);await privateDirectory(target.root,path.posix.dirname(file.path));
-  if((await assertRegular(output)).size!==file.bytes||await hashWorkspaceFile(output)!==file.sha256)throw new AppError('CONFLICT');
+  const saved=await admitted.member(path.join(target.root,file.path),(directory,name)=>directory.hash(name));
+  if(saved.bytes!==file.bytes||saved.sha256!==file.sha256)throw new AppError('CONFLICT');
  }
+ await admitted.assertNamed();
+ });
 }
 
 return {copy,receipt:intent,verify};
