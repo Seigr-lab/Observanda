@@ -6,6 +6,7 @@ import {createPersistentDirectory as mkdir,unlinkPersistent as unlink,persistDir
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {writePublicFile} from './file-content.js';
+import {stageNativeFiles,checkNativeOriginals,applyNativeFiles,cleanNativeFiles} from './local-export-native-files.js';
 
 export const sameFile=(a,b)=>a===null||b===null?a===b:a.bytes===b.bytes&&a.sha256===b.sha256;
 export function outputName(name){
@@ -61,6 +62,7 @@ async function removeMatching(file,expected,{links=false}={}){
 }
 // All new bytes are flushed and checked before any existing output is moved.
 export async function stageFiles(plan,candidate,checkpoint,changes=()=>plan.changes){
+ if(process.platform==='win32')return stageNativeFiles(plan,candidate,checkpoint,changes);
  for await(const change of changes()){
   if(!change.after||change.kind==='unchanged')continue;
   const file=await memberPath(plan.directory,change.path,{create:true}),stage=temporary(file,plan.id,'new');
@@ -70,12 +72,14 @@ export async function stageFiles(plan,candidate,checkpoint,changes=()=>plan.chan
  }
 }
 export async function checkOriginals(plan,changes=()=>plan.changes){
+ if(process.platform==='win32')return checkNativeOriginals(plan,changes);
  for await(const change of changes())if(!sameFile(await fingerprint(await memberPath(plan.directory,change.path)),change.before))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
 }
 // Recoverable per-file switch. A new file is installed with no-clobber link,
 // not rename-over-destination. Originals remain alongside it until the entire
 // edition is verified and its encrypted ownership receipt is committed.
 export async function applyFiles(plan,checkpoint,applied,changes=()=>plan.changes){
+ if(process.platform==='win32')return applyNativeFiles(plan,checkpoint,applied,changes);
  let ordinal=0;
  for await(const change of changes()){
   const index=ordinal++;
@@ -112,6 +116,7 @@ export async function applyFiles(plan,checkpoint,applied,changes=()=>plan.change
  for await(const change of changes()){const file=await memberPath(plan.directory,change.path);if(!sameFile(file?await installedFingerprint(file,temporary(file,plan.id,'new')):null,change.after))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);}
 }
 export async function cleanFiles(plan,changes=()=>plan.changes){
+ if(process.platform==='win32')return cleanNativeFiles(plan,changes);
  for await(const change of changes()){
   const file=await memberPath(plan.directory,change.path);if(!file)continue;
   await removeMatching(temporary(file,plan.id,'new'),change.after,{links:true});

@@ -1,6 +1,8 @@
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
+import {withMutationFilesSession} from './windows-mutation-files.js';
+import {discardNativeFiles} from './local-export-native-files.js';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -134,7 +136,7 @@ export class LocalExport {
  async apply({id,reviewed}){
   if(reviewed!==true)throw new AppError('LOCAL_EXPORT_REVIEW');
   let plan=await this.get(id);const directory=await this.directory(plan.directory);
-  return this.locked(directory,async()=>{
+  return withMutationFilesSession(()=>this.locked(directory,async()=>{
    plan=await this.get(id);const owner=await this.read(ownerFile(directory));
    this.validateOwner(owner,directory);const changes=()=>this.changes(plan);await this.verifyPlan(plan);
    if(plan.state==='completed'){
@@ -160,20 +162,21 @@ export class LocalExport {
    const receipt={version:2,directory,releaseId:plan.releaseId,files:await files.finish(),pending:id};
    await this.save(plan,receipt);await this.checkpoint('committed');
    await cleanFiles(plan,changes);plan.cleaned=true;await this.save(plan,{...receipt,pending:null});return this.summary(plan);
-  });
+  }));
  }
  async discard({id}){
   let plan=await this.get(id);const directory=await this.directory(plan.directory);
-  return this.locked(directory,async()=>{
+  return withMutationFilesSession(()=>this.locked(directory,async()=>{
    plan=await this.get(id);const owner=await this.read(ownerFile(directory));
    this.validateOwner(owner,directory);await this.verifyPlan(plan);
    if(!['planned','staging','discarded'].includes(plan.state))throw new AppError('LOCAL_EXPORT_RECOVER');
-   for await(const change of this.changes(plan)){
+   if(process.platform==='win32')await discardNativeFiles(plan,()=>this.changes(plan));
+   else for await(const change of this.changes(plan)){
     const file=await memberPath(directory,change.path);if(!file)continue;
     if(await regular(temporary(file,id,'old'),{missing:true}))throw new AppError('LOCAL_EXPORT_RECOVER');
     const stage=temporary(file,id,'new');if(await regular(stage,{missing:true}))await unlink(stage);
    }
    plan.state='discarded';plan.cleaned=true;await this.save(plan,owner?.pending===id?{...owner,pending:null}:null);return this.summary(plan);
-  });
+  }));
  }
 }
