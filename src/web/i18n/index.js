@@ -198,9 +198,21 @@ export function registerCatalogue(namespace,messages){
  const translated=translator(messageLanguage(namespace),cache.get(current)[namespace]??messages,messages);
  english[namespace]=messages;translations[namespace]=translated;
 }
+// Keep resource bursts small and wait for started requests to settle on error.
+// A retry must not overlap the unfinished work of a failed language choice.
+async function loadResources(names,load){
+ const values=new Array(names.length);let cursor=0,failed=false,error;
+ await Promise.all(Array.from({length:Math.min(6,names.length)},async()=>{
+  while(!failed&&cursor<names.length){
+   const index=cursor++;
+   try{values[index]=await load(names[index]);}catch(reason){if(!failed){failed=true;error=reason;}}
+  }
+ }));
+ if(failed)throw error;return values;
+}
 export async function prepareNamespaces(names){
  if(!Array.isArray(names)||names.some(name=>!MESSAGE_NAMESPACES.includes(name)))throw new TypeError('Unknown message namespace');
- await Promise.all([...new Set(names)].map(name=>Object.hasOwn(english,name)?undefined:deferredCatalogues[name]()));
+ await loadResources([...new Set(names)],name=>Object.hasOwn(english,name)?undefined:deferredCatalogues[name]());
 }
 // Static labels belong to a language, not to every incoming progress sample.
 export function localizedText(namespace){
@@ -219,11 +231,11 @@ export async function prepareLanguage(locale,{fetcher=fetch}={}){
  const load=(async()=>{
   const names=MESSAGE_NAMESPACES.filter(namespace=>catalogueLanguages(namespace).includes(locale));
   await prepareNamespaces(names);
-  const pairs=await Promise.all(names.map(async namespace=>{
+  const pairs=await loadResources(names,async namespace=>{
    const response=await fetcher(new URL('../locales/'+locale+'/'+namespace+'.json',import.meta.url));
    if(!response.ok)throw new Error('Language resource unavailable');
    return [namespace,validateCatalogue(await response.json(),english[namespace])];
-  }));
+  });
   cache.set(locale,Object.fromEntries(pairs));
  })();
  pendingLanguages.set(locale,load);

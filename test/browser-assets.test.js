@@ -10,6 +10,9 @@ import {deferredCatalogues} from '../src/web/i18n/deferred.js';
 
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-assets-'));t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-browser-assets-'));await rm(root,{recursive:true,force:true});});return root;}
 const directoryURL=directory=>pathToFileURL(directory+path.sep);
+// The catalogue registry includes shell controls as well as deferred editors.
+// Keep shell membership explicit so a new eager catalogue still fails this check.
+const shellCatalogues=new Set(['figureDisplay','figureDiagnostics','compositionControls','dashboardEditors','websiteAuthoring','applicationTexts','workspaceSecurity','supportEditors','materialEditors','projectEditors','editorControls','moduleEditors','recordEditors','workspaceViews','githubTransfer','labBookData','repositorySetup']);
 
 test('browser assets load on demand, coalesce reads and bound retained bytes',async t=>{
  const root=await fixture(t),source=path.join(root,'web');await mkdir(source);
@@ -21,6 +24,22 @@ test('browser assets load on demand, coalesce reads and bound retained bytes',as
  assert.equal(limited.statistics().cacheBytes,12);assert.equal(limited.statistics().cached,2);
 });
 
+test('cold module and catalogue bursts queue bounded reads and recover after an invalid asset',async t=>{
+ const root=await fixture(t),assets=new BrowserAssets({cacheBytes:48,cacheEntries:8});
+ for(let i=0;i<48;i++){
+  const file=path.join(root,i+'.js');await writeFile(file,'123456');
+  assets.file(String(i),pathToFileURL(file),i===17?{size:99}:{});
+ }
+ const requests=Array.from({length:48},(_,i)=>assets.read(String(i))),duplicates=Array.from({length:12},()=>assets.read('47'));
+ assert.equal(assets.statistics().active,16);assert.equal(assets.statistics().queued,32);assert.equal(assets.statistics().pending,48);
+ const outcomes=await Promise.allSettled([...requests,...duplicates]);
+ assert.deepEqual(outcomes.filter(row=>row.status==='rejected').map(row=>row.reason.code),['BROWSER_ASSETS_INVALID']);
+ assert.equal(assets.statistics().reads,47,'Queued duplicates share the same disk read');
+ assert.equal(assets.statistics().pending,0);assert.equal(assets.statistics().active,0);assert.equal(assets.statistics().queued,0);assert.ok(assets.statistics().cacheBytes<=48);assert.ok(assets.statistics().cached<=8);
+ assets.file('17',pathToFileURL(path.join(root,'17.js')));
+ assert.equal((await assets.read('17')).toString(),'123456');
+});
+
 test('production browser chunks are content addressed and reject corrupt or unsafe package manifests',async t=>{
  const root=await fixture(t),out=path.join(root,'output'),result=await buildBrowser({out});
  const options={builtDirectory:directoryURL(out)},assets=await createBrowserAssets(options),index=(await assets.response('index.html')).bytes.toString();
@@ -30,7 +49,7 @@ test('production browser chunks are content addressed and reject corrupt or unsa
  assert.ok(result.initialJavaScriptBytes<=2*1024*1024,'The compiled startup graph must remain within its 2 MiB uncompressed JavaScript budget');
  assert.ok(result.initialJavaScriptFiles<result.sourceStaticFiles,'Bundling must reduce the actual source-module request graph');assert.ok(result.javascriptFiles>result.initialJavaScriptFiles,'Feature entry chunks must stay deferred');
  for(const feature of ['research-materials-ui.js','website-ui.js','publishing-ui.js','laboratory-ui.js','reviews-ui.js','publication-jobs-ui.js','publication-selection-ui.js','record-values-ui.js','record-writing-ui.js','record-draft-edit-ui.js','retained-figure-editor.js','figure-editor.js'])assert.ok(!result.initialSources.includes('src/web/'+feature),feature+' must remain outside the startup graph');
- for(const namespace of Object.keys(deferredCatalogues))assert.ok(!result.initialSources.includes('src/web/locales/en/'+namespace+'.json'),namespace+' must load with its feature, not the shell');
+ for(const namespace of Object.keys(deferredCatalogues))assert.equal(result.initialSources.includes('src/web/locales/en/'+namespace+'.json'),shellCatalogues.has(namespace),namespace+' must retain its shell or deferred owner boundary');
  assert.ok(!result.initialSources.includes('src/web/vendor/equations.js'),'Equation rendering must load with displayed equations, not the shell');
  const styles=result.manifest.files.find(file=>file.path.endsWith('.css'));assert.ok(!(await assets.read(styles.path)).toString().includes('@import'),'The packaged stylesheet must not preserve a source CSS waterfall');
  assert.equal((index.match(/data-document-styles/g)??[]).length,1);assert.ok(index.includes('href="/'+styles.path+'" data-document-styles'));assert.ok((await assets.read(styles.path)).toString().includes('.ProseMirror'),'Compiled assets retain document editor styling');

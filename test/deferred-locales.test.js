@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {setImmediate} from 'node:timers/promises';
 import {t,language,prepareLanguage,activateLanguage,prepareNamespaces,registerCatalogue,catalogueLanguages,MESSAGE_NAMESPACES} from '../src/web/i18n/index.js';
 import {guideWithMessages,guideMessageNamespaces} from '../src/web/help/model.js';
 
@@ -36,4 +37,25 @@ test('feature messages retain translated catalogues across language changes and 
  activateLanguage('es');assert.equal(t('pdfEditor',key),(await resource('es/pdfEditor.json'))[key]);
  assert.equal(t('preferences','title'),(await resource('es/preferences.json')).title);
  activateLanguage('en');assert.equal(t('pdfEditor',key),reference[key]);
+});
+
+test('a failed language load drains its bounded requests before allowing a complete retry',async()=>{
+ const gate=Promise.withResolvers();let reads=0,settled=false;
+ const fetcher=async url=>{if(++reads===1)return {ok:false};await gate.promise;return fetchResource(url);};
+ const first=prepareLanguage('ca',{fetcher}),failure=first.catch(error=>{settled=true;return error;});
+ let repeated;
+ try{
+  await setImmediate();
+  assert.equal(settled,false,'An outstanding catalogue must finish before retry is available');
+  assert.ok(reads>1&&reads<=6,'Language loading must bound concurrent resource requests');
+  const before=reads;repeated=prepareLanguage('ca',{fetcher});repeated.catch(()=>{});
+  await setImmediate();assert.equal(reads,before,'A second attempt must share the draining load');
+ }finally{gate.resolve();await failure;}
+ await assert.rejects(first,/Language resource unavailable/);
+ if(repeated)await assert.rejects(repeated,/Language resource unavailable/);
+ assert.equal(language(),'en');
+ let retryReads=0;
+ await prepareLanguage('ca',{fetcher:async url=>{retryReads++;return fetchResource(url);}});
+ assert.equal(retryReads,MESSAGE_NAMESPACES.filter(name=>catalogueLanguages(name).includes('ca')).length);
+ activateLanguage('ca');assert.equal(t('preferences','title'),(await resource('ca/preferences.json')).title);activateLanguage('en');
 });

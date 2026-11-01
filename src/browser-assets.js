@@ -9,7 +9,7 @@ const invalid=()=>{throw new AppError('BROWSER_ASSETS_INVALID');};
 // development stays uncached; only verified content-addressed package chunks
 // receive public immutable caching. API and preview responses never enter it.
 export class BrowserAssets{
- constructor({cacheBytes=16*1024*1024,cacheEntries=256}={}){Object.assign(this,{cacheBytes,cacheEntries});this.entries=new Map();this.cache=new Map();this.pending=new Map();this.bytes=0;this.reads=0;}
+ constructor({cacheBytes=16*1024*1024,cacheEntries=256}={}){Object.assign(this,{cacheBytes,cacheEntries});this.entries=new Map();this.cache=new Map();this.pending=new Map();this.queue=[];this.active=0;this.bytes=0;this.reads=0;}
  has(name){return this.entries.has(name);}
  set(name,bytes){this.entries.set(name,{bytes:Buffer.from(bytes)});return this;}
  file(name,url,descriptor={}){this.entries.set(name,{url,...descriptor});return this;}
@@ -21,15 +21,21 @@ export class BrowserAssets{
  async read(name){
   const entry=this.entries.get(name);if(!entry)throw new AppError('NOT_FOUND');if(entry.bytes)return entry.bytes;
   const cached=this.cache.get(name);if(cached){this.cache.delete(name);this.cache.set(name,cached);return cached;}
-  if(this.pending.has(name))return this.pending.get(name);if(this.pending.size>=16)throw new AppError('WORKLOAD_BUSY');
+  if(this.pending.has(name))return this.pending.get(name);
   const task=(async()=>{
+   // Cold module graphs and language packs legitimately exceed sixteen files.
+   // Queue one read per inventoried asset; duplicates share its pending promise.
+   // Only active reads hold file buffers, and the byte cache remains bounded.
+   if(this.active<16)this.active++;else await new Promise(resolve=>this.queue.push(resolve));
+   try{
    const stat=await lstat(entry.url);if(!stat.isFile()||stat.size>limit||entry.size!==undefined&&stat.size!==entry.size)invalid();
    const bytes=await readFile(entry.url);if(bytes.length>limit||entry.sha256&&(bytes.length!==entry.size||hash(bytes)!==entry.sha256))invalid();
    this.reads++;this.remember(name,bytes);return bytes;
+   }finally{const next=this.queue.shift();if(next)next();else this.active--;}
   })();this.pending.set(name,task);try{return await task;}finally{this.pending.delete(name);}
  }
  async response(name){const bytes=await this.read(name),entry=this.entries.get(name);return {bytes,cacheControl:entry.immutable?'public, max-age=31536000, immutable':'no-store',etag:entry.immutable?'"'+entry.sha256+'"':null};}
- statistics(){return {files:this.entries.size,reads:this.reads,cached:this.cache.size,cacheBytes:this.bytes,pending:this.pending.size};}
+ statistics(){return {files:this.entries.size,reads:this.reads,cached:this.cache.size,cacheBytes:this.bytes,pending:this.pending.size,active:this.active,queued:this.queue.length};}
 }
 
 export async function createBrowserAssets({directory=new URL('./web/',import.meta.url),builtDirectory=new URL('./web-build/',import.meta.url)}={}){
