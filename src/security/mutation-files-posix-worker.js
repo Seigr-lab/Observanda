@@ -32,8 +32,8 @@ function execute(c){
  if(c.operation.startsWith('file-')){
   const before=stat(parent),fd=native.fd(parent);
   if(c.operation==='file-stat')return {dev:String(before.dev),ino:String(before.ino),size:String(before.size),nlink:String(before.nlink),mtimeNs:String(before.mtimeNs),ctimeNs:String(before.ctimeNs)};
-  if(c.operation==='file-read'){if(!Number.isSafeInteger(c.bytes)||c.bytes<0||c.bytes>1048576||!Number.isSafeInteger(c.position)||c.position<0)fail('INVALID');const bytes=Buffer.allocUnsafe(c.bytes),count=readSync(fd,bytes,0,bytes.length,c.position);stat(parent);return {data:bytes.subarray(0,count)};}
-  if(c.operation==='file-write'){if(!Number.isSafeInteger(c.position)||c.position<0||c.data.length>1048576)fail('INVALID');write(fd,c.data,c.position);stat(parent);return {bytesWritten:c.data.length};}
+  if(c.operation==='file-read'){if(!Number.isSafeInteger(c.bytes)||c.bytes<0||c.bytes>1114112||!Number.isSafeInteger(c.position)||c.position<0)fail('INVALID');const bytes=Buffer.allocUnsafe(c.bytes),count=readSync(fd,bytes,0,bytes.length,c.position);stat(parent);return {data:bytes.subarray(0,count)};}
+  if(c.operation==='file-write'){if(!Number.isSafeInteger(c.position)||c.position<0||c.data.length>1114112)fail('INVALID');write(fd,c.data,c.position);stat(parent);return {bytesWritten:c.data.length};}
   if(c.operation==='file-sync'){fsyncSync(fd);return {};}
   if(c.operation==='file-truncate'){if(!Number.isSafeInteger(c.bytes)||c.bytes<0)fail('INVALID');ftruncateSync(fd,c.bytes);return {};}
   fail('INVALID');

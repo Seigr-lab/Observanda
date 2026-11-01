@@ -46,10 +46,12 @@ static napi_value child(napi_env env,napi_callback_info info){
  int32_t mode;if(napi_get_value_int32(env,values[2],&mode)!=napi_ok||mode<0||mode>4){free(name);return fail(env,"INVALID");}
  // 0 existing directory, 1 create directory, 2 read file, 3 update file,
  // 4 exclusive new file. Nonblocking prevents a substituted FIFO from hanging.
- if(mode==1){if(mkdirat(parent->fd,name,0700)<0&&errno!=EEXIST){free(name);return system_error(env);}if(fsync(parent->fd)<0){free(name);return system_error(env);}}
+ if(mode==1){int created=mkdirat(parent->fd,name,0700);if(created<0&&errno!=EEXIST){free(name);return system_error(env);}if(created==0&&fsync(parent->fd)<0){free(name);return system_error(env);}}
  int flags=O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK|(mode<2?O_RDONLY|O_DIRECTORY:mode==2?O_RDONLY:O_RDWR);if(mode==4)flags|=O_CREAT|O_EXCL;
  int fd=openat(parent->fd,name,flags,0600);free(name);if(fd<0)return system_error(env);struct stat st;
- if(fstat(fd,&st)<0){int error=errno;close(fd);errno=error;return system_error(env);}if(mode<2?!S_ISDIR(st.st_mode):!S_ISREG(st.st_mode)){close(fd);return fail(env,"UNSAFE");}return saved(env,fd);
+ if(fstat(fd,&st)<0){int error=errno;close(fd);errno=error;return system_error(env);}if(mode<2?!S_ISDIR(st.st_mode):!S_ISREG(st.st_mode)){close(fd);return fail(env,"UNSAFE");}
+ if(mode==4&&fsync(parent->fd)<0){int error=errno;close(fd);errno=error;return system_error(env);}
+ return saved(env,fd);
 }
 static napi_value descriptor(napi_env env,napi_callback_info info){napi_value values[1],result;if(!args(env,info,1,values))return NULL;Handle *file=handle(env,values[0]);if(!file)return NULL;napi_create_int32(env,file->fd,&result);return result;}
 static napi_value close_handle(napi_env env,napi_callback_info info){napi_value values[1];if(!args(env,info,1,values))return NULL;Handle *file=handle(env,values[0]);if(!file)return NULL;release(file);return ok(env);}

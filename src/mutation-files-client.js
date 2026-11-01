@@ -13,8 +13,10 @@ export function mutationFilesClient(call,stop){
  }
  class File extends Handle{
   async stat({bigint=false}={}){const value=await this.request('file-stat'),result=Object.fromEntries(Object.entries(value).map(([k,v])=>[k,bigint?BigInt(v):Number(v)]));return {...result,isFile:()=>true,isDirectory:()=>false,isSymbolicLink:()=>false};}
-  async read(buffer,offset,length,position){const value=await this.request('file-read',{bytes:Math.min(length,1048576),position}),bytes=binary(value.data);if(bytes.length>length)throw new AppError('IO');bytes.copy(buffer,offset);return {bytesRead:bytes.length,buffer};}
-  async write(buffer,offset,length,position){const bytes=buffer.subarray(offset,offset+Math.min(length,1048576));await this.request('file-write',{bytes:bytes.length,position},{stream:[bytes]});return {bytesWritten:bytes.length,buffer};}
+  // One frame includes a full 1 MiB encrypted block and its authentication
+  // envelope, avoiding a second round trip for a few trailing bytes.
+  async read(buffer,offset,length,position){const value=await this.request('file-read',{bytes:Math.min(length,1114112),position}),bytes=binary(value.data);if(bytes.length>length)throw new AppError('IO');bytes.copy(buffer,offset);return {bytesRead:bytes.length,buffer};}
+  async write(buffer,offset,length,position){const bytes=buffer.subarray(offset,offset+Math.min(length,1114112));await this.request('file-write',{bytes:bytes.length,position},{stream:[bytes]});return {bytesWritten:bytes.length,buffer};}
   sync(){return this.request('file-sync');}
   truncate(bytes){return this.request('file-truncate',{bytes});}
  }

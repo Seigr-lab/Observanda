@@ -1,7 +1,6 @@
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {StringDecoder} from 'node:string_decoder';
 import {AppError} from './errors.js';
 import {mutationFilesClient} from './mutation-files-client.js';
 import {diagnosticCount} from './operational-diagnostics.js';
@@ -11,18 +10,24 @@ const wireError=value=>{const code=codes.has(value)?value:'UNSAFE',error=new App
 
 export async function windowsMutationFiles(){
  const child=spawn(path.join(process.env.SystemRoot??'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/mutation-files.ps1',import.meta.url))],{windowsHide:true,stdio:['pipe','pipe','ignore']});
- let receiver,failed,serial=Promise.resolve(),text='',closing;const decoder=new StringDecoder('utf8'),inbox=[];
+ let receiver,failed,serial=Promise.resolve(),header=Buffer.alloc(0),payload,closing;const inbox=[];
  const fail=error=>{failed??=error;receiver?.reject(failed);receiver=null;};
  const exited=new Promise(resolve=>{child.once('exit',()=>{fail(new AppError('IO'));resolve();});child.once('error',()=>{fail(new AppError('IO'));resolve();});});
  child.stdin.on('error',()=>fail(new AppError('IO')));
- child.stdout.on('data',bytes=>{
-  text+=decoder.write(bytes);if(text.length>262144){fail(new AppError('UNSAFE'));child.kill();return;}
-  for(let end;(end=text.indexOf('\n'))>=0;){const line=text.slice(0,end);text=text.slice(end+1);let value;try{value=JSON.parse(line);}catch{fail(new AppError('UNSAFE'));child.kill();return;}
-   if(!receiver){if(inbox.length>=2){fail(new AppError('UNSAFE'));child.kill();return;}inbox.push(value);continue;}
-   if(Object.hasOwn(value,'progress')){try{receiver.progress?.(value.progress);}catch(error){fail(error);child.kill();}continue;}
+ const deliver=value=>{
+   if(!receiver){if(inbox.length>=2){fail(new AppError('UNSAFE'));child.kill();return;}inbox.push(value);return;}
+   if(Object.hasOwn(value,'progress')){try{receiver.progress?.(value.progress);}catch(error){fail(error);child.kill();}return;}
    const current=receiver;receiver=null;
    if(value.error)current.reject(wireError(value.error));else current.resolve(value);
+ };
+ child.stdout.on('data',bytes=>{
+  try{while(bytes.length){
+   if(payload){const count=Math.min(bytes.length,payload.data.length-payload.position);bytes.copy(payload.data,payload.position,0,count);payload.position+=count;bytes=bytes.subarray(count);if(payload.position===payload.data.length){const value=payload;payload=null;deliver({result:{...value.result,data:value.data}});}continue;}
+   const end=bytes.indexOf(10),part=end<0?bytes:bytes.subarray(0,end);if(header.length+part.length>262144)throw new AppError('UNSAFE');header=header.length?Buffer.concat([header,part]):Buffer.from(part);if(end<0)break;bytes=bytes.subarray(end+1);
+   const value=JSON.parse(header.toString('utf8'));header=Buffer.alloc(0);
+   if(Object.hasOwn(value,'payload')){if(!Number.isInteger(value.payload)||value.payload<0||value.payload>1114112||!value.result)throw new AppError('UNSAFE');if(value.payload)payload={data:Buffer.allocUnsafe(value.payload),position:0,result:value.result};else deliver({result:{...value.result,data:Buffer.alloc(0)}});}else deliver(value);
   }
+  }catch(error){fail(error);child.kill();}
  });
  const response=progress=>{if(failed)return Promise.reject(failed);if(receiver)throw new AppError('IO');if(inbox.length){const value=inbox.shift();return value.error?Promise.reject(wireError(value.error)):Promise.resolve(value);}return new Promise((resolve,reject)=>{receiver={resolve,reject,progress};});};
  const timer=setTimeout(()=>{fail(new AppError('IO'));child.kill();},15000);

@@ -17,20 +17,26 @@ namespace Observanda {
   [StructLayout(LayoutKind.Sequential)] struct Attributes {public uint Length;public IntPtr RootDirectory,ObjectName;public uint Flags;public IntPtr SecurityDescriptor,SecurityQuality;}
   [StructLayout(LayoutKind.Sequential)] struct IoStatus {public IntPtr Status,Information;}
   [StructLayout(LayoutKind.Sequential)] struct Info {public uint Attributes;public System.Runtime.InteropServices.ComTypes.FILETIME Created,Accessed,Written;public uint Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow;}
+  [StructLayout(LayoutKind.Sequential)] struct BasicInfo {public long Created,Accessed,Written,Changed;public uint Attributes;}
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern SafeFileHandle CreateFile(string name,uint access,uint share,IntPtr security,uint creation,uint flags,IntPtr template);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetFileInformationByHandle(SafeFileHandle handle,out Info info);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetFileInformationByHandleEx(SafeFileHandle handle,int kind,out BasicInfo info,uint size);
   [DllImport("ntdll.dll")] static extern uint RtlNtStatusToDosError(int status);
   [DllImport("ntdll.dll")] static extern int NtCreateFile(out SafeFileHandle handle,uint access,ref Attributes attributes,out IoStatus status,IntPtr allocation,uint fileAttributes,uint share,uint disposition,uint options,IntPtr ea,uint eaLength);
   [DllImport("ntdll.dll")] static extern int NtSetInformationFile(SafeFileHandle handle,out IoStatus status,IntPtr data,uint length,int kind);
   [DllImport("ntdll.dll")] static extern int NtQueryDirectoryFile(SafeFileHandle handle,IntPtr evt,IntPtr apc,IntPtr context,out IoStatus status,IntPtr data,uint length,int kind,[MarshalAs(UnmanagedType.U1)]bool single,IntPtr pattern,[MarshalAs(UnmanagedType.U1)]bool restart);
   static Dictionary<int,SafeFileHandle> directories=new Dictionary<int,SafeFileHandle>();
+  class OpenFile {public SafeFileHandle Handle;public FileStream Stream;}
+  class Binary {public int Count;public Binary(int count){Count=count;}}
+  static Dictionary<int,OpenFile> files=new Dictionary<int,OpenFile>();
   static int next=0;
   static Stream input;
   static StreamWriter output;
+  static Stream rawOutput;
   static bool inputPayload=false;
   // Commands are serialized. Reuse one bounded transfer buffer, clearing it
   // after each file, instead of allocating a large object for every small file.
-  static readonly byte[] transferBuffer=new byte[1048576];
+  static readonly byte[] transferBuffer=new byte[1114112];
   static JavaScriptSerializer json=new JavaScriptSerializer {MaxJsonLength=262144,RecursionLimit=16};
   class Failure:Exception {public string Code;public Failure(string code){Code=code;}}
   static void Native(int code){if(code<0)throw new Win32Exception((int)RtlNtStatusToDosError(code));}
@@ -83,9 +89,9 @@ namespace Observanda {
     if(stream.ReadByte()!=-1||!Same(before,Information(handle,false)))throw new Failure("CONFLICT");return new {data=Convert.ToBase64String(bytes),identity=Identity(before)};
    }
   }}
-  static void Rename(SafeFileHandle file,SafeFileHandle parent,string name,int kind){
+  static void Rename(SafeFileHandle file,SafeFileHandle parent,string name,int kind,bool replace=false){
    Name(name);Information(parent,true);byte[] bytes=Encoding.Unicode.GetBytes(name);int offset=IntPtr.Size==8?20:12;IntPtr data=Marshal.AllocHGlobal(offset+bytes.Length);
-   try{for(int i=0;i<offset+bytes.Length;i++)Marshal.WriteByte(data,i,0);Marshal.WriteIntPtr(data,IntPtr.Size==8?8:4,parent.DangerousGetHandle());Marshal.WriteInt32(data,IntPtr.Size==8?16:8,bytes.Length);Marshal.Copy(bytes,0,IntPtr.Add(data,offset),bytes.Length);IoStatus status;Native(NtSetInformationFile(file,out status,data,(uint)(offset+bytes.Length),kind));}
+   try{for(int i=0;i<offset+bytes.Length;i++)Marshal.WriteByte(data,i,0);if(replace)Marshal.WriteByte(data,1);Marshal.WriteIntPtr(data,IntPtr.Size==8?8:4,parent.DangerousGetHandle());Marshal.WriteInt32(data,IntPtr.Size==8?16:8,bytes.Length);Marshal.Copy(bytes,0,IntPtr.Add(data,offset),bytes.Length);IoStatus status;Native(NtSetInformationFile(file,out status,data,(uint)(offset+bytes.Length),kind));}
    finally{Marshal.FreeHGlobal(data);}
   }
   static void Delete(SafeFileHandle file){IntPtr data=Marshal.AllocHGlobal(1);try{Marshal.WriteByte(data,1);IoStatus status;Native(NtSetInformationFile(file,out status,data,1,13));}finally{Marshal.FreeHGlobal(data);}}
@@ -102,6 +108,24 @@ namespace Observanda {
    }finally{Marshal.FreeHGlobal(data);}
   }
   static void Send(object value){output.WriteLine(json.Serialize(value));output.Flush();}
+  static long Position(Dictionary<string,object> command){object value;if(!command.TryGetValue("position",out value)||!(value is int||value is long)||Convert.ToInt64(value)<0||Convert.ToInt64(value)>9007199254740991L)throw new Failure("INVALID");return Convert.ToInt64(value);}
+  static object FileCommand(Dictionary<string,object> command,string operation,OpenFile file){
+   Info info=Information(file.Handle,false);var stream=file.Stream;
+   if(operation=="file-stat"){
+    BasicInfo basic;if(!GetFileInformationByHandleEx(file.Handle,0,out basic,(uint)Marshal.SizeOf(typeof(BasicInfo))))throw new Win32Exception();
+    return new {dev=info.Volume.ToString(),ino=(((ulong)info.IndexHigh<<32)|info.IndexLow).ToString(),size=Bytes(info).ToString(),nlink=info.Links.ToString(),mtimeNs=((basic.Written-116444736000000000L)*100).ToString(),ctimeNs=((basic.Changed-116444736000000000L)*100).ToString()};
+   }
+   if(operation=="file-sync"){stream.Flush(true);return new {ok=true};}
+   if(operation=="file-truncate"){stream.SetLength(Size(command));return new {ok=true};}
+   long size=Size(command);if(size>transferBuffer.Length)throw new Failure("INVALID");stream.Position=Position(command);
+   if(operation=="file-read"){int count=stream.Read(transferBuffer,0,(int)size);Information(file.Handle,false);return new Binary(count);}
+   if(operation=="file-write"){
+    inputPayload=true;Send(new {ready=true});int count=0;
+    try{while(count<size){int amount=input.Read(transferBuffer,count,(int)size-count);if(amount==0)throw new EndOfStreamException();count+=amount;}inputPayload=false;stream.Write(transferBuffer,0,count);Information(file.Handle,false);return new {bytesWritten=count};}
+    finally{Array.Clear(transferBuffer,0,count);}
+   }
+   throw new Failure("INVALID");
+  }
   static object Transfer(Dictionary<string,object> command,bool copy){
    SafeFileHandle source=null,destination=null;bool complete=false;Info before=new Info();
    long expected=Size(command),received=0;string expectedHash=Text(command,"sha256");if(expectedHash.Length!=64)throw new Failure("INVALID");
@@ -121,9 +145,19 @@ namespace Observanda {
   }
   static object Execute(Dictionary<string,object> command){
    string operation=Text(command,"operation");if(operation=="root")return Root(Text(command,"path"));
+   int handleId=Number(command,"directory");OpenFile opened;
+   if(files.TryGetValue(handleId,out opened)){
+    if(operation=="close"){files.Remove(handleId);opened.Stream.Dispose();return new {ok=true};}
+    return FileCommand(command,operation,opened);
+   }
    SafeFileHandle parent=Directory(command,"directory",operation!="close");
    if(operation=="close"){directories.Remove(Number(command,"directory"));parent.Dispose();return new {ok=true};}
    if(operation=="directory")return Saved(Open(parent,Text(command,"name"),true,0x80000000,Flag(command,"create")?3u:1u));
+   if(operation=="file-open"){
+    string mode=Text(command,"mode");if(mode!="read"&&mode!="update"&&mode!="exclusive")throw new Failure("INVALID");
+    var handle=Open(parent,Text(command,"name"),false,mode=="read"?0x80000000u:0xC0000000u,mode=="exclusive"?2u:1u);
+    try{Info info=Information(handle,false);int id=++next;files.Add(id,new OpenFile{Handle=handle,Stream=new FileStream(handle,mode=="read"?FileAccess.Read:FileAccess.ReadWrite,1,false)});return new {id=id,identity=Identity(info)};}catch{handle.Dispose();throw;}
+   }
    if(operation=="list")return List(parent,Flag(command,"restart"));
    if(operation=="hash")return Hash(parent,Text(command,"name"),Flag(command,"links"));
    if(operation=="read")return Read(parent,command);
@@ -132,17 +166,19 @@ namespace Observanda {
     Info info=Information(file,folder,Flag(command,"links"));Expected(command,info);
     if(operation=="stat")return new {bytes=Bytes(info),identity=Identity(info),links=info.Links};
     if(operation=="delete"){Delete(file);return new {ok=true};}
-    if(operation=="rename"||operation=="link"){if(operation=="link"&&folder)throw new Failure("UNSAFE");Rename(file,Directory(command,"targetDirectory"),Text(command,"target"),operation=="rename"?10:11);return new {ok=true};}
+    if(operation=="rename"||operation=="link"){if(operation=="link"&&folder||Flag(command,"replace")&&(folder||operation!="rename"))throw new Failure("UNSAFE");Rename(file,Directory(command,"targetDirectory"),Text(command,"target"),operation=="rename"?10:11,Flag(command,"replace"));return new {ok=true};}
     throw new Failure("INVALID");
    }
   }
   public static void Run(){
-   input=Console.OpenStandardInput();output=new StreamWriter(Console.OpenStandardOutput(),new UTF8Encoding(false));Send(new {ready=true});
+   input=Console.OpenStandardInput();rawOutput=Console.OpenStandardOutput();output=new StreamWriter(rawOutput,new UTF8Encoding(false));Send(new {ready=true});
    try{for(;;){var line=new MemoryStream();for(;;){int value=input.ReadByte();if(value<0){if(line.Length!=0)throw new EndOfStreamException();return;}if(value==10)break;if(line.Length>=65536)throw new Failure("INVALID");line.WriteByte((byte)value);}
-     try{var command=json.Deserialize<Dictionary<string,object>>(Encoding.UTF8.GetString(line.ToArray()));Send(new {result=Execute(command)});}
+     try{var command=json.Deserialize<Dictionary<string,object>>(Encoding.UTF8.GetString(line.ToArray()));object result=Execute(command);Binary binary=result as Binary;
+      if(binary==null)Send(new {result=result});else{try{Send(new {result=new {},payload=binary.Count});rawOutput.Write(transferBuffer,0,binary.Count);rawOutput.Flush();}finally{Array.Clear(transferBuffer,0,binary.Count);}}
+     }
      catch(Exception error){Send(new {error=Error(error)});if(inputPayload)return;}
     }
-   }finally{foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}
+   }finally{foreach(var file in files.Values)file.Stream.Dispose();files.Clear();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}
   }
  }
 }

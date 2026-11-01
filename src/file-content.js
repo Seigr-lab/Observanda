@@ -1,5 +1,6 @@
 import {scopedFileVerification} from './file-verification-context.js';
 import {checkpointedFileCopy} from './checkpointed-file-copy.js';
+import {withNativeContentFile} from './native-content-file.js';
 import {SEGMENTED_ENVELOPE} from './segmented-file-format.js';
 import {readSegmentedFile,readSegmentedRange,segmentedFileHeader} from './segmented-file-io.js';
 import {writeSegmentedContent} from './segmented-file-write.js';
@@ -38,7 +39,7 @@ async function* decoded(handle,workspace,file){
   for(;;){const bytes=Buffer.allocUnsafe(BLOCK),r=await handle.read(bytes,0,BLOCK,position);if(!r.bytesRead)break;position+=r.bytesRead;operationWork({bytes:r.bytesRead});yield cipher?cipher.update(bytes.subarray(0,r.bytesRead)):bytes.subarray(0,r.bytesRead);}
   if(cipher){try{const last=cipher.final();if(last.length)yield last;}catch{throw new AppError('ENCRYPTION_DAMAGED');}}
 }
-export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected}={}){
+export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected,exclusive=false}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
   // Already-buffered input can declare its digest without any additional disk
   // pass. Yield between bounded hash batches so leases/cancellation still run.
@@ -47,7 +48,7 @@ export async function writeContent(workspace,file,source,{maxBytes=0,reserveByte
    for(const bytes of source)for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');hash.update(chunk);if(++batch===16){batch=0;await yieldTurn(undefined,{signal});}}
    expected={size,sha256:hash.digest('hex')};
   }
-  if(workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected});
+  if(workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected,exclusive});
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;
@@ -103,20 +104,21 @@ export class FileContent {
   async copyTo(workspace,file,{signal,onProgress,check=async()=>{},reserveBytes=0,resume=false}={}){
     signal?.throwIfAborted();await check();await this.workspace.requireStorageKey();await workspace.requireStorageKey();
     if(!workspace.vault?.key||!workspace.vault.id||!Number.isSafeInteger(this.size)||this.size<0||! /^[a-f0-9]{64}$/.test(this.sha256))throw new AppError('INVALID');
-    if(await lstat(file).catch(error=>{if(error.code==='ENOENT')return null;throw error;}))throw new AppError('EXISTS');
     if(resume)return checkpointedFileCopy(this,workspace,file,{decode:decoded,signal,onProgress,check,reserveBytes});
-    const handle=await open(this.file,'r'),owner=this;
+    return withNativeContentFile(this.workspace,this.file,async(input,name)=>{
+    const handle=await input.file(name),owner=this,vault=owner.workspace.vault,key=vault?.key,keyCopy=key?Buffer.from(key):null;
     try{
       const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
       async function* checked(){
         let size=0;const hash=createHash('sha256');await onProgress?.(0,owner.size);
         for await(const chunk of decoded(handle,owner.workspace,owner.file)){
-          signal?.throwIfAborted();await check();size+=chunk.length;if(size>owner.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);yield chunk;await onProgress?.(size,owner.size);
+          signal?.throwIfAborted();await check();if(owner.workspace.vault!==vault||vault?.key!==key||keyCopy&&!keyCopy.equals(key))throw new AppError('ACCESS_LOCKED');size+=chunk.length;if(size>owner.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);yield chunk;await onProgress?.(size,owner.size);
         }
-        signal?.throwIfAborted();await check();if(size!==owner.size||hash.digest('hex')!==owner.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
+        signal?.throwIfAborted();await check();if(owner.workspace.vault!==vault||vault?.key!==key||keyCopy&&!keyCopy.equals(key))throw new AppError('ACCESS_LOCKED');if(size!==owner.size||hash.digest('hex')!==owner.sha256||!sameFile(before,await handle.stat({bigint:true}))||(await input.stat(name)).identity!==handle.identity)throw new AppError('MEDIA_INVALID');
       }
-      return await writeContent(workspace,file,checked(),{signal,reserveBytes,maxBytes:this.size,expected:{size:this.size,sha256:this.sha256}});
-    }finally{await handle.close();}
+      return await writeContent(workspace,file,checked(),{signal,reserveBytes,exclusive:true,maxBytes:this.size,expected:{size:this.size,sha256:this.sha256}});
+    }catch(error){if(error.code==='EEXIST')throw new AppError('EXISTS');throw error;}finally{keyCopy?.fill(0);await handle.close();}
+    });
   }
   stream(start=0,end=this.size-1,options={}){return Readable.from(this.read(start,end,options));}
   async verify({signal,onProgress,reportProgress=true}={}){
@@ -191,7 +193,7 @@ export async function serveContent(req,res,content,type,{signal}={}){
 }
 
 export async function describeContent(workspace,file,{signal}={}){
- await workspace.requireStorageKey();const handle=await open(file,'r');let size=0;const hash=createHash('sha256');
- try{const stat=await handle.stat();if(!stat.isFile()||stat.nlink>1)throw new AppError('UNSAFE');for await(const bytes of decoded(handle,workspace,file)){signal?.throwIfAborted();size+=bytes.length;hash.update(bytes);}}finally{await handle.close();}
- return new FileContent(workspace,file,size,hash.digest('hex'));
+ await workspace.requireStorageKey();return withNativeContentFile(workspace,file,async(parent,name)=>{const handle=await parent.file(name);let size=0;const hash=createHash('sha256');
+ try{const stat=await handle.stat({bigint:true});for await(const bytes of decoded(handle,workspace,file)){signal?.throwIfAborted();size+=bytes.length;hash.update(bytes);}if(!sameFile(stat,await handle.stat({bigint:true}))||(await parent.stat(name)).identity!==handle.identity)throw new AppError('MEDIA_INVALID');}finally{await handle.close();}
+ return new FileContent(workspace,file,size,hash.digest('hex'));});
 }

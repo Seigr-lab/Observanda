@@ -1,8 +1,7 @@
 import path from 'node:path';
-import {open,unlink} from 'node:fs/promises';
+import {withNativeContentFile} from './native-content-file.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {atomicReplace} from './atomic-replace.js';
 import {temporaryStreamName} from './storage-temporary.js';
 import {createSegmentedHeader,readSegmentedHeader,sealSegment,openSegment,segmentedChunkSize,SEGMENTED_BLOCK_BYTES,SEGMENTED_HEADER_BYTES,SEGMENTED_CHUNK_OVERHEAD} from './segmented-file-format.js';
 import {readFilePart,writeFilePart} from './segmented-file-io.js';
@@ -30,9 +29,10 @@ async function finalizeStream(handle,header,key,aad,saved,{reservation,signal,ch
   signal?.throwIfAborted();check();await handle.truncate(final.storedSize);await writeFilePart(handle,raw,0);
  });
 }
-export async function writeSegmentedContent(workspace,file,source,{expected,maxBytes=0,reserveBytes=0,signal,beforeCommit}){
+export async function writeSegmentedContent(workspace,file,source,options){return withNativeContentFile(workspace,file,(directory,name)=>writeAnchoredContent(workspace,file,source,options,directory,name),{create:true});}
+async function writeAnchoredContent(workspace,file,source,{expected,maxBytes=0,reserveBytes=0,signal,beforeCommit,exclusive=false},parent,name){
  await workspace.requireStorageKey();const vault=workspace.vault,ownerKey=vault?.key;if(!vault?.id||!ownerKey)throw new AppError('ACCESS_LOCKED');
- const key=Buffer.from(ownerKey),directory=path.dirname(file),temp=path.join(directory,temporaryStreamName()),buffer=Buffer.allocUnsafe(SEGMENTED_BLOCK_BYTES);let handle,reservation,moved=false;
+ const key=Buffer.from(ownerKey),directory=path.dirname(file),temp=temporaryStreamName(),buffer=Buffer.allocUnsafe(SEGMENTED_BLOCK_BYTES);let handle,reservation,identity,moved=false;
  try{
   if(!Number.isSafeInteger(maxBytes)||maxBytes<0)throw new AppError('INVALID');
   const provisionalSize=Math.min(streamLimit,maxBytes?Math.ceil(maxBytes/SEGMENTED_BLOCK_BYTES)*SEGMENTED_BLOCK_BYTES:streamLimit);
@@ -42,7 +42,7 @@ export async function writeSegmentedContent(workspace,file,source,{expected,maxB
   // Recheck capacity at bounded byte checkpoints, as resumable copies do.
   // Unknown streams reserve only one window ahead; all concurrent claims and
   // the caller's free-space floor still participate in each admission check.
-  signal?.throwIfAborted();reservation=await diskCapacity.reserve(directory,expected?header.storedSize:raw.length,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,growthBytes:expected?0:8*SEGMENTED_BLOCK_BYTES});handle=await open(temp,'wx+',0o600);await reservation.write(raw.length,()=>writeFilePart(handle,raw,0));
+  signal?.throwIfAborted();reservation=await diskCapacity.reserve(directory,expected?header.storedSize:raw.length,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,growthBytes:expected?0:8*SEGMENTED_BLOCK_BYTES});handle=await parent.file(temp,{mode:'exclusive'});identity=handle.identity;await reservation.write(raw.length,()=>writeFilePart(handle,raw,0));
   let position=raw.length,size=0,buffered=0,index=0;const hash=createHash('sha256');
   const flush=async()=>{signal?.throwIfAborted();checkKey();const staged=expected?header:{...header,size,count:index+1},output=sealSegment(buffer.subarray(0,buffered),index++,staged,key,aad);await reservation.write(output.length,()=>writeFilePart(handle,output,position));position+=output.length;buffered=0;};
   for await(const value of source){
@@ -57,7 +57,7 @@ export async function writeSegmentedContent(workspace,file,source,{expected,maxB
   const sha256=hash.digest('hex');if(expected&&(size!==header.size||sha256!==header.sha256))throw new AppError('MEDIA_INVALID');if(buffered)await flush();
   const saved={size,sha256};if(!expected)await finalizeStream(handle,header,key,aad,saved,{reservation,signal,check:checkKey});
   signal?.throwIfAborted();await beforeCommit?.(Object.freeze({...saved}));signal?.throwIfAborted();checkKey();
-  await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();checkKey();await atomicReplace(temp,file);moved=true;return saved;
+  await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();checkKey();await parent.rename(temp,parent,name,{identity,replace:!exclusive});moved=true;return saved;
  }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}
- finally{key.fill(0);buffer.fill(0);try{await handle?.close();if(!moved)await unlink(temp).catch(error=>{if(error.code!=='ENOENT')throw error;});}finally{reservation?.release();}}
+ finally{key.fill(0);buffer.fill(0);try{await handle?.close();if(!moved&&identity)await parent.remove(temp,{identity}).catch(error=>{if(error.code!=='ENOENT')throw error;});}finally{reservation?.release();}}
 }
