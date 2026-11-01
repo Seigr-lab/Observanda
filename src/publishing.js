@@ -1,8 +1,8 @@
 import {githubPlanReader,githubReviewKinds,githubRemovedPaths} from './github-plan-index.js';
-import {contentHash} from './file-content.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
+import {liveManifestReceipt} from './publication-live-budget.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
 import {publicationText} from './web/publication-messages.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
@@ -190,7 +190,8 @@ export class Publisher {
       if(/^[a-f0-9-]{36}$/.test(receipt.deploymentId??''))await this.workspace.writeMetadata('.observanda/deployment-verifications/'+receipt.deploymentId+'.json',serialize(verification));
     });
     try{
-      const verification=await verifyLiveFiles(this.liveRequest,base,receipt,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress});
+      const expected=await liveManifestReceipt(this.workspace,key,receipt);if(!expected)throw new LiveVerificationError('publication.json','metadata');
+      const verification=await verifyLiveFiles(this.liveRequest,base,expected,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress});
       await store(verification);return {verification,message:publicationText('liveVerified',{count:verification.files,removed:verification.removed})};
     }catch(error){
       if(!(error instanceof LiveVerificationError))throw error;
@@ -224,7 +225,6 @@ export class Publisher {
       else {
         receipt=await deployGithub(this,candidate,config,{plan,journal:{},save:async()=>{},guard:async()=>{},pushed:async (value,journal)=>{await writeGithubOwnership(this.workspace,key,journal);await recordDeploymentInventory(this.workspace,key,value,preparedInventory);receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));}});
       }
-      receipt.manifestHash = contentHash(await candidate.files.get('publication.json'));
       await recordDeploymentInventory(this.workspace,key,receipt,preparedInventory);
       receipts[key] = receipt; await this.workspace.writeMetadata('.observanda/publishing-receipts.json', serialize(receipts));
       return receipt;

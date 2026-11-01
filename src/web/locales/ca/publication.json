@@ -219,6 +219,7 @@
   "liveMismatch": "Els bytes servits no coincideixen amb l'edició revisada.",
   "liveUnavailable": "La petició ha fallat o ha esgotat el temps d'espera.",
   "liveManifestInvalid": "El manifest o l'inventari de fitxers servit no coincideix amb aquest desplegament.",
+  "liveVerificationMetadata": "Torna a publicar una edició revisada per recuperar la informació necessària per verificar el lloc web publicat.",
   "liveChecking": "S'està comprovant el lloc web en línia",
   "liveProgress": "Comprovació en línia: s'han comprovat {done} de {total} fitxers i URL eliminats.",
   "liveStopped": "S'ha aturat la comprovació en línia. Reprendre reinicia la verificació contra els bytes servits actualment.",

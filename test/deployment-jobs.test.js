@@ -21,6 +21,8 @@ import {clearVault} from '../src/encryption.js';
 import {githubFixture} from './github-fixture.js';
 import {readGithubOwnership} from '../src/github-publication-plan.js';
 import {githubPlanReader} from '../src/github-plan-index.js';
+import {liveManifestReceipt} from '../src/publication-live-budget.js';
+import {serialize} from '../src/storage-format.js';
 test('deployment summaries preserve indexed SSH progress and legacy uploaded arrays',()=>{
  const intent={reviewId:'a'.repeat(64),releaseId:'b'.repeat(64),key:'c'.repeat(64),config:{kind:'ssh',ssh:{host:'publish.example',directory:'/site'}}};
  const summary=journal=>DeploymentJobs.prototype.summary({id:randomUUID(),createdAt:'2026-10-17T00:00:00.000Z',intent,journal});
@@ -87,6 +89,13 @@ test('interrupted upload resumes acknowledged blobs after restart and retains se
  for(const {sha} of acknowledged.items)assert.equal(f.remote.calls.filter(c=>c.route.endsWith('/git/blobs')&&c.data&&Buffer.from(c.data.content,'base64').equals(f.remote.blobs.get(sha))).length,1);
  assert.equal((await restarted.read()).receipt.verification,undefined);await assert.rejects(restarted.verifyLive(),{code:'PUBLISH_NOT_LIVE'});
  f.remote.setManifest((await contentBuffer(await f.candidate.files.get('publication.json'))).toString('utf8'));await restarted.verifyLive();assert.ok((await restarted.read()).receipt.verification);assert.ok((await f.deployments.page()).items[0].verification);
+ // A receipt from an older version can recover exact bounds from the locally
+ // authenticated retained edition, including its indexed output inventory.
+ const current=await restarted.read(),key=restarted.destinationKey(current.config),legacy={...current.receipt};delete legacy.manifestBytes;delete legacy.manifestFiles;
+ const recovered=await liveManifestReceipt(restarted.workspace,key,legacy);assert.equal(recovered.manifestBytes,current.receipt.manifestBytes);assert.equal(recovered.manifestFiles,f.candidate.files.size-1);
+ await restarted.workspace.withLock(()=>restarted.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize({[key]:legacy})));
+ assert.equal((await restarted.verifyLive()).verification.files,f.candidate.files.size);
+ await assert.rejects(liveManifestReceipt(restarted.workspace,key,{...legacy,manifestHash:'f'.repeat(64)}),{code:'JOB_DAMAGED'});
  assert.equal((await f.deployments.start(f.intent)).id,job.id);assert.equal((await f.deployments.page()).items.length,1);
  assert.ok(!JSON.stringify(await f.deployments.read(job.id)).includes(token));
 });

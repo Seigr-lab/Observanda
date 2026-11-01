@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {verifyLiveFiles} from '../src/publication-live.js';
 
 const hash=b=>createHash('sha256').update(b).digest('hex');
-function site(files){const body=JSON.stringify({releaseId:'synthetic-release',files:[...files].map(([path,data])=>({path,bytes:data.length,sha256:hash(data)}))});return {body,receipt:{releaseId:'synthetic-release',manifestHash:hash(body)},request:async url=>{const name=new URL(url).pathname.slice(1);return name==='publication.json'?new Response(body):files.has(name)?new Response(files.get(name)):new Response(null,{status:404});}};}
+function site(files){const body=JSON.stringify({releaseId:'synthetic-release',files:[...files].map(([path,data])=>({path,bytes:Buffer.byteLength(data),sha256:hash(data)}))});return {body,receipt:{releaseId:'synthetic-release',manifestHash:hash(body),manifestBytes:Buffer.byteLength(body),manifestFiles:files.size},request:async url=>{const name=new URL(url).pathname.slice(1);return name==='publication.json'?new Response(body):files.has(name)?new Response(files.get(name)):new Response(null,{status:404});}};}
 
 test('live verification rejects cached removed pages, redirects, missing and modified content, and a rollout mid-check',async()=>{
  const s=site(new Map([['index.html','current page'],['styles.css','styles']]));
@@ -25,7 +25,7 @@ test('large sites are verified in bounded concurrency and large assets are strea
   if(new URL(url).pathname==='/capture.bin')return new Response(new ReadableStream({pull(controller){if(largeChunks++<96)controller.enqueue(chunk);else controller.close();}}));
   return s.request(url);
  };
- const result=await verifyLiveFiles(request,'https://example.test/',{...s.receipt,manifestHash:hash(body)});
+ const result=await verifyLiveFiles(request,'https://example.test/',{...s.receipt,manifestHash:hash(body),manifestBytes:Buffer.byteLength(body),manifestFiles:manifest.files.length});
  assert.equal(result.files,12002);assert.ok(result.bytes>96*1024*1024);assert.ok(maximum>1&&maximum<=4);assert.equal(largeChunks,97);
 });
 
@@ -60,7 +60,7 @@ test('live verification streams a manifest beyond 16 MiB and 50,000 files before
   assert.ok(name.startsWith(prefix));const id=Number(name.slice(prefix.length,-5));assert.ok(Number.isSafeInteger(id)&&id>=0&&id<count);assert.equal(received[id],0);received[id]=1;checked++;
   active++;maximum=Math.max(maximum,active);await new Promise(resolve=>setImmediate(resolve));active--;return new Response(payload);
  };
- const started=Date.now(),result=await verifyLiveFiles(request,'https://example.test/',{releaseId:'large-live-edition',manifestHash:hash(manifest)},{removed:(async function*(){yield 'removed.html';})(),progress:value=>{last=value;}});
+ const started=Date.now(),result=await verifyLiveFiles(request,'https://example.test/',{releaseId:'large-live-edition',manifestHash:hash(manifest),manifestBytes:manifest.length,manifestFiles:count},{removed:(async function*(){yield 'removed.html';})(),progress:value=>{last=value;}});
  assert.equal(result.files,count+1);assert.equal(result.removed,1);assert.equal(checked,count);assert.equal(received.reduce((a,b)=>a+b,0),count);
  assert.equal(result.bytes,manifest.length+count*payload.length);assert.equal(manifestReads,2);assert.deepEqual(last,{done:count+1,total:count+1});assert.ok(maximum>1&&maximum<=4);
  t.diagnostic(JSON.stringify({files:count,manifestBytes:manifest.length,elapsedMs:Date.now()-started,maximumRequests:maximum}));
@@ -80,10 +80,41 @@ test('untrusted, duplicate or malformed manifests make no content requests',asyn
   ['{"releaseId":"edition","files":[]} trailing']
  ];
  for(const [body,expected=hash(body)] of cases){
-  let requests=0;await assert.rejects(verifyLiveFiles(async url=>{assert.equal(new URL(url).pathname,'/publication.json');requests++;return new Response(body);},'https://example.test/',{releaseId:'edition',manifestHash:expected}),error=>error.issue?.path==='publication.json');assert.equal(requests,1);
+  let count=0;try{count=JSON.parse(body).files?.length??0;}catch{}
+  let requests=0;await assert.rejects(verifyLiveFiles(async url=>{assert.equal(new URL(url).pathname,'/publication.json');requests++;return new Response(body);},'https://example.test/',{releaseId:'edition',manifestHash:expected,manifestBytes:Buffer.byteLength(body),manifestFiles:count}),error=>error.issue?.path==='publication.json');assert.equal(requests,1);
  }
 });
 
 test('a stalled manifest reports the transfer failure and closes the response',async()=>{
- let cancelled=false;await assert.rejects(verifyLiveFiles(()=>new Response(new ReadableStream({start(controller){controller.enqueue(Buffer.from('{"releaseId":"edition","files":['));},cancel(){cancelled=true;}})),'https://example.test/',{releaseId:'edition',manifestHash:hash('unused')},{timeoutMs:30}),error=>error.issue?.path==='publication.json'&&error.issue.reason==='unavailable');assert.equal(cancelled,true);
+ let cancelled=false;await assert.rejects(verifyLiveFiles(()=>new Response(new ReadableStream({start(controller){controller.enqueue(Buffer.from('{"releaseId":"edition","files":['));},cancel(){cancelled=true;}})),'https://example.test/',{releaseId:'edition',manifestHash:hash('unused'),manifestBytes:1024,manifestFiles:1},{timeoutMs:30}),error=>error.issue?.path==='publication.json'&&error.issue.reason==='unavailable');assert.equal(cancelled,true);
+});
+
+test('exact reviewed bounds reject oversized chunked manifests without trusting response headers',async()=>{
+ const s=site(new Map([['index.html','reviewed']]));let reads=0,cancelled=false,requests=0;
+ const request=()=>{requests++;return new Response(new ReadableStream({pull(controller){reads++;controller.enqueue(Buffer.alloc(32,32));},cancel(){cancelled=true;}}),{headers:{'Content-Length':String(s.receipt.manifestBytes)}});};
+ await assert.rejects(verifyLiveFiles(request,'https://example.test/',s.receipt),error=>error.issue?.reason==='size');
+ assert.equal(requests,1);assert.equal(cancelled,true);assert.ok(reads<=Math.floor(s.receipt.manifestBytes/32)+2);
+});
+
+test('the manifest digest is authenticated before malformed content reaches the descriptor parser',async()=>{
+ const s=site(new Map([['index.html','reviewed']]));let requests=0;
+ await assert.rejects(verifyLiveFiles(()=>{requests++;return new Response('!'.repeat(s.receipt.manifestBytes));},'https://example.test/',s.receipt),error=>error.issue?.reason==='hash');
+ assert.equal(requests,1);
+});
+
+test('progressing streams cannot refresh the absolute manifest deadline',async()=>{
+ for(const immediate of [false,true]){
+  let reads=0,cancelled=false;const start=Date.now(),receipt={releaseId:'edition',manifestHash:hash('reviewed'),manifestBytes:16*1024*1024,manifestFiles:1};
+  const request=()=>new Response(new ReadableStream({async pull(controller){if(!immediate)await new Promise(resolve=>setTimeout(resolve,5));if(!cancelled){reads++;controller.enqueue(Buffer.from(' '));}},cancel(){cancelled=true;}}));
+  await assert.rejects(verifyLiveFiles(request,'https://example.test/',receipt,{timeoutMs:500,deadlineMs:60}),error=>error.issue?.reason==='unavailable');
+  assert.equal(cancelled,true);assert.ok(reads>1);assert.ok(Date.now()-start<2000,'deadline must run despite continuous byte progress');
+ }
+});
+
+test('missing or invalid trusted manifest bounds fail before requesting the website',async()=>{
+ const s=site(new Map());let requests=0;
+ for(const receipt of [{releaseId:s.receipt.releaseId,manifestHash:s.receipt.manifestHash},{...s.receipt,manifestBytes:0},{...s.receipt,manifestFiles:-1}]){
+  await assert.rejects(verifyLiveFiles(()=>{requests++;throw Error('unexpected request');},'https://example.test/',receipt),error=>error.issue?.reason==='metadata');
+ }
+ assert.equal(requests,0);
 });

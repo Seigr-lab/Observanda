@@ -2,48 +2,60 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
 import {safeLivePath,retainLiveManifest,retainRemovedLivePaths} from './publication-live-manifest.js';
+import {validLiveManifestBudget} from './publication-live-budget.js';
+import {spoolLiveManifest} from './publication-live-spool.js';
+import {performance} from 'node:perf_hooks';
 
 export {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths} from './publication-live-inventory.js';
 const safePath=safeLivePath;
+const minimumTransferRate=64*1024;
 
 export class LiveVerificationError extends Error{
  constructor(path,reason){super(reason);this.issue={path,reason};}
 }
-// At most four bounded streaming requests. Headers and each body read have an
-// idle deadline, so a large transfer can continue while it is making progress.
-export async function verifyLiveFiles(request,base,receipt,{removed=[],signal,progress=async()=>{},timeoutMs=30000}={}){
+// At most four streaming requests, each with an exact trusted byte budget,
+// an idle deadline and a nonrefreshing deadline scaled to that byte budget.
+export async function verifyLiveFiles(request,base,receipt,{removed=[],signal,progress=async()=>{},timeoutMs=30000,deadlineMs}={}){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>2147483647||deadlineMs!==undefined&&(!Number.isSafeInteger(deadlineMs)||deadlineMs<1))throw new AppError('INVALID');
  const root=new URL(base.endsWith('/')?base:base+'/'),controller=new AbortController(),combined=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
  async function read(name,{bytes,max=bytes,sha,consume,absent=false}={}){
   if(!safePath(name))throw new LiveVerificationError('publication.json','manifest');
   const url=new URL(name,root);if(url.origin!==root.origin||!url.pathname.startsWith(root.pathname))throw new LiveVerificationError('publication.json','manifest');
-  const scope=new AbortController(),abort=()=>scope.abort(combined.reason);let timer;
+  const scope=new AbortController(),abort=()=>scope.abort(combined.reason);let timer,deadline;
+  const duration=deadlineMs??timeoutMs+Math.ceil((max??0)/minimumTransferRate)*1000;if(!Number.isSafeInteger(duration))throw new LiveVerificationError(name,'size');
+  const until=performance.now()+duration,checkDeadline=()=>{if(performance.now()>=until)scope.abort(new Error('deadline'));scope.signal.throwIfAborted();};
+  const expire=()=>{const left=until-performance.now();if(left<=0)scope.abort(new Error('deadline'));else deadline=setTimeout(expire,Math.min(2147483647,left));};expire();
   const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>scope.abort(new Error('timeout')),timeoutMs);};refresh();combined.addEventListener('abort',abort,{once:true});if(combined.aborted)abort();
   let reader;
   const bounded=promise=>new Promise((resolve,reject)=>{const stop=()=>reject(scope.signal.reason);scope.signal.addEventListener('abort',stop,{once:true});if(scope.signal.aborted)stop();Promise.resolve(promise).then(resolve,reject).finally(()=>scope.signal.removeEventListener('abort',stop));});
   try{
    const response=await bounded(request(url,{redirect:'error',signal:scope.signal,headers:{'Cache-Control':'no-cache'}}));
    reader=response.body?.getReader();
-   refresh();
+   clearTimeout(timer);
    if(absent){if(![404,410].includes(response.status))throw new LiveVerificationError(name,'removed');return {bytes:0};}
    if(!response.ok)throw new LiveVerificationError(name,'missing');
    const hash=createHash('sha256');let received=0,finished=false,transferError;
    const chunks=async function*(){
-    try{if(reader)while(true){const {done,value}=await bounded(reader.read());if(done)break;received+=value.length;if(!Number.isSafeInteger(received)||max!==undefined&&received>max)throw new LiveVerificationError(name,'size');if(value.length)refresh();hash.update(value);yield value;}finished=true;}
+    try{if(reader)while(true){checkDeadline();refresh();const {done,value}=await bounded(reader.read());clearTimeout(timer);checkDeadline();if(done)break;received+=value.length;if(!Number.isSafeInteger(received)||max!==undefined&&received>max)throw new LiveVerificationError(name,'size');hash.update(value);yield value;}finished=true;}
     catch(error){transferError=error;throw error;}
    };
-   try{if(consume)await consume(chunks());else for await(const chunk of chunks())void chunk;}catch(error){throw transferError??error;}
+   try{if(consume)await consume(chunks(),scope.signal);else for await(const chunk of chunks())void chunk;}catch(error){throw transferError??error;}checkDeadline();
    if(!finished)throw new LiveVerificationError(name,'manifest');
    if(bytes!==undefined&&received!==bytes)throw new LiveVerificationError(name,'size');
    if(sha&&hash.digest('hex')!==sha)throw new LiveVerificationError(name,'hash');
    return {bytes:received};
   }catch(error){if(error instanceof LiveVerificationError||error instanceof AppError)throw error;combined.throwIfAborted();throw new LiveVerificationError(name,'unavailable');}
-  finally{clearTimeout(timer);combined.removeEventListener('abort',abort);if(reader)reader.cancel().catch(()=>{});scope.abort();}
+  finally{clearTimeout(timer);clearTimeout(deadline);combined.removeEventListener('abort',abort);if(reader)reader.cancel().catch(()=>{});scope.abort();}
  }
  try{
   return await withScratch(async work=>{
    let files;const fail=reason=>new LiveVerificationError('publication.json',reason);
    if(!/^[a-f0-9]{64}$/.test(receipt.manifestHash??'')||typeof receipt.releaseId!=='string'||!receipt.releaseId)throw fail('manifest');
-   const first=await read('publication.json',{sha:receipt.manifestHash,consume:async chunks=>{files=await retainLiveManifest(chunks,work,receipt.releaseId,{signal:combined,fail});}});
+   if(!validLiveManifestBudget(receipt))throw fail('metadata');
+   const first=await withScratch(async raw=>{
+    let stored;const first=await read('publication.json',{bytes:receipt.manifestBytes,sha:receipt.manifestHash,consume:async(chunks,signal)=>{stored=await spoolLiveManifest(chunks,raw,receipt.manifestBytes,{signal,fail});}});
+    files=await retainLiveManifest(stored.chunks({signal:combined}),work,receipt.releaseId,{signal:combined,fail,expectedFiles:receipt.manifestFiles,maxBytes:receipt.manifestBytes});return first;
+   },{signal:combined});
    const removedCount=await retainRemovedLivePaths(work,removed,{signal:combined,fail}),total=files+removedCount;
    let done=0,bytes=first.bytes;const pending=work.items();
    const worker=async()=>{while(true){combined.throwIfAborted();const item=await pending.next();if(item.done)return;const f=item.value,result=await read(f.path,{bytes:f.bytes,sha:f.sha256,absent:f.absent});bytes+=result.bytes;await progress({done:++done,total});}};

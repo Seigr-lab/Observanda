@@ -1,5 +1,5 @@
 import {githubPlanReader,requireGithubPlanCollections} from './github-plan-index.js';
-import {contentHash} from './file-content.js';
+import {reviewedManifest} from './publication-live-budget.js';
 import {GithubBlobBody} from './github-blob-body.js';
 import {buildGithubTree,verifyRemoteGithubTree} from './github-trees.js';
 import {admitGithubPlan,githubPagesProtection} from './github-publication-plan.js';
@@ -77,7 +77,8 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  }
  const verified=await call(`/git/ref/heads/${c.branch}`);
  if(verified.object?.sha!==journal.commit)throw new AppError('PUBLISH_STALE');
- journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',...(journal.archive?{archive:journal.archive}:{}),manifestHash:contentHash(await candidate.files.get('publication.json'))};
+ journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',...(journal.archive?{archive:journal.archive}:{})};
+ Object.assign(journal.receipt,await reviewedManifest(candidate));
  await checkpoint();await pushed(journal.receipt,journal);
  await report(messages.verifying);
  await verifyRemoteGithubTree(call,journal.tree,expected,{signal});

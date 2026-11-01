@@ -15,8 +15,10 @@ test('real shell SSH protocol resumes lost claim, sealed release and switch resp
   await assert.rejects(f.host.deploy(f.config,candidate,book.id,{journal,save}));assert.equal(lost,true);
   if(point==='switch'||point==='unlock')assert.ok((await f.current()).endsWith(candidate.id));
   const uploaded=f.calls.filter(c=>c.program==='sftp').length;f.setHook(null);
+  if(point==='unlock'){delete stored.receipt.manifestBytes;delete stored.receipt.manifestFiles;}
   const receipt=await new SSHHost(f.run).deploy(f.config,candidate,book.id,{journal:structuredClone(stored),save});
   assert.equal(receipt.releaseId,candidate.id);assert.equal(stored.released,true);assert.ok((await f.current()).endsWith(candidate.id));
+  assert.equal(receipt.manifestBytes,Buffer.byteLength(candidate.files.get('publication.json')));assert.equal(receipt.manifestFiles,candidate.files.size-1);
   if(point!=='claim')assert.equal(f.calls.filter(c=>c.program==='sftp').length,uploaded);
   assert.equal((await readFile(path.join(f.directory,'site','current','publication.json'),'utf8')),candidate.files.get('publication.json'));
  });

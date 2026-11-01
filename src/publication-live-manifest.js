@@ -1,12 +1,12 @@
-// A live manifest can contain arbitrarily many files. Parse descriptors one at
-// a time into the existing encrypted scratch store; do not fetch their URLs
-// until the caller has authenticated the entire manifest against its receipt.
+// Only authenticated, byte-bounded manifest bytes reach this parser. Descriptor
+// count and scratch payload are bounded by the locally reviewed publication.
 import {datasetJSONTokens} from './dataset-json-tokens.js';
 export const safeLivePath=value=>typeof value==='string'&&value.length>0&&value.length<=2048&&!/[\\%?#\x00-\x20]/.test(value)&&value.split('/').every(p=>p&&p!=='.'&&p!=='..')&&!value.includes(':');
 const fields=new Set(['path','bytes','sha256']);
-export async function retainLiveManifest(chunks,work,releaseId,{signal,fail}={}){
- let root=false,files=false,ended=false,release=null,current=null,count=0,batch=[];
+export async function retainLiveManifest(chunks,work,releaseId,{signal,fail,expectedFiles,maxBytes}={}){
+ let root=false,files=false,ended=false,release=null,current=null,count=0,payloadBytes=0,batch=[];
  const reject=()=>{throw fail('manifest');};
+ if(!Number.isSafeInteger(expectedFiles)||expectedFiles<0||!Number.isSafeInteger(maxBytes)||maxBytes<1)reject();
  const selected=({path})=>path.length===1&&path[0]==='releaseId'||path.length===3&&path[0]==='files'&&fields.has(path[2]);
  async function flush(){
   if(!batch.length)return;const names=batch.map(file=>file.path);
@@ -24,13 +24,13 @@ export async function retainLiveManifest(chunks,work,releaseId,{signal,fail}={})
     if(event==='begin'){if(type!=='object'||current)reject();current={};}
     else if(event==='end'){
      if(!current||!safeLivePath(current.path)||current.path==='publication.json'||!Number.isSafeInteger(current.bytes)||current.bytes<0||!/^[a-f0-9]{64}$/.test(current.sha256??''))reject();
-     batch.push(current);current=null;count++;if(!Number.isSafeInteger(count))reject();if(batch.length===32)await flush();
+     count++;payloadBytes+=Buffer.byteLength(JSON.stringify(current));if(count>expectedFiles||!Number.isSafeInteger(payloadBytes)||payloadBytes>maxBytes)reject();batch.push(current);current=null;if(batch.length===32)await flush();
     }else reject();
    }else if(path.length===3&&fields.has(path[2])){
     if(!current||event!=='value'||kind!==(path[2]==='bytes'?'number':'string'))reject();current[path[2]]=path[2]==='bytes'?Number(value):value;
    }
   }
-  if(!root||!ended||!files||current||release!==releaseId)reject();await flush();return count;
+  if(!root||!ended||!files||current||release!==releaseId||count!==expectedFiles)reject();await flush();return count;
  }catch(error){signal?.throwIfAborted();if(error.code==='MATERIAL_TABLE')reject();throw error;}
 }
 export async function retainRemovedLivePaths(work,removed,{signal,fail}={}){

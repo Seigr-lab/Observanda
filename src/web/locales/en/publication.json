@@ -219,6 +219,7 @@
   "liveMismatch": "The served bytes do not match the reviewed edition.",
   "liveUnavailable": "The request failed or timed out.",
   "liveManifestInvalid": "The served manifest or file inventory does not match this deployment.",
+  "liveVerificationMetadata": "Publish a reviewed edition again to restore the information needed for live verification.",
   "liveChecking": "Checking the live website",
   "liveProgress": "Live check: {done} of {total} files and removed URLs checked.",
   "liveStopped": "Live check stopped. Resume restarts verification against the current served bytes.",

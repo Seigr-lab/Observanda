@@ -219,6 +219,7 @@
   "liveMismatch": "De leverte bytene samsvarer ikke med den gjennomgåtte utgaven.",
   "liveUnavailable": "Forespørselen mislyktes eller fikk tidsavbrudd.",
   "liveManifestInvalid": "Det leverte manifestet eller filoversikten samsvarer ikke med denne utrullingen.",
+  "liveVerificationMetadata": "Publiser en gjennomgått utgave på nytt for å gjenopprette informasjonen som trengs for å kontrollere det publiserte nettstedet.",
   "liveChecking": "Kontrollerer det aktive nettstedet",
   "liveProgress": "Nettstedskontroll: {done} av {total} filer og fjernede URL-er kontrollert.",
   "liveStopped": "Nettstedskontrollen er stoppet. Fortsett starter verifiseringen på nytt mot bytene som leveres nå.",

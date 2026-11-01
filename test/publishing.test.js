@@ -42,6 +42,7 @@ test('GitHub upload sends only reviewed bytes, verifies hashes, and extends only
   const saved = await s.publisher.save(config, 'new'); await s.publisher.connect(token);
   const receipt = await s.publisher.deploy(s.candidate, saved.etag, s.owner);
   assert.equal(receipt.status, 'uploaded-awaiting-pages');
+  assert.equal(receipt.manifestBytes,Buffer.byteLength(s.candidate.files.get('publication.json')));assert.equal(receipt.manifestFiles,s.candidate.files.size-1);
   const firstCommit = fixture.calls.find(c => c.route.endsWith('/git/commits')).data;
   assert.deepEqual(firstCommit.parents, []);
   for (const content of s.candidate.files.values()) assert.ok(fixture.blobs.has(sha('blob', Buffer.from(content))));
@@ -117,6 +118,10 @@ test('reviewing existing main pins its parent and Pages source, then subsequent 
  await s.publisher.save(verified.config,changed.etag);
  remote.setServed('styles.css','tampered stylesheet');await assert.rejects(s.publisher.verifyLive(),{code:'PUBLISH_NOT_LIVE'});
  assert.equal((await s.publisher.read()).receipt.verification.failed,true);assert.equal((await s.publisher.read()).receipt.verification.files,undefined);
+ const local=await s.publisher.read(),key=s.publisher.destinationKey(local.config),legacy={...local.receipt};delete legacy.manifestBytes;delete legacy.manifestFiles;
+ await s.publisher.workspace.withLock(()=>s.publisher.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize({[key]:legacy})));
+ let reads=0;s.publisher.liveRequest=()=>{reads++;throw Error('unexpected request');};
+ await assert.rejects(s.publisher.verifyLive(),error=>error.code==='PUBLISH_NOT_LIVE'&&error.details?.[0]?.reason==='metadata');assert.equal(reads,0);
 });
 
 test('a changed main branch or Pages source invalidates approval before any upload',async t=>{

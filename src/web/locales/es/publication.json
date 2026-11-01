@@ -219,6 +219,7 @@
   "liveMismatch": "Los bytes servidos no coinciden con la edición revisada.",
   "liveUnavailable": "La solicitud ha fallado o ha agotado el tiempo de espera.",
   "liveManifestInvalid": "El manifiesto o inventario de archivos servido no coincide con este despliegue.",
+  "liveVerificationMetadata": "Vuelve a publicar una edición revisada para recuperar la información necesaria para verificar el sitio web publicado.",
   "liveChecking": "Comprobando el sitio web publicado",
   "liveProgress": "Comprobación del sitio publicado: {done} de {total} archivos y URL eliminadas comprobados.",
   "liveStopped": "Comprobación del sitio publicado detenida. Reanudar reinicia la verificación contra los bytes servidos actuales.",

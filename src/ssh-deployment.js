@@ -6,6 +6,7 @@ import {AppError} from './errors.js';
 import {writePublicFile,contentHash} from './file-content.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationText} from './web/publication-messages.js';
+import {reviewedManifest,validLiveManifestBudget} from './publication-live-budget.js';
 
 export const shellQuote=value=>"'"+value.replaceAll("'","'\\''")+"'";
 const batchQuote=value=>'"'+value.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
@@ -28,7 +29,7 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
  const checksumRows=async function*(){for await(const [name,content] of candidate.files)yield contentHash(content)+'  '+name+'\n';};
  const checksums=()=>indexed?checksumRows():[...candidate.files].map(([name,content])=>contentHash(content)+'  '+name).join('\n')+'\n';
  const verify=(directory,readOnly=false)=>`test -d ${q(directory)}; test ! -L ${q(directory)}; cd ${q(directory)}; test -z "$(find . ! -type f ! -type d -print)"; test "$(find . -type f | wc -l | tr -d ' ')" = ${candidate.files.size}; sha256sum -c - >/dev/null; `+(readOnly?'':'find . -type f -exec chmod 644 {} +; find . -type d -exec chmod 755 {} +; ');
- const receipt=async()=>({releaseId:candidate.id,commit:candidate.id,previousRelease:journal.parent==='-'?null:journal.parent.slice(9),at:new Date().toISOString(),status:'uploaded-remote-verified',manifestHash:contentHash(await candidate.files.get('publication.json'))});
+ const receipt=async()=>({releaseId:candidate.id,commit:candidate.id,previousRelease:journal.parent==='-'?null:journal.parent.slice(9),at:new Date().toISOString(),status:'uploaded-remote-verified',...await reviewedManifest(candidate)});
  const releaseClaim=()=>call(`set -eu; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)}; if test -e ${q(lock)} || test -L ${q(lock)}; then ${owned}rm ${q(lock)}; fi;`,'','reconcile');
  await guard({phase:'read'});await host.check(c,{signal});
  if(journal.pushAttempted){
@@ -38,7 +39,7 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
   if(!pointer(journal.parent)||!pointer(observed)||observed!==journal.parent&&observed!=='releases/'+candidate.id)throw new AppError('PUBLISH_STALE');
   if(observed==='releases/'+candidate.id){
    await call(`set -eu; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)}; ${verify(release,true)}`,checksums(),'read');
-   journal.commit=candidate.id;journal.receipt??=await receipt();await checkpoint();
+   journal.commit=candidate.id;journal.receipt??=await receipt();if(!validLiveManifestBudget(journal.receipt))Object.assign(journal.receipt,await reviewedManifest(candidate));await checkpoint();
    await releaseClaim();journal.released=true;await checkpoint();await report('sshConfirmed');return journal.receipt;
   }
   if(journal.receipt)throw new AppError('PUBLISH_STALE');
