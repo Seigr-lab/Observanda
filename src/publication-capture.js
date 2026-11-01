@@ -93,7 +93,7 @@ async function capture(workspace,operation,{signal,id:requestedId,write=fn=>tran
  // a selected external owner. Subsequent captures need no admission writer.
  const figureStorage=await workspace.catalogue(async store=>{const format=await catalogueFormat(store.db);return catalogueRequiresRetainedFigures(format)&&catalogueRequiresFigureAuthoring(format);});
  if(!figureStorage)await admit(write,()=>workspace.catalogue(async store=>{signal?.throwIfAborted();await requireRetainedFigures(store.db);await requireFigureAuthoring(store.db);signal?.throwIfAborted();}),signal);
- return withScratch(written=>workspace.catalogue(async store=>{
+ return workspace.catalogue(store=>withScratch(async written=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();
   const id=requestedId??randomUUID(),prefix=input(id)+'/',pending=new Map();let bytes=0,finished=false;
@@ -143,5 +143,5 @@ async function capture(workspace,operation,{signal,id:requestedId,write=fn=>tran
    if(!finished)await withoutWriterWait(()=>discard(workspace,id,fn=>transaction(workspace,fn))).catch(()=>{/* The durable journal retains interrupted cleanup. */});
    throw error;
   }
- }),{signal});
+ },{signal}));
 }

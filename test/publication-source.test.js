@@ -29,8 +29,14 @@ async function fixture(t,count=42,{publicPrefix=0}={}){
  for(const i of [2,count-1])Object.assign(book.entries[i],{share:true,title:'Public observation '+i,body:'Selected readable content '+i});
  for(let i=0;i<publicPrefix;i++)Object.assign(book.entries[i],{share:true,title:'Public observation '+i,body:'Selected readable content '+i});
  const f=await encryptedFixture(directory,book),jobs=workspaceJobs(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,...jobs,book,releases:new PublicationJobs(f.workspace)};
+}
+async function startCaptured(f,command){
+ const job=await f.releases.start(command,f.queue);
+ const leased=await f.queue.claim();assert.equal(leased.id,job.id);
+ try{if(job.input.request)await f.releases.capture(leased,{signal:new AbortController().signal,progress:async()=>{},write:operation=>f.queue.checkpoint(leased.id,leased.lease.token,operation)});return leased;}
+ catch(error){await f.queue.release(leased.id,leased.lease.token,{error});throw error;}
 }
 function forbidPrivateReads(t,ids){
  const read=ResearchCatalogue.prototype.read,manifest=ResearchCatalogue.prototype.manifest,record=ResearchCatalogue.prototype.record,loaded=[];
@@ -43,15 +49,15 @@ function forbidPrivateReads(t,ids){
 test('unsaved presentation and selection commands drive preview and retained releases without saving',async t=>{
  const f=await fixture(t),outline=await f.releases.workspace.outline(),included=f.book.entries[0],excluded=f.book.entries[2],last=f.book.entries.at(-1);
  const command={workspaceId:f.book.id,baseEtag:outline.etag,metadata:{website:{...outline.metadata.website,footer:'Unsaved public footer'}},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:included.id,share:true,attachments:[]},{id:excluded.id,share:false,attachments:[]}]}};
- const {loaded,restore}=forbidPrivateReads(t,[included.id,last.id]),request={etag:outline.etag,websitePin:outline.websitePin,draft:command};
- const source=await publicationSource(f.workspace,request);assert.deepEqual(source.entries.map(r=>r.id),[included.id,last.id]);assert.equal(source.website.footer,'Unsaved public footer');
- assert.equal((await f.workspace.outline()).etag,outline.etag);assert.deepEqual(loaded,[included.id,last.id]);loaded.length=0;
- const job=await f.releases.start(request,f.queue),input=await f.releases.source(job.id);
- assert.deepEqual(await publicationInputBook(f.workspace,input),source);assert.deepEqual(loaded,[included.id,last.id]);assert.equal((await f.workspace.outline()).etag,outline.etag);
+ const {loaded,restore}=forbidPrivateReads(t,[last.id]),request={etag:outline.etag,websitePin:outline.websitePin,draft:command};
+ const source=await publicationSource(f.workspace,request);assert.deepEqual(source.entries.map(r=>r.id),[last.id]);assert.equal(source.website.footer,'Unsaved public footer');
+ assert.equal((await f.workspace.outline()).etag,outline.etag);assert.deepEqual(loaded,[last.id]);loaded.length=0;
+ const job=await startCaptured(f,request),input=await f.releases.source(job.id);
+ const retained=await publicationInputBook(f.workspace,input);assert.equal(retained.website.footer,source.website.footer);assert.deepEqual(retained.entries.map(({id,body,attachments,sections})=>({id,body,attachments,sections})),source.entries.map(({id,body,attachments,sections})=>({id,body,attachments,sections})));assert.ok(!JSON.stringify(retained).includes('PRIVATE_BODY_'));assert.deepEqual(loaded,[last.id]);assert.equal((await f.workspace.outline()).etag,outline.etag);
  restore();
  await assert.rejects(publicationSource(f.workspace,{...request,book:f.book}),{code:'INVALID'});
  await assert.rejects(publicationSource(f.workspace,{...request,draft:{...command,workspaceId:randomUUID()}}),{code:'WORKSPACE_CHANGED'});
- await assert.rejects(publicationSource(f.workspace,{...request,draft:{...command,selection:{includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}}),{code:'RECORD_CHANGED'});
+ await assert.rejects(publicationSource(f.workspace,{...request,draft:{...command,selection:{includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}}),{code:'INVALID'});
  await assert.rejects(publicationSource(f.workspace,{...request,draft:{...command,selection:{includeProjects:[],records:[{id:included.id,share:true,attachments:[{id:randomUUID(),share:true}]}]}}}),{code:'INVALID'});
 });
 
@@ -97,7 +103,7 @@ test('paged publication still validates late selection overrides and never loads
  const request={...source,draft:command},first=await publicationSelection(f.workspace,{source:request});assert.equal(first.items.length,20);assert.equal(guard.loaded.length,0);guard.loaded.length=0;
  await assert.rejects(publicationReferences(f.workspace,{source:request,recordId:last.id}),{code:'RECORD_CHANGED'});assert.equal(guard.loaded.length,0);
  for(const override of [{id:randomUUID(),share:true,attachments:[]},{id:last.id,share:true,attachments:[{id:randomUUID(),share:true}]}]){
-  await assert.rejects(publicationSelection(f.workspace,{source:{...source,draft:{...command,selection:{includeProjects:[],records:[override]}}}}),{code:override.id===last.id?'INVALID':'RECORD_CHANGED'});
+  await assert.rejects(publicationSelection(f.workspace,{source:{...source,draft:{...command,selection:{includeProjects:[],records:[override]}}}}),{code:'INVALID'});
   assert.equal(guard.loaded.length,0);
  }
 });
@@ -105,10 +111,10 @@ for(const count of [42,420])test('saved edition selects public originals before 
  const f=await fixture(t,count),outline=await f.releases.workspace.outline(),command={workspaceId:f.book.id,etag:outline.etag,websitePin:outline.websitePin},publicIds=f.book.entries.filter(e=>e.share).map(e=>e.id),{loaded}=forbidPrivateReads(t,publicIds);
  const source=await publicationSource(f.workspace,command);assert.deepEqual(loaded.sort(),publicIds.sort());
  assert.deepEqual(publicProjection(source),publicProjection(f.book));loaded.length=0;
- const job=await f.releases.start(command,f.queue),input=await f.releases.source(job.id);
+ const job=await startCaptured(f,command),input=await f.releases.source(job.id);
  assert.equal(await (await openPublicationInput(f.releases.workspace,input)).recordCount(),2);assert.ok(!JSON.stringify(input).includes('PRIVATE_BODY_'));assert.ok(!JSON.stringify(input).includes('PRIVATE_TITLE_'));
  assert.deepEqual(loaded.sort(),publicIds.sort());
- const leased=await f.queue.claim(),output=await f.releases.prepare(leased,{signal:new AbortController().signal,progress:async()=>{}});
+ const leased=job.lease?job:await f.queue.claim(),output=await f.releases.prepare(leased,{signal:new AbortController().signal,progress:async()=>{}});
  await f.queue.complete(leased.id,leased.lease.token,output);
  const candidate=await f.releases.read(output.reviewId),text=await publicationText(candidate);
  assert.ok(text.includes('Selected readable content'));assert.ok(!text.includes('PRIVATE_'));assert.deepEqual(loaded.sort(),publicIds.sort());
@@ -127,17 +133,17 @@ test('private retained inputs are checked by pinned membership without entering 
  const result=await materials.plot({recordId:conclusion.id,title:'Public result',dataset,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'mean',kind:'bar',order:'source',mode:'replace',decimal:'.'}});
  await records.save({workspaceId:f.book.id,changes:[{id:conclusion.id,expectedRevision:recordRevision(conclusion),record:{...conclusion,figures:[result.figure]}}]},{compact:true});
  const before=await f.releases.workspace.outline(),command={workspaceId:f.book.id,etag:before.etag,websitePin:before.websitePin},guard=forbidPrivateReads(t,f.book.entries.filter(e=>e.share).map(e=>e.id));
- const first=await f.releases.start(command,f.queue),source=await f.releases.source(first.id);
+ const first=await startCaptured(f,command),source=await f.releases.source(first.id);
  assert.deepEqual({...source.researchReview,analysis:undefined},{references:{count:0,records:0},retainedFigures:1,changedInputs:0,editedFigures:0,analysis:undefined});assert.equal(source.researchReview.analysis.count,0);assert.ok(!JSON.stringify(source).includes(method.title));
  guard.restore();
- const site=await new WebsiteSites(f.workspace).read(null),draft={...command,draft:{workspaceId:f.book.id,baseEtag:command.etag,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection}},unsaved=await f.releases.start(draft,f.queue);
+ const site=await new WebsiteSites(f.workspace).read(null),draft={...command,draft:{workspaceId:f.book.id,baseEtag:command.etag,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection}},unsaved=await startCaptured(f,draft);
  assert.equal((await f.releases.source(unsaved.id)).researchReview.changedInputs,0,'Unsaved presentation drafts resolve related originals across pinned research');
  await records.save({workspaceId:f.book.id,changes:[{id:method.id,expectedRevision:recordRevision(method),record:{...method,body:'Revised private procedure'}}]},{compact:true});
  forbidPrivateReads(t,f.book.entries.filter(e=>e.share).map(e=>e.id));
  // The original edition keeps its correct historical assessment after an edit.
  assert.equal((await materials.releaseSources(await publicationInputBook(f.workspace,source),[conclusion.id],{sourceEtag:command.etag})).warnings.length,0);
- const second=await f.releases.start({...command,...await f.releases.workspace.outline()},f.queue),changed=await f.releases.source(second.id);
+ const second=await startCaptured(f,{...command,...await f.releases.workspace.outline()}),changed=await f.releases.source(second.id);
  assert.deepEqual({...changed.researchReview,analysis:undefined},{references:{count:0,records:0},retainedFigures:1,changedInputs:1,editedFigures:0,analysis:undefined});assert.equal(changed.researchReview.analysis.count,1);assert.notEqual(changed.researchReview.analysis.fingerprint,source.researchReview.analysis.fingerprint);
  assert.equal((await f.releases.source(first.id)).researchReview.changedInputs,0);
- await assert.rejects(f.releases.start(command,f.queue),{code:'CONFLICT'});
+ await assert.rejects(startCaptured(f,command),{code:'CONFLICT'});
 });

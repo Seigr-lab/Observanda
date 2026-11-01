@@ -39,15 +39,16 @@ async function checkSourcePermissions(workspace,source,{sourceReader,signal,chec
    if(row.revision!==current.publicationDescriptor.revision)assertAllowed(row,await store.record(member.id,member.revision),snapshot.metadata);
   }
  };
+ const foreign=[];
  await host.catalogue(async store=>{
   // Header and collection admission perform many selected node reads. Keep
   // those reads in this one fresh owner snapshot, rather than opening a read
   // transaction for each node. Close it before visiting any foreign owner.
   input??=await openPublicationInput(workspace,source,{signal});
+  for await(const group of input.sourceGroups())if(group.workspaceId!==source.workspaceId)foreign.push(group);
   const head=await store.head();if(head===source.etag||checkedSnapshots.get(source.workspaceId)===head)return;
   await checkCatalogue(store,await store.snapshot(),source.workspaceId);checkedSnapshots.set(source.workspaceId,head);
  });
- const foreign=[];for await(const group of input.sourceGroups())if(group.workspaceId!==source.workspaceId)foreign.push(group);
  if(!foreign.length)return;
  if(typeof sourceReader!=='function')throw new AppError('ACCESS_LOCKED');
  const reader=await sourceReader({signal});

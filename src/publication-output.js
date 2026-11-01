@@ -51,19 +51,24 @@ export async function openPublicationOutput(workspace,stored,{signal}={}){
 // A new attempt owns an empty namespace. Its immutable node receipts live in
 // bounded encrypted scratch storage until preparation completes or fails.
 export function withPublicationOutputWriter(workspace,source,job,options,operation){
- return publicationResearchWorkspace(workspace).withCatalogueConnections(()=>withScratch(async blocks=>{
-  const db=await publicationResearchWorkspace(workspace).openCatalogue({signal:options?.signal});let failure,writer;
+ return publicationResearchWorkspace(workspace).withCatalogueConnections(async()=>{
+  const db=await publicationResearchWorkspace(workspace).openCatalogue({signal:options?.signal});let failure;
   try{
+   return await db.scope(()=>withScratch(async blocks=>{
+   let writer,renderFailure;
+   try{
    await db.run('BEGIN');
    const key='Observanda/publication-output/'+db.id+'/'+JSON.stringify(publicationOutputOwner(source,job));
    if(!(await db.get('SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',key)).locked)throw new AppError('LOCKED');
    writer=new PublicationOutputWriter(workspace,source,job,{...options,[freshBlocks]:blocks});return await operation(writer);
+   }catch(error){renderFailure=error;throw error;}
+   finally{try{await writer?.drain();}catch(error){if(!renderFailure)throw error;}}
+   },{signal:options?.signal}));
   }catch(error){failure=error;throw error;}
   finally{
-   try{await writer?.drain();}catch(error){if(!failure){failure=error;throw error;}}
-   finally{try{await db.close();}catch(error){if(!failure)throw error;}}
+   try{await db.close();}catch(error){if(!failure)throw error;}
   }
- },{signal:options?.signal}));
+ });
 }
 export class PublicationOutputWriter{
  constructor(workspace,source,job,{directory,signal,write=operation=>workspace.withLock(operation),blockedValues=[],[freshBlocks]:blocks}={}){

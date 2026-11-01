@@ -28,7 +28,7 @@ async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-publication-compatibility-')),book=upgradeNotebook(sampleNotebook());
  book.entries=[{...book.entries[0],share:true,body:'Exact portable research original',attachments:[],figures:[],relations:[],sections:[]}];
  const value=await encryptedFixture(directory,book),vaults=[value.vault];
- t.after(async()=>{vaults.forEach(clearVault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-publication-compatibility-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-publication-compatibility-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  return {...value,directory,book,vaults};
 }
 
@@ -63,7 +63,7 @@ test('native publication owners survive ordinary archive and direct transfer plu
  async function archive(name){
   const root=path.join(f.directory,name);await mkdir(path.join(root,'.observanda'),{recursive:true});for(const file of [path.basename(await workspaceFile(workspace.root)),'.observanda/access.json'])await copyFile(path.join(workspace.root,file),path.join(root,file));
   const db=await workspace.openCatalogue();try{await backupCatalogue(workspace.root,root,{connection:db});}finally{await db.close();}
-  const header=JSON.parse((await readFile(path.join(root,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.version,13);assert.equal(header.catalogueVersion,generation);return new Workspace(root,f.vault);
+  const header=JSON.parse((await readFile(path.join(root,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,generation);return new Workspace(root,f.vault);
  }
  const copied=await archive('ordinary-archive');await check(copied);assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(workspace.root)).id);
  const directRoot=path.join(f.directory,'ordinary-direct');await mkdir(path.join(directRoot,'.observanda'),{recursive:true});await copyFile(path.join(workspace.root,'.observanda/access.json'),path.join(directRoot,'.observanda/access.json'));const direct=new Workspace(directRoot,f.vault);await direct.writeFile(await workspaceFile(directRoot,{secure:true}),descriptorText);

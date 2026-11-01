@@ -86,10 +86,10 @@ export class DurableJobs{
    return null;
   });
  }
- async held(id,token){await this.relocations.writable(id);const job=await this.read(id),now=await this.now();
+ async held(id,token){return this.workspace.catalogue(async()=>{await this.relocations.writable(id);const job=await this.read(id),now=await this.now();
   if(!job||job.state!=='running'||job.lease.token!==token||job.lease.until<=now)throw new AppError('JOB_LEASE');
   if(job.cancelRequested)throw new AppError('JOB_CANCELLED');return {job,now};
- }
+ });}
  async pulse(id,token,progress){return this.transaction(async()=>{
   const {job,now}=await this.held(id,token);if(progress)job.progress=validateJobProgress(progress);
   job.lease.until=now+this.leaseMs;job.updatedAt=new Date(now).toISOString();await this.write(job);return job;

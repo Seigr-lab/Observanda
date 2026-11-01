@@ -39,10 +39,12 @@ export class WebsiteSites{
   await this.initialize();await this.workspace.requireStorageKey();
   const db=await this.workspace.openCatalogue();
   try{
+   return await db.scope(async()=>{
    await db.run('BEGIN');const store=this.workspace.catalogueStore(db);
    await websiteDocumentLocks(store,{websiteIds:registration?[]:[websiteId],registration});
    await assertNotDeleting(this.workspace.root);await assertNotMoving(this.workspace.root);await assertNotRenaming(this.workspace.root);
    const value=await consume(store,new WebsiteDocumentStore(store));await db.run('COMMIT');return value;
+   });
   }finally{await db.close();}
  }
  async list({after=null,limit=20}={}){

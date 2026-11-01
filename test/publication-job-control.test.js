@@ -32,6 +32,14 @@ test('all registered controls authorize their exact job type and return only the
   if(contract.write)assert.ok(calls.includes(contract.action==='cancel'?'cancel-worker':'wake'));else assert.equal(calls.some(value=>value==='cancel-worker'||value==='wake'),false);
  }
 });
+
+test('status shares its job and authorization snapshot, then rechecks the live grant outside it',async()=>{
+ const {job,options}=context(publicationJobControlRoutes.status);let inside=false,reads=0,checks=0;
+ options.queue.workspace={catalogue:async operation=>{assert.equal(inside,false);inside=true;reads++;try{return await operation();}finally{inside=false;}}};
+ options.queue.read=async()=>{assert.equal(inside,true);return job;};options.queue.authorize=async()=>assert.equal(inside,true);
+ options.check=async()=>{assert.equal(inside,false);checks++;};
+ assert.equal((await executePublicationJobControl('status',{id:job.id},options)).job.id,job.id);assert.equal(reads,1);assert.equal(checks,2);
+});
 test('wrong owner, wrong type, malformed input and cancellation cannot reach diagnostics or mutations',async()=>{
  for(const [name,contract] of Object.entries(publicationJobControlRoutes)){
   for(const failure of ['authority','type','cancel','malformed','extra','attempt']){

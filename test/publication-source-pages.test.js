@@ -17,7 +17,8 @@ import {defaultEditionRecord} from '../src/web/publication-selection.js';
 test('selected-source pages seek both directions, pin consent, search privately and retain historical destinations',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-source-pages-'));let fixture;
  try{
-  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];book.id=id();book.entries=Array.from({length:300},(_,n)=>({...structuredClone(seed),id:id(),title:'Observation '+String(n).padStart(2,'0'),body:'Private body sentinel',share:false,attachments:[],figures:[],relations:[]}));
+  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];book.id=id();book.entries=Array.from({length:300},(_,n)=>({...structuredClone(seed),id:id(),title:'Observation '+String(n).padStart(2,'0'),body:'Private body sentinel',share:true,attachments:[],figures:[],relations:[]}));
+  book.entries.push({...structuredClone(seed),id:id(),title:'Withheld private original',share:false,attachments:[],figures:[],relations:[]});
   book.entries[0].sections=[{id:id(),title:'Admitted section',body:'Selected prose'},{id:id(),title:'Hidden section',body:'Excluded prose'}];
   fixture=await encryptedFixture(directory,{...book,entries:[]});await new ResearchRecords(fixture.workspace,new MediaStore(fixture.workspace)).save({workspaceId:book.id,changes:book.entries.map(record=>({id:record.id,expectedRevision:null,record}))});
   const head=await fixture.workspace.outline(),host={workspaceId:id()},source={workspaceId:book.id,projectIds:[book.projects[0].id],selection:{defaultShare:false,includeProjects:[book.projects[0].id],records:[{id:book.entries[1].id,share:false,attachments:[]}]}};
@@ -29,7 +30,7 @@ test('selected-source pages seek both directions, pin consent, search privately 
    const first=await run(),second=await run({cursor:first.nextCursor});assert.equal(first.items.length,25);assert.equal(second.items.length,25);assert.ok(second.nextCursor);assert.equal(first.previousCursor,null);assert.deepEqual((await run({cursor:second.previousCursor})).items,first.items);
    const all=[...first.items,...second.items];let cursor=second.nextCursor;while(cursor){const page=await run({cursor});all.push(...page.items);cursor=page.nextCursor;}assert.equal(all.length,299);assert.equal(new Set(all.map(item=>item.target)).size,299);assert.equal(first.items.some(item=>item.recordId===book.entries[1].id),false);assert.equal(JSON.stringify(first).includes('Private body sentinel'),false);assert.equal(originals,0);
    const search=await run({search:'Observation 38'});assert.equal(search.items.length,1);assert.equal(search.items[0].recordId,book.entries[38].id);assert.equal(originals,0);
-   const beforeSearch=summaries,sparse=await run({search:'Private body sentinel'});assert.ok(summaries-beforeSearch<=257);assert.deepEqual(sparse.items,[]);assert.ok(sparse.nextCursor);const tailSearch=await run({search:'Private body sentinel',cursor:sparse.nextCursor});assert.deepEqual(tailSearch.items,[]);assert.equal(tailSearch.nextCursor,null);assert.equal(originals,0);
+   const beforeSearch=summaries,sparse=await run({search:'Private body sentinel'});assert.ok(summaries-beforeSearch<=257);assert.deepEqual(sparse.items,[]);assert.ok(sparse.nextCursor);const tailSearch=await run({search:'Private body sentinel',cursor:sparse.nextCursor});assert.deepEqual(tailSearch.items,[]);assert.equal(tailSearch.nextCursor,null);assert.deepEqual((await run({search:'Withheld private original'})).items,[]);assert.equal(originals,0);
    await assert.rejects(run({search:'Changed search',cursor:first.nextCursor}),{code:'PUBLICATION_SELECTION_CURSOR'});
    const changed=structuredClone(source);changed.selection.records=[];await assert.rejects(run({source:changed,cursor:first.nextCursor}),{code:'PUBLICATION_SELECTION_CURSOR'});
    await assert.rejects(run({cursor:first.nextCursor.slice(0,-2)+'XX'}),{code:'PUBLICATION_SELECTION_CURSOR'});
@@ -42,5 +43,5 @@ test('selected-source pages seek both directions, pin consent, search privately 
    const tail=await run({source:historySource,backward:true});assert.equal(tail.items.length,25);assert.equal(tail.items.at(-1).revision,choice.revision);assert.notEqual(tail.items.at(-1).target,first.items.find(item=>item.recordId===record.id).target);
   });
   assert.equal((await fixture.workspace.outline()).etag,head.etag);
- }finally{if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+ }finally{if(fixture)await clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

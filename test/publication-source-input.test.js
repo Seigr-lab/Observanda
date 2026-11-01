@@ -38,7 +38,7 @@ import {publicationText} from './publication-fixture.js';
 async function publicationCommand(releases){const {etag,websitePin}=await releases.workspace.outline();return {etag,websitePin};}
 const sourceCandidate=source=>({version:3,workspaceId:source.workspaceId,websiteId:source.websiteId,jobId:source.id,source:{jobId:source.id,document:source.document},hasSources:source.hasSources,summary:source.summary,researchReview:source.researchReview});
 
-test('a combined edition pins explicit owners once and renders their copied identities after access closes',async()=>{
+test('a combined edition pins explicit owners once and requires renewed access before rendering retained identities',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const recordMethod=ResearchCatalogue.prototype.record,mediaMethod=MediaStore.prototype.get,namespacePage=ResearchCatalogue.prototype.objectIdPage;
  try{
   const host=sampleNotebook();host.entries=[];host.notebooks=[];host.projects=[];
@@ -63,12 +63,13 @@ test('a combined edition pins explicit owners once and renders their copied iden
   const choice=defaultEditionRecord(one.entries[0],recordRevision(one.entries[0]));choice.sections=[one.entries[0].sections[0].id];sources[0].edition={version:1,records:[choice]};
   const releases=new PublicationJobs(f.workspace,{sources,sourceReader:options=>publicationSourceReader(application,client,{workspaceId:host.id,...options})}),command={workspaceId:host.id,...await publicationCommand(releases)};
   const captureQueue=workspaceJobs(f.workspace).queue;
-  await assert.rejects(releases.start(command,captureQueue),error=>{if(!['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code))throw error;return error.projectId===two.projects[0].id;});
+  const capture=async()=>{await releases.start(command,captureQueue);const job=await captureQueue.claim();try{return await releases.capture(job,{signal:new AbortController().signal,progress:async()=>{},write:operation=>captureQueue.checkpoint(job.id,job.lease.token,operation)});}catch(error){await captureQueue.release(job.id,job.lease.token,{error});throw error;}};
+  await assert.rejects(capture(),error=>{if(!['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code))throw error;return error.projectId===two.projects[0].id;});
   await application.unlock(client,two.projects[0].id,{password:'Separate project password'});
   const loaded=[];ResearchCatalogue.prototype.record=function(recordId,...args){loaded.push(recordId);return recordMethod.call(this,recordId,...args);};
   const namespacePages=[];ResearchCatalogue.prototype.objectIdPage=function(prefix,options){if(prefix.startsWith('record:reference-origin:record:'))namespacePages.push({root:this.workspace.root,prefix});return namespacePage.call(this,prefix,options);};
   let savedDuringMedia=false;MediaStore.prototype.get=async function(...args){const asset=await mediaMethod.apply(this,args);if(this.root===owners[0].storage.root){await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/capture-concurrency.json','{}'));savedDuringMedia=true;}return asset;};
-  const jobInput=await releases.start(command,captureQueue),pinned=await releases.source(jobInput.id);ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;ResearchCatalogue.prototype.objectIdPage=namespacePage;assert.equal(savedDuringMedia,true);
+  const pinned=await capture();ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;ResearchCatalogue.prototype.objectIdPage=namespacePage;assert.equal(savedDuringMedia,true);
   assert.deepEqual(namespacePages,owners.map(owner=>({root:owner.storage.root,prefix:'record:reference-origin:record:'})));
   const input=await openPublicationInput(releases.workspace,pinned),records=await Array.fromAsync(input.records({order:'original'})),retainedMedia=await Array.fromAsync(input.items('retainedMedia'));assert.deepEqual(loaded,[one.entries[0].id,two.entries[0].id]);assert.equal(records.length,2);assert.equal(retainedMedia.length,2);assert.equal(new Set(records.map(row=>row.id)).size,2);assert.equal(new Set(retainedMedia.map(row=>row.id)).size,2);assert.equal(pinned.researchReview.references.count,0);
   for(const [index,book] of [one,two].entries())assert.deepEqual(await readPublicationRecord(f.workspace,pinned,records[index]),book.entries[0]);
@@ -82,11 +83,13 @@ test('a combined edition pins explicit owners once and renders their copied iden
   try{await assert.rejects(source.catalogue(store=>withRecordReferenceNamespaces(store,resolve=>resolve({workspaceId:one.id,id:one.entries[0].id}))),{code:'CATALOGUE_DAMAGED'});}
   finally{await source.withLock(()=>source.catalogue(store=>store.db.run('DELETE FROM objects WHERE id=$1',orphan)));}
   await application.close();application=null;owners.forEach(owner=>clearVault(owner.storage.vault));
-  const resumed=new PublicationJobs(f.workspace),job={id:pinned.id,lease:{token:id()}},candidate=await resumed.prepare(job,{signal:new AbortController().signal,progress:async()=>{}});await f.workspace.withLock(()=>resumed.commit(job,candidate));
+  const job={id:pinned.id,lease:{token:id()}},options={signal:new AbortController().signal,progress:async()=>{}};await assert.rejects(new PublicationJobs(f.workspace).prepare(job,options),{code:'ACCESS_LOCKED'});
+  application=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore});await application.unlock(client,two.projects[0].id,{password:'Separate project password'});
+  const resumed=new PublicationJobs(f.workspace,{sourceReader:options=>publicationSourceReader(application,client,{workspaceId:host.id,...options})}),candidate=await resumed.prepare(job,options);await f.workspace.withLock(()=>resumed.commit(job,candidate));
   const result=await resumed.read(candidate.reviewId),text=await publicationText(result);assert.match(text,/First pinned content/);assert.match(text,/Second pinned content/);assert.ok(!text.includes('Later research title'));assert.ok(!text.includes('WITHHELD_'));assert.ok(!text.includes(one.id));assert.ok(!text.includes(two.id));
   for(const [index,owner] of owners.entries()){const media=records[index].media[0].id;assert.deepEqual(await contentBuffer(await result.files.get('media/'+media+'.png')),owner.bytes);}
   const firstPage=(await contentBuffer(await result.files.get('entries/'+records[0].id+'.html'))).toString();assert.ok(firstPage.includes(records[1].id+'.html#record-figure-'+records[1].media[0].id));assert.ok(!firstPage.includes(researchReference(one.entries[0].relations[0].target)));
- }finally{ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;ResearchCatalogue.prototype.objectIdPage=namespacePage;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;ResearchCatalogue.prototype.objectIdPage=namespacePage;await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 async function runPublicationJob(queue){
@@ -98,7 +101,7 @@ async function runPublicationJob(queue){
 test('saved source choices survive preparation and require session access again after a deployment restart',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-access-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;
  try{
-  const source=sampleNotebook();source.title=source.projects[0].title='Source project';source.entries=[{...source.entries[0],attachments:[],figures:[],relations:[],share:false}];
+  const source=sampleNotebook();source.title=source.projects[0].title='Source project';source.entries=[{...source.entries[0],attachments:[],figures:[],relations:[],share:true}];
   const host=sampleNotebook();host.entries=[];host.projects=[];host.notebooks=[];
   host.website.researchSources=[{workspaceId:source.id,projectIds:[source.projects[0].id],selection:{defaultShare:false,includeProjects:[],records:[{id:source.entries[0].id,share:true,attachments:[]}]}}];
   const f=await encryptedFixture(path.join(directory,'Edition owner'),host);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,host.id),client={};
@@ -107,7 +110,7 @@ test('saved source choices survive preparation and require session access again 
   application=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore});await application.unlock(client,source.projects[0].id,{password:'Source password'});
   const sourceReader=publicationSourceFactory(application,client,f.workspace),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),config=defaultPublishing();
   Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:true});const saved=await publisher.save(config,'new');await publisher.connect('synthetic_github_token_1234567890');
-  const grants=new PublicationSourceAccess(),jobs=workspaceJobs(f.workspace,publisher,{sourceAccess:grants}),releases=new PublicationJobs(f.workspace,{sourceReader});
+  const grants=new PublicationSourceAccess(),jobs=workspaceJobs(f.workspace,publisher,{sourceAccess:grants}),releases=new PublicationJobs(f.workspace,{sourceReader,sourceAccess:grants});
   await releases.start(await publicationCommand(releases),jobs.queue);const prepared=await runPublicationJob(jobs.queue);assert.equal(prepared.state,'completed',prepared.error);
   const candidate=await releases.read(prepared.result.id),input=await openPublicationInput(releases.workspace,await releases.source(candidate.jobId)),groups=await Array.fromAsync(input.sourceGroups()),sourceSnapshots=groups.slice(1).map(({workspaceId,snapshotId})=>({workspaceId,snapshotId}));assert.equal(candidate.files.output.count('entries'),1);assert.deepEqual(groups.map(g=>g.workspaceId),[host.id,source.id]);
   await assert.rejects(new LocalExport(f.workspace).candidate(candidate.reviewId),{code:'ACCESS_LOCKED'});assert.equal((await new LocalExport(f.workspace,{sourceReader}).candidate(candidate.reviewId)).id,candidate.id);
@@ -118,11 +121,11 @@ test('saved source choices survive preparation and require session access again 
   // A rollback approval pins today's dependency heads while keeping the old
   // edition's content. Its worker must use that approval after restart/retry.
   const previous=await storage.catalogue(async store=>{const row=await store.member(await store.snapshot(),source.entries[0].id);return {record:await store.record(row.id,row.revision),revision:row.revision};});
-  await new ResearchRecords(storage,new MediaStore(storage)).save({workspaceId:source.id,changes:[{id:previous.record.id,expectedRevision:recordRevision(previous.record),record:{...previous.record,title:'Later private research'}}]});
+  await new ResearchRecords(storage,new MediaStore(storage)).save({workspaceId:source.id,changes:[{id:previous.record.id,expectedRevision:recordRevision(previous.record),record:{...previous.record,title:'Later source research'}}]});
   await assert.rejects(new AnalysisPublicationReview(f.workspace,{sourceReader}).assert(candidate),{code:'STALE'});
   const rollback=new PublicationRollback(f.workspace,publisher,{sourceReader}),approval=await rollback.review({id:candidate.reviewId}),rolled=rollback.project(candidate,approval.review);assert.notDeepEqual(rolled.sourceSnapshots,sourceSnapshots);
   const next=await afterRestart.start({...intent,rollbackReview:approval.review.id,rollbackConfirmed:true});assert.notEqual(next.id,job.id);assert.deepEqual((await afterRestart.read(next.id)).intent.sourceSnapshots,rolled.sourceSnapshots);
   const restored=await runPublicationJob(restarted.queue);assert.equal(restored.state,'completed',restored.error);
-  assert.equal((await storage.read()).book.entries[0].share,false);assert.ok(!(await publicationText(candidate)).includes('Later private research'));
- }finally{await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-access-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+  assert.equal((await storage.read()).book.entries[0].share,source.entries[0].share);assert.ok(!(await publicationText(candidate)).includes('Later source research'));
+ }finally{await application?.close();await runtime.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-access-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

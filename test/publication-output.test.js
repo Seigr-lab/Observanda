@@ -5,6 +5,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {setImmediate as turn} from 'node:timers/promises';
 import filesystem,{mkdtemp,rm,realpath,readdir} from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
+import {withMutationFilesSession} from '../src/mutation-files.js';
 import path from 'node:path';
 import os from 'node:os';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -48,9 +49,23 @@ test('streamed output coalescing forwards cancellation and closes the source bet
  await assert.rejects(publicationOutputChunks(untouched(),{signal:controller.signal}).next(),error=>error===reason);
 });
 
-test('output inventory binds nested retained blobs, selected choices and the exact streamed public manifest',{timeout:120000},async t=>{
+// Observe real admitted native file handles, including their durable flushes.
+// Patching fs.open would miss the handle-relative storage implementation.
+async function observeFiles(t,service,directory,operation){
+ const opened=await service.open(directory),identity=opened.identity,prototype=Object.getPrototypeOf(opened),original=prototype.file;await opened.close();
+ const native=t.mock.method(prototype,'file',function(member,options={}){
+  const open=()=>original.call(this,member,options);
+  return this.identity===identity?operation(path.join(directory,member),options.mode==='exclusive'?'wx+':options.mode==='update'?'r+':'r',open):open();
+ });
+ // Full-before-first-byte readers also retain Node file handles. Include them
+ // in the same observation without substituting either I/O implementation.
+ const originalRead=filesystem.open,reads=t.mock.method(filesystem,'open',function(file,...args){const open=()=>originalRead.call(this,file,...args);return args[0]==='r'&&path.dirname(file)===directory?operation(file,'r',open):open();});
+ syncBuiltinESMExports();return {mock:{restore(){native.mock.restore();reads.mock.restore();syncBuiltinESMExports();}}};
+}
+
+test('output inventory binds nested retained blobs, selected choices and the exact streamed public manifest',{timeout:120000},async t=>withMutationFilesSession(async service=>{
  const mounted=!!process.env.OBSERVANDA_TEST_SECOND_VOLUME,parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-output-')),book=sampleNotebook();let fixture,placement,runtime,detach;
- t.after(async()=>{await runtime?.close();detach?.();if(fixture?.vault)clearVault(fixture.vault);await placement?.cleanup();assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-output-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ t.after(async()=>{await runtime?.close();detach?.();if(fixture?.vault)await clearVault(fixture.vault);await placement?.cleanup();assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-output-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(mounted){
   placement=await workspaceDestinationFixture(root);
   runtime=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(runtime);
@@ -66,17 +81,17 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  fixture.workspace.writeMetadata=function(file,text){if(active&&file.includes('/release-outputs/'))active.push(Buffer.byteLength(text));return writeMetadata.call(this,file,text);};
  // Observe only this attempt's manifest payload buffers. Partial filesystem
  // writes may repeat a buffer; they do not represent extra source chunks.
- const retaining=new AsyncLocalStorage(),manifestPayloads=new Set(),openFile=filesystem.open;
- const syncGates=[],syncCompleted=[],reverseDone=Promise.withResolvers(),openHome=Promise.withResolvers();let homeWaiting=false,nextPageOpenedWhileHomeWaits=false,syncing=0,maxSyncing=0,privacyReads=0,maxPrivacyReads=0,privacyCount=0,reverse;
+ const retaining=new AsyncLocalStorage(),manifestPayloads=new Set();
+ const syncGates=[],syncCompleted=[],reverseDone=Promise.withResolvers(),openHome=Promise.withResolvers(),homeOpened=Promise.withResolvers();let homeWaiting=false,nextPageOpenedWhileHomeWaits=false,syncing=0,maxSyncing=0,privacyReads=0,maxPrivacyReads=0,privacyCount=0,reverse;
  reverseDone.promise.catch(()=>{});
- const fileMock=t.mock.method(filesystem,'open',async function(file,...args){
+ const fileMock=await observeFiles(t,service,directory,async function(file,mode,open){const args=[mode];
   const name=retaining.getStore();
-  if(args[0]==='wx'&&path.dirname(file)===directory){
-   if(name==='index.html'){homeWaiting=true;await openHome.promise;homeWaiting=false;}
+  if(['wx','wx+'].includes(args[0])&&path.dirname(file)===directory){
+   if(name==='index.html'){homeWaiting=true;homeOpened.resolve();await openHome.promise;homeWaiting=false;}
    if(name==='pages/'+late+'.html'){nextPageOpenedWhileHomeWaits=homeWaiting;openHome.resolve();}
   }
-  const handle=await openFile.call(this,file,...args);
-  if(name&&name!=='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
+  const handle=await open();
+  if(name&&name!=='publication.json'&&['wx','wx+'].includes(args[0])&&path.dirname(file)===directory){
    const sync=handle.sync;handle.sync=async function(){
     const gate=Promise.withResolvers(),finished=Promise.withResolvers();syncGates.push({name,gate,finished});syncing++;maxSyncing=Math.max(maxSyncing,syncing);
     if(syncGates.length===3){reverse=(async()=>{for(const item of [...syncGates].reverse()){item.gate.resolve();await item.finished.promise;}})();reverse.then(reverseDone.resolve,reverseDone.reject);}else if(syncGates.length===4)reverseDone.promise.then(gate.resolve,gate.reject);
@@ -87,23 +102,23 @@ test('output inventory binds nested retained blobs, selected choices and the exa
    privacyReads++;privacyCount++;maxPrivacyReads=Math.max(maxPrivacyReads,privacyReads);const close=handle.close;
    handle.close=async function(){try{return await close.call(this);}finally{privacyReads--;}};
   }
-  if(name==='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
+  if(name==='publication.json'&&['wx','wx+'].includes(args[0])&&path.dirname(file)===directory){
    const write=handle.write;handle.write=function(bytes,offset,length,position){if(position>=SEGMENTED_HEADER_BYTES)manifestPayloads.add(bytes);return write.call(this,bytes,offset,length,position);};
   }
   return handle;
- });syncBuiltinESMExports();
- const releaseHeld=setTimeout(()=>{openHome.resolve();for(const item of syncGates)item.gate.resolve();reverseDone.resolve();},15000);
+ });
+ const releaseHeld=setTimeout(()=>{homeOpened.reject(Error('Expected native output opening was not observed'));openHome.resolve();for(const item of syncGates)item.gate.resolve();reverseDone.resolve();},15000);
  let saved;try{saved=await withPublicationOutputWriter(workspace,source,job,{directory},async writer=>{
  const retain=writer.retain;writer.retain=function(name,...args){return retaining.run(name,()=>retain.call(this,name,...args));};
  async function* home(){assert.equal(await workspace.catalogue(async store=>catalogueRequiresPublicationDocuments(await catalogueFormat(store.db))),true,'The first content is consumed only after older writers are excluded');yield homeParts[0];await writer.retain('.nojekyll','');for(const part of homeParts.slice(1))yield part;}
- await writer.retain('index.html',home());await writer.addChoice('pages','index.html',{path:'index.html',title:'Home'});
+ await writer.retain('index.html',home());await homeOpened.promise;await writer.addChoice('pages','index.html',{path:'index.html',title:'Home'});
  await writer.retain('pages/'+late+'.html',(async function*(){yield '<!doctype html><title>Late page</title>';})());await writer.addChoice('pages','pages/'+late+'.html',{path:'pages/'+late+'.html',title:'Late page'});
  await writer.retain('pages/'+extra+'.html',(async function*(){yield '<!doctype html><title>Extra \u00c5 \u03bb page</title>';})());await writer.addChoice('pages','pages/'+extra+'.html',{path:'pages/'+extra+'.html',title:'Extra page'});
  await writer.retain('index.html',home());assert.equal(writer.count(),4);
  for(const value of entries)await writer.addChoice('entries',value.id,value);
  for(const value of styles)await writer.addChoice('styles',digest(value.css),value);
  return writer.finish({defaultPage:'index.html'});
- });}finally{clearTimeout(releaseHeld);openHome.resolve();for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
+ });}finally{clearTimeout(releaseHeld);openHome.resolve();for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();}
  assert.equal(nextPageOpenedWhileHomeWaits,true,'A buffered page must release rendering before its filesystem open completes');assert.equal(maxSyncing,3);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[2],syncGates[1],syncGates[0],syncGates[3]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,0);assert.equal(privacyReads,0);assert.equal(privacyCount,0);
  assert.ok(opened<=3,'Output repeatedly opened authenticated connections: '+opened);assert.equal(closed,opened,'Output retained a live connection after completion');
  const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
@@ -146,15 +161,15 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  // Attempt failure must wait for every started durable write before its lease
  // closes and ordinary cleanup removes the attempt. The completed sibling stays.
  for(const phase of ['callback','sync','privacy','cancel','key-clear','key-inplace','key-replace','vault-replace']){
-  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),attemptPrefix='.observanda/release-outputs/'+job.id+'/'+attempt.lease.token,controller=new AbortController(),reason=new Error('Refused output '+phase),ready=Promise.withResolvers(),gates=[],openFile=filesystem.open,vault=fixture.workspace.vault,keyReference=vault.key,keyBytes=Buffer.from(vault.key);let live=0,settled=false;
-  const mock=t.mock.method(filesystem,'open',async function(file,...args){
-   const handle=await openFile.call(this,file,...args);if(path.dirname(file)!==attemptDirectory)return handle;
-   if(args[0]==='wx'){
+  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),attemptPrefix='.observanda/release-outputs/'+job.id+'/'+attempt.lease.token,controller=new AbortController(),reason=new Error('Refused output '+phase),ready=Promise.withResolvers(),gates=[],vault=fixture.workspace.vault,keyReference=vault.key,keyBytes=Buffer.from(vault.key);let live=0,settled=false;
+  const mock=await observeFiles(t,service,attemptDirectory,async function(file,mode,open){const args=[mode];
+   const handle=await open();
+   if(['wx','wx+'].includes(args[0])){
     live++;const close=handle.close,sync=handle.sync;let closed=false;
     handle.close=async function(){try{return await close.call(this);}finally{if(!closed){closed=true;live--;}}};
     handle.sync=async function(){const gate=Promise.withResolvers();gates.push(gate);if(gates.length===2)ready.resolve();await gate.promise;return sync.call(this);};
    }return handle;
-  });syncBuiltinESMExports();
+  });
   let pending;const timeout=setTimeout(()=>{for(const gate of gates)gate.resolve();},10000);
   try{
    pending=withPublicationOutputWriter(workspace,source,attempt,{directory:attemptDirectory,signal:controller.signal,blockedValues:['private-observation-marker']},async writer=>{
@@ -164,20 +179,20 @@ test('output inventory binds nested retained blobs, selected choices and the exa
    });pending.then(()=>{settled=true;},()=>{settled=true;});
    await ready.promise;if(phase==='cancel')controller.abort(reason);if(phase==='key-clear')clearVault(vault);if(phase==='key-inplace')vault.key.fill(0);if(phase==='key-replace')vault.key=Buffer.from(keyBytes);if(phase==='vault-replace')fixture.workspace.vault={...vault,key:Buffer.from(keyBytes)};if(phase==='sync')gates[0].reject(reason);else gates[0].resolve();await turn();assert.equal(settled,false);assert.ok(live>0,'The remaining durable write must still be owned');gates[1].resolve();
    await assert.rejects(pending,error=>phase==='privacy'?error.code==='PRIVACY':phase.startsWith('key-')||phase==='vault-replace'?error.code==='ACCESS_LOCKED':error===reason);assert.equal(live,0);assert.ok((await readdir(attemptDirectory)).every(name=>name.endsWith('.blob')),'Failed writes must remove their temporary files');
-  }finally{clearTimeout(timeout);for(const gate of gates)gate.resolve();await pending?.catch(()=>{});if(fixture.workspace.vault!==vault)fixture.workspace.vault.key?.fill(0);fixture.workspace.vault=vault;if(vault.key!==keyReference)vault.key?.fill(0);keyBytes.copy(keyReference);vault.key=keyReference;keyBytes.fill(0);mock.mock.restore();syncBuiltinESMExports();}
+  }finally{clearTimeout(timeout);for(const gate of gates)gate.resolve();await pending?.catch(()=>{});if(fixture.workspace.vault!==vault)fixture.workspace.vault.key?.fill(0);fixture.workspace.vault=vault;if(vault.key!==keyReference)vault.key?.fill(0);keyBytes.copy(keyReference);vault.key=keyReference;keyBytes.fill(0);mock.mock.restore();}
   await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await workspace.listMetadata(attemptPrefix),[]);assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
  }
  // Complete small streams reject before a file is opened; large streams retain
  // the same privacy and UTF-8 policy through their authenticated readback.
  for(const large of [false,true])for(const problem of ['private','unsafe','utf8']){
-  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),name=problem==='unsafe'?'unsafe.bin':'index.html',body=problem==='utf8'?Buffer.from([0xc3,0x28]):Buffer.from(problem==='private'?'private-observation-marker':'Valid text'),openFile=filesystem.open;let writes=0,reads=0,owned,ended=false;
-  const mock=t.mock.method(filesystem,'open',async function(file,...args){if(path.dirname(file)===attemptDirectory){if(args[0]==='wx')writes++;if(args[0]==='r')reads++;}return openFile.call(this,file,...args);});syncBuiltinESMExports();
+  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),name=problem==='unsafe'?'unsafe.bin':'index.html',body=problem==='utf8'?Buffer.from([0xc3,0x28]):Buffer.from(problem==='private'?'private-observation-marker':'Valid text');let writes=0,reads=0,owned,ended=false;
+  const mock=await observeFiles(t,service,attemptDirectory,async function(file,mode,open){if(['wx','wx+'].includes(mode))writes++;if(mode==='r')reads++;return open();});
   try{
    await assert.rejects(withPublicationOutputWriter(workspace,source,attempt,{directory:attemptDirectory,blockedValues:['private-observation-marker']},async writer=>{
     owned=writer;async function* content(){try{yield body;if(large)yield Buffer.alloc(256*1024,0x20);}finally{ended=true;}}return writer.retain(name,content());
    }),{code:problem==='private'?'PRIVACY':'UNSAFE'});
    assert.equal(writes,large?1:0);assert.equal(reads,large?(problem==='private'?2:1):0,'Private text requires URI validation followed by detection; invalid UTF-8 or names fail during the first pass');assert.equal(ended,true);assert.equal(owned.buffers.bytes,0);
-  }finally{mock.mock.restore();syncBuiltinESMExports();}
+  }finally{mock.mock.restore();}
   await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
  }
  // Admission can fail after a producer completes but before its write starts.
@@ -189,7 +204,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  }),error=>error===refusal);
  await releases.clean(job.id,{only:rejected.lease.token});assert.deepEqual(await readdir(path.dirname(rejectedDirectory)),[job.lease.token]);
  assert.deepEqual(await contentBuffer(await files.get('index.html')),homeBytes);
-});
+}));
 
 test('output finalization bounds durable work and drains failures before releasing callers',async()=>{
  const saved={size:1,sha256:'a'.repeat(64)},signal=new AbortController(),finalization=new PublicationOutputFinalization({signal:signal.signal}),durable=[],privacyGate=Promise.withResolvers(),privacyStarted=Promise.withResolvers(),order=[];let active=0,maximum=0,consumed=0;

@@ -13,6 +13,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {withPublicationCapture} from '../src/publication-capture.js';
+import {SOURCE_PUBLICATION_VERSION} from '../src/web/source-publication-permissions.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {MediaStore} from '../src/media.js';
 import {buildPublication,verifyPublicationManifest} from '../src/publication.js';
@@ -25,8 +27,8 @@ import {publicationText,publicationDraftCommand} from './publication-fixture.js'
 import {defaultFeed} from '../src/web/website-feed-model.js';
 import {feedFilePath} from '../src/publication-feeds.js';
 const options=()=>({signal:new AbortController().signal,progress:async()=>{}});
-async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-pages-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),jobs=workspaceJobs(f.workspace);t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,directory,book,releases:new PublicationJobs(f.workspace)};}
-async function prepare(f,book){const command=await publicationDraftCommand(f.workspace,book),job=await f.releases.start(command,f.queue),lease=await f.queue.claim(),output=await f.releases.prepare(lease,options());assert.equal(lease.id,job.id);await f.queue.complete(job.id,lease.lease.token,output);return f.releases.read(output.reviewId);}
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-pages-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),jobs=workspaceJobs(f.workspace);t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,directory,book,releases:new PublicationJobs(f.workspace)};}
+async function prepare(f,book){const command=await publicationDraftCommand(f.workspace,book),job=await f.releases.start(command,f.queue),lease=await f.queue.claim(),output=await f.queue.definition(lease).prepare(lease,options());assert.equal(lease.id,job.id);await f.queue.complete(job.id,lease.lease.token,output);return f.releases.read(output.reviewId);}
 
 test('a retained edition manifest must account for each file exactly once',()=>{
  const candidate=buildPublication(upgradeNotebook(sampleNotebook()));verifyPublicationManifest(candidate);
@@ -80,7 +82,9 @@ test('retained file privacy admission is bound to bytes, output name and blocked
 });
 
 test('corrupted pinned originals and interrupted page writes cannot commit an edition',async t=>{
- const f=await fixture(t),current=await f.releases.workspace.outline(),job=await f.releases.start({etag:current.etag,websitePin:current.websitePin},f.queue),lease=await f.queue.claim(),source=await f.releases.source(job.id);
+ const f=await fixture(t),current=await f.releases.workspace.outline(),job=await f.releases.start({etag:current.etag,websitePin:current.websitePin},f.queue),lease=await f.queue.claim();
+ if(job.input.request)await f.releases.capture(lease,{...options(),write:operation=>f.queue.checkpoint(job.id,lease.lease.token,operation)});
+ const source=await f.releases.source(job.id);
  const input=await openPublicationInput(f.releases.workspace,source),first=(await input.window('records',{limit:1})).items[0],pinned='.observanda/release-inputs/'+job.id+'/'+first.id+'.json',raw=await f.workspace.readMetadata(pinned);
  await f.workspace.withLock(()=>f.workspace.writeMetadata(pinned,raw.replace('body','altered')));await assert.rejects(f.releases.prepare(lease,options()),{code:'JOB_DAMAGED'});assert.equal(await f.releases.read(source.reviewId),null);
  await f.workspace.withLock(()=>f.workspace.writeMetadata(pinned,raw));
@@ -90,7 +94,7 @@ test('corrupted pinned originals and interrupted page writes cannot commit an ed
 
 
 test('source versions one through five remain readable through explicit legacy adapters',async()=>{
- const files=new Map(),workspace={websiteContext:true,websiteId:null,metadataPath:file=>file,async readMetadata(file){return files.get(file)??null;}},releases=new PublicationJobs(workspace),book=upgradeNotebook(sampleNotebook());book.pages=[];book.branding=[];book.website.layouts=[];
+ const files=new Map(),workspace={websiteContext:true,websiteId:null,storageKind:async()=>'legacy',metadataPath:file=>file,async readMetadata(file){return files.get(file)??null;}},releases=new PublicationJobs(workspace),book=upgradeNotebook(sampleNotebook());book.pages=[];book.branding=[];book.website.layouts=[];
  const {entries,...metadata}=book;void entries;
  for(const version of [1,2,3,4,5]){
   const id=randomUUID(),etag='a'.repeat(64),websitePin={researchSnapshotId:etag,websiteId:null,websiteRevision:null},source={version,id,reviewId:digest(id),workspaceId:book.id,websiteId:null,etag,...(version>=3?{websitePin}:{}),...(version===1?{book:{...book,entries:[]}}:{metadata,records:[]}),...(version>=4?{pageInputs:[]}:{}),...(version===5?{layoutInputs:[],brandingInputs:[],presentationCounts:{layouts:0,branding:0}}:{})};
@@ -100,10 +104,14 @@ test('source versions one through five remain readable through explicit legacy a
 
 test('legacy candidate versions one and two read and authenticate their retained encrypted blobs',async t=>{
  const f=await fixture(t),expected=buildPublication(f.book),jobId=randomUUID(),attempt=randomUUID(),directory=await f.releases.directory(jobId,attempt),current=await f.releases.workspace.outline(),files=[];
+ await withPublicationCapture(f.releases.workspace,async(workspace,id,finish)=>{await f.releases.pin({etag:current.etag,websitePin:current.websitePin},{workspace,id});return finish(()=>{});},{id:jobId});
  for(const [name,content] of expected.files){const index=files.length,saved=await writeContent(f.workspace,path.join(directory,index+'.blob'),contentStream(content));assert.equal(saved.size,contentSize(content));assert.equal(saved.sha256,contentHash(content));files.push({name,index,...saved,type:typeof content==='string'?'text':'binary'});}
  const candidate={version:2,workspaceId:f.book.id,jobId,attempt,reviewId:digest(jobId),websiteId:null,websitePin:current.websitePin,id:expected.id,etag:current.etag,createdAt:new Date().toISOString(),files,blockedValues:[],defaultPage:expected.defaultPage,pages:expected.pages,entries:expected.entries,projects:expected.projects};
  for(const version of [1,2]){
   const saved={...candidate,version};if(version===1)delete saved.websitePin;
+  await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',serialize(saved)));
+  await assert.rejects(f.releases.read(candidate.reviewId),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
+  saved.sourcePermissionVersion=SOURCE_PUBLICATION_VERSION;
   await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',serialize(saved)));
   const read=await f.releases.read(candidate.reviewId);assert.equal(read.version,version);assert.ok(read.files instanceof Map);verifyPublicationManifest(read);
   for(const [name,content] of expected.files)assert.deepEqual(await contentBuffer(read.files.get(name)),await contentBuffer(content));
