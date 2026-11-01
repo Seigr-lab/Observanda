@@ -260,7 +260,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,f
   announce(dt("cardAdded"));document.querySelector('[data-desk-card="'+panel.id+'"]')?.scrollIntoView({block:'nearest'});
  }
  function bind(){
-  if(!visible()){library.close();choiceUI.close();}
+  if(!visible()){library.close();choiceUI.close();session?.suspend();}
   for(const id of cardPages.keys())if(!draft?.views.some(view=>view.panels.some(p=>p.id===id)))cardPages.delete(id);
   session?.retainSlots(new Set(['default',...(draft?active().panels.filter(p=>!p.hidden&&moduleVisible(p)).map(p=>'card:'+p.id):[]),...(draft?.shortcuts??[]).map(s=>'shortcut:'+s.id)]));
   settings.bind({refresh:['dashboard-settings','templates'].includes(state.page)&&lastPage!==state.page});

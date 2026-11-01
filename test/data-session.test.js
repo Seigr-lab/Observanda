@@ -12,6 +12,17 @@ function fixture(){
  return {session,requests,registry,get changes(){return changes;}};
 }
 
+test('leaving a view cancels pending reads, ignores late replies and retains completed cards',async()=>{
+ const f=fixture(),a={etag:'first',dataSlot:'a'},b={...a,etag:'second',dataSlot:'b'};
+ f.session.read('records',a);f.session.read('records',b);await setImmediate();
+ f.requests[0].resolve([item('Retained')]);await setImmediate();
+ f.session.suspend();assert.equal(f.requests[1].signal.aborted,true);
+ const changes=f.changes;f.requests[1].resolve([item('Late')]);await setImmediate();assert.equal(f.changes,changes);
+ assert.deepEqual(f.session.read('records',a).items,[item('Retained')]);
+ assert.equal(f.session.read('records',b).status,'loading');await setImmediate();assert.equal(f.requests.length,3);
+ f.requests[2].resolve([item('Fresh')]);await setImmediate();assert.deepEqual(f.session.read('records',b).items,[item('Fresh')]);f.session.close();
+});
+
 test('card requests retain their own scope and discard late results after a filter changes',async()=>{
  const f=fixture(),a={etag:'first',dataSlot:'a'},b={...a,dataSlot:'b'};
  assert.equal(f.session.read('records',a,{tag:'field'}).status,'loading');

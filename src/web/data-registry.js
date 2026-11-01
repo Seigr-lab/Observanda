@@ -88,6 +88,11 @@ export function createDataSession(registry,{context,api,onChange,access=operatio
    if(!failed.length){invalidate(id);return;}
    for(const value of failed){const request=value.execute(true);onChange();await request;}
   },invalidate,
+  suspend(){
+   // Leaving the dashboard releases in-flight research reads. Completed card
+   // data can be reused on return; a late reply cannot replace a new request.
+   for(const [key,value] of cache)if(value.status==='loading'){cache.delete(key);value.controller.abort();}
+  },
   retainSlots(slots){for(const [key,value] of cache)if(value.slot!==null&&!slots.has(value.slot)){value.controller.abort();cache.delete(key);}},
   close(){closed=true;cache.forEach(v=>v.controller.abort());unsubscribe();cache.clear();}
  };
