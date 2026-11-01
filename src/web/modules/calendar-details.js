@@ -1,5 +1,6 @@
 import '../i18n/catalogues/calendarDetails.js';
 import {t} from '../i18n/index.js';
+import {calendarErrorMessage} from './calendar-presentation.js';
 const tr=key=>t('calendarDetails',key);
 // Read-only notes are fetched for the opened event, not with the month grid.
 export function calendarDetails({state,api,esc,showDialog}){
@@ -9,7 +10,7 @@ export function calendarDetails({state,api,esc,showDialog}){
  const valid=s=>session===s&&s.identity===identity()&&s.dialog.open&&s.root.isConnected&&!state.access?.locked;
  function paint(s){
   if(!valid(s))return;const e=s.event;
-  s.root.innerHTML=`<h2 id="dialog-title">${esc(e.title)}</h2><p>${esc(e.startsAt)} – ${esc(e.endsAt)}</p><p>${esc(e.location??'')}</p>${s.busy?`<p role="status">${esc(tr('loading'))}</p>`:s.error?`<p role="alert">${esc(s.error.message)}</p><button type="button" class="button" data-calendar-details-retry>${esc(tr('retry'))}</button>`:`<p class="calendar-notes">${esc(e.notes??'')}</p>`}<p>${esc(tr('readOnly'))}</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">${esc(tr('close'))}</button></div>`;
+  s.root.innerHTML=`<h2 id="dialog-title">${esc(e.title)}</h2><p>${esc(e.startsAt)} – ${esc(e.endsAt)}</p><p>${esc(e.location??'')}</p>${s.busy?`<p role="status">${esc(tr('loading'))}</p>`:s.error?`<p role="alert">${esc(calendarErrorMessage(s.error))}</p><button type="button" class="button" data-calendar-details-retry>${esc(tr('retry'))}</button>`:`<p class="calendar-notes">${esc(e.notes??'')}</p>`}<p>${esc(tr('readOnly'))}</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">${esc(tr('close'))}</button></div>`;
   s.root.querySelector('[data-calendar-details-retry]')?.addEventListener('click',()=>void load(s));
  }
  async function load(s){

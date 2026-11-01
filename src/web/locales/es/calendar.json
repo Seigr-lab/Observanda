@@ -60,5 +60,8 @@
   "invalidPage": "La respuesta del calendario está incompleta. Actualiza la programación para volver a intentarlo.",
   "combined": "Calendario combinado",
   "group": "Planificación",
-  "sourceFailed": "{name}: {error}"
+  "sourceFailed": "{name}: {error}",
+  "taskDeadlines": "Plazos de las tareas",
+  "refreshFailed": "No se ha podido actualizar el calendario.",
+  "sourceChanged": "Este origen ha cambiado. Actualiza el calendario."
 }

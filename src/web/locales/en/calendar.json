@@ -60,5 +60,8 @@
   "invalidPage": "The calendar response is incomplete. Refresh the schedule to try again.",
   "combined": "Combined calendar",
   "group": "Planning",
-  "sourceFailed": "{name}: {error}"
+  "sourceFailed": "{name}: {error}",
+  "taskDeadlines": "Task deadlines",
+  "refreshFailed": "Calendar could not refresh.",
+  "sourceChanged": "This source changed. Refresh the calendar."
 }

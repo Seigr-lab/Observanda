@@ -4,7 +4,8 @@ import {readAccess} from '../access.js';
 import {clearVault} from '../encryption.js';
 import {readCalendar} from './reader.js';
 import {uuid,date} from '../modules/validation.js';
-import {ownerLabel} from '../web/modules/scope.js';
+import {ownerLabel,ownerDescriptor} from '../web/modules/scope.js';
+import messages from '../web/locales/en/calendar.json' with {type:'json'};
 import {calendarWindow} from './window.js';
 import {fetchCalendar} from './fetch.js';
 import {parseFeed} from './parse.js';
@@ -43,7 +44,7 @@ export class CalendarSources{
   const queue=snapshot.connections.filter(e=>!detail||detail.sourceId===e.id);
   const collect=async entity=>{
    let emitted=false;
-   const d=entity.data,source={id:entity.id,name:d.name,color:d.color,projectId:d.projectId,owner:ownerLabel(book,d.projectId),readOnly:true,kind:entity.type};
+   const d=entity.data,source={id:entity.id,name:d.name,color:d.color,projectId:d.projectId,owner:ownerLabel(book,d.projectId),ownerDisplay:ownerDescriptor(book,d.projectId),readOnly:true,kind:entity.type};
    result.sources.push(source);
    try{
     let events=[];
@@ -64,14 +65,14 @@ export class CalendarSources{
      const ws=new Workspace(connected.root,connected.vault),{metadata:other}=await ws.outline();
      if(other.id!==connected.workspaceId||other.id===book.id)throw new AppError('CALENDAR_SELF');
      const detailId=detail?.eventId.startsWith(other.id+':')?detail.eventId.slice(other.id.length+1):null;
-     const projected=await readCalendar(ws,other,range,{signal,detailId,includeConnections:false,includeSources:false,emit:emit?e=>{emitted=true;emit({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})});}:null});
+     const projected=await readCalendar(ws,other,range,{signal,detailId,includeConnections:false,includeSources:false,emit:emit?e=>{emitted=true;emit({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId),sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})});}:null});
      if((await readAccess(connected.root)).etag!==connected.etag){clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
      if(emit&&calendarScopeVersion((await ws.outline()).metadata)!==calendarScopeVersion(other))throw new AppError('CALENDAR_CURSOR');
-     events=projected.events.map(e=>({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId)}));source.checkedAt=new Date().toISOString();versions.set(entity.id,[other.id,projected.revision,calendarScopeVersion(other),connected.etag]);
+     events=projected.events.map(e=>({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId)}));source.checkedAt=new Date().toISOString();versions.set(entity.id,[other.id,projected.revision,calendarScopeVersion(other),connected.etag]);
     }
     signal?.throwIfAborted();if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
     for(const e of events){if(!matches(e))continue;const value={...e,sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})};if(emit)emit(value);else result.events.push(value);}
-   }catch(error){if(signal?.aborted||emitted)throw error;source.error=error instanceof AppError?error.message:'Calendar could not refresh.';source.locked=error.code==='CALENDAR_LOCKED';versions.set(entity.id,['unavailable',source.error]);}
+   }catch(error){if(signal?.aborted||emitted)throw error;source.error=error instanceof AppError?error.message:messages.refreshFailed;if(error instanceof AppError)source.errorCode=error.code;else source.errorKey='refreshFailed';source.locked=error.code==='CALENDAR_LOCKED';versions.set(entity.id,['unavailable',source.error]);}
   };
   let failure;
   await Promise.all(Array.from({length:Math.min(serial?1:4,queue.length)},async()=>{while(queue.length&&!failure){if(this.generation!==generation)return;try{await collect(queue.shift());}catch(error){failure=error;}}}));
@@ -83,7 +84,7 @@ export class CalendarSources{
    const before=snapshot.connections.find(e=>e.id===s.id),after=allowed.get(s.id);
    if(!after||JSON.stringify(before.data)!==JSON.stringify(after.data)){
     if(emit)throw new AppError('CALENDAR_CURSOR');
-    result.events=result.events.filter(e=>e.sourceId!==s.id);s.error='This source changed. Refresh the calendar.';this.cache.delete(s.id);
+    result.events=result.events.filter(e=>e.sourceId!==s.id);s.error=messages.sourceChanged;s.errorKey='sourceChanged';this.cache.delete(s.id);
     const c=this.connections.get(s.id);if(c){clearVault(c.vault);this.connections.delete(s.id);}
    }
    if(emitSource)await emitSource(s);

@@ -4,7 +4,7 @@ import {ModuleCatalogue} from '../modules/catalogue.js';
 import {workspaceModules} from '../modules/index.js';
 import {calendarFacts} from './facts.js';
 import {calendarEntity} from '../web/modules/calendar-model.js';
-import {ownerLabel} from '../web/modules/scope.js';
+import {ownerLabel,ownerDescriptor} from '../web/modules/scope.js';
 import {calendarWindow} from './window.js';
 import {AppError} from '../errors.js';
 import {proseText} from '../web/prose-model.js';
@@ -20,7 +20,7 @@ export async function readCalendar(workspace,book,range,{detailId=null,connectio
     if(!item)throw new AppError('CATALOGUE_DAMAGED');parents.set(id,item);
    }
    let source;
-   const event=calendarEntity(book,value,parents,(id,name,color,projectId)=>{source={id,name,color,projectId,owner:ownerLabel(book,projectId),readOnly:false};return id;});
+   const event=calendarEntity(book,value,parents,(id,name,color,projectId)=>{source={id,name,color,projectId,owner:ownerLabel(book,projectId),ownerDisplay:ownerDescriptor(book,projectId),readOnly:false};return id;});
    if(source&&includeSources&&await seen.add(source.id)){if(emitSource)await emitSource(source);else sources.push(source);}
    return event&&eventSources?{...event,source}:event;
   }

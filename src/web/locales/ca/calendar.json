@@ -60,5 +60,8 @@
   "invalidPage": "La resposta del calendari és incompleta. Actualitza la programació per tornar-ho a provar.",
   "combined": "Calendari combinat",
   "group": "Planificació",
-  "sourceFailed": "{name}: {error}"
+  "sourceFailed": "{name}: {error}",
+  "taskDeadlines": "Terminis de les tasques",
+  "refreshFailed": "No s’ha pogut actualitzar el calendari.",
+  "sourceChanged": "Aquest origen ha canviat. Actualitza el calendari."
 }

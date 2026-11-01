@@ -60,5 +60,8 @@
   "invalidPage": "Kalendersvaret er ufullstendig. Oppdater tidsplanen for å prøve igjen.",
   "combined": "Samla kalender",
   "group": "Planlegging",
-  "sourceFailed": "{name}: {error}"
+  "sourceFailed": "{name}: {error}",
+  "taskDeadlines": "Oppgåvefristar",
+  "refreshFailed": "Kalenderen kunne ikkje oppdaterast.",
+  "sourceChanged": "Denne kjelda er endra. Oppdater kalenderen."
 }

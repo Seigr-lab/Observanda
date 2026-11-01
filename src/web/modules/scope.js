@@ -1,5 +1,7 @@
 import {projectUsesTool,projectToolScope} from '../project-tools.js';
 import {descendants,locationName} from '../workspace-structure.js';
+import {modelMessages} from '../model-messages.js';
+import messages from '../locales/en/moduleEditors.json' with {type:'json'};
 // Shared by server projections, dashboard providers and every scoped editor.
 export function ownerOf(entity,entities){
  const get=id=>entities instanceof Map?entities.get(id):entities.find(e=>e.id===id);
@@ -21,13 +23,21 @@ export function toolItems(book,entities,moduleId){
  const index=new Map(entities.map(e=>[e.id,e]));
  return entities.filter(e=>projectUsesTool(book,ownerOf(e,index),moduleId));
 }
-export const ownerLabel=(book,id)=>id?(locationName(book,id)||'Removed location'):(book.title+' / Workspace');
+export function ownerDescriptor(book,id){
+ const name=id?locationName(book,id):book.title;
+ return {kind:id?(name?'location':'removed'):'workspace',name:name??''};
+}
+export function ownerLabel(book,id){
+ const owner=ownerDescriptor(book,id),text=modelMessages('moduleEditors',messages);
+ return owner.kind==='workspace'?text('workspaceName',{name:owner.name}):owner.kind==='removed'?text('removedLocation'):owner.name;
+}
 export function scopePath(projectId,path=''){return 'scope/'+(projectId||'workspace')+'/'+path;}
 export function parseScope(path=''){
  const parts=path.split('/');
  return parts[0]==='scope'?{projectId:parts[1]==='workspace'?null:parts[1],path:parts.slice(2).join('/')}:{projectId:null,path};
 }
 export function normalizeScopePath(path='',fallback=''){const parsed=parseScope(path);return scopePath(parsed.projectId,parsed.path||fallback);}
-export function scopeControl(book,projectId,esc,{recursive=true,moduleId=null}={}){
- return `<div class="operations-scope"><label>Show location<select data-operation-scope><option value="">${esc(book.title)} / All locations</option>${book.projects.filter(p=>!moduleId||projectToolScope(book,p.id,moduleId)).map(p=>`<option value="${p.id}" ${p.id===projectId?'selected':''}>${esc(locationName(book,p.id))}</option>`).join('')}</select></label>${projectId?`<label class="checkbox"><input type="checkbox" data-operation-descendants ${recursive?'checked':''}>Include locations inside</label>`:''}</div>`;
+export function scopeControl(book,projectId,esc,{recursive=true,moduleId=null,translate}={}){
+ const text=modelMessages('moduleEditors',messages,translate);
+ return `<div class="operations-scope"><label>${esc(text('showLocation'))}<select data-operation-scope><option value="">${esc(text('allLocations',{name:book.title}))}</option>${book.projects.filter(p=>!moduleId||projectToolScope(book,p.id,moduleId)).map(p=>`<option value="${p.id}" ${p.id===projectId?'selected':''}>${esc(locationName(book,p.id))}</option>`).join('')}</select></label>${projectId?`<label class="checkbox"><input type="checkbox" data-operation-descendants ${recursive?'checked':''}>${esc(text('includeLocations'))}</label>`:''}</div>`;
 }

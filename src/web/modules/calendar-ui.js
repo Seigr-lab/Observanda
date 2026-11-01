@@ -3,7 +3,8 @@ import {parseScope,scopePath,inScope} from './scope.js';
 import {scopeControl,ownerLabel} from './editor-presentation.js';
 import {localDate,nextDate} from './calendar-model.js';
 import {verifiedCalendarPage} from './calendar-page.js';
-import {t} from '../i18n/index.js';
+import {t,language} from '../i18n/index.js';
+import {calendarSourceName,calendarSourceOwner,calendarEventOrigin,calendarSourceError,calendarErrorMessage} from './calendar-presentation.js';
 const tr=(key,values)=>t('calendar',key,values),empty=()=>({sources:[],events:[],days:[],total:0});
 import {calendarDetails} from './calendar-details.js';
 import {researchId} from '../research-reference.js';
@@ -25,11 +26,11 @@ export function calendarUI(services,editor){
   const token=++request,query=options(),key=JSON.stringify(query),context=state.storage?.contextId;loading=true;loadingKey=key;error='';
   if(shown())render();
   try{const result=await api('/api/calendars/page',{...query,cursor,refresh},{adopt:false,signal:controller.signal});if(disposed||request!==token||context!==state.storage?.contextId)return;data=verifiedCalendarPage(result,state.book.id,query);loadedKey=key;last=Date.now();}
-  catch(e){if(request===token&&e.name!=='AbortError'){data=empty();error=e.message;loadedKey=key;last=Date.now();}}
+  catch(e){if(request===token&&e.name!=='AbortError'){data=empty();error=calendarErrorMessage(e);loadedKey=key;last=Date.now();}}
   finally{if(request===token&&!disposed){loading=false;loadingKey='';if(shown())render();}}
  }
  function open(path){state.modulePath=scopePath(current().projectId,path);render();}
- const dayLabel=day=>new Date(day+'T12:00').toLocaleDateString([],{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+ const dayLabel=day=>new Date(day+'T12:00').toLocaleDateString(language(),{weekday:'long',year:'numeric',month:'long',day:'numeric'});
  function openDay(day){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T12:00Z'))||new Date(day+'T12:00Z').toISOString().slice(0,10)!==day)return;
   selectedDay=day;month=day.slice(0,7);mode='day';sourceCursor=null;focusTarget='[data-day-heading]';render();
@@ -42,9 +43,9 @@ export function calendarUI(services,editor){
   const source=e.source,formatTime=value=>{
    const date=new Date(value),options={hour:'2-digit',minute:'2-digit'};
    if(detailed&&localDate(date)!==selectedDay)Object.assign(options,{month:'short',day:'numeric'});
-   return date.toLocaleString([],options);
+   return date.toLocaleString(language(),options);
   },time=e.allDay?tr('allDay'):formatTime(e.startsAt)+(detailed&&e.endsAt!==e.startsAt?' – '+formatTime(e.endsAt):'');
-  return `<button type="button" class="calendar-event ${compact?'compact':''}" data-calendar-colour="${source?.color??'#3958ba'}" data-action="module-command" data-command="calendar-event" data-event-id="${esc(e.id)}" data-source-id="${esc(e.sourceId)}"><span>${esc(time)}</span><strong>${esc(e.title)}</strong>${compact?'':`<small>${esc(source?.name)} · ${esc(e.origin??source?.owner)}${e.type==='task'?' · '+esc(tr('taskDeadline')):e.type==='booking'?' · '+esc(tr('booking')):''}${source?.readOnly?' · '+esc(tr('readOnly')):''}</small>${detailed&&e.location?`<small>${esc(e.location)}</small>`:''}`}</button>`;
+  return `<button type="button" class="calendar-event ${compact?'compact':''}" data-calendar-colour="${source?.color??'#3958ba'}" data-action="module-command" data-command="calendar-event" data-event-id="${esc(e.id)}" data-source-id="${esc(e.sourceId)}"><span>${esc(time)}</span><strong>${esc(e.title)}</strong>${compact?'':`<small>${esc(calendarSourceName(source))} · ${esc(calendarEventOrigin(e))}${e.type==='task'?' · '+esc(tr('taskDeadline')):e.type==='booking'?' · '+esc(tr('booking')):''}${source?.readOnly?' · '+esc(tr('readOnly')):''}</small>${detailed&&e.location?`<small>${esc(e.location)}</small>`:''}`}</button>`;
  }
  function monthView(selected){
   const {from,to}=range(),first=new Date(from+'T12:00'),offset=(first.getDay()+6)%7,days=Math.round((Date.parse(to)-Date.parse(from))/86400000),today=localDate(new Date());
@@ -54,7 +55,7 @@ export function calendarUI(services,editor){
    const summary=selected.days.find(d=>d.date===day),items=summary?.events??[],more=(summary?.total??0)-items.length;
    return `<section class="calendar-day ${day===today?'today':''}" data-calendar-day="${day}" aria-label="${day}"><button type="button" class="calendar-date" data-action="module-command" data-command="calendar-open-day" data-date="${day}" aria-label="${esc(tr('openDay',{day:dayLabel(day)}))}" ${day===today?'aria-current="date"':''}><time datetime="${day}">${i-offset+1}</time></button>${items.map(e=>eventButton(e,true)).join('')}${more?controls(tr('more',{count:more}),'calendar-open-day',`data-date="${day}"`):''}</section>`;
   }).join('');
-  const weekdays=Array.from({length:7},(_,i)=>new Date(2026,0,5+i).toLocaleDateString([],{weekday:'short'}));
+  const weekdays=Array.from({length:7},(_,i)=>new Date(2026,0,5+i).toLocaleDateString(language(),{weekday:'short'}));
   return `<div class="calendar-month">${weekdays.map(d=>`<div class="calendar-weekday">${esc(d)}</div>`).join('')}${cells}</div>`;
  }
  function dayView(events){
@@ -76,9 +77,9 @@ export function calendarUI(services,editor){
  function overview(){
   const parsed=current(),selected=loadedKey===queryKey()?data:empty(),title=parsed.projectId?ownerLabel(state.book,parsed.projectId):state.book.title;
   const sourceErrorsOutsidePage=(selected.sourceErrors??[]).filter(source=>!selected.sources.some(visible=>visible.id===source.id));
-  const sources=selected.sources.map(s=>`<article><label class="checkbox"><input type="checkbox" data-calendar-source="${esc(s.id)}" ${hidden.has(s.id)?'':'checked'}><span class="calendar-dot" data-calendar-colour="${s.color}"></span><strong>${esc(s.name)}</strong></label><small>${esc(s.owner)}${s.readOnly?' · '+esc(tr('readOnly')):''}</small>${s.error?`<p class="calendar-source-error" role="status">${esc(s.error)}</p>`:s.checkedAt?`<small>${esc(tr('updated',{time:new Date(s.checkedAt).toLocaleTimeString()}))}</small>`:''}${s.locked?controls(tr('unlockWorkspace'),'calendar-unlock',`data-id="${s.id}"`):''}</article>`).join('')||'<p>'+esc(tr('noCalendars'))+'</p>';
-  const content=mode==='day'?dayView(selected.events):mode==='month'?monthView(selected):`<div class="calendar-agenda">${selected.events.map(e=>`<article><time>${esc(e.allDay?e.startsAt:new Date(e.startsAt).toLocaleDateString())}</time>${eventButton(e)}</article>`).join('')||'<p>'+esc(tr('emptyAgenda'))+'</p>'}</div>`;
-  return `<div class="module-workbench calendar-workbench" data-calendar-view="${mode}"><header class="module-heading"><div><p class="eyebrow">${esc(title)}</p><h1>${esc(tr('heading'))}</h1></div><div class="module-actions">${mode==='day'?'':controls(tr('newEvent'),'calendar-new-event','',true)}${controls(tr('manage'),'calendar-manage')}${controls(tr('refresh'),'calendar-refresh',loading?'disabled':'')}</div></header>${editor.navigation()}${scopeControl(state.book,parsed.projectId,esc,{recursive,moduleId:'planning'})}${toolbar(selected.total)}${error?`<p role="alert" class="module-error">${esc(error)}</p>`:''}${sourceErrorsOutsidePage.map(s=>`<p class="calendar-source-error" role="status">${esc(tr('sourceFailed',{name:s.name,error:s.error}))}</p>`).join('')}<div class="calendar-layout"><aside class="calendar-sources" aria-label="${esc(tr('sources'))}"><h2>${esc(tr('sources'))}</h2><label class="field">${esc(tr('searchSources'))}<input type="search" data-calendar-source-search value="${esc(sourceSearch)}"></label>${sources}${sourceNavigation(selected)}<div class="module-actions">${controls(tr('addCalendar'),'calendar-add')}${controls(tr('subscribe'),'calendar-subscribe')}${controls(tr('connect'),'calendar-connect')}</div></aside><section class="calendar-content" aria-label="${esc(tr('schedule'))}">${content}${navigation(selected)}</section></div><p class="muted">${esc(tr('timeZone',{zone:Intl.DateTimeFormat().resolvedOptions().timeZone}))}</p></div>`;
+  const sources=selected.sources.map(s=>`<article><label class="checkbox"><input type="checkbox" data-calendar-source="${esc(s.id)}" ${hidden.has(s.id)?'':'checked'}><span class="calendar-dot" data-calendar-colour="${s.color}"></span><strong>${esc(calendarSourceName(s))}</strong></label><small>${esc(calendarSourceOwner(s))}${s.readOnly?' · '+esc(tr('readOnly')):''}</small>${s.error?`<p class="calendar-source-error" role="status">${esc(calendarSourceError(s))}</p>`:s.checkedAt?`<small>${esc(tr('updated',{time:new Date(s.checkedAt).toLocaleTimeString(language())}))}</small>`:''}${s.locked?controls(tr('unlockWorkspace'),'calendar-unlock',`data-id="${s.id}"`):''}</article>`).join('')||'<p>'+esc(tr('noCalendars'))+'</p>';
+  const content=mode==='day'?dayView(selected.events):mode==='month'?monthView(selected):`<div class="calendar-agenda">${selected.events.map(e=>`<article><time>${esc(e.allDay?e.startsAt:new Date(e.startsAt).toLocaleDateString(language()))}</time>${eventButton(e)}</article>`).join('')||'<p>'+esc(tr('emptyAgenda'))+'</p>'}</div>`;
+  return `<div class="module-workbench calendar-workbench" data-calendar-view="${mode}"><header class="module-heading"><div><p class="eyebrow">${esc(title)}</p><h1>${esc(tr('heading'))}</h1></div><div class="module-actions">${mode==='day'?'':controls(tr('newEvent'),'calendar-new-event','',true)}${controls(tr('manage'),'calendar-manage')}${controls(tr('refresh'),'calendar-refresh',loading?'disabled':'')}</div></header>${editor.navigation()}${scopeControl(state.book,parsed.projectId,esc,{recursive,moduleId:'planning'})}${toolbar(selected.total)}${error?`<p role="alert" class="module-error">${esc(error)}</p>`:''}${sourceErrorsOutsidePage.map(s=>`<p class="calendar-source-error" role="status">${esc(tr('sourceFailed',{name:calendarSourceName(s),error:calendarSourceError(s)}))}</p>`).join('')}<div class="calendar-layout"><aside class="calendar-sources" aria-label="${esc(tr('sources'))}"><h2>${esc(tr('sources'))}</h2><label class="field">${esc(tr('searchSources'))}<input type="search" data-calendar-source-search value="${esc(sourceSearch)}"></label>${sources}${sourceNavigation(selected)}<div class="module-actions">${controls(tr('addCalendar'),'calendar-add')}${controls(tr('subscribe'),'calendar-subscribe')}${controls(tr('connect'),'calendar-connect')}</div></aside><section class="calendar-content" aria-label="${esc(tr('schedule'))}">${content}${navigation(selected)}</section></div><p class="muted">${esc(tr('timeZone',{zone:Intl.DateTimeFormat().resolvedOptions().timeZone}))}</p></div>`;
  }
  async function newItem(type,initial={}){open(type);editor.view(state.modulePath);await editor.create(type,initial);}
  return {
@@ -159,7 +160,7 @@ export function calendarUI(services,editor){
   async submit(form,values){
    if(!form.dataset.calendarUnlock){await editor.submit(form,values);loadedKey='';sourceCursor=null;return;}
    try{await api('/api/calendars/unlock',{id:form.dataset.calendarUnlock,username:values.get('username'),password:values.get('password')});form.closest('dialog').close();await load();}
-   catch(e){form.querySelector('[data-calendar-unlock-error]').textContent=e.message;}
+   catch(e){form.querySelector('[data-calendar-unlock-error]').textContent=calendarErrorMessage(e);}
   },
   deactivate(){details.stop();controller?.abort();clearTimeout(searchTimer);request++;loading=false;loadingKey='';editor.deactivate();},
   dispose(){details.stop();controller?.abort();clearTimeout(searchTimer);disposed=true;request++;clearInterval(timer);data={sources:[],events:[]};editor.dispose();}
