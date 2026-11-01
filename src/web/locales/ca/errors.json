@@ -1,4 +1,6 @@
 {
+  "DATABASE_GUARD_STORAGE": "L'emmagatzematge de la base de dades no pot garantir l'accés privat verificat i la protecció dels directoris. Les dades existents s'han conservat. Selecciona un emmagatzematge amb controls d'accés compatibles o demana a l'administrador que traslladi la base de dades a un directori privat verificat.",
+  "DATABASE_GUARD_UNAVAILABLE": "Aquest sistema no ha pogut protegir els processos de la base de dades gestionada. Les dades existents s'han conservat. Utilitza un sistema compatible o un servei PostgreSQL gestionat externament.",
   "READINESS_LIMIT": "Les metadades de l'espai de treball seleccionat superen el límit de la comprovació de preparació. No se n'ha comprovat tota la integritat; aquest resultat no informa de cap corrupció.",
   "DURABILITY_UNCERTAIN": "Un canvi d'emmagatzematge pot ser ja visible, però no se n'ha pogut confirmar la persistència. Conserva els fitxers de recuperació i comprova l'estat guardat abans de tornar-ho a provar. No donis per fet que s'ha cancel·lat el canvi.",
   "BROWSER_ASSETS_INVALID": "No s'ha pogut verificar un fitxer de l'aplicació. Reinicia Observanda; si continua passant, repara la instal·lació.",

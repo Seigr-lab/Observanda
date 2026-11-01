@@ -12,7 +12,7 @@ using System.Web.Script.Serialization;
 using Microsoft.Win32.SafeHandles;
 
 namespace Observanda {
- public static class MutationFiles {
+ public static partial class MutationFiles {
   [StructLayout(LayoutKind.Sequential)] struct Unicode {public ushort Length,MaximumLength;public IntPtr Buffer;}
   [StructLayout(LayoutKind.Sequential)] struct Attributes {public uint Length;public IntPtr RootDirectory,ObjectName;public uint Flags;public IntPtr SecurityDescriptor,SecurityQuality;}
   [StructLayout(LayoutKind.Sequential)] struct IoStatus {public IntPtr Status,Information;}

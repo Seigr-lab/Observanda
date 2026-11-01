@@ -1,4 +1,6 @@
 {
+  "DATABASE_GUARD_STORAGE": "Databaselagringen kan ikke sikre verifisert privat tilgang og beskyttelse av mapper. Eksisterende data er bevart. Velg lagring med støttede tilgangskontroller, eller be administratoren flytte databasen til en verifisert privat mappe.",
+  "DATABASE_GUARD_UNAVAILABLE": "Dette systemet kunne ikke beskytte prosessene til den administrerte databasen. Eksisterende data er bevart. Bruk et støttet system eller en eksternt administrert PostgreSQL-tjeneste.",
   "READINESS_LIMIT": "Metadataene for det valgte arbeidsområdet overskrider den avgrensede klargjøringskontrollen. Den fulle integriteten er ikke kontrollert; dette resultatet rapporterer ikke dataskade.",
   "DURABILITY_UNCERTAIN": "En lagringsendring kan allerede være synlig, men det kunne ikke bekreftes at den er varig lagret. Behold gjenopprettingsfiler og kontroller den lagrede tilstanden før du prøver på nytt. Ikke anta at endringen ble avbrutt.",
   "BROWSER_ASSETS_INVALID": "En programfil kunne ikke verifiseres. Start Observanda på nytt; reparer installasjonen hvis dette fortsetter.",

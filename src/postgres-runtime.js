@@ -4,9 +4,9 @@ import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // PostgreSQL process lifecycle. Portable clusters belong to their workspace;
 // the installation-wide mode exists for older installations and explicit tools.
 import path from 'node:path';
-import {readFile,readdir,rm,chmod,realpath} from 'node:fs/promises';
+import {readdir,rm,chmod,realpath} from 'node:fs/promises';
 import {atomicReplace as rename} from './atomic-replace.js';
-import {createPersistentDirectory as mkdir,unlinkPersistent} from './filesystem-persistence.js';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
@@ -15,13 +15,15 @@ import {pipeline} from 'node:stream/promises';
 import {Transform} from 'node:stream';
 import {fileURLToPath} from 'node:url';
 import {Client} from 'pg';
-import {assertRegular,atomicWrite,WORKSPACE_FILE} from './storage.js';
+import {assertRegular,WORKSPACE_FILE} from './storage.js';
 import {WindowsProtector} from './security/device-store.js';
 import {AppError} from './errors.js';
 import {compatibleManagedRuntime} from './postgres-runtime-compatibility.js';
 import {seal,unseal} from './encryption.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {nativeResources,databaseMemoryReservation} from './native-resource-budget.js';
+import {acquirePostgresRuntimeGuard} from './postgres-runtime-guard.js';
+import {postgresRuntimeFiles} from './postgres-runtime-files.js';
 
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
 export const windowsRuntime=Object.freeze({version:'17.11',url:'https://sbp.enterprisedb.com/getfile.jsp?fileid=1260569',bytes:379726839,sha256:'b9424ee7bc60b52450ff910a3630225df32e633f3cb29c1d126d9299d59aea28'});
@@ -34,22 +36,22 @@ export function runtimeCommand(command,args,{signal,inherit=false,env=process.en
   // Abort emits an error before a child necessarily exits. Ordinary helpers
   // also drain their pipes. pg_ctl start deliberately leaves a managed server
   // running; inherited Windows pipe handles must not make startup await stop.
-  const finish=code=>{code===0&&!failed?resolve(output.trim()):reject(new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL'));};
+  const finish=code=>{if(code===0&&!failed)resolve(output.trim());else{const error=new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL');error.exitCode=code;reject(error);}};
   if(!waitForPipes)child.once('exit',code=>{child.stdout?.destroy();child.stderr?.destroy();finish(code);});
   child.once('close',finish);
  });
 }
-async function version(bin){
+async function version(bin,run=runtimeCommand){
  await assertRegular(executable(bin,'initdb'));await assertRegular(executable(bin,'pg_ctl'));
- const match=/PostgreSQL\) (1[678])(?:[.][0-9]+)?/.exec(await runtimeCommand(executable(bin,'postgres'),['--version']));
+ const match=/PostgreSQL\) (1[678])(?:[.][0-9]+)?/.exec(await run(executable(bin,'postgres'),['--version'],{capture:true}));
  if(!match)throw new AppError('DATABASE_RUNTIME');return Number(match[1]);
 }
-export async function findPostgres(env=process.env){
- if(env.OBSERVANDA_POSTGRES_BIN){const bin=path.resolve(env.OBSERVANDA_POSTGRES_BIN);return {bin,major:await version(bin)};}
+export async function findPostgres(env=process.env,checkVersion=version){
+ if(env.OBSERVANDA_POSTGRES_BIN){const bin=path.resolve(env.OBSERVANDA_POSTGRES_BIN);return {bin,major:await checkVersion(bin)};}
  const candidates=[...(env.PATH??'').split(path.delimiter)];
  for(const base of [env.ProgramFiles?path.join(env.ProgramFiles,'PostgreSQL'):'','/usr/lib/postgresql'])if(base)for(const entry of (await readdir(base).catch(()=>[])).sort().reverse())candidates.push(path.join(base,entry,'bin'));
  for(const base of ['/opt/homebrew/opt','/usr/local/opt'])for(const n of [17,18,16])candidates.push(path.join(base,'postgresql@'+n,'bin'));
- for(const bin of candidates.filter(Boolean))try{return {bin,major:await version(bin)};}catch{}
+ for(const bin of candidates.filter(Boolean))try{return {bin,major:await checkVersion(bin)};}catch{}
  return null;
 }
 export async function verifyRuntime(file,manifest=windowsRuntime){
@@ -71,11 +73,11 @@ export async function downloadRuntime(file,{signal,onProgress=()=>{},manifest=wi
  try{await pipeline(response.body,meter,createWriteStream(file,{flags:'wx',mode:0o600}),{signal});await verifyRuntime(file,manifest);}
  catch(error){await rm(file,{force:true});throw error;}
 }
-async function install(directory,{signal,onProgress,env}){
- const installed=env.OBSERVANDA_POSTGRES_ARCHIVE?null:await findPostgres(env);if(installed)return installed;
+async function install(directory,{signal,onProgress,env,checkVersion=version}){
+ const installed=env.OBSERVANDA_POSTGRES_ARCHIVE?null:await findPostgres(env,checkVersion);if(installed)return installed;
  if(windows&&process.arch==='x64'){
   const destination=path.join(directory,'runtime-17.11'),bin=path.join(destination,'pgsql','bin');
-  if(await assertRegular(destination,{directory:true,missing:true}))return {bin,major:await version(bin)};
+  if(await assertRegular(destination,{directory:true,missing:true}))return {bin,major:await checkVersion(bin)};
   const archive=path.join(directory,'postgresql-download.zip'),staging=path.join(directory,'runtime-staging');
   // These fixed staging locations contain only an interrupted managed installation.
   for(const target of [archive,staging]){if(await assertRegular(target,{directory:target===staging,missing:true}))await rm(target,{recursive:target===staging,force:true});}
@@ -83,7 +85,7 @@ async function install(directory,{signal,onProgress,env}){
    if(env.OBSERVANDA_POSTGRES_ARCHIVE){await verifyRuntime(path.resolve(env.OBSERVANDA_POSTGRES_ARCHIVE));}else await downloadRuntime(archive,{signal,onProgress});onProgress({stage:'extract'});
    await mkdir(staging,{mode:0o700});
    await runtimeCommand(path.join(env.SystemRoot??'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/extract-postgres.ps1',import.meta.url)),'-Archive',env.OBSERVANDA_POSTGRES_ARCHIVE?path.resolve(env.OBSERVANDA_POSTGRES_ARCHIVE):archive,'-Destination',staging],{signal});
-   await version(path.join(staging,'pgsql','bin'));await rename(staging,destination);return {bin,major:17};
+   await checkVersion(path.join(staging,'pgsql','bin'));await rename(staging,destination);return {bin,major:17};
   }finally{await rm(archive,{force:true});await rm(staging,{recursive:true,force:true});}
  }
  onProgress({stage:'install'});
@@ -96,7 +98,7 @@ async function install(directory,{signal,onProgress,env}){
   if(manager==='apt-get')await runtimeCommand(command,[...prefix,'update'],{signal,inherit:true});
   await runtimeCommand(command,[...prefix,'install','-y',...(manager==='apt-get'?['--no-install-recommends','postgresql']:['postgresql-server'])],{signal,inherit:true});
  }else throw new AppError('DATABASE_TOOLS');
- const result=await findPostgres(env);if(!result)throw new AppError('DATABASE_TOOLS');return result;
+ const result=await findPostgres(env,checkVersion);if(!result)throw new AppError('DATABASE_TOOLS');return result;
 }
 export async function outsideWorkspace(directory){
  for(let current=directory;;current=path.dirname(current)){
@@ -157,18 +159,24 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
  if(workspace){
   const root=await realpath(workspace.root);await assertRegular(path.join(root,'.observanda'),{directory:true});
   if(directory!==path.join(root,'.observanda','postgresql')||!Buffer.isBuffer(workspace.vault?.key)||workspace.vault.key.length!==32||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.vault.id??'')||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.ownerId??''))throw new AppError('DATABASE_LOCATION');
-  await assertRegular(directory,{directory:true,missing:!stopOnly});if(!stopOnly)await privateRoot(directory);directory=await realpath(directory);
-  if(directory!==path.join(root,'.observanda','postgresql'))throw new AppError('DATABASE_LOCATION');
- }else{await outsideWorkspace(directory);await privateRoot(directory);directory=await realpath(directory);await outsideWorkspace(directory);}
+  await assertRegular(directory,{directory:true,missing:!stopOnly});
+ }else await outsideWorkspace(directory);
+ const guard=await acquirePostgresRuntimeGuard({directory,create:!stopOnly&&!existingOnly,workspaceRoot:workspace?.root,run:runtimeCommand,signal});
+ try{return await manageGuardedPostgres({directory:guard.directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard});}
+ catch(error){await guard.close();throw error;}
+}
+async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard}){
+ const files=postgresRuntimeFiles(guard),checkVersion=bin=>version(bin,(command,args,options)=>guard.run(command,args,options));
  // Kernel-owned locks cannot collide with unrelated TCP services.
- const lease=await (workspace?workspaceDatabaseLease(directory):managerLease(directory));
+ const ownership=guard.lease??await (workspace?workspaceDatabaseLease(directory):managerLease(directory));
+ let leaseClosing;const lease={close:()=>leaseClosing??=(async()=>{try{await ownership.close();}finally{const result=await guard.close();if(result?.stopped)mayBeRunning=false;}})()};
  const stateFile=path.join(directory,'service.observanda'),data=path.join(directory,'data'),portableKey=workspace?Buffer.from(workspace.vault.key):null;
  const aad=workspace?'Observanda/workspace-postgresql/v1/'+workspace.vault.id:null;
  const protector=workspace?{protect:bytes=>seal(bytes,portableKey,aad),unprotect:bytes=>unseal(bytes,portableKey,aad)}:windows?new WindowsProtector():null;
  let config,verifiedCluster=false,freshCluster=false,reservation,mayBeRunning=false;
  const releaseCapacity=()=>{if(mayBeRunning)reservation?.uncertainExit();else{reservation?.release();if(verifiedCluster)budget.stopped(directory);}};
- const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await atomicWrite(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
- const ctl=(args,options={})=>runtimeCommand(executable(config.bin,'pg_ctl'),['-D',data,...args],options);
+ const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await files.write(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
+ const ctl=(args,options={})=>guard.run(executable(config.bin,'pg_ctl'),['-D',data,...args],options);
  try{
   if(!stopOnly){reservation=budget.reserve('database',databaseMemoryReservation(sharedBuffers),{key:directory});mayBeRunning=reservation.uncertain;}
   if(workspace){
@@ -178,28 +186,28 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
    else if(stopOnly&&workspace.renameId){const marker=await workspaceRename(workspace.root);if(marker?.id!==workspace.renameId)throw new AppError('STORAGE_RENAME_STATE');}
    else{await assertNotRenaming(workspace.root);if(stopOnly){const marker=await workspaceDeletion(workspace.root);if(marker?.id!==workspace.deleteId||marker.source!==workspace.root)throw new AppError('STORAGE_DELETE_STATE');}}
   }
-  const stat=await assertRegular(stateFile,{missing:true});
+  const stat=await files.stat(stateFile,{missing:true});
   if(stat){
    if(stat.size>16384)throw new AppError('DATABASE_RUNTIME');
-   let bytes=await readFile(stateFile);try{if(protector)bytes=await protector.unprotect(bytes);config=JSON.parse(bytes.toString());}finally{bytes.fill(0);}
+   let bytes=await files.read(stateFile);try{if(protector)bytes=await protector.unprotect(bytes);config=JSON.parse(bytes.toString());}finally{bytes.fill(0);}
    if(config.format!==1||![16,17,18].includes(config.major)||!['initializing','ready'].includes(config.phase)||!Number.isInteger(config.port)||config.port<1||config.port>65535||![config.adminPassword,config.appPassword].every(v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v))||!path.isAbsolute(config.bin))throw new AppError('DATABASE_RUNTIME');
    if(workspace&&(config.workspaceId!==workspace.vault.id||typeof config.running!=='boolean'||typeof config.ownerId!=='string'))throw new AppError('DATABASE_RUNTIME');
    // Never stop a PostgreSQL process owned by another installation sharing
    // this folder. A clean shutdown makes an ordinary disk transfer portable.
    if(workspace&&config.running&&(config.ownerId!==workspace.ownerId||config.activeDirectory!==directory))throw new AppError('DATABASE_WORKSPACE_RUNNING');
-   config.bin=await compatibleManagedRuntime(config,env.OBSERVANDA_POSTGRES_BIN,version);
+   config.bin=await compatibleManagedRuntime(config,env.OBSERVANDA_POSTGRES_BIN,checkVersion);
   }else{
-   if(existingOnly||stopOnly||await assertRegular(data,{directory:true,missing:true}))throw new AppError('DATABASE_RUNTIME');
+   if(existingOnly||stopOnly||await files.stat(data,{directory:true,missing:true}))throw new AppError('DATABASE_RUNTIME');
    let runtime;
    if(workspace){
-    runtime=await findPostgres(env);
-    if(!runtime){if(!runtimeDirectory)throw new AppError('DATABASE_TOOLS');runtimeDirectory=path.resolve(runtimeDirectory);await outsideWorkspace(runtimeDirectory);await privateRoot(runtimeDirectory);runtime=await install(runtimeDirectory,{env,signal,onProgress});}
-   }else runtime=await install(runtimeDirectory??directory,{env,signal,onProgress});
+    runtime=await findPostgres(env,checkVersion);
+    if(!runtime){if(!runtimeDirectory)throw new AppError('DATABASE_TOOLS');runtimeDirectory=path.resolve(runtimeDirectory);await outsideWorkspace(runtimeDirectory);await privateRoot(runtimeDirectory);runtime=await install(runtimeDirectory,{env,signal,onProgress,checkVersion});}
+   }else runtime=await install(runtimeDirectory??directory,{env,signal,onProgress,checkVersion});
    config={format:1,...runtime,phase:'initializing',port:await freePort(),adminPassword:randomBytes(32).toString('hex'),appPassword:randomBytes(32).toString('hex'),...(workspace?{workspaceId:workspace.vault.id,ownerId:workspace.ownerId,running:false,activeDirectory:null}:{})};await save();
   }
   if(existingOnly&&config.phase!=='ready')throw new AppError('DATABASE_RUNTIME');
   const stage=path.join(directory,'cluster-staging');
-  if(!await assertRegular(data,{directory:true,missing:true})){
+  if(!await files.stat(data,{directory:true,missing:true})){
    if(stopOnly){
     // Initialization writes its state before initdb and cannot start PostgreSQL
     // before the completed data directory is published.
@@ -207,14 +215,14 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
     let closing;return {managed:true,stopped:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{portableKey?.fill(0);await lease.close();})()};
    }
    if(config.phase!=='initializing')throw new AppError('DATABASE_RUNTIME');
-   if(await assertRegular(stage,{directory:true,missing:true}))await rm(stage,{recursive:true,force:true});
-   const passwordFile=path.join(directory,'bootstrap-password');await atomicWrite(passwordFile,config.adminPassword);
-   try{onProgress({stage:'initialize'});await runtimeCommand(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await rename(stage,data);freshCluster=true;}
-   finally{await unlinkPersistent(passwordFile).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+   if(await files.stat(stage,{directory:true,missing:true}))await files.removeTree(stage);
+   const passwordFile=path.join(directory,'bootstrap-password');await files.write(passwordFile,config.adminPassword);
+   try{onProgress({stage:'initialize'});await guard.run(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await files.rename(stage,data);freshCluster=true;}
+   finally{await files.unlink(passwordFile);}
   }
-  if((await readFile(path.join(data,'PG_VERSION'),'utf8')).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
+  if((await files.read(path.join(data,'PG_VERSION'),{limit:128,encoding:'utf8'})).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
   verifiedCluster=true;
-  mayBeRunning=!!await assertRegular(path.join(data,'postmaster.pid'),{missing:true});
+  mayBeRunning=!!await files.stat(path.join(data,'postmaster.pid'),{missing:true});
   let running=false;try{await ctl(['status']);running=true;}catch{}
   if(running){await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;}
   if(stopOnly){
@@ -239,13 +247,11 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
   let closing;
-  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;await lease.close();}})()};
+  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
  }catch(error){
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
-  if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await assertRegular(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
-  releaseCapacity();
-  portableKey?.fill(0);
-  await lease.close();
+  if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
+  try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);}
   if(error instanceof AppError)throw error;
   throw new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_RUNTIME');
  }

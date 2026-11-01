@@ -6,7 +6,7 @@ import {spawn} from 'node:child_process';
 import {startManagedPostgres} from '../src/postgres-runtime.js';
 import {nativeTestArguments} from './test-selection.js';
 import {prepareFilesystem} from './prepare-filesystem.js';
-const controller=new AbortController();let child,service,directory;
+const controller=new AbortController();let child,service,directory,temporaryRuntime;
 const stop=()=>{controller.abort();child?.kill('SIGTERM');};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 try{
  await prepareFilesystem();
@@ -17,7 +17,7 @@ try{
  const temporaryRoot=await realpath(os.tmpdir());
  const env={...process.env,TMPDIR:temporaryRoot,TMP:temporaryRoot,TEMP:temporaryRoot,OBSERVANDA_DATABASE_URL:process.env.OBSERVANDA_TEST_DATABASE_URL??'',OBSERVANDA_DATABASE_TLS:process.env.OBSERVANDA_TEST_DATABASE_TLS??'',OBSERVANDA_DATABASE_CA:process.env.OBSERVANDA_TEST_DATABASE_CA??''};
  if(!env.OBSERVANDA_DATABASE_URL){
-  directory=await mkdtemp(path.join(os.tmpdir(),'observanda-postgres-test-'));
+  temporaryRuntime=await mkdtemp(path.join(os.tmpdir(),'observanda-postgres-test-'));directory=path.join(temporaryRuntime,'database');
   if(env.OBSERVANDA_TEST_POSTGRES_BIN)env.OBSERVANDA_POSTGRES_BIN=env.OBSERVANDA_TEST_POSTGRES_BIN;
   service=await startManagedPostgres({directory,env,signal:controller.signal,onProgress:({stage,percent})=>{if(stage==='download'&&percent%10===0)console.log('Installing test PostgreSQL: '+percent+'%');}});
   env.OBSERVANDA_TEST_POSTGRES_BIN=service.bin;
@@ -28,7 +28,7 @@ try{
  });
 }catch(error){console.error(error.message);process.exitCode=1;}
 finally{
- try{await service?.close();}catch(error){console.error(error.message);process.exitCode=1;directory=null;}
- if(directory&&path.dirname(path.resolve(directory))===path.resolve(os.tmpdir())&&path.basename(directory).startsWith('observanda-postgres-test-'))await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+ try{await service?.close();}catch(error){console.error(error.message);process.exitCode=1;temporaryRuntime=null;}
+ if(temporaryRuntime&&path.dirname(path.resolve(temporaryRuntime))===path.resolve(os.tmpdir())&&path.basename(temporaryRuntime).startsWith('observanda-postgres-test-'))await rm(temporaryRuntime,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);
 }
