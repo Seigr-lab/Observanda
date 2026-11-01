@@ -52,27 +52,27 @@ export class ResearchExchange{
   const declaration=await exchangeDeclaration(parts.items(),selection);
   return writeExchange(this.identity,recipient,parts.entries(),{id:selection.id,declaration});
  }
- async receive(source,{signal}={}){
-  const workspace=this.workspace;if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');const controller=new AbortController();signal=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+ async receive(source,{signal,check=async()=>{}}={}){
+  if(typeof check!=='function')throw new AppError('INVALID');await check();const workspace=this.workspace;if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');const controller=new AbortController();signal=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
   let drained;const done=new Promise(resolve=>{drained=resolve;}),retire=onVaultRetire(workspace.vault,()=>{controller.abort(new AppError('ACCESS_LOCKED'));return done;});
   try{return await withStagingAuthority(workspace,async authority=>{
-   let claim,admitted,sender;const parts=new ExchangeParts(workspace,undefined,{capacity:options=>{if(!claim)throw new AppError('COLLABORATION_PACKAGE');return claim.capacity(options);},write:operation=>workspace.withLock(async()=>{await claim.check();await this.authorizeIncoming(admitted,sender);return operation();})});
+   let claim,admitted,sender;const parts=new ExchangeParts(workspace,undefined,{capacity:async options=>{await check();if(!claim)throw new AppError('COLLABORATION_PACKAGE');return claim.capacity(options);},write:operation=>workspace.withLock(async()=>{await check();await claim.check();await this.authorizeIncoming(admitted,sender);return operation();})});
    try{
     const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,{...options,reserveBytes:STAGING_FREE_BYTES}),{signal,requireDeclaration:true,authorizeDeclaration:async declaration=>{
-     admitted=validateSelection(declaration.declaration.selection);sender=declaration.sender;valid(admitted.id===declaration.id,'COLLABORATION_PACKAGE');await workspace.withLock(()=>this.authorizeIncoming(admitted,sender));await recoverStaging(workspace,{signal});
-     await workspace.withLock(async()=>{await this.authorizeIncoming(admitted,sender);claim=await authority.reserve({id:parts.id,principalId:admitted.grant.principalId,ownerId:(await workspace.outline()).metadata.id,grantGeneration:admitted.grant.generation,entries:declaration.declaration.entries,expectedBytes:declaredStagingBytes(declaration.declaration.bytes,declaration.declaration.entries),expiresAt:declaration.expiresAt});});
-    }}),selection=await packageSelection(parts);valid(selection.id===result.id,'COLLABORATION_PACKAGE');await claim.preparing();
+     admitted=validateSelection(declaration.declaration.selection);sender=declaration.sender;valid(admitted.id===declaration.id,'COLLABORATION_PACKAGE');await workspace.withLock(async()=>{await check();return this.authorizeIncoming(admitted,sender);});await recoverStaging(workspace,{signal});
+     await workspace.withLock(async()=>{await check();await this.authorizeIncoming(admitted,sender);claim=await authority.reserve({id:parts.id,principalId:admitted.grant.principalId,ownerId:(await workspace.outline()).metadata.id,grantGeneration:admitted.grant.generation,entries:declaration.declaration.entries,expectedBytes:declaredStagingBytes(declaration.declaration.bytes,declaration.declaration.entries),expiresAt:declaration.expiresAt});});
+    }}),selection=await packageSelection(parts);valid(selection.id===result.id,'COLLABORATION_PACKAGE');await check();await claim.preparing();
     const summary=await workspace.withLock(async()=>{
-     await claim.check();await this.authorizeIncoming(selection,result.sender);
+     await check();await claim.check();await this.authorizeIncoming(selection,result.sender);
      // Complete stream attestation and current authority precede publication.
      // The claim remains live until this database transaction has committed.
      const receiptPath='.observanda/collaboration/received/'+selection.id+'.json',raw=await workspace.readMetadata(receiptPath,8192),receipt={id:parts.id,sender:result.sender.id,selectionHash:identityHash(selection),manifestHash:result.attestation.value.manifestHash};
      if(raw){const previous=JSON.parse(raw);valid(previous.sender===receipt.sender&&previous.selectionHash===receipt.selectionHash&&previous.manifestHash===receipt.manifestHash,'COLLABORATION_PACKAGE');const retained=new ExchangeParts(workspace,previous.id);await retained.open();throw new RepeatedExchange(this.summary(retained,selection));}
-     await parts.finish({direction:'incoming',selectionHash:receipt.selectionHash,sender:result.sender.id,signatureHash:result.signatureHash,attestation:result.attestation},{write:operation=>operation()});await workspace.writeMetadata(receiptPath,JSON.stringify(receipt));return this.summary(parts,selection);
-    });await claim.committed();await recoverStaging(workspace,{id:parts.id,signal});return summary;
+     await check();await parts.finish({direction:'incoming',selectionHash:receipt.selectionHash,sender:result.sender.id,signatureHash:result.signatureHash,attestation:result.attestation},{write:operation=>operation()});await workspace.writeMetadata(receiptPath,JSON.stringify(receipt));await check();return this.summary(parts,selection);
+    });await claim.committed();await recoverStaging(workspace,{id:parts.id,signal});await check();return summary;
    }catch(error){
     await claim?.close();if(workspace.vault?.key)await recoverStaging(workspace,{id:parts.id});
-    if(error instanceof RepeatedExchange)return {...error.summary,replayed:true};throw error;
+    if(error instanceof RepeatedExchange){await check();return {...error.summary,replayed:true};}throw error;
    }finally{await claim?.close();}
   },{signal});}finally{retire();drained();}
  }

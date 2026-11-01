@@ -27,6 +27,7 @@ import {WorkspaceFonts} from '../src/workspace-fonts.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
 import {withStagingAuthority} from '../src/staging-reservations.js';
+import {testServer} from './device-fixture.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-shared-research-')),vaults=[];
@@ -75,6 +76,20 @@ test('revoking a grant during an incoming return prevents publication and remove
  try{await f.sa.access.saveLocal(await f.a.identity.public(),{workspaceId:f.book.id,expectedRevision:1,active:false,scopes:f.grant.scopes,organizationId:f.org.id,id:f.grant.id,recipient:f.grant.recipient,role:'editor'});}finally{resume();mock.mock.restore();}
  await rejected;assert.equal(await f.author.workspace.readMetadata('.observanda/collaboration/staging/'+stagedId+'/head.json',8192),null);assert.deepEqual(await f.author.workspace.listMetadata('.observanda/collaboration/staging/'+stagedId),[]);
  await withStagingAuthority(f.author.workspace,async authority=>assert.equal((await authority.status()).active,0));
+});
+
+for(const timed of [false,true])test('a browser bearer expiring during receive cannot publish without the wait header ('+(timed?'timer':'writer check')+')',{timeout:120000},async t=>{
+ const f=await fixture(t),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),bytes=Buffer.concat(await Array.fromAsync(await f.sa.outgoing(prepared.id))),app=await testServer({root:f.member.workspace.root,deviceStore:f.member.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'receive-preferences.json')});
+ let now=Date.now(),resume,arrived,stageId,receiveSignal;const deadlines=[],originalTimeout=globalThis.setTimeout,timers=t.mock.method(globalThis,'setTimeout',function(callback,duration,...args){if(duration>7*60*60*1000)deadlines.push(callback);return originalTimeout(callback,duration,...args);}),clock=t.mock.method(Date,'now',()=>now),pause=new Promise(resolve=>{resume=resolve;}),first=new Promise(resolve=>{arrived=resolve;}),original=ExchangeParts.prototype.receive,receive=ResearchExchange.prototype.receive;
+ const observe=t.mock.method(ResearchExchange.prototype,'receive',function(source,options){receiveSignal=options.signal;return receive.call(this,source,options);});
+ const mock=t.mock.method(ExchangeParts.prototype,'receive',async function(...args){const result=await original.apply(this,args);if(this.workspace.root===f.member.workspace.root&&this.count===1){stageId=this.id;arrived();await pause;}return result;});
+ try{
+  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const token=(await session.json()).session;
+  const pending=fetch(app.origin+'/api/sharing/receive',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/octet-stream','X-Observanda-Session':token},body:bytes});await Promise.race([first,pending.then(response=>{if(!stageId)throw Error('Upload ended before staging: '+response.status);})]);now+=8*60*60*1000;
+  if(timed){assert.ok(deadlines.length);deadlines.at(-1)();assert.equal(receiveSignal.aborted,true);assert.equal(receiveSignal.reason.code,'AUTH');}else assert.equal(receiveSignal.aborted,false);
+  resume();const response=await pending;assert.equal(response.status,401);assert.equal((await response.json()).code,'AUTH');
+  assert.equal(await f.member.workspace.readMetadata('.observanda/collaboration/staging/'+stageId+'/head.json',8192),null);assert.deepEqual(await f.member.workspace.listMetadata('.observanda/collaboration/staging/'+stageId),[]);await withStagingAuthority(f.member.workspace,async authority=>assert.equal((await authority.status()).active,0));
+ }finally{resume();mock.mock.restore();observe.mock.restore();timers.mock.restore();clock.mock.restore();await app.close();}
 });
 
 test('encrypted selected books open with independent keys and retain editable records without unrelated content',async t=>{

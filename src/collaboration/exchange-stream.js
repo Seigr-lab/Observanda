@@ -127,6 +127,6 @@ export async function readExchange(identity,source,consume,{signal,expectedSende
    }
    await consume(info,content(),{signal});if(!ended)fail();count++;
   }
- }catch(error){if(error.name==='AbortError'||['ACCESS_LOCKED','DEVICE_UNAVAILABLE','STORAGE_FULL','COLLABORATION_SCOPE','COLLABORATION_DENIED','LIMIT'].includes(error.code))throw error;throw new AppError('COLLABORATION_PACKAGE');}
+ }catch(error){if(error.name==='AbortError'||['AUTH','ACCESS_LOCKED','WORKSPACE_CHANGED','SERVER_CLOSING','DEVICE_UNAVAILABLE','STORAGE_FULL','COLLABORATION_SCOPE','COLLABORATION_DENIED','LIMIT'].includes(error.code))throw error;throw new AppError('COLLABORATION_PACKAGE');}
  finally{secret?.fill(0);await input.close();}
 }

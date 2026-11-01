@@ -1083,9 +1083,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/sharing/receive'){
         if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+        let expiry;const expire=()=>{const remaining=client.expires-Date.now();if(remaining<=0)controller.abort(new AppError('AUTH'));else{expiry=setTimeout(expire,Math.min(2147483647,remaining));expiry.unref?.();}};expire();
         const timeout=req.socket.timeout;res.setTimeout(0);
-        try{const result=await new ResearchExchange(workspace,deviceStore).receive(req,{signal:controller.signal});if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');return json(result);}
-        finally{res.removeListener('close',abort);if(!req.socket.destroyed)req.socket.setTimeout(timeout??60000);}
+        try{const result=await new ResearchExchange(workspace,deviceStore).receive(req,{signal:controller.signal,check:req.checkWriter});if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');return json(result);}
+        finally{clearTimeout(expiry);res.removeListener('close',abort);if(!req.socket.destroyed)req.socket.setTimeout(timeout??60000);}
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/sharing/')){
         const data=await body(req,16*1024*1024),operation=url.pathname.slice('/api/sharing/'.length);
