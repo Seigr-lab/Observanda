@@ -4,7 +4,7 @@ import path from 'node:path';
 import {readdir,unlink,rmdir} from 'node:fs/promises';
 import {AppError} from './errors.js';
 import {privateDirectory,assertRegular} from './storage.js';
-import {FileContent,writeContent,contentStream,contentSize,contentHash} from './file-content.js';
+import {FileContent,writeContent,contentStagedStream,contentSize,contentHash} from './file-content.js';
 import {researchId} from './web/research-reference.js';
 import {MediaStore} from './media.js';
 const profiles={image:['png','image/png'],audio:['wav','audio/wav'],video:['mp4','video/mp4']},kinds=new Set(Object.keys(profiles));
@@ -25,7 +25,7 @@ export async function retainPublicationMedia(workspace,jobId,assets,{signal}={})
   const file=path.join(root,fileName(asset.id)),bytes=asset.bytes;
   if(await assertRegular(file,{missing:true}))throw new AppError('PUBLICATION_IDENTITY');
   let header=Buffer.alloc(0);
-  async function* input(){for await(const value of contentStream(bytes)){signal?.throwIfAborted();const chunk=Buffer.from(value);if(header.length<12)header=Buffer.concat([header,chunk.subarray(0,12-header.length)]);yield chunk;}}
+  async function* input(){for await(const value of contentStagedStream(bytes,{signal})){signal?.throwIfAborted();const chunk=Buffer.from(value);if(header.length<12)header=Buffer.concat([header,chunk.subarray(0,12-header.length)]);yield chunk;}}
   const saved=await writeContent(workspace,file,input(),{signal,expected:{size:contentSize(bytes),sha256:contentHash(bytes)}});
   if(saved.size!==contentSize(bytes)||saved.sha256!==contentHash(bytes))throw new AppError('MEDIA_INVALID');
   const row={id:asset.id,kind:asset.kind,extension:asset.extension,mime:asset.mime,...saved,header:header.toString('hex')};

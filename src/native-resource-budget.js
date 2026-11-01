@@ -15,7 +15,7 @@ export class NativeResourceBudget{
  }
  canReserve(kind,bytes){return this.bytes+bytes<=this.memoryBytes&&(kind!=='database'||this.runtimes<this.runtimeLimit)&&this.available()>=this.bytes+bytes+this.reserveBytes;}
  reserve(kind,bytes,{key=Symbol(kind)}={}){
-  if(!['database','media'].includes(kind)||!Number.isSafeInteger(bytes)||bytes<1)throw new AppError('INVALID');
+  if(!['database','media','buffer'].includes(kind)||!Number.isSafeInteger(bytes)||bytes<1)throw new AppError('INVALID');
   let entry=this.entries.get(key);
   if(entry){
    if(entry.kind!==kind||!entry.uncertain||entry.claimed)throw new AppError('WORKLOAD_BUSY');
@@ -34,6 +34,6 @@ export class NativeResourceBudget{
  stopped(key){const entry=this.entries.get(key);if(entry?.uncertain&&!entry.claimed)this.remove(entry);}
  onRelease(listener){this.listeners.add(listener);return ()=>this.listeners.delete(listener);}
  onPressure(evict){this.evictions.add(evict);return ()=>this.evictions.delete(evict);}
- stats(){return {managedRuntimes:this.runtimes,runtimeLimit:this.runtimeLimit,converters:this.entries.size-this.runtimes,reservedBytes:this.bytes,memoryLimitBytes:this.memoryBytes,foregroundReserveBytes:this.reserveBytes,uncertainExits:[...this.entries.values()].filter(value=>value.uncertain).length};}
+ stats(){const entries=[...this.entries.values()];return {managedRuntimes:this.runtimes,runtimeLimit:this.runtimeLimit,converters:entries.filter(value=>value.kind==='media').length,buffers:entries.filter(value=>value.kind==='buffer').length,reservedBytes:this.bytes,memoryLimitBytes:this.memoryBytes,foregroundReserveBytes:this.reserveBytes,uncertainExits:entries.filter(value=>value.uncertain).length};}
 }
 export const nativeResources=new NativeResourceBudget();

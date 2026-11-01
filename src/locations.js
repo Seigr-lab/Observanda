@@ -256,9 +256,9 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
           if(file.path==='.observanda/access.json'||workspaceOwnerLeaseFile(file.path)||[CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path))continue;
           const relative=file.path==='observanda.json'&&access.formatVersion===3?WORKSPACE_FILE:file.path,output=path.join(plan.destination,relative);
           if(!within(plan.destination,output))throw new AppError('UNSAFE');
-          const content=await describeContent(source,path.join(plan.source,file.path));
+          const content=await describeContent(source,path.join(plan.source,file.path),{verification:'descriptor'});
           if(await assertRegular(output,{missing:true})){
-            const retained=await describeContent(target,output);
+            const retained=await describeContent(target,output,{verification:'descriptor'});
             if(retained.size!==content.size||retained.sha256!==content.sha256)throw new AppError('STORAGE_COPY');
             await retained.verify();
           }else await content.copyTo(target,output,{resume:!!recovery});

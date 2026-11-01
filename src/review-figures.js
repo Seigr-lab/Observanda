@@ -18,7 +18,7 @@ const exact=(v,names)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v)
 export const hasReviewFigures=records=>records.some(({record})=>allFigurePlots(record.figures).some(figure=>figure.kind==='retained'));
 const alias=(parts,kind,revision)=>parts.prefix+'/blocks/'+kind+'/'+revision+'.json';
 async function readPack(parts,entry,{signal}={}){
- signal?.throwIfAborted();const match=chunk.exec(entry.name);if(entry.kind!=='metadata'||!match||entry.size>262144||entry.sha256!==match[1])fail();const bytes=await contentBuffer(parts.content(entry),{signal}),value=JSON.parse(bytes.toString('utf8'));if(serialize(value)!==bytes.toString('utf8')||!exact(value,['format','version','items'])||value.format!=='review-figure-blocks'||value.version!==1||!Array.isArray(value.items)||!value.items.length||value.items.length>32)fail();
+ signal?.throwIfAborted();const match=chunk.exec(entry.name);if(entry.kind!=='metadata'||!match||entry.size>262144||entry.sha256!==match[1])fail();const bytes=await contentBuffer(parts.content(entry),{signal,maxBytes:262144}),value=JSON.parse(bytes.toString('utf8'));if(serialize(value)!==bytes.toString('utf8')||!exact(value,['format','version','items'])||value.format!=='review-figure-blocks'||value.version!==1||!Array.isArray(value.items)||!value.items.length||value.items.length>32)fail();
  for(const item of value.items)if(!exact(item,['kind','revision','node'])||!['value','index'].includes(item.kind)||!/^[a-f0-9]{64}$/.test(item.revision)||Buffer.byteLength(serialize(item.node))>65536||digest(serialize(item.node))!==item.revision)fail();return value;
 }
 export async function indexReviewFigurePart(parts,entry,options={}){
@@ -41,7 +41,7 @@ export function reviewFigureWorkspace(parts,{signal}={}){
  const cache=new Map();let cachedBytes=0;
  return {async readMetadata(name,max=65536){
   signal?.throwIfAborted();const match=block.exec(name);if(!match)return null;const raw=await parts.workspace.readMetadata(alias(parts,match[1],match[2]),1024);if(raw===null)return null;const address=JSON.parse(raw);if(!exact(address,['name','position'])||!chunk.test(address.name)||!Number.isInteger(address.position)||address.position<0||address.position>=32)fail();
-  let pack=cache.get(address.name);if(!pack){const entry=await parts.descriptor('metadata',address.name);if(!entry||entry.size>262144||entry.sha256!==chunk.exec(entry.name)[1])fail();const bytes=await contentBuffer(parts.content(entry),{signal});pack={value:JSON.parse(bytes.toString('utf8')),bytes:bytes.length};while(cache.size>=4||cachedBytes+pack.bytes>1048576){const key=cache.keys().next().value;if(key===undefined)break;cachedBytes-=cache.get(key).bytes;cache.delete(key);}cache.set(address.name,pack);cachedBytes+=pack.bytes;}
+  let pack=cache.get(address.name);if(!pack){const entry=await parts.descriptor('metadata',address.name);if(!entry||entry.size>262144||entry.sha256!==chunk.exec(entry.name)[1])fail();const bytes=await contentBuffer(parts.content(entry),{signal,maxBytes:262144});pack={value:JSON.parse(bytes.toString('utf8')),bytes:bytes.length};while(cache.size>=4||cachedBytes+pack.bytes>1048576){const key=cache.keys().next().value;if(key===undefined)break;cachedBytes-=cache.get(key).bytes;cache.delete(key);}cache.set(address.name,pack);cachedBytes+=pack.bytes;}
   const item=pack.value.items?.[address.position];if(item?.kind!==match[1]||item?.revision!==match[2])fail();const text=serialize(item.node);if(Buffer.byteLength(text)>max||digest(text)!==match[2])fail();return text;
  }};
 }

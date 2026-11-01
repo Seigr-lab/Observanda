@@ -370,11 +370,12 @@ export class ResearchMaterials {
   const retired=await retiredArtifactContent(this.workspace,doc);if(retired)return retired;
   const file=await this.artifactPath(doc);await assertRegular(file);return new FileContent(this.workspace,file,doc.content.size,doc.content.sha256);
  }
- async artifact(ref,{signal}={}){
+ async artifact(ref,{signal,verification='complete'}={}){
+  if(!['complete','descriptor'].includes(verification))fail();
   if(ref?.kind!=='artifact')fail();const doc=await this.read(ref),content=await this.originalContent(doc);
   // The retained descriptor already owns the expected size and digest. Check
   // both in one authenticated pass, including the stable-file check.
-  try{await content.verify({signal});}catch(error){if(error.code==='MEDIA_INVALID')fail('MATERIAL_MISSING');throw error;}
+  try{if(verification==='descriptor')await content.verifyMetadata({signal});else await content.verify({signal});}catch(error){if(error.code==='MEDIA_INVALID')fail('MATERIAL_MISSING');throw error;}
   return {doc,content};
  }
  async previewDataset(command,{signal}={}){
@@ -384,9 +385,9 @@ export class ResearchMaterials {
   if(command.calculatorResult)return new CalculatorResults(this).preview(command,{signal});
   if(command.aggregation)return new DatasetAggregation(this).preview(command,{signal});
   if(command.calculation)return new DatasetCalculations(this).preview(command,{signal});
-  await this.validateDataset(command);const source=await this.artifact(command.artifact,{signal}),rows=[],columns=[],columnOffset=command.columnOffset??0;let columnCount=0;
+  await this.validateDataset(command);const source=await this.artifact(command.artifact,{signal,verification:'descriptor'}),rows=[],columns=[],columnOffset=command.columnOffset??0;let columnCount=0;
   if(!Number.isSafeInteger(columnOffset)||columnOffset<0)fail();
-  for await(const item of readPagedDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,size:source.content.size})){
+  for await(const item of readPagedDataset(source.content.readChunks(0,source.content.size-1,{signal}),command.sourceMapping,{signal,size:source.content.size})){
    if(item.columnCount!==undefined){columnCount=item.columnCount;if(columnOffset>=columnCount)fail();let i=0;for await(const col of item.columns()){if(i>=columnOffset&&i<columnOffset+16)columns.push(col.name);if(++i>=columnOffset+16)break;}}
    else {const cells=[],truncated=[],valueKinds=[];let i=0;for await(const cell of item.cells()){if(i>=columnOffset&&i<columnOffset+16){let value='';for await(const part of cell.read()){value+=part.slice(0,4097-value.length);if(value.length>4096)break;}cells.push(value.slice(0,4096));truncated.push(value.length>4096);valueKinds.push(cell.kind);}if(++i>=columnOffset+16)break;}rows.push({line:item.line,order:item.order,locator:item.locator,cells,truncated,valueKinds});}
    if(rows.length===5)break;

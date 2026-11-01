@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {opendir,unlink,rmdir} from 'node:fs/promises';
 import {privateDirectory,digest,assertRegular} from '../storage.js';
 import {isStorageTemporary} from '../storage-temporary.js';
-import {FileContent,writeContent,contentStream,contentSize,contentHash,contentBuffer} from '../file-content.js';
+import {FileContent,writeContent,contentStagedStream,contentSize,contentHash,withContentBuffer} from '../file-content.js';
 import {uuid,exact} from '../modules/validation.js';
 import {AppError} from '../errors.js';
 import {validTransferPart} from './research-transfer.js';
@@ -22,7 +22,7 @@ export class ExchangeParts{
  async add({kind,name,content}){
   const old=await this.descriptor(kind,name),size=contentSize(content),sha256=contentHash(content);
   if(old){if(old.size!==size||old.sha256!==sha256)throw new AppError('COLLABORATION_PACKAGE');return old;}
-  return this.receive({kind,name,size,sha256},contentStream(content));
+  return this.receive({kind,name,size,sha256},contentStagedStream(content));
  }
  async receive(info,source,{signal,reserveBytes=0}={}){
   descriptor({...info,index:this.count},this.scope);if(this.bytes+info.size>2**41)throw new AppError('LIMIT');
@@ -34,7 +34,7 @@ export class ExchangeParts{
   const entry={...info,index};await this.write(async()=>{await this.workspace.writeMetadata(this.prefix+'/items/'+index+'.json',JSON.stringify(entry));await this.workspace.writeMetadata(this.prefix+'/names/'+digest(info.kind+'/'+info.name)+'.json',JSON.stringify(entry));});this.bytes+=saved.size;return entry;
  }
  content(item){descriptor(item,this.scope);return new FileContent(this.workspace,path.join(this.workspace.root,this.prefix,item.index+'.blob'),item.size,item.sha256);}
- async value(kind,name){const item=await this.descriptor(kind,name);if(!item)throw new AppError('COLLABORATION_PACKAGE');if(item.size>16*1024*1024)throw new AppError('LIMIT');return JSON.parse((await contentBuffer(this.content(item))).toString('utf8'));}
+ async value(kind,name){const item=await this.descriptor(kind,name);if(!item)throw new AppError('COLLABORATION_PACKAGE');if(item.size>16*1024*1024)throw new AppError('LIMIT');return withContentBuffer(this.content(item),{maxBytes:16*1024*1024,additionalBytes:2*item.size},bytes=>JSON.parse(bytes.toString('utf8')));}
  async finish(extra,{write=this.write}={}){await write(()=>this.workspace.writeMetadata(this.prefix+'/head.json',JSON.stringify({count:this.count,bytes:this.bytes,...extra})));}
  async open(){const raw=await this.workspace.readMetadata(this.prefix+'/head.json',8192);valid(!!raw);const head=JSON.parse(raw);valid(Number.isSafeInteger(head.count)&&head.count>=1&&(this.scope==='reviews'||head.count<=100000)&&Number.isSafeInteger(head.bytes)&&head.bytes>=0&&head.bytes<=2**41&&['incoming','outgoing','base'].includes(head.direction)&&/^[a-f0-9]{64}$/.test(head.selectionHash));this.count=head.count;this.bytes=head.bytes;return head;}
  async *items(){

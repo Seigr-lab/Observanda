@@ -13,7 +13,7 @@ import {MAX_FONT_BYTES} from './font-inspector.js';
 import {BUNDLED_FONTS,customFontId,validCustomFont} from './web/font-catalogue.js';
 import {bundledFonts,isBundledFont} from './fonts.js';
 import {assertPublicFields,assertPublicFiles} from './privacy.js';
-import {contentBuffer,contentStream,contentSize,contentHash} from './file-content.js';
+import {contentBuffer,withContentBuffer,contentStream,contentSize,contentHash} from './file-content.js';
 import {validWebsiteTheme,validWebsiteThemeOperation,themeReferences,WEBSITE_THEME_MANIFEST_LIMIT} from './web/website-theme-model.js';
 import {websiteThemeRemapper,captureWebsiteTheme} from './website-theme-package.js';
 import {WebsiteThemeResources,themeDigest} from './website-theme-resources.js';
@@ -68,8 +68,8 @@ export class WebsiteThemeExchange{
  }
  async validateFonts(stage,{signal}={}){
   stage.fonts=[];for(const font of stage.manifest.fonts){await this.check();const bundled=BUNDLED_FONTS.find(f=>f.id===font.id);
-   if(bundled){const expected=[...bundled.faces.map(f=>f.file),bundled.license];if(font.resources.length!==expected.length)invalid();for(const id of font.resources){const r=stage.manifest.resources.find(v=>v.id===id);if(!expected.includes(r.name)||!isBundledFont('fonts/'+r.name,await contentBuffer(this.resources.content(stage,r))))throw new AppError('FONT_INVALID');expected.splice(expected.indexOf(r.name),1);}continue;}
-   const r=stage.manifest.resources.find(v=>v.id===font.resources[0]);if(r.size>MAX_FONT_BYTES)throw new AppError('FONT_INVALID');const bytes=await contentBuffer(this.resources.content(stage,r)),info=await inspectUploadedFont(bytes,{signal});if(info.restricted)throw new AppError('FONT_EMBED');const id='custom-'+info.sha256;assertPublicFiles(new Map([['fonts/'+id+'.'+info.extension,bytes]]),this.blockedValues);
+   if(bundled){const expected=[...bundled.faces.map(f=>f.file),bundled.license];if(font.resources.length!==expected.length)invalid();for(const id of font.resources){const r=stage.manifest.resources.find(v=>v.id===id),known=bundledFonts.get('fonts/'+r.name);if(!expected.includes(r.name)||known===undefined||!isBundledFont('fonts/'+r.name,await contentBuffer(this.resources.content(stage,r),{signal,maxBytes:Buffer.byteLength(known)})))throw new AppError('FONT_INVALID');expected.splice(expected.indexOf(r.name),1);}continue;}
+   const r=stage.manifest.resources.find(v=>v.id===font.resources[0]);if(r.size>MAX_FONT_BYTES)throw new AppError('FONT_INVALID');const bytes=await contentBuffer(this.resources.content(stage,r),{signal,maxBytes:MAX_FONT_BYTES}),info=await inspectUploadedFont(bytes,{signal});if(info.restricted)throw new AppError('FONT_EMBED');const id='custom-'+info.sha256;assertPublicFiles(new Map([['fonts/'+id+'.'+info.extension,bytes]]),this.blockedValues);
    const entry={id,label:info.label,embed:true,restricted:false,hidden:false,faces:[{file:id+'.'+info.extension,style:info.style,weight:info.weight,axes:info.axes}]};if(!validCustomFont(entry))throw new AppError('FONT_INVALID');stage.fonts.push({from:font.id,resourceId:r.id,entry});
   }await this.resources.save(stage);
  }
@@ -86,7 +86,7 @@ export async function applyWebsiteTheme(context,operation,{store,signal}={}){
  stage.imported??=[];
  for(const asset of pkg.assets){signal?.throwIfAborted();if(stage.imported.some(v=>v.from===asset.id))continue;const r=stage.resources.find(v=>v.id===asset.id),saved=await new MediaStore(workspace).import(resources.content(stage,r).stream(),asset.kind,{signal});stage.imported.push({from:asset.id,...saved});await resources.save(stage);}
  const mapper=websiteThemeRemapper({assetIds:new Map(stage.imported.map(a=>[a.from,a.id])),fontIds:new Map((stage.fonts??[]).map(f=>[f.from,f.entry.id]))}),mapped=mapper.remap(pkg);
- for(const f of stage.fonts??[]){const r=stage.resources.find(v=>v.id===f.resourceId),bytes=await contentBuffer(resources.content(stage,r));await store.putObject(fontSlot(f.entry.id),{text:JSON.stringify({bytes:bytes.toString('base64')})});}
+ for(const f of stage.fonts??[]){const r=stage.resources.find(v=>v.id===f.resourceId);await withContentBuffer(resources.content(stage,r),{signal,maxBytes:MAX_FONT_BYTES,additionalBytes:4*r.size},bytes=>store.putObject(fontSlot(f.entry.id),{text:JSON.stringify({bytes:bytes.toString('base64')})}));}
  if(stage.fonts?.length)await store.putObject(librarySlot,{text:JSON.stringify(fonts)});
  const definitions=[...(current.design.regions?.definitions??[]),...(mapped.design.regions?.definitions??[])],replacing=new Set((mapped.design.regions?.assignments??[]).map(a=>a.target+'/'+a.kind));
  const design={...mapped.design,regions:{definitions,assignments:[...(current.design.regions?.assignments??[]).filter(a=>!replacing.has(a.target+'/'+a.kind)),...(mapped.design.regions?.assignments??[])]}};

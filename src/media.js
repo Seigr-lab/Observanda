@@ -188,7 +188,7 @@ export class MediaStore {
     for (const part of ['.observanda', 'media', id]) { directory = path.join(directory, part); await assertRegular(directory, { directory: true, missing: indexed!==null }); }
     const metadataFile = path.join(directory, 'asset.json');
     if(indexed===null){const stat=await assertRegular(metadataFile);if(stat.size>4096)throw new AppError('MEDIA_INVALID');}
-    const metadata=JSON.parse(indexed??(await contentBuffer(await describeContent(this.workspace,metadataFile))).toString('utf8'));
+    const metadata=JSON.parse(indexed??(await contentBuffer(await describeContent(this.workspace,metadataFile),{maxBytes:4096})).toString('utf8'));
     if(metadata.storageId!==undefined&&!safeId(metadata.storageId))throw new AppError('MEDIA_INVALID');
     const profile = metadata.kind==='file'?{extension:'bin',mime:'application/octet-stream'}:profiles[metadata.kind];
     if (!profile || metadata.id !== id || metadata.extension !== profile.extension || metadata.mime !== profile.mime || !Number.isSafeInteger(metadata.bytes) || metadata.bytes < 0 || metadata.bytes===0&&metadata.kind!=='file' || metadata.kind==='file'&&(!validDownloadInfo(downloadInfo(metadata))||metadata.originalBytes!==metadata.bytes||metadata.originalSha256!==metadata.sha256)) throw new AppError('MEDIA_INVALID');
@@ -209,9 +209,9 @@ export class MediaStore {
     const file = path.join(directory,metadata.kind==='file'?metadata.storageId?metadata.storageId+'.original':'original':`${metadata.storageId?metadata.storageId+'.':''}public.${profile.extension}`);
     const relative=path.relative(this.root,file).split(path.sep).join('/');let content=await retiredMediaContent(this.workspace,relative,metadata.bytes,metadata.sha256);
     if(!content){await assertRegular(file);content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
-    await content.verify({signal});
-    if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.read(0,11,{signal}))header.push(chunk);content.header=Buffer.concat(header);}
-    const bytes=streamed?content:await contentBuffer(content);
+    let bytes;
+    if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.read(0,11,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
+    else{bytes=await contentBuffer(content,{signal,maxBytes:metadata.bytes});if(includeHeader&&metadata.kind!=='file')content.header=Buffer.from(bytes.subarray(0,12));}
     return { id, kind: metadata.kind, extension: metadata.extension, mime: metadata.mime, bytes,...(metadata.kind==='file'?downloadInfo(metadata):{}) };
   }
 

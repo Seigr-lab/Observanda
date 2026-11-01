@@ -2,7 +2,7 @@ import {collectConfigurations,admitConfigurations,configurationPartName} from '.
 import path from 'node:path';
 import {AppError} from '../errors.js';
 import {privateDirectory,assertRegular} from '../storage.js';
-import {contentBuffer,contentStream,describeContent,writeContent} from '../file-content.js';
+import {contentBuffer,contentStagedStream,describeContent,writeContent} from '../file-content.js';
 import {ResearchMaterials} from '../research-materials.js';
 import {ResearchTransfer} from './research-transfer.js';
 import {validateSelection} from './selection.js';
@@ -36,7 +36,7 @@ export async function admitParts(workspace,parts,{heads=true}={}){
   if(item.kind==='metadata'){
    if(configurationPartName(item.name))continue;
    if(!heads&&item.name.endsWith('/head.json'))continue;
-   const raw=(await contentBuffer(parts.content(item))).toString('utf8'),old=await workspace.readMetadata(item.name,16*1024*1024);
+   const raw=(await contentBuffer(parts.content(item),{maxBytes:16*1024*1024})).toString('utf8'),old=await workspace.readMetadata(item.name,16*1024*1024);
    if(old!==null&&!item.name.endsWith('/head.json')&&item.name!=='.observanda/fonts/library.json'){
     if(item.name.startsWith('.observanda/media-imports/')){
      const incoming=JSON.parse(raw),prior=JSON.parse(old);if(Object.keys(incoming).some(key=>identityHash(incoming[key])!==identityHash(prior[key])))fail();
@@ -55,7 +55,7 @@ export async function admitParts(workspace,parts,{heads=true}={}){
    const file=workspace.metadataPath(item.name);
    if(await assertRegular(file,{missing:true})){const old=await describeContent(workspace,file);if(old.size!==item.size||old.sha256!==item.sha256)fail();continue;}
    await privateDirectory(workspace.root,path.posix.dirname(item.name));
-   await writeContent(workspace,file,contentStream(parts.content(item)),{maxBytes:item.size||1,expected:{size:item.size,sha256:item.sha256}});
+   await writeContent(workspace,file,contentStagedStream(parts.content(item)),{maxBytes:item.size||1,expected:{size:item.size,sha256:item.sha256}});
   }
  }
 }

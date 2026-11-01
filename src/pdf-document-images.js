@@ -50,7 +50,7 @@ export async function preparePdfImage(input,{signal}={}){
   const inputPath=path.join(directory,'source'),output=path.join(directory,'prepared'),source=await writeContent(workspace,inputPath,[bytes],{maxBytes:PDF_IMAGE_MAX_BYTES,signal});
   const policy={...defaultMediaPolicy(),maxUploadBytes:PDF_IMAGE_MAX_BYTES,maxPreparedBytes:PDF_IMAGE_MAX_BYTES,maxImagePixels:PDF_IMAGE_MAX_PIXELS,processingTimeoutSeconds:60};
   const result=await new MediaStore(workspace).prepare(new FileContent(workspace,inputPath,source.size,source.sha256),'image',randomUUID(),output,{policy,signal});
-  const canonical=canonicalPNG(await contentBuffer(new FileContent(workspace,output,result.bytes,result.sha256)));signal?.throwIfAborted();
+  const canonical=canonicalPNG(await contentBuffer(new FileContent(workspace,output,result.bytes,result.sha256),{signal,maxBytes:PDF_IMAGE_MAX_BYTES}));signal?.throwIfAborted();
   const metadata=Object.freeze({asset:digest(canonical.content),mime:'image/png',size:canonical.content.length,width:canonical.width,height:canonical.height});preparedImages.set(metadata,canonical.content);return metadata;
  }finally{
   clearVault(vault);bytes.fill(0);
