@@ -10,7 +10,7 @@ import {upgradeNotebook} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {validViewQuery,viewScopeIssue} from './web/record-view-model.js';
-import {recordQueryMatcher,recordQueryOrder,recordQueryDocument} from './web/record-query.js';
+import {recordBrowse,recordQueryMatcher,recordQueryOrder,recordQueryDocument} from './web/record-query.js';
 import {notebooksIn} from './web/workspace-structure.js';
 import {recordCounts} from './web/record-workflow.js';
 import {validRecordDate} from './web/record-date.js';
@@ -76,7 +76,7 @@ export class RecordQuery{
    const head=await store.head();if((await store.snapshot(head)).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const referenceNamespaces=relatedTo?await recordReferenceNamespaces(store,relatedTo):null;
    const rows=(source,ids)=>runOf?recordRunMembers(store,source,runOf,{signal,notebookIds:ids}):relatedTo?recordReferenceCandidates({store,snapshot:source,notebooks:ids,workspaceId:relatedTo.workspaceId,signal,search:query.search,fallback:()=>store.members(source,{signal,notebookIds:ids})},relatedTo.id):store.searchMembers(source,ids,query.search,{signal});
-   return run({head,matchedSearch:true,referenceNamespaces,indexedPage:indexedRecordDateQuery(query,{selection,relatedTo,runOf})?(source,ids,anchor)=>recordDatePage(store,source,ids,anchor,{signal}):null,manifest:id=>store.snapshot(id),documents:(source,ids)=>store.queryDocuments(rows(source,ids),source.metadata,{signal,search:false,matching:query.search,references:!!relatedTo,revisions:!!selection&&selection.includeRevisions!==false}),
+   return run({head,matchedSearch:true,referenceNamespaces,indexedPage:indexedRecordDateQuery(query,{selection,relatedTo,runOf})?(source,ids,anchor)=>recordDatePage(store,source,ids,anchor,{signal,ascending:recordBrowse(query.browse).sort==='date-asc'}):null,manifest:id=>store.snapshot(id),documents:(source,ids)=>store.queryDocuments(rows(source,ids),source.metadata,{signal,search:false,matching:query.search,references:!!relatedTo,revisions:!!selection&&selection.includeRevisions!==false}),
     resolveRevision:async(source,item)=>recordRevision(historicalBook(source.metadata,await store.record(item.id,item.storageRevision)).entries[0]),
     encode:value=>store.encode('record-query-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('record-query-page',workspaceId,Buffer.from(value,'base64url'))});
   });

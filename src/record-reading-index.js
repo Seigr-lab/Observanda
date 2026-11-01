@@ -6,15 +6,16 @@ import {buildIndex} from './index-builder.js';
 import {dateBounds,validRecordDate} from './web/record-date.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
+import {ascendingDateOrdinals} from './record-date-order.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 const prefix=(order,id)=>order+':'+id+':';
 export function readingKey(row,order){
  if(order==='position')return String(row.position).padStart(16,'0');
- if(order!=='date'||!validRecordDate(row.occurredOn))fail();
+ if(!['date','date-asc'].includes(order)||!validRecordDate(row.occurredOn))fail();
  const bounds=dateBounds(row.occurredOn);
  const reverse=value=>value.replace(/\d/g,d=>String(9-Number(d)));
- return (bounds?'0:'+reverse(bounds.from)+':'+reverse(bounds.to):'1')+':'+row.id;
+ return (bounds?'0:'+(order==='date'?reverse(bounds.from):bounds.from)+':'+(order==='date'?reverse(bounds.to):bounds.to):'1')+':'+row.id;
 }
 export class RecordReadingIndex extends ObjectIndex{
  constructor(store,{cacheSize=128}={}){super(store,{namespace:'record-reading-index:',immutable:true,cacheSize});this.membership=new SnapshotIndex(store,{cacheSize});}
@@ -38,7 +39,8 @@ export class RecordReadingIndex extends ObjectIndex{
   await this.flush(root);return {version:1,root};
  }
  async *rows(snapshot,notebookIds,{order='date',after=null,backward=false,inclusive=false,signal}={}){
-  if(!['date','position'].includes(order))throw new AppError('INVALID');
+  if(!['date','date-asc','position'].includes(order))throw new AppError('INVALID');
+  const ascending=order==='date-asc',storedOrder=ascending?'date':order;
   const boundary=after?readingKey(after,order):null,compare=(a,b)=>(readingKey(a,order)<readingKey(b,order)?-1:readingKey(a,order)>readingKey(b,order)?1:0)*(backward?-1:1);
   if(!snapshot.readingIndex){
    // Historical snapshots are not rewritten on a read. Their compatibility
@@ -60,14 +62,16 @@ export class RecordReadingIndex extends ObjectIndex{
   if(!RecordReadingIndex.valid(snapshot.readingIndex))fail();
   const head=snapshot.readingIndex,lanes=[];
   const next=async lane=>{
-   signal?.throwIfAborted();if(lane.at<lane.lower||lane.at>=lane.upper){lane.row=null;return;}
+   signal?.throwIfAborted();if(lane.ordinals){const value=await lane.ordinals.next();if(value.done){lane.row=null;return;}lane.at=value.value;}
+   else if(lane.at<lane.lower||lane.at>=lane.upper){lane.row=null;return;}
    const entry=await this.entryAt(head,lane.at),member=await this.membership.member(entry);
    if(!member)fail();const row=await this.describe(member);
-   if(entry.id!==lane.start+readingKey(row,order)||row.notebookId!==lane.id||
+   if(entry.id!==lane.start+readingKey(row,storedOrder)||row.notebookId!==lane.id||
     (await this.membership.find({root:snapshot.membership},'record:'+row.id))?.revision!==entry.revision)fail();
    lane.row=row;
   };
   for(const id of notebookIds){
+   if(ascending){const start=prefix('date',id),lane={id,start,ordinals:ascendingDateOrdinals(this,head,start,after?readingKey(after,'date'):null,{backward,inclusive,signal})};await next(lane);if(lane.row)lanes.push(lane);continue;}
    signal?.throwIfAborted();const start=prefix(order,id),lower=await this.rank(head,start),upper=await this.rank(head,start+'\uffff');
    const at=boundary!==null?await this.rank(head,start+boundary+((backward?inclusive:!inclusive)?'\0':''))-(backward?1:0):backward?upper-1:lower;
    if(at>=lower&&at<upper){const lane={id,start,lower,upper,at,row:null};await next(lane);lanes.push(lane);}
@@ -75,7 +79,7 @@ export class RecordReadingIndex extends ObjectIndex{
   for(;;){
    signal?.throwIfAborted();let chosen=null;
    for(const lane of lanes)if(lane.row&&(!chosen||compare(lane.row,chosen.row)<0))chosen=lane;
-   if(!chosen)return;yield chosen.row;chosen.at+=backward?-1:1;await next(chosen);
+   if(!chosen)return;yield chosen.row;if(!ascending)chosen.at+=backward?-1:1;await next(chosen);
   }
  }
  async verify(snapshot){

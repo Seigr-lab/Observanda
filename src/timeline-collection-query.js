@@ -5,6 +5,7 @@ import {compareKey,QUERY_ORDER_VERSION} from './web/query-order.js';
 import {researchId} from './web/research-reference.js';
 import {timelineMatch,timelineOrder,validTimelineQuery} from './web/tools/timeline-model.js';
 import {timelineCollectionScope} from './timeline-collection-scope.js';
+import {recordDateWindow} from './record-date-window.js';
 export async function timelineCollectionQuery(pages,client,command,{scope=null,registry,visit,signal}){
  if(!command||Object.keys(command).sort().join()!=='cursor,limit,query,workspaceId')throw new AppError('INVALID');
  const {workspaceId,query,limit,cursor}=command;
@@ -17,10 +18,14 @@ export async function timelineCollectionQuery(pages,client,command,{scope=null,r
   if(session.snapshots&&!Object.hasOwn(session.snapshots,owner.workspaceId)||Object.hasOwn(snapshots,owner.workspaceId))throw new AppError('RECORD_QUERY_CURSOR');snapshots[owner.workspaceId]=snapshotId;changed||=head!==snapshotId;
   const snapshot=await store.snapshot(snapshotId),metadata=snapshot.metadata;if(metadata.id!==owner.workspaceId)throw new AppError('DATABASE_LOCATION');
   const ids=sources.books(metadata),books=new Map(metadata.notebooks.map(book=>[book.id,book])),projects=new Map(metadata.projects.map(project=>[project.id,project]));
+  const owned=record=>{const {id,notebookId,title,occurredOn,status}=record,book=books.get(notebookId),project=projects.get(book.projectId);return {id,notebookId,title,occurredOn,status,owner:{...owner,projectId:book.projectId??owner.projectId,projectTitle:project?.title??owner.projectTitle??'',notebookTitle:book.title}};};
+  if(!query.query&&!query.status&&!query.from&&!query.to){
+   const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,ascending:!query.descending,signal});
+   if(indexed){page.addIndexed({...indexed,records:indexed.records.map(owned)});return;}
+  }
   for await(const record of store.queryDocuments(store.searchMembers(snapshot,ids,'',{signal}),metadata,{signal,search:false})){
    signal?.throwIfAborted();if(!ids.has(record.notebookId)||!matches(record))continue;
-   const {id,notebookId,title,occurredOn,status}=record,book=books.get(notebookId),project=projects.get(book.projectId);
-   page.add({id,notebookId,title,occurredOn,status,owner:{...owner,projectId:book.projectId??owner.projectId,projectTitle:project?.title??owner.projectTitle??'',notebookTitle:book.title}});
+   page.add(owned(record));
   }
  }),{workspaceId,scope,signal,selection:sources.selection,includeOwner:sources.includeOwner});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id))||(await registry.directory()).revision!==sources.directory.revision)throw new AppError('RECORD_QUERY_CURSOR');

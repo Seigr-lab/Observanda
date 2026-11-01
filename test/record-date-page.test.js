@@ -10,6 +10,8 @@ import {recordBrowse,recordQueryOrder} from '../src/web/record-query.js';
 import {sampleNotebook} from '../src/sample.js';
 import {recordCounts} from '../src/web/record-workflow.js';
 import {indexedRecordDateQuery} from '../src/record-date-page.js';
+import {TimelineQuery} from '../src/timeline-query.js';
+import {timelineDefaults,timelineQuery,timelineOrder} from '../src/web/tools/timeline-model.js';
 
 function fixture(count){
  const book=sampleNotebook(),snapshotId=digest('snapshot'),state=new Map(),documents=new Map(),members=[],calls={summaries:0,nodes:0};book.entries=[];
@@ -28,17 +30,27 @@ function fixture(count){
  const reading=tree(RecordReadingIndex,members.flatMap(row=>['date','position'].map(order=>({id:order+':'+row.notebookId+':'+readingKey(row,order),revision:digest(serialize(row))}))));
  const facets=tree(RecordFacetIndex,members.flatMap(row=>{const value=documents.get(row.id),kind=value.type==='experiment'&&!value.template?'experiments':'other';return [row.notebookId+':count:'+kind+':'+row.id,row.notebookId+':domain:'+encodeURIComponent(row.template?.profileId??'')+':'+row.id].map(id=>({id,revision:digest(serialize(row))}));}));
  const snapshot={indexVersion:1,metadata:book,count,membership,readingIndex:{version:1,root:reading},facetIndex:{version:1,root:facets}},workspace={storageKind:async()=>'catalogue',catalogue:operation=>operation(store)},query={workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()}};
- return {reader:new RecordQuery(workspace),query,calls,rows,snapshot,store};
+ return {reader:new RecordQuery(workspace),workspace,query,calls,rows,snapshot,store};
 }
-for(const count of [1000,10000])test('indexed record date pages read a bounded summary window at '+count+' records',async t=>{
- const f=fixture(count),expected=[...f.rows].sort(recordQueryOrder()),first=await f.reader.list(f.query);assert.deepEqual(first.records,expected.slice(0,25));assert.equal(first.total,count);assert.deepEqual(first.counts,recordCounts(f.rows));assert.deepEqual(first.domains,['arts-creative']);assert.equal(f.calls.summaries,25);const firstReads=f.calls.nodes;
+for(const count of [1000,10000])for(const sort of ['date-desc','date-asc'])test('indexed '+sort+' record pages read a bounded summary window at '+count+' records',async t=>{
+ const f=fixture(count);f.query.query.browse.sort=sort;const expected=[...f.rows].sort(recordQueryOrder({sort})),first=await f.reader.list(f.query);assert.deepEqual(first.records,expected.slice(0,25));assert.equal(first.total,count);assert.deepEqual(first.counts,recordCounts(f.rows));assert.deepEqual(first.domains,['arts-creative']);assert.equal(f.calls.summaries,25);const firstReads=f.calls.nodes;
  f.calls.summaries=0;const second=await f.reader.list({...f.query,cursor:first.nextCursor});assert.deepEqual(second.records,expected.slice(25,50));assert.equal(f.calls.summaries,25);
  f.calls.summaries=0;const third=await f.reader.list({...f.query,cursor:second.nextCursor});assert.deepEqual(third.records,expected.slice(50,75));assert.equal(f.calls.summaries,26);assert.deepEqual((await f.reader.list({...f.query,cursor:third.previousCursor})).records,second.records);
  const cursor=JSON.parse(Buffer.from(second.cursor,'base64url'));cursor.offset++;await assert.rejects(f.reader.list({...f.query,cursor:Buffer.from(JSON.stringify(cursor)).toString('base64url')}),{code:'RECORD_QUERY_CURSOR'});
- t.diagnostic(JSON.stringify({records:count,page:25,firstSummaryReads:25,firstIndexReads:firstReads}));
+ t.diagnostic(JSON.stringify({records:count,sort,page:25,firstSummaryReads:25,firstIndexReads:firstReads}));
 });
-test('only semantically unfiltered newest-date queries use the fast path',()=>{
+test('only semantically unfiltered date queries use the fast path',()=>{
  const base={filter:'all',search:'',browse:recordBrowse()};assert.equal(indexedRecordDateQuery(base),true);
- for(const patch of [{filter:'note'},{search:'needle'},{browse:recordBrowse({sort:'title'})},{browse:recordBrowse({sort:'date-asc'})},{browse:recordBrowse({tags:'sound'})},{browse:recordBrowse({domain:'arts-creative'})},{browse:recordBrowse({status:'completed'})}])assert.equal(indexedRecordDateQuery({...base,...patch}),false);
+ assert.equal(indexedRecordDateQuery({...base,browse:recordBrowse({sort:'date-asc'})}),true);
+ for(const patch of [{filter:'note'},{search:'needle'},{browse:recordBrowse({sort:'title'})},{browse:recordBrowse({tags:'sound'})},{browse:recordBrowse({domain:'arts-creative'})},{browse:recordBrowse({status:'completed'})}])assert.equal(indexedRecordDateQuery({...base,...patch}),false);
  for(const option of ['selection','relatedTo','runOf'])assert.equal(indexedRecordDateQuery(base,{[option]:{}}),false);
+});
+
+test('unfiltered timeline pages seek bounded summaries in either date direction',async()=>{
+ for(const descending of [false,true]){
+  const f=fixture(10000),query=timelineQuery({...timelineDefaults(),descending}),reader=new TimelineQuery(f.workspace),command={workspaceId:f.query.workspaceId,query,limit:25},expected=[...f.rows].sort(timelineOrder(query)).map(({id,notebookId,title,occurredOn,status})=>({id,notebookId,title,occurredOn,status}));
+  let page=await reader.list(command);assert.deepEqual(page.records,expected.slice(0,25));assert.equal(f.calls.summaries,25);assert.equal(page.total,10000);
+  page=await reader.list({...command,cursor:page.nextCursor});assert.deepEqual(page.records,expected.slice(25,50));assert.equal(f.calls.summaries,50);
+  assert.deepEqual((await reader.list({...command,cursor:page.previousCursor})).records,expected.slice(0,25));
+ }
 });

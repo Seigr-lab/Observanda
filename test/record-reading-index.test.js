@@ -30,6 +30,10 @@ test('reading order preserves exact date ordering, reverse cursors and immutable
  assert.deepEqual((await rows(f.workspace,null,{after:first[67]})).map(r=>r.id),expected.slice(68).map(r=>r.id));
  assert.deepEqual((await rows(f.workspace,null,{after:first[67],backward:true})).map(r=>r.id),expected.slice(0,67).reverse().map(r=>r.id));
  assert.deepEqual((await rows(f.workspace,null,{order:'position'})).map(r=>r.id),f.book.entries.map(r=>r.id));
+ const ascending=[...f.book.entries].sort((a,b)=>compareRecordDates(a,b)||(a.id<b.id?-1:a.id>b.id?1:0));
+ assert.deepEqual((await rows(f.workspace,null,{order:'date-asc'})).map(r=>r.id),ascending.map(r=>r.id));
+ assert.deepEqual((await rows(f.workspace,null,{order:'date-asc',after:ascending[67]})).map(r=>r.id),ascending.slice(68).map(r=>r.id));
+ assert.deepEqual((await rows(f.workspace,null,{order:'date-asc',after:ascending[67],backward:true})).map(r=>r.id),ascending.slice(0,67).reverse().map(r=>r.id));
  const service=new ResearchRecords(f.workspace,{}),record=f.book.entries[4];
  const result=await service.save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Changed',notebookId:f.book.notebooks[1].id,occurredOn:'2030-01-01'}}]},{recordIds:[record.id]});
  assert.equal((await rows(f.workspace))[0].id,record.id);assert.deepEqual(await rows(f.workspace,etag),first);
@@ -38,6 +42,7 @@ test('reading order preserves exact date ordering, reverse cursors and immutable
  await f.workspace.catalogue(async store=>new RecordReadingIndex(store).verify(await store.snapshot()));
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await rows(restored,etag),first);assert.deepEqual(await rows(restored),await rows(f.workspace));
+ assert.deepEqual((await rows(restored,etag,{order:'date-asc'})).map(r=>r.id),ascending.map(r=>r.id));
 });
 test('old snapshots page beyond the fallback window and are not rewritten when a later save builds the index',async t=>{
  const f=await fixture(t),etag=(await f.workspace.outline()).etag;
@@ -45,6 +50,8 @@ test('old snapshots page beyond the fallback window and are not rewritten when a
  const expected=[...f.book.entries].sort(order).map(r=>r.id);
  assert.deepEqual((await rows(f.workspace,etag)).map(r=>r.id),expected);
  assert.deepEqual((await rows(f.workspace,etag,{backward:true})).map(r=>r.id),[...expected].reverse());
+ const ascending=[...f.book.entries].sort((a,b)=>compareRecordDates(a,b)||(a.id<b.id?-1:a.id>b.id?1:0)).map(r=>r.id);
+ assert.deepEqual((await rows(f.workspace,etag,{order:'date-asc'})).map(r=>r.id),ascending);
  const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Indexed'}}]},{recordIds:[record.id]});
  await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(etag)).readingIndex,undefined);await new RecordReadingIndex(store).verify(await store.snapshot());});
  assert.deepEqual((await rows(f.workspace,etag)).map(r=>r.id),expected);

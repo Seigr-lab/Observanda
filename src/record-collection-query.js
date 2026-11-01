@@ -4,7 +4,7 @@ import {digest} from './storage-format.js';
 import {summaryPage} from './summary-page.js';
 import {AppError} from './errors.js';
 import {validViewQuery} from './web/record-view-model.js';
-import {recordQueryMatcher,recordQueryOrder,browseActive} from './web/record-query.js';
+import {recordBrowse,recordQueryMatcher,recordQueryOrder,browseActive} from './web/record-query.js';
 import {recentRecordOrder,compareKey,QUERY_ORDER_VERSION} from './web/query-order.js';
 import {recordCounts} from './web/record-workflow.js';
 import {RecordRecentIndex} from './record-recent-index.js';
@@ -38,7 +38,7 @@ export async function recordCollectionQuery(pages,client,command,{scope,visit,si
     page.add(owned(document,updatedAt));
    };
    if(mode==='browse'&&indexedRecordDateQuery(query)){
-    const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,signal});
+    const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,signal,ascending:recordBrowse(query.browse).sort==='date-asc'});
     if(indexed){for(const key of Object.keys(counts))counts[key]+=indexed.counts[key];for(const domain of indexed.domains)domains.add(domain);page.addIndexed({...indexed,records:indexed.records.map(document=>owned(document))});return;}
    }
    // The overview needs only the first page. Ordered indexes avoid scanning a
