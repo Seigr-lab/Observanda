@@ -21,7 +21,7 @@ export class SSHHost {
   args(c) { return ['-F', 'none', '-oBatchMode=yes', '-oStrictHostKeyChecking=yes', '-oConnectTimeout=15', '-oServerAliveInterval=30', '-oServerAliveCountMax=3', '-oForwardAgent=no', '-oClearAllForwardings=yes', ...(c.identityFile ? ['-i', c.identityFile] : [])]; }
   async command(c, script, input = '',{signal}={}) { guard(c); return this.run('ssh', [...this.args(c), '-p', String(c.port), `${c.user}@${c.host}`, script], { input,signal }); }
   async check(c,{signal}={}) {
-    const output = await this.command(c, 'set -eu; for tool in sha256sum find readlink chmod tr wc mkdir ls cat rm; do command -v $tool >/dev/null; done; mv --version >/dev/null; ln --version >/dev/null; printf observanda-ssh-ready','',{signal});
+    const output = await this.command(c, 'set -eu; for tool in sha256sum find id readlink chmod tr wc mkdir cat rm; do command -v $tool >/dev/null; done; mv --version >/dev/null; ln --version >/dev/null; printf observanda-ssh-ready','',{signal});
     if (output.trim() !== 'observanda-ssh-ready') throw new AppError('PUBLISH_SSH');
   }
   deploy(c,candidate,owner,options){guard(c);return deploySSH(this,c,candidate,owner,options);}

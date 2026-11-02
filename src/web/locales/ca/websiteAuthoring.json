@@ -82,7 +82,7 @@
   "pubSshUser": "Usuari SSH",
   "pubSshDirectory": "Directori exclusiu d’allotjament",
   "pubSshIdentity": "Fitxer d’identitat SSH (opcional)",
-  "pubSshHelp": "Utilitza la teva clau o agent OpenSSH i l’entrada verificada d’amfitrió conegut. Requereix ssh/sftp local i un servidor amb un intèrpret POSIX, find, sha256sum i GNU coreutils. Serveix el subdirectori {current} d’aquest directori d’allotjament. Cada versió verificada es conserva a {releases}.",
+  "pubSshHelp": "Utilitza la teva clau o agent OpenSSH i l’entrada verificada d’amfitrió conegut. Requereix ssh/sftp local i un servidor amb un intèrpret POSIX, find, sha256sum i GNU coreutils. El servidor ha d’aplicar els permisos POSIX del sistema de fitxers. El directori d’allotjament i tots els directoris pare fins a / han de pertànyer a root o al compte SSH i no poden donar permís d’escriptura al grup ni a altres usuaris. Serveix el subdirectori {current} d’aquest directori d’allotjament. Cada versió verificada es conserva a {releases}.",
   "pubUrl": "URL pública del lloc web (HTTPS)",
   "pubMaxFile": "Mida màxima de fitxer allotjat (MiB)",
   "pubNoLimit": "Cap límit addicional",

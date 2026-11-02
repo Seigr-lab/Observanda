@@ -82,7 +82,7 @@
   "pubSshUser": "Usuario SSH",
   "pubSshDirectory": "Directorio exclusivo de alojamiento",
   "pubSshIdentity": "Archivo de identidad SSH (opcional)",
-  "pubSshHelp": "Utiliza tu clave o agente OpenSSH y la entrada verificada de host conocido. Requiere ssh/sftp local y un servidor con un intérprete POSIX, find, sha256sum y GNU coreutils. Sirve el subdirectorio {current} de este directorio de alojamiento. Cada versión verificada se conserva en {releases}.",
+  "pubSshHelp": "Utiliza tu clave o agente OpenSSH y la entrada verificada de host conocido. Requiere ssh/sftp local y un servidor con un intérprete POSIX, find, sha256sum y GNU coreutils. El servidor debe aplicar los permisos POSIX del sistema de archivos. El directorio de alojamiento y todos sus directorios padre hasta / deben pertenecer a root o a la cuenta SSH, sin permiso de escritura para el grupo ni para otros usuarios. Sirve el subdirectorio {current} de este directorio de alojamiento. Cada versión verificada se conserva en {releases}.",
   "pubUrl": "URL pública del sitio web (HTTPS)",
   "pubMaxFile": "Tamaño máximo de archivo alojado (MiB)",
   "pubNoLimit": "Sin límite adicional",

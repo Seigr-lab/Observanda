@@ -12,6 +12,29 @@ export const shellQuote=value=>"'"+value.replaceAll("'","'\\''")+"'";
 const batchQuote=value=>'"'+value.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
 const pointer=value=>value==='-'||/^releases\/[a-f0-9]{64}$/.test(value);
 
+// SSH and SFTP resolve paths independently. Starting at /, admit only parents
+// whose entries cannot be replaced by another account. Check each parent
+// before looking up or creating its child. find does not follow symlinks.
+const trusted=String.raw`\( -uid 0 -o -uid "$publisher_uid" \) ! -perm -020 ! -perm -002`;
+const pathGuards=String.raw`
+publisher_uid=$(id -u)
+safe_dir() { test "$(find "$1" -prune -type d ${trusted} -print)" = "$1"; }
+ensure_dir() {
+ if test ! -e "$1" && test ! -L "$1"; then mkdir -m 755 "$1"; fi
+ safe_dir "$1"
+}
+safe_file() { test "$(find "$1" -prune -type f -links 1 ${trusted} -print)" = "$1"; }
+safe_tree() {
+ safe_dir "$1"
+ unsafe=$(find "$1" ! \( ${trusted} \( -type d -o -type f -links 1 \) \) -print -quit)
+ test -z "$unsafe"
+}
+`;
+function checkRoot(directory,create){
+ const components=directory.slice(1).split('/').map(shellQuote).join(' ');
+ return `safe_dir /; prefix=''; for part in ${components}; do prefix="$prefix/$part"; ${create?'ensure_dir':'safe_dir'} "$prefix"; done; `;
+}
+
 // The operation's symlink is an atomic remote claim. It is retained on any
 // uncertain result and only its owner may resume or release it. A durable local
 // checkpoint precedes every possible current-link switch.
@@ -25,17 +48,19 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
  const root=c.directory,stage=root+'/.stage-'+journal.nonce,release=root+'/releases/'+candidate.id,lock=root+'/.publishing-lock',current=root+'/current',next=root+'/.current-'+journal.nonce,q=shellQuote;
  const call=async(script,input='',phase)=>{await guard(phase?{phase}:undefined);signal?.throwIfAborted();return host.command(c,script,input,{signal});};
  const owned=`test -L ${q(lock)}; test "$(readlink ${q(lock)})" = ${q(journal.nonce)}; `;
+ const marker=q(root+'/.observanda-owner'),releases=q(root+'/releases');
+ const checkOwner=`safe_file ${marker}; test "$(cat ${marker})" = ${q(owner)}; `;
  const readCurrent=`if test -L ${q(current)}; then readlink ${q(current)}; else test ! -e ${q(current)}; printf '%s\\n' '-'; fi`;
  const checksumRows=async function*(){for await(const [name,content] of candidate.files)yield contentHash(content)+'  '+name+'\n';};
  const checksums=()=>indexed?checksumRows():[...candidate.files].map(([name,content])=>contentHash(content)+'  '+name).join('\n')+'\n';
- const verify=(directory,readOnly=false)=>`test -d ${q(directory)}; test ! -L ${q(directory)}; cd ${q(directory)}; test -z "$(find . ! -type f ! -type d -print)"; test "$(find . -type f | wc -l | tr -d ' ')" = ${candidate.files.size}; sha256sum -c - >/dev/null; `+(readOnly?'':'find . -type f -exec chmod 644 {} +; find . -type d -exec chmod 755 {} +; ');
+ const verify=(directory,readOnly=false)=>`${pathGuards}safe_tree ${q(directory)}; cd ${q(directory)}; test "$(find . -type f | wc -l | tr -d ' ')" = ${candidate.files.size}; sha256sum -c - >/dev/null; `+(readOnly?'':'find . -type f -exec chmod 644 {} +; find . -type d -exec chmod 755 {} +; ');
  const receipt=async()=>({releaseId:candidate.id,commit:candidate.id,previousRelease:journal.parent==='-'?null:journal.parent.slice(9),at:new Date().toISOString(),status:'uploaded-remote-verified',...await reviewedManifest(candidate)});
  const releaseClaim=()=>call(`set -eu; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)}; if test -e ${q(lock)} || test -L ${q(lock)}; then ${owned}rm ${q(lock)}; fi;`,'','reconcile');
  await guard({phase:'read'});await host.check(c,{signal});
  if(journal.pushAttempted){
   // Inspect the existing destination before claiming it or writing anything.
   // A lost switch response must remain recoverable after consent withdrawal.
-  const observed=(await call(`set -eu; test -d ${q(root)}; test ! -L ${q(root)}; test "$(cd ${q(root)} && pwd -P)" = ${q(root)}; test ! -L ${q(root+'/.observanda-owner')}; test "$(cat ${q(root+'/.observanda-owner')})" = ${q(owner)}; test ! -L ${q(root+'/releases')}; if test -e ${q(lock)} || test -L ${q(lock)}; then ${owned}:; fi; ${readCurrent}`,'','read')).trim();
+  const observed=(await call(`set -eu; ${pathGuards}${checkRoot(root,false)}${checkOwner}safe_dir ${releases}; if test -e ${q(lock)} || test -L ${q(lock)}; then ${owned}:; fi; ${readCurrent}`,'','read')).trim();
   if(!pointer(journal.parent)||!pointer(observed)||observed!==journal.parent&&observed!=='releases/'+candidate.id)throw new AppError('PUBLISH_STALE');
   if(observed==='releases/'+candidate.id){
    await call(`set -eu; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)}; ${verify(release,true)}`,checksums(),'read');
@@ -46,11 +71,27 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
  }
  await report('sshClaim');
  // A lost acknowledgement here is recoverable with the already saved nonce.
- const initial=await call(`set -eu; umask 022; mkdir -p ${q(root)}; test "$(cd ${q(root)} && pwd -P)" = ${q(root)}; if test ! -e ${q(root+'/.observanda-owner')}; then test -z "$(ls -A ${q(root)})"; (set -C; printf '%s' ${q(owner)} > ${q(root+'/.observanda-owner')}); fi; test ! -L ${q(root+'/.observanda-owner')}; test "$(cat ${q(root+'/.observanda-owner')})" = ${q(owner)}; test ! -L ${q(root+'/releases')}; mkdir -p ${q(root+'/releases')}; if test ! -L ${q(lock)}; then ln -sT ${q(journal.nonce)} ${q(lock)}; fi; ${owned}${readCurrent}`);
+ const initial=await call(`set -eu; umask 022; ${pathGuards}${checkRoot(root,true)}
+  if test ! -e ${marker}; then
+   test ! -L ${marker}
+   entry=$(find ${q(root)} -mindepth 1 -maxdepth 1 -print -quit)
+   test -z "$entry"
+   (set -C; printf '%s' ${q(owner)} > ${marker})
+  fi
+  ${checkOwner}ensure_dir ${releases}
+  if test ! -L ${q(lock)}; then ln -sT ${q(journal.nonce)} ${q(lock)}; fi
+  ${owned}${readCurrent}`);
  const remote=initial.trim();if(!pointer(remote))throw new AppError('PUBLISH_SSH');
  if(journal.parent===undefined){journal.parent=remote;await checkpoint();}
  if(!pointer(journal.parent)||remote!==journal.parent&&remote!=='releases/'+candidate.id)throw new AppError('PUBLISH_STALE');
- const exists=(await call(`set -eu; ${owned}if test -e ${q(release)} || test -L ${q(release)}; then printf sealed; elif test -d ${q(stage)} && test ! -L ${q(stage)}; then printf staged; else test ! -e ${q(stage)}; test ! -L ${q(stage)}; mkdir ${q(stage)}; printf new; fi`)).trim();
+ const exists=(await call(`set -eu; ${pathGuards}${owned}
+  if test -e ${q(release)} || test -L ${q(release)}; then
+   printf sealed
+  elif test -e ${q(stage)} || test -L ${q(stage)}; then
+   safe_tree ${q(stage)}; printf staged
+  else
+   (umask 077; mkdir ${q(stage)}); safe_dir ${q(stage)}; printf new
+  fi`)).trim();
  if(!['sealed','staged','new'].includes(exists))throw new AppError('PUBLISH_SSH');
  if(exists==='new'){if(indexed)journal.uploadedCount=0;else journal.uploaded=[];await checkpoint();}
  if(exists!=='sealed'){
@@ -61,8 +102,9 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
     for(const [name,content] of batch){
      let parent=path.posix.dirname(name);const ancestors=[];while(parent!=='.'){ancestors.unshift(parent);parent=path.posix.dirname(parent);}
      for(const ancestor of ancestors)if(!directories.has(ancestor)){directories.add(ancestor);await mkdir(path.join(temp,ancestor),{recursive:true});}
-     const checks=ancestors.map(a=>`test ! -L ${q(stage+'/'+a)}; mkdir -p ${q(stage+'/'+a)}; `).join('');
-     await call(`set -eu; ${owned}test -d ${q(stage)}; test ! -L ${q(stage)}; ${checks}test ! -L ${q(stage+'/'+name)};`);
+     const checks=ancestors.map(a=>`ensure_dir ${q(stage+'/'+a)}; `).join('');
+     const target=q(stage+'/'+name);
+     await call(`set -eu; ${pathGuards}${owned}${checks}if test -e ${target} || test -L ${target}; then safe_file ${target}; fi;`);
      written.push(name);await writePublicFile(path.join(temp,name),content,{mode:0o600});commands.push('put '+batchQuote(name)+' '+batchQuote(stage+'/'+name));
     }
     await guard();signal?.throwIfAborted();await host.run('sftp',[...host.args(c),'-P',String(c.port),'-b','-',`${c.user}@${c.host}`],{cwd:temp,input:commands.join('\n')+'\n',signal});

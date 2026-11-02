@@ -82,7 +82,7 @@
   "pubSshUser": "SSH user",
   "pubSshDirectory": "Dedicated hosting directory",
   "pubSshIdentity": "SSH identity file (optional)",
-  "pubSshHelp": "Uses your OpenSSH key or agent and verified known-host entry. Requires local ssh/sftp and a server with a POSIX shell, find, sha256sum, and GNU coreutils. Serve the {current} subdirectory of this hosting directory. Each verified release is retained under {releases}.",
+  "pubSshHelp": "Uses your OpenSSH key or agent and verified known-host entry. Requires local ssh/sftp and a server with a POSIX shell, find, sha256sum, and GNU coreutils. The server must enforce POSIX filesystem permissions. The hosting directory and every parent up to / must be owned by root or the SSH account, with no group or other write permission. Serve the {current} subdirectory of this hosting directory. Each verified release is retained under {releases}.",
   "pubUrl": "Public website URL (HTTPS)",
   "pubMaxFile": "Maximum hosted file (MiB)",
   "pubNoLimit": "No additional limit",

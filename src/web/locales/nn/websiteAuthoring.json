@@ -82,7 +82,7 @@
   "pubSshUser": "SSH-brukar",
   "pubSshDirectory": "Eiga netthotellmappe",
   "pubSshIdentity": "SSH-identitetsfil (valfritt)",
-  "pubSshHelp": "Bruker OpenSSH-nøkkelen eller agenten din og ei verifisert oppføring for kjend vert. Krev lokal ssh/sftp og ein tenar med POSIX-skal, find, sha256sum og GNU coreutils. Server undermappa {current} i denne netthotellmappa. Kvar verifiserte utgjeving blir bevart under {releases}.",
+  "pubSshHelp": "Bruker OpenSSH-nøkkelen eller agenten din og ei verifisert oppføring for kjend vert. Krev lokal ssh/sftp og ein tenar med POSIX-skal, find, sha256sum og GNU coreutils. Tenaren må handheve POSIX-rettar i filsystemet. Vertsmappa og alle overordna mapper opp til / må vere eigde av root eller SSH-kontoen. Gruppa og andre brukarar kan ikkje ha skrivetilgang. Server undermappa {current} i denne netthotellmappa. Kvar verifiserte utgjeving blir bevart under {releases}.",
   "pubUrl": "Offentleg nettstadadresse (HTTPS)",
   "pubMaxFile": "Maksimal filstorleik på netthotellet (MiB)",
   "pubNoLimit": "Inga ekstra grense",

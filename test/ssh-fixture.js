@@ -2,15 +2,18 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtemp,rm,copyFile,mkdir,readlink} from 'node:fs/promises';
+import {mkdtemp,rm,copyFile,mkdir,chmod,readlink,realpath} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {SSHHost} from '../src/ssh-host.js';
 const exec=promisify(execFile);
 export async function sshFixture(t){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-ssh-protocol-')),shell=process.platform==='win32'?'C:/Program Files/Git/bin/bash.exe':'/bin/sh',env={...process.env,MSYS:'winsymlinks:nativestrict'};
- const root=process.platform==='win32'?(await exec(shell,['-c','cygpath -u "$1"','sh',directory],{env,windowsHide:true})).stdout.trim():directory;
+ // A POSIX /tmp has a shared writable ancestor, unlike a dedicated hosting directory.
+ const windows=process.platform==='win32',base=windows?os.tmpdir():process.env.XDG_CACHE_HOME||path.join(os.homedir(),'.cache');
+ if(!windows)await mkdir(base,{recursive:true,mode:0o700});
+ const directory=await mkdtemp(path.join(await realpath(base),'observanda-ssh-protocol-')),shell=windows?'C:/Program Files/Git/bin/bash.exe':'/bin/sh',env={...process.env,MSYS:'winsymlinks:nativestrict'};
  t.after(()=>rm(directory,{recursive:true,force:true}));
+ const root=windows?(await exec(shell,['-c','cygpath -u "$1"','sh',directory],{env,windowsHide:true})).stdout.trim():directory;
  let hook=null;const calls=[];
  const run=async(program,args,options={})=>{
   const call={program,args,options};calls.push(call);await hook?.(call,'before');let output='';
@@ -18,7 +21,7 @@ export async function sshFixture(t){
   else if(program==='sftp')for(const line of options.input.trim().split('\n')){
    const match=/^put "([^"]+)" "([^"]+)"$/.exec(line);if(!match)throw Error('Unexpected SFTP command');
    if(!match[2].startsWith(root+'/'))throw Error('Fixture escaped remote root');const relative=match[2].slice(root.length+1),target=path.resolve(directory,relative);
-   if(!target.startsWith(directory+path.sep))throw Error('Fixture escaped remote root');await copyFile(path.join(options.cwd,match[1]),target);
+   if(!target.startsWith(directory+path.sep))throw Error('Fixture escaped remote root');await copyFile(path.join(options.cwd,match[1]),target);await chmod(target,0o600);
   }else throw Error('Unexpected executable');
   await hook?.(call,'after');return output;
  };

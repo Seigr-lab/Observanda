@@ -11,7 +11,7 @@ test('real shell SSH protocol resumes lost claim, sealed release and switch resp
  for(const point of ['claim','seal','switch','unlock'])await t.test(point,async t=>{
   const f=await sshFixture(t),book=sampleNotebook(),candidate=buildPublication(book),journal={};let stored={},lost=false;
   const save=value=>{stored=structuredClone(value);};
-  f.setHook((call,phase)=>{const command=call.args.at(-1),match=point==='claim'?command.includes('.observanda-owner'):point==='seal'?command.includes('mv -T ')&&!command.includes('mv -Tf'):point==='switch'?command.includes('mv -Tf'):command.includes('rm ')&&command.includes('.publishing-lock');if(phase==='after'&&match&&!lost){lost=true;throw Error('Lost acknowledgement');}});
+  f.setHook((call,phase)=>{const command=call.args.at(-1),match=point==='claim'?command.includes('.observanda-owner'):point==='seal'?command.includes('mv -T ')&&!command.includes('mv -Tf'):point==='switch'?command.includes('mv -Tf'):command.includes('; rm ')&&command.includes('.publishing-lock');if(phase==='after'&&match&&!lost){lost=true;throw Error('Lost acknowledgement');}});
   await assert.rejects(f.host.deploy(f.config,candidate,book.id,{journal,save}));assert.equal(lost,true);
   if(point==='switch'||point==='unlock')assert.ok((await f.current()).endsWith(candidate.id));
   const uploaded=f.calls.filter(c=>c.program==='sftp').length;f.setHook(null);
