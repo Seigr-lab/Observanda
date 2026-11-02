@@ -52,11 +52,11 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    '<label><input name="defaultTrack" type="checkbox"> '+esc(t('recordingDefaultTrack'))+'</label></fieldset>'+
    '<div class="website-files-toolbar"><button type="submit">'+esc(t('recordingApply'))+'</button>'+button('recordingCancel','close')+'</div></form></section>';
  }
- async function apply(form){
+ async function apply(data,file,vtt){
   if(!doc||path()!==pagePath||site().revision!==revision)throw Error(t('changed'));
-  const data=new FormData(form),kind=data.get('kind'),old=player();
+  const kind=data.get('kind'),old=player();
   if(!['audio','video'].includes(kind))throw Error(t('failed'));
-  const selected=data.get('reuse'),file=form.elements.upload.files[0],vtt=form.elements.vtt.files[0],trackText=[];
+  const selected=data.get('reuse'),trackText=[];
   if(file&&selected)throw Error(t('recordingChooseOne'));
   const reuse=items.find(item=>item.name===selected);
   if(reuse&&reuse.contentType.split('/')[0]!==kind)throw Error(t('recordingWrongKind'));
@@ -107,7 +107,12 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
   panel.querySelector('[data-recording-action="close"]').onclick=()=>{if(modified&&!confirm(t('recordingDiscard')))return;reset();close();};
   const more=panel.querySelector('[data-recording-action="more"]');
   if(more)more.onclick=()=>void run(async()=>{const count=items.length;await loadLibrary(next);for(const item of items.slice(count))f.elements.reuse.add(new Option(item.label||item.name,item.name));more.hidden=!next;}).catch(e=>notify(e.message,true));
-  f.onsubmit=event=>{event.preventDefault();void run(()=>apply(f)).catch(e=>notify(e.message,true));};
+  f.onsubmit=event=>{
+   event.preventDefault();
+   // The editor locks its fieldset while saving. Capture the successful controls first.
+   const data=new FormData(f),file=f.elements.upload.files[0],vtt=f.elements.vtt.files[0];
+   void run(()=>apply(data,file,vtt)).catch(e=>notify(e.message,true));
+  };
  }
  return {open,reset,view,bind,dirty:()=>modified};
 }

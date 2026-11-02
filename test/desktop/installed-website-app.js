@@ -34,7 +34,8 @@ export async function websiteDesktopFixture(){
  }
  return {...fixture,close,async start(program=fixture.packaged,{website=false,expectedVersion=candidateVersion}={}){
   if(!program)return fixture.start(undefined,{website});
-  const executable=await realpath(program),resources=path.join(path.dirname(executable),'resources');
+  const executable=await realpath(program);
+  const resources=process.platform==='darwin'?path.resolve(path.dirname(executable),'../Resources'):path.join(path.dirname(executable),'resources');
   const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
   assert.equal(installed.version,expectedVersion);await access(path.join(resources,'app.asar'));
   if(expectedVersion!==candidateVersion){

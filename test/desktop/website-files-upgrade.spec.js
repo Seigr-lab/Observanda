@@ -63,7 +63,7 @@ test('upgrade opens previously saved default and named websites and publishes th
   const methods=pages.locator('option').filter({hasText:'Methods'});await expect(methods).toHaveCount(1);
   await pages.selectOption(await methods.getAttribute('value'));await expect(canvas.locator('body')).toContainText('Authored methods page from the previous editor.');
   await pages.selectOption('index.html');await expect(canvas.locator('body')).toContainText(previousHomeText);
-  phase='edit and save previous site';await page.getByRole('button',{name:'Add paragraph',exact:true}).click();
+  phase='edit and save previous site';await page.locator('[data-website-file-block]').selectOption('paragraph');await page.getByRole('button',{name:'Insert element',exact:true}).click();
   const paragraph=canvas.locator('main > p').last();await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type(offlineEdit);
   await expect(paragraph).toHaveText(offlineEdit);
   await page.getByRole('button',{name:'CSS',exact:true}).click();
