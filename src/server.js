@@ -208,6 +208,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const {GithubConnections}=await import('./github/connections.js');
   const github=githubConnections??(preferencesFile?new GithubConnections({file:preferencesFile+'.github.json',request:publishingOptions?.request}):null);
   const picker=folderPicker??createFolderPicker({headless}),folderRequests=new Set(),inventoryRequests=new Set();
+  const websiteFolderPicker={
+   capabilities:()=>picker.capabilities(),
+   async choose({path,signal}){
+    if(changing||loginBusy)throw new AppError('LOCKED');
+    const controller=new AbortController();folderRequests.add(controller);
+    try{return await picker.choose({initialPath:path,signal:AbortSignal.any([signal,controller.signal])});}
+    finally{folderRequests.delete(controller);}
+   }
+  };
   const cancelFolderRequests=()=>{for(const controller of [...folderRequests,...inventoryRequests])controller.abort();};
   const responseBook = result => {const book=upgradeNotebook(result.book);return {...result,book,recordRevisions:recordRevisions(book)};};
   const makeContext=(location,required=false,vault={id:null,key:null})=>({readers:new WorkspaceReadAdmission(),calendarSources:new CalendarSources(),vault,id:randomBytes(24).toString('hex'),root:location,expectedExisting:!!location&&required,workspace:location?new Workspace(location,vault):null,media:location?new MediaStore(location,vault):null,laboratory:location?new Laboratory(location,vault):null,publisher:location?new Publisher(location,{...publishingOptions,connection:github?.forWorkspace(location)},vault):null,candidates:new Map(),designCandidates:new DesignCandidates(),appearancePreviews:new AppearancePreviewSessions()});
@@ -559,7 +568,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const worker=selectedContext.jobs?.worker,otherResearchSession=[...sessions.values()].some(s=>s!==client&&s.access&&s.expires>Date.now()&&!s.filesOnly);
         if(!otherResearchSession&&worker?.emptyClaims>0&&!worker.running&&!worker.active)await worker.stop();
        }
-       return await websiteFilesHttp(req,res,{url,workspace,contextId:selectedContext.id,title:workspaceFolderName(selectedContext.root),body,json,check:req.checkWriter,blockedValues,
+       return await websiteFilesHttp(req,res,{url,workspace,contextId:selectedContext.id,title:workspaceFolderName(selectedContext.root),body,json,check:req.checkWriter,blockedValues,folderPicker:websiteFolderPicker,
         publisherOptions:{...publishingOptions,connection:github?.forWorkspace(selectedContext.root)},
         withPublication:async work=>{if(publishing)throw new AppError('GITHUB_PUBLICATION_BUSY');publishing=true;try{return await work();}finally{publishing=false;}},
         githubAccount:async(operation,data)=>{

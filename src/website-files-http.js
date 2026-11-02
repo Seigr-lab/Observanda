@@ -23,7 +23,7 @@ const sshReviewKey='.observanda/website-ssh-review.json';
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,withPublication=work=>work()}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,folderPicker,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
@@ -92,6 +92,12 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation==='folder/chooser'||operation==='folder/choose'){
+   if(Object.keys(options).some(key=>key!=='path')||options.path!==undefined&&typeof options.path!=='string')throw new AppError('INVALID');
+   if(operation==='folder/chooser'){json(folderPicker?await folderPicker.capabilities():{mode:'server'});return true;}
+   if(!folderPicker)throw new AppError('FOLDER_PICKER_UNAVAILABLE');
+   const selection=await folderPicker.choose({path:options.path??'',signal});await check();json(selection);return true;
+  }
   if(operation==='library/placements'){json(await websiteSourceUsage(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/move-placement'||operation==='library/remove-placement'){json(await changeWebsitePlacement(store,siteId,operation==='library/move-placement'?'move':'remove',{...options,expectedRevision,signal}));return true;}
   if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal}));return true;}

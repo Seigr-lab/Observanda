@@ -12,6 +12,24 @@ import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {githubFixture,sha} from './github-fixture.js';
 import {defaultPublishing} from '../src/publishing.js';
 
+test('website folder selection requires the same live grant when the native dialog returns',async()=>{
+ const siteId=randomUUID(),workspace={catalogue:()=>assert.fail('Folder selection opened research')};
+ let selected=false,active=true;
+ const choose=async operation=>{
+  let result;
+  await websiteFilesHttp({method:'POST'},new EventEmitter(),{
+   workspace,url:new URL('/api/website-files/folder/'+operation,'http://localhost'),
+   body:async()=>({siteId,path:''}),check:async()=>{if(!active&&selected)throw Error('Grant expired');},
+   folderPicker:{capabilities:()=>({mode:'native'}),choose:async({path,signal})=>{assert.equal(path,'');assert.equal(signal.aborted,false);selected=true;return {cancelled:true,folder:null};}},
+   json:value=>{result=value;}
+  });
+  return result;
+ };
+ assert.deepEqual(await choose('chooser'),{mode:'native'});assert.equal(selected,false);
+ assert.deepEqual(await choose('choose'),{cancelled:true,folder:null});
+ selected=false;active=false;await assert.rejects(choose('choose'),/Grant expired/);
+});
+
 test('reviewed publication writes the saved HTML and CSS to a real folder without a catalogue, and refuses stale reviews',async()=>{
  const area=await mkdtemp(path.join(os.tmpdir(),'obs-site-publish-')),root=path.join(area,'workspace'),folder=path.join(area,'published');
  try{
