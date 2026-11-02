@@ -2,6 +2,7 @@ import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, write
 import {websiteRichText} from './website-files-visual-rich.js';
 import {websiteTableTools} from './website-files-table.js';
 import {responsiveLayout} from './website-files-responsive.js';
+import {websiteScientificReferences} from './website-files-science.js';
 
 const chrome = '[data-observanda-editor]';
 const source = '[data-observanda-source]';
@@ -137,6 +138,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,actions);
   const responsive=responsiveLayout({document,host:form,t,scope,selected:()=>selected,getCSS,getViewport,beforeChange,change,make,listen,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
+  websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});
   inspector.replaceChildren(form);
 
   function position() {
