@@ -39,6 +39,17 @@ async function fixture(page){
  return {frame,publish:async value=>{published=value;await page.goto(origin+'/published/index.html');}};
 }
 
+test('the inspector explains effective typography and shows a transparent background without writing an override',async({page})=>{
+ const {frame}=await fixture(page),before=await page.evaluate(()=>window.saved());
+ await frame.getByText('Second paragraph',{exact:true}).click();
+ const fields=page.locator('.website-visual-fields');
+ await expect(fields.locator('[data-visual-property="background-color"]')).toHaveAccessibleDescription('sectionTransparent');
+ await expect(fields.locator('[data-visual-property="font-size"]')).toHaveAttribute('placeholder',/^\d+(\.\d+)?px$/);
+ await expect(fields.locator('[data-visual-property="font-weight"]')).toHaveAttribute('placeholder','400');
+ await expect(fields.locator('[data-visual-property="font-family"] option').first()).toContainText('sans-serif');
+ expect(await page.evaluate(()=>window.saved())).toEqual(before);
+});
+
 test('responsive inspector publishes distinct grid and stack layouts at desktop tablet and phone widths',async({page})=>{
  const {frame,publish}=await fixture(page),selector='[data-section-id="text"]';
  const row=await page.evaluate(()=>window.rows().find(r=>r.name==='text').path);

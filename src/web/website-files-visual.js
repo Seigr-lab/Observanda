@@ -108,7 +108,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
 
   let selected=null, hover=null, range=null, activePath=null, timer=0;
   const observer=new win.ResizeObserver(schedule);
-  const fields=visualStyleFields(document,t), controls=new Map(), touched=new Set();
+  const fields=visualStyleFields(document,t), controls=new Map(), paintLabels=new Map(), touched=new Set();
   const form=make('form'); form.className='website-visual-style';
   const title=make('h3',t('sectionAppearance')), prompt=make('p',t('sectionSelectPrompt'));
   const scope=make('select'); scope.dataset.visualScope='';
@@ -127,8 +127,15 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     }
     control.dataset.visualProperty=field.name;controls.set(field.name,control);
     const unit=field.unit?' ('+field.unit+')':'';
-    grid.append(labelled(t(field.label)+unit,control));
-    const touch=()=>{touched.add(field.name);apply.disabled=false;};
+    const label=labelled(t(field.label)+unit,control);grid.append(label);
+    if(field.type==='color'){
+      const value=make('small');value.id='website-paint-'+field.name;value.setAttribute('aria-hidden','true');control.setAttribute('aria-describedby',value.id);
+      label.append(value);paintLabels.set(field.name,value);
+    }
+    const touch=()=>{
+      if(field.type==='color')showPaint(control,field.name,control.value);
+      touched.add(field.name);apply.disabled=false;
+    };
     listen(control,'input',touch);listen(control,'change',touch);
   }
   const edit=make('button',t('sectionEditText')), apply=make('button',t('sectionApply')), reset=make('button',t('sectionReset'));
@@ -160,6 +167,11 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     action.style.left=Math.max(0,Math.min(win.innerWidth,rect.right)-action.offsetWidth)+'px';
   }
   function schedule(){if(!timer)timer=win.requestAnimationFrame(position);}
+  function showPaint(control,name,value){
+    const transparent=value==='transparent'||value==='rgba(0, 0, 0, 0)';
+    control.style.setProperty('--website-paint',value);
+    paintLabels.get(name).textContent=transparent?t('sectionTransparent'):colour(value)||value;
+  }
   function refresh() {
     const text=styleRange(range,body);
     scope.querySelector('[value="selection"]').disabled=!text;
@@ -171,10 +183,17 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     const inline=readVisualStyle(document,getCSS(),site?'site':visualClass(target));
     const computed=win.getComputedStyle(target);
     for(const field of fields){
-      const control=controls.get(field.name), value=inline.getPropertyValue(field.name);
-      if(field.type==='color')control.value=colour(computed.getPropertyValue(field.name))||'#000000';
-      else if(field.type==='number')control.value=field.unit?(/^[-.\d]+px$/.test(value)?parseFloat(value):''):(value&&Number.isFinite(Number(value))?value:'');
-      else control.value=[...control.options].find(o=>o.value.replaceAll(' ','')===value.replaceAll(' ',''))?.value??'';
+      const control=controls.get(field.name),value=inline.getPropertyValue(field.name),resolved=computed.getPropertyValue(field.name);
+      if(field.type==='color'){
+        control.value=colour(resolved)||'#000000';showPaint(control,field.name,resolved);
+      }else if(field.type==='number'){
+        control.value=field.unit?(/^[-.\d]+px$/.test(value)?parseFloat(value):''):(value&&Number.isFinite(Number(value))?value:'');
+        const lineRatio=field.name==='line-height'&&resolved.endsWith('px')?parseFloat(resolved)/parseFloat(computed.fontSize):NaN;
+        control.placeholder=Number.isFinite(lineRatio)?String(Number(lineRatio.toFixed(3))):resolved;
+      }else{
+        control.options[0].textContent=t('sectionInherit')+' · '+resolved;
+        control.value=[...control.options].find(o=>o.value.replaceAll(' ','')===value.replaceAll(' ',''))?.value??'';
+      }
       control.disabled=selectionScope&&['padding','text-align'].includes(field.name);
     }
     touched.clear();apply.disabled=true;

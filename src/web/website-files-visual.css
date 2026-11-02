@@ -4,6 +4,10 @@
 .website-visual-style :is(select,input,button) { max-width:100%;min-width:0;font:inherit; }
 .website-visual-fields { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(9rem,100%),1fr));gap:.6rem; }
 .website-visual-fields input[type=color] { width:100%;min-height:2rem; }
+.website-visual-fields input[type=color]::-webkit-color-swatch {
+ background:linear-gradient(var(--website-paint),var(--website-paint)),repeating-conic-gradient(#cbd1d8 0 25%,#fff 0 50%) 0/12px 12px!important;
+}
+.website-visual-fields small { font-variant-numeric:tabular-nums; overflow-wrap:anywhere }
 .website-visual-actions,.website-visual-link { display:flex;align-items:center;flex-wrap:wrap;gap:.35rem; }
 .website-visual-link[hidden] { display:none; }
 .website-visual-rich { margin:0;padding:.6rem;min-width:0;border:1px solid var(--border,#cbd3df); }
