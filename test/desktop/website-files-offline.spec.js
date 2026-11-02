@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import path from 'node:path';
 import {websiteDesktopFixture} from './installed-website-app.js';
 import {selectEntry,createWebsiteWorkspace,disableWebsiteResearch} from './website-workspace-fixture.js';
-import {authorSite} from './website-authoring-journey.js';
+import {authorSite,authorScientificContent,selectLine} from './website-authoring-journey.js';
 
 async function updateVisibility(page,{context,prefix,workspaceId,recordId,sections}){
  await page.evaluate(async({context,prefix,workspaceId,recordId,sections})=>{
@@ -36,12 +36,13 @@ test('desktop website editing, persistence, preview and folder publication with 
   const coldOpenMs=Math.round(performance.now()-coldStart);
   requests.push(...await page.evaluate(()=>performance.getEntriesByType('resource').map(row=>new URL(row.name).pathname).filter(route=>route.startsWith('/api/'))));
   await page.locator('[data-website-file-block]').selectOption('paragraph');await page.getByRole('button',{name:'Insert element',exact:true}).click();const canvas=page.frameLocator('#website-files-canvas');
-  phase='type in visual editor';const paragraph=canvas.locator('main > p').last();await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type('Edited with PostgreSQL offline.');await expect(paragraph).toHaveText('Edited with PostgreSQL offline.');
+  phase='type in visual editor';const paragraph=canvas.locator('main > p').last();await selectLine(page,paragraph);await page.keyboard.type('Edited with PostgreSQL offline.');await expect(paragraph).toHaveText('Edited with PostgreSQL offline.');
   phase='save visual and CSS edits';
   await page.getByRole('button',{name:'CSS',exact:true}).click();await page.getByRole('textbox',{name:'CSS',exact:true}).fill('main > p { color: rgb(21, 43, 65); }');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');await page.reload();
   await expect(page.frameLocator('#website-files-canvas').locator('main > p')).toHaveText('Edited with PostgreSQL offline.');
   phase='author a multipage site offline';await authorSite(page);
+  phase='author a chemical formula, equation and reference offline';await authorScientificContent(page);
   phase='author gallery offline';await page.getByRole('button',{name:'Image gallery',exact:true}).click();
   await page.locator('[data-gallery-files]').setInputFiles(path.resolve('src/preview-assets/image.png'));
   await page.locator('[data-gallery-field="alt"]').fill('Test photograph');await page.locator('[data-gallery-field="caption"]').fill('Recorded observation');
@@ -54,6 +55,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   server=createServer(async(req,res)=>{const file=req.url==='/'?'index.html':/^\/(?:style\.css|public-gallery\.(?:js|css)|pictures\/[a-f0-9-]{36}\.png)$/.test(req.url)?req.url.slice(1):null;if(!file){res.writeHead(404).end();return;}try{res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':file.endsWith('.png')?'image/png':'text/html; charset=utf-8'}).end(await readFile(path.join(output,file)));}catch{res.destroy();}});
   await new Promise((resolve,reject)=>server.once('error',reject).listen(0,'127.0.0.1',resolve));browser=await chromium.launch();const publicPage=await browser.newPage();await publicPage.goto('http://127.0.0.1:'+server.address().port+'/');
   await expect(publicPage.getByText('Edited with PostgreSQL offline.',{exact:true})).toHaveCSS('color','rgb(21, 43, 65)');
+  await expect(publicPage.locator('math mfrac')).toBeVisible();await expect(publicPage.locator('p sub')).toHaveText('2');await expect(publicPage.locator('cite')).toHaveText('Transmission calibration protocol');
   await publicPage.getByRole('img',{name:'Test photograph'}).click();await expect(publicPage.getByRole('dialog')).toContainText('Recorded observation');await publicPage.getByRole('button',{name:'Close gallery'}).click();
   await test.info().attach('published-website',{body:await publicPage.screenshot(),contentType:'image/png'});
   // Fail on any newly introduced API dependency, including a background poll

@@ -8,6 +8,7 @@ import {destinationPlanRows,destinationConflictCount} from './publication-review
 import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,showPageChecks} from './website-files-dialogs.js';
+import {editWebsiteEquation} from './website-files-equation.js';
 import {bindSavedLinks} from './website-files-navigation.js';
 import {enhanceSavedPreview} from './website-files-preview.js';
 import {bindWebsiteVisual} from './website-files-visual.js';
@@ -193,11 +194,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function checkpoint(force=false){const now=Date.now();if(force||now-lastCheckpoint>350||!undo.length){flushCanvas();undo.push({html,css});historyBytes+=html.length+css.length;while(undo.length>50||historyBytes>8*1024*1024&&undo.length>1){const oldest=undo.shift();historyBytes-=oldest.html.length+oldest.css.length;}lastCheckpoint=now;}redo=[];}
  function documentChange(operation){flushCanvas();checkpoint(true);const document=websiteHTML(html);operation(document);html=serializeWebsiteHTML(document);changed();render();}
  function ensureStyle(doc){const url=baseURL(opened.site.cssPath);if(![...doc.querySelectorAll('link[rel="stylesheet"][href]')].some(link=>new URL(link.getAttribute('href'),baseURL()).href===url)){const link=doc.createElement('link');link.rel='stylesheet';link.href='../'.repeat(opened.path.split('/').length-1)+opened.site.cssPath;doc.head.append(link);}}
- function buttonDialog(){
+ function blockDialog(edit,style=''){
   const doc=websiteHTML(html),site=opened,original=html;
-  editActionLink({doc,at:blockAt(doc,selected),t:tr,path:site.path,directory:directory(),pages:site.site.pages,apply:value=>{
-   if(opened!==site||html!==original||stale){notify(tr('changed'),true);return;}
-   checkpoint(true);ensureStyle(value);html=serializeWebsiteHTML(value);if(!css.includes(buttonCSS))css+=buttonCSS;changed();render();
+  const current=()=>opened===site&&html===original&&!stale;
+  return edit({doc,at:blockAt(doc,selected),t:tr,path:site.path,directory:directory(),pages:site.site.pages,current,apply:value=>{
+   if(!current()){notify(tr('changed'),true);return;}
+   checkpoint(true);if(style){ensureStyle(value);if(!css.includes(style))css+=style;}html=serializeWebsiteHTML(value);changed();render();
   }});
  }
  async function save(){
@@ -378,7 +380,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='download'){await save();if(stale)throw Error(tr('changed'));await downloadResource('/api/website-files/export?siteId='+siteId()+'&revision='+opened.site.revision,'observanda-site.zip');}
    else if(operation==='add-block'||operation==='paragraph'||operation==='heading'){
     const type=operation==='add-block'?document.querySelector('[data-website-file-block]').value:operation;
-    if(type==='actionLink'){buttonDialog();return;}
+    if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
+    if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
     if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
     documentChange(doc=>{if(type==='columns'&&!css.includes('.website-columns{')){ensureStyle(doc);css+='\n.website-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}\n';}
     const node=createBlock(doc,type,tr);const at=blockAt(doc,selected);if(movable(at)&&main(doc).contains(at))at.after(node);else main(doc).append(node);});

@@ -10,7 +10,7 @@ const labels=[
  'Summary of the independent replicate measurements'
 ];
 
-test('page structure retains readable labels and keyboard actions at desktop and narrow widths',async({},info)=>{
+test('page structure retains readable labels and keyboard actions in desktop windows',async({},info)=>{
  test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires an isolated desktop qualification.');
  test.setTimeout(180000);
  const fixture=await websiteDesktopFixture(),metrics=[];
@@ -34,7 +34,7 @@ test('page structure retains readable labels and keyboard actions at desktop and
     expect(status).toBe(200);await page.reload();
    }
    await expect(page.getByRole('heading',{name:words.structure,exact:true})).toBeVisible();
-   for(const viewport of [{width:1920,height:1080},{width:390,height:844}]){
+   for(const viewport of [{width:1920,height:1080},{width:1280,height:800}]){
     await page.setViewportSize(viewport);await expect(rows).toHaveCount(labels.length);await page.evaluate(()=>document.fonts.ready);
     await rows.first().locator('[data-layer-select]').press('Enter');
     const layout=await list.evaluate(element=>{

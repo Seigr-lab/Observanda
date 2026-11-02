@@ -1,4 +1,4 @@
-export const blockTypes=['paragraph','heading','section','columns','quote','table','details','divider','actionLink','gallery'];
+export const blockTypes=['paragraph','heading','section','columns','quote','table','equationEdit','details','divider','actionLink','gallery'];
 
 export function duplicateBlock(node){
  const copy=node.cloneNode(true),ids=new Map();
