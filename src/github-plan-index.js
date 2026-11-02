@@ -26,7 +26,7 @@ export class GithubPlanIndex{
  root(kind){if(!Object.hasOwn(this.descriptor.collections,kind))fail();return this.descriptor.collections[kind];}
  count(kind){return this.root(kind)?.count??0;}
  keep(key,text){if(this.cache.has(key))return;const size=Buffer.byteLength(text);while(this.cache.size>=256||this.cacheBytes+size>1048576){const first=this.cache.keys().next().value;if(first===undefined)break;this.cacheBytes-=Buffer.byteLength(this.cache.get(first));this.cache.delete(first);}this.cache.set(key,text);this.cacheBytes+=size;}
- snapshot(operation){return this.workspace.catalogue(operation);}
+ snapshot(operation){return this.workspace.withPublicationMetadataSnapshot?this.workspace.withPublicationMetadataSnapshot(operation):this.workspace.catalogue(operation);}
  async readBlock(kind,id){this.check();if(!hash(id)||!['index','value'].includes(kind))fail();const key=kind+'-'+id,cached=this.cache.get(key),raw=cached??await this.workspace.readMetadata(prefix+key+'.json',65536);this.check();if(typeof raw!=='string'||digest(raw)!==id)fail();let value;try{value=JSON.parse(raw);}catch{fail();}if(serialize(value)!==raw)fail();if(cached===undefined)this.keep(key,raw);return value;}
  async putBlock(kind,value){this.check();const raw=serialize(value);if(Buffer.byteLength(raw)>65536)fail();const id=digest(raw),file=prefix+kind+'-'+id+'.json',prior=await this.workspace.readMetadata(file,65536);if(prior!==null&&prior!==undefined&&prior!==raw)fail();if(prior==null)await this.workspace.writeMetadata(file,raw);this.keep(kind+'-'+id,raw);return id;}
  async value(entry){if(!entry) return null;const row=await this.readBlock('value',entry.revision);if(typeof row.key!=='string'||digest(row.key)!==entry.id)fail();return row.value;}

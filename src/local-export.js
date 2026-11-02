@@ -35,7 +35,7 @@ function checkMembers(files,changes=false){
 }
 
 export class LocalExport {
- constructor(workspace,{checkpoint=async()=>{},sourceReader}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.sourceReader=sourceReader;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
+ constructor(workspace,{checkpoint=async()=>{},sourceReader,fileOwner}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.sourceReader=sourceReader;this.fileOwner=fileOwner;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
  async read(file){const raw=await this.workspace.readMetadata(file,limit);if(raw===null)return null;try{return JSON.parse(raw);}catch{throw new AppError('LOCAL_EXPORT_DAMAGED');}}
  async save(plan,owner){
   if(Buffer.byteLength(serialize(plan))>(plan.version===2?16384:limit))throw new AppError('LIMIT');
@@ -53,11 +53,13 @@ export class LocalExport {
  // A session lock lasts across short, separately durable journal transactions.
  // It is released by PostgreSQL on process failure, without a stale disk lock.
  async locked(directory,operation){
+  if(this.fileOwner)return this.fileOwner.locked(directory,operation);
   const db=await this.workspace.openCatalogue({detached:true});
   try{if(!(await db.get('SELECT pg_catalog.pg_try_advisory_lock(pg_catalog.hashtextextended($1,0)) AS locked','local-export:'+directoryKey(directory))).locked)throw new AppError('LOCKED');return await operation();}
   finally{await db.close();}
  }
  async candidate(id,{fresh=false}={}){
+  if(this.fileOwner)return this.fileOwner.candidate(id,{fresh});
   // Authenticate the retained trees in one read snapshot. Opening a separate
   // catalogue for each node repeats admission and shared branch reads.
   const candidate=await this.workspace.catalogue(async()=>{
@@ -95,6 +97,7 @@ export class LocalExport {
   }));
  }
  async *fileWindow(files){
+  if(this.fileOwner){yield* files;return;}
   // Leave each read transaction before the journal writes its next batch.
   // Retain at most 64 file handles; file bodies remain streamed and verified.
   const iterator=files[Symbol.asyncIterator]?.()??files[Symbol.iterator]();let done=false;

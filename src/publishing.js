@@ -36,8 +36,9 @@ export function validatePublishing(c) {
 }
 
 export class Publisher {
-  constructor(root, { request = fetch, liveRequest = publicHttpsRequest, ssh = new SSHHost(), connection=null, workspace=null } = {}, vault = null) {
+  constructor(root, { request = fetch, liveRequest = publicHttpsRequest, ssh = new SSHHost(), connection=null, workspace=null, authorizeCandidate=null } = {}, vault = null) {
     this.workspace = workspace??new Workspace(root,vault); this.request = request; this.liveRequest = liveRequest; this.ssh = ssh; this.token = null; this.connection=connection;
+    this.authorizeCandidate=authorizeCandidate;
     this.settingsFile = path.join(root, '.observanda', 'publishing.json');
     this.receiptsFile = path.join(root, '.observanda', 'publishing-receipts.json');
   }
@@ -215,8 +216,11 @@ export class Publisher {
     const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:githubRemovedPaths(this.workspace,plan,config.github?.directory)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
     return this.workspace.withLock(async () => {
-      await publicationWorkspace(this.workspace).lockWebsite();
-      if (!await publicationRevisionCurrent(this.workspace,candidate)) throw new AppError('STALE');
+      if(this.authorizeCandidate)await this.authorizeCandidate(candidate);
+      else{
+       await publicationWorkspace(this.workspace).lockWebsite();
+       if (!await publicationRevisionCurrent(this.workspace,candidate)) throw new AppError('STALE');
+      }
       if ((await this.read()).etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
       await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory);
       const receipts = await this.readFile(this.receiptsFile, {}), key = this.destinationKey(config);

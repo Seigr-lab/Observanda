@@ -25,7 +25,10 @@ export function withNativeExport(plan,operation){
    if(plan.directoryIdentity!==undefined&&plan.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
    const result=await active.run({directory:plan.directory,root},()=>operation(root));await namedRoot(service,plan,root);return result;
   }finally{await root.close();}
- });
+ // An encrypted source may itself be streamed by a native helper. The
+ // destination protocol waits for incoming bytes while a write is in flight;
+ // reads cannot share that same request channel or neither side can progress.
+ },{independent:!active.getStore()});
 }
 async function member(root,relative,{create=false}={},operation){
  const parts=outputName(relative).split('/'),name=parts.pop(),opened=[];let directory=root;
