@@ -67,7 +67,10 @@ test('desktop website editing, persistence, preview and folder publication with 
   await new Promise((resolve,reject)=>server.once('error',reject).listen(0,'127.0.0.1',resolve));browser=await chromium.launch();const publicPage=await browser.newPage();await publicPage.goto('http://127.0.0.1:'+server.address().port+'/');
   await expect(publicPage.getByText('Edited with PostgreSQL offline.',{exact:true})).toHaveCSS('color','rgb(21, 43, 65)');
   await test.info().attach('published-website',{body:await publicPage.screenshot(),contentType:'image/png'});
-  expect(requests.filter(route=>/^\/api\/(?:research\/|workspace\/read\/|notebook(?:\/|$)|projects\/|design-preview$|websites\/editor\/)/.test(route))).toEqual([]);expect(errors).toEqual([]);for(const database of databases)expect((await stat(database)).isFile()).toBe(true);
+  // Fail on any newly introduced API dependency, including a background poll
+  // whose failed database read was swallowed by the application.
+  const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/preferences'].includes(route);
+  expect([...new Set(requests.filter(route=>!allowed(route)))]).toEqual([]);expect(errors).toEqual([]);for(const database of databases)expect((await stat(database)).isFile()).toBe(true);
   console.log(JSON.stringify({packaged:Boolean(fixture.packaged),coldOpenMs,previewMs,databasesUnavailable:databases.length,publishedMatchesPreview:true,privateCanaryAbsent:true}));
  }catch(error){failure=error;const screen=await page?.locator('body').innerText({timeout:3000}).catch(()=>'');console.error('Website qualification failed during '+phase+': '+error.message+'\n'+errors.join('\n')+'\n'+screen?.slice(0,1800));throw error;}
  finally{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));try{await fixture.dispose(app);}catch(error){if(!failure)throw error;}}
