@@ -95,7 +95,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,signal}));return true;}
   if(operation==='menu/save'){json(await store.saveMenu(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}
-  if(operation==='save'){json(await store.save(siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='save'){
+   if(Object.hasOwn(options,'recordings')||Object.hasOwn(options,'receivePictures'))throw new AppError('INVALID');
+   const {path,html,css,title}=options;json(await store.save(siteId,{path,html,css,title,expectedRevision,signal}));return true;
+  }
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='destination'||operation==='destination/save'){
    json(await store.withSite(siteId,undefined,async()=>{const target=await publisher(siteId);return operation==='destination'?target.read():target.save(options.config,options.etag);}));return true;

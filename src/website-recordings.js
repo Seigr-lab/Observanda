@@ -11,6 +11,14 @@ const stage='.observanda/website-files/recording-stage';
 const resource=/^recordings\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.(wav|mp4|vtt)$/;
 const invalid=()=>{throw new AppError('INVALID');};
 const valueType={wav:'audio/wav',mp4:'video/mp4',vtt:'text/vtt; charset=utf-8'};
+export function websiteRecordingKind(file){
+ const extension=resource.exec(file?.name)?.[1];
+ if(file?.recording!==true||file.sourceId||!extension||file.contentType!==valueType[extension])return null;
+ return {wav:'audio',mp4:'video',vtt:'track'}[extension];
+}
+export function publicRecordingNames(manifest){
+ return new Set(manifest.pages.filter(page=>!page.draft).flatMap(page=>page.recordings??[]));
+}
 const timestamp=/^(?:(\d{2,}):)?([0-5]\d):([0-5]\d)\.(\d{3})$/;
 function time(text){
  const match=timestamp.exec(text);if(!match)invalid();
@@ -113,7 +121,7 @@ export async function saveWebsiteRecordings(store,manifest,{files,pages,names,up
    const file={...await store.siteFile(manifest.id,upload.name,upload,{draft,signal}),recording:true,...(upload.label?{label:upload.label}:{})};
    known.set(file.name,file);added.push(file);
   }
-  for(const name of names){const file=known.get(name);if(!file||!!file.draft!==!!draft)invalid();}
+  for(const name of names){const file=known.get(name);if(!websiteRecordingKind(file)||file.draft&&!draft)invalid();}
   return {files:[...files,...added].filter(file=>!file.recording||referenced.has(file.name)),rollback};
  }catch(error){await rollback();throw error;}
 }
@@ -125,7 +133,7 @@ export async function websiteRecordingLibrary(store,id,{expectedRevision,path:pa
   if(!entry)invalid();
   const items=[];let more=false;
   for(const file of manifest.files){
-   if(!file.recording||file.sourceId||!!entry.draft!==!!file.draft||file.name.endsWith('.vtt')||file.name<=after)continue;
+   if(!websiteRecordingKind(file)||file.draft&&!entry.draft||file.name.endsWith('.vtt')||file.name<=after)continue;
    const {name,label,contentType,size}=file,at=items.findIndex(row=>row.name>name);
    items.splice(at===-1?items.length:at,0,{name,label,contentType,size});
    if(items.length>limit){items.pop();more=true;}

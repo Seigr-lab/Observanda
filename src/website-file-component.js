@@ -3,13 +3,16 @@ import {parse,parseFragment,serializeOuter} from 'parse5';
 import {AppError} from './errors.js';
 import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {attr,put,descendants} from './website-migration-views.js';
+import {websiteRecordingKind} from './website-recordings.js';
 
 const marker='data-website-instance';
-const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img'.split(' '));
-const children=new Set([...blocks,...'span strong em b i u s sup sub small mark code br a time figcaption caption colgroup col thead tbody tfoot tr th td li dt dd summary'.split(' ')]);
+const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
+const children=new Set([...blocks,...'span strong em b i u s sup sub small mark code br a time figcaption caption colgroup col thead tbody tfoot tr th td li dt dd summary source track'.split(' ')]);
 const containers=new Set('body main section article aside div blockquote li dd'.split(' '));
 const common=new Set('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby'.split(' '));
-const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open'],col:['span']};
+const playerAttrs=['src','controls','loop','muted','preload'];
+const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
+ audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording']};
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
@@ -33,7 +36,7 @@ function safeStyle(value){
  }
 }
 function rewrite(root,{from,to,pages,files,draft,instance,originalIds=false,verifyOnly=false}){
- const ids=new Map(),pictures=new Map();
+ const ids=new Map(),pictures=new Map(),recordings=new Map();
  for(const node of descendants(root))if(node.nodeName==='#comment')invalid();
  for(const node of nodes(root)){
   const id=attr(node,'id');if(id===undefined)continue;
@@ -41,30 +44,34 @@ function rewrite(root,{from,to,pages,files,draft,instance,originalIds=false,veri
   ids.set(id,instance&&!originalIds?'wc-'+instance+'-'+id:id);
  }
  const localId=value=>ids.get(value)??invalid();
- const url=(value,image)=>{
-  if(!image&&value.startsWith('#'))return '#'+localId(value.slice(1));
-  if(!image&&/^(?:https?:\/\/|mailto:)/i.test(value))return value;
+ const url=(value,kind)=>{
+  if(kind==='link'&&value.startsWith('#'))return '#'+localId(value.slice(1));
+  if(kind==='link'&&/^(?:https?:\/\/|mailto:)/i.test(value))return value;
   if(!value||/[\\\s%:?\u0000-\u001f]/.test(value)||value.startsWith('/')||value.includes('#'))invalid();
   const name=path.posix.normalize(path.posix.join(path.posix.dirname(from),value));websiteFileName(name);
   const file=files.get(name),page=pages.get(name);
   if(file?.sourceId||!file||file.draft&&!draft)invalid();
-  if(file.picture===true&&/^pictures\/[\da-f-]{36}\.png$/.test(name))pictures.set(name,file);
-  else if(image||!page||!verifyOnly&&page.placements.length)invalid();
+  if(file.picture===true&&/^pictures\/[\da-f-]{36}\.png$/.test(name)&&['link','img'].includes(kind))pictures.set(name,file);
+  else if(file.recording===true&&websiteRecordingKind(file)&&(kind==='link'||websiteRecordingKind(file)===kind))recordings.set(name,file);
+  else if(kind!=='link'||!page||!verifyOnly&&page.placements.length)invalid();
   return path.posix.relative(path.posix.dirname(to),name);
  };
  for(const node of nodes(root)){
   if(!children.has(node.tagName)||node.namespaceURI!=='http://www.w3.org/1999/xhtml')invalid();
+  if(['track','source'].includes(node.tagName)&&!['audio','video'].includes(node.parentNode?.tagName))invalid();
   for(const attribute of node.attrs){
    const {name,value}=attribute;if(!common.has(name)&&!attributes[node.tagName]?.includes(name))invalid();
    if(name==='id')attribute.value=localId(value);
    if(idRefs.has(name))attribute.value=value.trim().split(/\s+/).map(localId).join(' ');
    if(name==='style')safeStyle(value);
-   if(name==='href'||name==='src')attribute.value=url(value,name==='src');
+   if(name==='href')attribute.value=url(value,'link');
+   if(name==='poster')attribute.value=url(value,'img');
+   if(name==='src')attribute.value=url(value,node.tagName==='source'?node.parentNode.tagName:node.tagName);
   }
  }
  const result=serializeOuter(root);
  validateWebsiteHTML(result,{file:to});
- return {html:result,pictures:[...pictures.values()]};
+ return {html:result,pictures:[...pictures.values()],recordings:[...recordings.values()]};
 }
 export function prepareComponent(html,from,context){
  return rewrite(oneRoot(html),{...context,from,to:'index.html'});

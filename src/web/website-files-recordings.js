@@ -1,6 +1,6 @@
 import {serializeWebsiteHTML} from './website-html-document.js';
 
-const protectedNodes='[data-observanda-source],[data-observanda-link],[data-website-component]';
+const protectedNodes='[data-observanda-source],[data-observanda-link],[data-website-instance]';
 const authored=doc=>[...doc.querySelectorAll('audio,video')].filter(node=>!node.closest(protectedNodes));
 const relative=(path,name)=>'../'.repeat(path.split('/').length-1)+name;
 const recordingPath=(page,name)=>new URL(name,new URL(page,'https://website.invalid/')).pathname.slice(1);

@@ -20,8 +20,8 @@ import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
-import {checkComponentManifest,checkSavedComponents,retainComponentPictures} from './website-component-storage.js';
-import {saveWebsiteRecordings} from './website-recordings.js';
+import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from './website-component-storage.js';
+import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -185,14 +185,15 @@ export class WebsiteFileStore{
  }
  site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
-  manifest=retainComponentPictures(manifest);
+  manifest=retainComponentAssets(manifest);
   const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
+  const bytes=Buffer.from(plain(value));if(bytes.length>CONTROL_LIMIT)throw new AppError('LIMIT');
   // Register placement before publishing the new site head. A crash may
   // leave an unused index row, but can never create an unindexed live copy.
   const previousSources=new Set(previous?.sources.map(source=>source.id));for(const source of value.sources)if(!previousSources.has(source.id)){
    await this.writeControl(ROOT+'/sources/'+source.id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:source.id},{signal});
   }
-  await this.writeControl(directory+'/revisions/'+value.revision+'.json',value,{signal});await this.writeControl(directory+'/head.json',{revision:value.revision},{signal});
+  await this.writeBytes(directory+'/revisions/'+value.revision+'.json',bytes,{signal});await this.writeControl(directory+'/head.json',{revision:value.revision},{signal});
   if(previous&&previous.revision!==value.revision){
    const currentSources=new Set(value.sources.map(source=>source.id));for(const source of previous.sources)if(!currentSources.has(source.id))await this.remove(ROOT+'/sources/'+source.id+'/placements/'+siteName(value.id)+'.json');
    const retained=new Set(value.files.map(file=>file.blob));
@@ -269,10 +270,16 @@ export class WebsiteFileStore{
  },{signal});}
  withSite(id,revision,operation){return this.scope(async()=>{const manifest=await this.current(id,revision);return operation(this.site(manifest));},{write:true});}
  file(id,name,{revision,signal,editor=false}={}){return this.scope(async()=>{
-  websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);if(!descriptor||editor!==true&&(descriptor.draft||descriptor.picture&&!publicPictureNames(manifest).has(name)))throw new AppError('NOT_FOUND');const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
+  websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);
+  if(!descriptor||editor!==true&&(descriptor.draft||descriptor.picture&&!publicPictureNames(manifest).has(name)||descriptor.recording&&!publicRecordingNames(manifest).has(name)))throw new AppError('NOT_FOUND');
+  const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:descriptor.size,sha256:descriptor.sha256,};
  },{signal});}
- export(id,{expectedRevision,signal}={}){return this.scope(async()=>{const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest);for(const descriptor of manifest.files)if(!descriptor.draft&&(!descriptor.picture||pictures.has(descriptor.name)))files.set(descriptor.name,new WebsiteFileContent(this,id,manifest.revision,descriptor));return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};},{signal});}
+ export(id,{expectedRevision,signal}={}){return this.scope(async()=>{
+  const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
+  for(const file of manifest.files)if(!file.draft&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
+  return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};
+ },{signal});}
  async source(id,{pending=false}={}){
   if(!hex(id))throw new AppError('INVALID');const directory=ROOT+'/sources/'+id;
   if(!pending&&(await this.pendingSources()).has(id))throw new AppError('CONFLICT');

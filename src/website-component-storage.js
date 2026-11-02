@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {validateWebsiteHTML} from './website-file-policy.js';
+import {websiteRecordingKind} from './website-recordings.js';
 import {checkComponentInstances,insertComponent,makeFirstInstance,pageComponentDocument,prepareComponent,rewriteComponentInstances,selectComponentBlock} from './website-file-component.js';
 
 const fail=()=>{throw new AppError('INVALID');};
@@ -12,14 +13,15 @@ const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f
 export function checkComponentManifest(manifest,files){
  if(manifest.components===undefined&&!manifest.pages.some(p=>p.instances?.length))return;
  const bad=()=>{throw new AppError('FORMAT');},entries=list(manifest);
- if(!Array.isArray(entries)||entries.length>128)bad();
+ if(!Array.isArray(entries))bad();
  const ids=new Set(),placements=new Set();
  for(const main of entries){
   if(!uuid(main?.id)||ids.has(main.id)||typeof main.name!=='string'||!main.name.trim()||main.name.length>100||typeof main.html!=='string'||Buffer.byteLength(main.html)>64*1024||!Array.isArray(main.pictures))bad();
   ids.add(main.id);
-  for(const descriptor of main.pictures){
+  if(main.recordings!==undefined&&(!Array.isArray(main.recordings)||main.recordings.some(f=>!websiteRecordingKind(f))))bad();
+  for(const descriptor of [...main.pictures,...(main.recordings??[])]){
    const file=files.get(descriptor.name);
-   if(!file?.picture||file.sourceId||file.blob!==descriptor.blob||file.sha256!==descriptor.sha256||file.size!==descriptor.size||file.draft!==descriptor.draft||file.draft&&!main.draft)bad();
+   if(!file||file.sourceId||file.picture!==descriptor.picture||file.recording!==descriptor.recording||file.contentType!==descriptor.contentType||file.blob!==descriptor.blob||file.sha256!==descriptor.sha256||file.size!==descriptor.size||file.draft!==descriptor.draft||file.draft&&!main.draft)bad();
   }
  }
  for(const page of manifest.pages)for(const row of page.instances??[]){
@@ -31,15 +33,16 @@ function contextOf(manifest){
  const components=map(list(manifest),'id'),pages=map(manifest.pages,'path'),files=map(manifest.files,'name');
  return {components,pages,files};
 }
-export function retainComponentPictures(manifest){
+export function retainComponentAssets(manifest){
  if(!manifest.components?.length)return manifest;
  const files=map(manifest.files,'name');
  // The public file/export boundary checks live page and stylesheet references.
- // Keep the private master’s image bytes available after its last placed use.
- for(const main of manifest.components)for(const picture of main.pictures){
-  const existing=files.get(picture.name);
-  if(existing&&(existing.blob!==picture.blob||existing.picture!==true||existing.sourceId))fail();
-  files.set(picture.name,picture);
+ // A private master can still use a picture, recording or caption after its
+ // last placement was detached and removed from a page.
+ for(const main of manifest.components)for(const asset of [...main.pictures,...(main.recordings??[])]){
+  const existing=files.get(asset.name);
+  if(existing&&(existing.blob!==asset.blob||existing.picture!==asset.picture||existing.recording!==asset.recording||existing.sourceId))fail();
+  files.set(asset.name,asset);
  }
  checkComponentManifest(manifest,files);
  return {...manifest,files:[...files.values()]};
@@ -52,14 +55,18 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
  const write=['create','insert','update','detach'].includes(operation);
  if(!write&&!['list','main'].includes(operation))fail();
  return store.scope(async()=>{
-  const manifest=await store.current(id,expectedRevision),context=contextOf(manifest),page=context.pages.get(path);
+  const manifest=await store.current(id,expectedRevision),page=manifest.pages.find(row=>row.path===path);
   if(!page)throw new AppError('NOT_FOUND');
-  const main=context.components.get(component),visible=main&&(!main.draft||page.draft);
   if(operation==='list'){
    if(typeof query!=='string'||query.length>100||!Number.isSafeInteger(offset)||offset<0)fail();
-   const rows=list(manifest).filter(item=>(!item.draft||page.draft)&&item.name.toLowerCase().includes(query.trim().toLowerCase()));
-   return {revision:expectedRevision,items:rows.slice(offset,offset+12).map(({id,name})=>({id,name})),total:rows.length,next:offset+12<rows.length?offset+12:null};
+   const term=query.trim().toLowerCase(),items=[];let total=0;
+   for(const item of list(manifest)){
+    if(item.draft&&!page.draft||!item.name.toLowerCase().includes(term))continue;
+    if(total>=offset&&items.length<12)items.push({id:item.id,name:item.name});total++;
+   }
+   return {revision:expectedRevision,items,total,next:offset+12<total?offset+12:null};
   }
+  const context=contextOf(manifest),main=context.components.get(component),visible=main&&(!main.draft||page.draft);
   if(operation==='main'){
    if(!visible)throw new AppError('NOT_FOUND');
    return {revision:expectedRevision,id:main.id,name:main.name,html:main.html};
@@ -72,7 +79,6 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
   if(operation==='create'||operation==='update'){
    const creating=operation==='create',label=componentName(name);
    if(list(manifest).some(item=>item.id!==current?.id&&item.name.toLowerCase()===label.toLowerCase()))fail();
-   if(creating&&context.components.size>=128)throw new AppError('LIMIT');
    // On creation the server selects the actual saved subtree, never a client
    // fragment. Main edits are expressed in portable, site-root coordinates.
    const content=creating?selectComponentBlock(document,blockPath):html;
@@ -100,10 +106,10 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
     next=rewriteComponentInstances(text,doc,definition,prior,context,{detach:operation==='detach'?instance:null});
     if(operation==='detach')instances=instances.filter(row=>row.id!==instance);
    }
-   const pictures=new Set();validateWebsiteHTML(next,{file:prior.path,scripts,pictures});
-   const changed={...prior,instances,pictures:[...pictures]};
+   const pictures=new Set(),recordings=new Set();validateWebsiteHTML(next,{file:prior.path,scripts,pictures,recordings});
+   const changed={...prior,instances,pictures:[...pictures],recordings:[...recordings]};
    checkComponentInstances(next,changed,context);
-   for(const name of pictures){
+   for(const name of [...pictures,...recordings]){
     const file=context.files.get(name);if(!file||file.draft&&!prior.draft)fail();
     files.set(name,file);
    }
@@ -111,8 +117,8 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
    if(!priorBlobs.has(descriptor.blob))staged.add(descriptor.blob);
    files.set(prior.path,descriptor);pages.push(changed);
   }
-  const used=new Set([...pages.flatMap(p=>p.pictures??[]),...Object.values(manifest.pictureStyles??{}).flat()]);
-  const candidate={...manifest,components:[...context.components.values()],pages,files:[...files.values()].filter(f=>!f.picture||used.has(f.name))};
+  const used=new Set([...pages.flatMap(p=>[...(p.pictures??[]),...(p.recordings??[])]),...Object.values(manifest.pictureStyles??{}).flat()]);
+  const candidate={...manifest,components:[...context.components.values()],pages,files:[...files.values()].filter(f=>(!f.picture&&!f.recording)||used.has(f.name))};
   await store.assertSources(candidate);
   return await store.present(await store.commit(candidate,{signal}),path,{signal});
   }catch(error){
