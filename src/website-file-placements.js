@@ -77,7 +77,11 @@ export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,li
     }
     if(matched)pageCount++;
    }
-   if(!total)throw new AppError('FORMAT');
+   if(!total){
+    const dormant=site.pages.some(page=>page.sourceGalleries?.some(group=>group.slots.some(slot=>slot.sourceId===sourceId&&slot.unavailable)));
+    if(dormant)continue;
+    throw new AppError('FORMAT');
+   }
    items.push({siteId,siteTitle:site.name,revision:site.revision,total,pageCount});
   }
   // Recheck the returned pages of this reverse index only, even for an entry
@@ -140,7 +144,7 @@ export function changeWebsitePlacement(store,id,operation,options){
    const offset=at<=start?at:at-block.length;html=html.slice(0,offset)+block+html.slice(offset);
   }
   if(html===previous)return store.present(manifest,pagePath,{signal});
-  const placements=websiteSourcePlacements(html,page.placements),lastOnPage=!placements.some(p=>p.id===sourceId&&!p.link);
+  const placements=websiteSourcePlacements(html,page.placements),lastOnPage=!placements.some(p=>p.id===sourceId&&!p.link&&!p.gallery);
   if(lastOnPage)html=removeStyle(html,pagePath,sourceId);
   const pictures=new Set(),recordings=new Set();
   validateWebsiteHTML(html,{file:pagePath,scripts:await store.scripts(manifest.files),pictures,recordings});

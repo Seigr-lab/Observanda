@@ -1,4 +1,6 @@
-import {parse,parseFragment} from 'parse5';
+import {parse,parseFragment,serializeOuter} from 'parse5';
+import {createHash} from 'node:crypto';
+import {galleryItemPlacement,galleryKey,itemKey} from './website-source-gallery-items.js';
 import {updateMigrationView} from './website-migration-views.js';
 import {linkPlacement,linkShape,linkSource,updateEntryLink} from './website-entry-links.js';
 import {AppError} from './errors.js';
@@ -24,7 +26,7 @@ export function websiteSourcePlacements(html,previous=[]){
   if(!/^[a-f0-9]{64}$/.test(id)||!range(node).start||!Number.isInteger(range(node).end))throw new AppError('INVALID');
   for(let parent=node.parentNode;parent;parent=parent.parentNode)if(sourceId(parent)!==undefined)throw new AppError('INVALID');
   const revision=attr(node,'data-observanda-source-revision');if(!/^[a-f0-9]{64}$/.test(revision??''))throw new AppError('INVALID');
-  result.push({id,revision});
+  result.push({id,revision,...galleryItemPlacement(node)});
  }
  return result;
 }
@@ -70,6 +72,7 @@ function mergeParts(current,previous,next,{root=false}={}){
 export function websiteMarkerShape(html){
  const scopes=[];
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+  if(attr(node,galleryKey)!==undefined)scopes.push('gallery:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
   if(linkSource(node)!==undefined){
    let owner,part;for(let parent=node.parentNode;parent;parent=parent.parentNode){part??=partId(parent);owner??=sourceId(parent);}
    scopes.push(JSON.stringify(['link',owner,part,linkShape(node)]));continue;
@@ -92,6 +95,7 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
   }
   if(sourceId(node)!==id)continue;const bounds=range(node),loc=location(node);
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
+  if(attr(node,itemKey)!==undefined)continue;
   if(attr(node,'data-observanda-view')){
    changes.push({start:loc.startOffset,end:loc.endOffset,text:updateMigrationView(node,{original:html.slice(loc.startOffset,loc.endOffset),previousHtml,html:nextHtml,visible,revision})});continue;
   }

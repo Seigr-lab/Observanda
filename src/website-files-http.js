@@ -11,11 +11,12 @@ import {researchId} from './web/research-reference.js';
 import {componentOperation} from './website-component-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
 import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement} from './website-file-placements.js';
+import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','save','insert-source','insert-sources','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','save','insert-source','insert-sources','gallery/source-save','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 // Only files belonging to this saved revision can be embedded. The same
@@ -38,6 +39,14 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }},workspace.vault);
  };
  try{
+  if(req.method==='GET'&&operation.startsWith('gallery/image/')){
+   const match=/^gallery\/image\/([a-f0-9]{64})\/([a-f0-9]{64})\/((?:media|figure)(?:%3A|:)[a-f0-9-]{36})$/i.exec(operation);
+   if(!match)throw new AppError('INVALID');
+   const file=await openGalleryImage(store,match[1],match[2],decodeURIComponent(match[3]),signal);
+   await check();res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
+   res.setHeader('Content-Security-Policy',"sandbox; default-src 'none'; style-src 'unsafe-inline'");
+   await serveContent(req,res,file.content,file.contentType,{signal});return true;
+  }
   if(req.method==='GET'&&operation.startsWith('preview/')){
    const match=/^preview\/([^/]+)\/([a-f0-9]{64})\/(.+)$/.exec(operation);
    if(!match||!researchId(match[1]))throw new AppError('INVALID');
@@ -88,10 +97,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='library/sites'){json(await websitesUsingSource(store,{...data,signal}));return true;}
   if(operation==='library/validate'){json(await store.scope(()=>validateWebsiteLibraryRows(store,{...data,signal}),{signal}));return true;}
   if(operation==='library/preview'){json(await store.previewSource({...data,signal}));return true;}
+  if(operation==='library/gallery-items'){json(await listGalleryItems(store,{...data,signal}));return true;}
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation==='gallery/source-read'){json(await readSourceGallery(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='gallery/source-save'){json(await saveSourceGallery(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='folder/chooser'||operation==='folder/choose'){
    if(Object.keys(options).some(key=>key!=='path')||options.path!==undefined&&typeof options.path!=='string')throw new AppError('INVALID');
    if(operation==='folder/chooser'){json(folderPicker?await folderPicker.capabilities():{mode:'server'});return true;}
