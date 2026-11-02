@@ -1,18 +1,19 @@
-export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
- const {owners,rows,queue,item,detail,placements}=state;
+import {websitePickerRefinements} from './website-files-picker-refinements.js';
+export function websitePickerView(state,{msg,esc,blocks,destination,owner,types,statusLabel,galleryAvailable}){
+ const {owners,rows,queue,item,detail,placements,galleryOnly}=state;
  const label=(key,args)=>esc(msg(key,args));
  const count=value=>new Intl.NumberFormat(document.documentElement.lang||undefined).format(value);
- const button=(key,op,attributes='',args)=>'<button type="button" class="button'+(['insert','insert-group'].includes(op)?' primary':'')+'" data-action="website-files-picker-'+op+'" '+attributes+'>'+label(key,args)+'</button>';
+ const button=(key,op,attributes='',args)=>'<button type="button" class="button'+(['insert','insert-group'].includes(op)||(op==='gallery'&&galleryOnly)?' primary':'')+'" data-action="website-files-picker-'+op+'" '+attributes+'>'+label(key,args)+'</button>';
  const option=(value,key,selected)=>'<option value="'+value+'" '+(value===selected?'selected':'')+'>'+label(key)+'</option>';
  const ownerName=(kind,row)=>row?.title||msg(kind==='project'?'pickerProjectId':'pickerBookId',{id:row?.id??'—'});
  const ancestry=row=>[row.projectTitle||(row.projectId?msg('pickerProjectId',{id:row.projectId}):msg('pickerUnlistedProject')),
   row.notebookTitle||(row.notebookId?msg('pickerBookId',{id:row.notebookId}):msg('pickerUnlistedBook'))].join(' › ');
  function facet(kind){
-  const data=owners[kind],project=kind==='project',name=project?'pickerProject':'pickerBook';
-  return '<details data-picker-facet="'+kind+'" '+(data.open?'open':'')+'><summary>'+label(name)+' · '+(data.chosen?esc(ownerName(kind,data.chosen)):label(project?'pickerAllProjects':'pickerAllBooks'))+'</summary><div class="website-picker-owner-menu">'+
-   '<label>'+label(project?'pickerSearchProjects':'pickerSearchBooks')+'<input type="search" maxlength="160" data-picker-facet-search="'+kind+'" value="'+esc(data.text)+'"></label>'+
+  const data=owners[kind],project=kind==='project',tags=kind==='tag',name=project?'pickerProject':tags?'pickerTags':'pickerBook';
+  return '<details data-picker-facet="'+kind+'" '+(data.open?'open':'')+'><summary>'+label(name)+(data.chosen?' · '+esc(ownerName(kind,data.chosen)):'')+'</summary><div class="website-picker-owner-menu">'+
+   (tags?'<p>'+label('pickerTagHelp')+'</p>':'')+'<label>'+label(project?'pickerSearchProjects':tags?'pickerSearchTags':'pickerSearchBooks')+'<input type="search" maxlength="160" data-picker-facet-search="'+kind+'" value="'+esc(data.text)+'"></label>'+
    button('pickerFind','find-'+kind)+(data.chosen?button(project?'pickerAllProjects':'pickerAllBooks','clear-'+kind):'')+
-   '<div data-picker-owner-results aria-busy="'+String(data.loading)+'"><ul class="website-picker-owners">'+data.items.map((row,index)=>'<li><button type="button" class="button" data-action="website-files-picker-choose-'+kind+'" data-index="'+index+'" aria-pressed="'+String(row.id===data.chosen?.id)+'">'+esc(ownerName(kind,row))+
+   '<div data-picker-owner-results aria-busy="'+String(data.loading)+'"><ul class="website-picker-owners">'+data.items.map((row,index)=>'<li><button type="button" data-action="website-files-picker-choose-'+kind+'" data-index="'+index+'" aria-pressed="'+String(tags?state.tags.includes(row.id):row.id===data.chosen?.id)+'">'+esc(ownerName(kind,row))+
     (!project&&row.projectTitle?' <small>'+esc(row.projectTitle)+'</small>':'')+(Number.isSafeInteger(row.count)?' ('+esc(count(row.count))+')':'')+'</button></li>').join('')+'</ul>'+
    (data.loading?'<p>'+label('loading')+'</p>':data.items.length?'':'<p>'+label('pickerNoMatches')+'</p>')+
    (data.page&&!data.loading?button('pickerPrevious','previous-'+kind):'')+(data.next!==null?button('pickerNext','next-'+kind):'')+'</div></div></details>';
@@ -35,7 +36,7 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
   const list=state.siteList;
   if(!list)return button('pickerFindWebsites','sites-open');
   return '<section class="website-picker-sites"><h4>'+label('pickerWebsitesUsing')+'</h4>'+
-   (list.items.length?'<ul>'+list.items.map((row,i)=>'<li>'+button('pickerUsageSite','use-site','data-index="'+i+'" aria-pressed="'+String((state.usageSite?.siteId??destination.site.id)===row.siteId)+'"',{title:row.siteTitle,count:row.total,pages:row.pageCount})+'</li>').join('')+'</ul>':'<p>'+label('pickerNoWebsites')+'</p>')+
+   (list.items.length?'<table aria-label="'+label('pickerWebsitesUsing')+'"><thead><tr>'+['pickerSitesColumn','pickerPlacementsColumn','pickerPagesColumn'].map(k=>'<th scope="col">'+label(k)+'</th>').join('')+'</tr></thead><tbody>'+list.items.map((row,i)=>'<tr><th scope="row"><button type="button" class="website-picker-link" data-action="website-files-picker-use-site" '+((state.usageSite?.siteId??destination.site.id)===row.siteId?'aria-current="true" ':'')+'data-index="'+i+'">'+esc(row.siteTitle)+'</button></th><td>'+esc(count(row.total))+'</td><td>'+esc(count(row.pageCount))+'</td></tr>').join('')+'</tbody></table>':'<p>'+label('pickerNoWebsites')+'</p>')+
    (state.sitePage?button('pickerPrevious','sites-previous'):'')+(list.next?button('pickerNext','sites-next'):'')+button('pickerThisWebsite','sites-close')+'</section>';
  }
  function places(){
@@ -44,8 +45,8 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
    (Number.isSafeInteger(placements.pageCount)?'<p>'+label('pickerPageCount',{count:placements.pageCount})+'</p>':'')+
    (placements.total?'<ol start="'+(state.placeOffset+1)+'">'+placements.items.map((row,i)=>{
     const name=(row.draft?msg('draftPage',{title:row.pageTitle||row.path}):row.pageTitle||row.path);
-    const target=esc(name)+' <small>'+esc(row.path)+' · '+label('pickerOccurrence',{n:row.ordinal+1})+(row.sectionTitle?' · '+esc(row.sectionTitle):'')+'</small>';
-    return '<li>'+target+' <div class="inline-actions">'+button('pickerLocate','jump','data-index="'+i+'"')+
+    const target='<button type="button" class="website-picker-link" data-action="website-files-picker-jump" data-index="'+i+'" aria-label="'+label('pickerLocate')+' · '+esc(name)+' · '+label('pickerOccurrence',{n:row.ordinal+1})+'">'+esc(name)+'</button><small>'+esc(row.path)+' · '+label('pickerOccurrence',{n:row.ordinal+1})+(row.sectionTitle?' · '+esc(row.sectionTitle):'')+'</small>';
+    return '<li>'+target+' <div class="inline-actions">'+
      (row.editable?button('pickerRemoveHere','review-remove','data-index="'+i+'"'):'<small>'+label('pickerManagedUse')+'</small>')+'</div>'+
      (state.confirm===i?'<p>'+label('pickerRemovalNotice')+'</p>'+button('pickerConfirmRemove','remove-placement','data-index="'+i+'"')+button('cancel','cancel-remove'):'')+'</li>';
    }).join('')+'</ol>':'<p>'+label('pickerUnused')+'</p>')+
@@ -58,29 +59,35 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
   const heading='<section class="website-picker-detail" aria-label="'+label('pickerPreview')+'"><h3>'+esc(item.title)+'</h3><p>'+esc(ancestry(item))+'</p>';
   if(state.pane==='sites'||state.pane==='uses')return heading+'<div class="inline-actions">'+button('pickerBackToEntry','show-entry')+
    (state.pane==='uses'?button('pickerFindWebsites','sites-open'):'')+'</div>'+(state.pane==='sites'?siteChoices():places())+'</section>';
-  return heading+button('pickerWhereUsed','show-uses')+
+  return heading+(galleryOnly?'':'<div class="inline-actions">'+button('pickerWhereUsed','show-uses')+(galleryAvailable?button('galleryChooseFigures','gallery'):'')+'</div>')+
    (data.length?'<dl class="website-picker-facts">'+data.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>':'')+
    (detail.overview??[]).filter(group=>keys[group.kind]).map(group=>'<h4>'+label(keys[group.kind])+'</h4>'+group.paragraphs.map(text=>'<p>'+esc(text)+'</p>').join('')).join('')+
    '<h4>'+label('pickerSections')+'</h4>'+(detail.sections.length?'<ul>'+detail.sections.map(s=>'<li><strong>'+esc(s.title)+'</strong>'+(s.preview?'<p>'+esc(s.preview)+'</p>':'')+'</li>').join('')+'</ul>':'<p>'+label('pickerNoSections')+'</p>')+
    (state.sectionOffset?button('pickerPrevious','sections-previous'):'')+(detail.nextSection!=null?button('pickerNext','sections-next'):'')+
    places()+'</section>';
  }
- const resultList='<section class="website-picker-entry-list"><h3>'+label('pickerEntries')+'</h3><p>'+label('pickerPage',{page:state.page+1})+'</p>'+
-  (rows.length?button('pickerSelectPage','select-page','',{count:rows.length})+
-   '<ul class="website-picker-results">'+rows.map(row=>'<li><strong>'+esc(row.title)+'</strong><small>'+esc(ancestry(row))+(row.displayDate?' · '+esc(row.displayDate):'')+'</small><small>'+label('pickerReference',{id:row.recordId??row.id})+'</small>'+
-    '<label class="website-picker-checkbox"><input type="checkbox" data-picker-check="'+esc(row.id)+'" '+(queue.has(row.id)?'checked':'')+'>'+label('pickerSelectEntry',{title:row.title})+'</label>'+
-    button('pickerPreview','select','data-source="'+esc(row.id)+'" aria-pressed="'+String(item?.id===row.id)+'"')+'</li>').join('')+'</ul>':
-    state.loading?'':'<p>'+label(state.query||owners.project.chosen||owners.book.chosen||state.applied!=='all'?'pickerNoMatches':'emptyLibrary')+'</p>')+
+ const refinements=websitePickerRefinements(state,{msg,esc,types,statusLabel,button,facet});
+ function entry(row){
+  const id=esc(row.id),facts=[row.recordType?types.label(row.recordType):'',statusLabel(row.status),row.displayDate].filter(Boolean);
+  const tags=row.tags??[],extra=tags.length-3;
+  return '<li data-picker-row="'+id+'" data-picker-revision="'+esc(row.revision)+'" '+(item?.id===row.id?'data-picker-current':'')+'>'+
+   (galleryOnly?'':'<input type="checkbox" data-picker-check="'+id+'" aria-label="'+label('pickerSelectEntry',{title:row.title})+'" aria-describedby="picker-owner-'+id+'" '+(queue.has(row.id)?'checked':'')+'>')+'<div class="website-picker-record"><button type="button" class="website-picker-link" data-source="'+id+'" aria-pressed="'+String(item?.id===row.id)+'" aria-describedby="picker-owner-'+id+'" data-action="website-files-picker-select">'+esc(row.title)+'</button>'+
+   '<small id="picker-owner-'+id+'">'+esc(ancestry(row))+'</small>'+(facts.length?'<small>'+esc(facts.join(' · '))+'</small>':'')+
+   (tags.length?'<small>'+label('pickerTags')+' · '+esc(tags.slice(0,3).join(', '))+(extra>0?' '+label('pickerMoreTags',{count:extra}):'')+'</small>':'')+
+   '<small class="website-picker-reference">'+label('pickerReference',{id:row.recordId??row.id})+'</small></div>'+
+   (galleryOnly?'':'<span draggable="true" data-picker-drag-handle title="'+label('pickerDragEntry')+'">'+label('pickerDragEntry')+'</span>')+'</li>';
+ }
+ const resultCount=state.page===0&&state.next===null&&!state.loading&&state.token?label('pickerMatches',{count:count(rows.length)}):label('pickerPage',{page:state.page+1});
+ const resultList='<section class="website-picker-entry-list"><div class="website-picker-list-head"><h3>'+label('pickerEntries')+'</h3><small>'+resultCount+'</small></div>'+
+  (rows.length?(galleryOnly?'':button('pickerSelectPage','select-page','',{count:rows.length}))+'<ul class="website-picker-results">'+rows.map(entry).join('')+'</ul>':
+   state.loading?'':'<p>'+label(refinements.filtered?'pickerNoMatches':'emptyLibrary')+'</p>'+(refinements.filtered?button('pickerClearFilters','reset-filters'):''))+
   (state.page?button('pickerPrevious','previous'):'')+(state.next!==null?button('pickerNext','next'):'')+'</section>';
  const review=queue.size&&state.pane!=='queue'?button('pickerReviewSelection','review-queue','',{count:queue.size}):'';
  const ready=item&&!queue.size?label('pickerReadyEntry',{title:item.title}):label('pickerSelectedCount',{count:queue.size});
- const footer='<footer class="website-picker-footer"><div><strong>'+label('pickerToPage',{site:destination.site.name,page:destination.path})+'</strong><small>'+ready+'</small></div>'+position()+review+
+ const footer=galleryOnly?'<footer class="website-picker-footer"><div>'+(item?esc(item.title):label('pickerChooseEntry'))+'</div>'+button('galleryChooseFigures','gallery',item&&detail?'':'disabled')+'</footer>':'<footer class="website-picker-footer"><div><strong>'+label('pickerToPage',{site:destination.site.name,page:destination.path})+'</strong><small>'+ready+'</small></div>'+position()+review+
   (queue.size?button('pickerInsertGroup','insert-group','',{count:queue.size}):button(placements?.total&&!state.usageSite?'pickerInsertAgain':'pickerInsert','insert',item?'':'disabled'))+'</footer>';
  return '<header><div><h2 id="website-picker-title">'+label('library')+'</h2>'+
- '<strong data-picker-total>'+(Number.isSafeInteger(state.totalEntries)?label('pickerEligibleCount',{count:count(state.totalEntries)}):'')+'</strong></div>'+button('pickerClose','close')+'</header><div class="website-picker-intro"><p>'+label('pickerPermissionHelp')+'</p>'+
+ '<strong data-picker-total>'+(Number.isSafeInteger(state.totalEntries)?label('pickerEligibleCount',{count:count(state.totalEntries)}):'')+'</strong></div><div class="website-picker-commands">'+(galleryOnly?'':'<button type="button" class="button" data-picker-dock>'+label('pickerDock')+'</button>')+button('pickerClose','close')+'</div></header><div class="website-picker-intro"><p>'+label('pickerPermissionHelp')+'</p>'+
  (state.preparation?'<p class="hint">'+label(({preparing:'pickerPreparingLibrary',locked:'pickerLockedLibrary',failed:'pickerFailedLibrary'})[state.preparation])+'</p>':'')+
- '<div class="website-picker-facets">'+facet('project')+facet('book')+'</div><div class="website-picker-search">'+
- '<label>'+label('pickerSearch')+'<input type="search" maxlength="160" data-picker-search value="'+esc(state.search)+'"></label>'+
- '<label>'+label('pickerFilter')+'<select data-picker-filter>'+option('all','pickerAll',state.filter)+option('media','pickerWithMedia',state.filter)+option('text','pickerTextOnly',state.filter)+'</select></label>'+button('pickerFind','search')+'</div>'+
- '<p role="status" aria-live="polite">'+esc(state.status)+'</p></div><div class="website-picker-workspace">'+resultList+'<div class="website-picker-side">'+(state.pane==='queue'&&queue.size?selected():preview())+'</div></div>'+footer;
+ refinements.search+'<p role="status" aria-live="polite">'+esc(state.status)+'</p></div><div class="website-picker-workspace" data-filters-shown="'+state.filtersShown+'">'+refinements.rail+resultList+'<div class="website-picker-side">'+(state.pane==='queue'&&queue.size?selected():preview())+'</div></div>'+footer;
 }

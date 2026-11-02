@@ -37,7 +37,7 @@ test('a website entry opens before owner counts finish and late counts cannot re
   });
   await mountFilesEditor(page);await page.getByRole('button',{name:'Browse available content'}).click();
   const d=page.getByRole('dialog');await expect.poll(()=>waiting).toBe(2);
-  await d.getByRole('button',{name:'Preview',exact:true}).click();await expect(d.locator('.website-picker-detail')).toContainText('Sampling method');
+  await d.getByRole('button',{name:'Transect observation',exact:true}).click();await expect(d.locator('.website-picker-detail')).toContainText('Sampling method');
   await expect(d.locator('[data-picker-total]')).toBeEmpty();
   const token=await store.beginSourceUpdate({sourceId:source.id,target:'website'});
   await expect(d.locator('.website-picker-results li')).toHaveCount(0,{timeout:12000});
