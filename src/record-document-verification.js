@@ -4,7 +4,7 @@ import {digest} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
 import {validateRecordDocument} from './record-document-validation.js';
 import {recordDocumentSummary} from './record-document-summary.js';
-import {retainedQueryProjection} from './record-query-projection.js';
+import {historicalQueryProjection,retainedQueryProjection} from './record-query-projection.js';
 import {withQueryValue} from './record-query-storage.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {validateFigureSources} from './figure-provenance.js';
@@ -39,7 +39,7 @@ export async function verifyRecordDocument(store,row,metadata,summaries,media,{s
   for await(const ref of document.items(['figures'],{signal}))await validateFigureSources(store.workspace,{figures:[await document.tree.read(ref.value)]});
   if(media)for await(const ref of document.items(['attachments'],{signal}))await media.record({attachments:[await document.tree.read(ref.value)]});
   await withRecordProjectionScratch(document,async projection=>{
-   const expected=await retainedQueryProjection(projection,encoding.contentRevision,{signal});
+   const expected=await retainedQueryProjection(projection,encoding.contentRevision,{signal});let historical;
    for(const [kind,revision] of [['record-query',row.queryRevision],['record-summary',row.summaryRevision]]){
     if(!revision)continue;const source={revision,slot:kind+':'+row.id+':'+revision},found=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot);
     await withQueryValue(store,store.decode('state',source.slot,found?.payload),source,row,async({value,tree})=>{
@@ -52,7 +52,14 @@ export async function verifyRecordDocument(store,row,metadata,summaries,media,{s
       signal?.throwIfAborted();
       if(kind==='record-summary'&&name==='searchText')fail();
       const actual=tree?await fieldDigest(tree,value.root,name,{signal}):digest(revisionText(value[name]));
-      if(actual!==await fieldDigest(projection.tree,expected.root,name,{signal}))fail();
+      let reference=expected;
+      if(name==='publicationDescriptor'||name==='editionInventory'){
+       const marked=tree?(await tree.selected(value.root,[name,'sourcePermissionVersion'])).found:Object.hasOwn(value[name]??{},'sourcePermissionVersion');
+       if(!marked){
+        historical??=await historicalQueryProjection(projection,encoding.contentRevision,{signal});reference=historical;
+       }
+      }
+      if(actual!==await fieldDigest(projection.tree,reference.root,name,{signal}))fail();
      }
     });
    }

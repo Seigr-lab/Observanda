@@ -24,7 +24,15 @@ import {attemptReferenceGroups} from './record-attempt-query.js';
 
 const collections=['sections','contributors','relations','figures','attachments','tags'];
 const depends=(collection,...fields)=>({collection:Array.isArray(collection)?collection:[collection],fields});
-export async function retainedQueryProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences}={}){
+export function retainedQueryProjection(document,revision,options={}){
+ return buildProjection(document,revision,options,false);
+}
+// Only the integrity reader reconstructs the original spelling of pre-consent
+// private query fields. Publishing and authoring always use the current shape.
+export function historicalQueryProjection(document,revision,{signal}={}){
+ return buildProjection(document,revision,{signal},true);
+}
+async function buildProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences},historical){
  if(previous&&(await previous.tree.selected(previous.root,['publicationDescriptor','sourcePermissionVersion'])).value!==SOURCE_PUBLICATION_VERSION)previous=null;
  // Every public projection depends on consent, including collection-derived
  // selectors and inventory rows that otherwise retain their old references.
@@ -34,7 +42,7 @@ export async function retainedQueryProjection(document,revision,{signal,previous
   signal?.throwIfAborted();
   Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await attemptDocumentHeader(document,{signal}):name==='results'?await resultDocumentHeader(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true});
  }
- const empty={...header,body:'',attempt:undefined},plain={...recordQueryDocument(header),publication:recordPublicationSummary(header),publicationCard:publicationCard(header),publicationDescriptor:null,editionInventory:recordEditionInventory(header,revision),recordRevision:revision};
+ const empty={...header,body:'',attempt:undefined},plain={...recordQueryDocument(header),publication:recordPublicationSummary(header),publicationCard:publicationCard(header),publicationDescriptor:null,editionInventory:recordEditionInventory(header,revision,{legacy:historical}),recordRevision:revision};
  const object=async(value,references={})=>{
   const builder=new RecordContainerBuilder(blocks,'object');
   for(const name of Object.keys(value)){signal?.throwIfAborted();await builder.add({name,value:references[name]??await tree.retain(value[name])});}
@@ -63,7 +71,7 @@ export async function retainedQueryProjection(document,revision,{signal,previous
   for await(const item of items('figures',['id']))if(placed.has(item.id))figureContext.figures.push(item);
   for await(const item of items('attachments',['id','kind','caption','alt','share']))if(placed.has(item.id))figureContext.attachments.push(item);
  }
- plain.publicationDescriptor=publicationDescriptorDetails(figureContext);
+ plain.publicationDescriptor=publicationDescriptorDetails(figureContext,undefined,{legacy:historical});
  async function* searchParts(){
   yield header.title;yield proseText(header.body);yield header.outcome??'';yield* items('tags');
   for await(const item of items('sections',['title','body'])){yield item.title;yield proseText(item.body);}
@@ -95,19 +103,20 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const images=await filtered(['publicationCard','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image',item=>item);
  const sharedImages=await filtered(['publicationDescriptor','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image'&&item.share,item=>item);
  const grouped=(path,owners,groups)=>reuse(path,owners,()=>groupRecordProjection(document,previous,{path,groups},{signal}));
- const allowed=key=>publicationPartAllowed(header,key);
+ const allowed=key=>historical||publicationPartAllowed(header,key);
+ const sectionVisible=item=>historical||item.share!==false;
  const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body','share'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
-  {collection:['sections'],fields:['id','title','share'],project:item=>item.share===false?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
+  {collection:['sections'],fields:['id','title','share'],project:item=>!sectionVisible(item)?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
   {collection:['figures'],fields:['id','title'],project:item=>allowed('figures')?[{version:1,kind:'figure',id:item.id,label:item.title}]:[]},
   {collection:['attachments'],fields:['id','kind','caption','alt','share'],project:item=>item.kind==='image'&&item.share?[{version:1,kind:'figure',id:item.id,label:item.caption||item.alt}]:[]},
   {field:['body'],project:body=>allowed('body')?bookSelectors({body}):[]},
-  {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:bookSelectors({body:item.body})}
+  {collection:['sections'],fields:['body','share'],project:item=>!sectionVisible(item)?[]:bookSelectors({body:item.body})}
  ]);
  const mentions=body=>proseReferences(body).map(target=>({role:'mention',target}));
  const relations=()=>grouped(['publicationDescriptor','relations'],[depends('relations','role','target'),depends('sections','body','share'),['body']],[
   {collection:['relations'],fields:['role','target'],project:item=>allowed('relations')?[{role:item.role??'related',target:item.target}]:[]},
   {field:['body'],project:body=>allowed('body')?mentions(body):[]},
-  {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:mentions(item.body)}
+  {collection:['sections'],fields:['body','share'],project:item=>!sectionVisible(item)?[]:mentions(item.body)}
  ]);
  const tags=await document.reference(['tags'],{signal});
  const descriptor=await object({...plain.publicationDescriptor,revision},{
@@ -120,13 +129,13 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const inventoryRoot=await object(inventory,{
   choice:await object(choice,{
    fields:header.template&&allowed('template')?await mapped(['editionInventory','choice','fields'],['template','fields'],['key'],item=>item.key):await tree.retain([]),
-   sections:await filtered(['editionInventory','choice','sections'],'sections',['id','share'],item=>item.share!==false,item=>item.id),
+   sections:await filtered(['editionInventory','choice','sections'],'sections',['id','share'],sectionVisible,item=>item.id),
    attachments:await filtered(['editionInventory','choice','attachments'],'attachments',['id','share'],item=>item.share,item=>item.id),
    figures:allowed('figures')?await mapped(['editionInventory','choice','figures'],'figures',['id'],item=>({id:item.id,data:false})):await tree.retain([])
   }),
-  sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],item=>item.share!==false,({id,title})=>({id,title})),
+  sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],sectionVisible,({id,title})=>({id,title})),
   fields:header.template&&allowed('template')?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
-  attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
+  attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>historical||item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
   figures:allowed('figures')?await mapped(['editionInventory','figures'],'figures',['id','title'],item=>item):await tree.retain([])
  });
  const root=await object(plain,{
