@@ -1,0 +1,23 @@
+[data-website-picker-dialog] { width:min(70rem,94vw); max-height:88vh; box-sizing:border-box; overflow:auto; color:CanvasText; background:Canvas; border:1px solid var(--border,#a7b1c0); padding:1.1rem; border-radius:.5rem }
+[data-website-picker-dialog]::backdrop { background:#17213b70 }
+[data-website-picker-dialog] header,.website-picker-search { display:flex; align-items:end; flex-wrap:wrap; gap:.6rem }
+[data-website-picker-dialog] header h2 { margin:0 auto 0 0 }
+.website-picker-facets,.website-picker-workspace { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; margin:.6rem 0 }
+.website-picker-facets details,.website-picker-detail,.website-picker-entry-list,.website-picker-queue { min-width:0; border:1px solid var(--border,#c1c8d3); padding:.65rem; overflow-wrap:anywhere }
+.website-picker-facets summary { cursor:pointer; font-weight:600 }
+.website-picker-facets input,.website-picker-search input,.website-picker-detail select { max-width:100%; box-sizing:border-box }
+.website-picker-owners { list-style:none; padding:0; max-height:13rem; overflow:auto }
+.website-picker-owners button { width:100%; text-align:start }
+[data-website-picker-dialog] .website-picker-results { max-height:46vh; margin:.4rem 0 }
+[data-website-picker-dialog] .website-picker-results li { grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.25rem; padding:.5rem 0 }
+.website-picker-results :is(strong,small) { grid-column:1 / -1 }
+[data-website-picker-dialog] label.website-picker-checkbox { display:flex; align-items:center; gap:.4rem; font-size:.9em; cursor:pointer; margin:0 }
+.website-picker-queue li { margin:.4rem 0 }
+.website-picker-side { min-width:0 }
+.website-picker-queue { margin-bottom:.7rem }
+.website-picker-queue ol { max-height:15rem; overflow:auto; padding-inline-start:1.6rem }
+[data-website-picker-dialog] h3,[data-website-picker-dialog] h4 { margin:.35rem 0 }
+.website-picker-queue li span,.website-picker-detail li small { display:block }
+.website-picker-detail ul,.website-picker-detail ol { max-height:15rem; overflow:auto; padding-inline-start:1.5rem }
+.website-picker-detail li { padding:.25rem; }
+@media(max-width:720px){.website-picker-facets,.website-picker-workspace{grid-template-columns:1fr}}
