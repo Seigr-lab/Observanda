@@ -20,6 +20,7 @@ import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
+import {checkComponentManifest,checkSavedComponents,retainComponentPictures} from './website-component-storage.js';
 import {saveWebsiteRecordings} from './website-recordings.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
@@ -137,6 +138,7 @@ export class WebsiteFileStore{
    if(!names.has(page.path)||names.get(page.path).draft!==page.draft||!page.path.endsWith('.html')||!Array.isArray(page.placements))throw new AppError('FORMAT');
   }
   if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
+  checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
  async raw(id,{missing=false}={}){
@@ -183,6 +185,7 @@ export class WebsiteFileStore{
  }
  site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
+  manifest=retainComponentPictures(manifest);
   const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   // Register placement before publishing the new site head. A crash may
   // leave an unused index row, but can never create an unindexed live copy.
@@ -236,6 +239,7 @@ export class WebsiteFileStore{
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
   }
+  checkSavedComponents(manifest,former,html);
   if(!former){
    ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
    validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
@@ -246,6 +250,7 @@ export class WebsiteFileStore{
    const viewerCSS=await readFile(new URL('./web/public-gallery.css',import.meta.url),'utf8');files.push(await this.siteFile(id,'public-gallery.css',viewerCSS,{signal}));
   }
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
+  if(former?.instances?.length)pages.at(-1).instances=former.instances;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
   const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures,draft,signal});
