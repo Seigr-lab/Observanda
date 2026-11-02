@@ -103,7 +103,10 @@ export function responsiveLayout({document,host,t,scope,selected,getCSS,getViewp
   }
   write(next,css=>update(css,name,view,style));refresh();
  }
- listen(panel,'toggle',refresh);listen(apply,'click',()=>commit(false));listen(reset,'click',()=>commit(true));
+ // A details toggle is delivered in a later task. A user can change a
+ // control before the opening event arrives. Keep those pending edits.
+ listen(panel,'toggle',()=>{if(!panel.open||!touched.size)refresh();});
+ listen(apply,'click',()=>commit(false));listen(reset,'click',()=>commit(true));
  listen(panel,'keydown',event=>{if(event.key==='Enter'&&event.target.matches('input')){event.preventDefault();commit(false);}});
  return {refresh};
 }

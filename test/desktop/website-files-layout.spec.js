@@ -36,15 +36,16 @@ test('page structure retains readable labels and keyboard actions at desktop and
    await expect(page.getByRole('heading',{name:words.structure,exact:true})).toBeVisible();
    for(const viewport of [{width:1920,height:1080},{width:390,height:844}]){
     await page.setViewportSize(viewport);await expect(rows).toHaveCount(labels.length);await page.evaluate(()=>document.fonts.ready);
+    await rows.first().locator('[data-layer-select]').press('Enter');
     const layout=await list.evaluate(element=>{
      const round=n=>Math.round(n*10)/10;
      return {viewport:window.innerWidth,bodyWidth:document.documentElement.scrollWidth,listWidth:element.clientWidth,listContent:element.scrollWidth,rows:[...element.children].map(row=>{
-      const label=row.querySelector('span'),lineHeight=parseFloat(getComputedStyle(label).lineHeight),rect=label.getBoundingClientRect(),parent=row.getBoundingClientRect();
-      const actions=[...row.querySelectorAll('button')].map(button=>{
+      const label=row.querySelector('[data-layer-select]'),range=document.createRange(),rect=label.getBoundingClientRect(),parent=row.getBoundingClientRect();range.selectNodeContents(label);
+      const actions=[...row.querySelectorAll('button[data-action],button[data-layer-move]')].map(button=>{
        const bounds=button.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(button);
        return {name:button.textContent.trim(),fits:[...range.getClientRects()].every(text=>text.left>=bounds.left-1&&text.right<=bounds.right+1&&text.top>=bounds.top-1&&text.bottom<=bounds.bottom+1)&&bounds.left>=parent.left-1&&bounds.right<=parent.right+1};
       });
-      return {label:label.textContent,width:round(rect.width),rowWidth:round(parent.width),lines:round(rect.height/lineHeight),actions};
+      return {label:label.textContent,width:round(rect.width),rowWidth:round(parent.width),lines:range.getClientRects().length,selected:row.getAttribute('aria-current')==='true',actions};
      })};
     });
     metrics.push({language,...layout});
@@ -60,17 +61,23 @@ test('page structure retains readable labels and keyboard actions at desktop and
     for(const row of layout.rows){
      expect.soft(row.width,context+' label '+row.label).toBeGreaterThanOrEqual(Math.min(150,row.rowWidth*.7));
      expect.soft(row.lines,context+' wrapped lines').toBeLessThanOrEqual(5);
-     expect(row.actions.map(action=>action.name)).toEqual([words.up,words.down,words.remove]);
+     if(row.selected)expect(row.actions.map(action=>action.name)).toEqual(expect.arrayContaining([words.sectionEdit,words.up,words.down,words.duplicate,words.remove,words.layerMove]));
+     else expect(row.actions).toHaveLength(0);
      expect.soft(row.actions.every(action=>action.fits),context+' action text and button bounds').toBe(true);
     }
    }
   }
   await info.attach('page-structure-geometry',{body:JSON.stringify(metrics,null,2),contentType:'application/json'});
   const first=rows.first(),down=first.getByRole('button',{name:catalan.down,exact:true});
+  await first.locator('[data-layer-select]').press('Enter');
   await expect(first.getByRole('button',{name:catalan.up,exact:true})).toBeDisabled();
+  await rows.last().locator('[data-layer-select]').press('Enter');
   await expect(rows.last().getByRole('button',{name:catalan.down,exact:true})).toBeDisabled();
+  await first.locator('[data-layer-select]').press('Enter');
   await down.focus();await expect(down).toBeFocused();await page.keyboard.press('Enter');await expect(first).toContainText(labels[1]);
+  await rows.nth(1).locator('[data-layer-select]').press('Enter');
   await rows.nth(1).getByRole('button',{name:catalan.up,exact:true}).press('Space');await expect(first).toContainText(labels[0]);
+  await first.locator('[data-layer-select]').press('Enter');
   await first.getByRole('button',{name:catalan.remove,exact:true}).press('Enter');await expect(rows).toHaveCount(2);
   await page.getByRole('button',{name:catalan.undo,exact:true}).press('Enter');await expect(rows).toHaveCount(3);
   await expect(first).toContainText(labels[0]);

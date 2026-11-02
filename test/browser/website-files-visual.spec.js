@@ -47,9 +47,13 @@ test('responsive inspector publishes distinct grid and stack layouts at desktop 
  const device=async(name,width)=>{
   await page.evaluate(({name,width})=>{window.canvasViewport=name;document.querySelector('iframe').style.width=width+'px';window.visual.viewportChanged();},{name,width});
  };
- await device('desktop',1200);await field('display').selectOption('grid');await field('grid-template-columns').fill('3');await field('gap').fill('24px');
+ await device('desktop',1200);await field('display').selectOption('grid');
+ // Chromium queues opening a details element. Delivering that notification
+ // after a keyboard choice must not clear the first property.
+ await page.locator('.website-layout-inspector').dispatchEvent('toggle');
+ await field('grid-template-columns').fill('3');await field('gap').fill('24px');
  await field('padding').fill('1rem 2rem');await field('border-width').fill('2px');await field('border-style').selectOption('solid');await field('width').fill('80%');await apply();
- await expect(frame.locator(selector)).toHaveCSS('display','grid');
+ await expect(frame.locator(selector),(await page.evaluate(()=>window.saved())).css).toHaveCSS('display','grid');
  await device('tablet',768);await field('grid-template-columns').fill('2');await field('gap').fill('16px');await apply();
  await device('phone',375);await field('display').selectOption('flex');await field('flex-direction').selectOption('column');
  await field('gap').fill('8px');await field('flex-basis').fill('50%');await apply();await expect(frame.locator(selector)).toHaveCSS('display','flex');

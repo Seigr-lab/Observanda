@@ -1,10 +1,9 @@
 import {test,expect} from '@playwright/test';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
+import {mountFilesEditor} from './mount-files-editor.js';
 
 // Exercise the real browser document editor. No research service is provided;
 // the unrelated installed acceptance test must also qualify packaging/storage.
-const id='10000000-0000-4000-8000-000000000001',web=path.resolve('src/web');
+const id='10000000-0000-4000-8000-000000000001';
 const savedSite={id,name:'Recovered site',revision:'c'.repeat(64),cssPath:'style.css',pages:[{path:'index.html',title:'Home'}]};
 const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><html><body><main><h1>Original saved home</h1></main></body></html>'};
 const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
@@ -105,16 +104,6 @@ for(const [state,message] of [
   await expect(page.locator('#website-files-canvas')).toHaveCount(0);
   expect(calls).toEqual(['/api/website-files/session']);
  });
-}
-async function mountFilesEditor(page,{resource=()=>'',hash=''}={}){
- await page.route('https://website.test/**',async route=>{
-  const url=new URL(route.request().url());if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:`<!doctype html><main id="root"></main><script type="module">
-   import {websiteFilesUI} from '/website-files-ui.js';const root=document.querySelector('#root'),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-   const files=websiteFilesUI({api:async(route,data)=>{const response=await window.filesAPI(route,data);if(response?.errorCode)throw Object.assign(Error(response.message),{code:response.errorCode});return response;},esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));root.addEventListener('submit',e=>{e.preventDefault();files.submit(e.target);});await files.load();</script>`});
-  if(url.pathname.startsWith('/api/website-files/preview/'))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
-  const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
- });
- await page.goto('https://website.test/'+hash);
 }
 test('visual edits preserve saved HTML, styles and placement and reject outdated drafts',async({page})=>{
  let version=1,html='<!doctype html><html lang="en"><head><title>Observation</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Observation</h1><p>Initial notes</p><section data-observanda-source="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" data-observanda-source-revision="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"><p data-observanda-part="body">Copied text</p><p data-observanda-part="section-1">First release</p></section></main></body></html>',css='h1{color:rgb(12, 34, 56)}';

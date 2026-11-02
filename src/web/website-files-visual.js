@@ -11,9 +11,10 @@ const editable = 'h1,h2,h3,h4,h5,h6,p,li,figcaption,blockquote,summary,dt,dd,td,
 const blocks = 'section,article,header,footer,aside,nav,figure,table,[data-section-id],[data-region-kind],'+part+
   ',:is(body,main) > :is(h1,h2,h3,h4,h5,h6,p,ul,ol,blockquote,table,hr,img,video,audio,details,pre),:is(body,main) > div:not(.page-composition,.container-content)';
 const protectedNodes = source+','+part+','+linked;
+const outlineContents='h1,h2,h3,h4,h5,h6,p,ul,ol,li,dl,dt,dd,blockquote,details,summary,figcaption,pre,hr,img,video,audio,.website-columns>div,[data-website-instance]';
 
 /** Paths are relative to body and use element-child indices in the saved HTML. */
-export function websiteVisualSections(document) {
+export function websiteVisualSections(document,{includeContents=false}={}) {
   const entries = [], stack = [];
   function children(parent, prefix, depth) {
     for (let i=parent.children.length-1; i>=0; --i) stack.push({node:parent.children[i], path:prefix+i, depth});
@@ -22,7 +23,7 @@ export function websiteVisualSections(document) {
   while (stack.length) {
     const row = stack.pop();
     if (row.node.matches(chrome+',script,style,template,svg,[hidden]')) continue;
-    const section = row.node.matches(blocks);
+    const section = row.node.matches(blocks)||(includeContents&&row.node.matches(outlineContents));
     if (section) entries.push(row);
     children(row.node, row.path+'/', row.depth+(section ? 1 : 0));
   }
@@ -178,8 +179,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     prompt.hidden=!!selected;
     responsive.refresh();
   }
-  function setSelected(node, scroll=false) {
-    if (!node?.matches(blocks) || node.closest(chrome)) return;
+  function setSelected(node, scroll=false, fromOutline=false) {
+    if (!node || !(node.matches(blocks)||(fromOutline&&node.matches(outlineContents))) || node.closest(chrome)) return;
     const same=node===selected;
     selected=node;hover=null;
     if(!same){
@@ -308,8 +309,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     select(path,{edit:focus=false}={}){
       if(typeof path!=='string'||!/^\d+(?:\/\d+)*$/.test(path))return false;
       let node=body;for(const index of path.split('/'))node=node?.children[Number(index)];
-      if(!node?.matches(blocks)||node.closest(chrome))return false;
-      setSelected(node,true);table.select(node);if(focus)editSelected();return true;
+      if(!node||!(node.matches(blocks)||node.matches(outlineContents))||node.closest(chrome))return false;
+      setSelected(node,true,true);table.select(node);if(focus)editSelected();return true;
     },
     destroy(){
       controller.abort();table.destroy();observer.disconnect();if(timer)win.cancelAnimationFrame(timer);
