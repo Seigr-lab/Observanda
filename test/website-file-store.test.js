@@ -10,6 +10,36 @@ import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource,updateWebsiteSource} from '../src/website-file-html.js';
 import {validateWebsiteHTML,validateWebsiteCSS} from '../src/website-file-policy.js';
 import {contentBuffer} from '../src/file-content.js';
+import {bindConvertedPage} from '../src/website-files-migration.js';
+
+test('cross-entry references retain authored labels, revoke target titles and never grant target assets',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-entry-links-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>assert.fail('Link update opened research');
+ const store=new WebsiteFileStore(workspace),site=randomUUID(),parent=randomUUID(),target=randomUUID(),href='entries/'+target+'.html';
+ const parentId=websiteSourceId({workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:parent}),targetId=websiteSourceId({workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:target});
+ const fragment=title=>'<div data-observanda-part="title"><h2>'+title+'</h2></div>';
+ const asset=Buffer.from('Unplaced target image'),assetName='assets/'+createHash('sha256').update(asset).digest('hex')+'.png';
+ const put=async(sourceId,title,visible=true)=>store.putSource({sourceId,title,visible,html:visible?fragment(title):'',assets:visible&&sourceId===targetId?[{path:assetName,bytes:asset,contentType:'image/png'}]:[]},{token:await store.beginSourceUpdate({sourceId})});
+ const a=await put(parentId,'Parent'),b=await put(targetId,'Original title');
+ const record=(id,source,title)=>[id,{source,media:new Map(),record:{title,tags:[],type:'note',attachments:[]}}];
+ const records=new Map([record(parent,a,'Parent'),record(target,b,'Original title')]);
+ const source='<html><body data-page="entry:'+parent+'"><main><article class="record-page"><div class="rich-document"><p>Surrounding copy <a href="'+href+'">my wording</a> and <a href="'+href+'"><em>Read </em><strong aria-label="Original title">Original</strong> title next</a>.</p></div><section class="record-related"><ul><li><a href="'+href+'">Original title</a></li></ul></section></article></main><footer>Footer</footer></body></html>';
+ const bound=bindConvertedPage('index.html',source,{records,aliases:new Map()});
+ let opened=await store.importFiles(site,{name:'Study',files:new Map([['index.html',bound],['style.css','']])});
+ assert.ok(opened.html.includes('my wording'));assert.match(opened.html,/<em>Read <\/em><strong aria-label="Original title">/);assert.equal((await store.export(site)).files.has(assetName),false);
+ await assert.rejects(store.file(site,assetName),{code:'NOT_FOUND'});
+ opened=await store.save(site,{...opened,expectedRevision:opened.site.revision,html:opened.html.replace('my wording','my edited wording')});
+ await put(targetId,'Original title',false);opened=await store.open(site);
+ assert.doesNotMatch(opened.html,/Original title/);assert.equal(opened.html.includes(href),false);assert.match(opened.html,/my edited wording/);assert.match(opened.html,/Surrounding copy/);assert.match(opened.html,/Read .* next/);
+ await assert.rejects(store.save(site,{...opened,expectedRevision:opened.site.revision,html:opened.html.replace('<a ','<a href="'+href+'" ')}),{code:'CONFLICT'});
+ opened=await store.save(site,{...opened,expectedRevision:opened.site.revision,html:opened.html.replace('Footer','Authored footer')});
+ await put(targetId,'Revised target title');opened=await store.open(site);
+ assert.ok(opened.html.includes('href="'+href+'"'));assert.match(opened.html,/Revised target title/);assert.match(opened.html,/Authored footer/);assert.match(opened.html,/my edited wording/);
+ assert.equal((await store.export(site)).files.has(assetName),false);assert.equal((await store.export(site)).files.has('source-'+targetId+'.css'),false);
+ await put(parentId,'Parent',false);await put(targetId,'Another title');opened=await store.open(site);
+ assert.equal(opened.html.includes(href),false);assert.doesNotMatch(opened.html,/Another title|my edited wording|Surrounding copy/);assert.match(opened.html,/Authored footer/);
+});
 
 test('private drafts remain editable and a draft-only placement contributes no published files',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'website-draft-'));await mkdir(path.join(root,'.observanda'));

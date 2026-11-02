@@ -20,6 +20,7 @@ import {assertPublicationSourcePermissions} from './publication-permission-admis
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {attr,put,words,descendants} from './website-migration-views.js';
+import {markEntryLink} from './website-entry-links.js';
 import {currentFigureSVGs} from './website-figure-assets.js';
 
 class WebsiteDependencyError extends AppError{
@@ -42,6 +43,7 @@ export function bindConvertedPage(file,html,{records,aliases}){
  }
  if(!records.size)return html;
  const scoped=node=>ancestor(node,n=>attr(n,'data-observanda-source')!==undefined);
+ let linkIndex=0;
  const label=(node,owner,anchor)=>{mark(node,owner.source,anchor?'section-label':'title');if(node.tagName==='a')reference(node,'href',attr(node,'href'));if(anchor)reference(node,'anchor',anchor);};
  for(const node of nodes){
   if(!node.tagName)continue;
@@ -61,7 +63,10 @@ export function bindConvertedPage(file,html,{records,aliases}){
   }
   if(scoped(node)){
    const href=attr(node,'href'),other=entryPath(local(file,href)),parent=scoped(node);
-   if(other&&records.get(other)?.source.id!==attr(parent,'data-observanda-source'))failed('cross-entry-composition');
+   if(other&&node.tagName==='a'){
+    const owner=records.get(other);if(!owner)failed('unresolved-entry-link');
+    if(owner.source.id!==attr(parent,'data-observanda-source'))markEntryLink(node,owner,++linkIndex);
+   }
    continue;
   }
   if(current){

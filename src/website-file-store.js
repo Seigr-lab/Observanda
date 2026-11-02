@@ -22,7 +22,7 @@ const recordIndex=(owner,record,target)=>ROOT+'/record-sources/'+hash(plain([own
 const styleName=id=>'source-'+id+'.css';
 const draftStyle='draft-styles.css';
 const siteOwner=(id,draft)=>ROOT+'/sites/'+siteName(id)+(draft?'/drafts':'');
-const publishedSources=pages=>new Set(pages.filter(page=>!page.draft).flatMap(page=>page.placements.map(source=>source.id)));
+const assetSources=pages=>new Set(pages.flatMap(page=>page.placements.filter(source=>!source.link).map(source=>source.id)));
 const sourceURL=(page,name)=>path.posix.relative(path.posix.dirname(page),name);
 const atPage=(html,page)=>page.includes('/')?html.replace(/(\b(?:src|href|poster)\s*=\s*["'])(assets\/[a-f0-9]{64}\.[a-z0-9]+)/gi,(_,prefix,name)=>prefix+sourceURL(page,name)):html;
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -139,8 +139,9 @@ export class WebsiteFileStore{
  }
  async siteAssets(local,placements,pages){
   const files=new Map(local.filter(file=>!file.sourceId).map(file=>[file.name,file]));
-  const publicIds=publishedSources(pages);
+  const publicIds=assetSources(pages.filter(page=>!page.draft)),allIds=assetSources(pages);
   for(const placement of placements){
+   if(!allIds.has(placement.id))continue;
    const source=await this.source(placement.id,{pending:true});
    if(!source||source.revision!==placement.revision||source.target!=='website')throw new AppError('CONFLICT');
    for(const asset of [...source.assets,{...source.css,name:styleName(source.id)}]){
@@ -217,7 +218,7 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
-  const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html);
+  const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html,former?.placements);
   const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
   validateWebsiteHTML(html,{scripts:await this.scripts(manifest.files),file:page});validateWebsiteCSS(css,{file:cssPath});
   if(former?.placements.length||placements.length){
@@ -319,13 +320,18 @@ export class WebsiteFileStore{
   let after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
-   const affected=new Set(manifest.pages.filter(page=>page.placements.some(value=>value.id===sourceId)).map(page=>page.path)),titles=new Map();
+   const pages=new Map(manifest.pages.map(page=>[page.path,page]));
    const nextFiles=[];for(const descriptor of manifest.files){
-    if(affected.has(descriptor.name)){const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible});if(updated!==original)titles.set(descriptor.name,websiteDocumentTitle(updated));nextFiles.push(updated===original?descriptor:await this.siteFile(id,descriptor.name,updated,{signal,draft:descriptor.draft}));}
+    const page=pages.get(descriptor.name);
+    if(page?.placements.some(item=>item.id===sourceId)){
+     const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible,placements:page.placements});
+     if(updated!==original)pages.set(page.path,{...page,title:websiteDocumentTitle(updated),placements:websiteSourcePlacements(updated,page.placements)});
+     nextFiles.push(updated===original?descriptor:await this.siteFile(id,descriptor.name,updated,{signal,draft:descriptor.draft}));
+    }
     else if(descriptor.sourceId!==sourceId)nextFiles.push(descriptor);
    }
-   const sources=manifest.sources.map(value=>value.id===sourceId?{id:sourceId,revision:source.revision}:value);
-   await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources,manifest.pages),sources},{signal});
+   const nextPages=[...pages.values()],sources=[...new Map(nextPages.flatMap(page=>page.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
+   await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages),sources},{signal});
   }after=sites.next;}while(after!==null);
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
@@ -334,7 +340,7 @@ export class WebsiteFileStore{
   if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');
   const opened=await this.present(manifest,page,{signal}),fragment=await this.readText(source.html,{signal});let html=insertWebsiteSource(opened.html,{id:sourceId,revision:source.revision,html:atPage(fragment,page)});
   const cssPath=sourceURL(page,styleName(sourceId));if(!html.includes('href="'+cssPath+'"'))html=html.replace(/<\/head\s*>/i,'<link rel="stylesheet" href="'+cssPath+'"></head>');
-  const pages=manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html)}:value);
+  const pages=manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html,value.placements)}:value);
   const local=manifest.files.filter(file=>!file.sourceId&&file.name!==page);local.push(await this.siteFile(id,page,html,{signal,draft:pages.find(value=>value.path===page)?.draft}));
   const sources=manifest.sources.filter(value=>value.id!==sourceId);sources.push({id:sourceId,revision:source.revision});const files=await this.siteAssets(local,sources,pages);
   return this.present(await this.commit({...manifest,files,sources,pages},{signal}),page,{signal});

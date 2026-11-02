@@ -1,5 +1,6 @@
 import {parse,parseFragment} from 'parse5';
 import {updateMigrationView} from './website-migration-views.js';
+import {linkPlacement,linkShape,linkSource,updateEntryLink} from './website-entry-links.js';
 import {AppError} from './errors.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
@@ -11,9 +12,14 @@ const sourceId=node=>attr(node,'data-observanda-source');
 const patches=(html,changes)=>changes.sort((a,b)=>b.start-a.start).reduce((text,change)=>text.slice(0,change.start)+change.text+text.slice(change.end),html);
 export const escapeWebsiteText=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-export function websiteSourcePlacements(html){
- const result=[];
+export function websiteSourcePlacements(html,previous=[]){
+ const result=[],keys=new Set(),prior=new Map(previous.filter(item=>item.link).map(item=>[item.link,item]));
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+  if(linkSource(node)!==undefined){
+   const placement=linkPlacement(node,prior);
+   if(keys.has(placement.link)||sourceId(node)!==undefined)throw new AppError('INVALID');
+   keys.add(placement.link);result.push(placement);continue;
+  }
   const id=sourceId(node);if(id===undefined)continue;
   if(!/^[a-f0-9]{64}$/.test(id)||!range(node).start||!Number.isInteger(range(node).end))throw new AppError('INVALID');
   for(let parent=node.parentNode;parent;parent=parent.parentNode)if(sourceId(parent)!==undefined)throw new AppError('INVALID');
@@ -63,7 +69,12 @@ function mergeParts(current,previous,next,{root=false}={}){
 }
 export function websiteMarkerShape(html){
  const scopes=[];
- for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){const id=sourceId(node);if(id===undefined)continue;const bounds=range(node),keys=[];
+ for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+  if(linkSource(node)!==undefined){
+   let owner,part;for(let parent=node.parentNode;parent;parent=parent.parentNode){part??=partId(parent);owner??=sourceId(parent);}
+   scopes.push(JSON.stringify(['link',owner,part,linkShape(node)]));continue;
+  }
+  const id=sourceId(node);if(id===undefined)continue;const bounds=range(node),keys=[];
   for(const child of descendants(node)){const part=partId(child);if(part!==undefined)keys.push(part);}
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
   scopes.push(id+':'+attr(node,'data-observanda-source-revision')+':'+JSON.stringify(keys.sort())+':'+JSON.stringify((node.attrs??[]).filter(item=>item.name.startsWith('data-observanda-')).map(item=>[item.name,item.value]).sort()));
@@ -72,9 +83,13 @@ export function websiteMarkerShape(html){
 // Only explicit source permission writes call this. Ordinary opening, preview
 // and publishing read the saved HTML unchanged. Stable component markers let a
 // newly allowed/revoked part change without losing its entry's page placement.
-export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextHtml='',visible=true}){
- const next=partTree(nextHtml),previous=partTree(previousHtml),changes=[];
+export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextHtml='',visible=true,placements=[]}){
+ const next=partTree(nextHtml),previous=partTree(previousHtml),changes=[],links=new Map(placements.filter(item=>item.id===id&&item.link).map(item=>[item.link,item])),projection={};
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+  if(linkSource(node)===id){
+   const loc=location(node);
+   changes.push({start:loc.startOffset,end:loc.endOffset,text:updateEntryLink(node,links.get(attr(node,'data-observanda-link-key')),{revision,visible,html:nextHtml,previousHtml},projection)});continue;
+  }
   if(sourceId(node)!==id)continue;const bounds=range(node),loc=location(node);
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
   if(attr(node,'data-observanda-view')){
