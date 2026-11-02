@@ -10,8 +10,6 @@
   "page": "Pàgina",
   "create": "Lloc web nou",
   "name": "Nom del lloc web",
-  "convert": "Converteix el lloc web existent",
-  "conversion": "Les composicions existents necessiten una conversió explícita per obrir-se com a fitxers web desats. La conversió llegeix la recerca seleccionada una vegada i exclou el contingut privat.",
   "save": "Desa el lloc web",
   "saved": "Lloc web desat.",
   "unsaved": "Canvis del lloc web sense desar",
@@ -60,11 +58,17 @@
   "cancel": "Cancel·la",
   "retry": "Torna-ho a provar",
   "failed": "No s’ha pogut completar l’operació. Es conserven els canvis sense desar.",
-  "noWebsite": "No s’ha obert cap fitxer web desat.",
+  "noWebsite": "Aquest espai de treball no té cap lloc web.",
   "fileTitle": "Pàgina del lloc web",
   "replacement": "Revisa la substitució dels fitxers de destinació existents",
   "conflicts": "La destinació conté fitxers en conflicte. Revisa’n la substitució abans de publicar.",
   "closePreview": "Torna a editar",
   "libraryNotice": "El contingut inserit manté la posició quan canvia la visibilitat.",
-  "pdf": "Desa la pàgina com a PDF"
+  "pdf": "Desa la pàgina com a PDF",
+  "working": "Operació en curs…",
+  "chooseSite": "Trieu un lloc web",
+  "preparing": "S’estan preparant els llocs web desats…",
+  "unavailable": "No s’ha pogut obrir aquest lloc web. Torneu a l’espai de treball per comprovar-lo.",
+  "preparationFailed": "No s’han pogut preparar els llocs web desats. Torneu a l’espai de treball per comprovar l’emmagatzematge i l’accés.",
+  "workspaceCheck": "Obriu l’espai de treball per comprovar si hi ha llocs web desats."
 }

@@ -5,6 +5,91 @@ import path from 'node:path';
 // Exercise the real browser document editor. No research service is provided;
 // the unrelated installed acceptance test must also qualify packaging/storage.
 const id='10000000-0000-4000-8000-000000000001',web=path.resolve('src/web');
+const savedSite={id,name:'Recovered site',revision:'c'.repeat(64),cssPath:'style.css',pages:[{path:'index.html',title:'Home'}]};
+const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><html><body><main><h1>Original saved home</h1></main></body></html>'};
+const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
+
+test('a prepared website opens from saved files without another user action',async({page})=>{
+ const calls=[];
+ await page.exposeFunction('filesAPI',route=>{
+  calls.push(route);
+  switch(route){
+   case '/api/website-files/session':return sessionWith([],{state:'preparing'});
+   case '/api/website-files/preparation':return {preparation:{state:'ready'}};
+   case '/api/website-files/list':return {items:[savedSite],next:null};
+   case '/api/website-files/open':return savedPage;
+   default:throw Error('Unexpected request '+route);
+  }
+ });
+ await mountFilesEditor(page);await expect(page.getByRole('status')).toHaveText('Preparing saved websites…');
+ await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+ await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
+ expect(calls).toEqual(['session','preparation','list','open'].map(op=>'/api/website-files/'+op));
+});
+
+test('the empty workspace creates once, disables actions while writing, and retains a failed form',async({page})=>{
+ let finish,creates=0;
+ await page.exposeFunction('filesAPI',async route=>{
+  if(route==='/api/website-files/session')return sessionWith([],{state:'ready'});
+  if(route==='/api/website-files/create'){
+   creates++;if(creates>1)return savedPage;
+   await new Promise(resolve=>{finish=resolve;});return {errorCode:'UNAVAILABLE',message:'Storage is unavailable.'};
+  }
+  throw Error('Unexpected request '+route);
+ });
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await mountFilesEditor(page);
+ const create=page.getByRole('button',{name:'New website',exact:true});
+ await expect(create).toHaveCount(1);await create.click();
+ await page.getByLabel('Website name').fill('Recovered site');await expect(create).toHaveCount(1);await create.click();
+ await expect(create).toBeDisabled();await expect(page.getByRole('button',{name:'Cancel'})).toBeDisabled();
+ await expect(page.getByLabel('Website name')).toBeDisabled();expect(creates).toBe(1);
+ finish();await expect(page.getByRole('alert')).toHaveText('Storage is unavailable.');
+ await expect(page.getByLabel('Website name')).toHaveValue('Recovered site');expect(errors).toEqual([]);
+ await create.click();await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
+ expect(creates).toBe(2);
+});
+
+test('a missing bookmarked site can be recovered without displaying another site under its name',async({page})=>{
+ const requested='20000000-0000-4000-8000-000000000002',calls=[];
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  calls.push([route,data?.siteId]);
+  if(route==='/api/website-files/session')return sessionWith([savedSite],{state:'ready'});
+  if(route==='/api/website-files/open')return data.siteId===requested?{errorCode:'NOT_FOUND',message:'Missing'}:savedPage;
+  throw Error('Unexpected request '+route);
+ });
+ await mountFilesEditor(page,{hash:'#/websites/'+requested+'/editor'});
+ await expect(page.getByText('This website could not be opened. Return to the workspace to check it.')).toBeVisible();
+ await expect(page.locator('#website-files-canvas')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+ await page.locator('[data-website-file-site]').selectOption(id);
+ await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
+ expect(calls).toEqual([['/api/website-files/session',undefined],['/api/website-files/open',requested],['/api/website-files/open',id]]);
+});
+for(const [state,message] of [
+ ['unprepared','Open the workspace to check for saved websites.'],
+ ['failed','The workspace could not prepare its saved websites. Return to the workspace to check storage and access.']
+]){
+ test('workspace preparation state '+state+' cannot be mistaken for an empty workspace',async({page})=>{
+  const calls=[];
+  await page.exposeFunction('filesAPI',route=>{calls.push(route);return sessionWith([],{state});});
+  await mountFilesEditor(page);await expect(page.getByText(message,{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Retry'})).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+  await expect(page.locator('#website-files-canvas')).toHaveCount(0);
+  expect(calls).toEqual(['/api/website-files/session']);
+ });
+}
+async function mountFilesEditor(page,{resource=()=>'',hash=''}={}){
+ await page.route('http://website.test/**',async route=>{
+  const url=new URL(route.request().url());if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:`<!doctype html><main id="root"></main><script type="module">
+   import {websiteFilesUI} from '/website-files-ui.js';const root=document.querySelector('#root'),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+   const files=websiteFilesUI({api:async(route,data)=>{const response=await window.filesAPI(route,data);if(response?.errorCode)throw Object.assign(Error(response.message),{code:response.errorCode});return response;},esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));root.addEventListener('submit',e=>{e.preventDefault();files.submit(e.target);});await files.load();</script>`});
+  if(url.pathname.startsWith('/api/website-files/preview/'))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
+  const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
+ });
+ await page.goto('http://website.test/'+hash);
+}
 test('visual edits preserve saved HTML, styles and placement and reject outdated drafts',async({page})=>{
  let version=1,html='<!doctype html><html lang="en"><head><title>Observation</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Observation</h1><p>Initial notes</p><section data-observanda-source="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" data-observanda-source-revision="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"><p data-observanda-part="body">Copied text</p><p data-observanda-part="section-1">First release</p></section></main></body></html>',css='h1{color:rgb(12, 34, 56)}';
  const revision=()=>String(version).padStart(64,'a'),site=()=>({id,name:'Observation',revision:revision(),pages:[{path:'index.html',title:'Observation'}],cssPath:'style.css'}),open=()=>({site:site(),path:'index.html',html,css});
@@ -15,14 +100,7 @@ test('visual edits preserve saved HTML, styles and placement and reject outdated
   default:throw Error('Unexpected request '+route);
  }});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.route('http://website.test/**',async route=>{
-  const url=new URL(route.request().url());if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:`<!doctype html><main id="root"></main><script type="module">
-   import {websiteFilesUI} from '/website-files-ui.js';const root=document.querySelector('#root'),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-   const files=websiteFilesUI({api:window.filesAPI,esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));await files.load();</script>`});
-  if(url.pathname.startsWith('/api/website-files/preview/'))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':url.pathname.endsWith('.css')?css:html});
-  const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
- });
- await page.goto('http://website.test/');const canvas=page.frameLocator('#website-files-canvas');await expect(canvas.locator('h1')).toHaveCSS('color','rgb(12, 34, 56)');
+ await mountFilesEditor(page,{resource:url=>url.pathname.endsWith('.css')?css:html});const canvas=page.frameLocator('#website-files-canvas');await expect(canvas.locator('h1')).toHaveCSS('color','rgb(12, 34, 56)');
  const paragraph=canvas.locator('main > p');await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type('Edited on canvas');await expect(paragraph).toHaveText('Edited on canvas');
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');expect(html).toContain('<p>Edited on canvas</p>');expect(html).not.toMatch(/contenteditable|data-observanda-editor/);
  await page.getByRole('button',{name:'CSS',exact:true}).click();await page.getByLabel('CSS',{exact:true}).fill('p{font-weight:700}');await page.getByRole('button',{name:'Preview saved website'}).click();await expect(page.frameLocator('iframe').locator('main > p')).toHaveCSS('font-weight','700');

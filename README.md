@@ -132,7 +132,7 @@ Commercial-print PDF/X export is not implemented. Physical printing and assistiv
 
 Use the visual website editor for a personal site, portfolio, field guide, project journal, teaching resource or documentation website. Build entirely from custom pages, include selected material from several lab books and projects, or combine both.
 
-Each website has its own HTML pages, CSS, assets and publishing destination. Open **Website editor** to work on those files, even when the research databases are unavailable. For a site created with the previous editor, choose **Convert existing website** once while its research sources are available. Conversion keeps the original composition and refuses to import content whose permission cannot be established.
+Each website has its own HTML pages, CSS, assets and publishing destination. Open **Website editor** to work on those files, even when the research databases are unavailable. When you open a workspace with an older website, Observanda prepares its saved HTML, CSS and assets automatically using the publication permissions in that workspace. The editor opens those files as soon as they are ready.
 
 1. In the lab book and entry, choose what may be used on websites and what may be used in PDFs. You can keep a section, attachment or result private while sharing the rest of the entry. Saving those choices prepares the permitted content. Nothing is published by selecting it.
 2. In **Website editor**, choose **Available content** to place the prepared content on a page. You can edit the page visually or edit its HTML and CSS. Changes you make here belong to the website and do not edit the lab book.

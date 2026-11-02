@@ -10,8 +10,6 @@
   "page": "Side",
   "create": "Nytt nettsted",
   "name": "Navn på nettstedet",
-  "convert": "Konverter eksisterende nettsted",
-  "conversion": "Eksisterende nettsider må konverteres uttrykkelig før de åpnes som lagrede nettfiler. Konverteringen leser valgt forskning én gang og utelater privat innhold.",
   "save": "Lagre nettsted",
   "saved": "Nettstedet er lagret.",
   "unsaved": "Ulagrede nettstedsendringer",
@@ -60,11 +58,17 @@
   "cancel": "Avbryt",
   "retry": "Prøv igjen",
   "failed": "Nettstedsoperasjonen kunne ikke fullføres. Ulagrede endringer beholdes.",
-  "noWebsite": "Ingen lagrede nettfiler er åpnet.",
+  "noWebsite": "Det finnes ingen nettsteder i dette arbeidsområdet.",
   "fileTitle": "Nettside",
   "replacement": "Se gjennom erstatning av eksisterende målfiler",
   "conflicts": "Publiseringsmålet har filkonflikter. Gjennomgå erstatning før publisering.",
   "closePreview": "Tilbake til redigering",
   "libraryNotice": "Innsatt innhold beholder plasseringen når synligheten endres.",
-  "pdf": "Lagre siden som PDF"
+  "pdf": "Lagre siden som PDF",
+  "working": "Arbeider …",
+  "chooseSite": "Velg et nettsted",
+  "preparing": "Klargjør lagrede nettsteder …",
+  "unavailable": "Nettstedet kunne ikke åpnes. Gå tilbake til arbeidsområdet for å sjekke det.",
+  "preparationFailed": "De lagrede nettstedene kunne ikke klargjøres. Gå tilbake til arbeidsområdet for å sjekke lagring og tilgang.",
+  "workspaceCheck": "Åpne arbeidsområdet for å se etter lagrede nettsteder."
 }

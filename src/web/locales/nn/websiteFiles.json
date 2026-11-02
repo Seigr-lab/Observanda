@@ -10,8 +10,6 @@
   "page": "Side",
   "create": "Ny nettstad",
   "name": "Namn på nettstaden",
-  "convert": "Konverter eksisterande nettstad",
-  "conversion": "Eksisterande nettsider må konverterast uttrykkeleg før dei blir opna som lagra nettfiler. Konverteringa les vald forsking éin gong og utelèt privat innhald.",
   "save": "Lagre nettstad",
   "saved": "Nettstaden er lagra.",
   "unsaved": "Ulagra nettstadendringar",
@@ -60,11 +58,17 @@
   "cancel": "Avbryt",
   "retry": "Prøv igjen",
   "failed": "Nettstadoperasjonen kunne ikkje fullførast. Ulagra endringar blir tekne vare på.",
-  "noWebsite": "Ingen lagra nettfiler er opna.",
+  "noWebsite": "Dette arbeidsområdet har ingen nettstader.",
   "fileTitle": "Nettside",
   "replacement": "Sjå gjennom erstatning av eksisterande målfiler",
   "conflicts": "Publiseringsmålet har filkonfliktar. Gå gjennom erstatning før publisering.",
   "closePreview": "Tilbake til redigering",
   "libraryNotice": "Innsett innhald held plasseringa når synlegheita endrar seg.",
-  "pdf": "Lagre sida som PDF"
+  "pdf": "Lagre sida som PDF",
+  "working": "Arbeider …",
+  "chooseSite": "Vel ein nettstad",
+  "preparing": "Klargjer lagra nettstader …",
+  "unavailable": "Kunne ikkje opne nettstaden. Gå tilbake til arbeidsområdet for å sjekke han.",
+  "preparationFailed": "Kunne ikkje klargjere dei lagra nettstadene. Gå tilbake til arbeidsområdet for å sjekke lagring og tilgang.",
+  "workspaceCheck": "Opne arbeidsområdet for å sjå etter lagra nettstader."
 }

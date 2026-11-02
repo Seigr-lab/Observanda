@@ -10,8 +10,6 @@
   "page": "Página",
   "create": "Nuevo sitio web",
   "name": "Nombre del sitio web",
-  "convert": "Convertir el sitio web existente",
-  "conversion": "Las composiciones existentes necesitan una conversión explícita para abrirse como archivos web guardados. La conversión lee la investigación seleccionada una vez y excluye el contenido privado.",
   "save": "Guardar sitio web",
   "saved": "Sitio web guardado.",
   "unsaved": "Cambios del sitio web sin guardar",
@@ -60,11 +58,17 @@
   "cancel": "Cancelar",
   "retry": "Reintentar",
   "failed": "No se pudo completar la operación. Se conservan los cambios sin guardar.",
-  "noWebsite": "No se ha abierto ningún archivo web guardado.",
+  "noWebsite": "Este espacio de trabajo no tiene sitios web.",
   "fileTitle": "Página del sitio web",
   "replacement": "Revisar sustitución de los archivos existentes del destino",
   "conflicts": "El destino contiene archivos en conflicto. Revisa su sustitución antes de publicar.",
   "closePreview": "Volver a editar",
   "libraryNotice": "El contenido insertado mantiene su posición cuando cambia su visibilidad.",
-  "pdf": "Guardar página como PDF"
+  "pdf": "Guardar página como PDF",
+  "working": "Operación en curso…",
+  "chooseSite": "Elige un sitio web",
+  "preparing": "Preparando los sitios web guardados…",
+  "unavailable": "No se ha podido abrir este sitio web. Vuelve al espacio de trabajo para comprobarlo.",
+  "preparationFailed": "No se han podido preparar los sitios web guardados. Vuelve al espacio de trabajo para comprobar el almacenamiento y el acceso.",
+  "workspaceCheck": "Abre el espacio de trabajo para comprobar si hay sitios web guardados."
 }

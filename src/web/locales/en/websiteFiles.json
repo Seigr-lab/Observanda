@@ -10,8 +10,6 @@
   "page": "Page",
   "create": "New website",
   "name": "Website name",
-  "convert": "Convert existing website",
-  "conversion": "Existing website compositions need an explicit conversion before opening as saved website files. Conversion reads the selected research once and excludes private content.",
   "save": "Save website",
   "saved": "Website saved.",
   "unsaved": "Unsaved website changes",
@@ -60,11 +58,17 @@
   "cancel": "Cancel",
   "retry": "Retry",
   "failed": "The website operation could not be completed. Your unsaved changes are retained.",
-  "noWebsite": "No saved website files have been opened.",
+  "noWebsite": "There are no websites in this workspace.",
   "fileTitle": "Website page",
   "replacement": "Review replacing existing destination files",
   "conflicts": "The destination has conflicting files. Review replacement before publishing.",
   "closePreview": "Return to editing",
   "libraryNotice": "Inserted content keeps its place when its visibility changes.",
-  "pdf": "Save page as PDF"
+  "pdf": "Save page as PDF",
+  "working": "Working…",
+  "chooseSite": "Choose a website",
+  "preparing": "Preparing saved websites…",
+  "unavailable": "This website could not be opened. Return to the workspace to check it.",
+  "preparationFailed": "The workspace could not prepare its saved websites. Return to the workspace to check storage and access.",
+  "workspaceCheck": "Open the workspace to check for saved websites."
 }
