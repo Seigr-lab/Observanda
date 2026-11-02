@@ -1,6 +1,7 @@
 // Derive query content from a pinned original one owned value at a time. Large
 // collections are retained as references, never accumulated into another record.
 import {SOURCE_PUBLICATION_VERSION} from './web/source-publication-permissions.js';
+import {publicationPartAllowed} from './web/record-publication-privacy.js';
 import {RecordContainerBuilder} from './record-tree-values.js';
 import {retainRecordText} from './record-text-retention.js';
 import {recordQueryDocument,recordReferenceTargets} from './web/record-query.js';
@@ -25,6 +26,9 @@ const collections=['sections','contributors','relations','figures','attachments'
 const depends=(collection,...fields)=>({collection:Array.isArray(collection)?collection:[collection],fields});
 export async function retainedQueryProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences}={}){
  if(previous&&(await previous.tree.selected(previous.root,['publicationDescriptor','sourcePermissionVersion'])).value!==SOURCE_PUBLICATION_VERSION)previous=null;
+ // Every public projection depends on consent, including collection-derived
+ // selectors and inventory rows that otherwise retain their old references.
+ if(previous&&await document.reference(['publication'],{signal})!==await previous.document.reference(['publication'],{signal}))previous=null;
  const {tree,blocks}=document,header={},reuse=recordProjectionReuse(document,previous,{signal});
  for(const name of await tree.propertyNames(document.root)){
   signal?.throwIfAborted();
@@ -91,38 +95,39 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const images=await filtered(['publicationCard','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image',item=>item);
  const sharedImages=await filtered(['publicationDescriptor','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image'&&item.share,item=>item);
  const grouped=(path,owners,groups)=>reuse(path,owners,()=>groupRecordProjection(document,previous,{path,groups},{signal}));
+ const allowed=key=>publicationPartAllowed(header,key);
  const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body','share'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
   {collection:['sections'],fields:['id','title','share'],project:item=>item.share===false?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
-  {collection:['figures'],fields:['id','title'],project:item=>[{version:1,kind:'figure',id:item.id,label:item.title}]},
+  {collection:['figures'],fields:['id','title'],project:item=>allowed('figures')?[{version:1,kind:'figure',id:item.id,label:item.title}]:[]},
   {collection:['attachments'],fields:['id','kind','caption','alt','share'],project:item=>item.kind==='image'&&item.share?[{version:1,kind:'figure',id:item.id,label:item.caption||item.alt}]:[]},
-  {field:['body'],project:body=>bookSelectors({body})},
+  {field:['body'],project:body=>allowed('body')?bookSelectors({body}):[]},
   {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:bookSelectors({body:item.body})}
  ]);
  const mentions=body=>proseReferences(body).map(target=>({role:'mention',target}));
  const relations=()=>grouped(['publicationDescriptor','relations'],[depends('relations','role','target'),depends('sections','body','share'),['body']],[
-  {collection:['relations'],fields:['role','target'],project:item=>[{role:item.role??'related',target:item.target}]},
-  {field:['body'],project:mentions},
+  {collection:['relations'],fields:['role','target'],project:item=>allowed('relations')?[{role:item.role??'related',target:item.target}]:[]},
+  {field:['body'],project:body=>allowed('body')?mentions(body):[]},
   {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:mentions(item.body)}
  ]);
  const tags=await document.reference(['tags'],{signal});
  const descriptor=await object({...plain.publicationDescriptor,revision},{
-  tags,
-  references:await grouped(['publicationDescriptor','references'],[['attempt']],attemptReferenceGroups(ref=>{if(ref.kind!=='record')return [];const {workspaceId,kind,id,revision}=ref;return [{workspaceId,kind,id,revision}];})),
+  tags:allowed('tags')?tags:await tree.retain([]),
+  references:allowed('attempt')?await grouped(['publicationDescriptor','references'],[['attempt']],attemptReferenceGroups(ref=>{if(ref.kind!=='record')return [];const {workspaceId,kind,id,revision}=ref;return [{workspaceId,kind,id,revision}];})):await tree.retain([]),
   attachments:sharedImages,selectors:await selectors(),relations:await relations(),
   media:await filtered(['publicationDescriptor','media'],'attachments',['id','kind','share'],item=>item.share,item=>item)
  });
  const inventory=plain.editionInventory,choice=inventory.choice;
  const inventoryRoot=await object(inventory,{
   choice:await object(choice,{
-   fields:header.template?await mapped(['editionInventory','choice','fields'],['template','fields'],['key'],item=>item.key):await tree.retain([]),
+   fields:header.template&&allowed('template')?await mapped(['editionInventory','choice','fields'],['template','fields'],['key'],item=>item.key):await tree.retain([]),
    sections:await filtered(['editionInventory','choice','sections'],'sections',['id','share'],item=>item.share!==false,item=>item.id),
    attachments:await filtered(['editionInventory','choice','attachments'],'attachments',['id','share'],item=>item.share,item=>item.id),
-   figures:await mapped(['editionInventory','choice','figures'],'figures',['id'],item=>({id:item.id,data:false}))
+   figures:allowed('figures')?await mapped(['editionInventory','choice','figures'],'figures',['id'],item=>({id:item.id,data:false})):await tree.retain([])
   }),
   sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],item=>item.share!==false,({id,title})=>({id,title})),
-  fields:header.template?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
+  fields:header.template&&allowed('template')?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
   attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
-  figures:await mapped(['editionInventory','figures'],'figures',['id','title'],item=>item)
+  figures:allowed('figures')?await mapped(['editionInventory','figures'],'figures',['id','title'],item=>item):await tree.retain([])
  });
  const root=await object(plain,{
   tags,referenceTargets,cardSources:await object(plain.cardSources,cardSources),searchText:retainedText??await reuse(['searchText'],[['title'],['body'],['outcome'],['tags'],depends('sections','title','body'),depends('contributors','name','role'),['template'],['attempt'],['results']],()=>retainRecordText(blocks,searchText(),{signal})),

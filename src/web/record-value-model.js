@@ -1,4 +1,5 @@
 import {revisionId} from './revision-model.js';
+import {validPublicationPrivacy} from './record-publication-privacy.js';
 import {validRecordDate} from './record-date.js';
 import {STATUSES,RECORD_TYPES} from './record-types.js';
 import {researchId,validContributors} from './record-model.js';
@@ -9,7 +10,7 @@ import {attemptValueField,validAttemptValue} from './record-attempt-value.js';
 import {resultValueId} from './record-result-value.js';
 import {validResultStatement} from './result-statements.js';
 import {validFigureCopies} from './record-figure-copy-model.js';
-export const recordValueFields=['title','type','status','outcome','occurredOn','share'];
+export const recordValueFields=['title','type','status','outcome','occurredOn','share','sharePdf','publication'];
 export const contributorValueId=field=>typeof field==='string'&&field.startsWith('contributor:')&&researchId(field.slice(12))?field.slice(12):null;
 export const relationValueId=field=>typeof field==='string'&&field.startsWith('relation:')&&researchId(field.slice(9))?field.slice(9):null;
 export const mediaValueId=field=>typeof field==='string'&&field.startsWith('media:')&&researchId(field.slice(6))?field.slice(6):null;
@@ -34,6 +35,7 @@ export function validRecordValue(value,field){
  if(field==='status')return STATUSES.includes(item);
  if(field==='outcome')return item===null||typeof item==='string'&&item.length<=500;
  if(field==='occurredOn')return validRecordDate(item,{draft:true});
- if(field==='share')return typeof item==='boolean';
+ if(field==='share'||field==='sharePdf')return typeof item==='boolean';
+ if(field==='publication')return item===null||validPublicationPrivacy(item);
  return validRecordValueField(field)&&(item===null||typeof item==='boolean'||typeof item==='string');
 }

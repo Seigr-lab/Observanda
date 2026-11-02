@@ -6,6 +6,10 @@ import {SOURCE_PUBLICATION_VERSION,sourceRecordAllowed} from './web/source-publi
 const revoked=()=>{throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');};
 function assertAllowed(retained,current,metadata){
  if(!current||!sourceRecordAllowed(current,metadata))revoked();
+ // This branch receives the current original when its revision has changed.
+ // A previously prepared edition cannot prove that its copied descendants
+ // exclude a newly withheld category. Require a new edition in that case.
+ if(current.publication?.website&&Object.values(current.publication.website).some(value=>value===false))revoked();
  const sections=new Set((current.sections??[]).filter(section=>section.share===false).map(section=>section.id));
  if((retained.selection?.sections??[]).some(id=>sections.has(id))||(retained.selectors??[]).some(selector=>selector.kind==='section'&&sections.has(selector.sourceId??selector.id)))revoked();
  const media=new Set((current.attachments??[]).filter(item=>item.share===false).map(item=>item.id));

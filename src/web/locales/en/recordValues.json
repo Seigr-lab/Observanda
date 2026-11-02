@@ -142,5 +142,21 @@
  "copyPlotBack": "Back to saved figures",
  "copyPanelPosition": "Go to panel number",
  "copyPanelRange": "Panels {first}–{last} of {total}",
- "resultChoosePanel": "Choose panel"
+ "resultChoosePanel": "Choose panel",
+ "publication": "Publication privacy",
+ "publicationHelp": "Select which parts of this entry may be included in websites and PDFs. Saving visibility changes updates copies already placed in those documents.",
+ "publicationSections": "Writing sections and attachments also have their own visibility controls. The lab book and entry must allow publication.",
+ "publication_body": "Summary / context",
+ "publication_outcome": "Outcome",
+ "publication_contributors": "Contributors",
+ "publication_tags": "Tags",
+ "publication_figures": "Figures",
+ "publication_results": "Results",
+ "publication_attempt": "Attempt history",
+ "publication_template": "Template fields",
+ "publication_relations": "Research links",
+ "publication_website": "Website",
+ "publication_pdf": "PDF",
+ "sharePdf": "Available for PDF",
+ "bookSharePdf": "Allow PDF publication from this lab book"
 }

@@ -1,4 +1,5 @@
 import {recordValueLabel as label} from './record-value-controls.js';
+import {PUBLICATION_PARTS,defaultPublicationPrivacy} from './record-publication-privacy.js';
 import {recordPreparationUI} from './record-preparation-ui.js';
 import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
@@ -48,18 +49,20 @@ export function recordValuesView(options,lifecycle){
     return field(esc(text('contributorName')),'<input data-contributor-value="name" required value="'+esc(retainedContributor.name)+'"'+disabled+'>')+field(esc(text('contributorRole')),'<input data-contributor-value="role" value="'+esc(retainedContributor.role)+'"'+disabled+'>')+(removable?'<label><input type="checkbox" data-contributor-remove'+(removed?' checked':'')+'> '+esc(text('removeContributor'))+'</label><p class="muted">'+esc(text('removeContributorHelp'))+'</p>':'');
    }
    if(name==='occurredOn')return recordDateFields(item,helpers);
+   if(name==='publication')return '<p>'+esc(text('publicationHelp'))+'</p><fieldset><legend>'+esc(text('publication'))+'</legend>'+['website','pdf'].map(target=>'<fieldset><legend>'+esc(text('publication_'+target))+'</legend>'+PUBLICATION_PARTS.map(key=>'<label class="checkbox"><input type="checkbox" data-publication-target="'+target+'" data-publication-part="'+key+'"'+(item?.[target]?.[key]!==false?' checked':'')+'>'+esc(text('publication_'+key))+'</label>').join('')+'</fieldset>').join('')+'</fieldset><p class="muted">'+esc(text('publicationSections'))+'</p>';
    let control;
    if(choices.supported(base.definition))control=choices.fields(base,value,changed);
    else if(base.definition)control=templateFieldInput(base.definition,item,{esc,attrs:'data-record-value'});
    else if(name==='type')control='<select data-record-value>'+RECORD_TYPES.map(type=>option(type.id,recordTypeLabel(type.id),item)).join('')+'</select><p class="muted">'+esc(text('typeHelp'))+'</p>';
    else if(name==='status')control='<select data-record-value>'+STATUSES.map(id=>option(id,text('status_'+id),item)).join('')+'</select>';
-   else if(name==='share')control='<select data-record-value>'+option('false',text('private'),String(item))+option('true',text('public'),String(item))+'</select>';
+   else if(name==='share'||name==='sharePdf')control='<select data-record-value>'+option('false',text('private'),String(item===true))+option('true',text('public'),String(item===true))+'</select>';
    else if(name==='outcome')control='<textarea data-record-value maxlength="500" rows="3">'+esc(item??'')+'</textarea>';
    else control='<input data-record-value required maxlength="180" value="'+esc(item??'')+'">';
    return field(esc(label(name,base.definition)),control);
   },
-  preview:base=>resultValueId(base.field)?results.preview(base):attemptValueField(base.field)?attempts.preview(base):figureValueId(base.field)?figures.preview(base):mediaValueId(base.field)?media.preview(base):relationValueId(base.field)?relations.preview(base):contributorValueId(base.field)?'<p>'+esc(base.value.value?base.value.value.name+(base.value.value.role?' · '+base.value.value.role:''):text('contributorAbsent'))+'</p>':'<p>'+esc(display(base))+'</p>',
+  preview:base=>base.field==='publication'?'<ul>'+['website','pdf'].map(target=>'<li>'+esc(text('publication_'+target))+': '+PUBLICATION_PARTS.filter(key=>base.value.value?.[target]?.[key]!==false).map(key=>esc(text('publication_'+key))).join(', ')+'</li>').join('')+'</ul>':resultValueId(base.field)?results.preview(base):attemptValueField(base.field)?attempts.preview(base):figureValueId(base.field)?figures.preview(base):mediaValueId(base.field)?media.preview(base):relationValueId(base.field)?relations.preview(base):contributorValueId(base.field)?'<p>'+esc(base.value.value?base.value.value.name+(base.value.value.role?' · '+base.value.value.role:''):text('contributorAbsent'))+'</p>':'<p>'+esc(display(base))+'</p>',
   input(element,base,value){
+   if(base?.field==='publication'&&element.hasAttribute('data-publication-part')){value.value??=defaultPublicationPrivacy();value.value[element.dataset.publicationTarget][element.dataset.publicationPart]=element.checked;return true;}
    if(resultValueId(base?.field))return results.input(element);
    if(attemptValueField(base?.field))return attempts.input(element);
    if(figureValueId(base?.field))return figures.input(element);
@@ -76,7 +79,7 @@ export function recordValuesView(options,lifecycle){
    }
    if(base.field==='occurredOn'){const record={occurredOn:value.value};if(!updateRecordDate(element,record,helpers))return false;value.value=record.occurredOn;return true;}
    if(!element.hasAttribute('data-record-value'))return false;
-   value.value=base.definition?templateInputValue(base.definition,element.value):base.field==='share'?element.value==='true':base.field==='outcome'&&!element.value?null:element.value;return true;
+   value.value=base.definition?templateInputValue(base.definition,element.value):(base.field==='share'||base.field==='sharePdf')?element.value==='true':base.field==='outcome'&&!element.value?null:element.value;return true;
   },
   validate(dialog,base,value){if(resultValueId(base.field))return results.validate();if(attemptValueField(base.field))return attempts.validate();if(figureValueId(base.field))return figures.validate();if(relationValueId(base.field))return relations.validate(dialog,base,value);if(base.field!=='occurredOn')return true;const issue=recordDateIssue(value.value);if(issue){dialog.querySelector('[data-record-date-error]').textContent=dateIssueLabel(issue);return false;}return true;}
  };

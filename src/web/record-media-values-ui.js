@@ -12,9 +12,9 @@ export function recordMediaView({esc,field}){
    return '<p>'+esc(text('mediaHelp'))+'</p>'+field(esc(text('mediaCaption')),'<textarea data-media-detail="caption" rows="2" maxlength="1500">'+esc(item.caption)+'</textarea>')+
     field(esc(text(base.definition.mediaKind==='image'?'mediaAlt':'mediaDescription')),'<textarea data-media-detail="alt" rows="3" maxlength="1500">'+esc(item.alt)+'</textarea>')+
     field(esc(text('mediaTranscript')),'<textarea data-media-detail="transcript" rows="6" maxlength="60000">'+esc(item.transcript)+'</textarea>')+
-    '<label class="checkbox"><input type="checkbox" data-media-detail="share"'+(item.share?' checked':'')+'><span>'+esc(text('mediaShare'))+'</span></label><p class="muted">'+esc(text('mediaShareHelp'))+'</p>';
+    '<label class="checkbox"><input type="checkbox" data-media-detail="sharePdf"'+(item.sharePdf?' checked':'')+'>'+esc(text('sharePdf'))+'</label><label class="checkbox"><input type="checkbox" data-media-detail="share"'+(item.share?' checked':'')+'><span>'+esc(text('mediaShare'))+'</span></label><p class="muted">'+esc(text('mediaShareHelp'))+'</p>';
   },
-  input(element,base,value){const key=element.dataset.mediaDetail;if(!key)return false;value.value[key]=key==='share'?element.checked:element.value;return true;},
+  input(element,base,value){const key=element.dataset.mediaDetail;if(!key)return false;value.value[key]=['share','sharePdf'].includes(key)?element.checked:element.value;return true;},
   preview(base){const item=base.value.value;return '<dl>'+['caption','alt','transcript'].map(key=>'<dt>'+esc(text({caption:'mediaCaption',alt:'mediaDescription',transcript:'mediaTranscript'}[key]))+'</dt><dd class="result-statement-text">'+esc(item[key]||text('empty'))+'</dd>').join('')+'<dt>'+esc(text('mediaShare'))+'</dt><dd>'+esc(text(item.share?'yes':'no'))+'</dd></dl>';}
  };
 }

@@ -19,6 +19,7 @@ export function validEditionSelection(value){
  return Array.isArray(value.records)&&Array.isArray(notes)&&notes.length<=10000&&notes.every(r=>exact(r,['recordId','target','statement'])&&researchId(r.recordId)&&validTarget(r.target)&&typeof r.statement==='string'&&r.statement.trim().length>0&&r.statement.length<=2000)&&new Set(notes.map(editionAvailabilityKey)).size===notes.length;
 }
 export function defaultEditionRecord(record,revision){
+ record=sourcePublicationRecord(record);
  return {id:record.id,revision,include:record.share===true,body:true,sections:publicRecordSections(record).map(s=>s.id),fields:(record.template?.fields??[]).map(f=>f.key),attachments:record.attachments.filter(a=>a.share).map(a=>a.id),figures:record.figures.map(f=>({id:f.id,data:false}))};
 }
 // Work on an edition derivative only. The original and its revision remain

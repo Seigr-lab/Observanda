@@ -15,11 +15,11 @@ export class LabBookSettings{
  async save(storage,command,{check=async()=>{},stopJobs=async()=>{}}={}){
   if(!command||Object.keys(command).some(key=>!['book','etag','id','configurationDraft','configurationPin'].includes(key))||!researchId(command.id)||!revisionId(command.etag))throw new AppError('INVALID');
   const {book,id,etag}=command,selected=command.configurationDraft!==undefined||command.configurationPin!==undefined;
-  if(!book||!['configuration,id,projectId,title',...(selected?['id,projectId,title']:[])].includes(Object.keys(book).filter(key=>key!=='share').sort().join())||Object.hasOwn(book,'share')&&typeof book.share!=='boolean'||book.id!==storage.labBookId||book.projectId!==this.project.projectId||!selected&&!validConfiguration(book.configuration)&&!validConfigurationReference(book.configuration))throw new AppError('INVALID');
+  if(!book||!['configuration,id,projectId,title',...(selected?['id,projectId,title']:[])].includes(Object.keys(book).filter(key=>!['share','sharePdf'].includes(key)).sort().join())||['share','sharePdf'].some(key=>Object.hasOwn(book,key)&&typeof book[key]!=='boolean')||book.id!==storage.labBookId||book.projectId!==this.project.projectId||!selected&&!validConfiguration(book.configuration)&&!validConfigurationReference(book.configuration))throw new AppError('INVALID');
   validateStorageName(book.title);await check();
   const receipt=await this.renames.read(id),current=await storage.outline(),name=current.metadata.notebooks[0].title;
   if(receipt||name!==book.title){
-   const permission=Object.hasOwn(book,'share')?{share:book.share}:{};
+   const permission=Object.fromEntries(['share','sharePdf'].filter(key=>Object.hasOwn(book,key)).map(key=>[key,book[key]]));
    let settings={etag,configuration:book.configuration,...permission};
    if(selected){
     const input=digest(serialize({etag,book,draft:command.configurationDraft,pin:command.configurationPin}));

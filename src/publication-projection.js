@@ -66,7 +66,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   if(publicationTarget&&(workspaceContent||singlePage||designTarget||designPageId||!entryDestinations))throw new AppError('INVALID');
   if(entryDestinations&&!publicationTarget&&(!workspaceContent||!singlePage||!designTarget))throw new AppError('INVALID');
   if(selection.recordCards&&!publicationTarget&&(!entryDestinations||!workspaceContent||!singlePage))throw new AppError('INVALID');
-  selection={...selection,notebooks:selection.notebooks.filter(n=>n.share!==false),entries:selection.entries.filter(e=>e.share===true&&selection.notebooks.some(n=>n.id===e.notebookId&&n.share!==false)).map(sourcePublicationRecord)};
+  selection={...selection,notebooks:selection.notebooks.filter(n=>n.share!==false),entries:selection.entries.filter(e=>e.share===true&&selection.notebooks.some(n=>n.id===e.notebookId&&n.share!==false)).map(record=>sourcePublicationRecord(record))};
   const pageTarget=publicationTarget??designTarget,paged=singlePage||!!publicationTarget;
   const destinations=entryDestinations??selection.entries;
   const links={...selection,entries:destinations};

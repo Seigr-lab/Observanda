@@ -1,4 +1,5 @@
 import {validTemplateLink} from './web/website-template-inheritance.js';
+import {validPublicationPrivacy} from './web/record-publication-privacy.js';
 import {isConfigurationReference,validConfigurationReference} from './web/configuration-reference.js';
 import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './web/website-item-validation.js';
@@ -44,7 +45,9 @@ const id = value => typeof value === 'string' && uuid.test(value);
 
 function checkRecords(book,records,unique,check){
   for (const e of records) {
-    if (!keys(e, ['id', 'notebookId', 'type', 'title', 'body', ...(book.formatVersion>=21&&Object.hasOwn(e??{},'results')?['results']:[]), ...(book.formatVersion>=21&&Object.hasOwn(e??{},'attempt')?['attempt']:[]), ...(book.formatVersion>=19&&Object.hasOwn(e??{},'outcome')?['outcome']:[]), ...(book.formatVersion>=15&&Object.hasOwn(e??{},'template')?['template']:[]), ...(book.formatVersion>=13?['contributors','relations']:['author']), 'tags', 'occurredOn', 'createdAt', 'updatedAt', 'share', ...(book.formatVersion>=14?['figures']:['chart']), ...(book.formatVersion >= 2 ? ['status', 'sections', 'attachments'] : [])])) { check(false, 'entry', e?.id); continue; }
+    if (!keys(e, ['id', 'notebookId', 'type', 'title', 'body', ...(book.formatVersion>=21&&Object.hasOwn(e??{},'sharePdf')?['sharePdf']:[]), ...(book.formatVersion>=21&&Object.hasOwn(e??{},'publication')?['publication']:[]), ...(book.formatVersion>=21&&Object.hasOwn(e??{},'results')?['results']:[]), ...(book.formatVersion>=21&&Object.hasOwn(e??{},'attempt')?['attempt']:[]), ...(book.formatVersion>=19&&Object.hasOwn(e??{},'outcome')?['outcome']:[]), ...(book.formatVersion>=15&&Object.hasOwn(e??{},'template')?['template']:[]), ...(book.formatVersion>=13?['contributors','relations']:['author']), 'tags', 'occurredOn', 'createdAt', 'updatedAt', 'share', ...(book.formatVersion>=14?['figures']:['chart']), ...(book.formatVersion >= 2 ? ['status', 'sections', 'attachments'] : [])])) { check(false, 'entry', e?.id); continue; }
+    if(Object.hasOwn(e,'sharePdf'))check(typeof e.sharePdf==='boolean','PDF availability',e.id);
+    if(Object.hasOwn(e,'publication'))check(validPublicationPrivacy(e.publication),'publication privacy',e.id);
     if(Object.hasOwn(e,'attempt'))check(validAttempt(e.attempt),'attempt',e.id);
     if(Object.hasOwn(e,'results'))check(validResults(e.results),'analysis results',e.id);
     check(unique(e) && book.notebooks.some(n => n?.id === e.notebookId), 'notebook', e.id);
@@ -67,12 +70,12 @@ function checkRecords(book,records,unique,check){
     if (book.formatVersion >= 2) {
       check(STATUSES.includes(e.status), 'status', e.id);
       check(book.formatVersion>=17||(e.type!=='run'&&!['failed','incomplete'].includes(e.status)&&!(Array.isArray(e.relations)?e.relations:[]).some(r=>r?.target?.revision)&&![e.body,...(Array.isArray(e.sections)?e.sections:[]).map(s=>s?.body)].some(value=>validProse(value)&&proseReferences(value).some(ref=>ref.revision))), 'revision-aware record format',e.id);
-      check(Array.isArray(e.sections) && (book.formatVersion>=21 || e.sections.length <= 30) && e.sections.every(s => keys(s, ['id', 'title', 'body',...(book.formatVersion>=21&&Object.hasOwn(s??{},'share')?['share']:[])]) && (!Object.hasOwn(s,'share')||typeof s.share==='boolean') && unique(s) && text(s.title, 160, true) && (book.formatVersion>=14?validProse(s.body):text(s.body, 60000))), 'sections', e.id);
+      check(Array.isArray(e.sections) && (book.formatVersion>=21 || e.sections.length <= 30) && e.sections.every(s => keys(s, ['id', 'title', 'body',...(book.formatVersion>=21?['share','sharePdf'].filter(key=>Object.hasOwn(s??{},key)):[])]) && ['share','sharePdf'].every(key=>!Object.hasOwn(s,key)||typeof s[key]==='boolean') && unique(s) && text(s.title, 160, true) && (book.formatVersion>=14?validProse(s.body):text(s.body, 60000))), 'sections', e.id);
       const attachmentIds = new Set();
       check(Array.isArray(e.attachments) && (book.formatVersion>=21 || e.attachments.length <= 30) && e.attachments.every(a => {
-        if (!keys(a, ['id', 'kind', 'caption', 'alt', 'transcript', 'share']) || !id(a.id) || attachmentIds.has(a.id)) return false;
+        if (!keys(a, ['id', 'kind', 'caption', 'alt', 'transcript', 'share',...(book.formatVersion>=21&&Object.hasOwn(a??{},'sharePdf')?['sharePdf']:[])]) || !id(a.id) || attachmentIds.has(a.id)) return false;
         attachmentIds.add(a.id);
-        return ['image', 'video', 'audio'].includes(a.kind) && text(a.caption, 1500) && text(a.alt, 1500) && text(a.transcript, 60000) && typeof a.share === 'boolean';
+        return ['image', 'video', 'audio'].includes(a.kind) && text(a.caption, 1500) && text(a.alt, 1500) && text(a.transcript, 60000) && typeof a.share === 'boolean'&&(!Object.hasOwn(a,'sharePdf')||typeof a.sharePdf==='boolean');
       }), 'attachments', e.id);
     }
     if(book.formatVersion>=14)check(Array.isArray(e.figures)&&e.figures.every(f=>validFigure(f))&&new Set(figureTargets(e.figures).map(f=>f.id)).size===figureTargets(e.figures).length, 'figures', e.id);
@@ -141,7 +144,7 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
   for (const p of book.projects) check(keys(p, book.formatVersion === 1 ? ['id', 'title', 'description'] : ['id', 'title', 'description', 'share', 'logoId',...(book.formatVersion>=15?['parentId','kind'].filter(k=>Object.hasOwn(p??{},k)):[]),...(book.formatVersion>=16&&Object.hasOwn(p??{},'tools')?['tools']:[]),...(book.formatVersion>=21&&Object.hasOwn(p??{},'labBookTemplate')?['labBookTemplate']:[])]) && (book.formatVersion === 1 || (typeof p.share === 'boolean' && (p.logoId === null || id(p.logoId)))) && unique(p) && text(p.title, 160, true) && text(p.description, 1500), 'project', p?.id);
   check(validHierarchy(book.projects), 'structure hierarchy');
   for(const p of book.projects){if(Object.hasOwn(p??{},'labBookTemplate'))check(configurationReferences&&isConfigurationReference(p.labBookTemplate?.configuration)?keys(p.labBookTemplate,['name','configuration'])&&text(p.labBookTemplate.name,160,true)&&validConfigurationReference(p.labBookTemplate.configuration,{workspaceId:book.id,projectId:p.id,notebookId:null,slot:'labBookTemplate'}):validLabBookTemplate(p.labBookTemplate),'project lab-book template',p.id);if(Object.hasOwn(p??{},'tools'))check(validProjectTools(p.tools),'project tools',p.id);if(Object.hasOwn(p??{},'parentId'))check(p.parentId===null||id(p.parentId),'parent',p.id);if(Object.hasOwn(p??{},'kind'))check(text(p.kind,80,true),'kind',p.id);}
-  for (const n of book.notebooks) check(keys(n, ['id', 'projectId', 'title',...(book.formatVersion>=15&&Object.hasOwn(n??{},'configuration')?['configuration']:[]),...(book.formatVersion>=21&&Object.hasOwn(n??{},'share')?['share']:[])]) && (!Object.hasOwn(n,'share')||typeof n.share==='boolean') && unique(n) && book.projects.some(p => p?.id === n.projectId) && text(n.title, 160, true), 'notebook', n?.id);
+  for (const n of book.notebooks) check(keys(n, ['id', 'projectId', 'title',...(book.formatVersion>=15&&Object.hasOwn(n??{},'configuration')?['configuration']:[]),...(book.formatVersion>=21?['share','sharePdf'].filter(key=>Object.hasOwn(n??{},key)):[])]) && ['share','sharePdf'].every(key=>!Object.hasOwn(n,key)||typeof n[key]==='boolean') && unique(n) && book.projects.some(p => p?.id === n.projectId) && text(n.title, 160, true), 'notebook', n?.id);
   for(const n of book.notebooks)if(Object.hasOwn(n??{},'configuration'))check(configurationReferences&&isConfigurationReference(n.configuration)?validConfigurationReference(n.configuration,{workspaceId:book.id,projectId:n.projectId,notebookId:n.id,slot:'configuration'}):validConfiguration(n.configuration),'notebook configuration',n.id);
   checkRecords(book,book.entries,unique,check);
   if (book.formatVersion >= 2) {

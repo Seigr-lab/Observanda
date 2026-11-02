@@ -12,7 +12,7 @@ import {attemptDocumentHeader,validateAttemptDocument} from './record-attempt-do
 import {resultDocumentHeader,validateResultDocument} from './record-result-document.js';
 
 const collections=['sections','contributors','relations','figures','attachments','tags'];
-const ordinaryDetails=new Set(['title','status','outcome','occurredOn','share','updatedAt']);
+const ordinaryDetails=new Set(['title','status','outcome','occurredOn','share','sharePdf','publication','updatedAt']);
 const invalid=(field,recordId)=>{throw new AppError('INVALID',[{field,recordId}]);};
 // Only the admitted current original can prove unchanged owners. Detail and
 // result edits preserve other collections; changed results receive independent
