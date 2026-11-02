@@ -9,7 +9,7 @@ import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,showPageChecks} from './website-files-dialogs.js';
 import {editWebsiteEquation} from './website-files-equation.js';
-import {bindSavedLinks} from './website-files-navigation.js';
+import {bindSavedLinks,openSavedPreview} from './website-files-navigation.js';
 import {enhanceSavedPreview} from './website-files-preview.js';
 import {bindWebsiteVisual} from './website-files-visual.js';
 import {websiteHierarchy,websiteLayerAt,movableWebsiteLayer,websiteLayerMove} from './website-files-hierarchy.js';
@@ -70,21 +70,25 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   insert:selection=>insertContent('insert-source',selection),
   insertMany:selection=>insertContent('insert-sources',selection),
   async mutatePlacement(operation,data){
-   await checkPlacementRevision(data.expectedRevision);
+   const targetSite=data.siteId??siteId(),currentSite=siteId();
+   if(targetSite===currentSite)await checkPlacementRevision(data.expectedRevision);
    const currentPath=opened.path;
-   const result=await request('library/'+operation+'-placement',{...data,siteId:siteId()});
-   adopt(result.path===currentPath?result:await request('open',{siteId:siteId(),path:currentPath}));
+   const result=await request('library/'+operation+'-placement',{...data,siteId:targetSite});
+   if(targetSite!==currentSite)return;
+   adopt(result.path===currentPath?result:await request('open',{siteId:currentSite,path:currentPath}));
    render();
   },
-  async jumpPlacement({path,blockPath,expectedRevision,sourceId}){
-   await checkPlacementRevision(expectedRevision);
-   const page=await request('open',{siteId:siteId(),path});
+  async jumpPlacement({siteId:targetSite=siteId(),path,blockPath,expectedRevision,sourceId}){
+   if(targetSite===siteId())await checkPlacementRevision(expectedRevision);
+   else if(!await beforeLeave(true))return false;
+   const page=await request('open',{siteId:targetSite,path});
    if(page.site.revision!==expectedRevision)throw Error(tr('changed'));
    if(blockPath!==null){
     const node=blockAt(websiteHTML(page.html),blockPath);
     if(!node||node.dataset.observandaSource!==sourceId&&node.dataset.observandaLink!==sourceId)throw Error(tr('changed'));
    }
-   adopt(page);mode='visual';selected=null;locatedPlacement=blockPath;render();
+   adopt(page);mode='visual';selected=null;locatedPlacement=blockPath;
+   history.replaceState(history.state,'',fileRoute(targetSite));render();
    if(blockPath===null)notify(tr('pickerHeadUse',{page:page.path}));
   }
  });
@@ -310,10 +314,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+'</div><iframe id="website-files-preview" class="website-files-canvas" title="'+esc(tr('preview'))+'" sandbox="allow-same-origin"></iframe>';
   else body=editorView();
   const toolbar=form||stale?'':(opened?extraTools('chooseSite',siteSelector()):siteSelector())+(opened?pageToolbar():'');
-  return '<fieldset class="website-file-controls" data-website-file-controls><header><h1>'+esc(title)+'</h1>'+headerActions+'</header>'+
-   (toolbar?'<div class="website-files-toolbar">'+toolbar+'</div>':'')+
+  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><h1>'+esc(title)+'</h1><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'</header>'+
+   (toolbar?'<div class="website-files-toolbar website-page-controls">'+toolbar+'</div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
-   '<p class="website-files-status" role="status" data-website-files-status></p>'+
    button('reopen','reopen','data-website-files-reopen '+(stale?'':'hidden'))+body+'</fieldset>';
  }
  function formView(){
@@ -324,7 +327,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
  }
  function editorView(){
-  const tools=['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('');
+  const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes='<label>'+esc(tr('viewport'))+' <select data-website-file-viewport>'+['desktop','tablet','phone'].map(key=>'<option value="'+key+'" '+(viewport===key?'selected':'')+'>'+esc(tr(key))+'</option>').join('')+'</select></label>';
   const toolbar='<div class="website-files-toolbar" role="group" aria-label="'+esc(tr('title'))+'">'+history+extraTools('title',tools+button('menu','menu')+button('checkPage','check-page')+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?sizes:''))+'</div>';
@@ -351,7 +354,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   hierarchy.bindHost(document);picker.bind();gallery.bind();components.bind();recordings.bind();
   const preview=document.getElementById('website-files-preview');
-  if(preview){const entry=trail[step]??{path:opened.path,hash:''};preview.onload=()=>{if(!preview.isConnected)return;const doc=preview.contentDocument;if(!doc)return;hierarchy.bindKeys(doc);enhanceSavedPreview(doc,{directory:directory(),pages:opened.site.pages,memory:previewMemory,navigate:navigatePreview,failed:()=>notify(tr('failed'),true)});bindNavigation(doc,entry.path,true);scrollToAnchor(doc,entry.hash);};preview.src=baseURL(entry.path)+(entry.search??'')+entry.hash;}
+  if(preview){
+   const entry=trail[step]??{path:opened.path,hash:''};
+   openSavedPreview(preview,baseURL(entry.path)+(entry.search??'')+entry.hash,doc=>{
+    hierarchy.bindKeys(doc);enhanceSavedPreview(doc,{directory:directory(),pages:opened.site.pages,memory:previewMemory,navigate:navigatePreview,failed:()=>notify(tr('failed'),true)});
+    bindNavigation(doc,entry.path,true);scrollToAnchor(doc,entry.hash);
+   },()=>notify(tr('failed'),true));
+  }
   const frame=document.getElementById('website-files-canvas');if(frame){frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!frame.isConnected||!opened)return;
    loadWebsiteCanvas(doc,html,css,baseURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);

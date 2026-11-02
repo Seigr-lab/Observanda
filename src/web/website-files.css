@@ -49,6 +49,26 @@
 .website-files-viewport { background:white }
 .website-files-stage { background:var(--border,#e4e7ec); padding:2px }
 .website-files-canvas { display:block; min-height:340px; height:75vh }
+.website-files-app .website-workspace-heading {
+ gap:.65rem; align-items:center; padding:.35rem 0 .7rem; margin:0;
+}
+.website-workspace-heading h1 { flex:0 1 auto!important; line-height:1.15; overflow-wrap:anywhere }
+.website-workspace-heading .website-files-status { margin:0 auto 0 0; color:var(--muted, inherit); min-height:0 }
+.website-workspace-heading .website-files-error { color:var(--danger,#a22b23) }
+.website-page-controls {
+ padding:.55rem .7rem; margin-bottom:.65rem!important; border:1px solid var(--border,#cbd3df);
+ border-radius:.5rem; background:var(--surface,#fff);
+}
+.website-editor-modes { display:inline-flex; align-items:center; border-radius:.4rem; border:1px solid var(--border,#cbd3df); overflow:hidden }
+.website-files-app .website-editor-modes .button { border:0; border-radius:0; box-shadow:none }
+.website-files-app .website-editor-modes .button[aria-pressed=true],
+.website-files-app [data-action="website-files-save"]:enabled {
+ color:var(--on-accent,white); background:var(--accent,#3454ac);
+}
+.website-editor-modes .button:focus-visible { outline-offset:-3px }
+.website-files-app .website-files-stage { border:1px solid var(--border,#cbd3df); padding:0; border-radius:.45rem; overflow:hidden }
+.website-files-stage .website-files-canvas { border:0 }
+.website-files-editor>aside>.panel+.panel { margin-top:.6rem }
 .website-author-dialog { width:min(36rem,90vw); max-height:80vh; color:inherit; background:var(--surface,#fff); border:1px solid var(--border,#cbd3df); border-radius:.5rem; padding:1.3rem }
 .website-author-dialog::backdrop { background:#18324b66 }
 .website-author-dialog form,.website-author-dialog label,.website-gallery-items label,.website-file-pages label { display:grid; gap:.35rem; margin-block:.5rem }

@@ -81,7 +81,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const make=(tag, text)=>{const el=host.createElement(tag); if(text!==undefined)el.textContent=text; return el;};
   const temporary=tag=>{const el=document.createElement(tag); el.dataset.observandaEditor=''; return el;};
   const sheet=temporary('style');
-  sheet.textContent=blocks+'{outline:1px dashed #4968a699;outline-offset:-1px}';
+  // Keep the outer composition visible. The pointer and keyboard overlay
+  // outlines the precise nested part being edited.
+  sheet.textContent=':where('+blocks+'):not(:where([data-observanda-source] *,[data-website-instance] *)){outline:1px dashed #4968a699;outline-offset:-1px}';
   document.head.append(sheet);
   const savedStyle=document.head.querySelector('style[data-observanda-editor]');
   const frame=temporary('div');
@@ -176,6 +178,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
       control.disabled=selectionScope&&['padding','text-align'].includes(field.name);
     }
     touched.clear();apply.disabled=true;
+    edit.hidden=!selected;
     edit.disabled=!selected||!editableText(selected,document);
     edit.title=edit.disabled?t('sectionNoText'):'';
     prompt.hidden=!!selected;

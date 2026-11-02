@@ -11,6 +11,8 @@
 .website-visual-rich button[aria-pressed=mixed] { border:2px dashed currentColor; }
 .website-visual-rich button:focus-visible { outline:3px solid var(--accent,#3454ac);outline-offset:2px; }
 .website-visual-rich .website-rich-context { margin:0 0 .5rem; }
+.website-visual-rich:has(.website-visual-actions[hidden]) .website-rich-context { margin:0 }
+.website-visual-rich .website-visual-actions[hidden] { display:none }
 .website-rich-sample { margin-inline-end:.4em;white-space:nowrap; }
 .website-visual-rich [data-visual-command=bold] strong { font-weight:700; }
 .website-visual-rich [data-visual-command=italic] em { font-style:italic; }

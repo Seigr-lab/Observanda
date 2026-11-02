@@ -130,6 +130,7 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
       const pressed=native?(document.queryCommandIndeterm(name)?'mixed':String(document.queryCommandState(name))):marks.get(name)??'false';
       button.setAttribute('aria-pressed',pressed);
     }
+    tools.hidden=!range;
     const label=t(!range?'richChooseText':range.collapsed?'richCaret':'richSelection');if(context.textContent!==label)context.textContent=label;
     heading.disabled=!range||!safeBlock(range);heading.value=range?element(range.startContainer).closest(blockSelector)?.localName??'':'';
     link.disabled=!range;unlink.disabled=!range||!anchor(range);
