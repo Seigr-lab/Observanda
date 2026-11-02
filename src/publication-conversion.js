@@ -7,6 +7,7 @@ import {sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {PUBLICATION_PARTS,publicationPartAllowed} from './web/record-publication-privacy.js';
 import {researchId} from './web/research-reference.js';
 import {convertPublicationRecord} from './publication-conversion-render.js';
+import {enrichWebsiteSources} from './website-file-library.js';
 
 const channels=['website','pdf'];
 const consentKey=target=>target==='pdf'?'sharePdf':'share';
@@ -14,6 +15,12 @@ const domainFields=new Set(PUBLICATION_PARTS);
 const notebookChange=data=>data?.change?.kind==='notebook'?data.change.value:null;
 const collectionAllowed=(value,target,collection)=>target==='pdf'?value===true:collection==='sections'?value!==false:value===true;
 const identity=(metadata,recordId,notebookId,target)=>{const book=metadata.notebooks.find(item=>item.id===notebookId);return book?{workspaceId:metadata.id,projectId:book.projectId,notebookId,recordId,target}:null;};
+function libraryContext(metadata,provenance){
+ const book=metadata.notebooks.find(b=>b.id===provenance.notebookId&&b.projectId===provenance.projectId);
+ if(metadata.id!==provenance.workspaceId||!book||book.share===false)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+ const title=value=>typeof value==='string'?value.trim().slice(0,300)||null:null;
+ return {projectTitle:title(metadata.projects?.find(p=>p.id===book.projectId)?.title),notebookTitle:title(book.title)};
+}
 
 // Never enumerate a research owner while opening a website. Only an explicit
 // research save can reach this adapter. Ordinary edits to copied writing do
@@ -92,28 +99,67 @@ export class PublicationConversion{
    return withRecordDocument(store,row.id,row.revision,async doc=>({metadata:snapshot.metadata,record:await permittedOriginal(doc,target)}));
   });
   const output=await convertPublicationRecord(storage,metadata,record,{target});if(!output.visible)throw new AppError('RECORD_CHANGED');
-  return this.files.putSource({sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null},title:record.title,...output},{token});
+  return this.files.putSource({sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output},{token});
  }
  async seedWebsites(provenances,withOwner,{signal,onSource}={}){
-  const pending=new Map(),sources=new Map();
+  const pending=new Map(),sources=new Map(),existing=[];
   try{
    // Fence before taking the research snapshot. One owner can contain many
    // selected entries; its grant and snapshot cover them all.
    await this.files.scope(async()=>{
+    const fenced=await this.files.pendingSources();
     for(const provenance of provenances){
      signal?.throwIfAborted();const sourceId=websiteSourceId(provenance),{source,pending:journal}=await this.files.sourceStatus(sourceId);
      if(source&&!journal){
-      if((await this.files.pendingSources()).has(sourceId))throw new AppError('CONFLICT');
-      if(!source.visible||source.target!=='website')throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-      sources.set(provenance.recordId,{id:source.id,revision:source.revision,assets:source.assets.map(file=>({path:file.name,sha256:file.sha256}))});
-      await onSource?.();
+      if(fenced.has(sourceId))throw new AppError('CONFLICT');
+      if(source.target!=='website')throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      if(source.visible)existing.push({source,provenance});
+      else{
+       // A tombstone is an authenticated prior withdrawal. Only a fresh
+       // permission check under the owner below can create its replacement.
+       const token=await this.files.beginSourceUpdate({sourceId,target:'website',ifAbsent:true,resumeSeed:true,reviveRevision:source.revision,signal});
+       pending.set(sourceId,{token,provenance});
+      }
      }else{
-      const token=await this.files.beginSourceUpdate({sourceId,target:'website',ifAbsent:true,resumeSeed:true,signal});
+      const reviveRevision=journal?.seed&&journal.previous?.visible===false?journal.previous.revision:undefined;
+      const token=await this.files.beginSourceUpdate({sourceId,target:'website',ifAbsent:true,resumeSeed:true,reviveRevision,signal});
       pending.set(sourceId,{token,provenance});
      }
     }
    },{write:true,signal});
-   if(pending.size)await withOwner(async(store,snapshot,{storage,snapshotId})=>{
+   if(existing.length||pending.size)await withOwner(async(store,snapshot,{storage,snapshotId})=>{
+    if(existing.length){
+     const rows=[],metadata=snapshot.metadata;
+     for(const {source,provenance} of existing){
+      signal?.throwIfAborted();const context=libraryContext(metadata,provenance),row=await store.member(snapshot,provenance.recordId);
+      const captured=source.provenance?.recordRevision??source.provenance?.revision;
+      if(!row||!captured||websiteSourceId(source.provenance)!==source.id)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      const current=await withRecordDocument(store,row.id,row.revision,async doc=>{
+       const notebookId=row.notebookId??(await doc.field(['notebookId'])).value;
+       if(notebookId!==provenance.notebookId||(await doc.field(['share'])).value!==true)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+       return row.revision!==captured?status(metadata,row,doc,'website'):null;
+      });
+      if(current){
+       // Ordinary edits do not replace an independently authored website
+       // copy. A different grant can never endorse its old section selection.
+       const prior=await withRecordDocument(store,row.id,captured,doc=>status(metadata,{id:row.id,revision:captured},doc,'website'));
+       if(!prior.visible||prior.sourceId!==current.sourceId||prior.signature!==current.signature)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      }
+      rows.push({source,context});
+     }
+     await this.files.scope(async()=>{
+      const fenced=await this.files.pendingSources();
+      for(const {source} of rows){
+       const current=await this.files.source(source.id,{pending:true});
+       if(fenced.has(source.id)||!current?.visible||current.revision!==source.revision||current.target!=='website')throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      }
+      await enrichWebsiteSources(this.files,rows,signal);
+     },{write:true,signal});
+     for(const {source} of rows){
+      sources.set(source.provenance.recordId,{id:source.id,revision:source.revision,assets:source.assets.map(file=>({path:file.name,sha256:file.sha256}))});
+      await onSource?.();
+     }
+    }
     for(const [sourceId,{token,provenance}] of pending){
      signal?.throwIfAborted();
      const row=await store.member(snapshot,provenance.recordId),metadata=snapshot.metadata;
@@ -126,7 +172,7 @@ export class PublicationConversion{
      });
      const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal});
      if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-     const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId},...output,signal},{token});
+     const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
      pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
      await onSource?.();
     }

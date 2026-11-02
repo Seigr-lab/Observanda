@@ -102,8 +102,9 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
  return patches(html,changes);
 }
 
-export function insertWebsiteSource(html,{id,revision,html:content,position='end'}){
- const document=parse(html,{sourceCodeLocationInfo:true}),body=[...descendants(document)].find(node=>node.tagName==='body');
+export function insertWebsiteSource(html,{position='end',...source}){return insertWebsiteSources(html,[source],position);}
+export function websiteInsertionOffset(document,position){
+ const body=[...descendants(document)].find(node=>node.tagName==='body');
  // New content belongs in the editable page, ahead of the site's footer.
  // Falling back to body also supports HTML pages without a main landmark.
  const main=body&&[...descendants(body)].find(node=>node.tagName==='main'&&!node.attrs.some(attr=>attr.name==='hidden'));
@@ -113,7 +114,12 @@ export function insertWebsiteSource(html,{id,revision,html:content,position='end
  else if(position==='start')at=location(container)?.startTag?.endOffset??location(blocks[0])?.startOffset??location(body)?.endTag?.startOffset;
  else if(position&&Object.keys(position).length===1&&Number.isInteger(position.before)&&position.before>=0&&position.before<blocks.length)at=location(blocks[position.before])?.startOffset;
  if(!Number.isInteger(at))throw new AppError('INVALID');
- const fragment='<section data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'">'+content+'</section>';
+ for(let parent=container;parent;parent=parent.parentNode)if(parent.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-website-instance','data-website-menu','hidden'].includes(a.name))||['nav','header','footer','template'].includes(parent.tagName))throw new AppError('CONFLICT');
+ return at;
+}
+export function insertWebsiteSources(html,sources,position='end'){
+ const at=websiteInsertionOffset(parse(html,{sourceCodeLocationInfo:true}),position);
+ const fragment=sources.map(({id,revision,html:content})=>'<section data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'">'+content+'</section>').join('');
  return html.slice(0,at)+fragment+html.slice(at);
 }
 

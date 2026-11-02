@@ -296,7 +296,7 @@ export class WebsiteFileStore{
   });
  }
  searchLibrary(options={}){return this.scope(scope=>searchWebsiteLibrary(this,scope,options),options);}
- previewSource({sourceId,sourceRevision,signal}={}){return this.scope(()=>previewWebsiteSource(this,sourceId,sourceRevision,signal),{signal});}
+ previewSource({sourceId,sourceRevision,sectionAfter,signal}={}){return this.scope(()=>previewWebsiteSource(this,sourceId,sourceRevision,signal,sectionAfter),{signal});}
  getSource(sourceId,{signal,target='website'}={}){return this.scope(async()=>{const source=await this.source(sourceId);if(!source?.visible||source.target!==target)throw new AppError('NOT_FOUND');
   return {id:sourceId,revision:source.revision,provenance:source.provenance,title:source.title,target,html:await this.readText(source.html,{signal}),css:await this.readText(source.css,{signal}),assets:source.assets.map(file=>({path:file.name,size:file.size,sha256:file.sha256,contentType:file.contentType}))};
  },{signal});}
@@ -319,14 +319,15 @@ export class WebsiteFileStore{
   return revision;
  },{signal});}
  advancePdfVersion(signal){return this.writeControl(ROOT+'/pdf-version.json',randomUUID(),{signal});}
- beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false}={}){return this.scope(async()=>{
+ beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false,reviveRevision}={}){return this.scope(async()=>{
   if(!hex(sourceId)||target!==undefined&&!['website','pdf'].includes(target))throw new AppError('INVALID');
   const path=ROOT+'/sources/'+sourceId+'/pending.json',token=randomUUID(),saved=await this.control(path,{missing:true});
   const previous=saved?saved.previous:await this.source(sourceId,{pending:true}),known=saved?.target??previous?.target;
   if(target&&known&&target!==known)throw new AppError('CONFLICT');
   if(resumeSeed&&(!ifAbsent||target!=='website'))throw new AppError('INVALID');
-  const seed=resumeSeed&&saved?.seed===true&&saved.previous===null;
-  if(ifAbsent&&!seed&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
+  if(reviveRevision!==undefined&&(!resumeSeed||!hex(reviveRevision)||previous?.visible!==false||previous.revision!==reviveRevision))throw new AppError('CONFLICT');
+  const seed=resumeSeed&&saved?.seed===true&&(saved.previous===null||reviveRevision!==undefined);
+  if(ifAbsent&&!seed&&(saved||previous&&reviveRevision===undefined||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
   target??=known;
   const journal={token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved),...(resumeSeed?{seed:true}:{})};
   // An absent source has no placements. Record bootstrap ownership first so
@@ -349,7 +350,7 @@ export class WebsiteFileStore{
   if(pending.recovered||pending.token!==token||(current?.revision??null)!==(pending.previous?.revision??null))throw new AppError('CONFLICT');
   await this.finishSourceUpdate(sourceId,pending.target??current?.target,signal,pending.seed);
  },{write:true,signal});}
- putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,pdfParts=null,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
+ putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,pickerContext,pdfParts=null,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
   if(!hex(sourceId)||!uuid(token)||typeof visible!=='boolean'||!['website','pdf'].includes(target))throw new AppError('INVALID');const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json');if(pending.token!==token||pending.target&&pending.target!==target)throw new AppError('CONFLICT');
   if(!pending.target&&target==='pdf'){await this.writeControl(directory+'/pending.json',{...pending,target},{signal});await this.advancePdfVersion(signal);}
   sourceTitle=title(sourceTitle);validateWebsiteHTML('<!doctype html><html><head><title>Content</title></head><body>'+html+'</body></html>');validateWebsiteCSS(css);
@@ -358,7 +359,7 @@ export class WebsiteFileStore{
   if(visible)for(const asset of assets){if(!/^assets\/[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(asset.path??''))throw new AppError('INVALID');const descriptor=await this.descriptor(asset.path,asset,{signal,owner:directory});if(asset.path.slice(7,71)!==descriptor.sha256)throw new AppError('MEDIA_INVALID');files.push(descriptor);}
   const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
-  await indexWebsiteSource(this,source,html,signal);
+  await indexWebsiteSource(this,source,html,signal,pickerContext);
   let after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;

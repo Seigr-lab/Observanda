@@ -31,6 +31,30 @@ test('explicit research saves update a placed HTML entry and withdrawing consent
  const privateBook=await files.open(site.site.id);assert.doesNotMatch(privateBook.html,/Edited website title|Listening to the room/);assert.match(privateBook.html,/data-observanda-source/);assert.equal(privateBook.css,edited.css);
 });
 import {convertExistingWebsite} from '../src/website-files-migration.js';
+test('reopening the grant seed verifies old memberships and revives only an explicitly regranted tombstone',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-grant-seed-')),book=sampleNotebook(),record=book.entries[1],notebook=book.notebooks[0];
+ book.entries=[record];book.projects[0].title='Private owner label';notebook.title='Private book label';record.share=true;
+ const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const store=new WebsiteFileStore(workspace),publicationConversion=new PublicationConversion(workspace,{store});
+ const provenance={workspaceId:book.id,recordId:record.id,projectId:notebook.projectId,notebookId:notebook.id},id=websiteSourceId(provenance);
+ const owner=consume=>workspace.catalogue(async catalogue=>{const snapshotId=await catalogue.head();return consume(catalogue,await catalogue.snapshot(snapshotId),{snapshotId,storage:workspace});});
+ const seed=()=>publicationConversion.seedWebsites([provenance],owner);
+ const original=(await seed()).get(record.id),before=await store.searchLibrary();
+ assert.equal(before.items[0].projectTitle,'Private owner label');assert.equal(before.items[0].notebookTitle,'Private book label');
+ const readText=store.readText;store.readText=()=>assert.fail('metadata-only enrichment reopened projected content');
+ try{
+  assert.equal((await seed()).get(record.id).revision,original.revision);
+  assert.equal((await store.searchLibrary()).generation,before.generation);
+ }finally{store.readText=readText;}
+ const target={workspaceId:book.id,recordId:record.id,field:'share'};
+ async function grant(value,author){const old=await executeResearchRequest(workspace,'/api/research/records/values/read',target);
+  await executeResearchRequest(workspace,'/api/research/records/values/save',{...target,expectedRevision:old.revision,value:{value}},{publicationConversion:author});}
+ await grant(false,publicationConversion);
+ await assert.rejects(seed(),{code:'PUBLICATION_PERMISSIONS_CHANGED'});assert.equal((await store.searchLibrary()).items.length,0);
+ await grant(true);const revival=await seed();assert.equal(revival.get(record.id).id,id);assert.equal((await store.searchLibrary()).items.length,1);
+ // A stale positive file head by itself cannot vouch for present research consent.
+ await grant(false);await assert.rejects(seed(),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
+});
 test('a saved home composition and its existing research cards convert once to private-aware website files',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-conversion-')),book=sampleNotebook(),record=book.entries[1];book.entries=[record];record.tags=['private-index-tag-canary'];const section={id:randomUUID(),title:'Unreleased experiment details',body:'A newly disclosed method.',share:false};record.sections=[section];
  book.website.home.sections.unshift({id:'authored-heading',kind:'text',show:true,title:'Authored home design',body:'Authored website introduction'});
