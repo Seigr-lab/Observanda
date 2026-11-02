@@ -8,7 +8,7 @@ import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource} from '../src/website-file-html.js';
-import {searchWebsiteLibrary,validateWebsiteLibraryRows} from '../src/website-file-library.js';
+import {searchWebsiteLibrary,validateWebsiteLibraryRows,websiteLibraryFacets} from '../src/website-file-library.js';
 
 test('file picker searches compact permitted summaries, falls back to earlier saved heads, and binds the chosen revision',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-picker-'));await mkdir(path.join(root,'.observanda'));
@@ -57,6 +57,24 @@ test('search spans compact summaries in keyset order with a bounded result and n
  assert.deepEqual((await searchWebsiteLibrary(store,scope,{search:'volcanic',limit:1})).items.map(i=>i.id),[suffix]);
  const first=await searchWebsiteLibrary(store,scope,{limit:10}),next=await searchWebsiteLibrary(store,scope,{limit:10,after:first.next});
  assert.equal(first.items.length,10);assert.equal(next.items[0].id,all[10]);assert.equal(directoryScans,1);assert.equal(shardReads,3);
+});
+
+test('concurrent picker panes share one directory read and filtered results read only matching shards',async()=>{
+ const projectId=randomUUID(),notebookId=randomUUID(),otherNotebook=randomUUID(),shards=new Map(),pending=new Set(),names=[];
+ for(let i=0;i<16;i++){
+  const prefix=i.toString(16).padStart(2,'0'),id=prefix+'0'.repeat(62);names.push(id);
+  shards.set(prefix,{[id]:{id,revision:id,title:'Observation',notebookId:i===7?notebookId:otherNotebook,projectId,media:false}});
+ }
+ let scans=0,shardReads=0;
+ const store={absolute:s=>s,workspace:{root:'disposable',vault:{}},pendingSources:async()=>pending,control:async name=>{
+  if(name.endsWith('/generation.json'))return 'same';shardReads++;return shards.get(name.split('/').pop().slice(0,2));
+ }};
+ const scope={member:async(_path,fn)=>{scans++;return fn({async *entries(){for(const name of names)yield {name,directory:true};}});}};
+ await Promise.all([websiteLibraryFacets(store,scope,{kind:'project'}),websiteLibraryFacets(store,scope,{kind:'book'}),searchWebsiteLibrary(store,scope,{limit:1})]);
+ assert.equal(scans,1);shardReads=0;
+ const filtered=await searchWebsiteLibrary(store,scope,{projectId,notebookId,search:'obser'});
+ assert.deepEqual(filtered.items.map(row=>row.id),[names[7]]);assert.equal(shardReads,1);
+ pending.add(names[7]);assert.deepEqual((await searchWebsiteLibrary(store,scope,{notebookId})).items,[]);
 });
 
 test('source placement uses the editable page blocks without changing surrounding author bytes',()=>{

@@ -9,7 +9,7 @@ const root='.observanda/website-files',index=root+'/picker',generation=index+'/g
 const views=new WeakMap(),validId=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
 const shardFile=id=>index+'/'+id.slice(0,2)+'.json';
 const text=value=>value.normalize('NFKC').toLowerCase();
-const scanLimit=4096,olderLimit=40;
+const scanLimit=4096,olderLimit=40,searchKeyBudget=8*1024*1024;
 const concealed=node=>['script','style','template','noscript'].includes(node.tagName)||node.attrs?.some(a=>a.name==='hidden'||a.name==='aria-hidden'&&a.value==='true');
 function shown(node){for(let parent=node;parent;parent=parent.parentNode)if(concealed(parent))return false;return true;}
 
@@ -85,13 +85,21 @@ function afterIndex(names,after){
 }
 async function census(store,scope,epoch,signal){
  const vault=store.workspace.vault;
- let view=views.get(vault);
- if(!view||view.epoch!==epoch||view.root!==store.workspace.root){
-  // The directory census has no entry content. Committed permission changes
-  // invalidate it across processes.
-  view={epoch,root:store.workspace.root,names:await ids(store,scope,signal)};views.set(vault,view);
+ for(;;){
+  signal?.throwIfAborted();
+  let view=views.get(vault);
+  if(view&&view.epoch===epoch&&view.root===store.workspace.root){
+   if(view.names)return view;
+   try{await view.loading;signal?.throwIfAborted();return view;}
+   catch(error){if(!view.cancelled||signal?.aborted)throw error;continue;}
+  }
+  view={epoch,root:store.workspace.root};views.set(vault,view);
+  view.loading=ids(store,scope,signal).then(names=>{view.names=names;}).catch(error=>{
+   view.cancelled=signal?.aborted===true;
+   if(views.get(vault)===view)views.delete(vault);throw error;
+  });
+  await view.loading;return view;
  }
- return view;
 }
 async function visitWindow(store,names,at,stamp,{signal,needsScope,visit}){
  let visited=0,older=0,groups=0,group=null,metadata;
@@ -113,10 +121,22 @@ async function visitWindow(store,names,at,stamp,{signal,needsScope,visit}){
 export async function searchWebsiteLibrary(store,scope,{search='',filter='all',after=null,limit=20,projectId=null,notebookId=null,signal}={}){
  if(typeof search!=='string'||search.length>160||!['all','media','text'].includes(filter)||after!==null&&!validId(after)||!Number.isInteger(limit)||limit<1||limit>40||projectId!==null&&!researchId(projectId)||notebookId!==null&&!researchId(notebookId))throw new AppError('INVALID');
  const stamp=await libraryStamp(store),view=await census(store,scope,stamp.generation,signal),terms=text(search).trim().split(/\s+/u).filter(Boolean),items=[];
- const at=await visitWindow(store,view.names,afterIndex(view.names,after),stamp,{signal,needsScope:!!projectId||!!notebookId,visit(item){
-  if(projectId&&projectId!==item.projectId||notebookId&&notebookId!==item.notebookId||filter!=='all'&&(filter==='media')!==item.media)return;
-  const haystack=text([item.title,item.id,item.recordId,item.notebookId,item.projectTitle,item.notebookTitle].join(' '));
-  if(terms.every(term=>haystack.includes(term)))items.push(item);
+ const matches=(item,haystack)=>(!projectId||projectId===item.projectId)&&(!notebookId||notebookId===item.notebookId)&&
+  (filter==='all'||(filter==='media')===item.media)&&terms.every(term=>haystack.includes(term));
+ let at=afterIndex(view.names,after);
+ const facets=view.facets;
+ if(facets?.keys&&facets.token===stamp.visibilityToken&&facets.at===view.names.length&&(terms.length||projectId||notebookId||filter!=='all')){
+  // The facet pass already visited the summaries. Read the current compact
+  // rows only for matches; keep article excerpts out of the search cache.
+  const candidates=[],through=Math.min(view.names.length,at+scanLimit);
+  while(at<through&&candidates.length<limit){
+   const id=view.names[at++],key=facets.keys.get(id);
+   if(key&&matches(key,key.text))candidates.push(id);
+  }
+  const read=await visitWindow(store,candidates,0,stamp,{signal,needsScope:true,visit:item=>{items.push(item);}});
+  if(read<candidates.length)at=afterIndex(view.names,candidates[read-1]);
+ }else at=await visitWindow(store,view.names,at,stamp,{signal,needsScope:!!projectId||!!notebookId,visit(item){
+  if(matches(item,searchText(item)))items.push(item);
   return items.length<limit;
  }});
  await checkLibraryStamp(store,stamp);
@@ -125,9 +145,9 @@ export async function searchWebsiteLibrary(store,scope,{search='',filter='all',a
 export async function websiteLibraryFacets(store,scope,{kind,projectId=null,search='',after=null,limit=24,signal}={}){
  if(!['book','project'].includes(kind)||projectId!==null&&!researchId(projectId)||typeof search!=='string'||search.length>160||!Number.isInteger(limit)||limit<1||limit>100||after!==null&&!researchId(after)&&!/^scan:\d+$/.test(after))throw new AppError('INVALID');
  const stamp=await libraryStamp(store),view=await census(store,scope,stamp.generation,signal);
- // Cache only owner choices while their exact grant generation and pending
- // fence set are current. No entry text is retained in this cache.
- if(view.facets?.token!==stamp.visibilityToken)view.facets={token:stamp.visibilityToken,at:0,count:0,project:new Map(),book:new Map()};
+ // Owner choices and search keys belong to this exact grant generation and
+ // pending fence set. Never hold article bodies or preview excerpts here.
+ if(view.facets?.token!==stamp.visibilityToken)view.facets={token:stamp.visibilityToken,at:0,count:0,project:new Map(),book:new Map(),keys:new Map(),keyBytes:0};
  const facets=view.facets;
  if(facets.at<view.names.length){
   facets.busy??=(async()=>{
@@ -137,6 +157,11 @@ export async function websiteLibraryFacets(store,scope,{kind,projectId=null,sear
    for(const item of window){
     if(item.projectId)add(facets.project,item.projectId,item.projectTitle);
     if(item.notebookId)add(facets.book,item.notebookId,item.notebookTitle,{projectId:item.projectId??null,projectTitle:item.projectTitle??null});
+    if(facets.keys){
+     const value=searchText(item);facets.keyBytes+=value.length*2+160;
+     if(facets.keyBytes>searchKeyBudget)facets.keys=null;
+     else facets.keys.set(item.id,{projectId:item.projectId,notebookId:item.notebookId,media:item.media,text:value});
+    }
    }
    facets.count+=window.length;facets.at=at;
   })().finally(()=>{facets.busy=null;});
@@ -159,6 +184,7 @@ export async function websiteLibraryFacets(store,scope,{kind,projectId=null,sear
  if(result.next)result.next=result.items.at(-1).id;
  return result;
 }
+function searchText(item){return text([item.title,item.id,item.recordId,item.notebookId,item.projectTitle,item.notebookTitle].join(' '));}
 export async function validateWebsiteLibraryRows(store,{items,generation:prior,signal}={}){
  if(!Array.isArray(items)||items.length>40||items.some(r=>!validId(r?.id)||!validId(r.revision)))throw new AppError('INVALID');
  const stamp=await libraryStamp(store),accepted=[];
