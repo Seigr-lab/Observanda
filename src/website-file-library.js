@@ -3,6 +3,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {attr,descendants} from './website-migration-views.js';
+import {projectedRecordMetadata,projectedSourceOverview} from './website-source-overview.js';
 
 const root='.observanda/website-files',index=root+'/picker',generation=index+'/generation.json';
 const views=new WeakMap(),validId=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
@@ -35,10 +36,8 @@ export async function indexWebsiteSource(store,source,html,signal,context){
  // written before the compact index existed. Never retain its title or text.
  let item=null;
  if(source.visible&&source.target==='website'){
-  const fragment=parseFragment(html),metadata=[...descendants(fragment)].find(node=>attr(node,'data-observanda-part')==='metadata'&&shown(node));
-  const time=metadata&&[...descendants(metadata)].find(node=>node.tagName==='time'&&shown(node));
-  const value=time&&attr(time,'datetime');
-  item=describe(source,excerpt(fragment,source.title),{...context,displayDate:typeof value==='string'&&/^\d{4}-\d{2}-\d{2}(?:T[\d:.+-]+Z?)?$/.test(value)&&value.length<=40?value:null});
+  const fragment=parseFragment(html),{displayDate}=projectedRecordMetadata(fragment);
+  item=describe(source,excerpt(fragment,source.title),{...context,displayDate});
  }
  entries[source.id]=item;
  await store.writeControl(shardFile(source.id),entries,{signal});
@@ -186,6 +185,7 @@ export async function previewWebsiteSource(store,id,revision,signal,sectionAfter
   const heading=[...descendants(node)].find(n=>/^h[1-6]$/.test(n.tagName)&&shown(n)),title=heading?excerpt(heading,''):'';
   sections.push({id:key.slice(8),title,preview:excerpt(node,title)});
  }
+ const overview=projectedSourceOverview(fragment,source.title),metadata=projectedRecordMetadata(fragment),preview=excerpt(fragment,source.title);
  await checkLibraryStamp(store,stamp);
- return {id,revision,preview:excerpt(fragment,source.title),sections,nextSection,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
+ return {id,revision,preview,overview,metadata,sections,nextSection,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
 }
