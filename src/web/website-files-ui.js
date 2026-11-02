@@ -36,6 +36,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let viewport='desktop',visual=null,selected=null,anchor='',trail=[],step=-1;
+ let locatedPlacement=null;
  let pendingCanvas=null,canvasTimer=null;
  let undo=[],redo=[],lastCheckpoint=0,historyBytes=0;
  const request=(operation,data,options={})=>api('/api/website-files/'+operation,data,{...options,owner:null,adopt:false});
@@ -55,15 +56,44 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
  const components=websiteFilesComponents({request,tr,esc,site:()=>opened,selected:()=>selected,save,adopt,render,run});
  const recordings=websiteFilesRecordings({t:tr,esc,request,read:()=>websiteHTML(html),css:()=>css,path:()=>opened.path,site:()=>opened.site,url:baseURL,adopt,render,run,notify,close:()=>{mode='visual';render();}});
- const picker=websiteFilesPicker({request,esc,tr,render,blocks:()=>structure().map(label),insert:async selection=>{
-  await save();adopt(await request('insert-source',{siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,...selection}));render();
- }});
+ async function insertContent(operation,selection){
+  await save();
+  adopt(await request(operation,{siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,...selection}));
+  render();
+ }
+ async function checkPlacementRevision(revision){
+  await save();
+  if(opened.site.revision!==revision)throw Error(tr('changed'));
+ }
+ const picker=websiteFilesPicker({request,esc,site:()=>opened,blocks:()=>structure().map(label),
+  libraryStatus:async()=> (await request('preparation',undefined,{signal:controller?.signal})).preparation?.library,
+  insert:selection=>insertContent('insert-source',selection),
+  insertMany:selection=>insertContent('insert-sources',selection),
+  async mutatePlacement(operation,data){
+   await checkPlacementRevision(data.expectedRevision);
+   const currentPath=opened.path;
+   const result=await request('library/'+operation+'-placement',{...data,siteId:siteId()});
+   adopt(result.path===currentPath?result:await request('open',{siteId:siteId(),path:currentPath}));
+   render();
+  },
+  async jumpPlacement({path,blockPath,expectedRevision,sourceId}){
+   await checkPlacementRevision(expectedRevision);
+   const page=await request('open',{siteId:siteId(),path});
+   if(page.site.revision!==expectedRevision)throw Error(tr('changed'));
+   if(blockPath!==null){
+    const node=blockAt(websiteHTML(page.html),blockPath);
+    if(!node||node.dataset.observandaSource!==sourceId&&node.dataset.observandaLink!==sourceId)throw Error(tr('changed'));
+   }
+   adopt(page);mode='visual';selected=null;locatedPlacement=blockPath;render();
+   if(blockPath===null)notify(tr('pickerHeadUse',{page:page.path}));
+  }
+ });
  const hierarchy=websiteHierarchy({t:tr,site:()=>opened,enabled:()=>!!opened&&!stale&&!form,available:()=>!busy,
   snapshot:()=>{flushCanvas();return html;},read:()=>websiteHTML(html),edit:documentChange,button,escape:esc,
   openPage:path=>run(async()=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}}),
   selectLayer:path=>{if(mode==='visual'&&visual){visual.select(path);return;}void run(async()=>{if(await beforeLeave(true)){mode='visual';selected=path;render();}});},
   retainSelection:path=>{selected=path;},notify:()=>notify(tr('layerMoveUnavailable'),true)});
- function forgetSelection(){visual?.destroy();visual=null;selected=null;hierarchy.reset();}
+ function forgetSelection(){visual?.destroy();visual=null;selected=locatedPlacement=null;hierarchy.reset();}
  const previewMemory=new Map();
  function resetPreview(){trail=[];step=-1;anchor='';previewMemory.clear();}
  function navigatePreview(page,remember=true){
@@ -327,7 +357,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    loadWebsiteCanvas(doc,html,css,baseURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    visual=bindWebsiteVisual({document:doc,inspector:document.querySelector('[data-website-visual-inspector]'),t:tr,beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{selected=item?.path??null;hierarchy.selection(selected);}});
-   hierarchy.bindCanvas(doc);if(selected!==null)visual.select(selected);
+   hierarchy.bindCanvas(doc);
+   if(locatedPlacement!==null){
+    const target=blockAt(doc,locatedPlacement);
+    if(target&&!visual.select(locatedPlacement)){
+     target.scrollIntoView({block:'center',inline:'nearest'});
+     target.animate([{outline:'3px solid Highlight'},{outline:'3px solid Highlight'}],1800);
+    }
+    locatedPlacement=null;
+   }else if(selected!==null)visual.select(selected);
    doc.body.addEventListener('beforeinput',()=>checkpoint());doc.body.addEventListener('input',()=>canvasInput(doc));
    doc.addEventListener('keydown',event=>{
     if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
