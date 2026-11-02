@@ -2,22 +2,24 @@ import {t} from './i18n/index.js';
 import {websitePickerView} from './website-files-picker-view.js';
 
 const pageSize=12,facetSize=8,reviewLimit=40;
-const facet=()=>({chosen:null,text:'',query:'',items:[],page:0,pages:[null],next:null,open:false});
+const facet=()=>({chosen:null,text:'',query:'',items:[],page:0,pages:[null],next:null,open:false,loading:false});
 const initial=()=>({open:false,search:'',query:'',filter:'all',applied:'all',owners:{project:facet(),book:facet()},rows:[],page:0,pages:[null],next:null,
  queue:new Map(),item:null,detail:null,placements:null,sectionOffset:0,sectionPages:[0],placeOffset:0,placePages:[0],position:'end',block:1,confirm:null,
  status:'',loading:false,generation:null,token:null,totalEntries:null,preparation:null,pane:'detail',siteList:null,sitePage:0,sitePages:[null],usageSite:null});
 export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mutatePlacement,jumpPlacement,libraryStatus}){
  const msg=(key,args)=>t('websiteFiles',key,args);
  let s=initial(),epoch=0,controller=null,validating=false;
+ const ownerRequests=new Map();
  const dialog=()=>document.querySelector('dialog[data-website-picker-dialog]');
  const siteArgs=()=>({siteId:site().site.id,expectedRevision:site().site.revision});
  function start(){
   controller?.abort();controller=new AbortController();
   return {number:++epoch,signal:controller.signal};
  }
- function reset(){epoch++;controller?.abort();controller=null;dialog()?.close();s=initial();}
+ function cancelOwners(){for(const request of ownerRequests.values())request.abort();ownerRequests.clear();}
+ function reset(){epoch++;controller?.abort();controller=null;cancelOwners();dialog()?.close();s=initial();}
  function forgetDetails(){s.item=s.detail=s.placements=s.siteList=s.usageSite=null;s.confirm=null;s.sectionOffset=s.placeOffset=s.sitePage=0;s.sectionPages=[0];s.placePages=[0];s.sitePages=[null];}
- const content=()=>websitePickerView(s,{msg,esc,blocks,destination:site()});
+ const content=owner=>websitePickerView(s,{msg,esc,blocks,destination:site(),owner});
  function view(){
   return '<section class="panel website-files-picker" data-website-picker><h2>'+esc(msg('library'))+'</h2><p>'+esc(msg('libraryNotice'))+
    '</p><button type="button" class="button" data-action="website-files-picker-open">'+esc(msg('pickerBrowse'))+'</button>'+
@@ -43,8 +45,8 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   bind();if(active)focusWhenReady(dialog()?.querySelector(active));
  }
  function clearProtected(){
-  forgetDetails();s.rows=[];s.next=null;s.queue.clear();s.token=s.generation=s.totalEntries=null;
-  for(const f of Object.values(s.owners)){f.items=[];f.chosen=null;f.pages=[null];f.page=0;f.next=null;}
+  cancelOwners();forgetDetails();s.rows=[];s.next=null;s.queue.clear();s.token=s.generation=s.totalEntries=null;
+  for(const f of Object.values(s.owners)){f.items=[];f.chosen=null;f.pages=[null];f.page=0;f.next=null;f.loading=false;}
  }
  function close(){
   reset();paint();focusWhenReady(document.querySelector('[data-action="website-files-picker-open"]'));
@@ -76,7 +78,7 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
  async function collect(route,args,after,limit,job){
   const items=[],seen=new Set();let head;
   do{
-   if(job.number!==epoch)throw new DOMException('Cancelled','AbortError');
+   job.signal?.throwIfAborted();if(job.number!=null&&job.number!==epoch)throw new DOMException('Cancelled','AbortError');
    if(seen.has(after))throw Error(msg('failed'));seen.add(after);
    const data=await request(route,{...args,after,limit:limit-items.length},{signal:job.signal});
    if(head&&(head.visibilityToken!==data.visibilityToken||head.generation!==data.generation))throw Error(msg('changed'));
@@ -84,36 +86,47 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   }while(after!=null&&items.length<limit);
   return {items,next:after??null,generation:head.generation,token:head.visibilityToken,totalEntries:head.totalEntries};
  }
- async function browse({entryPage=0,facetPage={},facets=['project','book'],entries=true,focus}={}){
-  const job=start();s.loading=true;s.status=msg('loading');
-  if(entries){s.rows=[];forgetDetails();s.next=null;}
-  for(const kind of facets)s.owners[kind].items=[];
+ function paintOwner(kind){
+  const current=dialog()?.querySelector('[data-picker-facet="'+kind+'"]');if(!current)return;
+  const template=document.createElement('template');template.innerHTML=content(kind);
+  const results=current.querySelector('[data-picker-owner-results]'),focus=document.activeElement;
+  const action=results.contains(focus)?focus.dataset.action:null;
+  current.querySelector('summary').textContent=template.content.querySelector('summary').textContent;
+  results.replaceWith(template.content.querySelector('[data-picker-owner-results]'));
+  if(action)focusWhenReady(current.querySelector('[data-action="'+CSS.escape(action)+'"]')??current.querySelector('summary'));
+  if(Number.isSafeInteger(s.totalEntries))dialog().querySelector('[data-picker-total]').textContent=msg('pickerEligibleCount',{count:s.totalEntries.toLocaleString(document.documentElement.lang||undefined)});
+ }
+ async function loadOwner(kind,page=0){
+  ownerRequests.get(kind)?.abort();const request=new AbortController();ownerRequests.set(kind,request);
+  const f=s.owners[kind],projectId=s.owners.project.chosen?.id??null;
+  f.loading=true;f.items=[];f.next=null;paintOwner(kind);
+  try{
+   const result=await collect('library/facets',{kind,search:f.query,...(kind==='book'?{projectId}:{})},f.pages[page]??null,facetSize,{signal:request.signal});
+   if(request.signal.aborted)return;
+   if(result.token!==s.token||result.generation!==s.generation)throw Error(msg('changed'));
+   f.loading=false;f.items=result.items;f.page=page;f.next=result.next;
+   if(f.chosen)f.chosen=f.items.find(row=>row.id===f.chosen.id)??f.chosen;
+   if(Number.isSafeInteger(result.totalEntries))s.totalEntries=result.totalEntries;
+   paintOwner(kind);
+  }catch(error){if(!request.signal.aborted)failHidden(error);}
+  finally{if(ownerRequests.get(kind)===request)ownerRequests.delete(kind);}
+ }
+ async function browse({entryPage=0,facets=['project','book'],focus}={}){
+  const job=start();s.loading=true;s.status=msg('loading');s.rows=[];forgetDetails();s.next=null;
+  for(const kind of facets){ownerRequests.get(kind)?.abort();s.owners[kind].loading=true;s.owners[kind].items=[];s.owners[kind].next=null;}
   paint(focus);
   const projectId=s.owners.project.chosen?.id??null,notebookId=s.owners.book.chosen?.id??null;
-  const steps=[];
-  if(entries)steps.push({key:'entries',page:entryPage,read:collect('library/search',{search:s.query,filter:s.applied,projectId,notebookId},s.pages[entryPage]??null,pageSize,job)});
-  for(const kind of facets){
-   const f=s.owners[kind],page=facetPage[kind]??0;
-   steps.push({key:kind,page,read:collect('library/facets',{kind,search:f.query,...(kind==='book'?{projectId}:{})},f.pages[page]??null,facetSize,job)});
-  }
   try{
-   const values=await Promise.all(steps.map(step=>step.read));
+   const result=await collect('library/search',{search:s.query,filter:s.applied,projectId,notebookId},s.pages[entryPage]??null,pageSize,job);
    if(job.number!==epoch)return;
-   if(values.some(v=>v.token!==values[0].token||v.generation!==values[0].generation))throw Error(msg('changed'));
-   if(s.token&&values[0].token!==s.token){clearProtected();s.loading=false;return browse();}
-   s.generation=values[0].generation;s.token=values[0].token;
-   steps.forEach(({key,page},i)=>{
-    const v=values[i];if(Number.isSafeInteger(v.totalEntries))s.totalEntries=v.totalEntries;
-    if(key==='entries'){
-     s.rows=v.items;s.page=page;s.next=v.next;
-     for(const row of v.items)if(s.queue.has(row.id))s.queue.set(row.id,row);
-    }
-    else{const f=s.owners[key];f.items=v.items;f.page=page;f.next=v.next;if(f.chosen)f.chosen=v.items.find(r=>r.id===f.chosen.id)??f.chosen;}
-   });
+   if(s.token&&(s.token!==result.token||s.generation!==result.generation)){clearProtected();return browse();}
+   s.generation=result.generation;s.token=result.token;s.rows=result.items;s.page=entryPage;s.next=result.next;
+   for(const row of s.rows)if(s.queue.has(row.id))s.queue.set(row.id,row);
    s.status='';s.loading=false;paint(focus);
-  }catch(error){if(job.number===epoch){clearProtected();s.loading=false;s.status=error.message;paint();}if(error.name!=='AbortError')throw error;}
+   for(const kind of facets)void loadOwner(kind);
+  }catch(error){if(job.number===epoch)failHidden(error);if(error.name!=='AbortError')throw error;}
  }
- function failHidden(error){clearProtected();s.status=error.message||msg('changed');s.loading=false;paint();}
+ function failHidden(error){epoch++;controller?.abort();clearProtected();s.status=error.message||msg('changed');s.loading=false;paint();}
  async function revalidate({signal}={}){
   if(!s.open||s.loading||validating)return;validating=true;const number=epoch;
   try{
@@ -194,10 +207,10 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
  }
  async function actFacet(op,kind,el){
   const f=s.owners[kind];
-  if(op==='find'){f.open=true;f.query=f.text.trim();f.pages=[null];await browse({entries:false,facets:[kind]});return;}
+  if(op==='find'){f.open=true;f.query=f.text.trim();f.pages=[null];void loadOwner(kind);return;}
   if(op==='next'||op==='previous'){
    f.open=true;if(op==='next'){if(!f.next)return;f.pages[f.page+1]=f.next;}
-   await browse({entries:false,facets:[kind],facetPage:{[kind]:Math.max(0,f.page+(op==='next'?1:-1))}});return;
+   void loadOwner(kind,Math.max(0,f.page+(op==='next'?1:-1)));return;
   }
   const row=op==='choose'?f.items[Number(el.dataset.index)]:null;if(op==='choose'&&!row)return;
   f.chosen=row;f.open=false;

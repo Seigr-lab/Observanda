@@ -1,4 +1,4 @@
-export function websitePickerView(state,{msg,esc,blocks,destination}){
+export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
  const {owners,rows,queue,item,detail,placements}=state;
  const label=(key,args)=>esc(msg(key,args));
  const count=value=>new Intl.NumberFormat(document.documentElement.lang||undefined).format(value);
@@ -12,11 +12,12 @@ export function websitePickerView(state,{msg,esc,blocks,destination}){
   return '<details data-picker-facet="'+kind+'" '+(data.open?'open':'')+'><summary>'+label(name)+' · '+(data.chosen?esc(ownerName(kind,data.chosen)):label(project?'pickerAllProjects':'pickerAllBooks'))+'</summary><div class="website-picker-owner-menu">'+
    '<label>'+label(project?'pickerSearchProjects':'pickerSearchBooks')+'<input type="search" maxlength="160" data-picker-facet-search="'+kind+'" value="'+esc(data.text)+'"></label>'+
    button('pickerFind','find-'+kind)+(data.chosen?button(project?'pickerAllProjects':'pickerAllBooks','clear-'+kind):'')+
-   '<ul class="website-picker-owners">'+data.items.map((row,index)=>'<li><button type="button" class="button" data-action="website-files-picker-choose-'+kind+'" data-index="'+index+'" aria-pressed="'+String(row.id===data.chosen?.id)+'">'+esc(ownerName(kind,row))+
+   '<div data-picker-owner-results aria-busy="'+String(data.loading)+'"><ul class="website-picker-owners">'+data.items.map((row,index)=>'<li><button type="button" class="button" data-action="website-files-picker-choose-'+kind+'" data-index="'+index+'" aria-pressed="'+String(row.id===data.chosen?.id)+'">'+esc(ownerName(kind,row))+
     (!project&&row.projectTitle?' <small>'+esc(row.projectTitle)+'</small>':'')+(Number.isSafeInteger(row.count)?' ('+esc(count(row.count))+')':'')+'</button></li>').join('')+'</ul>'+
-   (data.items.length||state.loading?'':'<p>'+label('pickerNoMatches')+'</p>')+
-   (data.page?button('pickerPrevious','previous-'+kind):'')+(data.next!==null?button('pickerNext','next-'+kind):'')+'</div></details>';
+   (data.loading?'<p>'+label('loading')+'</p>':data.items.length?'':'<p>'+label('pickerNoMatches')+'</p>')+
+   (data.page&&!data.loading?button('pickerPrevious','previous-'+kind):'')+(data.next!==null?button('pickerNext','next-'+kind):'')+'</div></div></details>';
  }
+ if(owner)return facet(owner);
  function position(){
   const labels=state.position==='before'?blocks():[];
   return '<label>'+label('pickerPosition')+'<select data-picker-position>'+option('end','pickerEnd',state.position)+option('start','pickerStart',state.position)+option('before','pickerBefore',state.position)+'</select></label>'+
@@ -73,7 +74,7 @@ export function websitePickerView(state,{msg,esc,blocks,destination}){
  const footer='<footer class="website-picker-footer"><div><strong>'+label('pickerToPage',{site:destination.site.name,page:destination.path})+'</strong><small>'+ready+'</small></div>'+position()+review+
   (queue.size?button('pickerInsertGroup','insert-group','',{count:queue.size}):button(placements?.total&&!state.usageSite?'pickerInsertAgain':'pickerInsert','insert',item?'':'disabled'))+'</footer>';
  return '<header><div><h2 id="website-picker-title">'+label('library')+'</h2>'+
- (Number.isSafeInteger(state.totalEntries)?'<strong>'+label('pickerEligibleCount',{count:count(state.totalEntries)})+'</strong>':'')+'</div>'+button('pickerClose','close')+'</header><div class="website-picker-intro"><p>'+label('pickerPermissionHelp')+'</p>'+
+ '<strong data-picker-total>'+(Number.isSafeInteger(state.totalEntries)?label('pickerEligibleCount',{count:count(state.totalEntries)}):'')+'</strong></div>'+button('pickerClose','close')+'</header><div class="website-picker-intro"><p>'+label('pickerPermissionHelp')+'</p>'+
  (state.preparation?'<p class="hint">'+label(({preparing:'pickerPreparingLibrary',locked:'pickerLockedLibrary',failed:'pickerFailedLibrary'})[state.preparation])+'</p>':'')+
  '<div class="website-picker-facets">'+facet('project')+facet('book')+'</div><div class="website-picker-search">'+
  '<label>'+label('pickerSearch')+'<input type="search" maxlength="160" data-picker-search value="'+esc(state.search)+'"></label>'+
