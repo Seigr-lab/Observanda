@@ -132,19 +132,14 @@ Commercial-print PDF/X export is not implemented. Physical printing and assistiv
 
 Use the visual website editor for a personal site, portfolio, field guide, project journal, teaching resource or documentation website. Build entirely from custom pages, include selected material from several lab books and projects, or combine both.
 
-Create multiple independent websites, each with its own pages, design, public content selection and publishing destination. Choose its content independently of the lab-book hierarchy.
+Each website has its own HTML pages, CSS, assets and publishing destination. Open **Website editor** to work on those files, even when the research databases are unavailable. For a site created with the previous editor, choose **Convert existing website** once while its research sources are available. Conversion keeps the original composition and refuses to import content whose permission cannot be established.
 
-- Compose pages and arrange text, images, galleries and selected research content.
-- Choose fonts and colours, and customize shared or page-specific headers, sidebars and footers.
-- Select the records, sections, attachments, figures and supporting data that belong in each public edition.
-- Browse a draft at desktop or phone width, then prepare and review a separate edition before publishing.
-- Publish to GitHub Pages, deploy to an SSH host or export static files for another host.
-- Review changes before updating a GitHub repository. To replace an existing website or application, review the complete replacement and optionally preserve the previous files in a separate branch. Existing `CNAME` and license files are kept; conflicting output is blocked.
-- Retain prepared editions for later review and republication.
+1. In the lab book and entry, choose what may be used on websites and what may be used in PDFs. You can keep a section, attachment or result private while sharing the rest of the entry. Saving those choices prepares the permitted content. Nothing is published by selecting it.
+2. In **Website editor**, choose **Available content** to place the prepared content on a page. You can edit the page visually or edit its HTML and CSS. Changes you make here belong to the website and do not edit the lab book.
+3. Change a visibility setting in the lab book at any time. For example, enabling a previously private methods section adds it to the entry already on the website. Withdrawing permission removes it from that placement and from the next publication. Neither action requires removing and adding the entry again.
+4. Choose **Save website**, then **Preview saved website**. Preview opens the saved page and its assets. Choose **Publish to folder** to review and write the website to a local destination, download the ZIP, or review and publish to the configured GitHub or SSH destination. These operations use the saved files.
 
-For example, create a field-guide page, add a text section and a gallery, then select a section on the canvas to edit it. Move, duplicate or remove sections using their visible controls; use Undo and Redo to revise those choices. **Save website** saves the design, while **Preview website** opens a reading view of the draft. **Prepare edition** creates a separate edition for review in the background, so you can continue working. Exporting that edition to a local folder requires no publishing account or external server.
-
-Publication permissions belong to the lab books, records and writing sections; each website's selection must respect them. An edition can omit preparation inputs, attempt details, linked-record information, contributor credits and result statements without changing the original record.
+Permission changes affect the saved composition. To update an already published website, publish the changed files to its destination. Previously downloaded PDFs and independent copies of public files cannot be withdrawn.
 
 Website design is separate from the app's appearance. Publishing selected work does not publish the whole workspace, and website visitors do not need Observanda installed.
 
