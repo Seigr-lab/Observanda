@@ -14,6 +14,7 @@ import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {AppError} from './errors.js';
 import {assertPublicFiles} from './privacy.js';
 import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
+import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
 
@@ -217,14 +218,20 @@ export class WebsiteFileStore{
   return this.present(await this.commit(candidate,{signal}),'index.html',{signal});
  },{write:true,signal});}
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
+ menu(id,options){return readSiteMenu(this,id,options);}
+ saveMenu(id,options){return saveSiteMenu(this,id,options);}
  save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
-  const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html,former?.placements);
+  const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
   const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
-  validateWebsiteHTML(html,{scripts:await this.scripts(manifest.files),file:page});validateWebsiteCSS(css,{file:cssPath});
+  const scripts=await this.scripts(manifest.files);validateWebsiteHTML(html,{scripts,file:page});validateWebsiteCSS(css,{file:cssPath});
   if(former?.placements.length||placements.length){
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
+  }
+  if(!former){
+   ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
+   validateWebsiteHTML(html,{scripts,file:page});
   }
   const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,...(draft?{draft:true}:{})});

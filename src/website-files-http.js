@@ -57,7 +57,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(req.method==='GET'&&!['session','preparation','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
-  if(writes.has(operation)){onWrite();await check();}
+  if(writes.has(operation)||operation==='menu/save'){onWrite();await check();}
   if(operation==='session'){
    const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
@@ -73,6 +73,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
+  if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,signal}));return true;}
+  if(operation==='menu/save'){json(await store.saveMenu(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}
   if(operation==='save'){json(await store.save(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
