@@ -44,6 +44,8 @@ test('upgrade opens previously saved default and named websites and publishes th
   await sites.selectOption(other[0]);await expect(page.frameLocator('#website-files-canvas').locator('body')).toContainText(previousDefaultText);
   await chooseSite(page,siteId);
   expect(onlineRoutes.filter(route=>/\/(convert-existing|legacy-list)$/.test(route))).toEqual([]);
+  const entered=onlineRoutes.indexOf('/api/website-files/session');expect(entered).toBeGreaterThanOrEqual(0);
+  expect(onlineRoutes.slice(entered)).not.toContain('/api/activity');
   phase='stop before taking databases offline';await fixture.close(app);app=null;
   const databases=await disableWebsiteResearch(fixture.directory,roots);expect(databases).toHaveLength(3);
   phase='open saved files with research unavailable';app=await fixture.start(undefined,{website:true});page=await app.firstWindow();watch(page,offlineRoutes);

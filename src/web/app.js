@@ -1334,6 +1334,7 @@ function renderWebsiteFiles(){
   document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
 }
 async function enterWebsiteFiles({hash='#/website',replace=false}={}){
+  activity.pause();
   const epoch=++fileEditorEpoch;state.filesMode=true;state.fileError=null;state.page='website';state.dirty=false;
   if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
   const id=/^#\/websites\/([a-f0-9-]{36})\//.exec(projectRoute(hash).hash)?.[1]??null;
@@ -1358,8 +1359,11 @@ async function loadWorkspaceOwned(){
   state.access=await api('/api/access/status');
   if(state.access.locked){activity.hide();await recordDrafts.start(null);render();return;}
   if(fileEditorHash(location.hash)||new URLSearchParams(location.search).get('view')==='website'&&!location.hash.startsWith('#/')){await enterWebsiteFiles({hash:fileEditorHash(location.hash)?location.hash:'#/website',replace:true});return true;}
-  if(!researchServicesStarted){await writerRecovery.check();researchServicesStarted=true;activity.start();}
+  if(!researchServicesStarted){await writerRecovery.check();researchServicesStarted=true;}
+  if(state.filesMode)return;
+  activity.start();
   const activityStatus=await activity.refresh();
+  if(state.filesMode)return;
   if(activityStatus.busy&&!activityStatus.readable){
    state.waitingForOperation=true;
    appShell.showStandalone(`<main id="main" class="loading"><h1>${esc(t('activity','busy'))}</h1><p>${esc(t('activity','busyDetail'))}</p><div data-owned-activity data-all-activity="true"></div></main>`);

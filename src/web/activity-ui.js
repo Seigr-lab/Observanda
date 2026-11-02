@@ -56,7 +56,7 @@ export function activityUI({onChange=()=>{}}={}){
  host.innerHTML='<button type="button" class="button" aria-controls="app-activity-panel" aria-expanded="false" data-toggle></button><section id="app-activity-panel" aria-labelledby="app-activity-heading" hidden><header><h2 id="app-activity-heading" tabindex="-1"></h2><button type="button" data-close>&times;</button></header><p data-connection role="status"></p><p data-empty></p><div data-list></div><button type="button" class="button" data-clear></button></section>';
 
  const toggle=host.querySelector('[data-toggle]'),panel=host.querySelector('section'),list=host.querySelector('[data-list]'),cards=new Map(),owned=new Map();
- let snapshot=null,pending=null,timer=null,stopped=false,generation=0;
+ let snapshot=null,pending=null,timer=null,stopped=true,generation=0,pollGeneration=0;
  const owner=entry=>activityOwner(entry.kind,entry.view);
  const ordered=()=>[...(snapshot?.operations??[])].sort((a,b)=>({running:0,queued:1}[a.state]??2)-({running:0,queued:1}[b.state]??2)||b.startedAt-a.startedAt);
  function mount(){const slot=document.querySelector('[data-activity-slot]');if(slot&&host.parentNode!==slot)slot.append(host);}
@@ -113,14 +113,16 @@ export function activityUI({onChange=()=>{}}={}){
  async function refresh(){
   if(pending)return pending;
   const epoch=generation;
-  pending=(async()=>{
+  const request=(async()=>{
    const response=await fetch('/api/activity',{cache:'no-store'});
-   if(!response.ok){if([401,403].includes(response.status)){snapshot=null;clear(cards);clear(owned);host.hidden=true;}throw await response.json();}
+   if(!response.ok){if(epoch===generation&&[401,403].includes(response.status)){snapshot=null;clear(cards);clear(owned);host.hidden=true;}throw await response.json();}
    const next=await response.json();if(epoch!==generation)return next;snapshot=next;updateText(host.querySelector('[data-connection]'),'');render();onChange(next);return next;
-  })().catch(error=>{updateText(host.querySelector('[data-connection]'),text('connection'));throw error;}).finally(()=>{pending=null;});
+  })().catch(error=>{if(epoch===generation)updateText(host.querySelector('[data-connection]'),text('connection'));throw error;}).finally(()=>{if(pending===request)pending=null;});
+  pending=request;
   return pending;
  }
- async function poll(){try{await refresh();}catch{/* A stale view must not claim completion. */}finally{if(!stopped)timer=setTimeout(poll,1500);}}
+ async function poll(epoch){try{await refresh();}catch{/* A stale view must not claim completion. */}finally{if(!stopped&&epoch===pollGeneration)timer=setTimeout(()=>poll(epoch),1500);}}
+ function pause(){stopped=true;pollGeneration++;generation++;clearTimeout(timer);pending=null;}
  toggle.addEventListener('click',()=>panel.hidden?open():close());host.querySelector('[data-close]').addEventListener('click',close);
  panel.addEventListener('click',event=>{if(event.target.closest('[data-owner]'))close();});
  panel.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();close();}});
@@ -128,5 +130,5 @@ export function activityUI({onChange=()=>{}}={}){
   try{const response=await fetch('/api/activity/clear',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId},body:'{}'});if(!response.ok)throw await response.json();await refresh();}catch{updateText(host.querySelector('[data-connection]'),text('connection'));}
  });
  const unsubscribe=onLanguageChange(render);
- return {open,refresh,bind,storageBusy:()=>!!snapshot?.busy&&(!snapshot.readable||snapshot.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&active(entry))),start(){stopped=false;void poll();},hide(){generation++;host.hidden=true;panel.hidden=true;toggle.setAttribute('aria-expanded','false');clear(cards);clear(owned);snapshot=null;},stop(){stopped=true;clearTimeout(timer);unsubscribe();clear(cards);clear(owned);host.remove();}};
+ return {open,refresh,bind,pause,storageBusy:()=>!!snapshot?.busy&&(!snapshot.readable||snapshot.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&active(entry))),start(){if(stopped){stopped=false;void poll(pollGeneration);}},hide(){generation++;host.hidden=true;panel.hidden=true;toggle.setAttribute('aria-expanded','false');clear(cards);clear(owned);snapshot=null;},stop(){pause();unsubscribe();clear(cards);clear(owned);host.remove();}};
 }
