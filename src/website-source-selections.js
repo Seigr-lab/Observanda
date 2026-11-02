@@ -6,7 +6,7 @@ import {RetainedTableIndex} from './retained-table-index.js';
 import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
-import {validWebsiteSelection} from './web/website-selection.js';
+import {validWebsiteSelection,websiteRecordShare} from './web/website-selection.js';
 import {validEditionSelection,editionRevisionKey,editionAvailabilityKey} from './web/publication-selection.js';
 import {digest,serialize} from './storage-format.js';
 
@@ -115,7 +115,7 @@ export function withWebsiteSourceSelections(document,operation,{signal,lazy=fals
 
 export async function sourceRecordChoice(selection,id){return sourceSelectionReader(selection)?.get(id)??selection.records.find(value=>value.id===id);}
 export async function sourceRecordIncluded(selection,record,projectId){
- if(record.share!==true)return false;const choice=await sourceRecordChoice(selection,record.id);return choice?.share??(selection.includeProjects.includes(projectId)?true:selection.defaultShare??record.share);
+ if(record.share!==true)return false;return websiteRecordShare(selection,record,projectId,await sourceRecordChoice(selection,record.id)??null);
 }
 export async function* sourceRecordChoices(selection){const reader=sourceSelectionReader(selection);if(reader)yield* reader.items();else yield* selection.records;}
 
@@ -137,10 +137,14 @@ export function sourceRecordOrder(selection,store,snapshot,{order='position',sig
    // Positive attachment requests and retained revisions still need admission.
    if(choice.share===false&&choice.attachments.every(item=>item.share===false)&&!await reader.required(choice.id))continue;
    const row=await store.member(snapshot,choice.id);if(!row){if(choice.share===false&&!await reader.required(choice.id))continue;throw new AppError('RECORD_CHANGED');}
-   const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true}));
-   projectSourceAttachmentChoices(choice.attachments,summary.publication.attachments);
+   let member=row.position===undefined&&Array.isArray(snapshot.records)?{...row,position:snapshot.records.findIndex(value=>value.id===row.id)}:row;
+   const missingOrder=member.share===undefined||member.notebookId===undefined||(order!=='position'&&member.occurredOn===undefined);
+   if(choice.attachments.length||choice.share===true&&missingOrder){
+    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true}));
+    if(choice.attachments.length)projectSourceAttachmentChoices(choice.attachments,summary.publication.attachments);
+    if(missingOrder)member={...member,share:summary.share,notebookId:summary.notebookId,occurredOn:summary.occurredOn};
+   }
    if(choice.share===true){
-    const member=row.position===undefined&&Array.isArray(snapshot.records)?{...row,position:snapshot.records.findIndex(value=>value.id===row.id)}:row;
     yield await index.describe(member,order!=='position');
    }
   }

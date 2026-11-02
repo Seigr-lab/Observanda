@@ -1,4 +1,4 @@
-import {sourceSelectionReader,sourceRecordChoice,sourceRecordIncluded,projectSourceAttachmentChoices} from './website-source-selections.js';
+import {sourceSelectionReader,sourceRecordChoice,projectSourceAttachmentChoices} from './website-source-selections.js';
 import {websitePublicationMetadata,websitePublicationPages,websitePublicationCollections} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,validateWebsiteDocumentSelection,websiteDocumentHeader} from './website-document-validation.js';
@@ -46,9 +46,11 @@ export async function* selectedPublicationRows(store,snapshot,{signal,metadata=s
   for await(const row of publicationRecords(store,snapshot,{metadata,selection,overrides:new Map(),notebooks,after:page?.after??null,recordId:page?.recordId??null,signal})){
    if(page?.recordId&&row.id!==page.recordId)continue;
    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true,inventory,inventoryFallback:false}));
-   if(!notebooks.has(summary.notebookId)||!await sourceRecordIncluded(selection,summary,owners.get(summary.notebookId)))continue;
+   if(!notebooks.has(summary.notebookId)||summary.share!==true)continue;
+   const patch=await sourceRecordChoice(selection,row.id);
+   if(!websiteRecordShare(selection,summary,owners.get(summary.notebookId),patch??null))continue;
    const index=position++;if(page&&(index<page.offset||index>=page.offset+page.limit))continue;
-   yield {row,summary,patch:await sourceRecordChoice(selection,row.id)};if(page&&position>=page.offset+page.limit)return;
+   yield {row,summary,patch};if(page&&position>=page.offset+page.limit)return;
   }
   return;
  }

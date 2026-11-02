@@ -104,7 +104,7 @@ test('a sparse paged source reads only explicit members while preserving saved p
  const {result}=await document([source]);await withWebsiteSourceSelections(result,async reader=>{
   const value=await reader.get(source.workspaceId),options={metadata,selection:value.selection};
   assert.deepEqual((await Array.fromAsync(selectedPublicationRows(store,snapshot,options))).map(row=>row.row.position),[3,290]);
-  assert.equal(summaries,4);assert.equal(lookups,2);
+  assert.equal(summaries,2);assert.equal(lookups,2);
   assert.deepEqual((await Array.fromAsync(selectedPublicationRows(store,snapshot,{...options,page:{after:3,offset:0,limit:1}}))).map(row=>row.row.position),[290]);assert.equal(lookups,2);
  });
 });

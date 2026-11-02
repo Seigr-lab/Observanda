@@ -9,9 +9,10 @@ export function validWebsiteSelection(value){
   Array.isArray(value.records)&&new Set(value.records.map(item=>item?.id)).size===value.records.length&&value.records.every(item=>
    exact(item,['id','share','attachments'])&&researchId(item.id)&&(item.share===null||typeof item.share==='boolean')&&Array.isArray(item.attachments)&&new Set(item.attachments.map(a=>a?.id)).size===item.attachments.length&&item.attachments.every(a=>exact(a,['id','share'])&&researchId(a.id)&&typeof a.share==='boolean'));
 }
-export function websiteRecordShare(selection,record,projectId){
+export function websiteRecordShare(selection,record,projectId,choice){
  if(record.share!==true)return false;
- return selection.records.find(item=>item.id===record.id)?.share??(selection.includeProjects.includes(projectId)?true:selection.defaultShare??record.share);
+ if(choice===undefined)choice=selection.records.find(item=>item.id===record.id);
+ return choice?.share??(selection.includeProjects.includes(projectId)?true:selection.defaultShare??record.share);
 }
 export function websiteSelectionDraft(){
  let value=emptyWebsiteSelection(),base=emptyWebsiteSelection();const projects=new Map();
