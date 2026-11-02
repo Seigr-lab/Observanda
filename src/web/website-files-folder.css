@@ -1,0 +1,26 @@
+.website-folder { max-width:66rem; margin-inline:auto; display:grid; gap:.65rem; padding:clamp(1rem,2vw,1.75rem) }
+.website-folder :is(h2,h3,h4,p) { margin:0 }
+.website-folder-destination { display:flex; align-items:end; gap:.5rem; flex-wrap:wrap }
+.website-folder-destination label { flex:1 1 22rem; min-width:14rem }
+.website-folder-destination input { display:block; margin-top:.35rem }
+.website-folder-destination .button { margin-bottom:.7rem }
+.website-folder [data-folder-plan] { border-top:1px solid var(--border,#b9c4d0); padding-top:1rem; display:grid; gap:1rem }
+.website-folder-summary { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem 1.2rem; align-items:center }
+.website-folder-summary ul { display:flex; flex-wrap:wrap; gap:.35rem; list-style:none; padding:0; margin:0 }
+.website-folder-summary li,.website-folder-kind { padding:.15rem .55rem; border:1px solid var(--border,#b9c4d0); border-radius:1rem; font-size:.84em; font-weight:600; white-space:nowrap }
+.website-folder-summary [data-file-change="conflict"][data-present],.website-folder-files [data-file-change="conflict"] .website-folder-kind { border:2px solid currentColor; color:var(--danger,#a52b31) }
+.website-folder-summary [data-file-change="removed"],.website-folder-files [data-file-change="removed"] .website-folder-kind { border-style:dashed }
+.website-folder-files { min-width:0 }
+.website-folder-files ul { list-style:none; margin:.35rem 0; padding:0; border-block:1px solid var(--border,#b9c4d0) }
+.website-folder-files li+li { border-top:1px solid var(--border,#b9c4d0) }
+.website-folder-files summary { cursor:pointer; padding:.48rem .2rem; overflow-wrap:anywhere }
+.website-folder-kind { display:inline-block; margin-inline:.25rem .65rem }
+.website-folder-files summary small { margin-inline-start:.5rem; font-weight:500 }
+.website-folder-files dl { display:grid; grid-template-columns:minmax(8rem,max-content) minmax(0,1fr); gap:.4rem .8rem; padding:.6rem 1rem; margin:0 0 .5rem; background:var(--surface-alt,rgba(120,136,150,.08)) }
+.website-folder-files dd { margin:0; overflow-wrap:anywhere }
+.website-folder-files code { font-size:.88em }
+.website-folder-pagination,.website-folder-approval { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1rem }
+.website-folder-pagination { justify-content:space-between }
+.website-folder-approval { border-top:1px solid var(--border,#b9c4d0); padding-top:.45rem; justify-content:space-between }
+.website-folder-approval label { display:flex; align-items:baseline; gap:.5rem; flex:1 1 26rem }
+.website-folder-approval input { flex:none }

@@ -119,7 +119,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    const local=new LocalExport(metadata,{fileOwner:{locked:(_directory,task)=>store.withSite(siteId,expectedRevision,task),candidate:async reviewId=>{
     const value=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});if(value.reviewId!==reviewId)throw new AppError('STALE');await value.verify({signal});return value;
    }}});
-   if(operation==='folder/plan'){const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});json(await local.plan({reviewId:candidate.reviewId,directory:options.directory}));}
+   if(operation==='folder/plan'){const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});json({...await local.plan({reviewId:candidate.reviewId,directory:options.directory}),currentReviewId:candidate.reviewId});}
    else if(operation==='folder/page')json(await local.page({id:options.id,offset:options.offset}));
    else if(operation==='folder/discard')json(await local.discard({id:options.id}));
    else if(operation==='folder/apply')json(await local.apply({id:options.id,reviewed:options.reviewed}));
