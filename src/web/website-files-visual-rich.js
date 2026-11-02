@@ -112,6 +112,12 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
     // Keep the last live range while that control is operating on it.
     if(host.activeElement?.contentDocument===document)capture();
   });
+  // selectionchange is queued. A keyboard move to the inspector or a pointer
+  // activation can leave the frame before that event runs; capture the live
+  // native selection while the editing host still owns its focus.
+  listen(document,'keyup',capture);
+  listen(document,'pointerup',capture);
+  listen(document,'focusout',capture,{capture:true});
   listen(document.body,'paste',event=>{
     event.preventDefault();
     const selection=win.getSelection();if(!selection.rangeCount||!safeRange(selection.getRangeAt(0)))return;

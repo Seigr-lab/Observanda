@@ -131,3 +131,24 @@ test('rich text headings lists links and plain-text paste preserve the document 
  await expect(frame.getByText('A permitted paragraph',{exact:true})).toBeVisible();
  expect(websiteMarkerShape((await page.evaluate(()=>window.saved())).html)).toEqual(websiteMarkerShape(saved));
 });
+
+test('keyboard formatting retains a cross-inline selection when focus moves to the inspector',async({page})=>{
+ const {frame}=await fixture(page);
+ const paragraph=frame.locator('[data-section-id="text"] p').first();
+ await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');
+ expect(await paragraph.evaluate(el=>el.ownerDocument.getSelection().toString())).toBe('Nested original wording');
+ const bold=page.locator('[data-visual-command=bold]');await bold.focus();await page.keyboard.press('Enter');
+ await expect(paragraph.locator('b,strong').first()).toBeVisible();
+ const text=await paragraph.evaluate(el=>[...el.querySelectorAll('b,strong')].map(node=>node.textContent).join(''));
+ expect(text).toBe('Nested original wording');
+ // A selectionchange is delivered on a later task. Moving HTML focus and
+ // activating the inspector during the same task must use the current range.
+ await paragraph.dblclick();
+ await page.evaluate(()=>{
+   const doc=document.querySelector('iframe').contentDocument,range=doc.createRange();
+   range.selectNodeContents(doc.querySelector('[data-section-id="text"] p:nth-child(2)'));
+   const selection=doc.getSelection();selection.removeAllRanges();selection.addRange(range);
+   const button=document.querySelector('[data-visual-command="italic"]');button.focus();button.click();
+ });
+ await expect(frame.locator('[data-section-id="text"] p:nth-child(2) :is(i,em)')).toHaveText('Second paragraph');
+});
