@@ -66,3 +66,17 @@ test('shared menu links to converted entry pages follow withdrawal and regrant w
  const restored=await store.open(id,{path:'another.html'});assert.match(restored.html,/Newly public/);assert.ok(restored.html.includes('href="'+target+'"'));
  const pending=await store.beginSourceUpdate({sourceId});await assert.rejects(store.menu(id,{expectedRevision:restored.site.revision}),{code:'CONFLICT'});await store.cancelSourceUpdate({sourceId,token:pending});
 });
+
+test('public menu pictures are inherited on nested pages, retained in drafts and retired after their last use',async t=>{
+ const {store,id}=await fixture(t),picture='pictures/'+'a'.repeat(64)+'.png',doc='<html><body><main>Page</main></body></html>';
+ const start=await store.importFiles(id,{name:'Images',files:new Map([['index.html',doc],['style.css','']]),draftFiles:new Map([['draft.html',doc],['draft-styles.css','']])});
+ const image='<nav aria-label="Website"><a href="index.html"><img alt="Logo" src="'+picture+'">Home</a></nav>';
+ const withPhoto=await store.save(id,{...start,html:doc.replace('<main>',image+'<main>'),expectedRevision:start.site.revision,receivePictures:async function*(){yield {name:picture,bytes:Buffer.from('menu picture')};}});
+ const added=await store.save(id,{path:'other/place.html',html:doc,css:'',expectedRevision:withPhoto.site.revision});
+ const {items}=await store.menu(id,{expectedRevision:added.site.revision});items[0].label='Welcome';
+ const shared=await store.saveMenu(id,{items,expectedRevision:added.site.revision});
+ assert.match((await store.open(id,{path:'other/place.html'})).html,/src="\.\.\/pictures\//);
+ assert.ok((await store.export(id)).files.has(picture));
+ const draft=await store.open(id,{path:'draft.html'});assert.match(draft.html,/src="pictures\//);
+ await store.saveMenu(id,{items:[],expectedRevision:shared.site.revision});assert.ok(!(await store.export(id)).files.has(picture));
+});

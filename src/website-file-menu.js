@@ -20,7 +20,7 @@ const relative=(page,to)=>to.startsWith('#')||/^[a-z][a-z0-9+.-]*:/i.test(to)?to
  path.posix.relative(path.posix.dirname(page),to.split('#')[0])+(to.includes('#')?'#'+to.split('#').slice(1).join('#'):'');
 const managed=node=>has(node,'data-observanda-source')||has(node,'data-observanda-link');
 function supported(nav){
- if(!nav||[...descendants(nav)].some(node=>node!==nav&&has(node,'data-observanda-source')&&node.tagName!=='a'))return null;
+ if(!nav||[...descendants(nav)].some(node=>has(node,'data-website-instance')||node!==nav&&has(node,'data-observanda-source')&&node.tagName!=='a'))return null;
  const items=children(nav),lists=items.filter(list);
  if(lists.length===1&&children(lists[0]).every(node=>node.tagName==='li'))return lists[0];
  return items.every(node=>node.tagName==='a')?nav:null;

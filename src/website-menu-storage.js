@@ -62,13 +62,16 @@ export function saveSiteMenu(store,id,{expectedRevision,path='index.html',items,
    const file=files.get(page.path),html=await store.readText(file,{signal});
    const updated=writeWebsiteMenu(html,page.path,page.placements,base,items,owners);
    if(updated.html===html)continue;
-   validateWebsiteHTML(updated.html,{scripts,file:page.path});
-   pages.set(page.path,{...page,placements:websiteSourcePlacements(updated.html,updated.prior)});
+   const pictures=new Set();validateWebsiteHTML(updated.html,{scripts,file:page.path,pictures});
+   for(const name of pictures){const picture=files.get(name);if(!picture||picture.draft&&!page.draft)throw new AppError('INVALID');}
+   pages.set(page.path,{...page,pictures:[...pictures],placements:websiteSourcePlacements(updated.html,updated.prior)});
    files.set(page.path,await store.siteFile(id,page.path,updated.html,{draft:page.draft,signal}));changed=true;
   }
   if(!changed)return store.present(manifest,path,{signal});
   const nextPages=[...pages.values()],sources=[...new Map(nextPages.flatMap(page=>page.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
-  const candidate={...manifest,pages:nextPages,sources,files:await store.siteAssets([...files.values()],sources,nextPages)};
+  const usedPictures=new Set([...nextPages.flatMap(page=>page.pictures??[]),...Object.values(manifest.pictureStyles??{}).flat()]);
+  const members=[...files.values()].filter(file=>!file.picture||usedPictures.has(file.name));
+  const candidate={...manifest,pages:nextPages,sources,files:await store.siteAssets(members,sources,nextPages)};
   await store.assertSources(candidate);
   return store.present(await store.commit(candidate,{signal}),path,{signal});
  },{write:true,signal});
