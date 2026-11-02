@@ -8,6 +8,7 @@ import {LocalExport} from './local-export.js';
 import {serveContent} from './file-content.js';
 import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
+import {websitePictureUpload} from './website-picture-upload.js';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
@@ -55,6 +56,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
   if(req.method==='GET'&&!['session','preparation','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
+  if(operation==='save-pictures'&&req.method==='POST'){
+   if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
+   onWrite();await check();
+   const {data,pictures}=await websitePictureUpload(req,signal);
+   if(!researchId(data.siteId))throw new AppError('INVALID');
+   json(await store.save(data.siteId,{html:data.html,css:data.css,path:data.path,expectedRevision:data.expectedRevision,receivePictures:pictures,signal}));return true;
+  }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
   if(writes.has(operation)||operation==='menu/save'){onWrite();await check();}
