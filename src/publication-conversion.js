@@ -97,7 +97,7 @@ export class PublicationConversion{
  async seedWebsite(storage,provenance,{signal}={}){
   const sourceId=websiteSourceId(provenance),prior=await this.files.sourceStatus(sourceId);if(prior.pending)throw new AppError('CONFLICT');
   if(!prior.source){
-   const token=await this.files.beginSourceUpdate({sourceId,ifAbsent:true,signal});
+   const token=await this.files.beginSourceUpdate({sourceId,target:provenance.target,ifAbsent:true,signal});
    try{
     const targets={records:new Map([[provenance.recordId,null]]),books:new Set()},state=(await states(storage,targets,provenance.workspaceId,['website'])).get(sourceId);
     if(!state?.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
@@ -115,7 +115,7 @@ export class PublicationConversion{
   const before=await states(storage,targets,workspaceId),pending=new Map();
   // After this point every affected site fails closed until its new website
   // files are committed. A lost response can be retried on the same source.
-  try{for(const [id,state] of before){const prior=await this.files.sourceStatus(id);pending.set(id,{prior,token:await this.files.beginSourceUpdate({sourceId:id}),state});}}
+  try{for(const [id,state] of before){const prior=await this.files.sourceStatus(id);pending.set(id,{prior,token:await this.files.beginSourceUpdate({sourceId:id,target:state.provenance.target}),state});}}
   catch(error){await Promise.allSettled([...pending].filter(([,item])=>!item.prior.pending).map(([sourceId,{token}])=>this.files.cancelSourceUpdate({sourceId,token})));throw error;}
   let result,error;try{result=await operation();}catch(failure){error=failure;}
   const after=await states(storage,targets,workspaceId);
