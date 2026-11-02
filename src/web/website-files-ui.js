@@ -9,6 +9,15 @@ import {destinationPlanRows,destinationConflictCount} from './publication-review
 const tr=(key,args)=>t('websiteFiles',key,args);
 
 const fileRoute=siteId=>'#/websites/'+siteId+'/editor';
+const preparationStages=new Set(['checking-saved-editions','capturing-entries','rendering-pages','reading-saved-files','converting-entries','copying-files','saving-files']);
+
+function preparationMessage(preparation){
+ if(!preparationStages.has(preparation.stage))return tr('preparing');
+ const stage=tr(preparation.stage),{completed,stageTotal}=preparation;
+ if(!Number.isSafeInteger(completed)||completed<0)return stage;
+ if(Number.isSafeInteger(stageTotal)&&stageTotal>=completed)return tr('stageProgress',{stage,completed,total:stageTotal});
+ return completed?tr('stageCompleted',{stage,completed}):stage;
+}
 
 export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{}}){
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
@@ -17,6 +26,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let undo=[],redo=[],lastCheckpoint=0,historyBytes=0;
  const request=(operation,data,options={})=>api('/api/website-files/'+operation,data,{...options,owner:null,adopt:false});
  const siteId=()=>opened?.site.id;
+ const draftPage=()=>opened?.site.pages.find(page=>page.path===opened.path)?.draft===true;
  let nextSite=null,preparationTimer=null,missingSite=false;
  let requestedSite=null,openPublishing=false;
  const connectionState={get storage(){return session?{contextId:session.contextId}:null;},publishing:{}};
@@ -100,7 +110,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    try{
     if(document.hidden||busy)return;
     const result=await request('preparation',undefined,{signal:controller.signal});
-    if(epoch!==generation||result.preparation?.state==='preparing')return;
+    if(epoch!==generation)return;
+    if(result.preparation?.state==='preparing'){
+     session.preparation=result.preparation;
+     const status=document.querySelector('[data-website-preparation]');
+     if(status){const message=preparationMessage(session.preparation);if(status.textContent!==message)status.textContent=message;}
+     return;
+    }
     if(result.preparation?.state!=='ready'){
      session.preparation=result.preparation;render();return;
     }
@@ -158,14 +174,17 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return '<label>'+esc(tr('site'))+' <select class="website-file-select" data-website-file-site>'+choose+options+'</select></label>'+(nextSite?button('more','sites-more'):'');
  }
  function pageToolbar(){
-  const options=opened.site.pages.map(page=>'<option value="'+esc(page.path)+'" '+(page.path===opened.path?'selected':'')+'>'+esc(page.title||page.path)+'</option>').join('');
+  const options=opened.site.pages.map(page=>{
+   const title=page.title||page.path;
+   return '<option value="'+esc(page.path)+'" '+(page.path===opened.path?'selected':'')+'>'+esc(page.draft?tr('draftPage',{title}):title)+'</option>';
+  }).join('');
   return '<label>'+esc(tr('page'))+' <select class="website-file-select" data-website-file-page>'+options+'</select></label>'+
    button('addPage','new-page')+button('save','save','data-website-file-requires-clean')+button('discard','discard')+
    button('preview','preview','data-website-file-requires-clean')+button('download','download','data-website-file-requires-clean');
  }
  function unopenedView(){
   const state=session.preparation?.state;
-  if(state==='preparing')return '<p role="status">'+esc(tr('preparing'))+'</p>';
+  if(state==='preparing')return '<p role="status" data-website-preparation>'+esc(preparationMessage(session.preparation))+'</p>';
   if(missingSite||state!=='ready'){
    const message=missingSite?'unavailable':state==='failed'?'preparationFailed':'workspaceCheck';
    return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('retry','retry')+'</section>';
@@ -188,13 +207,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const toolbar=form?'':siteSelector()+(opened?pageToolbar():'');
   return '<fieldset class="website-file-controls" data-website-file-controls><header><h1>'+esc(title)+'</h1>'+headerActions+'</header>'+
    (toolbar?'<div class="website-files-toolbar">'+toolbar+'</div>':'')+
+   (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    '<p class="website-files-status" role="status" data-website-files-status></p>'+
    button('reopen','reopen','data-website-files-reopen '+(stale?'':'hidden'))+body+'</fieldset>';
  }
  function formView(){
   const isPage=form.type==='page',label=isPage?'addPage':'create';
   const name=field(isPage?'pageTitle':'name','','required maxlength="160"');
-  const path=isPage?field('pagePath',crypto.randomUUID()+'.html','required pattern="[a-zA-Z0-9_./\\-]+[.]html"'):'';
+  const path=isPage?field('pagePath',crypto.randomUUID()+'.html','required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
   return '<section class="panel"><form data-website-files-form><h2>'+esc(tr(label))+'</h2>'+name+path+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
  }
@@ -263,7 +283,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  async function submit(element){if(!element.matches('[data-website-files-form]'))return false;if(!element.reportValidity())return true;await run(async()=>{
   const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result;
   if(form.type==='new')result=await request('create',{name:value('name')});
-  else if(form.type==='page'){const title=value('pageTitle'),path=value('pagePath');if(opened.site.pages.some(page=>page.path===path))throw Error(tr('duplicatePage'));result=await request('save',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,html:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><link rel="stylesheet" href="'+'../'.repeat(path.split('/').length-1)+esc(opened.site.cssPath)+'"></head><body><main><h1>'+esc(title)+'</h1></main></body></html>',css});}
+  else if(form.type==='page'){
+   const title=value('pageTitle'),path=value('pagePath');
+   if(opened.site.pages.some(page=>page.path===path))throw Error(tr('duplicatePage'));
+   // A newly added page uses the public site's stylesheet even when the
+   // current page has private CSS dedicated to its unpublished draft.
+   const publicPage=draftPage()?await request('open',{siteId:siteId(),path:'index.html'}):opened;
+   const style='../'.repeat(path.split('/').length-1)+publicPage.site.cssPath;
+   result=await request('save',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,html:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><link rel="stylesheet" href="'+esc(style)+'"></head><body><main><h1>'+esc(title)+'</h1></main></body></html>',css:publicPage.css});
+  }
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();
  });return true;}

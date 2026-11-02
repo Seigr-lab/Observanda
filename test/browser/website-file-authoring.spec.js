@@ -10,12 +10,12 @@ const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><h
 const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
 
 test('a prepared website opens from saved files without another user action',async({page})=>{
- const calls=[];
+ const calls=[];let checks=0;
  await page.exposeFunction('filesAPI',route=>{
   calls.push(route);
   switch(route){
    case '/api/website-files/session':return sessionWith([],{state:'preparing'});
-   case '/api/website-files/preparation':return {preparation:{state:'ready'}};
+   case '/api/website-files/preparation':return {preparation:++checks===1?{state:'preparing',stage:'copying-files',completed:8,stageTotal:15}:{state:'ready'}};
    case '/api/website-files/list':return {items:[savedSite],next:null};
    case '/api/website-files/open':return savedPage;
    default:throw Error('Unexpected request '+route);
@@ -23,8 +23,34 @@ test('a prepared website opens from saved files without another user action',asy
  });
  await mountFilesEditor(page);await expect(page.getByRole('status')).toHaveText('Preparing saved websites…');
  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+ await expect(page.getByRole('status')).toHaveText('Copying website files (8 of 15)');
  await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
- expect(calls).toEqual(['session','preparation','list','open'].map(op=>'/api/website-files/'+op));
+ expect(calls).toEqual(['session','preparation','preparation','list','open'].map(op=>'/api/website-files/'+op));
+});
+
+test('private draft remains identifiable and new pages use the public stylesheet',async({page})=>{
+ const draft={path:'drafts/notes.html',title:'Notes',draft:true},pages=[...savedSite.pages,draft];
+ const site={...savedSite,pages},home={...savedPage,site,css:'main{color:blue}'};
+ const privatePage={...savedPage,site:{...site,cssPath:'drafts/draft.css'},path:draft.path,css:'.private-note{color:red}'};
+ const writes=[];
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route==='/api/website-files/session')return sessionWith([site],{state:'ready'});
+  if(route==='/api/website-files/open')return data.path===draft.path?privatePage:home;
+  if(route==='/api/website-files/version')return {revision:site.revision};
+  if(route==='/api/website-files/save'){
+   writes.push(data);return {...home,path:data.path,html:data.html,site:{...site,pages:[...pages,{path:data.path,title:data.title}]}};
+  }
+  throw Error('Unexpected request '+route);
+ });
+ await mountFilesEditor(page);
+ const select=page.locator('[data-website-file-page]'),notice=page.getByText('Saving keeps this page as a private draft. Exports and publications exclude it.');
+ await expect(select.locator('option').last()).toHaveText('Notes (private draft)');
+ await select.selectOption(draft.path);await expect(notice).toBeVisible();
+ await page.getByRole('button',{name:'Add page'}).click();
+ await page.getByLabel('Page title').fill('Field work');await page.getByLabel('Page file name').fill('pages/field.html');
+ await page.getByRole('button',{name:'Add page'}).click();await expect(select).toHaveValue('pages/field.html');
+ await expect(notice).toHaveCount(0);expect(writes).toHaveLength(1);
+ expect(writes[0].html).toContain('href="../style.css"');expect(writes[0].css).toBe(home.css);
 });
 
 test('the empty workspace creates once, disables actions while writing, and retains a failed form',async({page})=>{
@@ -81,14 +107,14 @@ for(const [state,message] of [
  });
 }
 async function mountFilesEditor(page,{resource=()=>'',hash=''}={}){
- await page.route('http://website.test/**',async route=>{
+ await page.route('https://website.test/**',async route=>{
   const url=new URL(route.request().url());if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:`<!doctype html><main id="root"></main><script type="module">
    import {websiteFilesUI} from '/website-files-ui.js';const root=document.querySelector('#root'),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
    const files=websiteFilesUI({api:async(route,data)=>{const response=await window.filesAPI(route,data);if(response?.errorCode)throw Object.assign(Error(response.message),{code:response.errorCode});return response;},esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));root.addEventListener('submit',e=>{e.preventDefault();files.submit(e.target);});await files.load();</script>`});
   if(url.pathname.startsWith('/api/website-files/preview/'))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
   const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
  });
- await page.goto('http://website.test/'+hash);
+ await page.goto('https://website.test/'+hash);
 }
 test('visual edits preserve saved HTML, styles and placement and reject outdated drafts',async({page})=>{
  let version=1,html='<!doctype html><html lang="en"><head><title>Observation</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Observation</h1><p>Initial notes</p><section data-observanda-source="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" data-observanda-source-revision="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"><p data-observanda-part="body">Copied text</p><p data-observanda-part="section-1">First release</p></section></main></body></html>',css='h1{color:rgb(12, 34, 56)}';
