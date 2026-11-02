@@ -14,4 +14,6 @@
 .website-files-structure .website-layer-toggle,.website-files-structure .website-layer-label { border:0; color:inherit; background:transparent; cursor:pointer; text-align:start; font:inherit; padding:.25rem }
 .website-files-structure .website-layer-label { flex:1 1 0; min-width:0; overflow-wrap:anywhere; white-space:normal }
 .website-files-structure .website-layer-toggle { flex:none }
+.website-layer-actions { flex:1 0 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem }
+.website-layer-actions .button { min-height:2rem;padding:.2rem .35rem;font-size:.86rem }
 [data-layer-controls]>div { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; margin:.3rem 0 }

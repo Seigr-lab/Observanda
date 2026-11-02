@@ -50,7 +50,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
     }
    }
    return '<li '+attr+' data-level="'+Math.min(depth,3)+'" '+(active?'aria-current="true" ':'')+(movable?'draggable="true"':'')+
-    '><span>'+toggle+labelButton+'</span>'+actions+'</li>';
+    '><span>'+toggle+labelButton+'</span>'+(actions?'<div class="website-layer-actions">'+actions+'</div>':'')+'</li>';
   }).join('');
   const count=controls.querySelector('[data-layer-count]');count.textContent=visible.length?String(offset+1)+'–'+String(offset+window.length)+' / '+String(visible.length):t('finderEmpty');
   for(const [key,disabled] of [['previous',offset===0],['next',offset+pageSize>=visible.length]]){

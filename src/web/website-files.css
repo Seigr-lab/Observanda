@@ -84,9 +84,28 @@
 .website-file-pages [data-pages-results] { max-height:40vh; overflow:auto }
 .website-files-components dialog iframe,dialog.website-author-dialog [data-main-canvas] { width:100%;min-height:13rem }
 .website-visual-rich button,.website-visual-actions button,.website-files-publish [data-recording-action] { font:inherit; padding:.25rem .5rem; border:1px solid var(--border,#aebed4); border-radius:.25rem; color:inherit; background:var(--surface,#fff) }
-@media(max-width:1150px) {
- .website-files-editor { grid-template-columns:minmax(13rem,23%) minmax(0,1fr) }
- .website-files-inspection { grid-column:2; max-height:none!important }
+/* Each desktop pane owns its vertical scroll. Size the work surface from
+   the space left by the real toolbar, including translated or wrapped text. */
+.website-files-editor .website-files-structure { max-height:none;overflow:visible }
+.website-files-editor>aside:focus-visible { outline:2px solid var(--accent,#3454ac);outline-offset:-2px }
+@media(min-width:62rem) and (min-height:38rem) {
+ .website-files-app:has(.website-files-editor,#website-files-preview) {
+  display:flex;flex-direction:column;height:100dvh;min-height:0;box-sizing:border-box;
+ }
+ .website-files-app:has(.website-files-editor,#website-files-preview)>.website-file-controls {
+  display:flex;flex-direction:column;flex:1;min-height:0;
+ }
+ .website-files-editor { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;grid-template-columns:minmax(12rem,18%) minmax(0,1fr) minmax(13rem,20%) }
+ .website-files-editor>aside { min-height:0;max-height:none;overflow-y:auto;overscroll-behavior-y:contain }
+ .website-files-viewport,.website-files-stage .website-files-canvas { height:100%;min-height:0 }
+ #website-files-preview { flex:1;height:0;min-height:0 }
+}
+@media(max-width:61.999rem),(max-height:37.999rem) {
+ .website-files-editor>aside { max-height:none;overflow:visible;scrollbar-gutter:auto }
+}
+@media(min-width:761px) and (max-width:61.999rem) {
+ .website-files-editor { grid-template-columns:minmax(12rem,26%) minmax(0,1fr) }
+ .website-files-inspection { grid-column:2 }
 }
 @media(max-width:760px) {
  .website-files-app header,.website-files-app .website-files-toolbar { gap:.3rem;margin-block-end:.35rem }

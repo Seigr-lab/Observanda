@@ -10,6 +10,49 @@ const labels=[
  'Summary of the independent replicate measurements'
 ];
 
+test('scrolling the outline, page or inspector keeps the other desktop panes in place',async({},info)=>{
+ test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires an isolated desktop qualification.');
+ test.setTimeout(180000);
+ const fixture=await websiteDesktopFixture();let app;
+ try{
+  app=await fixture.start();const page=await app.firstWindow();
+  await createWebsiteWorkspace(page,fixture.directory,'Authoring workspace');
+  const id=await page.evaluate(async()=>{
+   const {contextId}=await(await fetch('/api/storage')).json();
+   const sections=Array.from({length:80},(_,i)=>'<section><h2>Sampling station '+(i+1)+'</h2><p>Replicates, instruments and field observations.</p></section>').join('');
+   const response=await fetch('/api/website-files/create',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':contextId},body:JSON.stringify({name:'Survey handbook',html:'<!doctype html><html lang="en"><head><title>Survey handbook</title></head><body><main><h1>Survey handbook</h1>'+sections+'</main></body></html>'})});
+   if(!response.ok)throw Error('Cannot prepare website: '+response.status);
+   return (await response.json()).site.id;
+  });
+  await page.goto(new URL('/#/websites/'+id+'/editor',page.url()).href);
+  const outline=page.locator('.website-files-editor>aside').first(),inspector=page.locator('.website-files-inspection'),list=page.locator('[data-website-files-structure]'),canvas=page.frameLocator('#website-files-canvas');
+  await expect(canvas.getByRole('heading',{name:'Survey handbook'})).toBeVisible();
+  const state=()=>page.evaluate(()=>{
+   const frame=document.querySelector('#website-files-canvas');
+   return {outer:document.scrollingElement.scrollTop,outerRange:document.scrollingElement.scrollHeight-innerHeight,outline:document.querySelector('.website-files-editor>aside').scrollTop,list:document.querySelector('[data-website-files-structure]').scrollTop,inspector:document.querySelector('.website-files-inspection').scrollTop,canvas:frame.contentDocument.scrollingElement.scrollTop};
+  });
+  for(const [width,height] of [[1440,900],[1148,759],[1280,800]]){
+   await page.setViewportSize({width,height});await expect.poll(async()=>(await state()).outerRange).toBeLessThanOrEqual(1);
+   expect(await list.evaluate(el=>getComputedStyle(el).overflowY)).toBe('visible');
+  }
+  await list.getByRole('button',{name:'Sampling station 1',exact:true}).hover();await page.mouse.wheel(0,320);
+  await expect.poll(async()=>(await state()).outline).toBeGreaterThan(0);
+  const left=await state();expect([left.outer,left.list,left.inspector,left.canvas]).toEqual([0,0,0,0]);
+  await inspector.focus();await page.keyboard.press('PageDown');await expect.poll(async()=>(await state()).inspector).toBeGreaterThan(0);
+  await canvas.getByRole('heading',{name:'Sampling station 2',exact:true}).hover();await page.mouse.wheel(0,310);
+  await expect.poll(async()=>(await state()).canvas).toBeGreaterThan(0);
+  const other=await state();expect(other.outer).toBe(0);expect(other.outline).toBe(left.outline);
+  await outline.focus();await page.keyboard.press('End');await expect.poll(()=>outline.evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop)).toBeLessThanOrEqual(1);
+  await outline.hover();await page.mouse.wheel(0,600);const edge=await state();expect(edge.outer).toBe(0);expect(edge.canvas).toBe(other.canvas);
+  await outline.focus();await page.keyboard.press('Home');await expect.poll(async()=>(await state()).outline).toBe(0);
+  await canvas.getByRole('heading',{name:'Sampling station 1',exact:true}).click();
+  await info.attach('desktop-scroll-ownership',{body:await page.screenshot(),contentType:'image/png'});
+  await page.setViewportSize({width:760,height:500});
+  for(const column of [outline,inspector,list])expect(await column.evaluate(el=>getComputedStyle(el).overflowY)).toBe('visible');
+  await inspector.focus();await expect(inspector).toBeFocused();await expect(inspector).toBeInViewport();
+ }finally{await fixture.dispose(app);}
+});
+
 test('page structure retains readable labels and keyboard actions in desktop windows',async({},info)=>{
  test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires an isolated desktop qualification.');
  test.setTimeout(180000);
