@@ -53,6 +53,18 @@ test('JSON selection preserves exact numeric spellings and rejects ambiguous or 
  await assert.rejects(selectedJSON([Buffer.from(text)],'/absent'),{code:'IMPORT_CONTENT'});
  await assert.rejects(selectedJSON([Buffer.from([123,34,120,34,58,34,0xff,34,125])],'/x'),{code:'IMPORT_CONTENT'});
 });
+test('review records a content error when unselected nested JSON exceeds the live key budget',async t=>{
+ const f=await fixture(t),object=f.declared.manifest.objects[2],before=await f.workspace.read();
+ const keys=Object.fromEntries(Array.from({length:1024},(_,i)=>[String(i).padEnd(2048,'k'),0]));
+ const file=await sourceFile(f,object.files[0].path,JSON.stringify([1,{...keys,child:keys}]));
+ object.files=[{...file,selector:{kind:'json-pointer',value:'/0'}}];await repin(f);
+ let batch=await f.create();while(batch.state==='staging')batch=await f.service.stage(f.command);
+ batch=await reviewAll(f,batch);
+ const row=await f.service.detail({...f.command,index:2});
+ assert.equal(row.problem.code,'IMPORT_CONTENT');assert.equal(row.prepared,null);
+ assert.equal(batch.state,'mapping');assert.equal(batch.review,null);
+ assert.equal((await f.workspace.read()).etag,before.etag);
+});
 test('HTML import keeps selected prose inert and makes conversion omissions explicit',async()=>{
  const bytes=Buffer.from('<html><body><section id="public"><h1>Research &amp; listening</h1><p>Visible</p><script>globalThis.importExecuted=true</script><p hidden>Hidden text</p><a href="https://example.invalid">Link</a></section><section id="private">EXCLUDED</section></body></html>');
  const result=await importContent({size:bytes.length,read:()=>[bytes]},{selector:{kind:'anchor',value:'public'}},'html');

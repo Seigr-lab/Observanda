@@ -4,4 +4,8 @@ export function pointerParts(value){
  return value===''?[]:value.slice(1).split('/').map(s=>s.replace(/~1/g,'/').replace(/~0/g,'~'));
 }
 export const selectorKey=s=>JSON.stringify(s.kind==='bytes'?[s.kind,s.offset,s.length]:[s.kind,s.value??'']);
-export const selectorLimits=Object.freeze({perFile:1000,jsonDepth:128,htmlBytes:8*1024*1024,htmlNodes:100000});
+export const selectorLimits=Object.freeze({
+ perFile:1000,jsonDepth:128,jsonKeyUnits:2048,jsonLiveKeys:100000,
+ jsonLiveKeyBytes:8*1024*1024,jsonConversionBytes:64*1024*1024,
+ htmlBytes:8*1024*1024,htmlNodes:100000
+});

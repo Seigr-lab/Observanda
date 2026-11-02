@@ -20,7 +20,7 @@ export async function importContent(content,file,mode,{signal}={}){
  const s=file.selector,start=s.kind==='bytes'?s.offset:0,end=s.kind==='bytes'?s.offset+s.length-1:content.size-1;
  const chunks=()=>content.read(start,end,{signal});
  if(s.kind==='json-pointer'||mode==='json'){
-  if(s.kind==='anchor'||mode!=='json')fail();
+  if(s.kind==='anchor'||mode!=='json'||end-start+1>selectorLimits.jsonConversionBytes)fail();
   return {body:await selectedJSON(chunks(),s.kind==='json-pointer'?s.value:'',{signal}),conversion:'json',omitted:[]};
  }
  let source=await boundedText(chunks(),['html','html-book'].includes(mode)?selectorLimits.htmlBytes:maximum,{signal});
