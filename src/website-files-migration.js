@@ -1,5 +1,14 @@
 import path from 'node:path';
 import {parse,parseFragment,serialize} from 'parse5';
+import {WebsiteFileStore} from './website-file-store.js';
+import {WebsiteSites} from './website-sites.js';
+import {WebsiteDocumentStore} from './website-document-store.js';
+import {websiteBook,websiteDocument} from './web/website-sites-model.js';
+import {createNotebook} from './model.js';
+import {sameWebsitePin} from './web/website-pin.js';
+import {authoredSiteOnly,renderAuthoredSite} from './website-authored-files.js';
+import {retainedSavedWebsite} from './website-upgrade-retained.js';
+import {runWebsiteUpgrade,upgradeControl,validateUpgradeState} from './website-upgrade-lease.js';
 import {websiteWorkspace} from './website-workspace.js';
 import {PublicationJobs} from './publication-jobs.js';
 import {openPublicationInput} from './publication-input-reader.js';
@@ -83,36 +92,80 @@ export function bindConvertedPage(file,html,{records,aliases}){
  return serialize(doc);
 }
 
-// This is the only website file operation that opens a prior research edition.
-// It is deliberately requested once for a chosen site; subsequent use is files.
+// This path belongs to upgrading a previous workspace. The file editor opens
+// its existing files and reads only the independent filesystem status marker.
+const cachedSiteId=(store,websiteId)=>websiteId??store.scope(async()=>(await store.control(upgradeControl('default-site'),{missing:true}))?.id);
+async function alreadyImported(store,websiteId,signal){
+ const id=await cachedSiteId(store,websiteId);
+ if(!id||!await store.scope(()=>store.raw(id,{missing:true}),{signal}))return null;
+ return store.open(id,{signal});
+}
 export async function convertExistingWebsite(workspace,store,{websiteId,sourceReader,signal,blockedValues=[]}={}){
  if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
- const site=websiteWorkspace(workspace,websiteId),{metadata,websitePin}=await site.outline(),siteId=websiteId??(await workspace.catalogue(readWebsiteDocumentRegistry))?.defaultSiteId;
- if(!researchId(siteId))throw new AppError('STORAGE_UPGRADE_REQUIRED');
- const releases=new PublicationJobs(site,{sourceReader}),candidate=await releases.inline({websitePin,etag:websitePin.researchSnapshotId,workspaceId:metadata.id,blockedValues},{signal});
- const retained=await releases.source(candidate.jobId),input=await openPublicationInput(site,retained,{signal}),conversion=new PublicationConversion(workspace,{store}),records=new Map(),aliases=new Map();
+ const existing=await alreadyImported(store,websiteId,signal);if(existing)return existing;
+ return runWebsiteUpgrade(store,'site-'+(websiteId??'default'),async()=>{
+  const previous=await alreadyImported(store,websiteId,signal);if(previous)return previous;
+  const saved=await workspace.catalogue(async catalogue=>{
+   const documents=new WebsiteDocumentStore(catalogue),registry=await documents.registry();
+   if(!registry)throw new AppError('STORAGE_UPGRADE_REQUIRED');
+   const selected=await documents.read(websiteId,{signal}),snapshot=await catalogue.snapshot(selected.researchSnapshotId);
+   const websitePin={websiteId,websiteRevision:selected.websiteRevision,researchSnapshotId:selected.researchSnapshotId};
+   return {siteId:websiteId??registry.defaultSiteId,metadata:websiteBook(snapshot.metadata,selected.site),websitePin,source:selected.site};
+  });
+  const {siteId,metadata,websitePin,source}=saved,site=websiteWorkspace(workspace,websiteId);
+  if(websiteId===null)await store.scope(()=>store.writeControl(upgradeControl('default-site'),{id:siteId},{signal}),{write:true,signal});
+  const duplicate=await alreadyImported(store,websiteId,signal);if(duplicate)return duplicate;
+  const files=authoredSiteOnly(source)?await renderAuthoredSite(workspace,metadata,{blockedValues,signal}):await researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues});
+  const {migrateWebsitePublishingMetadata}=await import('./website-publishing-migration.js');
+  return store.scope(()=>site.withLock(async()=>{
+   await site.lockWebsite();
+   const current=await new WebsiteSites(workspace).version(websiteId);
+   if(!sameWebsitePin(current.websitePin,websitePin))throw new AppError('CONFLICT');
+   await migrateWebsitePublishingMetadata(site,store,siteId,{signal});
+   return store.importFiles(siteId,{name:source.name,files,signal});
+  }),{write:true,signal});
+ },{signal});
+}
+
+async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues}){
+ const releases=new PublicationJobs(site,{sourceReader}),previous=await retainedSavedWebsite(releases,websitePin,{signal});
+ const candidate=previous?.candidate??await releases.inline({websitePin,etag:websitePin.researchSnapshotId,workspaceId:metadata.id,blockedValues},{signal});
+ const retained=previous?.retained??await releases.source(candidate.jobId),conversion=new PublicationConversion(workspace,{store}),records=new Map(),aliases=new Map(),owners=new Map(),mediaNames=new Map();
+ await workspace.catalogue(async()=>{
+  const input=await openPublicationInput(site,retained,{signal}),books=new Map(),projects=new Map();
+  for await(const row of input.records({order:'original'})){
+   if(row.historical)failed('historical-entry');
+   if(!books.has(row.notebookId))books.set(row.notebookId,await input.get('notebooks',row.notebookId));const book=books.get(row.notebookId);
+   if(!book)failed('entry-owner');if(!projects.has(book.projectId))projects.set(book.projectId,await input.get('projects',book.projectId));const project=projects.get(book.projectId);
+   if(!project)failed('entry-owner');
+   const provenance={workspaceId:row.sourceWorkspaceId??metadata.id,projectId:project.sourceId??project.id,notebookId:book.sourceId??book.id,recordId:row.recordId??row.id,target:'website'};
+   if(!owners.has(provenance.workspaceId))owners.set(provenance.workspaceId,new Map());owners.get(provenance.workspaceId).set(row.id,provenance);
+   // All annotation inputs are in the retained title/card descriptor, including
+   // non-cover media. Do not open the retained original again to get these IDs.
+   const record={title:row.title,type:row.type,tags:row.tags,attachments:row.media??row.attachments},media=new Map(Object.entries(row.mediaIdentities??{}).map(([id,alias])=>[alias,id]));
+   records.set(row.id,{record,media});
+   for(const member of row.media??[]){const ext={image:'png',audio:'wav',video:'mp4'}[member.kind],name='media/'+member.id+'.'+ext;if(!mediaNames.has(name))mediaNames.set(name,new Set());mediaNames.get(name).add(row.id);}
+  }
+ });
  let reader;
  try{
-  for await(const row of input.records()){
-   signal?.throwIfAborted();
-   if(row.historical)failed('historical-entry');
-   const book=await input.get('notebooks',row.notebookId),project=book&&await input.get('projects',book.projectId);if(!book||!project)failed('entry-owner');
-   const provenance={workspaceId:row.sourceWorkspaceId??metadata.id,projectId:project.sourceId??project.id,notebookId:book.sourceId??book.id,recordId:row.recordId??row.id,target:'website'};
-   let source;
-   if(provenance.workspaceId===metadata.id)source=await conversion.seedWebsite(workspace,provenance,{signal});
-   else{
-    if(!sourceReader)throw new AppError('ACCESS_LOCKED');reader??=await sourceReader({signal});
-    const result=await reader.use(provenance.workspaceId,undefined,(_store,_snapshot,pinned)=>conversion.seedWebsite(pinned.storage,provenance,{signal}));source=result.value;
-   }
-   const record=await input.record(row.id),media=new Map(Object.entries(row.mediaIdentities??{}).map(([id,alias])=>[alias,id])),assets=new Map(source.assets.map(asset=>[asset.sha256,asset.path]));
-   records.set(row.id,{source,record,media,assets});
-   for(const member of row.media??[]){const ext={image:'png',audio:'wav',video:'mp4'}[member.kind],name='media/'+member.id+'.'+ext;const file=await candidate.files.get(name);if(!file)continue;const alias=assets.get(contentHash(file));if(!alias)failed('entry-asset-permission');aliases.set(name,alias);}
+  for(const [namespace,selected] of owners){
+   const withOwner=async consume=>{
+    if(namespace===metadata.id)return workspace.catalogue(async catalogue=>{const snapshotId=await catalogue.head();return consume(catalogue,await catalogue.snapshot(snapshotId),{snapshotId,storage:workspace});});
+    if(!sourceReader)throw new AppError('ACCESS_LOCKED');reader??=await sourceReader({signal});return reader.use(namespace,undefined,consume);
+   };
+   const sources=await runWebsiteUpgrade(store,'source-owner-'+namespace,()=>conversion.seedWebsites(selected.values(),withOwner,{signal}),{signal,shareResult:false});
+   for(const [id,provenance] of selected){const source=sources.get(provenance.recordId);Object.assign(records.get(id),{source,assets:new Map(source.assets.map(asset=>[asset.sha256,asset.path]))});}
   }
   await reader?.verify();
-  for await(const name of candidate.files.keys()){
-   const figure=/^figures\/([a-f0-9-]{36})-.+\.(?:svg|csv)$/.exec(name);if(!figure)continue;
-   const alias=records.get(figure[1])?.assets.get(contentHash(await candidate.files.get(name)));if(!alias)failed('figure-asset-permission');aliases.set(name,alias);
-  }
+  await workspace.catalogue(async()=>{
+   for await(const name of candidate.files.keys()){
+    const figure=/^figures\/([a-f0-9-]{36})-.+\.(?:svg|csv)$/.exec(name),entries=figure?[figure[1]]:mediaNames.get(name);
+    if(!entries)continue;
+    const hash=candidate.files.output?(await candidate.files.output.get('files',name)).sha256:contentHash(await candidate.files.get(name));
+    for(const id of entries){const alias=records.get(id)?.assets.get(hash);if(!alias)failed(figure?'figure-asset-permission':'entry-asset-permission');aliases.set(name,alias);}
+   }
+  });
   const files=new Map();
   for await(const [name,value] of candidate.files){
    signal?.throwIfAborted();if(name==='publication.json'||aliases.has(name))continue;
@@ -122,12 +175,71 @@ export async function convertExistingWebsite(workspace,store,{websiteId,sourceRe
    else files.set(name,value);
   }
   await assertPublicationSourcePermissions(site,retained,{sourceReader,signal});
-  const {migrateWebsitePublishingMetadata}=await import('./website-publishing-migration.js');
-  return store.scope(()=>site.withLock(async()=>{
-   await site.lockWebsite();const current=await site.currentOutline();
-   if(current.websitePin.researchSnapshotId!==websitePin.researchSnapshotId||current.websitePin.websiteRevision!==websitePin.websiteRevision)throw new AppError('CONFLICT');
-   await migrateWebsitePublishingMetadata(site,store,siteId,{signal});
-   return store.importFiles(siteId,{name:(await site.website()).name,files,signal});
-  }),{write:true,signal});
+  return files;
  }finally{await reader?.close();}
+}
+const statusPath=upgradeControl('workspace');
+export async function websiteUpgradeStatus(workspace,{signal}={}){
+ const store=new WebsiteFileStore(workspace);
+ return store.scope(async()=>validateUpgradeState(await store.control(statusPath,{missing:true})),{signal});
+}
+
+async function authoredDefault(workspace,registry,{signal}){
+ const saved=await workspace.catalogue(async catalogue=>{
+  const documents=new WebsiteDocumentStore(catalogue),head=await documents.savedHead(registry.defaultSiteId,registry);
+  if(head.ordinal>0)return true;
+  const {document}=await documents.document(null,{signal}),actual=await document.reference(['document'],{signal});
+  for(const theme of ['research','studio']){
+   const defaults=websiteDocument(createNotebook('Website','',theme));
+   if(await document.tree.retain(defaults)===actual)return false;
+  }
+  return true;
+ });
+ if(saved)return true;
+ // An explicitly prepared or published initial composition is also a site.
+ const scoped=websiteWorkspace(workspace,null);
+ return await scoped.readMetadata('.observanda/publishing.json',1024*1024)!==null||
+  (await scoped.metadataPage('.observanda/release-list',{limit:1})).items.length>0||
+  (await scoped.metadataPage('.observanda/local-exports/owners',{limit:1})).items.length>0;
+}
+
+export async function upgradeExistingWebsites(workspace,{sourceReader,signal,blockedValues=[],onProgress}={}){
+ const store=new WebsiteFileStore(workspace),status=()=>store.scope(async()=>validateUpgradeState(await store.control(statusPath,{missing:true})),{signal});
+ const initial=await status();if(initial.state==='ready')return initial;
+ return runWebsiteUpgrade(store,'workspace',async()=>{
+  const prior=await status();if(prior.state==='ready')return prior;
+  const report=async value=>{
+   await store.scope(()=>store.writeControl(statusPath,{version:1,...value},{signal}),{write:true,signal});
+   onProgress?.(value);return value;
+  };
+  const common={total:0,done:0};let failed,phase='discovery',siteId;
+  try{
+   await report({...common,state:'preparing',phase});
+   const directory=new WebsiteSites(workspace);await directory.initialize();
+   const registry=await workspace.catalogue(readWebsiteDocumentRegistry),sites=[];
+   await store.scope(()=>store.writeControl(upgradeControl('default-site'),{id:registry.defaultSiteId},{signal}),{write:true,signal});
+   if(await authoredDefault(workspace,registry,{signal})){sites.push(null);common.defaultSiteId=registry.defaultSiteId;}
+   let after=null;do{
+    const page=await directory.list({after,limit:100});for(const site of page.sites)sites.push(site.id);after=page.next;
+   }while(after);
+   common.total=sites.length;phase='materializing';
+   for(const websiteId of sites){
+    signal?.throwIfAborted();siteId=websiteId??registry.defaultSiteId;
+    await report({...common,state:'preparing',siteId,phase});
+    try{
+     if(!await store.scope(()=>store.raw(siteId,{missing:true}),{signal}))
+      await convertExistingWebsite(workspace,store,{websiteId,sourceReader,blockedValues,signal});
+     common.done++;
+    }catch(error){
+     signal?.throwIfAborted();
+     failed??={siteId,code:error instanceof AppError?error.code:'IO'};
+     for(const key of ['projectId','labBookId','sourceWorkspaceId'])if(failed.siteId===siteId&&researchId(error[key]))failed[key]=error[key];
+    }
+   }
+   return report(failed?{...common,state:'failed',phase,...failed}:{...common,state:'ready'});
+  }catch(error){
+   signal?.throwIfAborted();
+   return report({...common,state:'failed',phase,...(siteId?{siteId}:{}),code:error instanceof AppError?error.code:'IO'});
+  }
+ },{signal});
 }

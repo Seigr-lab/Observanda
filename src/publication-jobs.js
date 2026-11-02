@@ -58,7 +58,8 @@ export class PublicationJobs{
     return capture(this.sources??metadata.website.researchSources??[]);
    }});
    const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
-   const source={sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt,etag:capturedPin.researchSnapshotId,...input,blockedValues,
+   const savedWebsiteComposition=websitePin?.websiteRevision&&book===undefined&&command===undefined&&websiteDraft===undefined&&edition===undefined&&this.sources===undefined;
+   const source={...(savedWebsiteComposition?{savedWebsiteComposition:1}:{}),sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt,etag:capturedPin.researchSnapshotId,...input,blockedValues,
     ...(requestRevision?{requestRevision}:{}),configEtag:destination.etag,destination:destination.configured?destination.config:null};
    signal?.throwIfAborted();
    await workspace.writeMetadata(inputFile(id),serialize(source));

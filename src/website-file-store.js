@@ -260,27 +260,35 @@ export class WebsiteFileStore{
   return revision;
  },{signal});}
  advancePdfVersion(signal){return this.writeControl(ROOT+'/pdf-version.json',randomUUID(),{signal});}
- beginSourceUpdate({sourceId,target,signal,ifAbsent=false}={}){return this.scope(async()=>{
+ beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false}={}){return this.scope(async()=>{
   if(!hex(sourceId)||target!==undefined&&!['website','pdf'].includes(target))throw new AppError('INVALID');
   const path=ROOT+'/sources/'+sourceId+'/pending.json',token=randomUUID(),saved=await this.control(path,{missing:true});
   const previous=saved?saved.previous:await this.source(sourceId,{pending:true}),known=saved?.target??previous?.target;
   if(target&&known&&target!==known)throw new AppError('CONFLICT');
-  if(ifAbsent&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
+  if(resumeSeed&&(!ifAbsent||target!=='website'))throw new AppError('INVALID');
+  const seed=resumeSeed&&saved?.seed===true&&saved.previous===null;
+  if(ifAbsent&&!seed&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
   target??=known;
+  const journal={token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved),...(resumeSeed?{seed:true}:{})};
+  // An absent source has no placements. Record bootstrap ownership first so
+  // a crash cannot leave an anonymous fence which no writer may safely adopt.
+  if(ifAbsent&&resumeSeed)await this.writeControl(path,journal,{signal});
   await this.fence(sourceId,true,signal);
-  await this.writeControl(path,{token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved)},{signal});
+  if(!(ifAbsent&&resumeSeed))await this.writeControl(path,journal,{signal});
   if(target==='pdf')await this.advancePdfVersion(signal);
   return token;
  },{write:true,signal});}
- async finishSourceUpdate(sourceId,target,signal){
-  await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');await this.fence(sourceId,false,signal);
+ async finishSourceUpdate(sourceId,target,signal,seed=false){
+  if(seed)await this.fence(sourceId,false,signal);
+  await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');
+  if(!seed)await this.fence(sourceId,false,signal);
   if(target==='pdf')await this.advancePdfVersion(signal);
  }
  cancelSourceUpdate({sourceId,token,signal}={}){return this.scope(async()=>{
   if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');
   const pending=await this.control(ROOT+'/sources/'+sourceId+'/pending.json'),current=await this.source(sourceId,{pending:true});
   if(pending.recovered||pending.token!==token||(current?.revision??null)!==(pending.previous?.revision??null))throw new AppError('CONFLICT');
-  await this.finishSourceUpdate(sourceId,pending.target??current?.target,signal);
+  await this.finishSourceUpdate(sourceId,pending.target??current?.target,signal,pending.seed);
  },{write:true,signal});}
  putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,pdfParts=null,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
   if(!hex(sourceId)||!uuid(token)||typeof visible!=='boolean'||!['website','pdf'].includes(target))throw new AppError('INVALID');const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json');if(pending.token!==token||pending.target&&pending.target!==target)throw new AppError('CONFLICT');
@@ -303,7 +311,7 @@ export class WebsiteFileStore{
    await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources),sources},{signal});
   }after=sites.next;}while(after!==null);
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
-  await this.finishSourceUpdate(sourceId,target,signal);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
+  await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
  insertSource(id,{expectedRevision,path:page='index.html',sourceId,signal}={}){return this.scope(async()=>{
   if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');

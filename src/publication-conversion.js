@@ -94,20 +94,48 @@ export class PublicationConversion{
   const output=await convertPublicationRecord(storage,metadata,record,{target});if(!output.visible)throw new AppError('RECORD_CHANGED');
   return this.files.putSource({sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null},title:record.title,...output},{token});
  }
- async seedWebsite(storage,provenance,{signal}={}){
-  const sourceId=websiteSourceId(provenance),prior=await this.files.sourceStatus(sourceId);if(prior.pending)throw new AppError('CONFLICT');
-  if(!prior.source){
-   const token=await this.files.beginSourceUpdate({sourceId,target:provenance.target,ifAbsent:true,signal});
-   try{
-    const targets={records:new Map([[provenance.recordId,null]]),books:new Set()},state=(await states(storage,targets,provenance.workspaceId,['website'])).get(sourceId);
-    if(!state?.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-    await this.capture(storage,state,token);
-   }catch(error){
-    // A concurrent withdrawal takes a different token and cannot be cancelled.
-    await this.files.cancelSourceUpdate({sourceId,token}).catch(()=>{});throw error;
-   }
+ async seedWebsites(provenances,withOwner,{signal}={}){
+  const pending=new Map(),sources=new Map();
+  try{
+   // Fence before taking the research snapshot. One owner can contain many
+   // selected entries; its grant and snapshot cover them all.
+   await this.files.scope(async()=>{
+    for(const provenance of provenances){
+     signal?.throwIfAborted();const sourceId=websiteSourceId(provenance),{source,pending:journal}=await this.files.sourceStatus(sourceId);
+     if(source&&!journal){
+      if((await this.files.pendingSources()).has(sourceId))throw new AppError('CONFLICT');
+      if(!source.visible||source.target!=='website')throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      sources.set(provenance.recordId,{id:source.id,revision:source.revision,assets:source.assets.map(file=>({path:file.name,sha256:file.sha256}))});
+     }else{
+      const token=await this.files.beginSourceUpdate({sourceId,target:'website',ifAbsent:true,resumeSeed:true,signal});
+      pending.set(sourceId,{token,provenance});
+     }
+    }
+   },{write:true,signal});
+   if(pending.size)await withOwner(async(store,snapshot,{storage,snapshotId})=>{
+    for(const [sourceId,{token,provenance}] of pending){
+     signal?.throwIfAborted();
+     const row=await store.member(snapshot,provenance.recordId),metadata=snapshot.metadata;
+     if(!row||metadata.id!==provenance.workspaceId)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+     const record=await withRecordDocument(store,row.id,row.revision,async doc=>{
+      const book=row.notebookId??(await doc.field(['notebookId'])).value;
+      if(book!==provenance.notebookId||!metadata.notebooks.some(item=>item.id===book&&item.projectId===provenance.projectId)||
+       !sourceRecordAllowed({id:row.id,notebookId:book,share:(await doc.field(['share'])).value},metadata,'website'))throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      return permittedOriginal(doc,'website');
+     });
+     const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal});
+     if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+     const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId},...output,signal},{token});
+     pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
+    }
+   });
+   return sources;
+  }catch(error){
+   // Tokens are checked against the current fence. A concurrent permission
+   // withdrawal cannot be cancelled by an interrupted initial materialization.
+   for(const [sourceId,{token}] of pending)await this.files.cancelSourceUpdate({sourceId,token}).catch(()=>{});
+   throw error;
   }
-  return this.files.getSource(sourceId,{signal});
  }
  async mutate(storage,{route,data},operation){const targets=commandTargets(route,data);return targets?this.change(storage,targets,data.workspaceId,operation):operation();}
  async mutateNotebook(storage,notebookId,operation){if(!researchId(notebookId))throw new AppError('INVALID');return this.change(storage,{records:new Map(),books:new Set([notebookId])},null,operation);}

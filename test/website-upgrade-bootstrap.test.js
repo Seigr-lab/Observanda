@@ -1,0 +1,61 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {closeIdleMutationFiles} from '../src/mutation-files.js';
+import {createNotebook} from '../src/model.js';
+import {sampleNotebook} from '../src/sample.js';
+import {WebsiteFileStore} from '../src/website-file-store.js';
+import {WebsiteEditor} from '../src/website-editor.js';
+import {MediaStore} from '../src/media.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {PublicationJobs} from '../src/publication-jobs.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
+import {contentBuffer} from '../src/file-content.js';
+import {upgradeExistingWebsites,websiteUpgradeStatus,convertExistingWebsite} from '../src/website-files-migration.js';
+
+async function fixture(t,book){
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-upgrade-'));
+ const value=await encryptedFixture(directory,book);
+ t.after(async()=>{await closeIdleMutationFiles();await clearVault(value.vault);await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});});return value.workspace;
+}
+test('a fresh workspace has no synthetic website and ready bootstrap reopens without the catalogue',async t=>{
+ const workspace=await fixture(t,createNotebook('New workspace')),store=new WebsiteFileStore(workspace);
+ assert.equal((await websiteUpgradeStatus(workspace)).state,'unprepared');
+ assert.deepEqual(await upgradeExistingWebsites(workspace),{state:'ready',total:0,done:0});
+ t.mock.method(workspace,'catalogue',()=>assert.fail('Ready filesystem bootstrap reopened PostgreSQL'));
+ assert.equal((await upgradeExistingWebsites(workspace)).state,'ready');assert.equal((await store.list()).items.length,0);
+});
+test('concurrent cold upgrades materialize a saved authored site, assets and links without visiting research or preparing an edition',async t=>{
+ const book=createNotebook('Saved pages'),pages=Array.from({length:6},(_,i)=>({id:randomUUID(),title:'Authored page '+i,share:true,body:'Authored text '+i,sections:[]}));book.pages=pages;
+ book.website.home={enabled:true,title:'Home',showTitle:true,introduction:'',sections:[{id:'intro',kind:'text',title:'Authored heading',show:true,body:'Saved homepage copy.'},{id:'pages',kind:'pages',title:'Pages',show:true,layout:'list'}]};
+ const workspace=await fixture(t,book),media=new MediaStore(workspace),image=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="blue"/></svg>'),'image');
+ const editor=new WebsiteEditor(workspace),run=(operation,data={})=>editor.execute(operation,{workspaceId:book.id,websiteId:null,...data});
+ let state=await run('open');
+ const asset={...image,alt:'Accessible illustration',caption:'Saved caption',transcript:''};
+ const layout={target:'page:'+pages[5].id,showHeading:true,heading:'Final authored heading',description:'',placement:'before',sections:[{id:'image',kind:'asset',title:'Website illustration',show:true,assetId:image.id}]};
+ state=await run('change',{websitePin:state.websitePin,draftId:state.draft?.id??null,expectedRevision:state.draft?.revision??null,commandId:randomUUID(),operations:[{type:'append',collection:'assets',values:[asset]},{type:'replace',collection:'layouts',key:layout.target,value:layout}]});
+ await run('save',{websitePin:state.websitePin,draftId:state.draft.id,expectedRevision:state.draft.revision,commandId:randomUUID()});
+ for(const key of ['record','members','queryDocuments'])t.mock.method(ResearchCatalogue.prototype,key,()=>assert.fail('Static site opened research '+key));
+ t.mock.method(PublicationJobs.prototype,'inline',()=>assert.fail('Static site generated a research edition'));
+ let starts=0;const onProgress=s=>{if(s.phase==='materializing'&&s.state==='preparing')starts++;};
+ const [first,second]=await Promise.all([upgradeExistingWebsites(workspace,{onProgress}),upgradeExistingWebsites(workspace,{onProgress})]);assert.deepEqual(first,second);assert.equal(first.state,'ready');assert.equal(starts,1);
+ const store=new WebsiteFileStore(workspace),site=await store.open(first.defaultSiteId);
+ assert.match(site.html,/Saved homepage copy/);assert.ok(site.html.includes('pages/'+pages[5].id+'.html'));
+ const saved=await store.open(first.defaultSiteId,{path:'pages/'+pages[5].id+'.html'});assert.match(saved.html,/Final authored heading/);assert.match(saved.html,/Accessible illustration/);assert.ok(saved.css.length>100);
+ const files=(await store.export(first.defaultSiteId)).files;
+ assert.deepEqual(await contentBuffer(files.get('media/'+asset.id+'.png')),await contentBuffer((await media.get(asset.id,{streamed:true})).bytes));
+ t.mock.method(workspace,'catalogue',()=>assert.fail('Already materialized default reopened PostgreSQL'));
+ const reopened=await convertExistingWebsite(workspace,store,{websiteId:null});assert.equal(reopened.site.revision,site.site.revision);
+});
+test('an exact saved edition supplies retained research pages without another preparation',async t=>{
+ const book=sampleNotebook();book.entries=[book.entries[1]];const workspace=await fixture(t,book),site=websiteWorkspace(workspace,null);
+ const {websitePin}=await site.outline();await new PublicationJobs(site).inline({workspaceId:book.id,websitePin,etag:websitePin.researchSnapshotId});
+ t.mock.method(PublicationJobs.prototype,'inline',()=>assert.fail('An exact complete saved edition was rebuilt'));
+ const status=await upgradeExistingWebsites(workspace);assert.equal(status.state,'ready');const saved=await new WebsiteFileStore(workspace).open(status.defaultSiteId,{path:'entries/'+book.entries[0].id+'.html'});
+ assert.ok(saved.html.includes(book.entries[0].title));assert.match(saved.html,/data-observanda-source=/);
+});

@@ -1,0 +1,34 @@
+import {setTimeout as delay} from 'node:timers/promises';
+import {withNativeDestination} from './native-destination.js';
+import {AppError} from './errors.js';
+
+const folder='.observanda/website-files/upgrades',running=new Map();
+export const upgradeControl=name=>folder+'/'+name+'.json';
+
+// The OS releases this dedicated lease on process exit. Other website files
+// keep their own shorter write transactions during conversion.
+export async function runWebsiteUpgrade(store,name,operation,{signal,shareResult=true}={}){
+ signal?.throwIfAborted();
+ await store.scope(()=>{}, {signal}); // authenticate each caller independently
+ const key=JSON.stringify([store.workspace.root,store.workspace.vault.id,name]);
+ const active=shareResult&&running.get(key);
+ if(active)return active;
+ const work=(async()=>{
+  await store.scope(scope=>scope.ensure(folder),{write:true,signal});
+  return withNativeDestination(store.workspace.root,async scope=>{
+   await scope.admit();let lease;const member=store.absolute(folder+'/'+name+'.lock');
+   while(!lease){
+    signal?.throwIfAborted();try{lease=await scope.member(member,(dir,file)=>dir.lease(file));}
+    catch(error){if(error.code!=='EBUSY')throw error;await delay(200,undefined,{signal});}
+   }
+   try{return await operation();}finally{await lease.close();}
+  });
+ })();
+ if(shareResult)running.set(key,work);
+ try{return await work;}finally{if(running.get(key)===work)running.delete(key);}
+}
+export function validateUpgradeState(value){
+ if(value===null)return {state:'unprepared',total:0,done:0};
+ if(value.version!==1||!['preparing','ready','failed'].includes(value.state)||!Number.isSafeInteger(value.total)||!Number.isSafeInteger(value.done)||value.total<value.done||value.done<0)throw new AppError('FORMAT');
+ const {version,...status}=value;return status;
+}
