@@ -1,6 +1,7 @@
 import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, writeVisualStyle} from './website-files-visual-style.js';
 import {websiteRichText} from './website-files-visual-rich.js';
 import {websiteTableTools} from './website-files-table.js';
+import {responsiveLayout} from './website-files-responsive.js';
 
 const chrome = '[data-observanda-editor]';
 const source = '[data-observanda-source]';
@@ -71,7 +72,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -133,6 +134,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change});
   form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,actions);
+  const responsive=responsiveLayout({document,host:form,t,scope,selected:()=>selected,getCSS,getViewport,beforeChange,change,make,listen,
+    write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
   inspector.replaceChildren(form);
 
   function position() {
@@ -173,6 +176,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     edit.disabled=!selected||!editableText(selected,document);
     edit.title=edit.disabled?t('sectionNoText'):'';
     prompt.hidden=!!selected;
+    responsive.refresh();
   }
   function setSelected(node, scroll=false) {
     if (!node?.matches(blocks) || node.closest(chrome)) return;
@@ -276,6 +280,10 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
       if(resetAll)target.classList.remove(name);else target.classList.add(name);
       write(name);change();
     }
+    persistStyle(css,canvasCSS);
+    refresh();schedule();
+  }
+  function persistStyle(css,canvasCSS){
     if(css!==getCSS()){
       // Hand-authored pages can omit the shared stylesheet. Link it on the
       // first actual style change, keeping untouched HTML byte-for-byte saved.
@@ -291,12 +299,12 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
       }
       savedStyle.textContent=canvasCSS;setCSS(css);
     }
-    refresh();schedule();
   }
   listen(form,'submit',event=>{event.preventDefault();commit(false);});
   listen(reset,'click',()=>commit(true));
   refresh();
   return {
+    viewportChanged(){responsive.refresh();schedule();},
     select(path,{edit:focus=false}={}){
       if(typeof path!=='string'||!/^\d+(?:\/\d+)*$/.test(path))return false;
       let node=body;for(const index of path.split('/'))node=node?.children[Number(index)];

@@ -10,3 +10,7 @@
 .website-visual-rich button[aria-pressed=true] { border-color:currentColor;box-shadow:inset 0 -2px currentColor; }
 .website-visual-style button { overflow-wrap:anywhere; }
 .website-visual-link { margin-top:.5rem; }
+.website-layout-inspector { min-width:0; padding:.6rem; border:1px solid var(--border,#cbd3df); }
+.website-layout-inspector summary { cursor:pointer; font-weight:600; }
+.website-layout-inspector[open] > :not(summary) { margin-block-start:.65rem; }
+.website-layout-inspector[hidden] { display:none; }

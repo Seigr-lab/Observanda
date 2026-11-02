@@ -31,13 +31,39 @@ async function fixture(page){
    const frame=document.querySelector('iframe'),doc=frame.contentDocument;
    loadWebsiteCanvas(doc,html,css,location.origin+base+'style.css');editWebsiteCanvas(doc);
    window.visual=bindWebsiteVisual({document:doc,inspector:document.querySelector('#styles'),t:name=>name,
-     beforeChange:()=>{},change:()=>{},getCSS:()=>css,setCSS:value=>{css=value;}});
+     beforeChange:()=>{},change:()=>{},getCSS:()=>css,setCSS:value=>{css=value;},getViewport:()=>window.canvasViewport??'desktop'});
    window.rows=()=>websiteVisualSections(doc).map(({node,depth,path})=>({name:node.dataset.sectionId,depth,path}));
    window.saved=()=>({html:websiteCanvasValue(doc),css});
  },{html:saved,css,base});
  const frame=page.frameLocator('iframe');
  return {frame,publish:async value=>{published=value;await page.goto(origin+'/published/index.html');}};
 }
+
+test('responsive inspector publishes distinct grid and stack layouts at desktop tablet and phone widths',async({page})=>{
+ const {frame,publish}=await fixture(page),selector='[data-section-id="text"]';
+ const row=await page.evaluate(()=>window.rows().find(r=>r.name==='text').path);
+ await page.evaluate(path=>window.visual.select(path),row);await page.locator('.website-layout-inspector summary').click();
+ const field=property=>page.locator('[data-layout-property="'+property+'"]'),apply=()=>page.getByRole('button',{name:'layoutApply',exact:true}).click();
+ const device=async(name,width)=>{
+  await page.evaluate(({name,width})=>{window.canvasViewport=name;document.querySelector('iframe').style.width=width+'px';window.visual.viewportChanged();},{name,width});
+ };
+ await device('desktop',1200);await field('display').selectOption('grid');await field('grid-template-columns').fill('3');await field('gap').fill('24px');
+ await field('padding').fill('1rem 2rem');await field('border-width').fill('2px');await field('border-style').selectOption('solid');await field('width').fill('80%');await apply();
+ await expect(frame.locator(selector)).toHaveCSS('display','grid');
+ await device('tablet',768);await field('grid-template-columns').fill('2');await field('gap').fill('16px');await apply();
+ await device('phone',375);await field('display').selectOption('flex');await field('flex-direction').selectOption('column');
+ await field('gap').fill('8px');await field('flex-basis').fill('50%');await apply();await expect(frame.locator(selector)).toHaveCSS('display','flex');
+ await page.getByRole('button',{name:'layoutReset',exact:true}).click();await expect(frame.locator(selector)).toHaveCSS('gap','16px');
+ await field('display').selectOption('flex');await field('flex-direction').selectOption('column');await field('gap').fill('8px');await field('flex-basis').fill('50%');await apply();
+ const saved=await page.evaluate(()=>window.saved());expect(saved.html).not.toMatch(/\sstyle=/);expect(saved.css).toContain('body { font-family: sans-serif }');
+ validateWebsiteHTML(saved.html);validateWebsiteCSS(saved.css);await publish(saved);
+ for(const [width,display,gap,count] of [[1200,'grid','24px',3],[768,'grid','16px',2],[375,'flex','8px',0]]){
+  await page.setViewportSize({width,height:800});const section=page.locator(selector);
+  await expect(section).toHaveCSS('display',display);await expect(section).toHaveCSS('gap',gap);await expect(section).toHaveCSS('border-top-width','2px');
+  if(count)expect((await section.evaluate(n=>getComputedStyle(n).gridTemplateColumns)).split(/\s+/)).toHaveLength(count);
+  else{await expect(section).toHaveCSS('flex-direction','column');await expect(section).toHaveCSS('flex-basis','50%');}
+ }
+});
 
 test('nested edit, rich text and visual styles survive saved HTML, external CSS and a source withdrawal',async({page})=>{
  const {frame,publish}=await fixture(page);
