@@ -11,6 +11,12 @@ export function loadWebsiteCanvas(document,html,css,stylesheet){
  // no script execution. Relative links and images therefore resolve exactly as
  // they do in the saved website, including pages in nested directories.
  const source=websiteHTML(html),base=document.location.href;
+ // The host has already installed its stricter revision-scoped HTTP policy.
+ // Keep the published policy inert only in the editable copy so the host can
+ // paint unsaved CSS. Restore the original attribute when serializing.
+ for(const meta of source.querySelectorAll('meta[http-equiv="Content-Security-Policy" i]')){
+  meta.dataset.observandaEditorHttpEquiv=meta.getAttribute('http-equiv');meta.removeAttribute('http-equiv');
+ }
  for(const link of source.querySelectorAll('link[rel="stylesheet"][href]'))if(new URL(link.getAttribute('href'),base).href===stylesheet){link.dataset.observandaEditorStylesheet=link.getAttribute('href');link.removeAttribute('href');}
  const style=source.createElement('style');style.dataset.observandaEditor='';
  style.textContent=css.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,(match,a,b,c)=>{const url=(a??b??c).trim();if(!url||url.startsWith('#'))return match;return 'url('+JSON.stringify(new URL(url,stylesheet).href)+')';});
@@ -18,6 +24,12 @@ export function loadWebsiteCanvas(document,html,css,stylesheet){
 }
 export function websiteCanvasValue(document){
  const copy=document.cloneNode(true);
+ for(const image of copy.querySelectorAll('img[data-observanda-editor-image]')){
+  image.setAttribute('src',image.dataset.observandaEditorImage);image.removeAttribute('data-observanda-editor-image');
+ }
+ for(const meta of copy.querySelectorAll('meta[data-observanda-editor-http-equiv]')){
+  meta.setAttribute('http-equiv',meta.dataset.observandaEditorHttpEquiv);meta.removeAttribute('data-observanda-editor-http-equiv');
+ }
  for(const node of copy.querySelectorAll('[data-observanda-editor]'))node.remove();
  for(const node of copy.querySelectorAll('[data-observanda-editor-stylesheet]')){node.setAttribute('href',node.dataset.observandaEditorStylesheet);node.removeAttribute('data-observanda-editor-stylesheet');}
  for(const node of copy.querySelectorAll('[data-observanda-editor-editable]')){
