@@ -51,7 +51,9 @@ export class WebsiteFileContent extends FileContent{
   if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start&&this.size!==0||end>=this.size)throw new AppError('INVALID');
   const output=new PassThrough({objectMode:true,highWaterMark:1});output.on('error',()=>{});let failure;
   const pending=this.store.scope(async scope=>{
-   if(this.siteId!==undefined)await this.store.current(this.siteId,this.revision);
+   // The descriptor was authenticated when the file was opened. Check the
+   // compact head and pending permissions again for each stream or range.
+   if(this.siteId!==undefined&&await this.store.siteVersion(this.siteId,{signal})!==this.revision)throw new AppError('CONFLICT');
    await scope.member(this.file,async(directory,name)=>{
     const handle=await directory.file(name),vault=this.workspace.vault,key=vault.key,keyCopy=Buffer.from(key),owner=this;
     const check=async()=>{signal?.throwIfAborted();if(owner.workspace.vault!==vault||vault.key!==key||!keyCopy.equals(key))throw new AppError('ACCESS_LOCKED');};

@@ -123,10 +123,17 @@ test('version polling uses compact files and observes PDF fences, cancellation, 
   const websiteId=websiteSourceId({...provenance,target:'website'}),webToken=await writer.beginSourceUpdate({sourceId:websiteId,target:'website'});
   await writer.putSource({sourceId:websiteId,title:'Website source',html:'<p>Public</p>'},{token:webToken});
   const placed=await writer.insertSource(id,{expectedRevision:site.site.revision,sourceId:websiteId});
+  const {content}=await reader.file(id,'index.html',{revision:placed.site.revision});
+  reads.length=0;
+  assert.match((await contentBuffer(content)).toString(),/Public/);
+  assert.deepEqual(reads.map(file=>file.split('/').pop()),['head.json','pending.json']);
   const edit=await writer.beginSourceUpdate({sourceId:websiteId,target:'website'});
   await assert.rejects(reader.siteVersion(id),{code:'CONFLICT'});
+  await assert.rejects(contentBuffer(content),{code:'CONFLICT'});
   await writer.cancelSourceUpdate({sourceId:websiteId,token:edit});
   assert.equal(await reader.siteVersion(id),placed.site.revision);assert.equal(await reader.pdfVersion(),settled);
+  await writer.save(id,{path:'index.html',expectedRevision:placed.site.revision,html:placed.html,css:'body { color: teal }'});
+  await assert.rejects(contentBuffer(content),{code:'CONFLICT'});
  }finally{
   await closeIdleMutationFiles();assert.equal(path.dirname(temporary),os.tmpdir());assert.ok(path.basename(temporary).startsWith('website-version-'));
   await rm(temporary,{recursive:true,force:true,maxRetries:6,retryDelay:100});
