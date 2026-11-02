@@ -12,6 +12,38 @@ import {validateWebsiteHTML,validateWebsiteCSS} from '../src/website-file-policy
 import {contentBuffer} from '../src/file-content.js';
 import {bindConvertedPage} from '../src/website-files-migration.js';
 
+test('a reviewed batch of eligible entries is placed in order or leaves the saved page untouched',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-reviewed-batch-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>assert.fail('Placement opened research');
+ const store=new WebsiteFileStore(workspace),id=randomUUID(),book=randomUUID(),sources=[];
+ for(const title of ['Station one','Station two','Unselected station']){
+  const sourceId=websiteSourceId({workspaceId:workspace.vault.id,notebookId:book,recordId:randomUUID()});
+  const token=await store.beginSourceUpdate({sourceId});
+  const source=await store.putSource({sourceId,title,html:'<p>'+title+'</p>'},{token});
+  sources.push({sourceId,sourceRevision:source.revision});
+ }
+ const page=await store.create({id,name:'Stations'}),pin=page.site.revision;
+ const submit=sources=>store.insertSources(id,{expectedRevision:pin,sources,position:{before:0}});
+ const [first,second,unselected]=sources;
+ await assert.rejects(submit([first,first]),{code:'INVALID'});
+ await assert.rejects(submit([first,{sourceId:second.sourceId}]),{code:'INVALID'});
+ await assert.rejects(submit([first,{...second,sourceRevision:'f'.repeat(64)}]),{code:'CONFLICT'});
+ const token=await store.beginSourceUpdate({sourceId:second.sourceId});
+ await assert.rejects(submit([first,second]),{code:'CONFLICT'});
+ assert.equal((await store.open(id)).site.revision,pin);
+ await store.cancelSourceUpdate({sourceId:second.sourceId,token});
+ const source=store.source.bind(store);store.source=(key,options)=>{assert.notEqual(key,unselected.sourceId);return source(key,options);};
+ const placed=await submit([second,first]);
+ assert.match(placed.html,/Station two[\s\S]+Station one[\s\S]+<h1/);
+ assert.doesNotMatch(placed.html,/Unselected station/);assert.notEqual(placed.site.revision,pin);
+ await assert.rejects(submit([first,second]),{code:'CONFLICT'});
+ await store.putSource({sourceId:second.sourceId,title:'Withdrawn',visible:false},{token:await store.beginSourceUpdate({sourceId:second.sourceId})});
+ const revoked=await store.open(id);
+ await assert.rejects(store.insertSources(id,{expectedRevision:revoked.site.revision,sources:[first,second]}),{code:'NOT_FOUND'});
+ assert.equal((await store.open(id)).html,revoked.html);
+});
+
 test('cross-entry references retain authored labels, revoke target titles and never grant target assets',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'website-entry-links-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});

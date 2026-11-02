@@ -18,7 +18,7 @@ import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
 import {publicPictureNames,saveWebsitePictures} from './website-picture-files.js';
 import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
-import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
+import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSources,updateWebsiteSource} from './website-file-html.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
 import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from './website-component-storage.js';
 import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
@@ -27,6 +27,12 @@ const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const recordIndex=(owner,record,target)=>ROOT+'/record-sources/'+hash(plain([owner,record,target]))+'.json';
 const styleName=id=>'source-'+id+'.css';
+function includeSourceAssets(files,source,draft){
+ for(const asset of [...source.assets,{...source.css,name:styleName(source.id)}]){
+  const other=files.get(asset.name);if(other&&other.sha256!==asset.sha256)throw new AppError('CONFLICT');
+  if(!other||other.draft||!draft)files.set(asset.name,{...asset,sourceId:source.id,...(draft?{draft:true}:{})});
+ }
+}
 const draftStyle='draft-styles.css';
 const siteOwner=(id,draft)=>ROOT+'/sites/'+siteName(id)+(draft?'/drafts':'');
 const assetSources=pages=>new Set(pages.flatMap(page=>page.placements.filter(source=>!source.link).map(source=>source.id)));
@@ -154,13 +160,7 @@ export class WebsiteFileStore{
    if(!allIds.has(placement.id))continue;
    const source=await this.source(placement.id,{pending:true});
    if(!source||source.revision!==placement.revision||source.target!=='website')throw new AppError('CONFLICT');
-   for(const asset of [...source.assets,{...source.css,name:styleName(source.id)}]){
-    const other=files.get(asset.name);if(other&&other.sha256!==asset.sha256)throw new AppError('CONFLICT');
-    // A copied asset is owned by at least one currently permitted source.
-    // If another source still permits the same bytes, use its own descriptor.
-    const draft=!publicIds.has(source.id);
-    if(!other||other.draft||!draft)files.set(asset.name,{...asset,sourceId:source.id,...(draft?{draft:true}:{})});
-   }
+   includeSourceAssets(files,source,!publicIds.has(source.id));
   }
   return [...files.values()];
  }
@@ -379,15 +379,28 @@ export class WebsiteFileStore{
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
- insertSource(id,{expectedRevision,path:page='index.html',sourceId,sourceRevision,position='end',signal}={}){return this.scope(async()=>{
-  if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');
-  if(sourceRevision!==undefined&&sourceRevision!==source.revision)throw new AppError('CONFLICT');
-  const opened=await this.present(manifest,page,{signal}),fragment=await this.readText(source.html,{signal});let html=insertWebsiteSource(opened.html,{id:sourceId,revision:source.revision,html:atPage(fragment,page),position});
-  const cssPath=sourceURL(page,styleName(sourceId));if(!html.includes('href="'+cssPath+'"'))html=html.replace(/<\/head\s*>/i,'<link rel="stylesheet" href="'+cssPath+'"></head>');
-  const pages=manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html,value.placements)}:value);
-  const local=manifest.files.filter(file=>!file.sourceId&&file.name!==page);local.push(await this.siteFile(id,page,html,{signal,draft:pages.find(value=>value.path===page)?.draft}));
-  const sources=manifest.sources.filter(value=>value.id!==sourceId);sources.push({id:sourceId,revision:source.revision});const files=await this.siteAssets(local,sources,pages);
-  return this.present(await this.commit({...manifest,files,sources,pages},{signal}),page,{signal});
+ insertSource(id,{sourceId,sourceRevision,...options}={}){return this.insertSources(id,{...options,sources:[{sourceId,sourceRevision}]},{requirePins:false});}
+ insertSources(id,{expectedRevision,path:page='index.html',sources,position='end',signal}={}, {requirePins=true}={}){return this.scope(async()=>{
+  if(!hex(expectedRevision)||!Array.isArray(sources)||!sources.length||sources.length>40||sources.some(row=>!hex(row?.sourceId)||(requirePins||row.sourceRevision!==undefined)&&!hex(row.sourceRevision))||new Set(sources.map(row=>row.sourceId)).size!==sources.length)throw new AppError('INVALID');
+  const manifest=await this.current(id,expectedRevision),destination=manifest.pages.find(row=>row.path===page);
+  if(!destination)throw new AppError('NOT_FOUND');
+  const files=new Map(manifest.files.map(file=>[file.name,file])),body=await this.readText(files.get(page),{signal});
+  const placements=new Map(manifest.sources.map(row=>[row.id,row])),fragments=[],styles=[];let bytes=Buffer.byteLength(body);
+  for(const {sourceId,sourceRevision} of sources){
+   signal?.throwIfAborted();const source=await this.source(sourceId);
+   if(!source?.visible||source.target!=='website')throw new AppError('NOT_FOUND');
+   if(sourceRevision!==undefined&&source.revision!==sourceRevision)throw new AppError('CONFLICT');
+   bytes+=source.html.size;if(bytes>TEXT_LIMIT)throw new AppError('LIMIT');
+   fragments.push({id:sourceId,revision:source.revision,html:atPage(await this.readText(source.html,{signal}),page)});
+   placements.set(sourceId,{id:sourceId,revision:source.revision});includeSourceAssets(files,source,Boolean(destination.draft));
+   const href=sourceURL(page,styleName(sourceId));if(!body.includes('href="'+href+'"'))styles.push('<link rel="stylesheet" href="'+href+'">');
+  }
+  let html=insertWebsiteSources(body,fragments,position);if(styles.length)html=html.replace(/<\/head\s*>/i,styles.join('')+'</head>');
+  if(Buffer.byteLength(html)>TEXT_LIMIT)throw new AppError('LIMIT');
+  const pages=manifest.pages.map(row=>row===destination?{...row,placements:websiteSourcePlacements(html,row.placements)}:row);
+  files.set(page,await this.siteFile(id,page,html,{signal,draft:destination.draft}));
+  const saved=await this.commit({...manifest,files:[...files.values()],sources:[...placements.values()],pages},{signal});
+  return this.present(saved,page,{signal});
  },{write:true,signal});}
  publicationWorkspace(id){
   siteName(id);const store=this,base=this.workspace,prefix=ROOT+'/sites/'+siteName(id)+'/publication';
