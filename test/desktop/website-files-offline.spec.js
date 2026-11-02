@@ -69,7 +69,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   await test.info().attach('published-website',{body:await publicPage.screenshot(),contentType:'image/png'});
   // Fail on any newly introduced API dependency, including a background poll
   // whose failed database read was swallowed by the application.
-  const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/preferences'].includes(route);
+  const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/language','/api/interface'].includes(route);
   expect([...new Set(requests.filter(route=>!allowed(route)))]).toEqual([]);expect(errors).toEqual([]);for(const database of databases)expect((await stat(database)).isFile()).toBe(true);
   console.log(JSON.stringify({packaged:Boolean(fixture.packaged),coldOpenMs,previewMs,databasesUnavailable:databases.length,publishedMatchesPreview:true,privateCanaryAbsent:true}));
  }catch(error){failure=error;const screen=await page?.locator('body').innerText({timeout:3000}).catch(()=>'');console.error('Website qualification failed during '+phase+': '+error.message+'\n'+errors.join('\n')+'\n'+screen?.slice(0,1800));throw error;}
