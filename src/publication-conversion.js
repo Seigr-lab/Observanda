@@ -94,7 +94,7 @@ export class PublicationConversion{
   const output=await convertPublicationRecord(storage,metadata,record,{target});if(!output.visible)throw new AppError('RECORD_CHANGED');
   return this.files.putSource({sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null},title:record.title,...output},{token});
  }
- async seedWebsites(provenances,withOwner,{signal}={}){
+ async seedWebsites(provenances,withOwner,{signal,onSource}={}){
   const pending=new Map(),sources=new Map();
   try{
    // Fence before taking the research snapshot. One owner can contain many
@@ -106,6 +106,7 @@ export class PublicationConversion{
       if((await this.files.pendingSources()).has(sourceId))throw new AppError('CONFLICT');
       if(!source.visible||source.target!=='website')throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
       sources.set(provenance.recordId,{id:source.id,revision:source.revision,assets:source.assets.map(file=>({path:file.name,sha256:file.sha256}))});
+      await onSource?.();
      }else{
       const token=await this.files.beginSourceUpdate({sourceId,target:'website',ifAbsent:true,resumeSeed:true,signal});
       pending.set(sourceId,{token,provenance});
@@ -127,6 +128,7 @@ export class PublicationConversion{
      if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
      const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId},...output,signal},{token});
      pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
+     await onSource?.();
     }
    });
    return sources;

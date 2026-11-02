@@ -20,6 +20,9 @@ const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const recordIndex=(owner,record,target)=>ROOT+'/record-sources/'+hash(plain([owner,record,target]))+'.json';
 const styleName=id=>'source-'+id+'.css';
+const draftStyle='draft-styles.css';
+const siteOwner=(id,draft)=>ROOT+'/sites/'+siteName(id)+(draft?'/drafts':'');
+const publishedSources=pages=>new Set(pages.filter(page=>!page.draft).flatMap(page=>page.placements.map(source=>source.id)));
 const sourceURL=(page,name)=>path.posix.relative(path.posix.dirname(page),name);
 const atPage=(html,page)=>page.includes('/')?html.replace(/(\b(?:src|href|poster)\s*=\s*["'])(assets\/[a-f0-9]{64}\.[a-z0-9]+)/gi,(_,prefix,name)=>prefix+sourceURL(page,name)):html;
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -113,22 +116,30 @@ export class WebsiteFileStore{
   else saved=await writeSegmentedContent(this.workspace,file,source,{expected,signal,admission:active.getStore()?.admission,reserveBytes:64*1024*1024,exclusive:true});
   return {name,blob,...saved,contentType:value?.contentType??contentType(name)};
  }
+ async siteFile(id,name,value,{draft,signal}={}){
+  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return draft?{...file,draft:true}:file;
+ }
  validBlob(file,id,sources){
-  const own=ROOT+'/sites/'+siteName(id)+'/files/',source=typeof file.sourceId==='string'&&sources.some(item=>item.id===file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
+  const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sources.some(item=>item.id===file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
   const base=file.blob?.startsWith(own)?own:source&&file.blob?.startsWith(source)?source:null;
   return base!==null&&file.blob.slice(base.length).startsWith(file.sha256+'.')&&/^[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(file.blob.slice(base.length));
  }
  validateManifest(value,id){
   if(value?.version!==1||value.id!==id||!hex(value.revision)||!Array.isArray(value.files)||!Array.isArray(value.pages)||!Array.isArray(value.sources))throw new AppError('FORMAT');
-  const names=new Set();for(const file of value.files){websiteFileName(file.name);if(names.has(file.name)||!this.validBlob(file,id,value.sources)||!Number.isSafeInteger(file.size)||file.size<0||!hex(file.sha256)||typeof file.contentType!=='string')throw new AppError('FORMAT');names.add(file.name);}
+  const names=new Map();for(const file of value.files){websiteFileName(file.name);if(names.has(file.name)||file.draft!==undefined&&file.draft!==true||!this.validBlob(file,id,value.sources)||!Number.isSafeInteger(file.size)||file.size<0||!hex(file.sha256)||typeof file.contentType!=='string')throw new AppError('FORMAT');names.set(file.name,file);}
+  for(const page of value.pages){
+   if(!names.has(page.path)||names.get(page.path).draft!==page.draft||!page.path.endsWith('.html')||!Array.isArray(page.placements))throw new AppError('FORMAT');
+  }
+  if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
  async raw(id,{missing=false}={}){
   const site=siteName(id),head=await this.control(ROOT+'/sites/'+site+'/head.json',{missing});if(!head)return null;if(!hex(head.revision))throw new AppError('FORMAT');
   return this.validateManifest(await this.control(ROOT+'/sites/'+site+'/revisions/'+head.revision+'.json'),id);
  }
- async siteAssets(local,placements){
+ async siteAssets(local,placements,pages){
   const files=new Map(local.filter(file=>!file.sourceId).map(file=>[file.name,file]));
+  const publicIds=publishedSources(pages);
   for(const placement of placements){
    const source=await this.source(placement.id,{pending:true});
    if(!source||source.revision!==placement.revision||source.target!=='website')throw new AppError('CONFLICT');
@@ -136,7 +147,8 @@ export class WebsiteFileStore{
     const other=files.get(asset.name);if(other&&other.sha256!==asset.sha256)throw new AppError('CONFLICT');
     // A copied asset is owned by at least one currently permitted source.
     // If another source still permits the same bytes, use its own descriptor.
-    files.set(asset.name,{...asset,sourceId:source.id});
+    const draft=!publicIds.has(source.id);
+    if(!other||other.draft||!draft)files.set(asset.name,{...asset,sourceId:source.id,...(draft?{draft:true}:{})});
    }
   }
   return [...files.values()];
@@ -162,7 +174,7 @@ export class WebsiteFileStore{
   if(manifest.sources.length){const pending=await this.pendingSources();if(manifest.sources.some(item=>pending.has(item.id)))throw new AppError('CONFLICT');}
   return manifest;
  }
- site(manifest){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title})=>({path,title})),cssPath:manifest.cssPath};}
+ site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
   const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   // Register placement before publishing the new site head. A crash may
@@ -174,41 +186,46 @@ export class WebsiteFileStore{
   if(previous&&previous.revision!==value.revision){
    const currentSources=new Set(value.sources.map(source=>source.id));for(const source of previous.sources)if(!currentSources.has(source.id))await this.remove(ROOT+'/sources/'+source.id+'/placements/'+siteName(value.id)+'.json');
    const retained=new Set(value.files.map(file=>file.blob));
-   for(const blob of new Set(previous.files.map(file=>file.blob)))if(!retained.has(blob)&&blob.startsWith(directory+'/files/'))await this.remove(blob);
+   for(const blob of new Set(previous.files.map(file=>file.blob)))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
    await this.remove(directory+'/revisions/'+previous.revision+'.json');
   }return value;
  }
  async readText(descriptor,{signal}={}){if(descriptor.size>TEXT_LIMIT)throw new AppError('LIMIT');const parts=[];for await(const bytes of new WebsiteFileContent(this,undefined,null,descriptor).read(0,descriptor.size-1,{signal}))parts.push(bytes);return Buffer.concat(parts).toString('utf8');}
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
  async present(manifest,page='index.html',{signal}={}){
-  websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),css=manifest.files.find(file=>file.name===manifest.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
-  return {site:this.site(manifest),path:page,html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
+  websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
+  return {site,path:page,html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
  }
  list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
  create({id=randomUUID(),name,html,css='',signal}={}){
   name=title(name);html??='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeWebsiteText(name)+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+escapeWebsiteText(name)+'</h1></main></body></html>';
   return this.importFiles(id,{name,files:new Map([['index.html',html],['style.css',css]]),signal});
  }
- importFiles(id,{name,files,expectedRevision,signal}={}){return this.scope(async()=>{
+ importFiles(id,{name,files,draftFiles=new Map(),expectedRevision,signal,onFile}={}){return this.scope(async()=>{
   siteName(id);name=title(name);if(!(files instanceof Map)||!files.has('index.html'))throw new AppError('INVALID');const previous=await this.raw(id,{missing:true});
   if(previous?expectedRevision!==previous.revision:expectedRevision!==undefined)throw new AppError(previous?'CONFLICT':'NOT_FOUND');
-  const descriptors=[];for(const [name,value] of files){signal?.throwIfAborted();descriptors.push(await this.descriptor(name,value,{signal,owner:ROOT+'/sites/'+siteName(id)}));}
+  if(!(draftFiles instanceof Map)||[...draftFiles.keys()].some(name=>files.has(name))||draftFiles.size&&!draftFiles.has(draftStyle))throw new AppError('INVALID');
+  const descriptors=[];for(const members of [files,draftFiles])for(const [name,value] of members){
+   signal?.throwIfAborted();descriptors.push(await this.siteFile(id,name,value,{draft:members===draftFiles,signal}));
+   await onFile?.(descriptors.length,files.size+draftFiles.size);
+  }
   const scripts=await this.scripts(descriptors),pages=[],sources=new Map();
-  for(const descriptor of descriptors){if(descriptor.name.endsWith('.html')){const html=await this.readText(descriptor,{signal});validateWebsiteHTML(html,{scripts,file:descriptor.name});const placements=websiteSourcePlacements(html);pages.push({path:descriptor.name,title:websiteDocumentTitle(html),placements});for(const source of placements)sources.set(source.id,source);}else if(descriptor.name.endsWith('.css'))validateWebsiteCSS(await this.readText(descriptor,{signal}),{file:descriptor.name});}
-  const placements=[...sources.values()],candidate={id,name,pages,cssPath:descriptors.some(file=>file.name==='style.css')?'style.css':descriptors.some(file=>file.name==='styles.css')?'styles.css':'style.css',files:await this.siteAssets(descriptors,placements),sources:placements};await this.assertSources(candidate);
+  for(const descriptor of descriptors){if(descriptor.name.endsWith('.html')){const html=await this.readText(descriptor,{signal});validateWebsiteHTML(html,{scripts,file:descriptor.name});const placements=websiteSourcePlacements(html);pages.push({path:descriptor.name,title:websiteDocumentTitle(html),placements,...(descriptor.draft?{draft:true}:{})});for(const source of placements)sources.set(source.id,source);}else if(descriptor.name.endsWith('.css'))validateWebsiteCSS(await this.readText(descriptor,{signal}),{file:descriptor.name});}
+  const placements=[...sources.values()],candidate={id,name,pages,cssPath:files.has('style.css')?'style.css':files.has('styles.css')?'styles.css':'style.css',files:await this.siteAssets(descriptors,placements,pages),sources:placements};await this.assertSources(candidate);
   return this.present(await this.commit(candidate,{signal}),'index.html',{signal});
  },{write:true,signal});}
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
-  validateWebsiteHTML(html,{scripts:await this.scripts(manifest.files),file:page});validateWebsiteCSS(css,{file:manifest.cssPath});const sources=new Map(),owner=ROOT+'/sites/'+siteName(id);
   const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html);
+  const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
+  validateWebsiteHTML(html,{scripts:await this.scripts(manifest.files),file:page});validateWebsiteCSS(css,{file:cssPath});
   if(former?.placements.length||placements.length){
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
   }
-  const files=manifest.files.filter(file=>file.name!==page&&file.name!==manifest.cssPath);files.push(await this.descriptor(page,html,{signal,owner}),await this.descriptor(manifest.cssPath,css,{signal,owner}));
-  const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements});
+  const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
+  const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,...(draft?{draft:true}:{})});
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);return this.present(await this.commit(candidate,{signal}),page,{signal});
  },{write:true,signal});}
@@ -220,11 +237,11 @@ export class WebsiteFileStore{
   return head.revision;
  },{signal});}
  withSite(id,revision,operation){return this.scope(async()=>{const manifest=await this.current(id,revision);return operation(this.site(manifest));},{write:true});}
- file(id,name,{revision,signal}={}){return this.scope(async()=>{
-  websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);if(!descriptor)throw new AppError('NOT_FOUND');const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
+ file(id,name,{revision,signal,editor=false}={}){return this.scope(async()=>{
+  websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);if(!descriptor||descriptor.draft&&editor!==true)throw new AppError('NOT_FOUND');const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:descriptor.size,sha256:descriptor.sha256,};
  },{signal});}
- export(id,{expectedRevision,signal}={}){return this.scope(async()=>{const manifest=await this.current(id,expectedRevision),files=new Map();for(const descriptor of manifest.files)files.set(descriptor.name,new WebsiteFileContent(this,id,manifest.revision,descriptor));return {revision:manifest.revision,site:this.site(manifest),files};},{signal});}
+ export(id,{expectedRevision,signal}={}){return this.scope(async()=>{const manifest=await this.current(id,expectedRevision),files=new Map();for(const descriptor of manifest.files)if(!descriptor.draft)files.set(descriptor.name,new WebsiteFileContent(this,id,manifest.revision,descriptor));return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};},{signal});}
  async source(id,{pending=false}={}){
   if(!hex(id))throw new AppError('INVALID');const directory=ROOT+'/sources/'+id;
   if(!pending&&(await this.pendingSources()).has(id))throw new AppError('CONFLICT');
@@ -304,11 +321,11 @@ export class WebsiteFileStore{
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
    const affected=new Set(manifest.pages.filter(page=>page.placements.some(value=>value.id===sourceId)).map(page=>page.path)),titles=new Map();
    const nextFiles=[];for(const descriptor of manifest.files){
-    if(affected.has(descriptor.name)){const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible});if(updated!==original)titles.set(descriptor.name,websiteDocumentTitle(updated));nextFiles.push(updated===original?descriptor:await this.descriptor(descriptor.name,updated,{signal,owner:ROOT+'/sites/'+siteName(id)}));}
+    if(affected.has(descriptor.name)){const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible});if(updated!==original)titles.set(descriptor.name,websiteDocumentTitle(updated));nextFiles.push(updated===original?descriptor:await this.siteFile(id,descriptor.name,updated,{signal,draft:descriptor.draft}));}
     else if(descriptor.sourceId!==sourceId)nextFiles.push(descriptor);
    }
    const sources=manifest.sources.map(value=>value.id===sourceId?{id:sourceId,revision:source.revision}:value);
-   await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources),sources},{signal});
+   await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources,manifest.pages),sources},{signal});
   }after=sites.next;}while(after!==null);
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
@@ -317,9 +334,10 @@ export class WebsiteFileStore{
   if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');
   const opened=await this.present(manifest,page,{signal}),fragment=await this.readText(source.html,{signal});let html=insertWebsiteSource(opened.html,{id:sourceId,revision:source.revision,html:atPage(fragment,page)});
   const cssPath=sourceURL(page,styleName(sourceId));if(!html.includes('href="'+cssPath+'"'))html=html.replace(/<\/head\s*>/i,'<link rel="stylesheet" href="'+cssPath+'"></head>');
-  const local=manifest.files.filter(file=>!file.sourceId&&file.name!==page);local.push(await this.descriptor(page,html,{signal,owner:ROOT+'/sites/'+siteName(id)}));
-  const sources=manifest.sources.filter(value=>value.id!==sourceId);sources.push({id:sourceId,revision:source.revision});const files=await this.siteAssets(local,sources);
-  return this.present(await this.commit({...manifest,files,sources,pages:manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html)}:value)},{signal}),page,{signal});
+  const pages=manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html)}:value);
+  const local=manifest.files.filter(file=>!file.sourceId&&file.name!==page);local.push(await this.siteFile(id,page,html,{signal,draft:pages.find(value=>value.path===page)?.draft}));
+  const sources=manifest.sources.filter(value=>value.id!==sourceId);sources.push({id:sourceId,revision:source.revision});const files=await this.siteAssets(local,sources,pages);
+  return this.present(await this.commit({...manifest,files,sources,pages},{signal}),page,{signal});
  },{write:true,signal});}
  publicationWorkspace(id){
   siteName(id);const store=this,base=this.workspace,prefix=ROOT+'/sites/'+siteName(id)+'/publication';

@@ -6,7 +6,7 @@ import {WebsiteDocumentStore} from './website-document-store.js';
 import {websiteBook,websiteDocument} from './web/website-sites-model.js';
 import {createNotebook} from './model.js';
 import {sameWebsitePin} from './web/website-pin.js';
-import {authoredSiteOnly,renderAuthoredSite} from './website-authored-files.js';
+import {authoredSiteOnly,renderAuthoredSite,renderDraftPages} from './website-authored-files.js';
 import {retainedSavedWebsite} from './website-upgrade-retained.js';
 import {runWebsiteUpgrade,upgradeControl,validateUpgradeState} from './website-upgrade-lease.js';
 import {websiteWorkspace} from './website-workspace.js';
@@ -21,7 +21,10 @@ import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {attr,put,words,descendants} from './website-migration-views.js';
 
-const failed=reason=>{throw new AppError('WEBSITE_CONVERSION_DEPENDENCIES',[{reason}]);};
+class WebsiteDependencyError extends AppError{
+ constructor(reason){super('WEBSITE_CONVERSION_DEPENDENCIES',[{reason}]);this.dependency=reason;}
+}
+const failed=reason=>{throw new WebsiteDependencyError(reason);};
 const hasClass=(node,key)=>(attr(node,'class')??'').split(/\s+/).includes(key);
 const local=(file,href)=>href&&!href.startsWith('#')&&!/^[a-z][a-z0-9+.-]*:|^\/\//i.test(href)?path.posix.normalize(path.posix.join(path.posix.dirname(file),href.split(/[?#]/)[0])):null;
 const entryPath=name=>/^entries\/([a-f0-9-]{36})(?:-references-\d+)?\.html$/.exec(name??'')?.[1];
@@ -100,7 +103,7 @@ async function alreadyImported(store,websiteId,signal){
  if(!id||!await store.scope(()=>store.raw(id,{missing:true}),{signal}))return null;
  return store.open(id,{signal});
 }
-export async function convertExistingWebsite(workspace,store,{websiteId,sourceReader,signal,blockedValues=[]}={}){
+export async function convertExistingWebsite(workspace,store,{websiteId,sourceReader,signal,blockedValues=[],progress}={}){
  if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
  const existing=await alreadyImported(store,websiteId,signal);if(existing)return existing;
  return runWebsiteUpgrade(store,'site-'+(websiteId??'default'),async()=>{
@@ -115,37 +118,47 @@ export async function convertExistingWebsite(workspace,store,{websiteId,sourceRe
   const {siteId,metadata,websitePin,source}=saved,site=websiteWorkspace(workspace,websiteId);
   if(websiteId===null)await store.scope(()=>store.writeControl(upgradeControl('default-site'),{id:siteId},{signal}),{write:true,signal});
   const duplicate=await alreadyImported(store,websiteId,signal);if(duplicate)return duplicate;
-  const files=authoredSiteOnly(source)?await renderAuthoredSite(workspace,metadata,{blockedValues,signal}):await researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues});
+  const material=authoredSiteOnly(source)?{files:await renderAuthoredSite(workspace,metadata,{blockedValues,signal})}:await researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues,progress});
+  const draftFiles=await renderDraftPages(workspace,metadata,material.files,{edition:material.edition,bind:material.bind,signal});
+  await progress?.('saving-files',0,material.files.size+draftFiles.size);
   const {migrateWebsitePublishingMetadata}=await import('./website-publishing-migration.js');
   return store.scope(()=>site.withLock(async()=>{
    await site.lockWebsite();
    const current=await new WebsiteSites(workspace).version(websiteId);
    if(!sameWebsitePin(current.websitePin,websitePin))throw new AppError('CONFLICT');
    await migrateWebsitePublishingMetadata(site,store,siteId,{signal});
-   return store.importFiles(siteId,{name:source.name,files,signal});
+   return store.importFiles(siteId,{name:source.name,files:material.files,draftFiles,signal,onFile:(done,total)=>progress?.('saving-files',done,total)});
   }),{write:true,signal});
  },{signal});
 }
 
-async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues}){
+async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues,progress}){
+ await progress?.('checking-saved-editions',0);
  const releases=new PublicationJobs(site,{sourceReader}),previous=await retainedSavedWebsite(releases,websitePin,{signal});
- const candidate=previous?.candidate??await releases.inline({websitePin,etag:websitePin.researchSnapshotId,workspaceId:metadata.id,blockedValues},{signal});
+ let captured=0,converted=0;
+ if(!previous)await progress?.('capturing-entries',0);
+ const candidate=previous?.candidate??await releases.inline({websitePin,etag:websitePin.researchSnapshotId,workspaceId:metadata.id,blockedValues},{signal,
+  onCapture:progress?async value=>{if(value.phase==='record-complete')await progress('capturing-entries',++captured);}:undefined,
+  progress:async({done,total})=>progress?.('rendering-pages',done,total)});
+ await progress?.('reading-saved-files',0);
  const retained=previous?.retained??await releases.source(candidate.jobId),conversion=new PublicationConversion(workspace,{store}),records=new Map(),aliases=new Map(),owners=new Map(),mediaNames=new Map();
- await workspace.catalogue(async()=>{
-  const input=await openPublicationInput(site,retained,{signal}),books=new Map(),projects=new Map();
-  for await(const row of input.records({order:'original'})){
+ const hasDrafts=metadata.pages.some(page=>!page.share);
+ const input=await workspace.catalogue(async()=>{
+  const source=await openPublicationInput(site,retained,{signal}),books=new Map(),projects=new Map();
+  for await(const row of source.records({order:'original'})){
    if(row.historical)failed('historical-entry');
-   if(!books.has(row.notebookId))books.set(row.notebookId,await input.get('notebooks',row.notebookId));const book=books.get(row.notebookId);
-   if(!book)failed('entry-owner');if(!projects.has(book.projectId))projects.set(book.projectId,await input.get('projects',book.projectId));const project=projects.get(book.projectId);
+   if(!books.has(row.notebookId))books.set(row.notebookId,await source.get('notebooks',row.notebookId));const book=books.get(row.notebookId);
+   if(!book)failed('entry-owner');if(!projects.has(book.projectId))projects.set(book.projectId,await source.get('projects',book.projectId));const project=projects.get(book.projectId);
    if(!project)failed('entry-owner');
    const provenance={workspaceId:row.sourceWorkspaceId??metadata.id,projectId:project.sourceId??project.id,notebookId:book.sourceId??book.id,recordId:row.recordId??row.id,target:'website'};
    if(!owners.has(provenance.workspaceId))owners.set(provenance.workspaceId,new Map());owners.get(provenance.workspaceId).set(row.id,provenance);
    // All annotation inputs are in the retained title/card descriptor, including
    // non-cover media. Do not open the retained original again to get these IDs.
    const record={title:row.title,type:row.type,tags:row.tags,attachments:row.media??row.attachments},media=new Map(Object.entries(row.mediaIdentities??{}).map(([id,alias])=>[alias,id]));
-   records.set(row.id,{record,media});
+   records.set(row.id,{record,media,...(hasDrafts?{card:row}:{})});
    for(const member of row.media??[]){const ext={image:'png',audio:'wav',video:'mp4'}[member.kind],name='media/'+member.id+'.'+ext;if(!mediaNames.has(name))mediaNames.set(name,new Set());mediaNames.get(name).add(row.id);}
   }
+  return source;
  });
  let reader;
  try{
@@ -154,7 +167,8 @@ async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,so
     if(namespace===metadata.id)return workspace.catalogue(async catalogue=>{const snapshotId=await catalogue.head();return consume(catalogue,await catalogue.snapshot(snapshotId),{snapshotId,storage:workspace});});
     if(!sourceReader)throw new AppError('ACCESS_LOCKED');reader??=await sourceReader({signal});return reader.use(namespace,undefined,consume);
    };
-   const sources=await runWebsiteUpgrade(store,'source-owner-'+namespace,()=>conversion.seedWebsites(selected.values(),withOwner,{signal}),{signal,shareResult:false});
+   await progress?.('converting-entries',converted,records.size);
+   const sources=await runWebsiteUpgrade(store,'source-owner-'+namespace,()=>conversion.seedWebsites(selected.values(),withOwner,{signal,onSource:()=>progress?.('converting-entries',++converted,records.size)}),{signal,shareResult:false});
    for(const [id,provenance] of selected){const source=sources.get(provenance.recordId);Object.assign(records.get(id),{source,assets:new Map(source.assets.map(asset=>[asset.sha256,asset.path]))});}
   }
   await reader?.verify();
@@ -166,16 +180,17 @@ async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,so
     for(const id of entries){const alias=records.get(id)?.assets.get(hash);if(!alias)failed(figure?'figure-asset-permission':'entry-asset-permission');aliases.set(name,alias);}
    }
   });
-  const files=new Map();
+  const files=new Map(),bind=(name,html)=>bindConvertedPage(name,html,{records,aliases,mediaNames});
   for await(const [name,value] of candidate.files){
    signal?.throwIfAborted();if(name==='publication.json'||aliases.has(name))continue;
-   if(name.endsWith('.html'))files.set(name,bindConvertedPage(name,(await contentBuffer(value,{signal})).toString('utf8'),{records,aliases}));
+   if(name.endsWith('.html'))files.set(name,bind(name,(await contentBuffer(value,{signal})).toString('utf8')));
    else if(name.endsWith('.css')){let css=(await contentBuffer(value,{signal})).toString('utf8');for(const [original,alias] of aliases)css=css.split(original).join(alias);files.set(name,css);}
    else if(records.size&&name!=='.nojekyll'&&!/^(?:[^/]+\.js|(?:media|fonts|assets)\/[^/]+)$/.test(name))failed('unowned-edition-member');
    else files.set(name,value);
+   await progress?.('copying-files',files.size,candidate.files.size);
   }
   await assertPublicationSourcePermissions(site,retained,{sourceReader,signal});
-  return files;
+  return {files,bind,edition:{input,records,aliases,candidate}};
  }finally{await reader?.close();}
 }
 const statusPath=upgradeControl('workspace');
@@ -227,12 +242,19 @@ export async function upgradeExistingWebsites(workspace,{sourceReader,signal,blo
     signal?.throwIfAborted();siteId=websiteId??registry.defaultSiteId;
     await report({...common,state:'preparing',siteId,phase});
     try{
-     if(!await store.scope(()=>store.raw(siteId,{missing:true}),{signal}))
-      await convertExistingWebsite(workspace,store,{websiteId,sourceReader,blockedValues,signal});
+     if(!await store.scope(()=>store.raw(siteId,{missing:true}),{signal})){
+      let lastStage,lastWrite=0;
+      const progress=async(stage,completed,total)=>{
+       const now=Date.now();if(stage===lastStage&&now-lastWrite<3000)return;
+       lastStage=stage;lastWrite=now;
+       await report({...common,state:'preparing',siteId,phase,stage,completed,...(Number.isSafeInteger(total)?{stageTotal:total}:{})});
+      };
+      await convertExistingWebsite(workspace,store,{websiteId,sourceReader,blockedValues,signal,progress});
+     }
      common.done++;
     }catch(error){
      signal?.throwIfAborted();
-     failed??={siteId,code:error instanceof AppError?error.code:'IO'};
+     failed??={siteId,code:error instanceof AppError?error.code:'IO',...(error instanceof WebsiteDependencyError?{dependency:error.dependency}:{})};
      for(const key of ['projectId','labBookId','sourceWorkspaceId'])if(failed.siteId===siteId&&researchId(error[key]))failed[key]=error[key];
     }
    }

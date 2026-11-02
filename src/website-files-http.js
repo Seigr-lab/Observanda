@@ -42,7 +42,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
     if(!site.pages.some(page=>page.path===decodeURIComponent(match[3])))throw new AppError('NOT_FOUND');
     res.setHeader('Content-Security-Policy',policy);res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head></head><body></body></html>');return true;
    }
-   const file=await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal});
+   const file=await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal,editor:true});
    await check();res.setHeader('Content-Security-Policy',policy);
    await serveContent(req,res,file.content??file.bytes,file.contentType,{signal});return true;
   }

@@ -9,6 +9,32 @@ import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource,updateWebsiteSource} from '../src/website-file-html.js';
 import {validateWebsiteHTML,validateWebsiteCSS} from '../src/website-file-policy.js';
+import {contentBuffer} from '../src/file-content.js';
+
+test('private drafts remain editable and a draft-only placement contributes no published files',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-draft-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});workspace.catalogue=()=>assert.fail('Draft editor opened research');
+ const store=new WebsiteFileStore(workspace),id=randomUUID(),draft='pages/private.html',privateCSS='draft-styles.css';
+ const files=new Map([['index.html','<html><head><title>Home</title></head><body>Public site</body></html>'],['style.css','body{color:navy}']]);
+ const draftFiles=new Map([[draft,'<html><head><title>Working copy</title><link rel="stylesheet" href="../draft-styles.css"></head><body><main><h1>Working copy</h1></main></body></html>'],[privateCSS,'body{color:red}'],['private.png',Buffer.from('Draft image')]]);
+ await store.importFiles(id,{name:'Site',files,draftFiles});
+ let opened=await store.open(id,{path:draft});assert.equal(opened.site.cssPath,privateCSS);
+ opened=await store.save(id,{...opened,expectedRevision:opened.site.revision,css:'p{color:purple}',html:opened.html.replace('<h1>Working copy','<h1>Revised draft')});
+ const sourceId=websiteSourceId({workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()}),asset=Buffer.from('Draft source asset'),assetPath='assets/'+createHash('sha256').update(asset).digest('hex')+'.png';
+ const token=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Source',html:'<p data-observanda-part="body">Source detail</p>',assets:[{path:assetPath,bytes:asset,contentType:'image/png'}]},{token});
+ opened=await store.insertSource(id,{path:draft,expectedRevision:opened.site.revision,sourceId});
+ assert.match(opened.html,/Source detail/);assert.match(opened.html,/Revised draft/);
+ for(const member of [draft,privateCSS,'private.png',assetPath,'source-'+sourceId+'.css']){
+  await assert.rejects(store.file(id,member),{code:'NOT_FOUND'});assert.ok((await store.file(id,member,{editor:true})).content);
+ }
+ const exported=await store.export(id);assert.deepEqual([...exported.files.keys()].sort(),['index.html','style.css']);assert.deepEqual(exported.site.pages.map(p=>p.path),['index.html']);
+ assert.equal((await contentBuffer(exported.files.get('style.css'))).toString(),'body{color:navy}');
+ const shared=await store.insertSource(id,{path:'index.html',expectedRevision:opened.site.revision,sourceId});assert.ok((await store.export(id)).files.has(assetPath));
+ const withdrew=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Withdrawn',visible:false},{token:withdrew});
+ assert.doesNotMatch((await store.open(id,{path:draft})).html,/Source detail/);assert.equal((await store.export(id)).files.has(assetPath),false);
+ await assert.rejects(store.file(id,assetPath,{revision:shared.site.revision,editor:true}),{code:'CONFLICT'});
+});
 
 test('saved HTML, CSS and copied source survive unavailable research; changing visibility updates existing placements and revokes stale publications',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'website-files-'));await mkdir(path.join(root,'.observanda'));

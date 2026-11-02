@@ -141,12 +141,12 @@ export class PublicationJobs{
  }
  // Compatibility callers wait for their reply, but use the same pinned input,
  // page renderer and retained-file reader as durable background preparations.
- async inline(command,{signal}={}){
+ async inline(command,{signal,onCapture,progress=async()=>{}}={}){
   signal??=new AbortController().signal;
-  const source=await withPublicationCapture(this.workspace,async(workspace,id,finish)=>{const source=await this.pin(command,{signal,workspace,id});return finish(()=>source);},{signal}),job={id:source.id,lease:{token:randomUUID()}};
+  const source=await withPublicationCapture(this.workspace,async(workspace,id,finish)=>{const source=await this.pin(command,{signal,workspace,id,onCapture});return finish(()=>source);},{signal}),job={id:source.id,lease:{token:randomUUID()}};
   let committed=false;
   try{
-   const candidate=await this.prepare(job,{signal,progress:async()=>{}});signal.throwIfAborted();
+   const candidate=await this.prepare(job,{signal,progress});signal.throwIfAborted();
    await this.workspace.withLock(async()=>{signal.throwIfAborted();await this.commit(job,candidate);});committed=true;
    return this.read(source.reviewId);
   }finally{
