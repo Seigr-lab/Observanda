@@ -143,6 +143,17 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
+const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
+let websiteFiles=null,fileEditorEpoch=0;
+const fileChanges=typeof BroadcastChannel==='function'?new BroadcastChannel('observanda-website-files'):null;
+if(fileChanges)fileChanges.onmessage=({data})=>{if(state.filesMode&&data?.type==='visibility'&&data.contextId===state.storage?.contextId)void websiteFiles?.checkVersion();};
+function sourceVisibilityWrite(route,data){
+ if(!data)return false;
+ if(/\/research\/records\/values\/save$/.test(route))return ['share','sharePdf','publication'].includes(data.field)||data.field?.startsWith('media:');
+ if(/\/research\/records\/writing\/save$/.test(route))return data.value&&('share' in data.value||'sharePdf' in data.value);
+ return /\/(?:research\/records\/(?:save|history\/restore|sections|media|location)|workspace\/(?:save|structure|notebook)|notebook\/save|lab-books\/edit)$/.test(route);
+}
+
 wireCustomFieldClipboard(document.body,{available:()=>!state.access?.locked&&!state.storageUnavailable});
 let previewSurfaces=[],dialogSurface=null;
 let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null;
@@ -193,6 +204,7 @@ function adoptSnapshot(result){
   recordChanges.reset(savedBook,savedRecordRevisions);
 }
 async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false,view=location.hash,owner=researchOwner(state),websitePin}={}) {
+  if(['/api/session','/api/access/unlock'].includes(route)&&data&&(fileEditorHash(location.hash)||new URLSearchParams(location.search).get('view')==='website'))data={...data,filesOnly:true};
   if(route==='/api/notebook'&&data===undefined&&activeWebsite(state))return websiteDocuments.open({websiteId:state.websiteId,websitePin:state.websitePin,base:{book:{id:state.book.id}},signal});
   if(route==='/api/workspace/read/selection'&&!validRecordSelection(data?.ids)){
     const result=await readRecordSelection(data,{signal});
@@ -244,6 +256,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
    result=onProgress||response.headers.get('content-type')?.includes('application/x-ndjson')?await readProgressStream(response,onProgress??progress?.update??(()=>{})):await response.json();
   }catch(error){const explicitProject=/^\/api\/projects\/([a-f0-9-]{36})\//.exec(route);if(explicitProject||projectApiRoute(route,owner)!==route)error.projectId??=explicitProject?.[1]??(typeof owner==='object'?owner?.projectId:owner);if(stop?.signal.aborted)throw {code:'STRUCTURE_CANCELLED',message:t('structureProgress','stopped')};const message=researchCapacityMessage(error);if(message)throw {...error,message};throw error;}
   finally{progress?.close();}
+  if(sourceVisibilityWrite(route,data))fileChanges?.postMessage({type:'visibility',contextId:requestContext});
   // An explicit project command can finish after its page has been left. Its
   // owner receives the result; it does not adopt research into the current view.
   if(!adopt&&route.startsWith('/api/projects/')){if(requestContext!==state.storage?.contextId)throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return result;}
@@ -550,6 +563,7 @@ configurationRecord=configurationRecordCreation({state,api,esc,field,render,onDi
 const recordList=recordListUI({state,api,esc,showDialog,render,access:operation=>withProjectAccess(operation),decorate:root=>decorateRecordLinks(root,state.book),chooseType:value=>{state.filter=value;refreshRecordResults();},table:rows=>renderRecordTable(rows,{action:'browse-record'})});
 const ownerOperation=projectOperationView({state,esc,projectDirectory:projectDirectoryUI,restore:restoreRoute,render});
 const activity=activityUI({onChange:snapshot=>{
+ if(state.filesMode)return;
  void ownerOperation.activity(snapshot).catch(report);
  void projectDirectoryUI.activity(snapshot).catch(report);
  void labBookDirectoryUI.activity(snapshot).catch(report);
@@ -612,6 +626,7 @@ const designUI = appearanceUI({fontLibrary,textControls,state,esc,field,option,d
 
 const saveableForms=new Set(['starter-edit-form','starter-details-form','starter-field-form','starter-tag-form','record-view-form','notebook-config-form','structure-project-form','project-template-form','workspace-name-form','theme-name-form','lab-sample-form','lab-analysis-form','lab-result-form','storage-access-form','media-policy-form']);
 function pendingChanges(scope='all'){
+  if(state.filesMode)return {forms:[],labels:websiteFiles?.isDirty()?[appText('saveWebsite')]:[],canSave:true};
   const websiteEditing=scope==='website-editor',navigation=scope==='navigation'||websiteEditing;if(navigation)scope='all';
   const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?appText('labBookTemplate'):appText('projectBookSettings'));
@@ -625,6 +640,7 @@ function pendingChanges(scope='all'){
   return {forms,labels:[...new Set(labels)],canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
 }
 async function savePending(scope='all',forms=drafts.changed(scope),{requireClean=true}={}){
+ if(state.filesMode){await websiteFiles?.save();return !websiteFiles?.isDirty();}
  if(websiteDocuments.enabled())await websiteDocuments.waitForStructure();
  const guardScope=scope;if(scope==='navigation')scope='all';
  if(figures.isBusy())throw Error(t('figureProvenance','checking'));
@@ -649,6 +665,7 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
   return complete;
 }
 async function discardPending(scope='all',forms=drafts.changed(scope)){
+  if(state.filesMode){await websiteFiles?.discard();return;}
   const navigation=scope==='navigation';if(navigation)scope='all';
   if(savePromise)await savePromise;
   if(initialRecordSave?.pending&&recordDrafts.saveUncertain())await saveInitialRecord();
@@ -701,6 +718,17 @@ function invalidatesResearchReturn(button){const name=button.dataset.action;retu
 function invalidateResearchReturn(){returnNavigation.invalidate();projectOwners.cancelPending();}
 async function action(button){
   if(removingRecord)return;
+  const fileAction=button.dataset.action;
+  if(state.filesMode){
+    if(fileAction==='website-files-back'){if(await websiteFiles?.beforeLeave())await leaveWebsiteFiles();return;}
+    if(fileAction==='website-files-retry'){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
+    if(fileAction?.startsWith('website-files-')||fileAction?.startsWith('github-')){await websiteFiles?.action(button);return;}
+  }
+  if(!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&(fileAction==='website'||fileAction==='publishing'||fileAction==='site-list'||fileAction==='site-open'||fileAction==='site-view'&&['website','publishing'].includes(button.dataset.page))){
+    const id=fileAction==='site-open'?button.dataset.id:button.closest?.('#main-navigation')?null:state.websiteId;
+    const publishing=fileAction==='publishing'||button.dataset.page==='publishing';
+    await leave.run(()=>enterWebsiteFiles({hash:id?'#/websites/'+id+'/'+(publishing?'publishing':'editor'):publishing?'#/publishing':'#/website'}),{scope:'navigation'});return;
+  }
   if(accessHelp.action(button))return;
   if(shellMenu.action(button))return;
   shellMenu.beforeAction(button);
@@ -761,6 +789,7 @@ function releaseCompleteWorkspace(){
 }
 function render() {
   updateDocumentLanguage(document);
+  if(state.filesMode&&!state.access?.locked){renderWebsiteFiles();return;}
   configurationRecord?.checkContext();
   runCreation.checkContext();
   recordLocation.checkContext();
@@ -1132,6 +1161,7 @@ document.addEventListener('click', event => {
   if (button) { event.preventDefault(); const previous = `${state.page}/${state.project}/${state.notebook}`; action(button).then(() => { if (`${state.page}/${state.project}/${state.notebook}` !== previous) window.scrollTo(0,0); }).catch(report); }
 });
 document.addEventListener('input', event => {
+  if(state.filesMode&&event.target.closest('[data-website-files-app]')){websiteFiles?.input(event.target);return;}
   if(event.target.matches('[data-tool-search]')){state.toolQuery=event.target.value;filterToolDirectory(event.target);return;}
   if(recordDestination.input(event.target)||recordCreation.input(event.target))return;
   if(bookStorage.input(event.target))return;
@@ -1207,9 +1237,9 @@ async function submitForm(form){
 
   }catch(error){if(!websiteForm&&beforeBook&&state.etag===beforeEtag){state.book=beforeBook;Object.assign(state,locationBefore);dirty();}throw error;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(form.id==='create-form')setupControls.busy(false);}
 }
-document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??appText('workspaceCreateFailed'));else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??appText('formSaveFailed'),true);else report(error);});});
+document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;if(state.filesMode&&form.matches('[data-website-files-form]')){websiteFiles?.submit(form).catch(report);return;}submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??appText('workspaceCreateFailed'));else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??appText('formSaveFailed'),true);else report(error);});});
 window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || figures.isBusy() || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
-document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && state.book) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify(appText('changesSaved'));}).catch(report); } });
+document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && (state.book||state.filesMode)) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify(appText('changesSaved'));}).catch(report); } });
 
 
 
@@ -1295,7 +1325,29 @@ function renderMediaPolicy(){
 }
 function mediaPolicyField([key,label,unit]){const value=state.mediaPolicy.policy[key];return field(esc(appText(label)),`<input type="number" min="0" step="any" name="${key}" value="${value?value/unit:''}" placeholder="${esc(appText('standardLimit'))}">`);}
 
-let workspaceLoadTask=null;
+let workspaceLoadTask=null,researchServicesStarted=false;
+function renderWebsiteFiles(){
+  workspaceLive.bind();
+  const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
+  const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view()??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
+  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
+  document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
+}
+async function enterWebsiteFiles({hash='#/website',replace=false}={}){
+  const epoch=++fileEditorEpoch;state.filesMode=true;state.fileError=null;state.page='website';state.dirty=false;
+  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
+  const id=/^#\/websites\/([a-f0-9-]{36})\//.exec(projectRoute(hash).hash)?.[1]??null;
+  document.querySelector('#dialog')?.close();workspaceLive.bind();recordList.stop();recordDrafts.pause();recordActivity.stop();workflow.stop();dashboard.bind();operationsLive.bind();
+  if(!websiteFiles){const {websiteFilesUI}=await import('./website-files-ui.js');if(epoch!==fileEditorEpoch)return;websiteFiles=websiteFilesUI({api,esc,render:()=>{if(state.filesMode)renderWebsiteFiles();},notify,onSession:session=>{if(!state.filesMode)return;if(!session.contextId)throw Error(t('websiteFiles','failed'));state.storage={...state.storage,contextId:session.contextId};},onDirty:value=>{if(state.filesMode)state.dirty=value;}});}
+  websiteFiles.clear();renderWebsiteFiles();
+  try{await websiteFiles.load({id,publishing:hash.endsWith('/publishing')});if(epoch!==fileEditorEpoch)return;const session=websiteFiles.session();if(!state.storage&&session?.contextId)state.storage={contextId:session.contextId};}
+  catch(error){if(epoch!==fileEditorEpoch||error.name==='AbortError')return;if(error.code==='ACCESS_LOCKED'){state.filesMode=false;state.access={...state.access,locked:true};render();return;}state.fileError=error.message??t('websiteFiles','failed');renderWebsiteFiles();}
+}
+async function leaveWebsiteFiles({hash='#/workspace',replace=false}={}){
+  fileEditorEpoch++;websiteFiles?.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
+  if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
+  await loadWorkspace();
+}
 function loadWorkspace(){
  return workspaceLoadTask??=loadWorkspaceOwned().then(loaded=>{workspaceLoadTask=null;if(loaded)syncRoute();},error=>{workspaceLoadTask=null;throw error;});
 }
@@ -1305,6 +1357,8 @@ async function loadWorkspaceOwned(){
   fontLibrary.clear();
   state.access=await api('/api/access/status');
   if(state.access.locked){activity.hide();await recordDrafts.start(null);render();return;}
+  if(fileEditorHash(location.hash)||new URLSearchParams(location.search).get('view')==='website'&&!location.hash.startsWith('#/')){await enterWebsiteFiles({hash:fileEditorHash(location.hash)?location.hash:'#/website',replace:true});return true;}
+  if(!researchServicesStarted){await writerRecovery.check();researchServicesStarted=true;activity.start();}
   const activityStatus=await activity.refresh();
   if(activityStatus.busy&&!activityStatus.readable){
    state.waitingForOperation=true;
@@ -1336,8 +1390,6 @@ async function loadWorkspaceOwned(){
 await startApplication({api,esc,show:content=>appShell.showStandalone(content),load:async()=>{
   await languageControls.load();
   await textControls.load();
-  await writerRecovery.check();
-  activity.start();
   await loadWorkspace();
 }});
 
@@ -1353,6 +1405,7 @@ function refreshRecordResults(){
 }
 function rememberFilters(){history.replaceState({...history.state,observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',location.href);}
 function syncRoute(){
+  if(state.filesMode)return;
   if(!state.book&&state.page!=='workspaces'||state.ownerOperation||restoringRoute||workspaceLoadTask||projectOwners.pending())return;
   const next=routeFor(state);
   if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
@@ -1360,6 +1413,7 @@ function syncRoute(){
 }
 async function restoreRoute({websiteReady=false}={}){
   invalidateResearchReturn();
+  if(!state.access?.locked&&fileEditorHash(location.hash)){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
   if(!state.access?.locked&&!state.newWorkspace&&(state.storageUnavailable||!state.book))state.page=location.hash==='#/workspaces'?'workspaces':'workspace';
   if(state.access?.locked||state.storageUnavailable&&!state.newWorkspace||!state.book||state.newWorkspace){render();markHistory();return;}
   const request=++routeRestoreVersion;let requestedRoute=location.hash;const current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
@@ -1398,6 +1452,7 @@ window.addEventListener('popstate',event=>{
   if(travel){const done=travel;travel=null;done();return;}
   (async()=>{
     const targetIndex=Number.isInteger(event.state?.observandaIndex)?event.state.observandaIndex:routeIndex+1;
+    if(state.filesMode){const hash=location.hash;if(!await websiteFiles?.beforeLeave()){const current=websiteFiles?.current();history.replaceState({...event.state,observandaIndex:routeIndex},'',current?'#/websites/'+current.site.id+'/editor':'#/website');return;}routeIndex=targetIndex;if(fileEditorHash(hash))await enterWebsiteFiles({hash,replace:true});else await leaveWebsiteFiles({hash,replace:true});return;}
     if(!Number.isInteger(event.state?.observandaIndex))history.replaceState({...history.state,observandaIndex:targetIndex},'',location.href);
     const delta=targetIndex-routeIndex,targetHash=location.hash,sameWebsite=sameWebsiteEditRoute(targetHash);
     if(!delta)return;

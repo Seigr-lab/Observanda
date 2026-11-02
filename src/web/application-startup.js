@@ -16,7 +16,9 @@ export async function startApplication({api,load,show,esc,location=window.locati
  }catch(error){
   const authorization=error?.code==='AUTH',message=key=>esc(t('startup',key));
   const detail=error?.code&&typeof error.message==='string'?'<p role="alert">'+esc(error.message)+'</p>':'';
-  show('<main id="main" class="loading"><h1 tabindex="-1">'+message(authorization?'unauthorized':'connectionFailed')+'</h1><p>'+message(authorization?'authorizationMessage':'connectionMessage')+'</p>'+detail+'<button type="button" class="button primary" id="startup-reload">'+message('reload')+'</button></main>');
+  const researchUnavailable=typeof error?.code==='string'&&/^(?:DATABASE(?:_|$)|CATALOGUE_)/.test(error.code);
+  show('<main id="main" class="loading"><h1 tabindex="-1">'+message(authorization?'unauthorized':'connectionFailed')+'</h1><p>'+message(authorization?'authorizationMessage':'connectionMessage')+'</p>'+detail+'<button type="button" class="button primary" id="startup-reload">'+message('reload')+'</button>'+(researchUnavailable?'<button type="button" class="button" id="startup-website">'+esc(t('websiteSites','editor'))+'</button>':'')+'</main>');
   document.querySelector('#main h1')?.focus();document.getElementById('startup-reload').addEventListener('click',()=>location.reload());
+  document.getElementById('startup-website')?.addEventListener('click',()=>{const url=new URL(location.href);url.searchParams.set('view','website');if(!/^#[a-f0-9]{64}$/.test(url.hash))url.hash='#/website';location.assign(url.href);});
  }
 }

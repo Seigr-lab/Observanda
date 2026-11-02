@@ -1,4 +1,5 @@
 {
+  "websiteFiles": ["en", "ca", "es", "nb", "nn"],
   "coordinateFrames": [
     "en",
     "ca",

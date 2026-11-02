@@ -8,7 +8,7 @@ import {t} from './i18n/index.js';
 export function workspaceRefresh({state,api,version:readVersion,read,apply,blocked,notify,onAccessError,interval=5000}){
  let task=null,controller=null,stopped=false,pending=false,failure=false,manualBusy=false,owner=null;
  const text=key=>t('workspaceRead',key);
- const identity=()=>state.book&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace?
+ const identity=()=>!state.filesMode&&!(state.page==='module'&&state.moduleId==='pdf-editor')&&state.book&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace?
   websiteContext(state)+':'+state.book.id:null;
  function paint(){
   const logo=document.querySelector('.brand[data-action="workspace-refresh"]');
