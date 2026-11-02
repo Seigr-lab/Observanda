@@ -203,5 +203,6 @@
   "changedWorkspace": "Arbeidsområdet er endra. Opne nettbasert samarbeid på nytt.",
   "owner": "{name} — {role}",
   "noConnections": "Ingen tilkopla installasjonar enno.",
-  "recoveryHelp": "Denne teksten er bevart på denne installasjonen. Når du tek han i bruk, blir det gjeldande skriveområdet erstatta for alle; samanlikn begge versjonane først."
+  "recoveryHelp": "Denne teksten er bevart på denne installasjonen. Når du tek han i bruk, blir det gjeldande skriveområdet erstatta for alle; samanlikn begge versjonane først.",
+ "publicationOwner": "Synlegheita ved publisering vert styrt i det opphavlege arbeidsområdet. Be eigaren endre løyva for nettstad eller PDF."
 }

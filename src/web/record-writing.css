@@ -1,5 +1,12 @@
 .record-writing{width:min(68rem,calc(100% - 2rem));max-width:none;max-height:calc(100dvh - 2rem);overflow:auto;overscroll-behavior:contain}
 .record-writing h2{margin-top:0}.record-writing>p{overflow-wrap:anywhere}
+.publication-parts{border-collapse:collapse;width:min(100%,38rem);margin-block:1rem}
+.publication-parts caption{text-align:start;font-weight:600;padding-block-end:.5rem}
+.publication-parts th,.publication-parts td{padding:0 .65rem;border-bottom:1px solid var(--ui-border)}
+.publication-parts thead th,.publication-parts td{text-align:center}
+.publication-parts th[scope=row]{text-align:start;font-weight:500}
+.publication-parts .publication-part-choice{display:grid;place-items:center;min-width:3rem;min-height:2.55rem;cursor:pointer}
+.publication-part-choice input[type=checkbox]{width:1.15rem;height:1.15rem;margin:0;cursor:pointer}
 .record-writing [data-writing-fields]{min-width:0}.record-writing .document-content{min-height:12rem}
 .record-writing .document-tools{position:static}
 .record-writing .dialog-actions{position:static;display:flex;flex-wrap:wrap;gap:.5rem;padding:1rem 0;background:var(--ui-surface)}

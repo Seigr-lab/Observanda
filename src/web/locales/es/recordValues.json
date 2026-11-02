@@ -95,7 +95,7 @@
  "status": "Progreso",
  "outcome": "Resultado",
  "occurredOn": "Fecha del registro",
- "share": "Disponibilidad para publicación",
+ "share": "Disponible para sitios web",
  "private": "Privado",
  "public": "Disponible para publicación",
  "empty": "Sin establecer",
@@ -144,8 +144,8 @@
  "copyPanelRange": "Paneles {first}–{last} de {total}",
  "resultChoosePanel": "Elegir panel",
  "publication": "Privacidad de publicación",
- "publicationHelp": "Elige qué partes de esta entrada pueden incluirse en sitios web y PDF. Guardar los cambios de visibilidad actualiza las copias ya colocadas en esos documentos.",
- "publicationSections": "Las secciones y los adjuntos tienen sus propios controles de visibilidad. El cuaderno y la entrada deben permitir la publicación.",
+ "publicationHelp": "Elige el sitio web y el PDF por separado. Al guardar, se actualizan las copias ya insertadas en sitios web y documentos PDF guardados. Vuelve a publicar el sitio o a exportar el PDF para distribuir los cambios.",
+ "publicationSections": "Configura cada sección de texto y archivo adjunto en su propio editor. Tanto el cuaderno como la entrada deben permitir el destino elegido.",
  "publication_body": "Resumen / contexto",
  "publication_outcome": "Resultado",
  "publication_contributors": "Colaboradores",
@@ -158,5 +158,8 @@
  "publication_website": "Sitio web",
  "publication_pdf": "PDF",
  "sharePdf": "Disponible para PDF",
- "bookSharePdf": "Permitir la publicación en PDF de este cuaderno"
+ "bookSharePdf": "Permitir la publicación en PDF de este cuaderno",
+ "publicationParts": "Partes de la entrada",
+ "publicationOutputs": "Visibilidad en sitios web y PDF",
+ "publicationBookBlocked": "Excluida por la configuración del cuaderno"
 }

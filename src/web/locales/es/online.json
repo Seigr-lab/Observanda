@@ -203,5 +203,6 @@
   "changedWorkspace": "El espacio de trabajo ha cambiado. Vuelve a abrir la colaboración en línea.",
   "owner": "{name} — {role}",
   "noConnections": "Todavía no hay instalaciones conectadas.",
-  "recoveryHelp": "Este texto se conservó en esta instalación. Aplicarlo sustituye el área de escritura actual para todos; compara primero ambas versiones."
+  "recoveryHelp": "Este texto se conservó en esta instalación. Aplicarlo sustituye el área de escritura actual para todos; compara primero ambas versiones.",
+ "publicationOwner": "La visibilidad de publicación se gestiona en el espacio de trabajo de origen. Pide a quien lo gestiona que cambie los permisos de sitio web o PDF."
 }

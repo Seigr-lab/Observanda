@@ -22,7 +22,7 @@ test('saved editing opens directly, browses areas and retains late writing acros
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id);
   const editor=page.locator('.record-editing'),nav=page.getByRole('navigation',{name:'Record editing areas',exact:true});
   await expect(editor.locator('h1')).toHaveText(record.title);await expect(nav).toBeVisible();await expect(editor.locator('[contenteditable=true]')).toHaveCount(0);
-  await expect(editor.locator('.record-edit-details')).toContainText('Progress');await expect(editor.locator('.record-edit-details')).toContainText('Publication availability');await expect(editor.locator('.record-edit-details')).not.toContainText('undefined');
+  await expect(editor.locator('[data-record-edit-area="details"]')).toContainText('Progress');await expect(editor.locator('[data-record-publication]')).toContainText('Website and PDF visibility');await expect(editor).not.toContainText('undefined');
   for(const [name,area] of [['Writing','summary'],['Evidence and results','attachments'],['Record details','details'],['Activity and history','activity']]){
    await nav.getByRole('button',{name,exact:true}).click();await expect(page.locator('[data-record-edit-area="'+area+'"]')).toBeFocused();
   }

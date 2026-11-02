@@ -6,7 +6,7 @@ import {ux} from './experience-ui.js';
 
 // Shared checkpoint, conflict and lifetime owner for selected-value editors.
 // Domain views own their controls; this owner never loads a complete record.
-export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter}){
+export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,adapter}){
  const text=key=>t(adapter.messages,key);
  const dialog=document.createElement('dialog');dialog.className='record-writing';dialog.setAttribute('aria-labelledby',adapter.route+'-value-title');document.body.append(dialog);
  let owner=null,editorEpoch=0,base=null,value=null,writer=null,dirty=false,busy=false,loading=false,checkpointError=false,error='',status='',conflict=null,timer=null,queue=Promise.resolve(),pending=null,last='',resolveClose=null,focusBefore=null,draftMutation=null,openingInput=null,lastDraftMutation=null;
@@ -175,7 +175,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
   }catch(failure){if(owner===actionOwner){error=failure.message||text('failed');busy=false;paint();}}
  });
  async function open(input,retained=null){
-  if(dialog.open)return;openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=captureFocus(input.focusTarget instanceof Element?input.focusTarget:document.activeElement);loading=true;status=text('loading');draw();dialog.showModal();
+  if(dialog.open)return;onOpen?.();openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=captureFocus(input.focusTarget instanceof Element?input.focusTarget:document.activeElement);loading=true;status=text('loading');draw();dialog.showModal();
   try{
    if(retained){
     const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:retained.draft.workspaceId,id:retained.draft.id,expectedRevision:retained.revision},{adopt:false});

@@ -203,5 +203,6 @@
  "changedWorkspace":"The workspace changed. Reopen online collaboration.",
  "owner":"{name} — {role}",
  "noConnections":"No connected installations yet.",
- "recoveryHelp":"This text was retained on this installation. Applying it replaces the current writing area for everyone; compare both versions first."
+ "recoveryHelp":"This text was retained on this installation. Applying it replaces the current writing area for everyone; compare both versions first.",
+ "publicationOwner": "Publication visibility is managed in the originating workspace. Ask its owner to change the website or PDF permissions."
 }

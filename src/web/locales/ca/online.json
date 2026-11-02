@@ -203,5 +203,6 @@
   "changedWorkspace": "L'espai de treball ha canviat. Torna a obrir la col·laboració en línia.",
   "owner": "{name} — {role}",
   "noConnections": "Encara no hi ha instal·lacions connectades.",
-  "recoveryHelp": "Aquest text es va conservar en aquesta instal·lació. Aplicar-lo substitueix l'àrea d'escriptura actual per a tothom; compara primer les dues versions."
+  "recoveryHelp": "Aquest text es va conservar en aquesta instal·lació. Aplicar-lo substitueix l'àrea d'escriptura actual per a tothom; compara primer les dues versions.",
+ "publicationOwner": "La visibilitat de publicació es gestiona a l’espai de treball d’origen. Demaneu a qui el gestiona que canviï els permisos de web o PDF."
 }

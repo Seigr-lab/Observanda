@@ -27,7 +27,7 @@
   "failed": "No se ha podido abrir este texto. Vuelve a intentarlo.",
   "changedWorkspace": "El espacio de trabajo ha cambiado. El punto de recuperación conservado sigue disponible en su espacio de trabajo original.",
   "publication": "Permitir esta sección en sitios web",
-  "publicationHint": "Esta sección solo puede aparecer cuando su cuaderno de laboratorio y su registro también permiten la publicación web.",
+  "publicationHint": "Al guardar, esta sección se actualiza donde la entrada ya esté insertada en un documento guardado. Tanto el cuaderno como la entrada deben permitir ese destino.",
   "bookPublication": "Permitir la publicación web desde este cuaderno de laboratorio",
-  "bookPublicationHint": "Los sitios web solo pueden utilizar registros y secciones de texto que también permitan la publicación. Desactivar esto mantiene privado todo el cuaderno de laboratorio."
+  "bookPublicationHint": "Al desmarcar un destino, las entradas de este cuaderno se retiran de los documentos guardados correspondientes. Se conservan los ajustes de entradas y secciones para cuando lo vuelvas a activar."
 }

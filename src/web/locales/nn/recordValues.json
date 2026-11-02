@@ -95,7 +95,7 @@
  "status": "Framdrift",
  "outcome": "Utfall",
  "occurredOn": "Oppføringsdato",
- "share": "Tilgjenge for publisering",
+ "share": "Tilgjengeleg for nettstader",
  "private": "Privat",
  "public": "Tilgjengeleg for publisering",
  "empty": "Ikkje oppgitt",
@@ -144,8 +144,8 @@
  "copyPanelRange": "Panel {first}–{last} av {total}",
  "resultChoosePanel": "Vel panel",
  "publication": "Personvern ved publisering",
- "publicationHelp": "Vel kva delar av oppføringa som kan inkluderast på nettstader og i PDF-ar. Lagring av synlegheitsendringar oppdaterer kopiar som allereie er plasserte i dokumenta.",
- "publicationSections": "Tekstavsnitt og vedlegg har òg eigne synlegheitsval. Både labboka og oppføringa må tillate publisering.",
+ "publicationHelp": "Vel nettstad og PDF kvar for seg. Når du lagrar, vert kopiar som allereie er sette inn på lagra nettstader og i lagra PDF-dokument, oppdaterte. Publiser nettstaden eller eksporter PDF-en på nytt for å dele endringane.",
+ "publicationSections": "Vel synlegheit for kvar tekstdel og kvart vedlegg i deira eigne redigeringsvindauge. Både labboka og oppføringa må tillate det valde formatet.",
  "publication_body": "Samandrag / kontekst",
  "publication_outcome": "Utfall",
  "publication_contributors": "Bidragsytarar",
@@ -158,5 +158,8 @@
  "publication_website": "Nettstad",
  "publication_pdf": "PDF",
  "sharePdf": "Tilgjengeleg for PDF",
- "bookSharePdf": "Tillat PDF-publisering frå denne labboka"
+ "bookSharePdf": "Tillat PDF-publisering frå denne labboka",
+ "publicationParts": "Delar av oppføringa",
+ "publicationOutputs": "Synlegheit på nettstader og i PDF",
+ "publicationBookBlocked": "Halden tilbake av labboka"
 }

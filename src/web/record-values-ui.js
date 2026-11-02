@@ -1,5 +1,6 @@
 import {recordValueLabel as label} from './record-value-controls.js';
-import {PUBLICATION_PARTS,defaultPublicationPrivacy} from './record-publication-privacy.js';
+import {PUBLICATION_PARTS} from './record-publication-privacy.js';
+import {publicationPartsFields,updatePublicationPart} from './record-publication-controls.js';
 import {recordPreparationUI} from './record-preparation-ui.js';
 import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
@@ -49,7 +50,7 @@ export function recordValuesView(options,lifecycle){
     return field(esc(text('contributorName')),'<input data-contributor-value="name" required value="'+esc(retainedContributor.name)+'"'+disabled+'>')+field(esc(text('contributorRole')),'<input data-contributor-value="role" value="'+esc(retainedContributor.role)+'"'+disabled+'>')+(removable?'<label><input type="checkbox" data-contributor-remove'+(removed?' checked':'')+'> '+esc(text('removeContributor'))+'</label><p class="muted">'+esc(text('removeContributorHelp'))+'</p>':'');
    }
    if(name==='occurredOn')return recordDateFields(item,helpers);
-   if(name==='publication')return '<p>'+esc(text('publicationHelp'))+'</p><fieldset><legend>'+esc(text('publication'))+'</legend>'+['website','pdf'].map(target=>'<fieldset><legend>'+esc(text('publication_'+target))+'</legend>'+PUBLICATION_PARTS.map(key=>'<label class="checkbox"><input type="checkbox" data-publication-target="'+target+'" data-publication-part="'+key+'"'+(item?.[target]?.[key]!==false?' checked':'')+'>'+esc(text('publication_'+key))+'</label>').join('')+'</fieldset>').join('')+'</fieldset><p class="muted">'+esc(text('publicationSections'))+'</p>';
+   if(name==='publication')return '<p>'+esc(text('publicationHelp'))+'</p>'+publicationPartsFields(item,esc);
    let control;
    if(choices.supported(base.definition))control=choices.fields(base,value,changed);
    else if(base.definition)control=templateFieldInput(base.definition,item,{esc,attrs:'data-record-value'});
@@ -62,7 +63,7 @@ export function recordValuesView(options,lifecycle){
   },
   preview:base=>base.field==='publication'?'<ul>'+['website','pdf'].map(target=>'<li>'+esc(text('publication_'+target))+': '+PUBLICATION_PARTS.filter(key=>base.value.value?.[target]?.[key]!==false).map(key=>esc(text('publication_'+key))).join(', ')+'</li>').join('')+'</ul>':resultValueId(base.field)?results.preview(base):attemptValueField(base.field)?attempts.preview(base):figureValueId(base.field)?figures.preview(base):mediaValueId(base.field)?media.preview(base):relationValueId(base.field)?relations.preview(base):contributorValueId(base.field)?'<p>'+esc(base.value.value?base.value.value.name+(base.value.value.role?' · '+base.value.value.role:''):text('contributorAbsent'))+'</p>':'<p>'+esc(display(base))+'</p>',
   input(element,base,value){
-   if(base?.field==='publication'&&element.hasAttribute('data-publication-part')){value.value??=defaultPublicationPrivacy();value.value[element.dataset.publicationTarget][element.dataset.publicationPart]=element.checked;return true;}
+   if(base?.field==='publication'&&element.hasAttribute('data-publication-part')){value.value=updatePublicationPart(value.value,element);return true;}
    if(resultValueId(base?.field))return results.input(element);
    if(attemptValueField(base?.field))return attempts.input(element);
    if(figureValueId(base?.field))return figures.input(element);

@@ -27,7 +27,7 @@
   "failed": "No s'ha pogut obrir aquest text. Torna-ho a provar.",
   "changedWorkspace": "L'espai de treball ha canviat. El punt de recuperació conservat continua disponible al seu espai de treball original.",
   "publication": "Permet publicar aquesta secció al web",
-  "publicationHint": "Aquesta secció només pot aparèixer quan el seu llibre de laboratori i el registre també permeten la publicació web.",
+  "publicationHint": "En desar, aquesta secció s’actualitza allà on l’entrada ja estigui inserida en un document desat. Tant el quadern com l’entrada han de permetre aquella destinació.",
   "bookPublication": "Permet publicar al web des d'aquest llibre de laboratori",
-  "bookPublicationHint": "Els llocs web només poden utilitzar registres i seccions d'escriptura que també permetin la publicació. Desactivar-ho manté privat tot el llibre de laboratori."
+  "bookPublicationHint": "Si desmarqueu una destinació, es retiraran les entrades del quadern dels documents desats corresponents. Es conserven les opcions de les entrades i les seccions per a quan la torneu a activar."
 }

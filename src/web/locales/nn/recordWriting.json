@@ -27,7 +27,7 @@
   "failed": "Denne teksten kunne ikkje opnast. Prøv på nytt.",
   "changedWorkspace": "Arbeidsområdet er endra. Det bevarte gjenopprettingspunktet er framleis tilgjengeleg i det opphavlege arbeidsområdet.",
   "publication": "Tillat denne delen på nettstader",
-  "publicationHint": "Denne delen kan berre visast når labboka og oppføringa òg tillèt nettpublisering.",
+  "publicationHint": "Når du lagrar, vert delen oppdatert overalt der oppføringa er sett inn i eit lagra dokument. Både labboka og oppføringa må tillate det formatet.",
   "bookPublication": "Tillat nettpublisering frå denne labboka",
-  "bookPublicationHint": "Nettstader kan berre bruke oppføringar og tekstdelar som òg tillèt publisering. Slår du dette av, blir heile labboka halden privat."
+  "bookPublicationHint": "Når du fjernar avkryssinga for eit format, vert oppføringane i labboka trekte tilbake frå lagra dokument i det formatet. Vala for oppføringane og delane vert tekne vare på til du aktiverer formatet att."
 }

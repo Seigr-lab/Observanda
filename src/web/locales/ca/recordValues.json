@@ -95,7 +95,7 @@
  "status": "Progrés",
  "outcome": "Resultat",
  "occurredOn": "Data del registre",
- "share": "Disponibilitat per publicar",
+ "share": "Disponible per als llocs web",
  "private": "Privat",
  "public": "Disponible per publicar",
  "empty": "Sense especificar",
@@ -144,8 +144,8 @@
  "copyPanelRange": "Panells {first}–{last} de {total}",
  "resultChoosePanel": "Tria un panell",
  "publication": "Privacitat de publicació",
- "publicationHelp": "Tria quines parts d’aquesta entrada es poden incloure en llocs web i PDF. Desar els canvis de visibilitat actualitza les còpies ja col·locades en aquests documents.",
- "publicationSections": "Les seccions i els adjunts tenen controls de visibilitat propis. El quadern i l’entrada han de permetre la publicació.",
+ "publicationHelp": "Trieu el web i el PDF per separat. En desar, s’actualitzen les còpies ja inserides als llocs web i documents PDF desats. Torneu a publicar el web o a exportar el PDF per distribuir els canvis.",
+ "publicationSections": "Configureu cada secció de text i cada adjunt al seu editor. Tant el quadern com l’entrada han de permetre la destinació triada.",
  "publication_body": "Resum / context",
  "publication_outcome": "Resultat",
  "publication_contributors": "Col·laboradors",
@@ -158,5 +158,8 @@
  "publication_website": "Lloc web",
  "publication_pdf": "PDF",
  "sharePdf": "Disponible per a PDF",
- "bookSharePdf": "Permet la publicació en PDF d’aquest quadern"
+ "bookSharePdf": "Permet la publicació en PDF d’aquest quadern",
+ "publicationParts": "Parts de l’entrada",
+ "publicationOutputs": "Visibilitat al web i al PDF",
+ "publicationBookBlocked": "Exclòs per la configuració del quadern"
 }

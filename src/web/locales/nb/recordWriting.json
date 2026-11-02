@@ -27,7 +27,7 @@
   "failed": "Denne teksten kunne ikke åpnes. Prøv igjen.",
   "changedWorkspace": "Arbeidsområdet er endret. Det bevarte gjenopprettingspunktet er fortsatt tilgjengelig i det opprinnelige arbeidsområdet.",
   "publication": "Tillat denne delen på nettsteder",
-  "publicationHint": "Denne delen kan bare vises når labboken og oppføringen også tillater nettpublisering.",
+  "publicationHint": "Når du lagrer, blir delen oppdatert overalt der oppføringen er satt inn i et lagret dokument. Både labboken og oppføringen må tillate det formatet.",
   "bookPublication": "Tillat nettpublisering fra denne labboken",
-  "bookPublicationHint": "Nettsteder kan bare bruke oppføringer og tekstdeler som også tillater publisering. Hvis dette slås av, forblir hele labboken privat."
+  "bookPublicationHint": "Når du fjerner avkrysningen for et format, trekkes oppføringene i labboken tilbake fra lagrede dokumenter i det formatet. Valgene for oppføringene og delene beholdes til du aktiverer formatet igjen."
 }

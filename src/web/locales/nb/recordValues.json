@@ -95,7 +95,7 @@
  "status": "Fremdrift",
  "outcome": "Utfall",
  "occurredOn": "Oppføringsdato",
- "share": "Tilgjengelighet for publisering",
+ "share": "Tilgjengelig for nettsteder",
  "private": "Privat",
  "public": "Tilgjengelig for publisering",
  "empty": "Ikke angitt",
@@ -144,8 +144,8 @@
  "copyPanelRange": "Paneler {first}–{last} av {total}",
  "resultChoosePanel": "Velg panel",
  "publication": "Personvern ved publisering",
- "publicationHelp": "Velg hvilke deler av oppføringen som kan inkluderes på nettsteder og i PDF-er. Lagring av synlighetsendringer oppdaterer kopier som allerede er plassert i dokumentene.",
- "publicationSections": "Tekstavsnitt og vedlegg har også egne synlighetsvalg. Både labboken og oppføringen må tillate publisering.",
+ "publicationHelp": "Velg nettsted og PDF hver for seg. Når du lagrer, oppdateres kopier som allerede er satt inn på lagrede nettsteder og i lagrede PDF-dokumenter. Publiser nettstedet eller eksporter PDF-en på nytt for å dele endringene.",
+ "publicationSections": "Angi synlighet for hver tekstdel og hvert vedlegg i deres egne redigeringsvinduer. Både labboken og oppføringen må tillate det valgte formatet.",
  "publication_body": "Sammendrag / kontekst",
  "publication_outcome": "Utfall",
  "publication_contributors": "Bidragsytere",
@@ -158,5 +158,8 @@
  "publication_website": "Nettsted",
  "publication_pdf": "PDF",
  "sharePdf": "Tilgjengelig for PDF",
- "bookSharePdf": "Tillat PDF-publisering fra denne labboken"
+ "bookSharePdf": "Tillat PDF-publisering fra denne labboken",
+ "publicationParts": "Deler av oppføringen",
+ "publicationOutputs": "Synlighet på nettsteder og i PDF",
+ "publicationBookBlocked": "Holdt tilbake av labboken"
 }

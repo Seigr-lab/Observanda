@@ -27,7 +27,7 @@
  "failed":"This writing could not be opened. Try again.",
  "changedWorkspace":"The workspace changed. The retained checkpoint remains available in its original workspace.",
  "publication":"Allow this section on websites",
- "publicationHint":"This section can appear only when its lab book and record also allow web publishing.",
+ "publicationHint":"Saving updates this section wherever the entry is placed in a saved document. The lab book and entry must both allow that output.",
  "bookPublication":"Allow web publishing from this lab book",
- "bookPublicationHint":"Websites can use only records and writing sections that also allow publishing. Turning this off keeps the entire lab book private."
+ "bookPublicationHint":"Clearing an output withdraws this book’s entries from saved documents for that output. Entry and section choices are retained for when you enable it again."
 }

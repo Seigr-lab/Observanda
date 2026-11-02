@@ -69,6 +69,7 @@ import {recordFields,updateRecordField} from './record-fields-ui.js';
 import {wireCustomFieldClipboard} from './custom-field-clipboard-ui.js';
 import {documentEditors} from './document-editor.js';
 import {recordSectionsUI} from './record-sections-ui.js';
+import {publicationAvailability,updatePublicationPart} from './record-publication-controls.js';
 import {figureEditor} from './figure-editor-loader.js';
 import {researchReference,parseResearchReference} from './record-model.js';
 import {researchTargets} from './research-target-presentation.js';
@@ -513,12 +514,13 @@ async function recordLinkDestinations({query='',cursor=null,signal}={}){
 }
 function openEditorLink(href){const target=parseResearchReference(href);if(target)void leave.run(()=>navigateResearch(target));else if(/^(https?:|mailto:|tel:)/.test(href))window.open(href,'_blank','noopener,noreferrer');}
 const documents=documentEditors({book:()=>state.book,figures:()=>entry()?[...entry().figures,...entry().attachments.filter(a=>a.kind==='image')]:[],context:()=>state.access?.locked?null:state.book?.id,destinations:recordLinkDestinations,onError:message=>notify(message,true),onOpenLink:openEditorLink});
-const recordWriting=recordWritingUI({state,api,esc,field,destinations:recordLinkDestinations,figures:()=>displayedRecord()?[...displayedRecord().figures,...displayedRecord().attachments.filter(a=>a.kind==='image')]:[],notify,onOpenLink:openEditorLink,onSaved:async(_result,target,options)=>{
+const dismissPreviousSuccess=()=>{if(!notices.node.classList.contains('error'))notices.hide();};
+const recordWriting=recordWritingUI({state,api,esc,field,onOpen:dismissPreviousSuccess,destinations:recordLinkDestinations,figures:()=>displayedRecord()?[...displayedRecord().figures,...displayedRecord().attachments.filter(a=>a.kind==='image')]:[],notify,onOpenLink:openEditorLink,onSaved:async(_result,target,options)=>{
  const selected=()=>state.page==='record-reader'&&state.book?.id===target.workspaceId&&state.selected===target.recordId;
  if(selected()&&target.sectionId)state.recordSection=target.sectionId;
  await workspaceLive.check(options);if(selected())render();
 },onClosed:()=>recordDrafts.refresh()});
-const recordValues=recordValuesUI({state,api,esc,field,notify,onSaved:async(result,target,options)=>{await workspaceLive.check(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
+const recordValues=recordValuesUI({state,api,esc,field,notify,onOpen:dismissPreviousSuccess,onSaved:async(result,target,options)=>{await workspaceLive.check(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
 const runCreation=recordRunCreationUI({state,api,esc,notify,onCreated:async result=>{await workspaceLive.check();await openRecordReading(result.recordId);}});
 const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check(),choose:options=>recordDestination.open(options),access:operation=>withProjectAccess(operation),moved:result=>{location.hash=ownedRoute('#/records/'+result.recordId+'/read',{projectId:result.projectId,labBookId:result.labBookId});}});
 const recordRemoval=recordRemovalUI({state,api,esc,notify,target:()=>recordContent.removalTarget(),refresh:()=>workspaceLive.check(),onRemoved:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.selected=null;state.page='entries';state.preview=null;render();}});
@@ -892,7 +894,7 @@ function renderEditor() {
   const e=entry();
   if(!e){state.page='entries';return renderEntries();}
   if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(appText('backRecords'))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
-   <article class="record-reader"><h1>${esc(e.title)}</h1>${recordActivity.view({readonly:true})}${workflow.view({readonly:true})}${recordRevisionView(e,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
+   <article class="record-reader"><h1>${esc(e.title)}</h1>${publicationAvailability(e,state.book.notebooks.find(n=>n.id===e.notebookId),esc)}${recordActivity.view({readonly:true})}${workflow.view({readonly:true})}${recordRevisionView(e,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
   const notebook=state.book.notebooks.find(n=>n.id===e.notebookId);
   const notebookOptions=state.book.projects.map(project=>`<optgroup label="${esc(appText('projectLabel',{project:project.title}))}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
   return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(appText('backRecords'))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}<details class="record-actions" data-disclosure="draft-actions"><summary>${esc(ux('actions'))}</summary><button class="button danger" data-action="delete-entry">${esc(t('recordAuthoring','remove'))}</button></details></div>
@@ -900,6 +902,7 @@ function renderEditor() {
       ${field(esc(appText('recordTitle')),`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="${esc(appText('recordName'))}">${esc(e.title)}</textarea>`)}
       ${documents.field({key:e.id+':body',label:appText('summaryContext'),value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}
       ${renderSections(e)}
+      ${publicationAvailability(e,notebook,esc,{draft:true})}
     </section><details class="record-edit-group" data-disclosure="draft-evidence"><summary>${esc(ux('evidence'))}</summary>${renderMedia(e)}${figures.view()}${materials.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordDetails.relations(e)}${connectedWork.view()}</details>
     <details class="record-edit-group" data-disclosure="draft-details"><summary>${esc(ux('details'))}</summary><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
       ${e.template?'<p class="scope-kicker">'+esc(e.template.label)+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
@@ -910,7 +913,7 @@ function renderEditor() {
       ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}
       <p class="muted">${esc(appText('locationLabel',{location:locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId)}))}</p>
       ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="${esc(appText('tagExample'))}">`)}${recordFields(e,{field,option,esc})}${recordDetails.contributors(e)}
-    </section><section class="panel"><h3>${esc(appText('sharing'))}</h3><label class="checkbox"><input type="checkbox" data-entry="share" ${e.share?'checked':''}><span>${esc(appText('includeWebsite'))}<small>${esc(t('attempts','sharing'))}</small></span></label></section></details>
+    </section></details>
     <details class="record-edit-group" data-disclosure="draft-activity"><summary>${esc(ux('activity'))}</summary>${recordActivity.view()}${workflow.view()}</details></article>`;
 }
 
@@ -1187,11 +1190,12 @@ document.addEventListener('input', event => {
   if(labUI.input(el))return;
   if(el.dataset.recordBrowse){state.recordBrowse={...recordBrowse(state.recordBrowse),[el.dataset.recordBrowse]:el.value};refreshRecordResults();return;}
   if (el.id === 'search') { state.search = el.value;refreshRecordResults();return; }
+  if(el.hasAttribute('data-publication-part')&&el.closest('.record-draft-editor')){const record=entry();record.publication=updatePublicationPart(record.publication,el);dirtyRecord();return;}
   if (el.dataset.entry) {
     const record=entry(),previousNotebook=record.notebookId;
     record[el.dataset.entry] = el.type === 'checkbox' ? el.checked : el.dataset.entry === 'tags' ? el.value.split(',').map(t => t.trim()).filter(Boolean) : el.value;
     if(el.dataset.entry==='notebookId'&&previousNotebook!==record.notebookId){
-      record.share=false;state.notebook=record.notebookId;
+      record.share=false;if(record.sharePdf)record.sharePdf=false;state.notebook=record.notebookId;
       state.project=state.book.notebooks.find(n=>n.id===record.notebookId)?.projectId??null;
       dirtyRecord();render();$('[data-entry="notebookId"]')?.focus({preventScroll:true});
     }else dirtyRecord();
@@ -1276,7 +1280,7 @@ function uploadField(label, purpose, projectId = '') {
   return field(label, `<input type="file" data-upload="${purpose}" data-project-id="${projectId}" accept="${accept}" ${uploading ? 'disabled' : ''}>`);
 }
 function renderMedia(e) {
-  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
+  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="sharePdf" ${a.sharePdf?'checked':''}>${esc(t('recordValues','sharePdf'))}</label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
 }
 async function uploadMedia(input) { await mediaImports.upload(input); }
 async function applyMedia(intent,asset) {
