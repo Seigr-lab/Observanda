@@ -1,3 +1,4 @@
+import {allowPdfImage,pdfFileSections} from './pdf-publication-files.js';
 import {retainPdfPrintProfile} from './pdf-print-profile-requests.js';
 import {pdfAudienceSummary} from './pdf-audience.js';
 import {readPdfResearchImages,retainPdfResearchImage} from './pdf-research-images.js';
@@ -20,9 +21,9 @@ import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 export {pdfDocumentRequest} from './pdf-route-policy.js';
-export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,sourceReader,exportService}={}){
+export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,publicationFiles,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
- const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId);
+ const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId,{publicationFiles});
  if(request.pdf==='capabilities'){await documents.available();return pdfRendererCapabilities();}
  try{
   if(request.pdf==='exports'||request.pdf.startsWith('export-')){
@@ -45,7 +46,7 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
   }
   if(request.pdf==='image-read'){
    if(Object.keys(input).sort().join()!=='asset,id'||!researchId(input.id)||!revisionId(input.asset)||!await documents.available())throw new AppError('INVALID');
-   const image=await documents.domains.run(['pdf'],async get=>{await new PdfDocumentStore(get('pdf')).open(input.id);return new PdfDocumentImages(get('pdf'),input.id).read(input.asset,{signal});},{signal,check});await check();return binary({name:'image.png',mime:'image/png',content:image.content});
+   const image=await documents.domains.run(['pdf'],async get=>{await new PdfDocumentStore(get('pdf')).open(input.id);if(!await allowPdfImage(get('pdf'),publicationFiles,input.id,{asset:input.asset},{signal}))throw new AppError('PDF_SOURCE_CONTENT');return new PdfDocumentImages(get('pdf'),input.id).read(input.asset,{signal});},{signal,check});await check();return binary({name:'image.png',mime:'image/png',content:image.content});
   }
   if(request.pdf==='font-read'){
    if(Object.keys(input).sort().join()!=='fontId,id,revision'||!researchId(input.id)||!revisionId(input.revision)||!customFontId(input.fontId)||!await documents.available())throw new AppError('INVALID');
@@ -65,9 +66,9 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
    const prepared=replay||input.sourceLayout?null:await preparePdfFont(storage,input.fontId,{signal,check});
    return documents.domains.run(['pdf'],async get=>{const store=get('pdf'),owner=new PdfDocumentStore(store),selected=await owner.open(input.id,{revision:input.expectedRevision}),pin=await (async()=>{if(replay){const saved=await owner.revision(input.id,replay.revision),pin=saved.header.fonts?.find(font=>font.id===input.fontId);if(!pin)throw new AppError('MODULE_REPLAY');await describePdfDocumentFont(store,input.id,pin,{signal});return pin;}if(!input.sourceLayout)return retainPdfDocumentFont(store,input.id,prepared,{signal});const layout=await new PdfLayoutLibrary(store).value(input.sourceLayout.revision);if(layout.id!==input.sourceLayout.id||layout.fontPin?.id!==input.fontId)throw new AppError('INVALID');return copyPdfDocumentFont(store,layout.id,layout.fontPin,input.id,{signal});})(),header={...selected.header,fonts:[...(selected.header.fonts??[]).filter(font=>font.id!==pin.id),pin]};return owner.change({id:input.id,commandId:input.commandId,expectedRevision:input.expectedRevision,operation:{type:'header',header}},{signal});},{signal,check,write:['pdf']});
   }
-  if(request.pdf==='selection'){if(Object.keys(input).sort().join()!=='id,revision'||!researchId(input.id)||!revisionId(input.revision)||!await documents.available())throw new AppError('INVALID');return documents.domains.run(['pdf'],async get=>{const owner=new PdfDocumentStore(get('pdf')),selected=await owner.open(input.id,{revision:input.revision});return pdfAudienceSummary(selected.header,owner.content(input.id,input.revision,{signal}),{signal});},{signal,check});}
-  if(request.pdf==='source-images'||request.pdf==='source-image-retain'){if(!sourceReader)throw new AppError('INVALID');return request.pdf==='source-images'?readPdfResearchImages(sourceReader,input,{signal}):retainPdfResearchImage(documents,sourceReader,input,{signal,check});}
-  if(request.pdf==='source'||request.pdf==='source-retain'){if(!sourceReader)throw new AppError('INVALID');return request.pdf==='source'?readPdfResearch(sourceReader,input,{signal}):retainPdfResearch(documents,sourceReader,input,{signal,check});}
+  if(request.pdf==='selection'){if(Object.keys(input).sort().join()!=='id,revision'||!researchId(input.id)||!revisionId(input.revision)||!await documents.available())throw new AppError('INVALID');return documents.domains.run(['pdf'],async get=>{const owner=new PdfDocumentStore(get('pdf')),selected=await owner.open(input.id,{revision:input.revision});return pdfAudienceSummary(selected.header,pdfFileSections(get('pdf'),publicationFiles,input.id,owner.content(input.id,input.revision,{signal}),{signal}),{signal});},{signal,check});}
+  if(request.pdf==='source-images'||request.pdf==='source-image-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source-images'?readPdfResearchImages(publicationFiles,input,{signal}):retainPdfResearchImage(documents,publicationFiles,input,{signal,check});}
+  if(request.pdf==='source'||request.pdf==='source-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source'?readPdfResearch(publicationFiles,input,{signal}):retainPdfResearch(documents,publicationFiles,input,{signal,check});}
   if(request.pdf==='export'||request.pdf==='preflight'){
    if(!revisionId(input.revision)||Object.keys(input).sort().join()!=='id,revision')throw new AppError('INVALID');
    if(!pdfRendererAvailable())throw new AppError('PDF_DESKTOP');

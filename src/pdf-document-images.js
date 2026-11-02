@@ -42,9 +42,9 @@ function canonicalPNG(bytes,{strict=false}={}){
  }
  if(!end)fail();return {content:Buffer.concat(kept),width,height};
 }
-export async function preparePdfImage(input,{signal}={}){
+export async function preparePdfImage(input,{signal,approvedSvg=false}={}){
  signal?.throwIfAborted();if(!(input instanceof Uint8Array)||!input.byteLength||input.byteLength>PDF_IMAGE_MAX_BYTES)fail('MEDIA_LIMIT');
- const bytes=Buffer.from(input);if(!raster(bytes))fail();
+ const bytes=Buffer.from(input);if(!raster(bytes)&&!(approvedSvg&&/^[\s\uFEFF]*<svg[\s>]/.test(bytes.subarray(0,256).toString('utf8'))))fail();
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-pdf-image-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(directory,vault);
  try{
   const inputPath=path.join(directory,'source'),output=path.join(directory,'prepared'),source=await writeContent(workspace,inputPath,[bytes],{maxBytes:PDF_IMAGE_MAX_BYTES,signal});

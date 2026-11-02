@@ -1,3 +1,4 @@
+import {checkPdfSources} from './pdf-publication-files.js';
 // Durable exports belong to the independent PDF domain. Render callbacks run
 // outside transactions; short, fenced writes retain each immutable output.
 import {randomUUID,createHash} from 'node:crypto';
@@ -136,8 +137,8 @@ export class PdfExportJobs{
    if(claim.version===2?(!validPdfOutputValidation(result.validation)||result.validation.profile!==outputProfile||result.validation.sha256!==sha256):Object.hasOwn(result,'validation'))throw new AppError('PDF_OUTPUT');
    const validation=claim.version===2?structuredClone(result.validation):null;
    await progress('retaining',{done:0,total:bytes.length});
-   const blocks=new ExportBlocks(null,attemptPrefix(claim),{signal,write:operation=>this.fenced(id,token,store=>operation(store),scoped)}),root=await retainBytes(blocks,bytes,signal),value={version:claim.version,documentId:claim.documentId,revision:claim.revision,root,bytes:bytes.length,sha256,renderer,preflight,...(validation?{validation}:{})},outputRoot=await new RecordValueTree(blocks).retain(value);await blocks.flush();abort(signal);
-   await this.fenced(id,token,async(store,job,now)=>{job.state='completed';job.completedAt=now;job.updatedAt=now;job.lease=null;job.output={root:outputRoot,bytes:bytes.length,sha256,...(validation?{validation}:{})};job.progress={stage:'completed',done:bytes.length,total:bytes.length};await store.putObject(JOB+id,job);},scoped);
+   const blocks=new ExportBlocks(null,attemptPrefix(claim),{signal,write:operation=>this.fenced(id,token,store=>operation(store),scoped)}),root=await retainBytes(blocks,bytes,signal),value={version:claim.version,documentId:claim.documentId,revision:claim.revision,root,bytes:bytes.length,sha256,renderer,preflight,...(validation?{validation}:{})},outputRoot=await new RecordValueTree(blocks).retain(value),proofRoot=await new RecordValueTree(blocks).retain(result.sourceProof??[]);await blocks.flush();abort(signal);
+   await this.fenced(id,token,async(store,job,now)=>{const pins=result.sourceProof??[];await checkPdfSources(this.documents.publicationFiles,pins);await store.putObject('pdf-publication-proof:'+id,{version:1,attempt:job.attempt,sha256,root:proofRoot});job.state='completed';job.completedAt=now;job.updatedAt=now;job.lease=null;job.output={root:outputRoot,bytes:bytes.length,sha256,...(validation?{validation}:{})};job.progress={stage:'completed',done:bytes.length,total:bytes.length};await store.putObject(JOB+id,job);},scoped);
   }catch(error){
    // Revoked authorization cannot mutate the owner. In that case the durable
    // lease expires and an authenticated explicit resume owns cleanup/retry.
@@ -147,7 +148,17 @@ export class PdfExportJobs{
   return this.status(id,{check:options.check});
  }
  async download(id,options={}){
-  return this.run(false,async store=>{const job=await jobValue(store,id);if(job.state!=='completed')throw new AppError('JOB_CHANGED');const result=await readOutput(store,job,{signal:options.signal,collect:true});abort(options.signal);await options.check?.();return {bytes:result.bytes,sha256:result.sha256,renderer:result.renderer,preflight:result.preflight,...(job.version===2?{validation:result.validation}:{}),documentId:job.documentId,revision:job.revision,completedAt:job.completedAt};},options);
+  return this.run(false,async store=>{const job=await jobValue(store,id);if(job.state!=='completed')throw new AppError('JOB_CHANGED');const proof=await store.object('pdf-publication-proof:'+id),files=this.documents.publicationFiles;
+   let pins;if(proof){if(proof.version!==1||proof.attempt!==job.attempt||proof.sha256!==job.output.sha256||!revisionId(proof.root))bad();pins=await new RecordValueTree(new ExportBlocks(store,attemptPrefix(job),{signal:options.signal})).read(proof.root);await checkPdfSources(files,pins);}
+   else{
+    // Pre-proof PDFs that contain research or selected source images must be
+    // regenerated. Their bytes cannot establish which permissions they used.
+    const owner=new PdfDocumentStore(store),selected=await owner.open(job.documentId,{revision:job.revision}),linked=new Set();
+    for await(const key of store.objectIdEntries('pdf-source-image:'+job.documentId+':',{signal:options.signal}))linked.add((await store.object(key)).asset);
+    for await(const section of owner.content(job.documentId,job.revision,options)){if(section.research)throw new AppError('PDF_SOURCE_CONTENT');for(const image of section.images??[])if(linked.has(image.asset))throw new AppError('PDF_SOURCE_CONTENT');}
+    if(linked.has(selected.header.press?.artwork?.image?.asset))throw new AppError('PDF_SOURCE_CONTENT');
+   }
+   const result=await readOutput(store,job,{signal:options.signal,collect:true});if(proof)await checkPdfSources(files,pins);abort(options.signal);await options.check?.();return {bytes:result.bytes,sha256:result.sha256,renderer:result.renderer,preflight:result.preflight,...(job.version===2?{validation:result.validation}:{}),documentId:job.documentId,revision:job.revision,completedAt:job.completedAt};},options);
  }
 }
 

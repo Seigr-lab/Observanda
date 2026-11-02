@@ -4,6 +4,7 @@ import {AppError} from './errors.js';
 import {outputName} from './local-export-files.js';
 
 const forbidden=new Set(['base','iframe','frame','frameset','object','embed','portal','fencedframe','foreignObject','animate','animateMotion','animateTransform','set']);
+const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
 const resources=new Set(['src','poster','background','action','formaction','srcset']);
 export const websiteFileName=outputName;
 function localURL(value,file){
@@ -26,7 +27,10 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html'}={
  if(typeof html!=='string'||Buffer.byteLength(html)>16*1024*1024)throw new AppError('LIMIT');
  const root=parse(html);
  function visit(node){
-  if(forbidden.has(node.tagName)||node.tagName==='meta'&&node.attrs?.some(attr=>attr.name==='http-equiv'))throw new AppError('INVALID');
+  if(forbidden.has(node.tagName))throw new AppError('INVALID');
+  if(node.tagName==='meta'&&node.attrs?.some(attr=>attr.name==='http-equiv')){
+   if(node.attrs.find(attr=>attr.name==='http-equiv').value.toLowerCase()!=='content-security-policy'||node.attrs.find(attr=>attr.name==='content')?.value!==generatedPolicy)throw new AppError('INVALID');
+  }
   if(node.tagName==='script'){
    const src=node.attrs?.find(attr=>attr.name==='src')?.value;
    if(!src||!scripts.has(localURL(src,file))||(node.childNodes??[]).some(child=>(child.value??'').trim()))throw new AppError('INVALID');
@@ -36,7 +40,7 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html'}={
    if(name==='style')validateWebsiteCSS(value,{file});
    if(resources.has(name)&&value&&localURL(value,file)===null)throw new AppError('INVALID');
    if(name==='href'){
-    if(node.tagName==='link'){if(localURL(value,file)===null||!['stylesheet','icon','alternate'].includes(node.attrs.find(attr=>attr.name==='rel')?.value))throw new AppError('INVALID');}
+    if(node.tagName==='link'){if(localURL(value,file)===null||!['stylesheet','icon','alternate','canonical'].includes(node.attrs.find(attr=>attr.name==='rel')?.value))throw new AppError('INVALID');}
     else if(value&&localURL(value,file)===null&&(node.tagName!=='a'||!externalLink(value)))throw new AppError('INVALID');
    }
   }

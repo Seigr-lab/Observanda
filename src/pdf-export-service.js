@@ -1,3 +1,4 @@
+import {allowPdfImage,pdfFileSections,checkPdfSources} from './pdf-publication-files.js';
 import {preparePdfBleedImage} from './pdf-bleed-artwork.js';
 import {PdfPrintProfiles} from './pdf-print-profiles.js';
 import {PdfDocuments} from './pdf-documents.js';
@@ -16,23 +17,24 @@ import {AppError} from './errors.js';
 export async function prepareSavedPdf(documents,{documentId,revision},{signal,check=async()=>{},progress=async()=>{},preflightOnly=false}={}){
  try{
   await check();await progress('compiling');
-  const compiled=await documents.domains.run(['pdf'],async get=>{
+  const proof=new Map(),compiled=await documents.domains.run(['pdf'],async get=>{
    const store=get('pdf'),owner=new PdfDocumentStore(store),selected=await owner.open(documentId,{revision});
-   const compiled=await compilePdfDocument(selected.header,owner.content(documentId,revision,{signal}),{signal,readImage:asset=>new PdfDocumentImages(store,documentId).read(asset,{signal})}),customFonts=new Map();
-   const bleedImage=await preparePdfBleedImage(selected.header.press,asset=>new PdfDocumentImages(store,documentId).read(asset,{signal}),{signal});if(bleedImage)compiled.bleedImage=bleedImage;
+   const readImage=async asset=>{if(!await allowPdfImage(store,documents.publicationFiles,documentId,{asset},{signal,proof}))throw new AppError('PDF_SOURCE_CONTENT');return new PdfDocumentImages(store,documentId).read(asset,{signal});};
+   const compiled=await compilePdfDocument(selected.header,pdfFileSections(store,documents.publicationFiles,documentId,owner.content(documentId,revision,{signal}),{signal,proof}),{signal,readImage}),customFonts=new Map();
+   const bleedImage=await preparePdfBleedImage(selected.header.press,readImage,{signal});if(bleedImage)compiled.bleedImage=bleedImage;
    for(const pin of selected.header.fonts??[])if(compiled.fonts.includes(pin.id))customFonts.set(pin.id,await readPdfDocumentFont(store,documentId,pin,{signal}));
    if(selected.header.printCondition){compiled.printCondition=structuredClone(selected.header.printCondition);compiled.iccProfile=(await new PdfPrintProfiles(store,documentId).read(selected.header.printCondition.profile,{signal})).toString('base64');}
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
-  await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();return result;
+  await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);return {...result,sourceProof};
  }catch(error){if(preflightOnly&&error instanceof PdfLayoutError&&error.code==='PDF_LINK_CODE_LAYOUT'&&typeof error.details?.[0]==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(error.details[0])){await check();signal?.throwIfAborted();return {preflight:{version:1,status:'fatal',truncated:false,findings:[{code:error.code,severity:'fatal',sectionId:error.details[0],blockId:null,blockIndex:null,details:{}}]}};}if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
 }
 // The desktop renderer is intentionally single-owner. Queued exports compile
 // only when their turn begins instead of retaining many whole documents in RAM.
 let rendering=Promise.resolve();
 export class PdfExportService{
- constructor(storage,{check=async()=>{}}={}){this.storage=storage;this.check=check;this.pending=new Map();this.again=new Map();this.closed=false;this.controller=new AbortController();}
- queue(workspaceId){return new PdfExportJobs(new PdfDocuments(this.storage,workspaceId),{prepare:(pin,options)=>prepareSavedPdf(new PdfDocuments(this.storage,workspaceId),pin,options)});}
+ constructor(storage,{check=async()=>{},publicationFiles=null}={}){this.storage=storage;this.publicationFiles=publicationFiles;this.check=check;this.pending=new Map();this.again=new Map();this.closed=false;this.controller=new AbortController();}
+ queue(workspaceId){return new PdfExportJobs(new PdfDocuments(this.storage,workspaceId,{publicationFiles:this.publicationFiles}),{prepare:(pin,options)=>prepareSavedPdf(new PdfDocuments(this.storage,workspaceId,{publicationFiles:this.publicationFiles}),pin,options)});}
  schedule(workspaceId,id,{check=async()=>{}}={}){
   if(this.closed)throw new AppError('ACCESS_LOCKED');const key=workspaceId+':'+id;if(this.pending.has(key)){this.again.set(key,{workspaceId,id,check});return;}
   const current=async()=>{if(this.closed)throw new AppError('ACCESS_LOCKED');await this.check();await check();},queue=this.queue(workspaceId),signal=this.controller.signal;

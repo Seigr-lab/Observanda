@@ -27,6 +27,14 @@ export async function preparePdfFont(storage,fontId,{signal,check=async()=>{}}={
  if(info.restricted)fail('FONT_EMBED');if(!matchesFont(font,info))fail('FONT_INVALID');
  await check();signal?.throwIfAborted();const prepared=Object.freeze({id:font.id,label:font.label,sha256:info.sha256,size:bytes.length});preparedFonts.set(prepared,{font,bytes});return prepared;
 }
+// Converted PDF compositions already own the explicitly embeddable font
+// bytes. Inspect that file instead of consulting an unrelated research owner.
+export async function preparePdfPublicationFont(files,sourceId,revision,fontId,{signal}={}){
+ if(!customFontId(fontId)||!files)fail('PDF_FONT');const data=await files.pdfSource(sourceId,{revision,signal}),asset=data.assets.find(asset=>asset.sha256===fontId.slice(7)&&/\.(?:ttf|otf|woff|woff2)$/.test(asset.path));if(!asset)fail('PDF_FONT');
+ const bytes=await files.pdfAsset(sourceId,asset.path,{revision,signal,limit:MAX_FONT_BYTES}),info=await inspectUploadedFont(bytes,{signal});if(info.restricted||fontId!=='custom-'+info.sha256)fail('FONT_EMBED');
+ const font={id:fontId,label:info.label,embed:true,restricted:false,hidden:false,faces:[{file:fontId+'.'+info.extension,style:info.style,weight:info.weight,axes:info.axes}]};if(!matchesFont(font,info))fail('FONT_INVALID');
+ const prepared=Object.freeze({id:font.id,label:font.label,sha256:info.sha256,size:bytes.length});preparedFonts.set(prepared,{font,bytes});return prepared;
+}
 class PdfFontBlocks{
  constructor(store,id,signal){owner(store,id);this.store=store;this.id=id;this.signal=signal;}
  key(kind,revision){if(!['value','index'].includes(kind)||!revisionId(revision))fail('CATALOGUE_DAMAGED');return 'pdf-font:block:'+this.id+':'+kind+':'+revision;}

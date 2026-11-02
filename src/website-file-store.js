@@ -224,7 +224,7 @@ export class WebsiteFileStore{
   if(!pending&&(await this.pendingSources()).has(id))throw new AppError('CONFLICT');
   const result=await this.control(directory+'/head.json',{missing:true});if(result&&(result.id!==id||!hex(result.revision)))throw new AppError('FORMAT');return result;
  }
- library(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sources',options),items=[],pending=await this.pendingSources();for(const id of page.items){if(pending.has(id))continue;const source=await this.source(id,{pending:true});if(source?.visible&&source.target===(options.target??'website'))items.push({id,title:source.title,revision:source.revision,target:source.target??'website'});}return {items,next:page.next};},options);}
+ library(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sources',options),items=[],pending=await this.pendingSources();for(const id of page.items){if(pending.has(id))continue;const source=await this.source(id,{pending:true});if(source?.visible&&source.target===(options.target??'website'))items.push({id,title:source.title,revision:source.revision,target:source.target??'website',...(source.provenance?{workspaceId:source.provenance.workspaceId,recordId:source.provenance.recordId,notebookId:source.provenance.notebookId}:{})});}return {items,next:page.next};},options);}
  sourceForRecord({workspaceId,recordId,target='website'}={}){
   if(!uuid(workspaceId)||!uuid(recordId)||!['website','pdf'].includes(target))throw new AppError('INVALID');
   return this.scope(async()=>{const index=await this.control(recordIndex(workspaceId,recordId,target),{missing:true});if(!index)return null;
@@ -235,29 +235,41 @@ export class WebsiteFileStore{
  getSource(sourceId,{signal,target='website'}={}){return this.scope(async()=>{const source=await this.source(sourceId);if(!source?.visible||source.target!==target)throw new AppError('NOT_FOUND');
   return {id:sourceId,revision:source.revision,provenance:source.provenance,title:source.title,target,html:await this.readText(source.html,{signal}),css:await this.readText(source.css,{signal}),assets:source.assets.map(file=>({path:file.name,size:file.size,sha256:file.sha256,contentType:file.contentType}))};
  },{signal});}
+ pdfSource(sourceId,{revision,signal}={}){
+  return this.scope(async()=>{const source=await this.source(sourceId);if(!source?.visible||source.target!=='pdf'||!source.pdfParts)throw new AppError('NOT_FOUND');if(revision!==undefined&&revision!==source.revision)throw new AppError('CONFLICT');
+   const parts=JSON.parse(await this.readText(source.pdfParts,{signal}));if((await this.source(sourceId))?.revision!==source.revision)throw new AppError('PDF_SOURCE_CONTENT');return {id:sourceId,revision:source.revision,title:source.title,provenance:source.provenance,parts,assets:source.assets.map(file=>({path:file.name,size:file.size,sha256:file.sha256,contentType:file.contentType}))};
+  },{signal});
+ }
+ pdfAsset(sourceId,name,{revision,signal,limit}={}){
+  return this.scope(async()=>{const source=await this.source(sourceId);if(!source?.visible||source.target!=='pdf'||source.revision!==revision)throw new AppError('PDF_SOURCE_CONTENT');const descriptor=source.assets.find(asset=>asset.name===name);
+   if(!descriptor||!Number.isSafeInteger(limit)||limit<0||descriptor.size>limit)throw new AppError('PDF_CAPACITY');const value=Buffer.allocUnsafe(descriptor.size);let offset=0;
+   for await(const chunk of new WebsiteFileContent(this,undefined,null,descriptor).read(0,descriptor.size-1,{signal})){value.set(chunk,offset);offset+=chunk.length;}
+   if((await this.source(sourceId))?.revision!==revision)throw new AppError('PDF_SOURCE_CONTENT');return value;
+  },{signal});
+ }
  sourceStatus(sourceId){return this.scope(async()=>({source:await this.source(sourceId,{pending:true}),pending:await this.control(ROOT+'/sources/'+sourceId+'/pending.json',{missing:true})}));}
- beginSourceUpdate({sourceId,signal}={}){return this.scope(async()=>{if(!hex(sourceId))throw new AppError('INVALID');const token=randomUUID(),saved=await this.control(ROOT+'/sources/'+sourceId+'/pending.json',{missing:true}),previous=saved?saved.previous:await this.source(sourceId,{pending:true});await this.fence(sourceId,true,signal);await this.writeControl(ROOT+'/sources/'+sourceId+'/pending.json',{token,previous,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved)},{signal});return token;},{write:true,signal});}
+ beginSourceUpdate({sourceId,signal,ifAbsent=false}={}){return this.scope(async()=>{if(!hex(sourceId))throw new AppError('INVALID');const token=randomUUID(),saved=await this.control(ROOT+'/sources/'+sourceId+'/pending.json',{missing:true}),previous=saved?saved.previous:await this.source(sourceId,{pending:true});if(ifAbsent&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');await this.fence(sourceId,true,signal);await this.writeControl(ROOT+'/sources/'+sourceId+'/pending.json',{token,previous,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved)},{signal});return token;},{write:true,signal});}
  cancelSourceUpdate({sourceId,token,signal}={}){return this.scope(async()=>{if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');const pending=await this.control(ROOT+'/sources/'+sourceId+'/pending.json');const current=await this.source(sourceId,{pending:true});if(pending.recovered||pending.token!==token||(current?.revision??null)!==(pending.previous?.revision??null))throw new AppError('CONFLICT');await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');await this.fence(sourceId,false,signal);},{write:true,signal});}
- putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
+ putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,pdfParts=null,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
   if(!hex(sourceId)||!uuid(token)||typeof visible!=='boolean'||!['website','pdf'].includes(target))throw new AppError('INVALID');const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json');if(pending.token!==token)throw new AppError('CONFLICT');
   sourceTitle=title(sourceTitle);validateWebsiteHTML('<!doctype html><html><head><title>Content</title></head><body>'+html+'</body></html>');validateWebsiteCSS(css);
   if(provenance&&websiteSourceId({...provenance,target})!==sourceId)throw new AppError('INVALID');
   const prior=pending.previous,previousHtml=prior?await this.readText(prior.html,{signal}):'',files=[];
   if(visible)for(const asset of assets){if(!/^assets\/[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(asset.path??''))throw new AppError('INVALID');const descriptor=await this.descriptor(asset.path,asset,{signal,owner:directory});if(asset.path.slice(7,71)!==descriptor.sha256)throw new AppError('MEDIA_INVALID');files.push(descriptor);}
-  const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};source.revision=hash(plain(source));
+  const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
   let after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
-   const affected=new Set(manifest.pages.filter(page=>page.placements.some(value=>value.id===sourceId)).map(page=>page.path));
+   const affected=new Set(manifest.pages.filter(page=>page.placements.some(value=>value.id===sourceId)).map(page=>page.path)),titles=new Map();
    const nextFiles=[];for(const descriptor of manifest.files){
-    if(affected.has(descriptor.name)){const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible});nextFiles.push(updated===original?descriptor:await this.descriptor(descriptor.name,updated,{signal,owner:ROOT+'/sites/'+siteName(id)}));}
+    if(affected.has(descriptor.name)){const original=await this.readText(descriptor,{signal}),updated=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible});if(updated!==original)titles.set(descriptor.name,websiteDocumentTitle(updated));nextFiles.push(updated===original?descriptor:await this.descriptor(descriptor.name,updated,{signal,owner:ROOT+'/sites/'+siteName(id)}));}
     else if(descriptor.sourceId!==sourceId)nextFiles.push(descriptor);
    }
    const sources=manifest.sources.map(value=>value.id===sourceId?{id:sourceId,revision:source.revision}:value);
-   await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources),sources},{signal});
+   await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources),sources},{signal});
   }after=sites.next;}while(after!==null);
-  if(prior){const retained=new Set([source.html,source.css,...source.assets].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets])if(!retained.has(file.blob))await this.remove(file.blob);}
+  if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.remove(directory+'/pending.json');await this.fence(sourceId,false,signal);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
  insertSource(id,{expectedRevision,path:page='index.html',sourceId,signal}={}){return this.scope(async()=>{

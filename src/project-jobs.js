@@ -28,7 +28,7 @@ class ProjectWorker extends JobWorker{
  wake(){return withoutCatalogueConnections(()=>independentDiagnostics(()=>withoutWriterWait(()=>withDatabaseRequest(undefined,()=>super.wake()))));}
 }
 export class ProjectJobs{
- constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
+ constructor({publisherOptions=()=>({}),publicationFiles=null}={}){this.publisherOptions=publisherOptions;this.publicationFiles=publicationFiles;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
  stop(entry){
   if(entry.stopped)return entry.stopped;entry.closed=true;entry.sourceAccess?.clear();entry.publications?.clear();this.entries.delete(entry);
   const pending=Promise.all([entry.worker.stop(),entry.pdfs?.close()]).then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(async()=>{try{try{await clearVault(entry.storage.vault);}finally{await entry.grant?.close();}}finally{this.stopping.delete(pending);}});
@@ -59,7 +59,7 @@ export class ProjectJobs{
    entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess,comparisonAccess:this.comparisonAccess}),async()=>{
     try{if(entry.closed||entry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
-   entry.pdfs=new PdfExportService(owned,{check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue,{inactive:()=>Date.now()-entry.lastUsed>=60000});entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
+   entry.pdfs=new PdfExportService(owned,{publicationFiles:this.publicationFiles,check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue,{inactive:()=>Date.now()-entry.lastUsed>=60000});entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
    }catch(error){try{await grant?.close();}finally{await clearVault(owned.vault);}throw error;}
   }
   const wasInactive=Date.now()-entry.lastUsed>=60000;entry.lastUsed=Date.now();entry.expires=entry.lastUsed+8*60*60*1000;
