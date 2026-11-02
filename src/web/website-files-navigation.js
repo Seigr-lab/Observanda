@@ -3,11 +3,11 @@
 export function savedPageLink(href, pageURL, directory, pages) {
   let url;
   try { url = new URL(href, pageURL); } catch { return null; }
-  if (url.origin !== directory.origin || !url.pathname.startsWith(directory.pathname) || url.search || url.username || url.password) return null;
+  if (url.origin !== directory.origin || !url.pathname.startsWith(directory.pathname) || url.searchParams.has('canvas') || url.username || url.password) return null;
   let path;
   try { path = decodeURIComponent(url.pathname.slice(directory.pathname.length)); } catch { return null; }
   if (!pages.some(page => page.path === path)) return null;
-  return {path, hash: url.hash};
+  return {path, hash: url.hash,search:url.search};
 }
 
 export function bindSavedLinks(doc, {url, directory, pages, navigate, download, unavailable}) {
