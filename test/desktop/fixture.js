@@ -86,8 +86,12 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
    }
   },
   async dispose(app){
-   if(app){await app.evaluate(({dialog})=>{dialog.showMessageBoxSync=()=>1;}).catch(()=>{});await close(app);}
-   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:200});
+   const child=app?.process();
+   try{
+    if(app){await app.evaluate(({dialog})=>{dialog.showMessageBoxSync=()=>1;}).catch(()=>{});await close(app);}
+   }finally{
+    if(!child||child.exitCode!==null||child.signalCode!==null)await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:200});
+   }
   }
  };
 }

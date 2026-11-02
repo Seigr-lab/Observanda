@@ -63,5 +63,9 @@ export async function websiteDesktopFixture(){
    if(browser)await close({browser,child,exited});else if(child.pid&&child.exitCode===null)child.kill();
    throw error;
   }
- },async dispose(app){if(app)await close(app);await fixture.dispose(null);}};
+ },async dispose(app){
+  if(!app?.child)return fixture.dispose(app);
+  try{await close(app);}
+  finally{if(app.child.exitCode!==null||app.child.signalCode!==null)await fixture.dispose(null);}
+ }};
 }
