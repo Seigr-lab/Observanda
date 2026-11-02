@@ -182,6 +182,43 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
   if(el.dataset.pdfLayout){const kind=el.dataset.pdfLayout==='document'?'header':'section',layout=kind==='header'?selected.header.layout:section.layout;if(el.dataset.key==='font'&&customFontId(el.value)){void retainFont(el.value,kind);return true;}changePdfLayout(layout,el.dataset.key,el.type==='checkbox'?el.checked:el.value);if(kind==='header')refreshPdfPress(selected.header,root());change(kind);if(el.dataset.key==='master.enabled')draw();return true;}
   if(el.hasAttribute('data-pdf-custom')){section.layout=el.checked?structuredClone(selected.header.layout):null;change('section');draw();return true;}return false;
  }
+ // Visibility changes do not change this PDF document's own revision. Evict
+ // the displayed PDF blob before reading its updated permitted composition.
+ let visibilityTask=null,again=false,visibilityTimer=null,previewWasOpen=false;
+ const visibilityChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('observanda-website-files'):null;
+ function recheckVisibility(){
+  if(!active()||!selected||disposed)return;
+  previewWasOpen||=preview.state().visible;preview.reset();research.close();
+  if(busy||saving){clearTimeout(visibilityTimer);visibilityTimer=setTimeout(recheckVisibility,150);return;}
+  if(visibilityTask){again=true;return;}
+  const id=selected.header.id,revision=selected.revision,sectionId=section?.id,mark=serial;
+  visibilityTask=(async()=>{
+   const [list,current]=await Promise.all([post('sections',{id,revision,offset,limit:20}),sectionId?post('section',{id,revision,sectionId}):null]);
+   if(!active()||selected?.header.id!==id)return;if(selected.revision!==revision||section?.id!==sectionId||serial!==mark||busy){again=true;return;}
+   const wasPending=sectionDirty!==0;
+   if(current&&section){
+    // Keep the user's current writing if its source is still the same. When
+    // a grant changes, use the service's projected writing for that placement;
+    // it no longer includes removed blocks or images.
+    if(!wasPending)section=current.section;
+    else{
+     const incoming=current.section,previous=section.research,next=incoming.research;
+     if(previous&&next&&previous.snapshotId!==next.snapshotId||previous&&next&&!next.title&&!next.content){
+      if(JSON.stringify(previous.content)!==JSON.stringify(next.content))section.content=incoming.content;
+      if(previous.title!==next.title)section.title=incoming.title;
+      if(JSON.stringify(previous.figures)!==JSON.stringify(next.figures))section.figures=incoming.figures;
+      section.research=next;retry=null;
+     }
+     if(section.images) section.images=section.images.filter(image=>incoming.images?.some(allowed=>allowed.id===image.id&&allowed.asset===image.asset));
+    }
+   }
+   sections=list;history.clear();docs.release();outline.deactivate();preflight=null;audienceSummary=null;draw();
+   if(previewWasOpen&&!dirty()){previewWasOpen=false;await preview.show(id,revision);draw();}
+  })().catch(reason=>{if(active()){error=reason.message;status();}}).finally(()=>{visibilityTask=null;if(again){again=false;recheckVisibility();}});
+ }
+ function focused(){if(!document.hidden)recheckVisibility();}
+ if(visibilityChannel)visibilityChannel.onmessage=({data})=>{if(data?.type==='visibility'&&data.contextId===state.storage?.contextId)recheckVisibility();};
+ document.addEventListener('visibilitychange',focused);
  const capabilities=await post('capabilities');canRender=capabilities.render;canArchival=capabilities.archival===true;await library.load();await activate();document.addEventListener('keydown',historyKey);
- return {activate,view,action,input,bind:()=>{docs.bind(root()??document);retainedFonts.update(selected,section,fontChoices);exports.bind();composition.bind(root());pagination.bind(root());pages.bind();status();if(pendingFinding&&!busy){focusPdfFinding(root(),section,pendingFinding);pendingFinding=null;}},isDirty:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),needsNavigationGuard:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),flushAutosave:flush,save:flush,discard:async()=>{clearTimeout(timer);await printCondition.discard();if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){pressArtwork.deactivate();retainedFonts.clear();crossReferences.deactivate();outline.deactivate();exports.deactivate();docs.release();preview.close();},dispose(){printCondition.dispose();pressArtwork.dispose();retainedFonts.dispose();disposed=true;document.removeEventListener('keydown',historyKey);history.clear();crossReferences.dispose();pages.dispose();outline.dispose();composition.dispose();pagination.dispose();exports.dispose();images.dispose();clearTimeout(timer);preview.reset();docs.release();if(dirty())void save().catch(()=>{});}};
+ return {activate,view,action,input,bind:()=>{docs.bind(root()??document);retainedFonts.update(selected,section,fontChoices);exports.bind();composition.bind(root());pagination.bind(root());pages.bind();status();if(pendingFinding&&!busy){focusPdfFinding(root(),section,pendingFinding);pendingFinding=null;}},isDirty:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),needsNavigationGuard:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),flushAutosave:flush,save:flush,discard:async()=>{clearTimeout(timer);await printCondition.discard();if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){pressArtwork.deactivate();retainedFonts.clear();crossReferences.deactivate();outline.deactivate();exports.deactivate();docs.release();preview.close();},dispose(){visibilityChannel?.close();document.removeEventListener('visibilitychange',focused);clearTimeout(visibilityTimer);printCondition.dispose();pressArtwork.dispose();retainedFonts.dispose();disposed=true;document.removeEventListener('keydown',historyKey);history.clear();crossReferences.dispose();pages.dispose();outline.dispose();composition.dispose();pagination.dispose();exports.dispose();images.dispose();clearTimeout(timer);preview.reset();docs.release();if(dirty())void save().catch(()=>{});}};
 }

@@ -15,6 +15,9 @@ import {MediaStore} from '../../src/media.js';
 import {installPdfRenderer} from '../../src/pdf-render-service.js';
 import {measurePdfPreflight} from '../../src/pdf-preflight.js';
 import {navigate} from './preferences-helper.js';
+async function signalPrivacyChange(page){
+ await page.evaluate(async()=>{const {contextId}=await(await fetch('/api/storage')).json(),channel=new BroadcastChannel('observanda-website-files');channel.postMessage({type:'visibility',contextId});channel.close();});
+}
 const paragraph=text=>({type:'paragraph',content:[{type:'text',text}]});
 
 test('PDF author places one granted table and section privacy updates it without exporting surrounding prose',async({page,browser})=>{
@@ -45,11 +48,11 @@ test('PDF author places one granted table and section privacy updates it without
   // Research prose edits alone leave the copied table untouched. An explicit
   // privacy change reconverts the permitted composition at its existing place.
   await editSource(record=>{record.sections.push({id:randomUUID(),title:'Extra result',body:'Another PDF-approved result',share:false,sharePdf:true});});
-  await page.reload();await ui.getByRole('navigation',{name:'Sections',exact:true}).getByRole('button',{name:'Locally chosen heading',exact:true}).click();
+  await signalPrivacyChange(page);await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toContainText('9007199254740995');
   const updated=(await documents.read('section',{id,sectionId})).section;expect(updated.content.content).toHaveLength(1);expect(updated.content.content[0].attrs.rows[0][1]).toBe('9007199254740995');expect(updated.research.blockId).toBe(chosen.attrs.id);expect(updated.research.snapshotId).not.toBe(retained.research.snapshotId);
   const nextDownload=page.waitForEvent('download',{timeout:45000});await ui.getByRole('button',{name:'Download PDF',exact:true}).click();const bytes=await readFile(await (await nextDownload).path());expect(bytes.subarray(0,5).toString()).toBe('%PDF-');expect(rendered.at(-1).text).toContain('9007199254740995');
   for(const output of rendered)for(const forbidden of ['PRIVATE',workspaceId,original.id,retained.research.recordRevision,retained.research.snapshotId])expect(output.html).not.toContain(forbidden);
   const text=await page.evaluate(async data=>{const library=await import('/vendor/pdfjs/pdf.js');library.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.js';const task=library.getDocument({data:Uint8Array.from(data),isEvalSupported:false,useSystemFonts:false,disableFontFace:true,useWasm:false,useWorkerFetch:false}),pdf=await task.promise,parts=[];try{for(let index=1;index<=pdf.numPages;index++){const page=await pdf.getPage(index);parts.push((await page.getTextContent()).items.map(item=>item.str??'').join(' '));page.cleanup();}return parts.join(' ');}finally{await task.destroy();}},[...bytes]);expect(text).toContain('9007199254740995');expect(text).toContain('0001.2300');expect(text).not.toContain('PRIVATE');
-  await editSource(record=>{record.sections[0].sharePdf=false;});await page.reload();await expect(ui.getByRole('navigation',{name:'Sections',exact:true}).getByRole('button',{name:'Locally chosen heading',exact:true})).toHaveCount(0);expect((await documents.read('section',{id,sectionId,revision:edition})).section.content).toBe('');expect(errors).toEqual([]);
+  await editSource(record=>{record.sections[0].sharePdf=false;});await signalPrivacyChange(page);await expect(ui.getByRole('navigation',{name:'Sections',exact:true}).getByRole('button',{name:'Locally chosen heading',exact:true})).toHaveCount(0);expect((await documents.read('section',{id,sectionId,revision:edition})).section.content).toBe('');expect(errors).toEqual([]);
  }finally{await app.close();removeRenderer();await clearVault(f.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-table-ui-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
