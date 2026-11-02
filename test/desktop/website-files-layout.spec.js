@@ -46,7 +46,7 @@ test('scrolling the outline, page or inspector keeps the other desktop panes in 
   await outline.hover();await page.mouse.wheel(0,600);const edge=await state();expect(edge.outer).toBe(0);expect(edge.canvas).toBe(other.canvas);
   await outline.focus();await page.keyboard.press('Home');await expect.poll(async()=>(await state()).outline).toBe(0);
   await canvas.getByRole('heading',{name:'Sampling station 1',exact:true}).click();
-  await info.attach('desktop-scroll-ownership',{body:await page.screenshot(),contentType:'image/png'});
+  if(process.env.OBSERVANDA_WEBSITE_LAYOUT_ARCHIVE==='1')await info.attach('desktop-scroll-ownership',{body:await page.screenshot(),contentType:'image/png'});
   await page.setViewportSize({width:760,height:500});
   for(const column of [outline,inspector,list])expect(await column.evaluate(el=>getComputedStyle(el).overflowY)).toBe('visible');
   await inspector.focus();await expect(inspector).toBeFocused();await expect(inspector).toBeInViewport();
