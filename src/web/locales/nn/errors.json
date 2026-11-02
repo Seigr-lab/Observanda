@@ -329,6 +329,7 @@
   "LAB_BOOK_IMPORT_PENDING": "Fullfør importen av denne labboka før du endrar lagringa.",
   "LAB_BOOK_IMPORT_ACCESS": "Labboka kunne ikkje låsast opp. Kontroller passordet eller gjenopprettingsnøkkelen.",
   "PROJECT_IMPORT_ACCESS": "Lås opp det valde prosjektet eller den valde labboka for å halde fram med importen.",
+  "WEBSITE_CONVERSION_DEPENDENCIES": "Nettstaden brukar ein forskingsreferanse der tilgangsløyvet ikkje kunne stadfestast. Nettstaden vart ikkje importert.",
   "PUBLICATION_IDENTITY": "Dei valde kjeldene inneheld publiseringsidentitetar som er i konflikt.",
   "PROJECT_MOVE_DESTINATION_ACCESS": "Lås opp målarbeidsområdet for å halde fram med denne flyttinga.",
   "PDF_DESKTOP": "PDF-gjengjeving er tilgjengeleg i skrivebordsprogrammet. Dokumentet ditt kan framleis redigerast og lagrast her.",

@@ -329,6 +329,7 @@
   "LAB_BOOK_IMPORT_PENDING": "Termina de importar este cuaderno de laboratorio antes de cambiar su almacenamiento.",
   "LAB_BOOK_IMPORT_ACCESS": "No se ha podido desbloquear el cuaderno de laboratorio. Comprueba su contraseña o clave de recuperación.",
   "PROJECT_IMPORT_ACCESS": "Desbloquea el proyecto o cuaderno de laboratorio seleccionado para continuar importando.",
+  "WEBSITE_CONVERSION_DEPENDENCIES": "Este sitio usa una referencia de investigación cuyos permisos no se pudieron verificar. No se ha importado el sitio.",
   "PUBLICATION_IDENTITY": "Las fuentes seleccionadas contienen identidades de publicación en conflicto.",
   "PROJECT_MOVE_DESTINATION_ACCESS": "Desbloquea el espacio de trabajo de destino para continuar este traslado.",
   "PDF_DESKTOP": "La generación de PDF está disponible en la aplicación de escritorio. Aquí puedes seguir editando y guardando el documento.",

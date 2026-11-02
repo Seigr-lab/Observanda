@@ -1,4 +1,5 @@
 import {parse,parseFragment} from 'parse5';
+import {updateMigrationView} from './website-migration-views.js';
 import {AppError} from './errors.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
@@ -65,7 +66,7 @@ export function websiteMarkerShape(html){
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){const id=sourceId(node);if(id===undefined)continue;const bounds=range(node),keys=[];
   for(const child of descendants(node)){const part=partId(child);if(part!==undefined)keys.push(part);}
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
-  scopes.push(id+':'+attr(node,'data-observanda-source-revision')+':'+JSON.stringify(keys.sort()));
+  scopes.push(id+':'+attr(node,'data-observanda-source-revision')+':'+JSON.stringify(keys.sort())+':'+JSON.stringify((node.attrs??[]).filter(item=>item.name.startsWith('data-observanda-')).map(item=>[item.name,item.value]).sort()));
  }return scopes.sort();
 }
 // Only explicit source permission writes call this. Ordinary opening, preview
@@ -76,6 +77,9 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
   if(sourceId(node)!==id)continue;const bounds=range(node),loc=location(node);
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
+  if(attr(node,'data-observanda-view')){
+   changes.push({start:loc.startOffset,end:loc.endOffset,text:updateMigrationView(node,{original:html.slice(loc.startOffset,loc.endOffset),previousHtml,html:nextHtml,visible,revision})});continue;
+  }
   const current=partTree(html.slice(bounds.start,bounds.end)),replacement=visible?mergeParts(current,previous,next,{root:true}):'';
   const startTag=html.slice(loc.startOffset,bounds.start).replace(/(data-observanda-source-revision\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s>]+)/i,'$1"'+revision+'"');
   changes.push({start:loc.startOffset,end:bounds.end,text:startTag+replacement});

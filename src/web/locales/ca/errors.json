@@ -329,6 +329,7 @@
   "LAB_BOOK_IMPORT_PENDING": "Acaba d'importar aquest llibre de laboratori abans de canviar-ne l'emmagatzematge.",
   "LAB_BOOK_IMPORT_ACCESS": "No s'ha pogut desbloquejar el llibre de laboratori. Comprova'n la contrasenya o la clau de recuperació.",
   "PROJECT_IMPORT_ACCESS": "Desbloqueja el projecte o llibre de laboratori seleccionat per continuar important.",
+  "WEBSITE_CONVERSION_DEPENDENCIES": "Aquest lloc utilitza una referència de recerca els permisos de la qual no s’han pogut verificar. No s’ha importat el lloc.",
   "PUBLICATION_IDENTITY": "Les fonts seleccionades contenen identitats de publicació en conflicte.",
   "PROJECT_MOVE_DESTINATION_ACCESS": "Desbloqueja l'espai de treball de destinació per continuar aquest trasllat.",
   "PDF_DESKTOP": "La renderització de PDF està disponible a l'aplicació d'escriptori. Aquí encara pots editar i guardar el document.",

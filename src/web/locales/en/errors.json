@@ -329,6 +329,7 @@
   "LAB_BOOK_IMPORT_PENDING": "Finish importing this lab book before changing its storage.",
   "LAB_BOOK_IMPORT_ACCESS": "The lab book could not be unlocked. Check its password or recovery key.",
   "PROJECT_IMPORT_ACCESS": "Unlock the selected project or lab book to continue importing.",
+  "WEBSITE_CONVERSION_DEPENDENCIES": "This website uses a research reference whose privacy ownership could not be verified. No website was imported.",
   "PUBLICATION_IDENTITY": "The selected sources contain conflicting publication identities.",
   "PROJECT_MOVE_DESTINATION_ACCESS": "Unlock the destination workspace to continue this move.",
   "PDF_DESKTOP": "PDF rendering is available in the desktop application. Your document can still be edited and saved here.",

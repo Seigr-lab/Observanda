@@ -329,6 +329,7 @@
   "LAB_BOOK_IMPORT_PENDING": "Fullfør importen av denne labboken før du endrer lagringen.",
   "LAB_BOOK_IMPORT_ACCESS": "Labboken kunne ikke låses opp. Kontroller passordet eller gjenopprettingsnøkkelen.",
   "PROJECT_IMPORT_ACCESS": "Lås opp det valgte prosjektet eller den valgte labboken for å fortsette importen.",
+  "WEBSITE_CONVERSION_DEPENDENCIES": "Nettstedet bruker en forskningsreferanse der tilgangstillatelsen ikke kunne bekreftes. Nettstedet ble ikke importert.",
   "PUBLICATION_IDENTITY": "De valgte kildene inneholder motstridende publiseringsidentiteter.",
   "PROJECT_MOVE_DESTINATION_ACCESS": "Lås opp målarbeidsområdet for å fortsette denne flyttingen.",
   "PDF_DESKTOP": "PDF-gjengivelse er tilgjengelig i skrivebordsprogrammet. Dokumentet kan fortsatt redigeres og lagres her.",
