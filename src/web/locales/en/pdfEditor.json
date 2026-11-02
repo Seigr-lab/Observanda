@@ -1,4 +1,6 @@
 {
+  "convertedLibrary": "Choose from the entries already converted for PDF. Visibility changes update retained content without removing its placement.",
+  "wholeEntry": "Whole entry",
   "title": "PDF documents",
   "new": "New document",
   "empty": "No PDF documents yet.",
