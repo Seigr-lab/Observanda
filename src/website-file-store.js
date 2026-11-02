@@ -15,6 +15,7 @@ import {AppError} from './errors.js';
 import {assertPublicFiles} from './privacy.js';
 import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
+import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -256,6 +257,8 @@ export class WebsiteFileStore{
    return {id:source.id,visible:source.visible,revision:source.revision,title:source.title,target,provenance:source.provenance};
   });
  }
+ searchLibrary(options={}){return this.scope(scope=>searchWebsiteLibrary(this,scope,options),options);}
+ previewSource({sourceId,sourceRevision,signal}={}){return this.scope(()=>previewWebsiteSource(this,sourceId,sourceRevision,signal),{signal});}
  getSource(sourceId,{signal,target='website'}={}){return this.scope(async()=>{const source=await this.source(sourceId);if(!source?.visible||source.target!==target)throw new AppError('NOT_FOUND');
   return {id:sourceId,revision:source.revision,provenance:source.provenance,title:source.title,target,html:await this.readText(source.html,{signal}),css:await this.readText(source.css,{signal}),assets:source.assets.map(file=>({path:file.name,size:file.size,sha256:file.sha256,contentType:file.contentType}))};
  },{signal});}
@@ -317,6 +320,7 @@ export class WebsiteFileStore{
   if(visible)for(const asset of assets){if(!/^assets\/[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(asset.path??''))throw new AppError('INVALID');const descriptor=await this.descriptor(asset.path,asset,{signal,owner:directory});if(asset.path.slice(7,71)!==descriptor.sha256)throw new AppError('MEDIA_INVALID');files.push(descriptor);}
   const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
+  await indexWebsiteSource(this,source,html,signal);
   let after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
@@ -336,9 +340,10 @@ export class WebsiteFileStore{
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
- insertSource(id,{expectedRevision,path:page='index.html',sourceId,signal}={}){return this.scope(async()=>{
+ insertSource(id,{expectedRevision,path:page='index.html',sourceId,sourceRevision,position='end',signal}={}){return this.scope(async()=>{
   if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');
-  const opened=await this.present(manifest,page,{signal}),fragment=await this.readText(source.html,{signal});let html=insertWebsiteSource(opened.html,{id:sourceId,revision:source.revision,html:atPage(fragment,page)});
+  if(sourceRevision!==undefined&&sourceRevision!==source.revision)throw new AppError('CONFLICT');
+  const opened=await this.present(manifest,page,{signal}),fragment=await this.readText(source.html,{signal});let html=insertWebsiteSource(opened.html,{id:sourceId,revision:source.revision,html:atPage(fragment,page),position});
   const cssPath=sourceURL(page,styleName(sourceId));if(!html.includes('href="'+cssPath+'"'))html=html.replace(/<\/head\s*>/i,'<link rel="stylesheet" href="'+cssPath+'"></head>');
   const pages=manifest.pages.map(value=>value.path===page?{...value,placements:websiteSourcePlacements(html,value.placements)}:value);
   const local=manifest.files.filter(file=>!file.sourceId&&file.name!==page);local.push(await this.siteFile(id,page,html,{signal,draft:pages.find(value=>value.path===page)?.draft}));

@@ -66,6 +66,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='list'){json(await store.list(data));return true;}
   if(operation==='pdf-version'){json({revision:await store.pdfVersion({signal})});return true;}
   if(operation==='library'){json(await store.library(data));return true;}
+  if(operation==='library/search'){json(await store.searchLibrary({...data,signal}));return true;}
+  if(operation==='library/preview'){json(await store.previewSource({...data,signal}));return true;}
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
