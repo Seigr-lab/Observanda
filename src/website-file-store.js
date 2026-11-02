@@ -222,7 +222,7 @@ export class WebsiteFileStore{
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
  async present(manifest,page='index.html',{signal}={}){
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
-  return {site,path:page,html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
+  return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
  }
  list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
  create({id=randomUUID(),name,html,css='',signal}={}){

@@ -8,6 +8,27 @@ const savedSite={id,name:'Recovered site',revision:'c'.repeat(64),cssPath:'style
 const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><html><body><main><h1>Original saved home</h1></main></body></html>'};
 const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
 
+test('a pending grant hides the page and open review, then restores the current draft after cancellation',async({page})=>{
+ let pending=false;
+ await page.exposeFunction('filesAPI',route=>{
+  if(route.endsWith('/session'))return sessionWith([savedSite],{state:'ready'});
+  if(route.endsWith('/open'))return savedPage;
+  if(route.endsWith('/version'))return pending?{errorCode:'CONFLICT',message:'Workspace changed'}:{revision:savedSite.revision};
+  throw Error('Unexpected route '+route);
+ });
+ await page.clock.install();
+ await mountFilesEditor(page);
+ const canvas=page.frameLocator('#website-files-canvas'),heading=canvas.getByRole('heading');
+ await expect(heading).toHaveText('Original saved home');
+ await heading.click();await page.keyboard.press('End');await page.keyboard.type(' with new writing');
+ await page.getByRole('button',{name:'Check page',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();
+ pending=true;await page.clock.fastForward(5100);
+ await expect(page.getByRole('alert')).toContainText('Checking whether this page can be shown');
+ await expect(page.locator('#website-files-canvas')).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
+ pending=false;await page.clock.fastForward(5100);
+ await expect(heading).toHaveText('Original saved home with new writing');await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeEnabled();
+});
+
 test('a prepared website opens from saved files without another user action',async({page})=>{
  const calls=[];let checks=0;
  await page.exposeFunction('filesAPI',route=>{
@@ -111,7 +132,7 @@ for(const [state,message] of [
 }
 test('visual edits preserve saved HTML, styles and placement and reject outdated drafts',async({page})=>{
  let version=1,html='<!doctype html><html lang="en"><head><title>Observation</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Observation</h1><p>Initial notes</p><section data-observanda-source="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" data-observanda-source-revision="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"><p data-observanda-part="body">Copied text</p><p data-observanda-part="section-1">First release</p></section></main></body></html>',css='h1{color:rgb(12, 34, 56)}';
- const revision=()=>String(version).padStart(64,'a'),site=()=>({id,name:'Observation',revision:revision(),pages:[{path:'index.html',title:'Observation'}],cssPath:'style.css'}),open=()=>({site:site(),path:'index.html',html,css});
+ const revision=()=>String(version).padStart(64,'a'),site=()=>({id,name:'Observation',revision:revision(),pages:[{path:'index.html',title:'Observation'}],cssPath:'style.css'}),open=()=>({site:site(),path:'index.html',sourceStamp:html.match(/data-observanda-source-revision="([a-f0-9]{64})"/)[1],html,css});
  const calls=[];await page.exposeFunction('filesAPI',async(route,data)=>{calls.push(route);switch(route){
   case '/api/website-files/session':return {workspaceId:id,title:'Lab',sites:[site()]};
   case '/api/website-files/open':return open();case '/api/website-files/version':return {revision:revision()};
@@ -131,5 +152,12 @@ test('visual edits preserve saved HTML, styles and placement and reject outdated
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');expect(html).toContain('My webpage wording');
  version++;html=html.replace('c'.repeat(64),'d'.repeat(64)).replace('<p data-observanda-part="body">My webpage wording</p>','');
  await expect(part).toHaveCount(0,{timeout:10000});await expect(canvas.getByText('My webpage wording',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'HTML',exact:true}).click();const source=page.getByLabel('HTML',{exact:true});await source.fill(html.replace('Edited on canvas','Uncommitted change'));version++;html=html.replace('Edited on canvas','Updated visibility');await expect(page.locator('[data-website-files-status]')).toContainText('Website content changed',{timeout:10000});
- expect(await source.inputValue()).toContain('Uncommitted change');await expect(page.getByRole('button',{name:'Preview saved website'})).toBeDisabled();expect(calls.every(call=>call.startsWith('/api/website-files/'))).toBe(true);expect(errors).toEqual([]);
+ expect(await source.inputValue()).toContain('Uncommitted change');await expect(page.getByRole('button',{name:'Preview saved website'})).toHaveCount(0);
+ await expect(page.getByLabel('Latest saved page')).toHaveValue(/Updated visibility/);
+ await page.getByRole('button',{name:'Continue editing my draft'}).click();
+ await expect(source).toBeEditable();await expect(source).toHaveValue(/Uncommitted change/);
+ expect(html).toContain('Updated visibility');
+ version++;html=html.replace('d'.repeat(64),'e'.repeat(64)).replace('Updated visibility','New field report').replace('<p data-observanda-part="section-2">Second release</p>','');
+ await expect(source).toHaveCount(0,{timeout:10000});await expect(page.getByRole('button',{name:'Continue editing my draft'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Reopen saved website'})).toBeVisible();expect(calls.every(call=>call.startsWith('/api/website-files/'))).toBe(true);expect(errors).toEqual([]);
 });

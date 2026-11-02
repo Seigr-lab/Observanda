@@ -110,6 +110,7 @@ test('saved HTML, CSS and copied source survive unavailable research; changing v
   const token=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Observation',html:publicPart,assets:[{path:assetPath,bytes:image,contentType:'image/png'}]},{token});
   const placed=await store.insertSource(id,{sourceId,expectedRevision:first.site.revision});assert.match(placed.html,/Original summary/);
   const authored=await store.save(id,{path:'index.html',expectedRevision:placed.site.revision,html:placed.html.replace('Original summary','Website wording'),css:'body{color:navy}'});
+  assert.match(placed.sourceStamp,/^[a-f0-9]{64}$/);assert.equal(authored.sourceStamp,placed.sourceStamp);
   const exported=await store.export(id,{expectedRevision:authored.site.revision});let published='';for await(const part of exported.files.get('index.html').stream())published+=part;assert.equal(published,authored.html);
   await assert.rejects(store.save(id,{expectedRevision:authored.site.revision,path:'index.html',html:authored.html.replace('data-observanda-source=','data-old-source='),css:authored.css}),{code:'CONFLICT'});
   const abandoned=await store.beginSourceUpdate({sourceId}),update=await store.beginSourceUpdate({sourceId});await assert.rejects(store.open(id),{code:'CONFLICT'});
@@ -117,6 +118,7 @@ test('saved HTML, CSS and copied source survive unavailable research; changing v
   await store.putSource({sourceId,title:'Observation',html:publicPart+newPart},{token:update});const reopened=await store.open(id);assert.match(reopened.html,/Website wording/);assert.match(reopened.html,/Released method/);assert.equal(reopened.css,'body{color:navy}');
   await assert.rejects(store.export(id,{expectedRevision:authored.site.revision}),{code:'CONFLICT'});await assert.rejects(store.file(id,assetPath),{code:'NOT_FOUND'});
   const withdraw=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Observation',visible:false},{token:withdraw});const privatePage=await store.open(id);assert.doesNotMatch(privatePage.html,/Released method|Website wording/);assert.match(privatePage.html,/data-observanda-source=/);
+  assert.notEqual(privatePage.sourceStamp,authored.sourceStamp);
   const restore=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Observation',html:publicPart},{token:restore});assert.match((await store.open(id)).html,/Original summary/);
  }finally{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true});}
 });
