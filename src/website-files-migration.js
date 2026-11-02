@@ -20,6 +20,7 @@ import {assertPublicationSourcePermissions} from './publication-permission-admis
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 import {attr,put,words,descendants} from './website-migration-views.js';
+import {currentFigureSVGs} from './website-figure-assets.js';
 
 class WebsiteDependencyError extends AppError{
  constructor(reason){super('WEBSITE_CONVERSION_DEPENDENCIES',[{reason}]);this.dependency=reason;}
@@ -177,7 +178,16 @@ async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,so
     const figure=/^figures\/([a-f0-9-]{36})-.+\.(?:svg|csv)$/.exec(name),entries=figure?[figure[1]]:mediaNames.get(name);
     if(!entries)continue;
     const hash=candidate.files.output?(await candidate.files.output.get('files',name)).sha256:contentHash(await candidate.files.get(name));
-    for(const id of entries){const alias=records.get(id)?.assets.get(hash);if(!alias)failed(figure?'figure-asset-permission':'entry-asset-permission');aliases.set(name,alias);}
+    for(const id of entries){
+     const owner=records.get(id);let alias=owner?.assets.get(hash);
+     const svg=figure&&!alias&&/^figures\/[a-f0-9-]{36}-([a-f0-9-]{36})\.svg$/.exec(name);
+     if(svg&&owner){
+      owner.figureSVGs??=await currentFigureSVGs(store,owner.source,{signal});
+      alias=owner.figureSVGs.get(svg[1]);
+     }
+     if(!alias)failed(figure?'figure-asset-permission':'entry-asset-permission');
+     aliases.set(name,alias);
+    }
    }
   });
   const files=new Map(),bind=(name,html)=>bindConvertedPage(name,html,{records,aliases,mediaNames});
