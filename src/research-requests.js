@@ -62,7 +62,8 @@ export const researchRequest=route=>commands.get(route)??recordDraftRequest(rout
 export async function executeResearchRequest(storage,route,data,options={}){
  const command=researchRequest(route);if(!command)throw new AppError('NOT_FOUND');
  const requestOptions=command.write&&!command.cancellable?{...options,signal:undefined}:options;
- const result=await withDatabaseRequest(requestOptions.signal,()=>command.run(storage,data,requestOptions));
+ const execute=()=>command.run(storage,data,requestOptions);
+ const result=await withDatabaseRequest(requestOptions.signal,()=>command.write&&options.publicationConversion?options.publicationConversion.mutate(storage,{route,data},execute):execute());
  // Catalogue outlines already passed native metadata admission. They are not
  // legacy whole-workspace documents and retain their referenced schemas.
  if(!result?.book||result.outline===true)return result;

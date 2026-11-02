@@ -119,7 +119,8 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
     await stopJobs();return settings.password(data,{deviceStore,check:()=>current(),changed:async next=>{await bookAccess.changed(storage.root,next,vault);etag=next;}});
    }
    if(selected.bookOperation==='settings'){
-    const result=await new LabBookSettings(project).save(storage,data,{check:bookAccess?()=>bookAccess.check():check,stopJobs});entry=await registry.locate(selected.labBookId);etag=(await readAccess(entry.root)).etag;return result;
+    const save=()=>new LabBookSettings(project).save(storage,data,{check:bookAccess?()=>bookAccess.check():check,stopJobs});
+    const result=await (options.publicationConversion?options.publicationConversion.mutateNotebook(storage,selected.labBookId,save):save());entry=await registry.locate(selected.labBookId);etag=(await readAccess(entry.root)).etag;return result;
    }
    if(selected.bookOperation==='rename'){
     if(!data||Object.keys(data).sort().join()!=='expectedName,id,name')throw new AppError('INVALID');

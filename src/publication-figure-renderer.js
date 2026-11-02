@@ -38,6 +38,9 @@ export async function* publicationFigureContents(input,recordId,figure,{writer,d
  signal?.throwIfAborted();const selected=await input.get('records',recordId),choice=selected?.selection?.figures.find(value=>value.id===figure.id);
  if(!choice||data&&!choice.data)fail();
  const original=await openPublicationFigure(input,recordId,figure.id,{signal});if(serialize(original.originalFigure??original.figure)!==serialize(figure))fail();
+ yield* renderApprovedFigureContents(original,recordId,figure,{writer,data,results,signal});
+}
+export async function* renderApprovedFigureContents(original,recordId,figure,{writer,data=false,results,signal}={}){
  const reader=publicFigureReader(original),{header}=await reader.header(),selection={collection:'header',id:header.id,field:'title'},stem=recordId+'-'+figure.id;
  await writer.retain('figures/'+stem+'.svg',retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem}));
  if(data)await writer.retain('figures/'+stem+'.csv',retainedFigureCSV(reader,{signal}));signal?.throwIfAborted();

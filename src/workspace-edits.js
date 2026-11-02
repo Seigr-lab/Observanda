@@ -11,7 +11,7 @@ const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 // Research edits retain an exact base. Website choices use their independent
 // owner; only older inline workspaces accept the legacy mixed selection edit.
 export class WorkspaceEdits{
- constructor(workspace,evidence){this.workspace=workspace;this.records=new ResearchRecords(workspace,evidence);}
+ constructor(workspace,evidence,{publicationConversion}={}){this.workspace=workspace;this.records=new ResearchRecords(workspace,evidence);this.publicationConversion=publicationConversion;}
  async save(command){
   const response=command?.response;
   if(response!==undefined){if(response!=='outline')throw new AppError('INVALID');const {response:_,...rest}=command;command=rest;}
@@ -22,7 +22,8 @@ export class WorkspaceEdits{
   if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(outline.etag!==command.baseEtag)throw new AppError('CONFLICT');
   if(outline.metadata.formatVersion!==21||await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
-  return this.workspace.withLock(()=>this.workspace.catalogue(store=>this.apply(store,command,{response})));
+  const save=()=>this.workspace.withLock(()=>this.workspace.catalogue(store=>this.apply(store,command,{response})));
+  return this.publicationConversion?this.publicationConversion.mutate(this.workspace,{route:'/api/workspace/save',data:command},save):save();
  }
  async apply(store,command,{response}={}){
   const head=await store.head(),source=await store.snapshot(head);
