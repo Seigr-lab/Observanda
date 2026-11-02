@@ -13,6 +13,7 @@ async function editor(page){
   calls.push(route);
   if(route.endsWith('/session'))return {workspaceId:id,title:'Measurements',sites:[site]};
   if(route.endsWith('/version'))return {revision};
+  if(route.endsWith('/components/list'))return {revision,items:[],next:null};
   if(route.endsWith('/open'))return {site,path:data.path||'index.html',html:data.path==='index.html'||!data.path?html:'<!doctype html><main><h1>Selected private plot</h1></main>',css};
   if(route.endsWith('/save')){html=data.html;return {site,path:data.path,html,css};}
   throw Error('Unexpected route '+route);
@@ -35,6 +36,8 @@ test('finds saved pages, tools, elements and nested layers with a keyboard and b
  await filter.fill('');await page.getByRole('button',{name:'Next layers'}).click();await expect(list.getByRole('listitem')).toHaveCount(48);
  await page.keyboard.press('Control+k');await search.fill('elements');await expect(dialog.getByRole('group',{name:'Elements'})).toBeVisible();await search.press('Escape');
  await page.keyboard.press('Control+k');await search.fill('tools');await expect(dialog.getByRole('group',{name:'Tools'})).toBeVisible();await search.press('Escape');
+ await page.keyboard.press('Control+k');await search.fill('browse components');await search.press('Enter');
+ await expect(page.getByRole('textbox',{name:'Component name',exact:true})).toBeVisible();
  await page.keyboard.press('Control+k');await search.fill('plots/1199.html');await expect(dialog.getByRole('option')).toContainText('private draft');
  await search.press('Enter');await expect(canvas.getByRole('heading',{name:'Selected private plot'})).toBeVisible();
  expect(calls.every(route=>route.startsWith('/api/website-files/'))).toBe(true);

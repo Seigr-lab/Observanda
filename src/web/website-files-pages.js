@@ -2,6 +2,15 @@ import {websiteHTML} from './website-html-document.js';
 
 const windowSize=40;
 const normalize=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
+export function suggestedPagePath(title,taken){
+ if(!title.trim())return '';
+ let base=normalize(title.normalize('NFKC')).replaceAll('ø','o').replaceAll('æ','ae').replaceAll('ß','ss')
+  .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'page';
+ if(/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(base))base+='-page';
+ let file=base+'.html';
+ for(let number=2;taken.has(file);number++)file=base+'-'+number+'.html';
+ return file;
+}
 const ownsMetadata=element=>Boolean(element?.closest('[data-observanda-source],[data-observanda-link]'));
 const description=head=>Array.from(head.children).filter(node=>node.localName==='meta'&&node.getAttribute('name')?.toLowerCase()==='description');
 const titleElement=head=>Array.from(head.children).find(node=>node.localName==='title');

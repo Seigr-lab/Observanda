@@ -1,7 +1,7 @@
 import {foldLayerText} from './website-layer-model.js';
 
 const cap=8;
-const tools=new Set(['visual','html','css','pages','new-page','menu','preview','check-page','galleries','media','folder','destination','save','download','picker-open','component-open']);
+const tools=new Set(['visual','html','css','pages','new-page','menu','preview','check-page','galleries','media','folder','destination','save','download','picker-open','component-browse']);
 
 export function finderGroups({site,root,rows,t,openPage,selectLayer}){
  const groups=[];

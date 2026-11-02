@@ -15,7 +15,7 @@ import {bindWebsiteVisual} from './website-files-visual.js';
 import {websiteHierarchy,websiteLayerAt,movableWebsiteLayer,websiteLayerMove} from './website-files-hierarchy.js';
 import {websiteFilesComponents} from './website-files-components.js';
 import {websiteFilesRecordings} from './website-files-recordings.js';
-import {websiteFilesPages} from './website-files-pages.js';
+import {suggestedPagePath,websiteFilesPages} from './website-files-pages.js';
 import {websiteFilesMenu} from './website-files-menu.js';
 import {websiteFilesPicker} from './website-files-picker.js';
 
@@ -321,8 +321,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function formView(){
   const isPage=form.type==='page',label=isPage?'addPage':'create';
-  const name=field(isPage?'pageTitle':'name','','required maxlength="160"');
-  const path=isPage?field('pagePath',crypto.randomUUID()+'.html','required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
+  const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
+  const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
   return '<section class="panel"><form data-website-files-form><h2>'+esc(tr(label))+'</h2>'+name+path+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
  }
@@ -403,7 +403,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='undo'||operation==='redo'){const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;if(from.length){to.push({html,css});({html,css}=from.pop());historyBytes=undo.reduce((n,item)=>n+item.html.length+item.css.length,0);lastCheckpoint=0;changed();render();}}
    else if(operation==='discard'||operation==='reopen')await discard();
    else if(operation==='new'){if(await beforeLeave(true)){form={type:'new'};render();}}
-   else if(operation==='new-page'){if(await beforeLeave(true)){form={type:'page'};render();}}
+   else if(operation==='new-page'){if(await beforeLeave(true)){
+    form={type:'page',title:'',path:'',customPath:false,taken:new Set(opened.site.pages.map(page=>page.path.toLowerCase()))};render();
+   }}
    else if(operation==='sites-more'){const result=await request('list',{limit:100,after:nextSite});sites.push(...result.items.filter(item=>!sites.some(site=>site.id===item.id)));nextSite=result.next;render();}
 
    else if(operation==='form-cancel'){form=null;render();}
@@ -454,6 +456,16 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){
+  if(form?.type==='page'&&element.closest('[data-website-files-form]')){
+   if(element.dataset.websiteFileField==='pageTitle'){
+    form.title=element.value;
+    if(!form.customPath){
+     form.path=suggestedPagePath(form.title,form.taken);
+     element.form.querySelector('[data-website-file-field="pagePath"]').value=form.path;
+    }
+   }else if(element.dataset.websiteFileField==='pagePath'){form.path=element.value;form.customPath=Boolean(form.path);}
+   return true;
+  }
   if(components.input(element)||pagesPanel.input(element)||folder.input(element)||picker.input(element)||menu.input(element)||gallery.input(element))return true;
   if(element.matches('[data-website-file-viewport]')){viewport=element.value;document.querySelector('.website-files-viewport').dataset.size=viewport;visual?.viewportChanged();return true;}
   if(element.matches('[data-website-file-code]')){checkpoint();if(element.dataset.websiteFileCode==='html')html=element.value;else css=element.value;changed();return true;}
@@ -470,7 +482,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(form.type==='new')result=await request('create',{name:value('name')});
   else if(form.type==='page'){
    const title=value('pageTitle'),path=value('pagePath');
-   if(opened.site.pages.some(page=>page.path===path))throw Error(tr('duplicatePage'));
+   if(form.taken.has(path.toLowerCase()))throw Error(tr('duplicatePage'));
    // A newly added page uses the public site's stylesheet even when the
    // current page has private CSS dedicated to its unpublished draft.
    const publicPage=draftPage()?await request('open',{siteId:siteId(),path:'index.html'}):opened;

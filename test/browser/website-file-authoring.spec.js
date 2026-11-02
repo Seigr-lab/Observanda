@@ -46,7 +46,11 @@ test('private draft remains identifiable and new pages use the public stylesheet
  await expect(select.locator('option').last()).toHaveText('Notes (private draft)');
  await select.selectOption(draft.path);await expect(notice).toBeVisible();
  await page.getByRole('button',{name:'Add page'}).click();
- await page.getByLabel('Page title').fill('Field work');await page.getByLabel('Page file name').fill('pages/field.html');
+ const title=page.getByLabel('Page title'),file=page.getByLabel('Page file name');
+ await title.fill('Index');await expect(file).toHaveValue('index-2.html');
+ await title.fill('NUL');await expect(file).toHaveValue('nul-page.html');
+ await title.fill('Øresund – Résultats');await expect(file).toHaveValue('oresund-resultats.html');
+ await file.fill('pages/field.html');await title.fill('Field work');await expect(file).toHaveValue('pages/field.html');
  await page.getByRole('button',{name:'Add page'}).click();await expect(select).toHaveValue('pages/field.html');
  await expect(notice).toHaveCount(0);expect(writes).toHaveLength(1);
  expect(writes[0].html).toContain('href="../style.css"');expect(writes[0].css).toBe(home.css);
