@@ -8,6 +8,7 @@ import {AppError} from './errors.js';
 import {revisionId} from './web/revision-model.js';
 import {researchId} from './web/research-reference.js';
 import {LabBookDirectory} from './lab-book-directory.js';
+import {LabBookRegistry} from './lab-book-registry.js';
 import {projectCollectionReader} from './project-collection-reader.js';
 import {WebsiteResearch} from './website-research.js';
 import {WebsiteEditorStore} from './website-editor-store.js';
@@ -23,6 +24,24 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
  if(scope&&(host.state!=='active'||host.revision!==directory.revision))throw new AppError('RECORD_QUERY_CURSOR');
  return {
   host:{workspaceId,projectId:scope,labBookId,projectNamespaceId:host?.entry?.namespaceId??null},
+  async projectOwners(after){
+   if(scope||labBookId)throw new AppError('ACCESS_DENIED');
+   await check();signal?.throwIfAborted();
+   return registry.inspect(async view=>{
+    if(view.revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');
+    const page=await view.page({index:'active',after,limit:32,signal});
+    return {items:page.items.map(({entry})=>({projectId:entry.projectId,namespaceId:entry.namespaceId})),next:page.next};
+   });
+  },
+  async bookOwners(projectId,namespaceId,{after,revision}){
+   if(scope||labBookId)throw new AppError('ACCESS_DENIED');
+   const project=await registry.state(projectId);
+   if(project.revision!==directory.revision||project.state!=='active'||project.entry.namespaceId!==namespaceId)throw new AppError('RECORD_QUERY_CURSOR');
+   return reader.useStorage({workspaceId:namespaceId,projectId,labBookId:null},async storage=>{
+    const page=await new LabBookRegistry(storage).list({after,revision,limit:32});
+    return {...page,items:page.items.map(({namespaceId})=>({namespaceId}))};
+   });
+  },
   async use(sourceId,snapshotId,consume,{prepare}={}){
    if(!researchId(sourceId)||snapshotId!==undefined&&!revisionId(snapshotId))throw new AppError('INVALID');signal?.throwIfAborted();
    const selected=await registry.state(sourceId,{index:'namespace'});if(selected.revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');registry.assertState(selected.state?selected:null);

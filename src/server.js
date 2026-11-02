@@ -23,6 +23,7 @@ import {planningTaskAccessFactory} from './planning-task-access.js';
 import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
+import {discoverEligibleWebsiteSources} from './website-library-discovery.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
 import {withWorkspaceDeletionSession} from './workspace-deletion-session.js';
 import {publicationDesignPreview} from './publication-design-preview.js';
@@ -274,13 +275,17 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();void ctx.jobs.recover().catch(error=>diagnostic('worker-claim',{error}));startDashboardEdits(ctx);}};
   const projectApplication=ctx=>ctx.projects??=new ProjectApplication(ctx.workspace,{publicationConversion:ctx.publicationConversion??=new PublicationConversion(ctx.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
   const websitePreparation=ctx=>ctx.websitePreparation??=new WorkspaceWebsitePreparation(ctx.workspace);
-  const prepareWebsites=(ctx,client)=>{
+  const prepareWebsites=(ctx,client,{retry=false}={})=>{
    if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly||!client.access)return;
    const check=async()=>{if(context!==ctx||ctx.manualLock||shuttingDown||client.expires<=Date.now()||![...sessions.values()].includes(client)||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
-   websitePreparation(ctx).start(client,{check,prepare:run=>{
-    const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
+   const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
+   websitePreparation(ctx).start(client,{check,retry,prepare:run=>{
     return projects.withSourceHistory(client,()=>run({sourceReader,blockedValues:[ctx.root,os.homedir(),os.hostname()].filter(Boolean)}),{check});
-   }});
+   },discover:({signal})=>projects.withSourceHistory(client,async()=>{
+    const reader=await sourceReader({signal});
+    try{return await discoverEligibleWebsiteSources(ctx.publicationConversion.files,reader,{signal});}
+    finally{await reader.close();}
+   },{check})});
   };
   const stopWebsitePreparation=async ctx=>{await ctx.websitePreparation?.stop();delete ctx.websitePreparation;};
   const stopWorkspaceJobs=async ctx=>{await stopWebsitePreparation(ctx);await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
@@ -608,8 +613,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(['open','open/resume','open/cancel','open/access/finish'].includes(selectedProject.operation))req.activityRecoveryKey='project-open:'+data?.id;
         if(['storage/delete','storage/delete/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-delete:'+data?.id;
         if(/^storage\/(copy|export|move)(?:\/(resume|cancel))?$/.test(selectedProject.operation))req.activityRecoveryKey='project-'+selectedProject.operation.split('/')[1]+':'+data?.id;
-        if(['lab-books/access/unlock','lab-books/access/lock'].includes(selectedProject.operation)){req.operationActivity=null;return json(await projects.run(client,selectedProject,data,{check}));}
-        if(selectedProject.operation==='access/unlock')return json(await projects.unlock(client,selectedProject.projectId,data,{check}));
+        if(['lab-books/access/unlock','lab-books/access/lock'].includes(selectedProject.operation)){
+         req.operationActivity=null;const result=await projects.run(client,selectedProject,data,{check});
+         if(selectedProject.operation==='lab-books/access/unlock')prepareWebsites(selectedContext,client,{retry:true});
+         return json(result);
+        }
+        if(selectedProject.operation==='access/unlock'){
+         const result=await projects.unlock(client,selectedProject.projectId,data,{check});prepareWebsites(selectedContext,client,{retry:true});return json(result);
+        }
         if(selectedProject.operation==='access/lock'){if(Object.keys(data).length)throw new AppError('INVALID');return json(await projects.lock(client,selectedProject.projectId));}
         if(selectedProject.write){activeWrites++;countedWrite=true;}
         else req.operationActivity=null;
