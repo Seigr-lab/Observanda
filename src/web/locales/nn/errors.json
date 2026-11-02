@@ -1,4 +1,5 @@
 {
+  "WEBSITE_CHANGED": "Innhaldet på nettstaden eller tilgangane er endra. Last inn visinga på nytt før du held fram.",
   "INSTALL_FILE_MISSING": "Ei installasjonsfil for Observanda manglar. Reparer eller installer Observanda på nytt.",
   "DATABASE_GUARD_STORAGE": "Databaselagringa kan ikkje sikre verifisert privat tilgang og vern av mapper. Eksisterande data er tekne vare på. Vel lagring med støtta tilgangskontrollar, eller be administratoren flytte databasen til ei verifisert privat mappe.",
   "DATABASE_GUARD_UNAVAILABLE": "Dette systemet kunne ikkje verne prosessane til den administrerte databasen. Eksisterande data er tekne vare på. Bruk eit støtta system eller ei eksternt administrert PostgreSQL-teneste.",

@@ -1,4 +1,5 @@
 {
+  "WEBSITE_CHANGED": "El contenido del sitio web o sus permisos han cambiado. Vuelve a cargar la vista actual antes de continuar.",
   "INSTALL_FILE_MISSING": "Falta un archivo de la instalación de Observanda. Repara o reinstala Observanda.",
   "DATABASE_GUARD_STORAGE": "El almacenamiento de la base de datos no puede garantizar el acceso privado verificado y la protección de los directorios. Los datos existentes se han conservado. Selecciona un almacenamiento con controles de acceso compatibles o pide al administrador que traslade la base de datos a un directorio privado verificado.",
   "DATABASE_GUARD_UNAVAILABLE": "Este sistema no ha podido proteger los procesos de la base de datos gestionada. Los datos existentes se han conservado. Utiliza un sistema compatible o un servicio PostgreSQL gestionado externamente.",
