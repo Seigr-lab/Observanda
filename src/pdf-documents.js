@@ -25,7 +25,10 @@ export class PdfDocuments{
     const result=operation==='outline'?await documents.outline(data.id,{...data,query:''},options):await documents.sections(data.id,data),items=[],proof=new Map();
     const needle=operation==='outline'?(data.query??'').normalize('NFKC').trim().toLowerCase():'';if(needle.length>240)throw new AppError('INVALID');
     for(const item of result.items){const saved=await documents.section(data.id,item.id,{revision:result.revision}),resolved=await projectPdfSection(store,this.publicationFiles,data.id,saved.section,{...options,proof});
-     if(!needle||resolved.section.title.normalize('NFKC').toLowerCase().includes(needle))items.push({...item,title:resolved.section.title});
+     if(!needle||resolved.section.title.normalize('NFKC').toLowerCase().includes(needle)){
+      const usesPublication=Boolean(saved.section.research||saved.section.images?.length);
+      items.push({...item,title:resolved.section.title,...(usesPublication?{hasPublicationContent:true}:{})});
+     }
     }await checkPdfSources(this.publicationFiles,[...proof.values()]);return {...result,...(operation==='outline'?{query:needle}:{}),items};
    }
    return documents[operation](data.id,data,options);

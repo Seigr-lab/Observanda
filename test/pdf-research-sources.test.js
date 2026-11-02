@@ -27,6 +27,9 @@ test('PDF composition uses only PDF-granted files, updates existing placements a
  await update('Newly permitted section content');assert.equal((await d.read('section',{id,sectionId})).section.content,'Newly permitted section content');await assert.rejects(jobs.download(jobId),{code:'PDF_SOURCE_CONTENT'});
  await update('',false);const withdrawn=await d.read('section',{id,sectionId,revision:head.revision});assert.equal(withdrawn.section.content,'');assert.equal(withdrawn.section.research.content,'');assert.ok(!(await d.read('sections',{id})).items.some(item=>item.title==='Measurements'));await assert.rejects(readPdfResearch(files,{operation:'selection',...source,snapshotId:null}),{code:'PDF_SOURCE_CONTENT'});
  await update('Restored section');assert.equal((await d.read('section',{id,sectionId})).section.content,'Restored section');
+ const summaries=(await d.read('sections',{id})).items;
+ assert.equal(summaries.find(item=>item.id===sectionId).hasPublicationContent,true);
+ assert.equal(summaries.find(item=>item.id===first.id).hasPublicationContent,undefined);
 });
 test('PDF SVG identifier scoping preserves clip paths and marker references',()=>{
  const html='<svg><clipPath id="clip"><path/></clipPath><path clip-path="url(#clip)"/><use href="#clip"/></svg>',scoped=scopePdfIds(html,'section-');assert.match(scoped,/id="section-clip"/);assert.match(scoped,/url\(#section-clip\)/);assert.match(scoped,/href="#section-clip"/);

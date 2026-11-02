@@ -40,6 +40,43 @@ test('a nested revoked figure disappears without replacing the surrounding websi
  assert.match(changed,/Edited on website/);assert.match(changed,/New section/);assert.match(changed,/Before/);assert.doesNotMatch(changed,/figure\.png|figure:one/);
 });
 
+test('version polling uses compact files and observes PDF fences, cancellation, failure and settlement',async()=>{
+ const temporary=await mkdtemp(path.join(os.tmpdir(),'website-version-'));
+ await mkdir(path.join(temporary,'.observanda'));
+ try{
+  const vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(temporary,vault);
+  for(const name of ['catalogue','withLock','outline','readMetadata'])workspace[name]=()=>assert.fail('Unexpected research read');
+  const writer=new WebsiteFileStore(workspace),reader=new WebsiteFileStore(workspace),reads=[];
+  const control=reader.control.bind(reader);reader.control=async(file,...args)=>{reads.push(file);return control(file,...args);};
+  const site=await writer.create({name:'Example'}),id=site.site.id;
+  assert.equal(await reader.siteVersion(id),site.site.revision);
+  assert.equal(await reader.pdfVersion(),null);
+  assert.deepEqual(reads.map(file=>file.split('/').pop()),['head.json','pending.json','pdf-version.json']);
+  await assert.rejects(reader.siteVersion(randomUUID()),{code:'NOT_FOUND'});
+  const provenance={workspaceId:vault.id,recordId:randomUUID(),notebookId:randomUUID(),target:'pdf'},sourceId=websiteSourceId(provenance);
+  const first=await writer.beginSourceUpdate({sourceId,target:'pdf'}),pending=await reader.pdfVersion();
+  assert.ok(pending);await assert.rejects(reader.pdfSource(sourceId),{code:'CONFLICT'});
+  await writer.cancelSourceUpdate({sourceId,token:first});
+  const cancelled=await reader.pdfVersion();assert.notEqual(cancelled,pending);
+  const second=await writer.beginSourceUpdate({sourceId,target:'pdf'}),retry=await reader.pdfVersion();
+  assert.notEqual(retry,cancelled);
+  await assert.rejects(writer.putSource({sourceId,provenance,target:'pdf',title:'Example',html:'<script>bad()</script>'},{token:second}),{code:'INVALID'});
+  assert.equal(await reader.pdfVersion(),retry);await assert.rejects(reader.pdfSource(sourceId),{code:'CONFLICT'});
+  await writer.putSource({sourceId,provenance,target:'pdf',title:'Example',visible:false},{token:second});
+  const settled=await reader.pdfVersion();assert.notEqual(settled,retry);
+  const websiteId=websiteSourceId({...provenance,target:'website'}),webToken=await writer.beginSourceUpdate({sourceId:websiteId,target:'website'});
+  await writer.putSource({sourceId:websiteId,title:'Website source',html:'<p>Public</p>'},{token:webToken});
+  const placed=await writer.insertSource(id,{expectedRevision:site.site.revision,sourceId:websiteId});
+  const edit=await writer.beginSourceUpdate({sourceId:websiteId,target:'website'});
+  await assert.rejects(reader.siteVersion(id),{code:'CONFLICT'});
+  await writer.cancelSourceUpdate({sourceId:websiteId,token:edit});
+  assert.equal(await reader.siteVersion(id),placed.site.revision);assert.equal(await reader.pdfVersion(),settled);
+ }finally{
+  await closeIdleMutationFiles();assert.equal(path.dirname(temporary),os.tmpdir());assert.ok(path.basename(temporary).startsWith('website-version-'));
+  await rm(temporary,{recursive:true,force:true,maxRetries:6,retryDelay:100});
+ }
+});
+
 test('stored HTML admits only site-local resources and vetted scripts, even on nested pages',()=>{
  const html='<html><head><link rel="stylesheet" href="../styles.css"></head><body><button type="button">Open menu</button><img src="../assets/photo.png"><script src="../public-book.js"></script></body></html>';
  assert.doesNotThrow(()=>validateWebsiteHTML(html,{file:'entries/entry.html',scripts:new Set(['public-book.js'])}));

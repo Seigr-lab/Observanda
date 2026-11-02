@@ -78,7 +78,7 @@ export class WebsiteFileStore{
   if(!await scope.stat(file,{missing:true}))return missing?null:Promise.reject(new AppError('NOT_FOUND'));
   const result=unseal(await scope.read(file,{limit:limit+1024*1024}),this.workspace.vault.key,this.workspace.fileAAD(file));if(result.length>limit)throw new AppError('LIMIT');return result;
  }
- async control(relative,{missing=false}={}){const bytes=await this.bytes(relative,{missing});if(bytes===null)return null;try{return JSON.parse(bytes.toString('utf8'));}catch{throw new AppError('FORMAT');}}
+ async control(relative,{missing=false,limit}={}){const bytes=await this.bytes(relative,{missing,limit});if(bytes===null)return null;try{return JSON.parse(bytes.toString('utf8'));}catch{throw new AppError('FORMAT');}}
  async writeBytes(relative,bytes,{signal}={}){
   const scope=active.getStore()?.scope;if(!active.getStore()?.write)throw new AppError('LOCKED');const file=this.absolute(relative);await scope.ensure(relative.slice(0,relative.lastIndexOf('/')));
   return writeSegmentedContent(this.workspace,file,[bytes],{expected:{size:bytes.length,sha256:hash(bytes)},signal,admission:active.getStore()?.admission,reserveBytes:64*1024*1024});
@@ -213,6 +213,12 @@ export class WebsiteFileStore{
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);return this.present(await this.commit(candidate,{signal}),page,{signal});
  },{write:true,signal});}
  checkRevision(id,revision){return this.scope(async()=>this.site(await this.current(id,revision)));}
+ siteVersion(id,{signal}={}){return this.scope(async()=>{
+  const head=await this.control(ROOT+'/sites/'+siteName(id)+'/head.json',{limit:1024});
+  if(!hex(head?.revision))throw new AppError('FORMAT');
+  if((await this.pendingSources()).size)return (await this.current(id)).revision;
+  return head.revision;
+ },{signal});}
  withSite(id,revision,operation){return this.scope(async()=>{const manifest=await this.current(id,revision);return operation(this.site(manifest));},{write:true});}
  file(id,name,{revision,signal}={}){return this.scope(async()=>{
   websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);if(!descriptor)throw new AppError('NOT_FOUND');const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
@@ -248,10 +254,37 @@ export class WebsiteFileStore{
   },{signal});
  }
  sourceStatus(sourceId){return this.scope(async()=>({source:await this.source(sourceId,{pending:true}),pending:await this.control(ROOT+'/sources/'+sourceId+'/pending.json',{missing:true})}));}
- beginSourceUpdate({sourceId,signal,ifAbsent=false}={}){return this.scope(async()=>{if(!hex(sourceId))throw new AppError('INVALID');const token=randomUUID(),saved=await this.control(ROOT+'/sources/'+sourceId+'/pending.json',{missing:true}),previous=saved?saved.previous:await this.source(sourceId,{pending:true});if(ifAbsent&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');await this.fence(sourceId,true,signal);await this.writeControl(ROOT+'/sources/'+sourceId+'/pending.json',{token,previous,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved)},{signal});return token;},{write:true,signal});}
- cancelSourceUpdate({sourceId,token,signal}={}){return this.scope(async()=>{if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');const pending=await this.control(ROOT+'/sources/'+sourceId+'/pending.json');const current=await this.source(sourceId,{pending:true});if(pending.recovered||pending.token!==token||(current?.revision??null)!==(pending.previous?.revision??null))throw new AppError('CONFLICT');await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');await this.fence(sourceId,false,signal);},{write:true,signal});}
+ pdfVersion({signal}={}){return this.scope(async()=>{
+  const revision=await this.control(ROOT+'/pdf-version.json',{missing:true,limit:128});
+  if(revision!==null&&!uuid(revision))throw new AppError('FORMAT');
+  return revision;
+ },{signal});}
+ advancePdfVersion(signal){return this.writeControl(ROOT+'/pdf-version.json',randomUUID(),{signal});}
+ beginSourceUpdate({sourceId,target,signal,ifAbsent=false}={}){return this.scope(async()=>{
+  if(!hex(sourceId)||target!==undefined&&!['website','pdf'].includes(target))throw new AppError('INVALID');
+  const path=ROOT+'/sources/'+sourceId+'/pending.json',token=randomUUID(),saved=await this.control(path,{missing:true});
+  const previous=saved?saved.previous:await this.source(sourceId,{pending:true}),known=saved?.target??previous?.target;
+  if(target&&known&&target!==known)throw new AppError('CONFLICT');
+  if(ifAbsent&&(saved||previous||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
+  target??=known;
+  await this.fence(sourceId,true,signal);
+  await this.writeControl(path,{token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved)},{signal});
+  if(target==='pdf')await this.advancePdfVersion(signal);
+  return token;
+ },{write:true,signal});}
+ async finishSourceUpdate(sourceId,target,signal){
+  await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');await this.fence(sourceId,false,signal);
+  if(target==='pdf')await this.advancePdfVersion(signal);
+ }
+ cancelSourceUpdate({sourceId,token,signal}={}){return this.scope(async()=>{
+  if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');
+  const pending=await this.control(ROOT+'/sources/'+sourceId+'/pending.json'),current=await this.source(sourceId,{pending:true});
+  if(pending.recovered||pending.token!==token||(current?.revision??null)!==(pending.previous?.revision??null))throw new AppError('CONFLICT');
+  await this.finishSourceUpdate(sourceId,pending.target??current?.target,signal);
+ },{write:true,signal});}
  putSource({sourceId,title:sourceTitle,html='',css='',assets=[],provenance,pdfParts=null,visible=true,target='website',signal}={}, {token}={}){return this.scope(async()=>{
-  if(!hex(sourceId)||!uuid(token)||typeof visible!=='boolean'||!['website','pdf'].includes(target))throw new AppError('INVALID');const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json');if(pending.token!==token)throw new AppError('CONFLICT');
+  if(!hex(sourceId)||!uuid(token)||typeof visible!=='boolean'||!['website','pdf'].includes(target))throw new AppError('INVALID');const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json');if(pending.token!==token||pending.target&&pending.target!==target)throw new AppError('CONFLICT');
+  if(!pending.target&&target==='pdf'){await this.writeControl(directory+'/pending.json',{...pending,target},{signal});await this.advancePdfVersion(signal);}
   sourceTitle=title(sourceTitle);validateWebsiteHTML('<!doctype html><html><head><title>Content</title></head><body>'+html+'</body></html>');validateWebsiteCSS(css);
   if(provenance&&websiteSourceId({...provenance,target})!==sourceId)throw new AppError('INVALID');
   const prior=pending.previous,previousHtml=prior?await this.readText(prior.html,{signal}):'',files=[];
@@ -270,7 +303,7 @@ export class WebsiteFileStore{
    await this.commit({...manifest,pages:manifest.pages.map(page=>({...page,title:titles.get(page.path)??page.title,placements:page.placements.map(item=>item.id===sourceId?{id:sourceId,revision:source.revision}:item)})),files:await this.siteAssets(nextFiles,sources),sources},{signal});
   }after=sites.next;}while(after!==null);
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
-  await this.remove(directory+'/pending.json');await this.fence(sourceId,false,signal);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
+  await this.finishSourceUpdate(sourceId,target,signal);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
  insertSource(id,{expectedRevision,path:page='index.html',sourceId,signal}={}){return this.scope(async()=>{
   if(!hex(expectedRevision))throw new AppError('INVALID');const manifest=await this.current(id,expectedRevision),source=await this.source(sourceId);if(!source?.visible||source.target==='pdf')throw new AppError('NOT_FOUND');
