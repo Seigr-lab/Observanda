@@ -6,6 +6,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import {chromium} from '@playwright/test';
 import {desktopFixture} from './fixture.js';
+import {payloadFiles} from '../../scripts/desktop-payload.js';
 
 // Packaged Electron intentionally refuses the Node main-process inspector.
 // Drive its real renderer over a disposable loopback Chromium debugging port.
@@ -16,7 +17,7 @@ export async function websiteDesktopFixture(){
  // must reopen the very same profile selected by the packaged predecessor.
  if(!fixture.packaged)fixture.env.OBSERVANDA_DESKTOP_TEST_HOME=path.join(fixture.directory,'.observanda');
  const candidateVersion=JSON.parse(await readFile(new URL('../../package.json',import.meta.url),'utf8')).version;
- const env={...fixture.env};for(const key of ['NODE_OPTIONS','ELECTRON_RUN_AS_NODE','OBSERVANDA_DESKTOP_NODE','OBSERVANDA_DESKTOP_TEST_HOME','OBSERVANDA_POSTGRES_BIN','OBSERVANDA_TEST_POSTGRES_BIN'])delete env[key];
+ const env={...fixture.env};for(const key of ['NODE_OPTIONS','ELECTRON_RUN_AS_NODE','OBSERVANDA_DESKTOP_NODE','OBSERVANDA_POSTGRES_BIN','OBSERVANDA_TEST_POSTGRES_BIN'])delete env[key];
  const endpoint=path.join(fixture.directory,'.observanda','window','DevToolsActivePort');
  async function close(app){
   if(!app)return;
@@ -36,6 +37,14 @@ export async function websiteDesktopFixture(){
   const executable=await realpath(program),resources=path.join(path.dirname(executable),'resources');
   const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
   assert.equal(installed.version,expectedVersion);await access(path.join(resources,'app.asar'));
+  if(expectedVersion!==candidateVersion){
+   // The installer includes separate uncompressed resources. Reject an
+   // incomplete predecessor before its older shell can show a native dialog.
+   const manifest=JSON.parse(await readFile(path.join(resources,'payload.json'),'utf8'));
+   assert.equal(manifest.format,1);assert.equal(manifest.platform,process.platform);assert.equal(manifest.arch,process.arch);
+   const actual=new Map((await payloadFiles(resources)).map(row=>[row.path,row]));
+   for(const row of manifest.files)assert.deepEqual(actual.get(row.path),row,'Incomplete previous desktop payload: '+row.path);
+  }
   await rm(endpoint,{force:true});
   const child=spawn(executable,['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--disable-renderer-backgrounding','--disable-background-timer-throttling','--disable-backgrounding-occluded-windows',...(website?['--website']:[])],{env,windowsHide:true,stdio:'ignore'});
   const exited=once(child,'exit');exited.catch(()=>{});
