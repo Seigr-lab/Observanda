@@ -86,7 +86,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function initialPage(){
   const epoch=generation;
-  const id=requestedSite??session.defaultSiteId??sites[0]?.id;
+  const id=requestedSite??session.preparation?.defaultSiteId??session.defaultSiteId??sites[0]?.id;
   if(!id){render();return;}
   try{await open(id);}
   catch(reason){if(reason.code!=='NOT_FOUND')throw reason;missingSite=true;render();return;}

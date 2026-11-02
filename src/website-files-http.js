@@ -10,7 +10,7 @@ import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','save','insert-source','convert-existing','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','save','insert-source','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 // Only files belonging to this saved revision can be embedded. The same
@@ -18,7 +18,7 @@ const sshReviewKey='.observanda/website-ssh-review.json';
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},convertExisting,listExisting,githubAccount,withPublication=work=>work()}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
@@ -54,21 +54,20 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    }));return true;
   }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
-  if(req.method==='GET'&&!['session','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
+  if(req.method==='GET'&&!['session','preparation','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
   if(writes.has(operation)){onWrite();await check();}
   if(operation==='session'){
-   const result=await store.list({limit:100});
-   json({workspaceId:workspace.vault?.id,title,contextId,sites:result.sites??result.items??[],next:result.next??null,legacyAvailable:true});return true;
+   const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
+   json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
   }
+  if(operation==='preparation'){json({preparation:await preparation()});return true;}
   if(operation==='list'){json(await store.list(data));return true;}
   if(operation==='pdf-version'){json({revision:await store.pdfVersion({signal})});return true;}
   if(operation==='library'){json(await store.library(data));return true;}
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
-  if(operation==='legacy-list'){json(await listExisting(data,{signal}));return true;}
-  if(operation==='convert-existing'){json(await convertExisting(store,data,{signal,blockedValues}));return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}

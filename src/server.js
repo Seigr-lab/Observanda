@@ -109,6 +109,7 @@ import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './invento
 import {WebsiteSites} from './website-sites.js';
 import {WebsiteEditor} from './website-editor.js';
 import {websiteFilesHttp} from './website-files-http.js';
+import {WorkspaceWebsitePreparation} from './workspace-website-preparation.js';
 import {PublicationConversion} from './publication-conversion.js';
 import {websiteWorkspace,websiteJobQueue,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
@@ -271,8 +272,19 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();void ctx.jobs.recover().catch(error=>diagnostic('worker-claim',{error}));startDashboardEdits(ctx);}};
-  const stopWorkspaceJobs=async ctx=>{await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
-  const stopJobs=async ctx=>{await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
+  const projectApplication=ctx=>ctx.projects??=new ProjectApplication(ctx.workspace,{publicationConversion:ctx.publicationConversion??=new PublicationConversion(ctx.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+  const websitePreparation=ctx=>ctx.websitePreparation??=new WorkspaceWebsitePreparation(ctx.workspace);
+  const prepareWebsites=(ctx,client)=>{
+   if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly||!client.access)return;
+   const check=async()=>{if(context!==ctx||ctx.manualLock||shuttingDown||client.expires<=Date.now()||![...sessions.values()].includes(client)||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
+   websitePreparation(ctx).start(client,{check,prepare:run=>{
+    const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
+    return projects.withSourceHistory(client,()=>run({sourceReader,blockedValues:[ctx.root,os.homedir(),os.hostname()].filter(Boolean)}),{check});
+   }});
+  };
+  const stopWebsitePreparation=async ctx=>{await ctx.websitePreparation?.stop();delete ctx.websitePreparation;};
+  const stopWorkspaceJobs=async ctx=>{await stopWebsitePreparation(ctx);await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
+  const stopJobs=async ctx=>{await stopWebsitePreparation(ctx);await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
   let context=makeContext(root,expectedExisting), origin, publishing=false, importing=false, changing=false, activeWrites=0, loginBusy=false;
@@ -560,16 +572,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
          }finally{publishing=false;}
         },
         onWrite:()=>{if(!countedWrite){activeWrites++;countedWrite=true;}},
-        listExisting:async data=>{const page=await new WebsiteSites(workspace).list(data);if(!data.after&&!page.sites.some(site=>site.id===null))page.sites.unshift({id:null,name:workspaceFolderName(selectedContext.root)});return page;},
-        convertExisting:async(store,data,options)=>{
-         const projects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
-         const reader=publicationSourceFactory(projects,client,workspace,{check:req.checkWriter});
-         const {convertExistingWebsite}=await import('./website-files-migration.js');
-         return projects.withSourceHistory(client,()=>convertExistingWebsite(workspace,store,{...data,...options,sourceReader:reader}));
-        }});
+        preparation:()=>websitePreparation(selectedContext).status()});
       }
       if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}
-      const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+      const historyProjects=projectApplication(selectedContext);
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
@@ -699,7 +705,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         client.access=result.etag;client.expires=Date.now()+8*60*60*1000;return json(result);
        }finally{changing=false;}
       }
-      if(req.method==='GET'&&url.pathname==='/api/storage')return json(await metadata());
+      if(req.method==='GET'&&url.pathname==='/api/storage'){
+       const result=await metadata();
+       if(context===selectedContext&&result.available)prepareWebsites(selectedContext,client);
+       return json(result);
+      }
       if(req.method==='GET'&&url.pathname==='/api/workspaces'){
         let current=null;
         try{if(workspace){const book=(await workspace.outline()).metadata;current={path:workspace.root,title:workspaceFolderName(workspace.root),label:identityLabel(book.identity)};}}catch(e){if(!['MISSING','CATALOGUE_UNAVAILABLE'].includes(e.code))throw e;}

@@ -12,8 +12,8 @@ for(const stage of ['startup-modules','runtime-permissions','runtime-version','r
 for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
 for(const stage of ['website-source-entry','website-source-find','website-source-describe','website-source-neighbours','website-source-body','website-source-references'])phases.add(stage);
 for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])phases.add(stage);
-for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist'])phases.add(stage);
-const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
+for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist','website-storage-upgrade'])phases.add(stage);
+const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor','website-files']);
 for(const stage of ['edition-capture','edition-clean','edition-input','edition-permissions','edition-pin','edition-directory','edition-render','edition-finish'])phases.add(stage);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs'],'database-queue':['databaseQueueEntries','databaseQueueMs'],'database-cursor':['databaseCursorBatches','databaseCursorMs']});
 // Logical work, including cache uses, is distinct from physical I/O and RSS.
