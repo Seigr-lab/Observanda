@@ -49,13 +49,16 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner}){
      (row.editable?button('pickerRemoveHere','review-remove','data-index="'+i+'"'):'<small>'+label('pickerManagedUse')+'</small>')+'</div>'+
      (state.confirm===i?'<p>'+label('pickerRemovalNotice')+'</p>'+button('pickerConfirmRemove','remove-placement','data-index="'+i+'"')+button('cancel','cancel-remove'):'')+'</li>';
    }).join('')+'</ol>':'<p>'+label('pickerUnused')+'</p>')+
-   (state.placeOffset?button('pickerPrevious','places-previous'):'')+(placements.next!=null?button('pickerNext','places-next'):'')+siteChoices()+'</section>';
+   (state.placeOffset?button('pickerPrevious','places-previous'):'')+(placements.next!=null?button('pickerNext','places-next'):'')+(state.pane==='detail'?button('pickerFindWebsites','sites-open'):'')+'</section>';
  }
  function preview(){
   if(!item||!detail)return '<section class="website-picker-detail"><p>'+label('pickerChooseEntry')+'</p></section>';
   const keys={body:'pickerBody',outcome:'pickerOutcome',results:'pickerResults',contributors:'pickerContributors',attempt:'pickerAttempt',tags:'pickerTags',text:'pickerText'};
   const data=[[msg('pickerType'),detail.displayType],[msg('pickerDate'),detail.metadata?.displayDate??item.displayDate],[msg('pickerStatus'),detail.displayStatus]].filter(([,v])=>v);
-  return '<section class="website-picker-detail" aria-label="'+label('pickerPreview')+'"><h3>'+esc(item.title)+'</h3><p>'+esc(ancestry(item))+'</p>'+
+  const heading='<section class="website-picker-detail" aria-label="'+label('pickerPreview')+'"><h3>'+esc(item.title)+'</h3><p>'+esc(ancestry(item))+'</p>';
+  if(state.pane==='sites'||state.pane==='uses')return heading+'<div class="inline-actions">'+button('pickerBackToEntry','show-entry')+
+   (state.pane==='uses'?button('pickerFindWebsites','sites-open'):'')+'</div>'+(state.pane==='sites'?siteChoices():places())+'</section>';
+  return heading+button('pickerWhereUsed','show-uses')+
    (data.length?'<dl class="website-picker-facts">'+data.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>':'')+
    (detail.overview??[]).filter(group=>keys[group.kind]).map(group=>'<h4>'+label(keys[group.kind])+'</h4>'+group.paragraphs.map(text=>'<p>'+esc(text)+'</p>').join('')).join('')+
    '<h4>'+label('pickerSections')+'</h4>'+(detail.sections.length?'<ul>'+detail.sections.map(s=>'<li><strong>'+esc(s.title)+'</strong>'+(s.preview?'<p>'+esc(s.preview)+'</p>':'')+'</li>').join('')+'</ul>':'<p>'+label('pickerNoSections')+'</p>')+

@@ -81,7 +81,7 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
    job.signal?.throwIfAborted();if(job.number!=null&&job.number!==epoch)throw new DOMException('Cancelled','AbortError');
    if(seen.has(after))throw Error(msg('failed'));seen.add(after);
    const data=await request(route,{...args,after,limit:limit-items.length},{signal:job.signal});
-   if(head&&(head.visibilityToken!==data.visibilityToken||head.generation!==data.generation))throw Error(msg('changed'));
+   if(head&&(head.visibilityToken!==data.visibilityToken||head.generation!==data.generation))throw Object.assign(Error(msg('changed')),{code:'WEBSITE_CHANGED'});
    head=data;items.push(...data.items);after=data.next;
   }while(after!=null&&items.length<limit);
   return {items,next:after??null,generation:head.generation,token:head.visibilityToken,totalEntries:head.totalEntries};
@@ -103,12 +103,12 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   try{
    const result=await collect('library/facets',{kind,search:f.query,...(kind==='book'?{projectId}:{})},f.pages[page]??null,facetSize,{signal:request.signal});
    if(request.signal.aborted)return;
-   if(result.token!==s.token||result.generation!==s.generation)throw Error(msg('changed'));
+   if(result.token!==s.token||result.generation!==s.generation){await reloadPermissions();return;}
    f.loading=false;f.items=result.items;f.page=page;f.next=result.next;
    if(f.chosen)f.chosen=f.items.find(row=>row.id===f.chosen.id)??f.chosen;
    if(Number.isSafeInteger(result.totalEntries))s.totalEntries=result.totalEntries;
    paintOwner(kind);
-  }catch(error){if(!request.signal.aborted)failHidden(error);}
+  }catch(error){if(!request.signal.aborted){if(error.code==='WEBSITE_CHANGED')await reloadPermissions();else failHidden(error);}}
   finally{if(ownerRequests.get(kind)===request)ownerRequests.delete(kind);}
  }
  async function browse({entryPage=0,facets=['project','book'],focus}={}){
@@ -119,14 +119,28 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   try{
    const result=await collect('library/search',{search:s.query,filter:s.applied,projectId,notebookId},s.pages[entryPage]??null,pageSize,job);
    if(job.number!==epoch)return;
-   if(s.token&&(s.token!==result.token||s.generation!==result.generation)){clearProtected();return browse();}
+   if(s.token&&(s.token!==result.token||s.generation!==result.generation))return reloadPermissions();
    s.generation=result.generation;s.token=result.token;s.rows=result.items;s.page=entryPage;s.next=result.next;
    for(const row of s.rows)if(s.queue.has(row.id))s.queue.set(row.id,row);
    s.status='';s.loading=false;paint(focus);
    for(const kind of facets)void loadOwner(kind);
-  }catch(error){if(job.number===epoch)failHidden(error);if(error.name!=='AbortError')throw error;}
+  }catch(error){if(job.number===epoch){if(error.code==='WEBSITE_CHANGED')return reloadPermissions();failHidden(error);}if(error.name!=='AbortError')throw error;}
  }
  function failHidden(error){epoch++;controller?.abort();clearProtected();s.status=error.message||msg('changed');s.loading=false;paint();}
+ function retainedQueue(rows,accepted){
+  return new Map(rows.filter(row=>accepted.has(row.id)).map(({id,revision,title,recordId})=>[id,{id,revision,title,recordId}]));
+ }
+ async function reloadPermissions(){
+  const job=start(),queued=[...s.queue.values()];clearProtected();s.loading=true;s.status=msg('pickerPermissionsChanged');paint();
+  try{
+   if(queued.length){
+    const result=await request('library/validate',{items:queued.map(({id,revision})=>({id,revision})),generation:null},{signal:job.signal});
+    if(job.number!==epoch)return;
+    s.queue=retainedQueue(queued,new Set(result.accepted));s.token=result.visibilityToken;s.generation=result.generation;
+   }
+   await browse();
+  }catch(error){if(job.number===epoch)failHidden(error);}
+ }
  async function revalidate({signal}={}){
   if(!s.open||s.loading||validating)return;validating=true;const number=epoch;
   try{
@@ -139,10 +153,10 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
     for(const id of result.accepted)accepted.add(id);
    }
    if(token!==s.token||items.some(row=>!accepted.has(row.id))){
-    const retained=new Map([...s.queue].filter(([id])=>accepted.has(id)).map(([id,row])=>[id,{id,revision:row.revision,title:row.title,recordId:row.recordId}]));
+    const retained=retainedQueue([...s.queue.values()],accepted);
     clearProtected();s.queue=retained;s.status=msg('pickerPermissionsChanged');paint();
     await browse();
-   }else if(s.pane==='detail'&&s.siteList&&s.item)await listSites(s.sitePage,{number,signal},true);
+   }else if((s.pane==='sites'||s.pane==='uses')&&s.siteList&&s.item)await listSites(s.sitePage,{number,signal},true);
   }catch(error){
    if(number===epoch)failHidden(error);
    if(error.name==='AbortError'||error.code==='AUTH'||error.code==='ACCESS_LOCKED')throw error;
@@ -205,6 +219,10 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   if(!Number.isInteger(s.block)||s.block<1||s.block>blocks().length)throw Error(msg('pickerBlockNumber'));
   return {before:s.block-1};
  }
+ function showPane(pane,action){
+  s.pane=pane;paint('[data-action="website-files-picker-'+action+'"]');
+  dialog()?.querySelector('.website-picker-detail')?.scrollTo(0,0);
+ }
  async function actFacet(op,kind,el){
   const f=s.owners[kind];
   if(op==='find'){f.open=true;f.query=f.text.trim();f.pages=[null];void loadOwner(kind);return;}
@@ -237,7 +255,8 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   else if(op==='next'&&s.next){s.pages[s.page+1]=s.next;await browse({entryPage:s.page+1,facets:[]});}
   else if(op==='select'){const row=s.rows.find(r=>r.id===el.dataset.source);if(row){s.pane='detail';await details(row);}}
   else if(op==='review-queue'){s.pane='queue';paint();}
-  else if(op==='show-entry'){s.pane='detail';paint();}
+  else if(op==='show-entry')showPane('detail','show-uses');
+  else if(op==='show-uses'&&s.item)showPane('uses','show-entry');
   else if(op==='select-page'){add(s.rows);paint();}
   else if(op.startsWith('queue-')){
    const id=el.dataset.source;
@@ -258,11 +277,11 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
     const next=op==='sites-open'?0:op==='sites-next'?s.sitePage+1:s.sitePage-1;
     if(next<0||op==='sites-next'&&!s.siteList?.next)return true;
     if(op==='sites-next')s.sitePages[next]=s.siteList.next;
-    try{await listSites(next);}catch(error){failHidden(error);throw error;}
+    try{await listSites(next);if(s.open&&s.item)showPane('sites','show-entry');}catch(error){failHidden(error);throw error;}
    }else if(op==='use-site'||op==='sites-close'){
     const other=op==='use-site'?s.siteList?.items[Number(el.dataset.index)]:null;if(op==='use-site'&&!other)return true;
     s.usageSite=other?.siteId===site().site.id?null:other;s.placeOffset=0;s.placePages=[0];if(op==='sites-close')s.siteList=null;
-    await details(s.item,{part:'places',sectionOffset:s.sectionOffset});
+    await details(s.item,{part:'places',sectionOffset:s.sectionOffset});if(s.open&&s.item)showPane('uses','show-entry');
    }else if(op==='review-remove'&&row?.editable){s.confirm=Number(el.dataset.index);paint();}
    else if(op==='cancel-remove'){s.confirm=null;paint();}
    else if(op==='jump'&&row){const result=await jumpPlacement({...row,siteId:s.usageSite?.siteId??site().site.id,expectedRevision:s.placements.revision,sourceId:s.item.id,sourceRevision:s.item.revision});if(result!==false&&s.open)close();}

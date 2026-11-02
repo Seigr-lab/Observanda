@@ -23,7 +23,7 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   const otherSite=await store.create({name:'Regional archive'}),source=corpus.examples.find(e=>e.notebookId===corpus.books[0].id);
   let otherPage=otherSite;for(let n=0;n<2;n++)otherPage=await store.insertSource(otherSite.site.id,{sourceId:source.id,sourceRevision:source.revision,expectedRevision:otherPage.site.revision});
   let siteScans=0;
-  await page.exposeFunction('filesAPI',async(route,data={})=>{
+  const fileAPI=async(route,data={})=>{
    switch(route.replace('/api/website-files/','')){
     case 'session':return {workspaceId:vault.id,title:'Ecology',defaultSiteId:id,sites:(await store.list()).items};
     case 'open':return store.open(data.siteId,data);
@@ -40,7 +40,11 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
     case 'insert-source':return store.insertSource(data.siteId,data);
     default:throw Error('Unexpected route '+route);
    }
-  });
+  };
+  await page.exposeFunction('filesAPI',(route,data)=>fileAPI(route,data).catch(error=>{
+   if(!error.code)throw error;
+   return {errorCode:error.code,message:error.message};
+  }));
   await page.setViewportSize({width:1280,height:800});await mountFilesEditor(page);const browse=page.getByRole('button',{name:'Browse available content',exact:true}),d=page.getByRole('dialog');
   await browse.press('Enter');await expect(d.getByText('24 entries available for websites')).toBeVisible();await expect(d.getByLabel('Search titles or record references')).toBeFocused();await expect(d.locator('.website-picker-results li')).toHaveCount(12);
   await d.locator('[data-picker-facet="book"] summary').click();
@@ -77,6 +81,10 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   await expect(uses.getByRole('heading',{name:'Uses in this website (2)'})).toBeVisible();
   expect((await store.open(id)).html.split('data-observanda-source="'+chosen.id+'"').length-1).toBe(1);
   expect((await store.open(id,{path:'notes.html'})).html).toContain(chosen.id);
+  const where=d.getByRole('button',{name:'Where used',exact:true}),back=d.getByRole('button',{name:'Show entry details',exact:true});
+  await where.press('Enter');await expect(back).toBeFocused();await expect(d.getByRole('heading',{name:'Uses in this website (2)'})).toBeInViewport();
+  await back.press('Enter');await expect(where).toBeFocused();await expect(d.getByRole('heading',{name:'Entry text'})).toBeVisible();
+  await where.press('Enter');
   expect(siteScans).toBe(0);
   await d.getByRole('button',{name:'Find usage across websites'}).click();
   const external=d.locator('[data-action="website-files-picker-use-site"]').filter({hasText:'Regional archive'});await external.click();
@@ -87,9 +95,12 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   await uses.getByRole('button',{name:'Open this placement'}).first().click();await expect(page.locator('[data-website-file-site]')).toHaveValue(otherSite.site.id);
   await browse.click();await duplicates();
   await a.getByRole('checkbox').check();await b.getByRole('checkbox').check();
-  const token=await store.beginSourceUpdate({sourceId:chosen.id,target:'website'});
+  const unrelated=await store.beginSourceUpdate({sourceId:other.id,target:'website'});
   const queue=d.locator('.website-picker-queue li');await expect(queue).toHaveCount(1,{timeout:12000});
-  await expect(queue.locator('[data-source="'+other.id+'"]').first()).toBeVisible();await expect(d).not.toContainText('Sampling method');
+  await expect(queue.locator('[data-source="'+chosen.id+'"]').first()).toBeVisible();await expect(d).not.toContainText('Sampling method');
+  await store.putSource({sourceId:other.id,target:'website',visible:false,title:'Withdrawn'},{token:unrelated});
+  const token=await store.beginSourceUpdate({sourceId:chosen.id,target:'website'});
+  await expect(page.locator('#website-files-canvas')).toHaveCount(0,{timeout:12000});await expect(d).toHaveCount(0);
   await store.putSource({sourceId:chosen.id,target:'website',visible:false,title:'Withdrawn'},{token});
  }finally{await closeIdleMutationFiles();await rm(directory,{recursive:true,force:true,maxRetries:6,retryDelay:100});}
 });
