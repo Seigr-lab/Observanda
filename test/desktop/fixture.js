@@ -40,14 +40,14 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
  }
  return {directory,env,packaged,sourceExecutable,
   close,
-  async start(executablePath=packaged){
+  async start(executablePath=packaged,{website=false}={}){
    // A source-comparison checkout may omit generated desktop assets. Report
    // that in the test runner before launching a window or a native error box.
    if(!executablePath)for(const name of ['desktop/icon.png','desktop/icon-black.png','desktop/icon-white.png','src/desktop-localization.js',...languages.map(({id})=>'src/web/locales/'+id+'/desktopShell.json')]){
     await access(path.resolve(name)).catch(()=>{throw Error('Desktop test asset is missing: '+name+'. Prepare desktop assets before launching the test.');});
    }
    const launchExecutable=executablePath||sourceExecutable;
-   const app=await electron.launch({...(launchExecutable?{executablePath:launchExecutable}:{}),args:executablePath?[]:[path.resolve('desktop')],env,timeout:30000});
+   const app=await electron.launch({...(launchExecutable?{executablePath:launchExecutable}:{}),args:[...(executablePath?[]:[path.resolve('desktop')]),...(website?['--website']:[])],env,timeout:30000});
    try{
     await app.firstWindow();await app.evaluate(({BrowserWindow},screenshots)=>BrowserWindow.getAllWindows().forEach(window=>{window.webContents.setBackgroundThrottling(false);if(screenshots)window.showInactive();else if(window.isVisible())throw Error('Desktop test launch unexpectedly showed a window');}),screenshots);return app;
    }catch(error){
