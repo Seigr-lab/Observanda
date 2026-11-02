@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {contentSize,contentHash,contentStream} from './file-content.js';
+import {FileContent,contentSize,contentHash,contentStream} from './file-content.js';
 import {outputName} from './local-export-files.js';
 import {hasPrivateTextStream} from './privacy-text-stream.js';
 import {digest,serialize} from './storage-format.js';
@@ -23,10 +23,17 @@ export class WebsiteFilesCandidate {
   await this.store.checkRevision(this.siteId,this.revision);
   for(const [name,content] of this.files){
    signal?.throwIfAborted();outputName(name);
-   const hash=createHash('sha256');let size=0;
-   for await(const bytes of contentStream(content)){signal?.throwIfAborted();hash.update(bytes);size+=bytes.length;}
-   if(size!==contentSize(content)||hash.digest('hex')!==contentHash(content))throw new AppError('STALE');
-   if(/\.(?:html|css|json|svg|csv|js)$/i.test(name)&&await hasPrivateTextStream(()=>contentStream(content),this.blockedValues))throw new AppError('PRIVACY',[{field:'website file'}]);
+   // The privacy scan replays text. Verify each replay as it streams rather
+   // than fetching the same file from storage for a separate digest pass.
+   async function* checked(){
+    const hash=createHash('sha256');let size=0;
+    const stream=content instanceof FileContent?content.stream(0,content.size-1,{signal}):contentStream(content);
+    for await(const bytes of stream){signal?.throwIfAborted();hash.update(bytes);size+=bytes.length;yield bytes;}
+    if(size!==contentSize(content)||hash.digest('hex')!==contentHash(content))throw new AppError('STALE');
+   }
+   if(/\.(?:html|css|json|svg|csv|js)$/i.test(name)){
+    if(await hasPrivateTextStream(checked,this.blockedValues,{signal}))throw new AppError('PRIVACY',[{field:'website file'}]);
+   }else for await(const _ of checked()){ /* Validate binary assets in one pass. */ }
    await onFile?.();
   }
   await this.store.checkRevision(this.siteId,this.revision);

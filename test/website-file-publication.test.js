@@ -42,6 +42,8 @@ test('GitHub destination review, ownership and upload use the file revision with
   const call=async(operation,options={})=>{let result;await websiteFilesHttp({method:'POST'},new EventEmitter(),{url:new URL('/api/website-files/'+operation,'http://localhost'),workspace,publisherOptions,body:async()=>({siteId,expectedRevision,...options}),check:async()=>{},json:value=>{result=value;}});return result;};
   const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:true});
   const saved=await call('destination/save',{config,etag:'new'});const reviewed=await call('plan',{configEtag:saved.etag});
+  const page=await call('plan/page',{configEtag:saved.etag,id:reviewed.id,kind:'added',offset:0});assert.ok(page.items.includes('index.html'));
+  await assert.rejects(call('publish',{configEtag:saved.etag,destinationReviewed:true}),{code:'PUBLISH_STALE'});
   await assert.rejects(call('publish',{configEtag:saved.etag,destinationReview:reviewed.id,destinationReviewed:false}),{code:'PUBLISH_STALE'});
   const {receipt}=await call('publish',{configEtag:saved.etag,destinationReview:reviewed.id,destinationReviewed:true});assert.equal(receipt.status,'uploaded-awaiting-pages');
   assert.ok(remote.blobs.has(sha('blob',Buffer.from(initial.html))));assert.ok(remote.blobs.has(sha('blob',Buffer.from(initial.css))));

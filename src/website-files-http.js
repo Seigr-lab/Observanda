@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {randomUUID} from 'node:crypto';
 import {WebsiteFileStore} from './website-file-store.js';
 import {WebsiteFilesCandidate} from './website-files-candidate.js';
 import {Publisher} from './publishing.js';
@@ -11,6 +12,7 @@ import {researchId} from './web/research-reference.js';
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','convert-existing','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const sshReviewKey='.observanda/website-ssh-review.json';
 // Only files belonging to this saved revision can be embedded. The same
 // loopback origin also serves protected research routes.
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
@@ -74,8 +76,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   if(operation==='save'){json(await store.save(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
-  if(operation==='destination'){json(await (await publisher(siteId)).read());return true;}
-  if(operation==='destination/save'){json(await (await publisher(siteId)).save(options.config,options.etag));return true;}
+  if(operation==='destination'||operation==='destination/save'){
+   json(await store.withSite(siteId,undefined,async()=>{const target=await publisher(siteId);return operation==='destination'?target.read():target.save(options.config,options.etag);}));return true;
+  }
+  if(operation==='plan/page'){
+   if(!revision(expectedRevision))throw new AppError('INVALID');
+   json(await store.withSite(siteId,expectedRevision,async()=>{const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision),target=await publisher(siteId);return target.destinationPlanPage(options,candidate.id);}));return true;
+  }
   if(operation.startsWith('folder/')){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const metadata=websitePublicationMetadata(await store.publicationWorkspace(siteId));
@@ -91,13 +98,24 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='plan'||operation==='publish'){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues}),target=await publisher(siteId);
-   await candidate.verify({signal});await check();
+   // GitHub review and all deployments verify the complete candidate at their
+   // trust boundary. Avoid a second pass across every website asset here.
+   await check();
    if(operation==='plan'){
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
-    if(saved.config.kind==='ssh')json({id:null,kind:'ssh',requiresReview:true,files:candidate.files.size,revision:expectedRevision});
+    if(saved.config.kind==='ssh'){
+     await candidate.verify({signal});
+     const review={id:randomUUID(),kind:'ssh',requiresReview:true,files:candidate.files.size,revision:expectedRevision,configEtag:options.configEtag};
+     await store.withSite(siteId,expectedRevision,()=>target.workspace.writeMetadata(sshReviewKey,JSON.stringify(review)));json(review);
+    }
     else json(await target.reviewDestination(candidate,options.configEtag,{signal,replaceExisting:options.replaceExisting===true,archiveBranch:options.archiveBranch??null,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)}));
    }
-   else {if(options.destinationReviewed!==true)throw new AppError('PUBLISH_STALE');json({receipt:await withPublication(()=>target.deploy(candidate,options.configEtag,workspace.vault?.id,{...(options.destinationReview?{destinationReview:options.destinationReview}:{}),destinationReviewed:true}))});}
+   else {
+    if(options.destinationReviewed!==true||!researchId(options.destinationReview))throw new AppError('PUBLISH_STALE');
+    const ssh=(await target.read()).config.kind==='ssh';
+    if(ssh){const receipt=JSON.parse(await target.workspace.readMetadata(sshReviewKey,8192));if(receipt?.id!==options.destinationReview||receipt.revision!==expectedRevision||receipt.configEtag!==options.configEtag)throw new AppError('PUBLISH_STALE');}
+    json({receipt:await withPublication(()=>target.deploy(candidate,options.configEtag,workspace.vault?.id,{...(!ssh?{destinationReview:options.destinationReview}:{}),destinationReviewed:true}))});
+   }
    return true;
   }
   throw new AppError('NOT_FOUND');

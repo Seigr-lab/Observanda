@@ -100,7 +100,7 @@ export class Publisher {
     if(typeof replaceExisting!=='boolean'||archiveBranch!==null&&(!replaceExisting||!githubArchiveBranch(archiveBranch)))throw new AppError('INVALID');
     signal?.throwIfAborted();
     const remote=(route,missing=false)=>{signal?.throwIfAborted();return this.github(route,'GET',undefined,missing,signal);};
-    await verifyPublicationCandidate(candidate);
+    await verifyPublicationCandidate(candidate,{signal});
     const saved=await this.read();
     if(!saved.configured||saved.etag!==configEtag||saved.config.kind!=='github')throw new AppError('PUBLISH_STALE');
     const c=saved.config.github,base=`/repos/${c.owner}/${c.repository}`,repo=await remote(base);
@@ -147,10 +147,10 @@ export class Publisher {
     if(githubPlanReader(this.workspace,plan).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
     return admitGithubPlan(plan);
   }
-  async destinationPlanPage({id,configEtag,kind,offset=0}){
+  async destinationPlanPage({id,configEtag,kind,offset=0},expectedReleaseId){
     if(!githubReviewKinds.includes(kind))throw new AppError('INVALID');
     const saved=await this.read(),plan=await this.readFile(path.join(this.workspace.root,'.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json'),null,16*1024*1024);
-    if(!plan||plan.id!==id||saved.etag!==configEtag||plan.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');
+    if(!plan||plan.id!==id||saved.etag!==configEtag||plan.configEtag!==configEtag||expectedReleaseId!==undefined&&plan.releaseId!==expectedReleaseId)throw new AppError('PUBLISH_STALE');
     const page=await githubPlanReader(this.workspace,admitGithubPlan(plan)).page(kind,{offset});return {...page,items:page.items.map(row=>row.path)};
   }
   async check({plan=null,reviewExisting=false}={}) {
