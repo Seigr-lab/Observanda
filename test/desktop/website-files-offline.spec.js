@@ -3,7 +3,7 @@ import {mkdir,readFile,writeFile,rename,stat} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
-import {desktopFixture} from './fixture.js';
+import {websiteDesktopFixture} from './installed-website-app.js';
 import {sampleNotebook} from '../../src/sample.js';
 
 async function selectEntry(page){
@@ -28,10 +28,10 @@ async function updateVisibility(page,{context,prefix,workspaceId,recordId,sectio
 
 test('desktop website editing, persistence, preview and folder publication with research storage offline',async()=>{
  test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires a packaged executable or explicit source qualification.');test.setTimeout(240000);
- const fixture=await desktopFixture('observanda-installed-website-'),workspace=path.resolve(fixture.directory,'Website acceptance'),output=path.resolve(fixture.directory,'published');
+ const fixture=await websiteDesktopFixture(),workspace=path.resolve(fixture.directory,'Website acceptance'),output=path.resolve(fixture.directory,'published');
  let app=null,browser=null,server=null,page=null,failure=null,phase='start';const errors=[],requests=[];
  try{
-  await mkdir(output);app=await fixture.start();expect(await app.evaluate(({app})=>app.isPackaged)).toBe(Boolean(process.env.OBSERVANDA_DESKTOP_EXECUTABLE));page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));phase='create workspace';
+  await mkdir(output);app=await fixture.start();if(!fixture.packaged)expect(await app.evaluate(({app})=>app.isPackaged)).toBe(false);page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));phase='create workspace';
   await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible({timeout:60000});
   await page.getByLabel('Workspace name',{exact:true}).fill('Website acceptance');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.getByLabel('Create in',{exact:true}).fill(fixture.directory);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
@@ -47,16 +47,18 @@ test('desktop website editing, persistence, preview and folder publication with 
   // at its original path also prevents startup from creating a replacement.
   const databases=[workspace,...source.roots].map(root=>path.resolve(root,'.observanda','postgresql'));
   for(const database of databases){if(!database.startsWith(path.resolve(fixture.directory)+path.sep)||!(await stat(database)).isDirectory())throw Error('Unexpected disposable database layout');await rename(database,database+'-offline');await writeFile(database,'Research PostgreSQL is deliberately unavailable.\n',{flag:'wx'});}
-  phase='open offline file editor';app=await fixture.start(undefined,{website:true});page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+  phase='open offline file editor';const coldStart=performance.now();app=await fixture.start(undefined,{website:true});page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));
   app.context().on('request',request=>{const url=new URL(request.url());if(url.pathname.startsWith('/api/'))requests.push(url.pathname);});
   await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Saved HTML acceptance',{timeout:60000});
+  const coldOpenMs=Math.round(performance.now()-coldStart);
+  requests.push(...await page.evaluate(()=>performance.getEntriesByType('resource').map(row=>new URL(row.name).pathname).filter(route=>route.startsWith('/api/'))));
   await page.getByRole('button',{name:'Add paragraph',exact:true}).click();const canvas=page.frameLocator('#website-files-canvas');
   phase='type in visual editor';const paragraph=canvas.locator('main > p').last();await paragraph.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');await page.keyboard.type('Edited with PostgreSQL offline.');await expect(paragraph).toHaveText('Edited with PostgreSQL offline.');
   phase='save visual and CSS edits';
   await page.getByRole('button',{name:'CSS',exact:true}).click();await page.getByRole('textbox',{name:'CSS',exact:true}).fill('main > p { color: rgb(21, 43, 65); }');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');await page.reload();
   await expect(page.frameLocator('#website-files-canvas').locator('main > p')).toHaveText('Edited with PostgreSQL offline.');
-  await page.getByRole('button',{name:'Preview saved website',exact:true}).click();const saved=page.frameLocator('.website-files-canvas');await expect(saved.locator('main > p')).toHaveCSS('color','rgb(21, 43, 65)');
+  const previewStart=performance.now();await page.getByRole('button',{name:'Preview saved website',exact:true}).click();const saved=page.frameLocator('.website-files-canvas');await expect(saved.locator('main > p')).toHaveCSS('color','rgb(21, 43, 65)');const previewMs=Math.round(performance.now()-previewStart);
   const previewUrl=await page.locator('iframe.website-files-canvas').getAttribute('src');const previewBytes=await page.evaluate(async url=>{const response=await fetch(url);if(!response.ok)throw Error('Preview unavailable');return response.text();},previewUrl);
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);await page.getByRole('button',{name:'Review file changes',exact:true}).click();
   await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:60000});
@@ -64,7 +66,9 @@ test('desktop website editing, persistence, preview and folder publication with 
   server=createServer(async(req,res)=>{const file=req.url==='/'?'index.html':req.url==='/style.css'?'style.css':null;if(!file){res.writeHead(404).end();return;}try{res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':'text/html; charset=utf-8'}).end(await readFile(path.join(output,file)));}catch{res.destroy();}});
   await new Promise((resolve,reject)=>server.once('error',reject).listen(0,'127.0.0.1',resolve));browser=await chromium.launch();const publicPage=await browser.newPage();await publicPage.goto('http://127.0.0.1:'+server.address().port+'/');
   await expect(publicPage.getByText('Edited with PostgreSQL offline.',{exact:true})).toHaveCSS('color','rgb(21, 43, 65)');
+  await test.info().attach('published-website',{body:await publicPage.screenshot(),contentType:'image/png'});
   expect(requests.filter(route=>/^\/api\/(?:research\/|workspace\/read\/|notebook(?:\/|$)|projects\/|design-preview$|websites\/editor\/)/.test(route))).toEqual([]);expect(errors).toEqual([]);for(const database of databases)expect((await stat(database)).isFile()).toBe(true);
+  console.log(JSON.stringify({packaged:Boolean(fixture.packaged),coldOpenMs,previewMs,databasesUnavailable:databases.length,publishedMatchesPreview:true,privateCanaryAbsent:true}));
  }catch(error){failure=error;const screen=await page?.locator('body').innerText({timeout:3000}).catch(()=>'');console.error('Website qualification failed during '+phase+': '+error.message+'\n'+errors.join('\n')+'\n'+screen?.slice(0,1800));throw error;}
  finally{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));try{await fixture.dispose(app);}catch(error){if(!failure)throw error;}}
 });
