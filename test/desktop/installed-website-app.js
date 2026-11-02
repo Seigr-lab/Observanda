@@ -12,10 +12,7 @@ import {desktopFixture} from './fixture.js';
 export async function websiteDesktopFixture(){
  const fixture=await desktopFixture('observanda-installed-website-');
  if(!fixture.packaged)return fixture;
- const executable=await realpath(fixture.packaged),resources=path.join(path.dirname(executable),'resources');
- const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
- assert.equal(installed.version,JSON.parse(await readFile(new URL('../../package.json',import.meta.url),'utf8')).version);
- await access(path.join(resources,'app.asar'));
+ const candidateVersion=JSON.parse(await readFile(new URL('../../package.json',import.meta.url),'utf8')).version;
  const env={...fixture.env};for(const key of ['NODE_OPTIONS','ELECTRON_RUN_AS_NODE','OBSERVANDA_DESKTOP_NODE','OBSERVANDA_DESKTOP_TEST_HOME','OBSERVANDA_POSTGRES_BIN','OBSERVANDA_TEST_POSTGRES_BIN'])delete env[key];
  const endpoint=path.join(fixture.directory,'.observanda','window','DevToolsActivePort');
  async function close(app){
@@ -30,7 +27,10 @@ export async function websiteDesktopFixture(){
    assert.deepEqual(exit,[0,null]);
   }finally{clearTimeout(timeout);await app.browser.close().catch(()=>{});}
  }
- return {...fixture,close,async start(_executable,{website=false}={}){
+ return {...fixture,close,async start(program=fixture.packaged,{website=false,expectedVersion=candidateVersion}={}){
+  const executable=await realpath(program),resources=path.join(path.dirname(executable),'resources');
+  const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
+  assert.equal(installed.version,expectedVersion);await access(path.join(resources,'app.asar'));
   await rm(endpoint,{force:true});
   const child=spawn(executable,['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--disable-renderer-backgrounding','--disable-background-timer-throttling','--disable-backgrounding-occluded-windows',...(website?['--website']:[])],{env,windowsHide:true,stdio:'ignore'});
   const exited=once(child,'exit');exited.catch(()=>{});

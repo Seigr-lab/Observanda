@@ -1,24 +1,10 @@
 import {test,expect,chromium} from '@playwright/test';
-import {mkdir,readFile,writeFile,rename,stat} from 'node:fs/promises';
+import {mkdir,readFile,stat} from 'node:fs/promises';
 import {createServer} from 'node:http';
-import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {websiteDesktopFixture} from './installed-website-app.js';
-import {sampleNotebook} from '../../src/sample.js';
+import {selectEntry,createWebsiteWorkspace,disableWebsiteResearch} from './website-workspace-fixture.js';
 
-async function selectEntry(page){
- const seed=sampleNotebook(),entry=seed.entries[2];seed.entries=[entry];entry.title='Retained observation';entry.body='Permitted record body';entry.share=false;
- entry.sections=[{id:randomUUID(),title:'First result',body:'withdraw-this-result',share:true},{id:randomUUID(),title:'Second result',body:'release-this-result',share:false},{id:randomUUID(),title:'Private appendix',body:'never-export-this-canary',share:false}];
- return page.evaluate(async seed=>{
-  const context=(await(await fetch('/api/storage')).json()).contextId,headers={'Content-Type':'application/json','X-Observanda-Workspace':context};
-  async function call(route,data){const response=await fetch(route,{headers,...(data?{method:'POST',body:JSON.stringify(data)}:{})});const result=await response.json();if(!response.ok)throw Error(route+': '+result.code);return result;}
-  const projectId=crypto.randomUUID(),project=(await call('/api/projects/create',{id:crypto.randomUUID(),username:'',password:'',project:{id:projectId,title:'Optics project',description:'',share:true,logoId:null}})).project;
-  const books='/api/projects/'+projectId+'/lab-books',book=(await call(books+'/create',{id:crypto.randomUUID(),username:'',password:'',book:{id:crypto.randomUUID(),projectId,title:'Measurement book'}})).book,prefix=books+'/'+book.labBookId;
-  const entry=seed.entries[0];entry.notebookId=book.labBookId;await call(prefix+'/research/records/save',{workspaceId:book.namespaceId,changes:[{id:entry.id,expectedRevision:null,record:entry}]});
-  const target={workspaceId:book.namespaceId,recordId:entry.id,field:'share'},prior=await call(prefix+'/research/records/values/read',target);await call(prefix+'/research/records/values/save',{...target,expectedRevision:prior.revision,value:{value:true}});
-  return {context,prefix,workspaceId:book.namespaceId,recordId:entry.id,sections:entry.sections.map(value=>value.id),roots:[project.root,book.root]};
- },seed);
-}
 async function updateVisibility(page,{context,prefix,workspaceId,recordId,sections}){
  await page.evaluate(async({context,prefix,workspaceId,recordId,sections})=>{
   const headers={'Content-Type':'application/json','X-Observanda-Workspace':context};async function call(operation,data){const response=await fetch(prefix+'/research/records/writing/'+operation,{method:'POST',headers,body:JSON.stringify(data)}),result=await response.json();if(!response.ok)throw Error(operation+': '+result.code);return result;}
@@ -32,10 +18,7 @@ test('desktop website editing, persistence, preview and folder publication with 
  let app=null,browser=null,server=null,page=null,failure=null,phase='start';const errors=[],requests=[];
  try{
   await mkdir(output);app=await fixture.start();if(!fixture.packaged)expect(await app.evaluate(({app})=>app.isPackaged)).toBe(false);page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));phase='create workspace';
-  await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible({timeout:60000});
-  await page.getByLabel('Workspace name',{exact:true}).fill('Website acceptance');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByLabel('Create in',{exact:true}).fill(fixture.directory);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
-  await expect(page.locator('.topbar .workspace-name')).toHaveText('Website acceptance',{timeout:60000});phase='select permitted research';const source=await selectEntry(page);phase='open file editor';await page.locator('#main-navigation').getByRole('button',{name:'Website editor',exact:true}).click();
+  await createWebsiteWorkspace(page,fixture.directory,'Website acceptance');phase='select permitted research';const source=await selectEntry(page);phase='open file editor';await page.locator('#main-navigation').getByRole('button',{name:'Website editor',exact:true}).click();
   await page.getByRole('button',{name:'New website',exact:true}).click();await page.getByLabel('Website name',{exact:true}).fill('Saved HTML acceptance');await page.locator('form[data-website-files-form]').getByRole('button',{name:'New website',exact:true}).click();
   await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Saved HTML acceptance');phase='insert converted research';await page.getByRole('button',{name:'Available content',exact:true}).click();await page.getByRole('button',{name:'Retained observation',exact:true}).click();
   const placed=page.frameLocator('#website-files-canvas').locator('[data-observanda-source]');await expect(placed).toContainText('withdraw-this-result');await expect(placed).not.toContainText('release-this-result');const placement=await placed.getAttribute('data-observanda-source');
@@ -45,8 +28,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   // Every path below belongs solely to the private disposable test fixture.
   // Block the exact PostgreSQL runtime location after graceful shutdown. A file
   // at its original path also prevents startup from creating a replacement.
-  const databases=[workspace,...source.roots].map(root=>path.resolve(root,'.observanda','postgresql'));
-  for(const database of databases){if(!database.startsWith(path.resolve(fixture.directory)+path.sep)||!(await stat(database)).isDirectory())throw Error('Unexpected disposable database layout');await rename(database,database+'-offline');await writeFile(database,'Research PostgreSQL is deliberately unavailable.\n',{flag:'wx'});}
+  const databases=await disableWebsiteResearch(fixture.directory,[workspace,...source.roots]);
   phase='open offline file editor';const coldStart=performance.now();app=await fixture.start(undefined,{website:true});page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));
   app.context().on('request',request=>{const url=new URL(request.url());if(url.pathname.startsWith('/api/'))requests.push(url.pathname);});
   await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Saved HTML acceptance',{timeout:60000});
