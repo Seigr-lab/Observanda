@@ -80,9 +80,12 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
   })().catch(e=>{error=e.message??String(e);throw e;}).finally(()=>{saving=null;if(!error&&!dirty()&&selected)preview.refresh(selected.header.id,selected.revision);status();});status();return saving;
  }
  async function load(id){
-  contentEpoch++;preflight=null;audienceSummary=null;outline.deactivate();research.close();docs.release();loadedPath=id||'';editions=null;offset=0;error='';preview.reset();selected=null;section=null;sections={items:[],next:null,total:0};
+  stopGeneration();observedGeneration=undefined;placedContent=false;contentEpoch++;preflight=null;audienceSummary=null;outline.deactivate();research.close();docs.release();loadedPath=id||'';editions=null;offset=0;error='';preview.reset();selected=null;section=null;sections={items:[],next:null,total:0};
   if(!id){history.clear();list=await post(archived?'archive':'list');return;}
-  if(!researchId(id))throw new Error('Invalid document');selected=await post('open',{id});history.observe(selected);const fonts=await post('fonts',{id});fontChoices=[...new Map([...fonts.available,...fonts.retained].map(font=>[font.id,font])).values()];await sectionPage(0);
+  if(!researchId(id))throw new Error('Invalid document');
+  // Capture a generation before reading the document sections. If a remote
+  // consent write overlaps opening, the next probe must observe the change.
+  const [head,generation]=await Promise.all([post('open',{id}),readGeneration()]);selected=head;observedGeneration=generation;history.observe(selected);const fonts=await post('fonts',{id});fontChoices=[...new Map([...fonts.available,...fonts.retained].map(font=>[font.id,font])).values()];await sectionPage(0);
  }
  async function sectionPage(value){offset=value;sections=await post('sections',{id:selected.header.id,revision:selected.revision,offset,limit:20});section=sections.items.length?(await post('section',{id:selected.header.id,sectionId:sections.items[0].id,revision:selected.revision})).section:null;}
  async function activate(){const path=state.modulePath??'';if(loadedPath===path)return;await flush();await load(path);}
@@ -185,6 +188,25 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
  // Visibility changes do not change this PDF document's own revision. Evict
  // the displayed PDF blob before reading its updated permitted composition.
  let visibilityTask=null,again=false,visibilityTimer=null,previewWasOpen=false;
+ let observedGeneration,placedContent=false,generationTimer=null,generationRequest=null;
+ async function readGeneration(signal){const value=await api('/api/website-files/pdf-version',{}, {owner:null,adopt:false,signal});if(!value||value.revision!==null&&typeof value.revision!=='string')throw Error(tr('invalid'));return value.revision;}
+ function stopGeneration(){clearTimeout(generationTimer);generationTimer=null;generationRequest?.abort();generationRequest=null;clearTimeout(visibilityTimer);visibilityTimer=null;}
+ function sourceVisible(){
+  placedContent||=!!section?.research||!!section?.images?.length||sections.items.some(item=>item.hasPublicationContent===true);
+  return active()&&selected&&!document.hidden&&(placedContent||preview.state().visible&&(offset>0||sections.next!==null));
+ }
+ function scheduleGeneration(){if(!sourceVisible()||generationTimer||generationRequest)return;generationTimer=setTimeout(()=>{generationTimer=null;void checkGeneration();},5000);}
+ async function checkGeneration(force=false){
+  if(!active()||!selected||document.hidden||(!force&&!sourceVisible())||generationRequest)return;
+  clearTimeout(generationTimer);generationTimer=null;
+  const controller=new AbortController(),id=selected.header.id;generationRequest=controller;
+  try{
+   const revision=await readGeneration(controller.signal);if(controller.signal.aborted||!active()||selected?.header.id!==id)return;
+   if(revision!==observedGeneration){observedGeneration=revision;recheckVisibility();}
+  }catch(reason){if(!controller.signal.aborted&&active()){error=reason.message;preview.reset();status();}}
+  finally{if(generationRequest===controller){generationRequest=null;scheduleGeneration();}}
+ }
+ 
  const visibilityChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('observanda-website-files'):null;
  function recheckVisibility(){
   if(!active()||!selected||disposed)return;
@@ -216,9 +238,9 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
    if(previewWasOpen&&!dirty()){previewWasOpen=false;await preview.show(id,revision);draw();}
   })().catch(reason=>{if(active()){error=reason.message;status();}}).finally(()=>{visibilityTask=null;if(again){again=false;recheckVisibility();}});
  }
- function focused(){if(!document.hidden)recheckVisibility();}
- if(visibilityChannel)visibilityChannel.onmessage=({data})=>{if(data?.type==='visibility'&&data.contextId===state.storage?.contextId)recheckVisibility();};
+ function focused(){if(document.hidden)stopGeneration();else void checkGeneration();}
+ if(visibilityChannel)visibilityChannel.onmessage=({data})=>{if(data?.type==='visibility'&&data.contextId===state.storage?.contextId)void checkGeneration(true);};
  document.addEventListener('visibilitychange',focused);
  const capabilities=await post('capabilities');canRender=capabilities.render;canArchival=capabilities.archival===true;await library.load();await activate();document.addEventListener('keydown',historyKey);
- return {activate,view,action,input,bind:()=>{docs.bind(root()??document);retainedFonts.update(selected,section,fontChoices);exports.bind();composition.bind(root());pagination.bind(root());pages.bind();status();if(pendingFinding&&!busy){focusPdfFinding(root(),section,pendingFinding);pendingFinding=null;}},isDirty:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),needsNavigationGuard:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),flushAutosave:flush,save:flush,discard:async()=>{clearTimeout(timer);await printCondition.discard();if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){pressArtwork.deactivate();retainedFonts.clear();crossReferences.deactivate();outline.deactivate();exports.deactivate();docs.release();preview.close();},dispose(){visibilityChannel?.close();document.removeEventListener('visibilitychange',focused);clearTimeout(visibilityTimer);printCondition.dispose();pressArtwork.dispose();retainedFonts.dispose();disposed=true;document.removeEventListener('keydown',historyKey);history.clear();crossReferences.dispose();pages.dispose();outline.dispose();composition.dispose();pagination.dispose();exports.dispose();images.dispose();clearTimeout(timer);preview.reset();docs.release();if(dirty())void save().catch(()=>{});}};
+ return {activate,view,action,input,bind:()=>{scheduleGeneration();docs.bind(root()??document);retainedFonts.update(selected,section,fontChoices);exports.bind();composition.bind(root());pagination.bind(root());pages.bind();status();if(pendingFinding&&!busy){focusPdfFinding(root(),section,pendingFinding);pendingFinding=null;}},isDirty:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),needsNavigationGuard:()=>dirty()||saving!==null||pendingFont!==null||(images.isBusy()||pressArtwork.isBusy()||printCondition.isBusy()||printCondition.hasPending())||notes.hasPending(),flushAutosave:flush,save:flush,discard:async()=>{clearTimeout(timer);await printCondition.discard();if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){stopGeneration();pressArtwork.deactivate();retainedFonts.clear();crossReferences.deactivate();outline.deactivate();exports.deactivate();docs.release();preview.close();},dispose(){stopGeneration();visibilityChannel?.close();document.removeEventListener('visibilitychange',focused);clearTimeout(visibilityTimer);printCondition.dispose();pressArtwork.dispose();retainedFonts.dispose();disposed=true;document.removeEventListener('keydown',historyKey);history.clear();crossReferences.dispose();pages.dispose();outline.dispose();composition.dispose();pagination.dispose();exports.dispose();images.dispose();clearTimeout(timer);preview.reset();docs.release();if(dirty())void save().catch(()=>{});}};
 }
