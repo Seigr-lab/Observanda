@@ -85,7 +85,10 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
 
 export function insertWebsiteSource(html,{id,revision,html:content}){
  const document=parse(html,{sourceCodeLocationInfo:true}),body=[...descendants(document)].find(node=>node.tagName==='body');
- const at=location(body)?.endTag?.startOffset;if(!Number.isInteger(at))throw new AppError('INVALID');
+ // New content belongs in the editable page, ahead of the site's footer.
+ // Falling back to body also supports HTML pages without a main landmark.
+ const main=body&&[...descendants(body)].find(node=>node.tagName==='main'&&!node.attrs.some(attr=>attr.name==='hidden'));
+ const at=location(main??body)?.endTag?.startOffset??location(body)?.endTag?.startOffset;if(!Number.isInteger(at))throw new AppError('INVALID');
  const fragment='<section data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'">'+content+'</section>';
  return html.slice(0,at)+fragment+html.slice(at);
 }
