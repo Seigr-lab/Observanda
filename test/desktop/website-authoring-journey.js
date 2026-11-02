@@ -65,7 +65,11 @@ export async function authorScientificContent(page){
  await references.getByLabel('Author or authors').fill('Laboratory team');
  await references.getByLabel('Work title').fill('Transmission calibration protocol');
  await references.getByRole('button',{name:'Save reference',exact:true}).click();
- await page.getByRole('button',{name:'Save website',exact:true}).click();await page.reload();
+ await expect(references.getByRole('status')).toHaveText('Saved to the page. Save the website to keep the change.');
+ await expect(canvas.locator('cite')).toHaveText('Transmission calibration protocol');
+ await page.getByRole('button',{name:'Save website',exact:true}).click();
+ await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+ await page.reload();
  await expect(canvas.locator('math mfrac')).toHaveCount(1);await expect(canvas.locator('p sub')).toHaveText('2');
  await expect(canvas.locator('cite')).toHaveText('Transmission calibration protocol');
 }

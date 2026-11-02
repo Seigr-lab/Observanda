@@ -37,6 +37,8 @@ test('captions, descriptive links and a bibliography survive native file save, r
   await target.selectOption({label:'Table · Baseline'});await cap.fill('Observed insects by plot');await setCaption.click();
   await task.selectOption('scienceReference');await panel.getByLabel('Author or authors').fill('Field group');await panel.getByLabel('Year or date').fill('2025');
   await panel.getByLabel('Work title').fill('Sampling methods');const url=panel.getByLabel('DOI or HTTPS URL (optional)');
+  await panel.evaluate(element=>element.dispatchEvent(new Event('toggle')));
+  await expect(panel.getByLabel('Work title')).toHaveValue('Sampling methods');
   await url.fill('javascript:alert(1)');await panel.getByRole('button',{name:'Save reference'}).click();await expect(status).toContainText('HTTPS');await expect(canvas.locator('cite')).toHaveCount(0);
   await url.fill('10.1234/field.25');await panel.getByRole('button',{name:'Save reference'}).click();
   const reference=canvas.locator('[data-website-reference]'),refId=await reference.getAttribute('id'),tableId=await canvas.locator('table').getAttribute('id');

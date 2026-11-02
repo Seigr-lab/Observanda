@@ -92,9 +92,11 @@ export function websiteScientificReferences({document,host,t,listen,beforeChange
   }
   fields();
  }
+ let indexed=false;
  function refresh(prefer){
   if(!panel.open)return;
   rows=[...document.body.querySelectorAll(objects)].filter(node=>writable(node)&&(!node.closest(bibliography)||isReference(node)));
+  indexed=true;
   list(prefer??lastClicked?.closest(objects)??selected()?.closest(objects));
  }
  function writeReference(node){
@@ -149,7 +151,11 @@ export function websiteScientificReferences({document,host,t,listen,beforeChange
  }
  listen(document,'pointerup',e=>{lastClicked=element(e.target);capture();});listen(document,'keyup',capture);listen(document,'focusout',capture,{capture:true});
  listen(document,'selectionchange',()=>{if(outer.activeElement===document.defaultView.frameElement)capture();});
- listen(panel,'toggle',()=>{if(panel.open){status.textContent='';refresh();}else rows=shown=[];});
+ // A details toggle is queued. The author may already have selected a task
+ // and typed into it before the browser dispatches the opening event.
+ const openIfNeeded=()=>{if(panel.open&&!indexed){status.textContent='';refresh();}};
+ listen(panel,'focusin',openIfNeeded);
+ listen(panel,'toggle',()=>{if(panel.open)openIfNeeded();else{indexed=false;rows=shown=[];}});
  listen(mode,'change',()=>{status.textContent='';filter.value='';refresh();});listen(filter,'input',()=>list());
  listen(choices,'change',fields);listen(apply,'click',commit);listen(remove,'click',deleteReference);
  listen(panel,'keydown',event=>{if(event.key==='Enter'&&event.target.matches('input')&&event.target!==filter){event.preventDefault();commit();}});
