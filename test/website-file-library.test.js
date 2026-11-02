@@ -8,7 +8,7 @@ import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource} from '../src/website-file-html.js';
-import {searchWebsiteLibrary} from '../src/website-file-library.js';
+import {searchWebsiteLibrary,validateWebsiteLibraryRows} from '../src/website-file-library.js';
 
 test('file picker searches compact permitted summaries, falls back to earlier saved heads, and binds the chosen revision',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-picker-'));await mkdir(path.join(root,'.observanda'));
@@ -26,11 +26,14 @@ test('file picker searches compact permitted summaries, falls back to earlier sa
  const first=await store.searchLibrary({search:'SHARED',limit:1}),second=await store.searchLibrary({search:'shared',limit:1,after:first.next});
  assert.deepEqual([first.items[0].id,second.items[0].id].sort(),[a.id,b.id].sort());
  const media=await store.searchLibrary({filter:'media'});assert.equal(media.items.length,1);assert.equal(media.items[0].id,b.id);assert.equal(media.items[0].preview,'Optical survey');
+ const visible=()=>store.scope(()=>validateWebsiteLibraryRows(store,{items:media.items,generation:media.generation}));
+ assert.deepEqual((await visible()).accepted,[b.id]);
  assert.equal((await store.searchLibrary({search:media.items[0].recordId})).items[0].id,b.id);
  assert.deepEqual((await store.searchLibrary({filter:'text'})).items.map(i=>i.id),[a.id]);
  assert.equal((await store.searchLibrary({search:'Private'})).items.length,0);assert.equal((await store.searchLibrary({search:'Unrelated PDF'})).items.length,0);
  store.readText=savedText;store.source=savedSource;
  const token=await store.beginSourceUpdate({sourceId:b.id});
+ assert.deepEqual((await visible()).accepted,[]);
  assert.equal((await store.searchLibrary({filter:'media'})).items.length,0);
  await assert.rejects(store.previewSource({sourceId:b.id,sourceRevision:b.revision}),{code:'CONFLICT'});await store.cancelSourceUpdate({sourceId:b.id,token});
  await store.scope(()=>store.remove('.observanda/website-files/picker/'+b.id.slice(0,2)+'.json'),{write:true});
@@ -41,6 +44,7 @@ test('file picker searches compact permitted summaries, falls back to earlier sa
  const result=await store.insertSource(page.site.id,{sourceId:b.id,sourceRevision:b.revision,expectedRevision:page.site.revision,position:{before:1}});
  assert.match(result.html,/<p>Before<\/p><section data-observanda-source=.*Optical survey.*<\/section><p>After<\/p>/s);
  await put('Hidden again','',{recordId:legacy.recordId,visible:false});assert.equal((await store.searchLibrary({filter:'media'})).items.length,0);
+ assert.deepEqual((await visible()).accepted,[]);
  await assert.rejects(store.previewSource({sourceId:b.id,sourceRevision:b.revision}),{code:'NOT_FOUND'});
 });
 

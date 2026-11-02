@@ -4,22 +4,38 @@ const pageSize=12;
 export function websiteFilesPicker({request,esc,render,blocks,insert}){
  const msg=(key,data)=>t('websiteFiles',key,data);
  let open=false,search='',filter='all',query='',applied='all',pages=[null],page=0,rows=[],next=null;
- let selected=null,preview='',position='end',blockNumber=1,epoch=0,controller=null;
+ let selected=null,preview='',position='end',blockNumber=1,epoch=0,controller=null,validated;
  const button=(label,op,extra='')=>'<button type="button" class="button" data-action="website-files-picker-'+op+'" '+extra+'>'+esc(msg(label))+'</button>';
  const option=(value,label,choice)=>'<option value="'+value+'" '+(choice===value?'selected':'')+'>'+esc(msg(label))+'</option>';
  function reset(){
-  controller?.abort();controller=null;epoch++;open=false;search=query='';filter=applied='all';pages=[null];page=0;rows=[];next=null;selected=null;preview='';position='end';blockNumber=1;
+  controller?.abort();controller=null;epoch++;open=false;search=query='';filter=applied='all';pages=[null];page=0;rows=[];next=null;selected=null;preview='';position='end';blockNumber=1;validated=undefined;
  }
  async function fetchPage(after,index){
   controller?.abort();controller=new AbortController();
-  const current=++epoch,items=[];let cursor=after;
+  const current=++epoch,items=[];let cursor=after,generation;
   for(let window=0;window<3;window++){
    const data=await request('library/search',{search:query,filter:applied,limit:pageSize-items.length,after:cursor},{signal:controller.signal});
    if(current!==epoch)return;
+   if(window&&generation!==data.generation){clearRows();throw Error(msg('changed'));}
+   generation=data.generation;
    items.push(...data.items);cursor=data.next;
    if(!cursor||items.length===pageSize)break;
   }
-  rows=items;next=cursor;page=index;pages[index]=after;selected=null;preview='';render();
+  validated=generation;rows=items;next=cursor;page=index;pages[index]=after;selected=null;preview='';render();
+ }
+ function paintRows(){const host=document.querySelector('[data-website-picker]');if(host){host.outerHTML=view();bind();}}
+ function clearRows(){epoch++;rows=[];selected=null;preview='';validated=undefined;paintRows();}
+ async function revalidate({signal}={}){
+  if(!open||!rows.length)return;
+  const current=epoch;
+  try{
+   const result=await request('library/validate',{items:rows.map(({id,revision})=>({id,revision})),generation:validated},{signal});
+   if(current!==epoch)return;
+   const accepted=new Set(result.accepted);validated=result.generation;
+   if(rows.some(row=>!accepted.has(row.id))){
+    epoch++;rows=rows.filter(row=>accepted.has(row.id));if(!accepted.has(selected)){selected=null;preview='';}paintRows();
+   }
+  }catch(error){if(current===epoch)clearRows();throw error;}
  }
  function reference(item){return msg('pickerReference',{id:item.recordId??item.id});}
  function view(){
@@ -52,7 +68,9 @@ export function websiteFilesPicker({request,esc,render,blocks,insert}){
   else if(operation==='picker-next'&&next!==null)await fetchPage(next,page+1);
   else if(operation==='picker-select'){
    const item=rows.find(row=>row.id===element.dataset.source);if(!item)return true;
-   const current=++epoch,value=await request('library/preview',{sourceId:item.id,sourceRevision:item.revision},{signal:controller?.signal});
+   const current=++epoch;let value;
+   try{value=await request('library/preview',{sourceId:item.id,sourceRevision:item.revision},{signal:controller?.signal});}
+   catch(error){if(current===epoch)clearRows();throw error;}
    if(current!==epoch)return true;selected=item.id;preview=value.preview;render();
   }else if(operation==='picker-insert'){
    const item=rows.find(row=>row.id===selected);if(!item)return true;
@@ -65,5 +83,5 @@ export function websiteFilesPicker({request,esc,render,blocks,insert}){
   const field=document.querySelector('[data-picker-search]');if(!field)return;
   field.onkeydown=event=>{if(event.key==='Enter'&&!event.isComposing){event.preventDefault();field.closest('[data-website-picker]').querySelector('[data-action="website-files-picker-search"]').click();}};
  }
- return {view,input,action,reset,bind};
+ return {view,input,action,reset,bind,revalidate};
 }

@@ -80,7 +80,22 @@ export async function searchWebsiteLibrary(store,scope,{search='',filter='all',a
  // fences its ID before touching any original or file-backed projection.
  const fenced=await store.pendingSources();
  if(await version(store)!==epoch)throw new AppError('WEBSITE_CHANGED');
- return {items:items.filter(item=>!fenced.has(item.id)),next:at<view.names.length?view.names[at-1]:null};
+ return {items:items.filter(item=>!fenced.has(item.id)),next:at<view.names.length?view.names[at-1]:null,generation:epoch};
+}
+export async function validateWebsiteLibraryRows(store,{items,generation:prior,signal}={}){
+ if(!Array.isArray(items)||items.length>40||items.some(r=>!validId(r?.id)||!validId(r.revision)))throw new AppError('INVALID');
+ const epoch=await version(store),pending=await store.pendingSources(),accepted=[];
+ for(const row of items){
+  signal?.throwIfAborted();if(pending.has(row.id))continue;
+  if(prior!==epoch||epoch===null){
+   const source=await store.source(row.id,{pending:true});
+   if(!source?.visible||source.target!=='website'||source.revision!==row.revision)continue;
+  }
+  accepted.push(row.id);
+ }
+ const fenced=await store.pendingSources();
+ if(await version(store)!==epoch)throw new AppError('WEBSITE_CHANGED');
+ return {accepted:accepted.filter(id=>!fenced.has(id)),generation:epoch};
 }
 export async function previewWebsiteSource(store,id,revision,signal){
  const epoch=await version(store),source=await store.source(id);
