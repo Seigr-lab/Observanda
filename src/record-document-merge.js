@@ -3,7 +3,7 @@
 import {createHash} from 'node:crypto';
 import {withScratch} from './scratch-work.js';
 import {RecordContainerBuilder} from './record-tree-values.js';
-import {RecordDocument} from './record-document.js';
+import {RecordDocument,withdrawDocumentPublication} from './record-document.js';
 import {mergeAttemptAdditions} from './web/attempt-model.js';
 import {AppError} from './errors.js';
 
@@ -96,9 +96,9 @@ export async function mergeRecordDocuments(document,{base,mine,stored,choose,sig
   const selected=await same(mine,stored)?stored:await choose({path:[],base,mine,stored});
   if(selected===null)return null;
   const result=new RecordDocument(blocks,selected,{mutable:true});
-  return base&&!stored?result.replace(['share'],false,{signal}):result;
+  return base&&!stored?withdrawDocumentPublication(result,{signal}):result;
  }
  const merged=await object(base,mine,stored,[],{record:true});
  const result=new RecordDocument(blocks,merged,{mutable:true});
- return await same(await field(merged,'notebookId'),await field(stored,'notebookId'))?result:result.replace(['share'],false,{signal});
+ return await same(await field(merged,'notebookId'),await field(stored,'notebookId'))?result:withdrawDocumentPublication(result,{signal});
 }

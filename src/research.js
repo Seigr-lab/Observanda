@@ -1,3 +1,4 @@
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {isConfigurationReference} from './web/configuration-reference.js';
 import {validateCurrentInlineRecordTemplate} from './record-template-configuration.js';
 import {recordContentRevision} from './record-encoding.js';
@@ -125,7 +126,7 @@ export class ResearchRecords {
 
       // Moving a record cannot implicitly publish it under a different project.
       const prior=basis??previous;
-      if(prior&&prior.notebookId!==record.notebookId)record.share=false;
+      if(prior&&prior.notebookId!==record.notebookId)Object.assign(record,privatePublicationFlags(record));
       if(prior&&priorRevision===recordRevision(record))continue;
       if(index<0)book.entries.push(record);else book.entries[index]=record;
       changed=true;

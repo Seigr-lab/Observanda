@@ -1,3 +1,4 @@
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {AppError} from './errors.js';
 
 // Operates on the structure command's private snapshot. The workspace adapter
@@ -14,7 +15,7 @@ export function deleteLabBook(book,choice){
  if(choice.records==='move'){
   for(const record of records){
    record.notebookId=destination.id;
-   if(source.projectId!==destination.projectId)record.share=false;
+   if(source.projectId!==destination.projectId)Object.assign(record,privatePublicationFlags(record));
   }
  }else if(choice.records==='delete'){
   for(const record of records)removed.add('entry:'+record.id);

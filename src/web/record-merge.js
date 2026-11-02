@@ -1,4 +1,5 @@
 // Three-way record reconciliation. Conflicts are decisions, never last-write-wins.
+import {privatePublicationFlags} from './record-publication-privacy.js';
 import {retainRecord,retainOwnedRecord,sameValue as same} from './workspace-snapshot.js';
 import {recordRecoveryMessage,recordConflictLabel} from './record-recovery-messages.js';
 import {mergeAttemptAdditions} from './attempt-model.js';
@@ -92,7 +93,7 @@ export function reconcileRecords(changes,current,{message=recordRecoveryMessage,
       if(record){
         // Restoring a removed record or changing its notebook requires a fresh
         // sharing decision. Do not republish it by resolving a conflict.
-        if(base&&!stored||stored&&record.notebookId!==stored.notebookId)record={...record,share:false};
+        if(base&&!stored||stored&&record.notebookId!==stored.notebookId)record={...record,...privatePublicationFlags(record)};
         result.set(record.id,materialize?copy(record):record);
       }else result.delete(mine.id);
     }

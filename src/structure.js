@@ -1,3 +1,4 @@
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import { randomUUID } from 'node:crypto';
 import { upgradeNotebook, validateNotebook } from './model.js';
 import { logosFor } from './web/branding.js';
@@ -58,8 +59,10 @@ function applyStructure(book,change){
  const value=structuredClone(change.value),index=collection.findIndex(e=>e.id===value.id);
  const previous=collection[index];
  if(change.kind==='project'&&previous?.parentId!==value.parentId)value.share=false;
- if(change.kind==='notebook'&&previous&&previous.projectId!==value.projectId)
-  for(const record of book.entries.filter(e=>e.notebookId===value.id))record.share=false;
+ if(change.kind==='notebook'&&previous&&previous.projectId!==value.projectId){
+  Object.assign(value,privatePublicationFlags(value));
+  for(const record of book.entries.filter(e=>e.notebookId===value.id))Object.assign(record,privatePublicationFlags(record));
+ }
  if(index<0)collection.push(value);else collection[index]=value;
  return {book};
 }

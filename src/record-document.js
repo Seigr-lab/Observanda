@@ -7,6 +7,14 @@ import {withStoredRecord} from './record-storage.js';
 import {retainRecordContainer} from './record-tree-values.js';
 import {digest,serialize} from './storage-format.js';
 const invalid=()=>{throw new AppError('INVALID');};
+// A move or restoration withdraws both grants without materializing the
+// record or adding an optional PDF field to a previously private document.
+export async function withdrawDocumentPublication(document,{signal}={}){
+ for(const field of ['share','sharePdf']){
+  if((await document.field([field],{signal})).value===true)document=await document.replace([field],false,{signal});
+ }
+ return document;
+}
 const natural=v=>Number.isSafeInteger(v)&&v>=0;
 export class RecordDocument{
  #attemptAppend=null;

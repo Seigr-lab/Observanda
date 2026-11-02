@@ -11,7 +11,7 @@ import {requireRecordOwnerTransfers} from './catalogue-format.js';
 import {researchId} from './web/research-reference.js';
 import {readRecordOwnerTransfer,writeRecordOwnerTransfer,readRecordOwnerFence,setRecordOwnerFence,withRecordOwnerTransferWrite,recordOwnerTransferStatus,recordOwnerTransferFingerprint,validRecordOwner,validRecordOwnerTransferCommand} from './record-owner-transfer-state.js';
 import {copyRecordOwnerDocument,withRecordOwnerDocument} from './record-owner-document.js';
-import {withRecordDocument} from './record-document.js';
+import {withRecordDocument,withdrawDocumentPublication} from './record-document.js';
 import {retainStoredDocument,verifyStoredRecord} from './record-storage.js';
 import {copyRecordOwnerHistoryMetadata,retainRecordOwnerHistory} from './record-owner-history.js';
 import {retainRecordOrigin,recordOrigins,recordOrigin,registerRecordOwnerReference} from './record-owner-provenance.js';
@@ -25,14 +25,16 @@ import {withScratch} from './scratch-work.js';
 import {ResearchMaterials} from './research-materials.js';
 import {withMetadataBatch} from './metadata-batch.js';
 import {reconcileWebsiteMembership} from './website-membership.js';
+import {PublicationConversion} from './publication-conversion.js';
 const same=(a,b)=>serialize(a)===serialize(b),now=()=>new Date().toISOString();
 const terminal=value=>value.phase==='complete'||value.phase==='cancelled'&&value.progress.reclamation?.state!=='pending';
 const historyMap=(id,snapshotId,revision)=>'record-owner-history-map:'+id+':'+snapshotId+':'+revision;
 const emptyReferences=()=>({format:1,kind:'references',root:null,count:0,chunkSize:64});
 export class RecordOwnerTransfer{
- constructor(source,target,{registry,sourceOwner,targetOwner}={}){
+ constructor(source,target,{registry,sourceOwner,targetOwner,publication}={}){
   if(!source||!target||!registry||!validRecordOwner(sourceOwner)||!validRecordOwner(targetOwner)||sourceOwner.workspaceId===targetOwner.workspaceId||source.root===target.root)throw new AppError('INVALID');
   this.source=source;this.target=target;this.registry=registry;this.sourceOwner=structuredClone(sourceOwner);this.targetOwner=structuredClone(targetOwner);
+  this.publication=publication??(registry.workspace&&new PublicationConversion(registry.workspace));
  }
  static async pending(source,{workspaceId,recordId,id}={}){
   if(!researchId(workspaceId)||!researchId(recordId)||id!==undefined&&!researchId(id))throw new AppError('INVALID');
@@ -162,6 +164,7 @@ export class RecordOwnerTransfer{
    await requireRecordOwnerTransfers(store.db);await writeRecordOwnerTransfer(store,value);await setRecordOwnerFence(store,value,'incoming');
    const {initializeRecordOwnerReclamation}=await import('./record-owner-resources.js');await withRecordOwnerTransferWrite(store,value,()=>initializeRecordOwnerReclamation(store,value));
   }));
+  const resumedCandidate=Boolean(value.progress.prepared);
   if(value.phase==='copying'){
    await this.copyHistory(value,{write,signal,checkpoint,save});value=await read();
    const {prepareRecordOwnerEvidence}=await import('./record-owner-evidence.js');
@@ -174,11 +177,29 @@ export class RecordOwnerTransfer{
    const {verifyRecordOwnerEvidence}=await import('./record-owner-evidence.js');await verifyRecordOwnerEvidence(this.target,value,evidence,{signal,check:checked});
    await checked();await save({phase:'verified'});await checkpoint('verified',recordOwnerTransferStatus(value));
   }
+  if(!this.publication)throw new AppError('DATABASE_LOCATION');
   if(value.phase==='verified'){await checked();await save({phase:'activating'});await checkpoint('activating',recordOwnerTransferStatus(value));}
+  // Activation is the first irrevocable phase. Fence both saved identities
+  // before destination admission. The persisted phase re-establishes these
+  // tokens on retry, including a crash after source retirement.
+  const command=value.command;
+  const outgoing=await this.publication.fenceRecordMove(this.source,{workspaceId:command.workspaceId,notebookId:command.sourceNotebookId,recordId:command.recordId},signal);
+  const incoming=await this.publication.fenceRecordMove(this.target,{workspaceId:command.targetWorkspaceId,notebookId:command.targetNotebookId,recordId:command.recordId},signal);
   if(value.phase==='activating'){
    const {retainRecordOwnerSourceDrafts}=await import('./record-owner-drafts.js');await retainRecordOwnerSourceDrafts(this.source,this.target,value,{signal,check:checked});
    const targetReceipt=await this.target.catalogue(store=>readRecordOwnerTransfer(store,id));
-   if(targetReceipt.phase!=='complete')await write(store=>this.activate(store,value,{signal}));
+   if(targetReceipt.phase!=='complete'){
+    // A transfer can resume with a candidate prepared by an earlier service.
+    // Correct its grants and derived membership before admitting that record.
+    const prepared=value.progress.prepared;
+    const granted=resumedCandidate&&await this.target.catalogue(store=>withRecordOwnerDocument(store,prepared.descriptor,async doc=>
+     (await doc.field(['share'],{signal})).value===true||(await doc.field(['sharePdf'],{signal})).value===true));
+    if(granted){
+     const privateCandidate=await this.prepareCurrent({...value,progress:{...value.progress,prepared:null}},{write,signal});
+     await save({progress:{...value.progress,prepared:privateCandidate}});
+    }
+    await write(store=>this.activate(store,value,{signal}));
+   }
    const published=await this.target.catalogue(store=>readRecordOwnerTransfer(store,id));if(published.phase!=='complete'||!published.result)throw new AppError('CATALOGUE_DAMAGED');
    await save({phase:'retiring',result:published.result,progress:{...value.progress,activatedSnapshotId:published.progress.activatedSnapshotId}});await checkpoint('destination-published',recordOwnerTransferStatus(value));
   }
@@ -187,7 +208,11 @@ export class RecordOwnerTransfer{
    const {compactRecordOwnerResources}=await import('./record-owner-resources.js'),published=await this.target.catalogue(store=>readRecordOwnerTransfer(store,id));
    if(published?.phase!=='complete'||published.fingerprint!==value.fingerprint)throw new AppError('CATALOGUE_DAMAGED');
    await compactRecordOwnerResources(this.target,published,{signal,write,checkpoint});
-   await this.retire(value);await save({phase:'complete'});await checkpoint('complete',recordOwnerTransferStatus(value));
+   await this.retire(value);
+   await checkpoint('source-retired',recordOwnerTransferStatus(value));
+   await this.publication.settleRecordMove(this.source,outgoing,{signal});
+   await this.publication.settleRecordMove(this.target,incoming,{incoming:true,signal});
+   await save({phase:'complete'});await checkpoint('complete',recordOwnerTransferStatus(value));
   }
   return recordOwnerTransferStatus(value);
  }
@@ -226,7 +251,7 @@ export class RecordOwnerTransfer{
   }
  } async prepareCurrent(value,{write,signal}){
   if(value.progress.prepared)return value.progress.prepared;
-  const descriptor=await this.source.catalogue(from=>withRecordDocument(from,value.command.recordId,value.command.expectedStorageRevision,document=>copyRecordOwnerDocument(document,this.target,{write,signal,notebookId:value.command.targetNotebookId,transform:async copied=>{copied=await copied.replace(['notebookId'],value.command.targetNotebookId,{signal});copied=await copied.replace(['share'],false,{signal});return copied.replace(['updatedAt'],value.createdAt,{signal});}})));
+  const descriptor=await this.source.catalogue(from=>withRecordDocument(from,value.command.recordId,value.command.expectedStorageRevision,document=>copyRecordOwnerDocument(document,this.target,{write,signal,notebookId:value.command.targetNotebookId,transform:async copied=>{copied=await copied.replace(['notebookId'],value.command.targetNotebookId,{signal});copied=await withdrawDocumentPublication(copied,{signal});return copied.replace(['updatedAt'],value.createdAt,{signal});}})));
   // Build selected derivations using encrypted temporary scratch. Durable nodes
   // use the same short writer batches as copying; this reader holds no shared
   // resource locks while traversing a large record.
@@ -277,7 +302,6 @@ export class RecordOwnerTransfer{
     const target='entry:'+row.id,metadata={...current.metadata,branding:current.metadata.branding.filter(item=>item.target!==target),website:{...current.metadata.website,layouts:current.metadata.website.layouts.filter(item=>item.target!==target)}};
     await reconcileWebsiteMembership(metadata,id=>id===row.id?null:store.member(current,id));await store.validateMetadata(current,metadata,{removed:[row.id]});await store.commitChanges(currentId,current,metadata,[],{removed:[row.id]});
    }
-   await writeRecordOwnerTransfer(store,{...value,phase:'complete',updatedAt:now()});
   })));
  }
 }

@@ -173,6 +173,21 @@ export class WebsiteFileStore{
  async pendingSources(){
   const value=await this.control(ROOT+'/pending.json',{missing:true});if(value!==null&&(!Array.isArray(value)||value.some(id=>!hex(id))))throw new AppError('FORMAT');return new Set(value??[]);
  }
+ async sourceDirectoryFilter(memberCount){
+  const held=active.getStore();if(!held?.write||held.root!==this.workspace.root)throw new AppError('LOCKED');
+  if(memberCount<64)return ()=>true;
+  // Source directory names already contain cryptographic hashes. One directory
+  // walk and two MiB of bits avoid negative network lookups for a large book.
+  // A colliding prefix still requires an authenticated source/journal read.
+  const bits=new Uint8Array(1<<21),prefix=id=>Number.parseInt(id.slice(0,6),16);
+  await held.scope.member(this.absolute(ROOT+'/sources/sentinel'),async directory=>{
+   if(!directory)return;
+   for await(const entry of directory.entries())if(hex(entry.name)){
+    const i=prefix(entry.name);bits[i>>>3]|=1<<(i&7);
+   }
+  },{missing:true});
+  return id=>{const i=prefix(id);return Boolean(bits[i>>>3]&(1<<(i&7)));};
+ }
  async fence(sourceId,set,signal){
   const entries=await this.pendingSources();if(set)entries.add(sourceId);else entries.delete(sourceId);
   if(entries.size)await this.writeControl(ROOT+'/pending.json',[...entries],{signal});else await this.remove(ROOT+'/pending.json');

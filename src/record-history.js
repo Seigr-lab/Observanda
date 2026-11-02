@@ -1,3 +1,4 @@
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 // Record history projects existing encrypted snapshots; it does not create a
 // second history store. Restoration changes only one record under the same lock.
@@ -165,11 +166,11 @@ export class RecordHistory {
    const previous=await this.historical(command,book);
    if(recordRevision(current)===recordRevision(previous))return null;
    // Keep today's organisation. Old publication choices require a fresh review.
-   const restored={...structuredClone(previous),notebookId:current.notebookId,createdAt:current.createdAt,updatedAt:current.updatedAt,share:false};
+   const restored={...structuredClone(previous),notebookId:current.notebookId,createdAt:current.createdAt,updatedAt:current.updatedAt,...privatePublicationFlags(previous)};
    // An earlier narrative must not erase later preparation/event/assessment
    // facts. Their corrections are appended explicitly in the attempt editor.
    if(current.attempt)restored.attempt=structuredClone(current.attempt);
-   restored.attachments=restored.attachments.map(a=>({...a,share:false}));
+   restored.attachments=restored.attachments.map(a=>({...a,...privatePublicationFlags(a)}));
    book.entries[index]=restored;if(!partialRecords)validateNotebook(book);
    for(const attachment of restored.attachments){
     const file=await this.media.get(attachment.id,{streamed:true});

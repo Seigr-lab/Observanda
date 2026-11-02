@@ -40,7 +40,7 @@ export class RecordOwnerTransferApplication{
    destination=new RecordOwnerSession(app,client,targetOwner,{check});
    return app.tracked(()=>destination.use(async(target,checkTarget)=>{
     const current=async()=>{signal?.throwIfAborted();await checkSource();await checkTarget();};await current();
-    const engine=new RecordOwnerTransfer(storage,target,{registry:await app.registry(),sourceOwner,targetOwner});
+    const engine=new RecordOwnerTransfer(storage,target,{registry:await app.registry(),sourceOwner,targetOwner,publication:app.publicationConversion});
     invoked=true;return engine[operation](command,{signal,check:current,progress:onProgress,checkpoint});
    }),targetOwner.projectId,targetOwner.labBookId);
   }),sourceOwner.projectId,sourceOwner.labBookId);}

@@ -1,8 +1,9 @@
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
-import {withRecordDocument,RecordDocument} from './record-document.js';
+import {withRecordDocument,RecordDocument,withdrawDocumentPublication} from './record-document.js';
 import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
 import {digest} from './storage-format.js';
 import {changedRecordFields} from './record-document-comparison.js';
@@ -64,13 +65,15 @@ export class RecordHistoryDocuments{
    return withRecordDocument(store,old.id,old.revision,source=>withRecordDocument(store,row.id,row.revision,async latest=>{
     let document=new RecordDocument(latest.blocks,await copyRecordValue(source,latest,source.root),{mutable:true});
     for(const name of ['notebookId','createdAt','updatedAt'])document=await document.replace([name],(await latest.field([name])).value);
-    document=await document.replace(['share'],false);const attempt=await latest.reference(['attempt']);
+    document=await withdrawDocumentPublication(document);const attempt=await latest.reference(['attempt']);
     if(attempt){
      if(!await document.reference(['attempt']))document=await document.property([],'attempt',{});
      document=new RecordDocument(document.blocks,await document.replaceReference(document.root,['attempt'],await copyRecordValue(latest,document,attempt)),{mutable:true});
     }
     const attachments=new RecordContainerBuilder(document.blocks,'array');
-    for await(const item of document.items(['attachments']))await attachments.add({value:await document.tree.retain({...await document.tree.read(item.value),share:false})});
+    for await(const item of document.items(['attachments'])){
+     const media=await document.tree.read(item.value);await attachments.add({value:await document.tree.retain({...media,...privatePublicationFlags(media)})});
+    }
     document=new RecordDocument(document.blocks,await document.replaceReference(document.root,['attachments'],await attachments.finish()),{mutable:true});
     const header=await validateRecordDocument(document,snapshot.metadata);await validateDocumentSources(store,snapshot,document,header,latest,this.media);
     const membership=new RecordMemberCollections(store);let member=row;

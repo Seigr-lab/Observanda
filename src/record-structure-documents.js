@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
 import {RecordBlockStore} from './record-block-store.js';
-import {RecordDocument,withRecordDocument} from './record-document.js';
+import {RecordDocument,withRecordDocument,withdrawDocumentPublication} from './record-document.js';
 import {copyRecordValue} from './record-document-copy.js';
 import {validateRecordDocument} from './record-document-validation.js';
 import {validateDocumentSources} from './record-document-sources.js';
@@ -16,7 +16,7 @@ import {RunReadiness} from './run-readiness.js';
 import {MediaStore} from './media.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 
-export async function commitStructureDocuments(store,currentId,current,proposed,selected,targets,{removed=[],now=new Date().toISOString(),membershipRebuilt=false,signal,onProgress=()=>{}}={}){
+export async function commitStructureDocuments(store,currentId,current,proposed,selected,targets,{removed=[],now=new Date().toISOString(),membershipRebuilt=false,metadataUnchanged=false,signal,onProgress=()=>{}}={}){
  if(proposed.id!==current.metadata.id||proposed.revision!==current.metadata.revision||proposed.createdAt!==current.metadata.createdAt)throw new AppError('CONFLICT');
  const index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),before=[],after=[],removedIds=new Set(removed);
  if(removedIds.size!==removed.length)throw new AppError('INVALID');
@@ -24,26 +24,29 @@ export async function commitStructureDocuments(store,currentId,current,proposed,
  const etag=digest('Observanda/catalogue-snapshot/'+randomUUID()),ordinal=(await store.db.get('SELECT MAX(ordinal)+1 AS n FROM snapshots')).n;
  const media=new MediaStore(store.workspace),membership=new RecordMemberCollections(store),query=new RecordQueryDocuments(store);
  for(const id of removedIds){const row=await index.get(current.membership,id);if(!row)throw new AppError('CONFLICT');before.push(row);}
- await operationStage('write-records',{total:selected.length,unit:'records'},async()=>{
+ const total=selected.length??current.count;
+ await operationStage('write-records',{total,unit:'records'},async()=>{
   let loaded=0;
-  for(const selectedRow of selected){
-   signal?.throwIfAborted();onProgress({stage:'records',loaded:loaded++,total:selected.length});signal?.throwIfAborted();
-   const target=targets.get(selectedRow.id);if(!target)continue;
+  for await(const selectedRow of selected){
+   signal?.throwIfAborted();onProgress({stage:'records',loaded:loaded++,total});signal?.throwIfAborted();
+   const target=typeof targets==='function'?targets(selectedRow):targets.get(selectedRow.id);if(!target)continue;
    const row=await index.get(current.membership,selectedRow.id);
    if(!row||row.revision!==selectedRow.revision||removedIds.has(row.id))throw new AppError('CONFLICT');
    await withRecordDocument(store,row.id,row.revision,async original=>{
-    const share=(await original.field(['share'])).value&&target.share;
-    if(row.notebookId===target.notebookId&&share===(await original.field(['share'])).value)return;
+    const moved=row.notebookId!==target.notebookId,share=target.share&&(await original.field(['share'],{signal})).value;
+    if(!moved&&target.share)return;
     let key;
     try{
      let document=original;
-     if(row.notebookId!==target.notebookId){
+     if(moved){
       key=await store.scopeKey(target.notebookId,1,{create:true});
       const destination=new RecordDocument(new RecordBlockStore(store,target.notebookId,1,key),null,{mutable:true});
       document=new RecordDocument(destination.blocks,await copyRecordValue(original,destination,original.root,{signal}),{mutable:true});
       document=await document.replace(['notebookId'],target.notebookId,{signal});
      }
-     document=await document.replace(['share'],share,{signal});document=await document.replace(['updatedAt'],now,{signal});
+     if(!target.share)document=await withdrawDocumentPublication(document,{signal});
+     if(document===original)return;
+     document=await document.replace(['updatedAt'],now,{signal});
      const header=await validateRecordDocument(document,metadata,{signal});operationItem(header.title);
      await validateDocumentSources(store,{...current,metadata},document,header,original,media,{signal});
      await new RunReadiness(store.workspace).documentCompletion(original,document,header,metadata);
@@ -56,6 +59,7 @@ export async function commitStructureDocuments(store,currentId,current,proposed,
    operationAdvance();
   }
  });
- signal?.throwIfAborted();onProgress({stage:'indexing'});
+ signal?.throwIfAborted();if(metadataUnchanged&&!before.length&&!after.length)return currentId;
+ onProgress({stage:'indexing'});
  return store.finishRecordChanges(currentId,current,metadata,before,after,{removed,now,membershipRebuilt,bulk:true,index,etag,ordinal});
 }

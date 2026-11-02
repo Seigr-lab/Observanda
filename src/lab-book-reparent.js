@@ -30,6 +30,10 @@ import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
+import {privatePublicationFlags} from './web/record-publication-privacy.js';
+import {PublicationConversion} from './publication-conversion.js';
+import {SnapshotIndex} from './snapshot-index.js';
+import {commitStructureDocuments} from './record-structure-documents.js';
 const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
 const sameIdentity=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
 const sameBook=(a,b)=>['labBookId','namespaceId','vaultId'].every(key=>a?.[key]===b?.[key]);
@@ -103,7 +107,6 @@ export class LabBookReparents{
    await check();if(value.phase==='complete')return this.complete(source,target,vault,value);if(['cancelling','cancelled'].includes(value.phase))return this.cancel(source,target,vault,value,{checkpoint});
    await this.reserve(source,target,value);
    if(value.phase==='copying')await transfer.copy();
-   if(['retiring','retired'].includes(value.phase)){await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);return this.complete(source,target,vault,value);}
    let root=await this.locate(value);authenticateKeyring((await readAccess(root)).value,vault);
    if(root===roots.destination&&value.version!==2&&['prepared','frozen'].includes(value.phase))await persistRename(roots.source,roots.destination);
    if(root===roots.source){
@@ -123,9 +126,24 @@ export class LabBookReparents{
    const storage=new LabBookStorage(root,this.labBookId,vault);
    await storage.withLock(()=>storage.catalogue(async store=>{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId||![value.sourceProjectId,value.targetProjectId].includes(snapshot.metadata.notebooks[0].projectId))throw new AppError('DATABASE_LOCATION');
-    if(snapshot.metadata.notebooks[0].projectId===value.targetProjectId)return;
-    const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[projectSummaryForBook(value.parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId}))};await reparentConfigurationMetadata(store,current.metadata,metadata);await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+    const book=snapshot.metadata.notebooks[0],admitted=book.projectId===value.targetProjectId;
+    const metadataUnchanged=admitted&&book.share===false&&book.sharePdf!==true;
+    const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[projectSummaryForBook(value.parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId,...privatePublicationFlags(book)}))};
+    if(!admitted)await reparentConfigurationMetadata(store,current.metadata,metadata);
+    await store.validateMetadata(current,metadata);
+    const publication=new PublicationConversion(this.workspace),index=new SnapshotIndex(store),bookId=this.labBookId;
+    await publication.files.scope(async()=>{
+     const pending=await publication.files.pendingSources(),possible=await publication.files.sourceDirectoryFilter(current.count);
+     async function* members(){
+      for await(const row of index.members(current.membership,{notebookId:bookId})){
+       await check();await publication.withdrawReparentedEntry(value.namespaceId,bookId,row.id,[value.sourceProjectId,value.targetProjectId],pending,possible);
+       yield row;
+      }
+     }
+     await commitStructureDocuments(store,head,current,metadata,members(),()=>({notebookId:bookId,share:false}),{metadataUnchanged});
+    },{write:true});
    }));await checkpoint('metadata',value);
+   if(['retiring','retired'].includes(value.phase)){await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);return this.complete(source,target,vault,value);}
    const next=await to.describe(storage,{staged:value.version===2});
    await withWriterLease(path.join(target.root,'.observanda/lab-books.lock'),async()=>{
     const destination=await to.read(),exists=destination.value.books.find(book=>book.labBookId===this.labBookId);

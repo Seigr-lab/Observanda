@@ -24,6 +24,20 @@ test('stored reconciliation agrees with ordinary independent edits, removals and
  mine.sections.splice(0,1);stored.sections.find(item=>item.id==='b').body='Concurrent removal conflict';
  for(const version of ['mine','stored'])await compare(base,mine,stored,version);
 });
+test('moving or recovering a deleted entry through a merge withdraws both grants and preserves its section choices',async()=>{
+ const base={...record(['a']),sharePdf:true};base.sections[0].sharePdf=true;
+ for(const restored of [false,true]){
+  const mine={...structuredClone(base),notebookId:'new book'},stored=restored?null:structuredClone(base);
+  const blocks=memory(),tree=blocks.tree(),baseRef=await tree.retain(base),mineRef=await tree.retain(mine),storedRef=stored?await tree.retain(stored):null;
+  const document=new RecordDocument(blocks,mineRef,{mutable:true});
+  const merged=await mergeRecordDocuments(document,{base:baseRef,mine:mineRef,stored:storedRef,choose:async choice=>choice.mine});
+  const expected={...mine,share:false,sharePdf:false};
+  assert.deepEqual(await tree.read(merged.root),expected);
+  const ordinary=reconcileRecords([{base,record:mine}],stored?[stored]:[]);
+  assert.deepEqual(ordinary.resolveVersions(new Map(ordinary.conflicts.map(item=>[item.key,{version:'mine'}])))[0],expected);
+  assert.deepEqual(await tree.read(baseRef),base);
+ }
+});
 test('stored reconciliation preserves exact result claims, optional removal and notebook privacy',async()=>{
  const base=record([]),mine=structuredClone(base),stored=structuredClone(base),statement=(id,text)=>({id,kind:'number',title:id,text,basis:'authored',source:null,limitations:'Declared scope'});
  base.results={version:1,statements:[statement('a','1/3'),statement('b','10')]};mine.results=structuredClone(base.results);stored.results=structuredClone(base.results);

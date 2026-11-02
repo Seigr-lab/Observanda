@@ -6,3 +6,5 @@ export const defaultPublicationPrivacy=()=>({website:parts(),pdf:parts()});
 const validParts=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===PUBLICATION_PARTS.length&&PUBLICATION_PARTS.every(key=>typeof value[key]==='boolean');
 export const validPublicationPrivacy=value=>value&&Object.keys(value).sort().join()==='pdf,website'&&validParts(value.website)&&validParts(value.pdf);
 export const publicationPartAllowed=(record,key,target='website')=>record.publication?.[target]?.[key]!==false;
+// Preserve the authenticated shape of records written before PDF opt-in.
+export const privatePublicationFlags=value=>({share:false,...(Object.hasOwn(value,'sharePdf')?{sharePdf:false}:{})});
