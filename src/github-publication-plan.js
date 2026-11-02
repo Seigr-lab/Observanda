@@ -90,7 +90,7 @@ export async function githubFilePlan(candidate,files,ownership,directory='',{sig
 // Stream remote, owned and desired entries through independently counted rows.
 // Intermediate rows remain private and no review header exists until all roots
 // are durable. Every provider write subsequently uses this immutable plan.
-export function indexedGithubFilePlan(workspace,candidate,files,ownership,directory='',options={}){return workspace.withCatalogueConnections(()=>buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory,options));}
+export function indexedGithubFilePlan(workspace,candidate,files,ownership,directory='',options={}){const build=()=>buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory,options);return workspace.withPublicationMetadataSnapshot?build():workspace.withCatalogueConnections(build);}
 async function buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory='',{signal,replaceExisting=false,onProgress=async()=>{},write}={}){
  const index=GithubPlanIndex.builder(workspace,{signal,write}),prefix=directory?directory+'/':'';
  if(typeof replaceExisting!=='boolean'||!githubDirectory(directory))throw new AppError('INVALID');

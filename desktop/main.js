@@ -109,7 +109,7 @@ else{
     if(!message||typeof message!=='object')return;
     if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure,phase:message.phase});return;}
     if(message.type==='lifecycle')supervisor.progress(message.phase);
-    if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();origin=new URL(message.url).origin;await main.loadURL(message.url);}
+    if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();const url=new URL(message.url);origin=url.origin;if(process.argv.includes('--website'))url.searchParams.set('view','website');await main.loadURL(url.href);}
     if(message.type==='progress'&&typeof message.message==='string')showProgress(message);
     if(message.type==='failed'&&typeof message.message==='string')void failed(message);
     if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){

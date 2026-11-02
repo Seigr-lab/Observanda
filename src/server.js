@@ -108,6 +108,8 @@ import {workspaceJobs,websitePublisher} from './workspace-jobs.js';
 import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './inventory-maintenance-jobs.js';
 import {WebsiteSites} from './website-sites.js';
 import {WebsiteEditor} from './website-editor.js';
+import {websiteFilesHttp} from './website-files-http.js';
+import {PublicationConversion} from './publication-conversion.js';
 import {websiteWorkspace,websiteJobQueue,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
 import {databaseStatus,databaseCapacity} from './postgres.js';
@@ -396,7 +398,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
         if(sessions.size>=128)forgetSession(sessions.keys().next().value);
-        const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000};
+        const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000,filesOnly:data.filesOnly===true};
         if(access.value.formatVersion===3&&!context.manualLock&&!access.updateRequired){
          try{
           const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
@@ -408,9 +410,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
          }
          catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
         }
-        if(local.access){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
+        if(local.access&&data.filesOnly!==true){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
         if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
-        if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);if(local.access)startJobs(context);
+        if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);if(local.access&&data.filesOnly!==true)startJobs(context);
         claim.complete(session);return json(sessionResponse(res,session));
         }catch(error){claim.fail(error);throw error;}
       }
@@ -518,7 +520,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/access/unlock'){
         if(changing||loginBusy)throw new AppError('LOCKED');
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(changing||loginBusy)throw new AppError('LOCKED');loginBusy=true;
-        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;startJobs(context);return json({ok:true});}
+        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}if(data.filesOnly!==true)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;if(data.filesOnly!==true)startJobs(context);return json({ok:true});}
         finally{selectedContext.readers.open();loginBusy=false;}
       }
       if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;await context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
@@ -530,7 +532,44 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         activities.clear(context.id);return json({ok:true});
       }
       if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/history','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
-      const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+      if(url.pathname.startsWith('/api/website-files/')){
+       if(!workspace||changing||loginBusy||!selectedContext.readers.accepting)throw new AppError('LOCKED');
+       releaseRead=selectedContext.readers.enter();if(!releaseRead)throw new AppError('LOCKED');
+       if(url.pathname==='/api/website-files/session'){
+        // Entering an editor must not cancel an existing export or another
+        // session's job. An idle worker can stop polling until research reopens.
+        client.filesOnly=true;
+        const worker=selectedContext.jobs?.worker,otherResearchSession=[...sessions.values()].some(s=>s!==client&&s.access&&s.expires>Date.now()&&!s.filesOnly);
+        if(!otherResearchSession&&worker?.emptyClaims>0&&!worker.running&&!worker.active)await worker.stop();
+       }
+       return await websiteFilesHttp(req,res,{url,workspace,contextId:selectedContext.id,title:workspaceFolderName(selectedContext.root),body,json,check:req.checkWriter,blockedValues,
+        publisherOptions:{...publishingOptions,connection:github?.forWorkspace(selectedContext.root)},
+        withPublication:async work=>{if(publishing)throw new AppError('GITHUB_PUBLICATION_BUSY');publishing=true;try{return await work();}finally{publishing=false;}},
+        githubAccount:async(operation,data)=>{
+         const connection=publisher?.connection;
+         if(!connection){if(operation==='status')return json({available:false,accounts:[],selected:null,connected:false,signIn:null,error:null});throw new AppError('GITHUB_HELPER_MISSING');}
+         if(operation==='status')return json(await connection.status());
+         if(!['start','cancel','choose','disconnect'].includes(operation))throw new AppError('INVALID');
+         const worker=selectedContext.jobs?.worker;if(publishing||worker?.running&&(!worker.active||['publication.deploy','publication.repository','publication.destination-review'].includes(worker.active.type)))throw new AppError('GITHUB_PUBLICATION_BUSY');
+         if(operation==='start'&&headless)throw new AppError('GITHUB_BROWSER_UNAVAILABLE');
+         publishing=true;try{publisher.token=null;
+          if(operation==='start')return json(await connection.start(),202);
+          if(operation==='cancel')return json(await connection.cancel());
+          if(operation==='choose')return json(await connection.choose(data.login));
+          return json(await connection.disconnect({forget:data.forget===true}));
+         }finally{publishing=false;}
+        },
+        onWrite:()=>{if(!countedWrite){activeWrites++;countedWrite=true;}},
+        listExisting:async data=>{const page=await new WebsiteSites(workspace).list(data);if(!data.after&&!page.sites.some(site=>site.id===null))page.sites.unshift({id:null,name:workspaceFolderName(selectedContext.root)});return page;},
+        convertExisting:async(store,data,options)=>{
+         const projects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+         const reader=publicationSourceFactory(projects,client,workspace,{check:req.checkWriter});
+         const {convertExistingWebsite}=await import('./website-files-migration.js');
+         return projects.withSourceHistory(client,()=>convertExistingWebsite(workspace,store,{...data,...options,sourceReader:reader}));
+        }});
+      }
+      if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}
+      const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
@@ -546,13 +585,13 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }
         if(selectedProject.material){
           const check=req.checkWriter;await check();
-          const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+          const projects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
           if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
           return await materialHttp(req,res,selectedProject,{contextId:selectedContext.id,body,json,execute:(data,options)=>projects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         const data=await body(req,selectedProject.limit,selectedProject.capacity),check=req.checkWriter;
         await check();
-        const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+        const projects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
         if(selectedProject.recordTransfer&&selectedProject.write)req.activityRecoveryKey='record-transfer:'+data?.id;
         if(['create','create/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-create:'+data?.id;
         if(['lab-books/import','lab-books/import/resume','lab-books/import/cancel'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-import:'+data?.id;
@@ -726,7 +765,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
              return await withWorkspaceRenameSession(historyProjects,client,async rename=>{
               const result=await workspaceDirectory.using(target,{replacing:source},async()=>{return rename.begin(renames,data.name,{checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=target;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==source).map(item=>item.path)]});});
               await activate(result.destination,client,vault,{movingFrom:source});
-              await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+              await rename.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
              });
             }catch(error){await clearVault(vault);throw error;}
            },json);
@@ -740,7 +779,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             try{return await withWorkspaceRenameSession(historyProjects,client,async rename=>{
              const result=await workspaceDirectory.using(receipt.destination,{replacing:receipt.source,allowExisting:true},async()=>rename.resume(renames,data.id,{checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=receipt.destination;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==receipt.source).map(item=>item.path)]}));
              await activate(result.destination,client,vault,{movingFrom:receipt.source});
-             await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+             await rename.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
             });}catch(error){await clearVault(vault);throw error;}
            },json);
           }
@@ -807,7 +846,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
               try{return await workspaceDirectory.using(plan.destination,{},async()=>{
                 const location=await copy.encrypted(plan,access,vault);plans.delete(data.id);
                 await activate(location,client,vault);adopted=true;
-                await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));
+                await copy.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));
                 return metadata();
               });}catch(error){if(!adopted)await clearVault(vault);throw error;}
             });
@@ -819,7 +858,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
               return await storageResponse(req,res,async()=>workspaceDirectory.using(await resolveLocation(data.path),{},()=>withWorkspaceCopySession(historyProjects,client,async copy=>{
                 const location=await copy.copy(await copy.plan(data.path,{inspect:false}));operationTransfer({phase:'opening'});
                 await activate(location,client,cloneVault(context.vault),{followSettings:true});
-                await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+                await copy.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
               })),json);
             }
             const plan=plans.get(data.id);if(!plan||plan.portable||plan.expires<Date.now()||data.reviewed!==true)throw new AppError('STALE');
@@ -827,14 +866,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             return await storageResponse(req,res,()=>workspaceDirectory.using(plan.destination,{},()=>withWorkspaceCopySession(historyProjects,client,async copy=>{
               const location=await copy.copy(plan);plans.delete(data.id);operationTransfer({phase:'opening'});
               await activate(location,client,cloneVault(context.vault),{followSettings:true});
-              await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+              await copy.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
             })),json);
           }
           if(url.pathname==='/api/storage/move'){
             if(data.confirmed!==true||data.id!==undefined)throw new AppError('INVALID');
             return await storageResponse(req,res,async()=>{return workspaceDirectory.using(await resolveLocation(data.path),{replacing:context.root},async()=>{const projectCount=await (await historyProjects.registry()).inspect(view=>view.count);
               if(projectCount)await withWorkspaceMoveSession(historyProjects,client,async move=>{
-                await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
+                await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
               });else await moveWorkspaceTo(context.root,data.path,{vault:context.vault,activate:(destination,movingFrom)=>activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true})});return metadata();});},json);
           }
           if(url.pathname==='/api/storage/move/finish'){
@@ -932,7 +971,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(!workspace)throw new AppError('MISSING');
       const pdf=pdfDocumentRequest(url.pathname,req.method);
-      if(pdf){req.operationActivity=null;const service=['export-start','export-resume'].includes(pdf.pdf)?selectedContext.pdfs??=new PdfExportService(workspace,{check:async()=>{if(shuttingDown||context!==selectedContext||selectedContext.manualLock||!selectedContext.vault.key)throw new AppError('ACCESS_LOCKED');}}):null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter,sourceReader,exportService:service})});}
+      if(pdf){req.operationActivity=null;const publicationFiles=(selectedContext.publicationConversion??=new PublicationConversion(workspace)).files;const service=['export-start','export-resume'].includes(pdf.pdf)?selectedContext.pdfs??=new PdfExportService(workspace,{publicationFiles,check:async()=>{if(shuttingDown||context!==selectedContext||selectedContext.manualLock||!selectedContext.vault.key)throw new AppError('ACCESS_LOCKED');}}):null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,publicationFiles,check:req.checkWriter,sourceReader,exportService:service})});}
       const starter=recordStarterRequest(url.pathname,req.method);
       if(starter){
         if(!starter.write)req.operationActivity=null;
@@ -1131,23 +1170,24 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);
-        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,{...options,withConfigurationSource:configurationSourceAccess(historyProjects,client,{check:req.checkWriter})}),json);
+        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,{...options,publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),withConfigurationSource:configurationSourceAccess(historyProjects,client,{check:req.checkWriter})}),json);
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await executeResearchRequest(workspace,url.pathname,data,{signal:controller.signal}));}finally{res.off('close',abort);}
       }
-      if(req.method==='POST'&&url.pathname==='/api/workspace/save'){const data=await body(req);requireCurrentWorkspaceName(workspace,data.metadata?.title);return json(await new WorkspaceEdits(workspace,media).save(data));}
+      if(req.method==='POST'&&url.pathname==='/api/workspace/save'){const data=await body(req);requireCurrentWorkspaceName(workspace,data.metadata?.title);return json(await new WorkspaceEdits(workspace,media,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace)}).save(data));}
       if(req.method==='POST'&&url.pathname.startsWith('/api/website/research/')){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await new WebsiteResearch(workspace).run(url.pathname.slice('/api/website/research/'.length),await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
       }
       if (req.method === 'POST' && url.pathname === '/api/notebook/save') {
         const data = await body(req);
-        requireCurrentWorkspaceName(workspace,data.book?.title);await assertExistingNativeStructure(workspace,data.book,data.etag);return json(responseBook(await workspace.save(data.book, data.etag)));
+        requireCurrentWorkspaceName(workspace,data.book?.title);await assertExistingNativeStructure(workspace,data.book,data.etag);const conversion=selectedContext.publicationConversion??=new PublicationConversion(workspace);return json(responseBook(await conversion.mutate(workspace,{route:'/api/notebook/save',data},()=>workspace.save(data.book,data.etag))));
       }
       if(req.method==='POST'&&['/api/workspace/structure','/api/workspace/reorganize/preview','/api/workspace/reorganize','/api/workspace/notebook'].includes(url.pathname)){
         const kind=url.pathname.split('/')[3],preview=url.pathname.endsWith('/preview');
         const data=await body(req);if(kind==='reorganize')requireCurrentWorkspaceName(workspace,data.change?.workspaceTitle);const execute=async options=>{
-          const result=await new StructureCommands(workspace).execute(kind,data,{preview,...options});
+          const command=()=>new StructureCommands(workspace).execute(kind,data,{preview,...options});
+          const result=await (preview?command():(selectedContext.publicationConversion??=new PublicationConversion(workspace)).mutate(workspace,{route:url.pathname,data},command));
           return preview||result.recordUpdate||result.recordPatch||result.outline?result:responseBook(result);
         };
         return await operationResponse(req,res,execute,json);

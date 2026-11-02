@@ -11,10 +11,12 @@ import {researchId} from './web/research-reference.js';
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','convert-existing','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
-const previewPolicy="default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+// Only files belonging to this saved revision can be embedded. The same
+// loopback origin also serves protected research routes.
+const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},convertExisting,listExisting}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},convertExisting,listExisting,githubAccount,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
@@ -32,13 +34,14 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(req.method==='GET'&&operation.startsWith('preview/')){
    const match=/^preview\/([^/]+)\/([a-f0-9]{64})\/(.+)$/.exec(operation);
    if(!match||!researchId(match[1]))throw new AppError('INVALID');
+   const policy=previewPolicy(url.origin+prefix+'preview/'+match[1]+'/'+match[2]+'/');
    if(url.searchParams.get('canvas')==='1'){
     const site=await store.checkRevision(match[1],match[2]);
     if(!site.pages.some(page=>page.path===decodeURIComponent(match[3])))throw new AppError('NOT_FOUND');
-    res.setHeader('Content-Security-Policy',previewPolicy);res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head></head><body></body></html>');return true;
+    res.setHeader('Content-Security-Policy',policy);res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head></head><body></body></html>');return true;
    }
    const file=await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal});
-   await check();res.setHeader('Content-Security-Policy',previewPolicy);
+   await check();res.setHeader('Content-Security-Policy',policy);
    await serveContent(req,res,file.content??file.bytes,file.contentType,{signal});return true;
   }
   if(req.method==='GET'&&operation==='export'){
@@ -59,7 +62,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   if(operation==='list'){json(await store.list(data));return true;}
   if(operation==='library'){json(await store.library(data));return true;}
-  if(operation==='create'){json(await store.create(data));return true;}
+  if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
+  if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   if(operation==='legacy-list'){json(await listExisting(data,{signal}));return true;}
   if(operation==='convert-existing'){json(await convertExisting(store,data,{signal,blockedValues}));return true;}
   const {siteId,expectedRevision,...options}=data;
@@ -93,7 +97,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
     if(saved.config.kind==='ssh')json({id:null,kind:'ssh',requiresReview:true,files:candidate.files.size,revision:expectedRevision});
     else json(await target.reviewDestination(candidate,options.configEtag,{signal,replaceExisting:options.replaceExisting===true,archiveBranch:options.archiveBranch??null,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)}));
    }
-   else {if(options.destinationReviewed!==true)throw new AppError('PUBLISH_STALE');json({receipt:await target.deploy(candidate,options.configEtag,workspace.vault?.id,{...(options.destinationReview?{destinationReview:options.destinationReview}:{}),destinationReviewed:true})});}
+   else {if(options.destinationReviewed!==true)throw new AppError('PUBLISH_STALE');json({receipt:await withPublication(()=>target.deploy(candidate,options.configEtag,workspace.vault?.id,{...(options.destinationReview?{destinationReview:options.destinationReview}:{}),destinationReviewed:true}))});}
    return true;
   }
   throw new AppError('NOT_FOUND');
