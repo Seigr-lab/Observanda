@@ -1,3 +1,5 @@
+import {websiteTextLinks} from './website-files-text-link.js';
+
 const marker='data-website-instance',dragType='application/x-observanda-component';
 function nodeAt(doc,path){
  if(typeof path!=='string'||!/^\d+(?:\/\d+)*$/.test(path))return null;
@@ -48,13 +50,14 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
  function editor(value,pin){
   closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog';host.setAttribute('aria-label',tr('componentEdit'));
   host.innerHTML='<h2>'+esc(tr('componentEdit'))+'</h2><p>'+esc(tr('componentApplyHelp'))+'</p><label>'+esc(tr('componentName'))+'<input data-main-name maxlength="100"></label>'+
-   '<iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+
+   '<div class="inline-actions" data-main-links></div><iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+
    '<p role="alert" data-main-error></p><div class="inline-actions"><button type="button" data-main-apply>'+esc(tr('componentApply'))+'</button><button type="button" data-main-cancel>'+esc(tr('cancel'))+'</button></div>';
   const title=host.querySelector('[data-main-name]'),source=host.querySelector('textarea'),frame=host.querySelector('iframe'),apply=host.querySelector('[data-main-apply]');
   title.value=value.name;source.value=value.html;
   // Only admitted server markup is loaded into the interactive frame.
   // User-entered HTML stays inert until the server validates the new main.
-  let code=false;source.oninput=()=>{code=true;frame.inert=true;};
+  const linkTools=host.querySelector('[data-main-links]');
+  let code=false;source.oninput=()=>{code=true;frame.inert=true;linkTools.inert=true;};
   frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!host.isConnected)return;
    const fragment=doc.createElement('template');fragment.innerHTML=value.html;
@@ -64,6 +67,9 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
    doc.addEventListener('drop',e=>e.preventDefault());
    doc.addEventListener('paste',e=>{e.preventDefault();doc.execCommand('insertText',false,e.clipboardData.getData('text/plain'));});
    doc.body.oninput=()=>{if(!code)source.value=doc.body.innerHTML;};
+   websiteTextLinks({document:doc,tools:linkTools,t:tr,listen:(node,type,cb)=>node.addEventListener(type,cb),
+    safeRange:range=>!code&&host.open&&frame.contentDocument===doc&&doc.body.contains(range.commonAncestorContainer),
+    beforeChange:()=>{},change:()=>{source.value=doc.body.innerHTML;}});
   };
   const url='/api/website-files/preview/'+encodeURIComponent(pin.siteId)+'/'+encodeURIComponent(pin.expectedRevision)+'/index.html?canvas=1';
   frame.src=url;

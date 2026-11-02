@@ -1,24 +1,10 @@
 import {selectionMarkStates,setSelectionMark} from './website-files-rich-marks.js';
+import {websiteTextLinks} from './website-files-text-link.js';
 
 const blockSelector='p,h1,h2,h3,h4,h5,h6,li,blockquote,div,figcaption,td,th,summary,pre';
 const owned='[data-observanda-part],[data-observanda-source],[data-observanda-link]';
 const element=node=>node?.nodeType===1?node:node?.parentElement;
 
-function validAddress(value, base) {
-  if(!value || /[\\\s\u0000-\u001f]/.test(value))return false;
-  if(value.startsWith('#'))return true;
-  let url;
-  try{url=new URL(value,base);}catch{return false;}
-  if(/^[a-z][a-z\d+.-]*:/i.test(value)){
-    if(url.protocol==='mailto:')return true;
-    return ['http:','https:'].includes(url.protocol) && !url.username && !url.password &&
-      !/^(?:localhost|127\.|\[::1\])/.test(url.hostname) && !/^\/api(?:\/|$)/i.test(url.pathname);
-  }
-  if(value.startsWith('/')||/[?%:]/.test(value))return false;
-  const root=new URL('./',base);
-  const revision=root.pathname.match(/^.*\/preview\/[^/]+\/[a-f0-9]{64}\//);
-  return url.origin===root.origin&&url.pathname.startsWith(revision?.[0]??root.pathname);
-}
 
 export function websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange}) {
   const toolbar=make('fieldset');toolbar.className='website-visual-rich';
@@ -92,35 +78,7 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
   for(let i=1;i<=6;i++)option('h'+i,t('richHeading')+' '+i);
   listen(heading,'change',()=>{if(heading.value)command('formatBlock',heading.value);});
 
-  const linkBox=make('div');linkBox.className='website-visual-link';linkBox.hidden=true;
-  const input=make('input');input.type='text';input.setAttribute('aria-label',t('richLinkAddress'));
-  const apply=make('button',t('richApplyLink'));apply.type='button';linkBox.append(input,apply);toolbar.append(linkBox);
-  function anchor(range){
-    const first=element(range?.startContainer)?.closest('a');
-    return first?.contains(range.endContainer)&&!first.matches('[data-observanda-link]')?first:null;
-  }
-  const link=button('richLink',()=>{
-    const range=current();if(!range)return;
-    linkBox.hidden=!linkBox.hidden;
-    if(!linkBox.hidden){input.setCustomValidity('');input.value=anchor(range)?.getAttribute('href')??'';input.focus();}
-  });
-  function applyLink(){
-    const range=current(), value=input.value.trim();if(!range)return;
-    if(!validAddress(value,document.location.href)){input.setCustomValidity(t('richLinkAddress'));input.reportValidity();return;}
-    const node=anchor(range);linkBox.hidden=true;
-    if(node){beforeChange();node.setAttribute('href',value);restore();change();return;}
-    if(!range.collapsed){command('createLink',value);return;}
-    restore();beforeChange();
-    const a=document.createElement('a');a.href=value;a.textContent=value;
-    range.insertNode(a);range.setStartAfter(a);range.collapse(true);change();
-  }
-  listen(input,'input',()=>input.setCustomValidity(''));
-  listen(input,'keydown',event=>{if(event.key==='Enter'){event.preventDefault();applyLink();}else if(event.key==='Escape'){event.preventDefault();linkBox.hidden=true;link.focus();}});
-  listen(apply,'click',applyLink);
-  const unlink=button('richUnlink',()=>{
-    const range=current(),node=range&&anchor(range);
-    if(!node)return;beforeChange();restore();node.replaceWith(...node.childNodes);change();capture();
-  });
+  websiteTextLinks({document,tools,t,listen,safeRange,beforeChange,change});
   function sync(){
     const range=current(),marks=selectionMarkStates(range);
     for(const [name,button] of controls){
@@ -133,7 +91,6 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
     tools.hidden=!range;
     const label=t(!range?'richChooseText':range.collapsed?'richCaret':'richSelection');if(context.textContent!==label)context.textContent=label;
     heading.disabled=!range||!safeBlock(range);heading.value=range?element(range.startContainer).closest(blockSelector)?.localName??'':'';
-    link.disabled=!range;unlink.disabled=!range||!anchor(range);
   }
   listen(document,'selectionchange',()=>{
     // Moving focus to an external control may empty the native selection.
