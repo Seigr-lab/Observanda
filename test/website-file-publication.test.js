@@ -20,6 +20,8 @@ test('reviewed publication writes the saved HTML and CSS to a real folder withou
   for(const method of ['outline','catalogue','openCatalogue','withLock','readMetadata','writeMetadata'])workspace[method]=()=>assert.fail('Unexpected research database call: '+method);
   const store=new WebsiteFileStore(workspace),{site}=await store.create({name:'Laboratory'});
   const call=async(operation,data)=>{let result;const res=new EventEmitter();await websiteFilesHttp({method:'POST'},res,{url:new URL('/api/website-files/'+operation,'http://localhost'),workspace,contextId:'test',body:async()=>data,check:async()=>{},json:value=>{result=value;}});return result;};
+  assert.deepEqual(await call('version',{siteId:site.id}),{revision:site.revision});
+  assert.deepEqual(await call('pdf-version',{}),{revision:null});
   const command={siteId:site.id,expectedRevision:site.revision,directory:folder};
   const plan=await call('folder/plan',command);assert.equal(plan.counts.added,3);
   await assert.rejects(call('folder/apply',{...command,id:plan.id,reviewed:false}),{code:'LOCAL_EXPORT_REVIEW'});

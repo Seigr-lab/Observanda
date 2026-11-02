@@ -54,7 +54,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    }));return true;
   }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
-  if(req.method==='GET'&&!['session','list','library'].includes(operation))throw new AppError('NOT_FOUND');
+  if(req.method==='GET'&&!['session','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
   if(writes.has(operation)){onWrite();await check();}
@@ -63,6 +63,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.sites??result.items??[],next:result.next??null,legacyAvailable:true});return true;
   }
   if(operation==='list'){json(await store.list(data));return true;}
+  if(operation==='pdf-version'){json({revision:await store.pdfVersion({signal})});return true;}
   if(operation==='library'){json(await store.library(data));return true;}
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
@@ -71,9 +72,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
-  if(operation==='version'){
-   const current=await store.checkRevision(siteId);json({revision:typeof current==='string'?current:current.revision??current.site?.revision});return true;
-  }
+  if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}
   if(operation==='save'){json(await store.save(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='destination'||operation==='destination/save'){
