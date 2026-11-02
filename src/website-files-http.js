@@ -9,6 +9,7 @@ import {serveContent} from './file-content.js';
 import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 import {websitePictureUpload} from './website-picture-upload.js';
+import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
@@ -55,6 +56,11 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    }));return true;
   }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
+  if(operation==='media/save'&&req.method==='POST'){
+   if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
+   onWrite();await check();const upload=await readRecordingUpload(req,signal);
+   json(await saveRecordingUpload(store,upload,{signal,check}));return true;
+  }
   if(req.method==='GET'&&!['session','preparation','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
   if(operation==='save-pictures'&&req.method==='POST'){
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
@@ -81,6 +87,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
+  if(operation==='media/library'){json(await websiteRecordingLibrary(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,signal}));return true;}
   if(operation==='menu/save'){json(await store.saveMenu(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}

@@ -31,7 +31,7 @@ export class WebsiteFilesCandidate {
     for await(const bytes of stream){signal?.throwIfAborted();hash.update(bytes);size+=bytes.length;yield bytes;}
     if(size!==contentSize(content)||hash.digest('hex')!==contentHash(content))throw new AppError('STALE');
    }
-   if(/\.(?:html|css|json|svg|csv|js)$/i.test(name)){
+   if(/\.(?:html|css|json|svg|csv|js|vtt)$/i.test(name)){
     if(await hasPrivateTextStream(checked,this.blockedValues,{signal}))throw new AppError('PRIVACY',[{field:'website file'}]);
    }else for await(const _ of checked()){ /* Validate binary assets in one pass. */ }
    await onFile?.();

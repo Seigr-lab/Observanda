@@ -25,10 +25,11 @@ export function validateWebsiteCSS(css,{file='style.css',pictures}={}){
 function externalLink(value){
  try{const url=new URL(value);return url.protocol==='mailto:'||['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!/^(?:localhost|127\.|\[::1\])/.test(url.hostname)&&!/^\/api(?:\/|$)/i.test(url.pathname);}catch{return false;}
 }
-export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pictures}={}){
+export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pictures,recordings}={}){
  if(typeof html!=='string'||Buffer.byteLength(html)>16*1024*1024)throw new AppError('LIMIT');
  const root=parse(html);
- function visit(node){
+ function visit(node,inPlacement=false){
+  inPlacement ||= node.attrs?.some(attr=>attr.name==='data-observanda-source'||attr.name==='data-observanda-link')??false;
   if(forbidden.has(node.tagName))throw new AppError('INVALID');
   if(node.tagName==='meta'&&node.attrs?.some(attr=>attr.name==='http-equiv')){
    if(node.attrs.find(attr=>attr.name==='http-equiv').value.toLowerCase()!=='content-security-policy'||node.attrs.find(attr=>attr.name==='content')?.value!==generatedPolicy)throw new AppError('INVALID');
@@ -41,6 +42,11 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pi
    if(/^on/i.test(name)||['srcdoc','formaction','ping','is','action'].includes(name))throw new AppError('INVALID');
    if(name==='style')validateWebsiteCSS(value,{file,pictures});
    if(pictures&&(resources.has(name)||name==='href')){const resource=localURL(value,file);if(resource?.startsWith('pictures/'))pictures.add(resource);}
+   if(recordings&&(resources.has(name)||name==='href')){
+    const resource=localURL(value,file);if(resource?.startsWith('recordings/')){
+     if(inPlacement)throw new AppError('INVALID');recordings.add(resource);
+    }
+   }
    if(resources.has(name)&&value&&localURL(value,file)===null)throw new AppError('INVALID');
    if(name==='href'){
     if(node.tagName==='link'){if(localURL(value,file)===null||!['stylesheet','icon','alternate','canonical'].includes(node.attrs.find(attr=>attr.name==='rel')?.value))throw new AppError('INVALID');}
@@ -48,7 +54,7 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pi
    }
   }
   if(node.tagName==='style')validateWebsiteCSS((node.childNodes??[]).map(child=>child.value??'').join(''),{file,pictures});
-  for(const child of node.childNodes??[])visit(child);if(node.content)visit(node.content);
+  for(const child of node.childNodes??[])visit(child,inPlacement);if(node.content)visit(node.content,inPlacement);
  }
  visit(root);return html;
 }

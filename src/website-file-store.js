@@ -20,6 +20,7 @@ import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSource,updateWebsiteSource} from './website-file-html.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
+import {saveWebsiteRecordings} from './website-recordings.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -223,33 +224,35 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  menu(id,options){return readSiteMenu(this,id,options);}
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
- save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,signal}={}){return this.scope(async()=>{
+ save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
   const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
   const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
-  const scripts=await this.scripts(manifest.files),htmlPictures=new Set(),cssPictures=new Set();
+  const scripts=await this.scripts(manifest.files),htmlPictures=new Set(),cssPictures=new Set(),recordingNames=new Set();
   const addViewer=!scripts.has('public-gallery.js')&&typeof html==='string'&&html.includes('public-gallery.js');
   if(addViewer)scripts.add('public-gallery.js');
-  validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures});validateWebsiteCSS(css,{file:cssPath,pictures:cssPictures});
+  validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});validateWebsiteCSS(css,{file:cssPath,pictures:cssPictures});
   if(former?.placements.length||placements.length){
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
   }
   if(!former){
    ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
-   validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures});
+   validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
   }
   const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
   if(addViewer)files.push(await this.siteFile(id,'public-gallery.js',PUBLIC_GALLERY_SCRIPT,{signal}));
   if(html.includes('public-gallery.css')&&!files.some(file=>file.name==='public-gallery.css')){
    const viewerCSS=await readFile(new URL('./web/public-gallery.css',import.meta.url),'utf8');files.push(await this.siteFile(id,'public-gallery.css',viewerCSS,{signal}));
   }
-  const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],...(draft?{draft:true}:{})});
+  const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
   const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures,draft,signal});
-  let saved;try{saved=await this.commit({...candidate,files:pictures.files,pictureStyles:pictures.pictureStyles},{signal});}
-  catch(error){if((await this.raw(id)).revision===manifest.revision)await pictures.rollback();throw error;}
+  let saved,media;try{
+   media=await saveWebsiteRecordings(this,manifest,{files:pictures.files,pages,names:recordingNames,uploads:recordings,draft,signal});
+   saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal});
+  }catch(error){if((await this.raw(id)).revision===manifest.revision){await pictures.rollback();await media?.rollback();}throw error;}
   return this.present(saved,page,{signal});
  },{write:true,signal});}
  checkRevision(id,revision){return this.scope(async()=>this.site(await this.current(id,revision)));}
