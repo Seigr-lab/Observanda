@@ -1,6 +1,7 @@
 import {websiteDefaults} from './web/website-model.js';
 import {upgradeRecord} from './web/record-model.js';
 import { readFile } from 'node:fs/promises';
+import {installationFileError} from './errors.js';
 import {posix} from 'node:path';
 import { createNotebook, validateNotebook } from './model.js';
 import { buildPublication } from './publication.js';
@@ -14,7 +15,14 @@ import {publicationText} from './web/publication-messages.js';
 // image/logo are drawn grids/circles; audio is a quiet tone; video fades the grid.
 // This module never reads or writes user records or fetches remote media.
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const assets = new Map(await Promise.all([['image','png'],['logo','png'],['audio','wav'],['video','mp4']].map(async ([name,ext],i)=>[id(100+i),{kind:name==='logo'?'image':name,extension:ext,bytes:await readFile(new URL(`./preview-assets/${name}.${ext}`,import.meta.url))}])));
+let sampleAssets;
+function loadSampleAssets(){
+  sampleAssets??=Promise.all([['image','png'],['logo','png'],['audio','wav'],['video','mp4']].map(async ([name,extension],index)=>{
+    const bytes=await readFile(new URL(`./preview-assets/${name}.${extension}`,import.meta.url));
+    return [id(100+index),{kind:name==='logo'?'image':name,extension,bytes}];
+  })).then(entries=>new Map(entries)).catch(error=>{sampleAssets=undefined;throw installationFileError(error);});
+  return sampleAssets;
+}
 export const EXAMPLE_GALLERY = `pages/${id(60)}.html`;
 
 export function designExampleBook(appearance) {
@@ -37,9 +45,9 @@ export function designExampleBook(appearance) {
   return validateNotebook(book);
 }
 
-export function buildDesignExamples(appearance, {blockedValues=[],fontFiles=new Map()}={}) {
+export async function buildDesignExamples(appearance, {blockedValues=[],fontFiles=new Map()}={}) {
   const book=designExampleBook(appearance),edition={version:1,records:book.entries.map(record=>{const choice=defaultEditionRecord(record,recordRevision(record));choice.figures.forEach(f=>f.data=true);return choice;})};
-  const candidate=buildPublication(book,{blockedValues,fontFiles,mediaFiles:assets,edition});
+  const candidate=buildPublication(book,{blockedValues,fontFiles,mediaFiles:await loadSampleAssets(),edition});
   const main = html => /<main id="content" class="page-content">([\s\S]*?)<\/main>/.exec(html)[1];
   const relocate=(html,from)=>html.replace(/(href|src)="([^"]+)"/g,(match,attribute,url)=>{
     if(/^(?:#|[a-z][a-z0-9+.-]*:|\/)/i.test(url))return match;

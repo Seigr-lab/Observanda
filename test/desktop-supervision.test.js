@@ -4,6 +4,16 @@ import {setImmediate} from 'node:timers/promises';
 import {ServiceSupervisor} from '../desktop/service-supervisor.js';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 
+test('a specific service failure remains the only report while its dialog is open and after dismissal',async()=>{
+ const supervisor=new ServiceSupervisor({query:async()=>({})}),dismiss=deferred(),messages=[];
+ const pending=supervisor.reportFailure(()=>{messages.push('installation file missing');return dismiss.promise;});
+ assert.equal(supervisor.exited(),true);
+ await supervisor.reportFailure(()=>messages.push('unexpected exit'));
+ dismiss.resolve();await pending;
+ await supervisor.reportFailure(()=>messages.push('duplicate error'));
+ assert.deepEqual(messages,['installation file missing']);
+});
+
 test('unresponsive shutdown is reported within a bounded wait and never declares work lost or kills it',async t=>{
  t.mock.timers.enable({apis:['setTimeout','setInterval','Date']});const exit=deferred(),notices=[];let stops=0;
  const supervisor=new ServiceSupervisor({query:()=>new Promise(()=>{}),intervalMs:10,probeMs:5,noticeMs:30,onWaiting:notice=>notices.push(notice)});

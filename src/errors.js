@@ -13,6 +13,9 @@ export class AppError extends Error {
 }
 
 const ownerId=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
+export function installationFileError(error){
+  return ['ENOENT','ENOTDIR','ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND'].includes(error?.code)?new AppError('INSTALL_FILE_MISSING'):error;
+}
 export function safeError(error) {
   if(error instanceof CellComputationError)error=new AppError(error.code);
   if(error instanceof CoordinateFrameError)error=new AppError(error.code);

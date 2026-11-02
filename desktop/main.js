@@ -30,9 +30,23 @@ app.on('browser-window-focus',()=>localized.refresh());app.on('will-quit',()=>lo
 const supervisor=new ServiceSupervisor({query:()=>{if(!child?.connected)throw Error('Service is disconnected');return serviceState();},
  onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(dt('degradedTitle'));else if(serviceDegraded&&(state==='starting'||state==='ready'))main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
  onWaiting:async({phase,responding})=>{
+  if(testLaunch){console.error(dt('shutdownMessage'));return;}
   const detail=(responding?(dt(['http-drain','database-stop'].includes(phase)?phase:'shutdownDetail')):dt('shutdownUnresponsive'))+'\n\n'+dt('shutdownRecovery');
   await dialog.showMessageBox({type:'warning',title:dt('shutdownTitle'),message:dt('shutdownMessage'),detail,buttons:[dt('keepWaiting')],defaultId:0,cancelId:0});
  }});
+async function reportFailure(message){
+ await supervisor.reportFailure(async()=>{
+  const reason=localized.error(message);
+  if(testLaunch){
+   console.error(reason);
+   if(main&&!main.isDestroyed())await main.loadURL(desktopStartupPage(localized.language,dt,reason));
+   return;
+  }
+  const options={type:'error',title:dt('startFailedTitle'),message:reason,detail:dt('startFailedDetail'),buttons:[dt('ok')]};
+  if(main&&!main.isDestroyed()){await dialog.showMessageBox(main,options);main?.close();}
+  else await dialog.showMessageBox(options);
+ });
+}
 function serviceState(){
   if(!child?.connected)return Promise.resolve({busy:false,failure:0});
   return new Promise((resolve,reject)=>{
@@ -102,21 +116,20 @@ else{
   child=launchService(executable,service,env);
   supervisor.monitor();
   attachPdfService(child);child.stdout.resume();child.stderr.resume();
-  const failed=async message=>{if(stopping)return;await dialog.showMessageBox({type:'error',title:dt('startFailedTitle'),message:localized.error(message),detail:dt('startFailedDetail'),buttons:[dt('ok')]});main?.close();};
-  child.on('error',()=>{resolveExit();void failed(dt('serviceStartFailed'));});
-  child.on('exit',()=>{const unexpected=supervisor.exited();resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(unexpected)void failed(dt('serviceStopped'));});
+  child.on('error',error=>{resolveExit();void reportFailure(error.code==='ENOENT'?{code:'INSTALL_FILE_MISSING'}:dt('serviceStartFailed'));});
+  child.on('exit',()=>{const unexpected=supervisor.exited();resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(unexpected)void reportFailure(dt('serviceStopped'));});
   child.on('message',async message=>{
     if(!message||typeof message!=='object')return;
     if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure,phase:message.phase});return;}
     if(message.type==='lifecycle')supervisor.progress(message.phase);
     if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();const url=new URL(message.url);origin=url.origin;if(process.argv.includes('--website'))url.searchParams.set('view','website');await main.loadURL(url.href);}
     if(message.type==='progress'&&typeof message.message==='string')showProgress(message);
-    if(message.type==='failed'&&typeof message.message==='string')void failed(message);
+    if(message.type==='failed'&&typeof message.message==='string')void reportFailure(message);
     if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){
       const result=protectDeviceValue(safeStorage,message);
       if(child.connected)child.send({type:'protected',id:message.id,...(typeof result==='string'?{value:result}:{error:true})});
     }
   });
   child.send({type:'start',preferencesFile,deviceProtection:deviceProtectionAvailable(safeStorage)});
-  }).catch(async()=>{await dialog.showMessageBox({type:'error',title:dt('startFailedTitle'),message:dt('windowFailed'),buttons:[dt('ok')]});main?.destroy();await stopService();});
+  }).catch(async()=>{await reportFailure(dt('windowFailed'));main?.destroy();await stopService();});
 }

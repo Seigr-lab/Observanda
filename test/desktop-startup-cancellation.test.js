@@ -22,3 +22,17 @@ test('desktop answers status during deferred loading and cancels before starting
   const bytes=await readFile(path.join(directory,name),'utf8');assert.equal(bytes.includes('service-failed'),false);
  }
 });
+
+test('missing bundled service module reaches the desktop as an installation error', {timeout:20000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-startup-missing-'));
+ const child=launchService(process.execPath,fileURLToPath(new URL('./fixtures/desktop-service-loading.js',import.meta.url)),{...process.env,OBSERVANDA_FIXTURE_MISSING_MODULE:'1'}),reports=[];
+ const ended=once(child,'close');child.stdout.resume();child.stderr.resume();
+ t.after(async()=>{if(child.exitCode===null&&child.signalCode===null)child.kill();await ended;await rm(root,{recursive:true,force:true});});
+ child.on('message',value=>{
+  if(value.type==='fixture-ready')child.send({type:'start',preferencesFile:path.join(root,'preferences.json')});
+  if(value.type==='failed')reports.push(value);
+ });
+ assert.deepEqual(await ended,[1,null]);assert.equal(reports.length,1);
+ assert.equal(reports[0].code,'INSTALL_FILE_MISSING');assert.match(reports[0].message,/installation file is missing/i);
+ assert.ok(!reports[0].message.includes(root));
+});

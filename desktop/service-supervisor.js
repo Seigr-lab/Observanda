@@ -10,6 +10,11 @@ export class ServiceSupervisor{
  }
  change(state){this.state=state;try{this.onState({state,phase:this.phase});}catch{}}
  ready(){this.wasReady=true;if(!this.stopping&&this.state!=='stopped')this.change('ready');}
+ reportFailure(report){
+  if(this.stopping||this.failureReported)return;
+  this.failureReported=true;
+  return report();
+ }
  progress(phase){if(phases.has(phase)){this.phase=phase;this.change(this.state);}}
  exited(){const unexpected=!this.stopping;clearInterval(this.timer);this.change('stopped');return unexpected;}
  monitor(){

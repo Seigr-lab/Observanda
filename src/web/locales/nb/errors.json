@@ -1,4 +1,5 @@
 {
+  "INSTALL_FILE_MISSING": "En installasjonsfil for Observanda mangler. Reparer eller installer Observanda på nytt.",
   "DATABASE_GUARD_STORAGE": "Databaselagringen kan ikke sikre verifisert privat tilgang og beskyttelse av mapper. Eksisterende data er bevart. Velg lagring med støttede tilgangskontroller, eller be administratoren flytte databasen til en verifisert privat mappe.",
   "DATABASE_GUARD_UNAVAILABLE": "Dette systemet kunne ikke beskytte prosessene til den administrerte databasen. Eksisterende data er bevart. Bruk et støttet system eller en eksternt administrert PostgreSQL-tjeneste.",
   "READINESS_LIMIT": "Metadataene for det valgte arbeidsområdet overskrider den avgrensede klargjøringskontrollen. Den fulle integriteten er ikke kontrollert; dette resultatet rapporterer ikke dataskade.",

@@ -1457,7 +1457,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{
           const {book,source,websitePin,websiteDraft}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
           if(source==='website')return json(await appearancePreviews.create(workspace,{...data,websitePin,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
-          const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
+          const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=await buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
           controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,websitePin,...(websiteDraft?{websiteDraft}:{}),pages:result.candidate.pages});
         }finally{res.off('close',abort);}
       }

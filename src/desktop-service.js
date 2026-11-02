@@ -4,7 +4,7 @@ import {desktopProgressMessage} from './desktop-localization.js';
 // The desktop window runs the existing HTTP app in a bundled Node process.
 // There is no renderer-to-Node bridge or separate desktop workspace model.
 import path from 'node:path';
-import {AppError,safeError} from './errors.js';
+import {AppError,safeError,installationFileError} from './errors.js';
 import {OperationalDiagnostics,withDiagnostics,diagnosticPhase} from './operational-diagnostics.js';
 let runtime,server,diagnostics,starting=false,stopping=false,closed,phase='startup';const startup=new AbortController(),pending=new Map();let sequence=0;
 const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options),{capabilities:()=>pdfBridge.capabilities()});
@@ -39,7 +39,7 @@ process.on('message',async message=>{
   try{
     const [{startWorkspaceDatabases},{startServer},{readPreference},{DeviceStore}]=await withDiagnostics(diagnostics,()=>diagnosticPhase('startup-modules',()=>Promise.all([
       import('./workspace-databases.js'),import('./server.js'),import('./locations.js'),import('./security/device-store.js')
-    ])));
+    ]))).catch(error=>{throw installationFileError(error);});
     startup.signal.throwIfAborted();
     runtime=await withDiagnostics(diagnostics,()=>diagnosticPhase('startup',()=>startWorkspaceDatabases({directory:path.join(path.dirname(message.preferencesFile),'postgresql'),signal:startup.signal,onProgress:({stage,percent})=>send({type:'progress',stage,...(Number.isFinite(percent)?{percent}:{}),message:desktopProgressMessage({stage,percent})})})));
     startup.signal.throwIfAborted();const root=await readPreference(message.preferencesFile);
@@ -48,7 +48,7 @@ process.on('message',async message=>{
     startup.signal.throwIfAborted();send({type:'ready',url:server.url});
   }catch(error){
     const cancelled=stopping&&startup.signal.aborted&&(error===startup.signal.reason||error.name==='AbortError'||error.code==='DATABASE_CANCELLED');
-    if(!cancelled){diagnostics.record('service-failed',{phase:'startup',error});if(!stopping)send({type:'failed',code:safeError(error).code,message:safeError(error).message});process.exitCode=1;}
+    if(!cancelled){diagnostics.record('service-failed',{phase:'startup',error});if(!stopping){const {code,message}=safeError(error);send({type:'failed',code,message});}process.exitCode=1;}
     stopping=true;
   }
   finally{starting=false;if(stopping)await stop();}

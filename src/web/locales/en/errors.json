@@ -1,4 +1,5 @@
 {
+  "INSTALL_FILE_MISSING": "An Observanda installation file is missing. Repair or reinstall Observanda.",
   "DATABASE_GUARD_STORAGE": "The database storage cannot provide verified private access and directory protection. Existing data has been preserved. Select storage with supported access controls, or ask your administrator to move the database into a verified private directory.",
   "DATABASE_GUARD_UNAVAILABLE": "This system could not protect the managed database processes. Existing data has been preserved. Use a supported system or an externally managed PostgreSQL service.",
   "READINESS_LIMIT": "The selected workspace metadata exceeds the bounded readiness check. Its full integrity has not been checked; this result does not report corruption.",

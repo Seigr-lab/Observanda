@@ -84,7 +84,7 @@ export class ProjectPublications{
     const id=result.baseUrl.split('/').filter(Boolean).at(-1);
     return {...result,baseUrl:this.appearanceUrl(id),url:this.appearanceUrl(id,result.defaultPage),pagesUrl:this.appearanceUrl(id,'pages')};
    }
-   const fontFiles=await fonts.files(source.book.appearance,{preview:true,signal}),result=buildDesignExamples(source.book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
+   const fontFiles=await fonts.files(source.book.appearance,{preview:true,signal}),result=await buildDesignExamples(source.book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
    signal?.throwIfAborted();this.designs.set(id,result.candidate);return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:source.source,websitePin:source.websitePin,...(source.websiteDraft?{websiteDraft:source.websiteDraft}:{}),pages:result.candidate.pages};
   }
   if(operation==='appearance-pages')return this.appearancePreviews.choices(request.id,{cursor:query.cursor??null,path:query.path??null,signal});

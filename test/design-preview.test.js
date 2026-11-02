@@ -1,13 +1,37 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import {buildDesignExamples,EXAMPLE_GALLERY} from '../src/design-preview.js';
 import {startingAppearance} from '../src/web/themes.js';
 import {verifyPublication} from '../src/publication.js';
 
-test('complete design gallery reuses publication styles, has working links and covers editable components',()=>{
+test('startup skips specimen media and a missing example can be retried after repair',async t=>{
+  const read=fs.readFile,reads=[];let videoMissing=true;
+  const mocked=t.mock.method(fs,'readFile',async(file,...rest)=>{
+    if(file instanceof URL&&file.pathname.includes('/preview-assets/')){
+      reads.push(file.pathname.split('/').at(-1));
+      if(videoMissing&&reads.at(-1)==='video.mp4')return read(new URL('missing-video.mp4',file),...rest);
+    }
+    return read(file,...rest);
+  });
+  syncBuiltinESMExports();
+  try{
+    const preview=await import('../src/design-preview.js?deferred-assets');
+    assert.deepEqual(reads,[]);
+    const appearance=startingAppearance('research');
+    await assert.rejects(preview.buildDesignExamples(appearance),{code:'INSTALL_FILE_MISSING'});
+    videoMissing=false;reads.length=0;
+    const results=await Promise.all([preview.buildDesignExamples(appearance),preview.buildDesignExamples(appearance)]);
+    assert.deepEqual(reads.sort(),['audio.wav','image.png','logo.png','video.mp4']);
+    for(const {candidate} of results)verifyPublication(candidate);
+  }finally{mocked.mock.restore();syncBuiltinESMExports();}
+});
+
+test('complete design gallery reuses publication styles, has working links and covers editable components',async()=>{
   for(const theme of ['research','studio']){
-    const appearance=startingAppearance(theme), result=buildDesignExamples(appearance), {candidate}=result;
+    const appearance=startingAppearance(theme), result=await buildDesignExamples(appearance), {candidate}=result;
     verifyPublication(candidate);assert.equal(result.defaultPage,EXAMPLE_GALLERY);
     const gallery=candidate.files.get(EXAMPLE_GALLERY);
     for(const token of ['publication-card','record-page','entry-meta','breadcrumbs','custom-logo','<table>','<audio','<video','media-figure','class="tags"','fictional sample content'])assert.ok(gallery.includes(token),token);
