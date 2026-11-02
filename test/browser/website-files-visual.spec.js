@@ -83,7 +83,9 @@ test('nested edit, rich text and visual styles survive saved HTML, external CSS 
  const first=frame.locator('[data-section-id="text"] em');
  await first.dblclick();
  await page.locator('[data-visual-command="bold"]').click();
- await expect(frame.locator('[data-section-id="text"] :is(b,strong)')).toHaveText('original');
+ // Chromium's double-click may also select the following space outside the
+ // emphasis element. The word must stay inside its original emphasis.
+ await expect(first.locator('b,strong')).toHaveText('original');
  await first.dblclick();
  await page.locator('[data-visual-scope]').selectOption('selection');
  await property('font-weight').fill('500');await page.getByRole('button',{name:'sectionApply',exact:true}).click();

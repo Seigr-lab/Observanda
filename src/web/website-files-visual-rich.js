@@ -1,3 +1,5 @@
+import {selectionMarkStates,setSelectionMark} from './website-files-rich-marks.js';
+
 const blockSelector='p,h1,h2,h3,h4,h5,h6,li,blockquote,div,figcaption,td,th,summary,pre';
 const owned='[data-observanda-part],[data-observanda-source],[data-observanda-link]';
 const element=node=>node?.nodeType===1?node:node?.parentElement;
@@ -21,6 +23,8 @@ function validAddress(value, base) {
 export function websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange}) {
   const toolbar=make('fieldset');toolbar.className='website-visual-rich';
   toolbar.append(make('legend',t('richText')));
+  const context=make('p');context.className='website-rich-context';context.id='website-rich-context';
+  context.setAttribute('role','status');toolbar.setAttribute('aria-describedby',context.id);toolbar.append(context);
   const tools=make('div');tools.className='website-visual-actions';toolbar.append(tools);
   const win=document.defaultView, controls=new Map();
   let saved=null;
@@ -46,14 +50,19 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
   }
   const commands=[
     ['bold','richBold'],['italic','richItalic'],['underline','richUnderline'],
+    ['strikeThrough','richStrike'],['subscript','richSubscript'],['superscript','richSuperscript'],
+    ['highlight','richHighlight'],['inlineCode','richInlineCode'],['clearFormatting','richClear'],
     ['insertUnorderedList','richBullets'],['insertOrderedList','richNumbers']
   ];
   const structural=new Set(['insertUnorderedList','insertOrderedList','formatBlock']);
+  const selectionOnly=new Set(['highlight','inlineCode','clearFormatting']);
   function command(name,value){
     const range=restore();if(!range||structural.has(name)&&!safeBlock(range))return;
+    if(range.collapsed&&selectionOnly.has(name))return;
     beforeChange();
-    document.execCommand('styleWithCSS',false,false);
-    const changed=document.execCommand(name,false,value);
+    let changed;
+    if(!range.collapsed&&controls.has(name)&&!structural.has(name))changed=setSelectionMark(range,name);
+    else {document.execCommand('styleWithCSS',false,false);changed=document.execCommand(name,false,value);}
     if(changed)change();
     capture();
   }
@@ -62,6 +71,20 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
   }
   for(const [name,key] of commands){
     const b=button(key,()=>command(name));b.dataset.visualCommand=name;controls.set(name,b);
+    const sample={bold:'strong',italic:'em',underline:'u',strikeThrough:'s',highlight:'mark',inlineCode:'code'}[name];
+    if(sample)b.replaceChildren(make(sample,t(key)));
+    if(name==='subscript'||name==='superscript'){
+      const example=make('span');example.className='website-rich-sample';example.setAttribute('aria-hidden','true');
+      if(name==='subscript')example.append('H',make('sub','2'),'O');else example.append('Fe',make('sup','3+'));
+      b.prepend(example);
+    }
+    if(name==='insertUnorderedList'||name==='insertOrderedList'){
+      const marker=make('span',name==='insertUnorderedList'?'•':'1.');marker.className='website-rich-sample';marker.setAttribute('aria-hidden','true');b.prepend(marker);
+    }
+    if(['bold','italic','underline'].includes(name)){
+      const key={bold:'B',italic:'I',underline:'U'}[name];
+      b.setAttribute('aria-keyshortcuts','Control+'+key+' Meta+'+key);
+    }
   }
   const heading=make('select');heading.setAttribute('aria-label',t('richHeading'));tools.append(heading);
   const option=(value,label)=>{const o=make('option',label);o.value=value;heading.append(o);};
@@ -99,11 +122,15 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
     if(!node)return;beforeChange();restore();node.replaceWith(...node.childNodes);change();capture();
   });
   function sync(){
-    const range=current();
+    const range=current(),marks=selectionMarkStates(range);
     for(const [name,button] of controls){
-      button.disabled=!range||structural.has(name)&&!safeBlock(range);
-      button.setAttribute('aria-pressed',String(!!range&&document.queryCommandState(name)));
+      button.disabled=!range||structural.has(name)&&!safeBlock(range)||range.collapsed&&selectionOnly.has(name);
+      if(name==='clearFormatting')continue;
+      const native=range&&(structural.has(name)||range.collapsed&&!selectionOnly.has(name));
+      const pressed=native?(document.queryCommandIndeterm(name)?'mixed':String(document.queryCommandState(name))):marks.get(name)??'false';
+      button.setAttribute('aria-pressed',pressed);
     }
+    const label=t(!range?'richChooseText':range.collapsed?'richCaret':'richSelection');if(context.textContent!==label)context.textContent=label;
     heading.disabled=!range||!safeBlock(range);heading.value=range?element(range.startContainer).closest(blockSelector)?.localName??'':'';
     link.disabled=!range;unlink.disabled=!range||!anchor(range);
   }
@@ -111,6 +138,13 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
     // Moving focus to an external control may empty the native selection.
     // Keep the last live range while that control is operating on it.
     if(host.activeElement?.contentDocument===document)capture();
+  });
+  listen(document,'keydown',event=>{
+    if(event.defaultPrevented||event.isComposing||event.shiftKey||event.altKey||!(event.ctrlKey||event.metaKey))return;
+    const name=({b:'bold',i:'italic',u:'underline'})[event.key.toLowerCase()];
+    if(!name)return;
+    capture();const range=current();if(!range||range.collapsed)return;
+    event.preventDefault();command(name);
   });
   // selectionchange is queued. A keyboard move to the inspector or a pointer
   // activation can leave the frame before that event runs; capture the live
