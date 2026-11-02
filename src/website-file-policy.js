@@ -2,6 +2,7 @@ import path from 'node:path';
 import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {outputName} from './local-export-files.js';
+import {safeEquationElement} from './web/website-equation-markup.js';
 
 const forbidden=new Set(['base','iframe','frame','frameset','object','embed','portal','fencedframe','foreignObject','animate','animateMotion','animateTransform','set']);
 const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
@@ -28,8 +29,11 @@ function externalLink(value){
 export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pictures,recordings}={}){
  if(typeof html!=='string'||Buffer.byteLength(html)>16*1024*1024)throw new AppError('LIMIT');
  const root=parse(html);
- function visit(node,inPlacement=false){
+ function visit(node,inPlacement=false,inEquation=false,inMath=false){
   inPlacement ||= node.attrs?.some(attr=>attr.name==='data-observanda-source'||attr.name==='data-observanda-link')??false;
+  inEquation ||= node.attrs?.some(attr=>attr.name==='data-website-equation')??false;
+  inMath ||= inEquation&&node.tagName==='math';
+  if(node.tagName&&inMath&&!safeEquationElement(node.tagName,node.namespaceURI,node.attrs))throw new AppError('INVALID');
   if(forbidden.has(node.tagName))throw new AppError('INVALID');
   if(node.tagName==='meta'&&node.attrs?.some(attr=>attr.name==='http-equiv')){
    if(node.attrs.find(attr=>attr.name==='http-equiv').value.toLowerCase()!=='content-security-policy'||node.attrs.find(attr=>attr.name==='content')?.value!==generatedPolicy)throw new AppError('INVALID');
@@ -54,7 +58,7 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pi
    }
   }
   if(node.tagName==='style')validateWebsiteCSS((node.childNodes??[]).map(child=>child.value??'').join(''),{file,pictures});
-  for(const child of node.childNodes??[])visit(child,inPlacement);if(node.content)visit(node.content,inPlacement);
+  for(const child of node.childNodes??[])visit(child,inPlacement,inEquation,inMath);if(node.content)visit(node.content,inPlacement,inEquation,inMath);
  }
  visit(root);return html;
 }

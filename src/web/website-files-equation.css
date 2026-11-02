@@ -1,0 +1,13 @@
+.website-equation-dialog{width:min(48rem,90vw);max-height:88vh;overflow:auto}
+.website-equation-dialog form{display:grid;gap:.7rem}
+.website-equation-dialog fieldset{min-inline-size:0;max-inline-size:100%;margin:0}
+.website-equation-dialog fieldset button{margin:.15rem}
+.website-equation-dialog fieldset>span{display:flex;align-items:center;gap:.7rem;margin-block-end:.4rem}
+.website-equation-dialog input[type=number]{width:4em}
+.website-equation-dialog .website-equation-slots{display:grid;gap:.45rem;padding:.35rem;overflow-x:auto}
+.website-equation-slots input{display:block;min-width:5rem;width:100%;box-sizing:border-box}
+.website-equation-fraction>label:first-child{border-bottom:2px solid currentColor;padding-bottom:.5rem}
+.website-equation-power,.website-equation-subscript{grid-template-columns:1.5fr 1fr}
+.website-equation-power>label:first-child,.website-equation-subscript>label:last-child{margin-top:1rem}
+.website-equation-matrix{grid-template-columns:repeat(var(--equation-columns),minmax(5rem,1fr));border-inline:2px solid currentColor}
+.website-equation-preview{padding:.7rem;min-height:2rem;overflow-x:auto;border:1px solid currentColor}

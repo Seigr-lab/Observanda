@@ -4,6 +4,7 @@ import {AppError} from './errors.js';
 import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {attr,put,descendants} from './website-migration-views.js';
 import {websiteRecordingKind} from './website-recordings.js';
+import {mathNamespace,safeEquationElement} from './web/website-equation-markup.js';
 
 const marker='data-website-instance';
 const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
@@ -12,7 +13,7 @@ const containers=new Set('body main section article aside div blockquote li dd'.
 const common=new Set('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby'.split(' '));
 const playerAttrs=['src','controls','loop','muted','preload'];
 const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
- audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording']};
+ audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording','data-website-equation']};
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
@@ -57,6 +58,11 @@ function rewrite(root,{from,to,pages,files,draft,instance,originalIds=false,veri
   return path.posix.relative(path.posix.dirname(to),name);
  };
  for(const node of nodes(root)){
+  if(node.namespaceURI===mathNamespace){
+   if(!safeEquationElement(node.tagName,node.namespaceURI,node.attrs))invalid();
+   for(const item of node.attrs){if(item.name==='id')item.value=localId(item.value);if(idRefs.has(item.name))item.value=item.value.trim().split(/\s+/).map(localId).join(' ');}
+   continue;
+  }
   if(!children.has(node.tagName)||node.namespaceURI!=='http://www.w3.org/1999/xhtml')invalid();
   if(['track','source'].includes(node.tagName)&&!['audio','video'].includes(node.parentNode?.tagName))invalid();
   for(const attribute of node.attrs){
