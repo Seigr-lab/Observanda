@@ -6,6 +6,7 @@ import {linkSource} from './website-entry-links.js';
 import {websiteSourcePlacements,websiteInsertionOffset} from './website-file-html.js';
 import {websiteFileName,validateWebsiteHTML} from './website-file-policy.js';
 import {libraryStamp,checkLibraryStamp} from './website-file-library.js';
+import {researchId} from './web/research-reference.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const owner=node=>attr(node,'data-observanda-source');
@@ -38,12 +39,53 @@ function parseLocations(html,page,id,revision){
  if(stored.length!==found.length||stored.some((p,i)=>p.revision!==revision||Boolean(p.link)!==(found[i].kind==='link')))throw new AppError('FORMAT');
  return {document,found};
 }
-async function openSourceSite(store,id,{sourceId,sourceRevision,expectedRevision}){
- if(![sourceId,sourceRevision,expectedRevision].every(hex))throw new AppError('INVALID');
- const manifest=await store.current(id,expectedRevision),source=await store.source(sourceId);
+async function requireSource(store,sourceId,sourceRevision){
+ if(!hex(sourceId)||!hex(sourceRevision))throw new AppError('INVALID');
+ const source=await store.source(sourceId);
  if(!source?.visible||source.target!=='website')throw new AppError('NOT_FOUND');
  if(source.revision!==sourceRevision)throw new AppError('CONFLICT');
- return manifest;
+}
+async function openSourceSite(store,id,{sourceId,sourceRevision,expectedRevision}){
+ if(!hex(expectedRevision))throw new AppError('INVALID');
+ await requireSource(store,sourceId,sourceRevision);return store.current(id,expectedRevision);
+}
+// The writer registers this source's reverse row before it commits the new
+// site head. An interrupted save may therefore leave a row for an absent or
+// older site. Only a current authenticated site can contribute a name/count.
+export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,limit=8,signal}){
+ if(after!==null&&!researchId(after)||!Number.isInteger(limit)||limit<1||limit>24)throw new AppError('INVALID');
+ return store.scope(async()=>{
+  const stamp=await libraryStamp(store);await requireSource(store,sourceId,sourceRevision);
+  const directory='.observanda/website-files/sources/'+sourceId+'/placements',cursor=after===null?null:after+'.json';
+  const window=await store.names(directory,{after:cursor,limit,directories:false}),items=[];
+  for(const member of window.items){
+   signal?.throwIfAborted();
+   const siteId=member.slice(0,-5);
+   if(!researchId(siteId)||member!==siteId+'.json')throw new AppError('FORMAT');
+   const row=await store.control(directory+'/'+member,{missing:true});
+   if(!row)continue;
+   if(row.siteId!==siteId||row.sourceId!==sourceId)throw new AppError('FORMAT');
+   const site=await store.raw(siteId,{missing:true}),placement=site?.sources.find(p=>p.id===sourceId);
+   if(!placement||site.sources.some(p=>stamp.pending.has(p.id)))continue;
+   if(placement.revision!==sourceRevision)throw new AppError('CONFLICT');
+   let total=0,pageCount=0;
+   for(const page of site.pages){
+    let matched=false;
+    for(const p of page.placements)if(p.id===sourceId){
+     if(p.revision!==sourceRevision)throw new AppError('CONFLICT');
+     matched=true;total++;
+    }
+    if(matched)pageCount++;
+   }
+   if(!total)throw new AppError('FORMAT');
+   items.push({siteId,siteTitle:site.name,revision:site.revision,total,pageCount});
+  }
+  // Recheck the returned pages of this reverse index only, even for an entry
+  // shared by many sites. The file library needs no global site enumeration.
+  for(const item of items)if(await store.siteVersion(item.siteId,{signal})!==item.revision)throw new AppError('WEBSITE_CHANGED');
+  await checkLibraryStamp(store,stamp);
+  return {items,next:window.next?.slice(0,-5)??null,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
+ },{signal});
 }
 export function websiteSourceUsage(store,id,options){
  const {sourceId,sourceRevision,path:currentPage,limit=16,offset=0,signal}=options;

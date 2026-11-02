@@ -7,7 +7,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {websiteLibraryFacets,validateWebsiteLibraryRows} from '../src/website-file-library.js';
-import {websiteSourceUsage,changeWebsitePlacement} from '../src/website-file-placements.js';
+import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement} from '../src/website-file-placements.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 
 async function fixture(t){
@@ -46,6 +46,33 @@ test('scoped eligible sources keep private owner labels, permitted dates and pag
  assert.doesNotMatch(placed.html,/Picker-only owner|Field log/);
  const publication=await store.export(site.site.id),content=publication.files.get('index.html');let html='';for await(const chunk of content.readStaged())html+=chunk;
  assert.doesNotMatch(html,/Picker-only owner|Field log/);
+});
+
+test('reverse membership opens only sites for this source, paginates live placements and suppresses stale or fenced owners',async t=>{
+ const {store,put}=await fixture(t),source=await put(),other=await put();
+ const sourcePin={sourceId:source.id,sourceRevision:source.revision};
+ let first=await store.create({name:'Coastal handbook'}),second=await store.create({name:'Station catalogue'});
+ const unrelated=await store.create({name:'Unrelated notebook website'});
+ first=await store.insertSource(first.site.id,{expectedRevision:first.site.revision,...sourcePin});
+ first=await store.insertSource(first.site.id,{expectedRevision:first.site.revision,...sourcePin});
+ second=await store.insertSource(second.site.id,{expectedRevision:second.site.revision,...sourcePin});
+ second=await store.insertSource(second.site.id,{expectedRevision:second.site.revision,sourceId:other.id,sourceRevision:other.revision});
+ // A crash after reverse lookup registration and before a site's first head.
+ const stale=randomUUID(),reverse='.observanda/website-files/sources/'+source.id+'/placements/';
+ await store.scope(()=>store.writeControl(reverse+stale+'.json',{sourceId:source.id,siteId:stale}),{write:true});
+ const raw=store.raw.bind(store);store.raw=(id,options)=>{assert.notEqual(id,unrelated.site.id);return raw(id,options);};
+ const readText=store.readText;store.readText=()=>assert.fail('cross-site usage opened a page body');
+ const seen=[];let after=null,requests=0;
+ do{const w=await websitesUsingSource(store,{...sourcePin,limit:1,after});requests++;if(w.next)assert.ok(!after||w.next>after);seen.push(...w.items);after=w.next;}while(after!==null);
+ assert.equal(requests,3);assert.deepEqual(seen.map(s=>[s.siteTitle,s.total,s.pageCount]).sort(),[['Coastal handbook',2,1],['Station catalogue',1,1]]);
+ const pending=await store.beginSourceUpdate({sourceId:other.id,target:'website'});
+ assert.deepEqual((await websitesUsingSource(store,sourcePin)).items.map(s=>s.siteId),[first.site.id]);await store.cancelSourceUpdate({sourceId:other.id,token:pending});
+ store.readText=readText;
+ const target=seen.find(s=>s.siteId===second.site.id),usage=await websiteSourceUsage(store,target.siteId,{...sourcePin,expectedRevision:target.revision});
+ await changeWebsitePlacement(store,target.siteId,'remove',{...sourcePin,expectedRevision:target.revision,path:usage.items[0].path,ordinal:usage.items[0].ordinal});
+ assert.deepEqual((await websitesUsingSource(store,sourcePin)).items.map(s=>s.siteId),[first.site.id]);
+ const blocked=await store.beginSourceUpdate({sourceId:source.id,target:'website'});await assert.rejects(websitesUsingSource(store,sourcePin),{code:'CONFLICT'});
+ await store.putSource({sourceId:source.id,title:'Private',visible:false},{token:blocked});await assert.rejects(websitesUsingSource(store,sourcePin),{code:'NOT_FOUND'});
 });
 
 test('pinned occurrence lookup and edits distinguish repeats and generated labels, then fail closed on withdrawal',async t=>{

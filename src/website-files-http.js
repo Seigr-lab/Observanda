@@ -10,7 +10,7 @@ import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 import {componentOperation} from './website-component-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
-import {websiteSourceUsage,changeWebsitePlacement} from './website-file-placements.js';
+import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement} from './website-file-placements.js';
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 
@@ -85,6 +85,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='library'){json(await store.library(data));return true;}
   if(operation==='library/search'){json(await store.searchLibrary({...data,signal}));return true;}
   if(operation==='library/facets'){json(await store.scope(scope=>websiteLibraryFacets(store,scope,{...data,signal}),{signal}));return true;}
+  if(operation==='library/sites'){json(await websitesUsingSource(store,{...data,signal}));return true;}
   if(operation==='library/validate'){json(await store.scope(()=>validateWebsiteLibraryRows(store,{...data,signal}),{signal}));return true;}
   if(operation==='library/preview'){json(await store.previewSource({...data,signal}));return true;}
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,signal}));return true;}
