@@ -104,10 +104,13 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
  const sharedImages=await filtered(['publicationDescriptor','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image'&&item.share,item=>item);
  const grouped=(path,owners,groups)=>reuse(path,owners,()=>groupRecordProjection(document,previous,{path,groups},{signal}));
  const allowed=key=>historical||publicationPartAllowed(header,key);
+ const hiddenFigures=new Set(historical?[]:header.publication?.website?.hiddenFigures);
+ const figureVisible=item=>allowed('figures')&&!hiddenFigures.has(item.id);
+ const inventoryFigures=(path,fields,project)=>!allowed('figures')?tree.retain([]):hiddenFigures.size?filtered(path,'figures',fields,figureVisible,project):mapped(path,'figures',fields,project);
  const sectionVisible=item=>historical||item.share!==false;
  const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body','share'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
   {collection:['sections'],fields:['id','title','share'],project:item=>!sectionVisible(item)?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
-  {collection:['figures'],fields:['id','title'],project:item=>allowed('figures')?[{version:1,kind:'figure',id:item.id,label:item.title}]:[]},
+  {collection:['figures'],fields:['id','title'],project:item=>figureVisible(item)?[{version:1,kind:'figure',id:item.id,label:item.title}]:[]},
   {collection:['attachments'],fields:['id','kind','caption','alt','share'],project:item=>item.kind==='image'&&item.share?[{version:1,kind:'figure',id:item.id,label:item.caption||item.alt}]:[]},
   {field:['body'],project:body=>allowed('body')?bookSelectors({body}):[]},
   {collection:['sections'],fields:['body','share'],project:item=>!sectionVisible(item)?[]:bookSelectors({body:item.body})}
@@ -131,12 +134,12 @@ async function buildProjection(document,revision,{signal,previous,searchText:ret
    fields:header.template&&allowed('template')?await mapped(['editionInventory','choice','fields'],['template','fields'],['key'],item=>item.key):await tree.retain([]),
    sections:await filtered(['editionInventory','choice','sections'],'sections',['id','share'],sectionVisible,item=>item.id),
    attachments:await filtered(['editionInventory','choice','attachments'],'attachments',['id','share'],item=>item.share,item=>item.id),
-   figures:allowed('figures')?await mapped(['editionInventory','choice','figures'],'figures',['id'],item=>({id:item.id,data:false})):await tree.retain([])
+   figures:await inventoryFigures(['editionInventory','choice','figures'],['id'],item=>({id:item.id,data:false}))
   }),
   sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],sectionVisible,({id,title})=>({id,title})),
   fields:header.template&&allowed('template')?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
   attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>historical||item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
-  figures:allowed('figures')?await mapped(['editionInventory','figures'],'figures',['id','title'],item=>item):await tree.retain([])
+  figures:await inventoryFigures(['editionInventory','figures'],['id','title'],item=>item)
  });
  const root=await object(plain,{
   tags,referenceTargets,cardSources:await object(plain.cardSources,cardSources),searchText:retainedText??await reuse(['searchText'],[['title'],['body'],['outcome'],['tags'],depends('sections','title','body'),depends('contributors','name','role'),['template'],['attempt'],['results']],()=>retainRecordText(blocks,searchText(),{signal})),

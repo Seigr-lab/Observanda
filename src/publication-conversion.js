@@ -4,7 +4,7 @@ import {withRecordDocument} from './record-document.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {WebsiteFileStore,websiteSourceId} from './website-file-store.js';
 import {sourceRecordAllowed} from './web/source-publication-permissions.js';
-import {PUBLICATION_PARTS,publicationPartAllowed} from './web/record-publication-privacy.js';
+import {PUBLICATION_PARTS,publicationPartAllowed,figureSharingId} from './web/record-publication-privacy.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {convertPublicationRecord} from './publication-conversion-render.js';
@@ -30,7 +30,7 @@ function commandTargets(route,data){
  const records=new Map(),books=new Set(),previousLocations=[];
  const add=(id,notebook=null)=>{if(researchId(id))records.set(id,notebook);};
  switch(route){
- case '/api/research/records/values/save': if(!['share','sharePdf','publication'].includes(data.field)&&!(typeof data.field==='string'&&data.field.startsWith('media:')))return null;add(data.recordId);break;
+ case '/api/research/records/values/save': if(!['share','sharePdf','publication'].includes(data.field)&&!figureSharingId(data.field)&&!(typeof data.field==='string'&&data.field.startsWith('media:')))return null;add(data.recordId);break;
  case '/api/research/records/writing/save':if(!data.sectionId||!data.value||!['share','sharePdf'].some(key=>Object.hasOwn(data.value,key)))return null;add(data.recordId);break;
  case '/api/research/records/sections':if(data.action==='move')return null;add(data.recordId);break;
  case '/api/research/records/media':add(data.recordId);break;
@@ -59,7 +59,11 @@ async function status(metadata,row,document,target){
  const record={id:row.id,notebookId:row.notebookId??(await document.field(['notebookId'])).value,[consentKey(target)]:(await document.field([consentKey(target)])).value};
  const provenance=identity(metadata,row.id,record.notebookId,target);if(!provenance)throw new AppError('CATALOGUE_DAMAGED');
  const visible=sourceRecordAllowed(record,metadata,target);let permissions=null;
- if(visible){const publication=(await document.field(['publication'])).value;permissions={parts:PUBLICATION_PARTS.filter(key=>publicationPartAllowed({publication},key,target)),sections:await visibleParts(document,'sections',target),attachments:await visibleParts(document,'attachments',target)};}
+ if(visible){
+  const publication=(await document.field(['publication'])).value;
+  permissions={parts:PUBLICATION_PARTS.filter(key=>publicationPartAllowed({publication},key,target)),sections:await visibleParts(document,'sections',target),attachments:await visibleParts(document,'attachments',target)};
+  if(permissions.parts.includes('figures')&&publication?.[target]?.hiddenFigures?.length)permissions.hiddenFigures=[...publication[target].hiddenFigures].sort();
+ }
  return {provenance,sourceId:websiteSourceId(provenance),visible,signature:digest(serialize(permissions)),revision:row.revision};
 }
 
@@ -89,6 +93,10 @@ async function permittedOriginal(doc,target){
    const values=[];for await(const item of doc.items([key])){const flag=(await doc.tree.selected(item.value,[consentKey(target)])).value;if(collectionAllowed(flag,target,key))values.push(await doc.tree.read(item.value));}record[key]=values;
   }else if(domainFields.has(key)&&!publicationPartAllowed({publication},key,target)){
    if(['contributors','tags','figures','relations'].includes(key))record[key]=[];else if(['body','outcome'].includes(key))record[key]='';
+  }else if(key==='figures'&&publication?.[target]?.hiddenFigures?.length){
+   const hidden=new Set(publication[target].hiddenFigures),figures=[];
+   for await(const item of doc.items(['figures']))if(!hidden.has((await doc.tree.selected(item.value,['id'])).value))figures.push(await doc.tree.read(item.value));
+   record.figures=figures;
   }else record[key]=(await doc.field([key])).value;
  }
  return record;

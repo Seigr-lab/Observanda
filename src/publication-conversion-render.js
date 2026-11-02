@@ -18,6 +18,7 @@ import {RetainedFigureDocuments} from './retained-figure-document.js';
 import {RetainedFigureAuthoring} from './retained-figure-authoring.js';
 import {renderApprovedFigureContents} from './publication-figure-renderer.js';
 import {hasRetainedFigure} from './record-retained-figures.js';
+import {retainedFigureTargets} from './retained-figure-targets.js';
 import {ResearchMaterials} from './research-materials.js';
 import {retainedTableHTML} from './publication-retained-tables.js';
 
@@ -53,7 +54,16 @@ export function annotatePublicationParts(article,record){
 export async function convertPublicationRecord(storage,metadata,original,{signal,target:channel='website'}={}){
  if(!sourceRecordAllowed(original,metadata,channel))return {visible:false,html:'',css:'',assets:[]};
  signal?.throwIfAborted();
- const selected=sourcePublicationRecord(original,channel),record={...selected,share:true,sections:selected.sections.map(item=>({...item,share:true})),attachments:selected.attachments.map(item=>({...item,share:true}))};
+ const hidden=new Set(original.publication?.[channel]?.hiddenFigures),retainedTargets=new Set();
+ if(hidden.size&&publicationPartAllowed(original,'figures',channel)&&publicationPartAllowed(original,'results',channel)){
+  const needed=new Set((original.results?.statements??[]).filter(item=>item.kind==='figure').map(item=>item.figureId));
+  for(const figure of original.figures??[]){
+   if(!needed.size)break;
+   if(figure.kind!=='retained'||hidden.has(figure.id))continue;
+   for await(const target of retainedFigureTargets(storage,figure,{signal})){if(needed.delete(target.id))retainedTargets.add(target.id);if(!needed.size)break;}
+  }
+ }
+ const selected=sourcePublicationRecord(original,channel,retainedTargets),record={...selected,share:true,sections:selected.sections.map(item=>({...item,share:true})),attachments:selected.attachments.map(item=>({...item,share:true}))};
  const notebook=metadata.notebooks.find(item=>item.id===record.notebookId),project=metadata.projects.find(item=>item.id===notebook.projectId);
  if(!project)throw new AppError('CATALOGUE_DAMAGED');
  // Build only the selected entry's composition. No other owner's names,

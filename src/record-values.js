@@ -9,6 +9,7 @@ import {sameJSONData} from './web/json-data-equality.js';
 import {validRecordValueField,validRecordValue,recordValueCollection} from './web/record-value-model.js';
 import {relationValue,relationFromValue,canonicalRelationValue} from './web/record-relation-value.js';
 import {mediaDetails} from './web/record-media-value.js';
+import {figurePublicationChoices,withFigurePublicationChoices} from './web/record-publication-privacy.js';
 import {retainedFigureTargets,hasRetainedFigureTarget} from './retained-figure-targets.js';
 import {figureTargets} from './web/figure-composition.js';
 import {validateFigureSources} from './figure-provenance.js';
@@ -43,7 +44,15 @@ export async function selectedRecordValue(document,field,{position,signal,inspec
   if(position===undefined){position=-1;for await(const item of document.items([collection.name],{signal})){
    if((await document.tree.selected(item.value,['id'])).value===collection.id){position=item.index;break;}
   }}
-  const path=position<0?null:[collection.name,String(position)],selected=path?(await document.field(path,{signal})).value:null;
+  const path=position<0?null:[collection.name,String(position)];
+  if(collection.kind==='figure-sharing'){
+   if(!path)throw new AppError('MISSING');
+   if((await document.field([...path,'id'],{signal})).value!==collection.id)throw new AppError('CATALOGUE_DAMAGED');
+   const title=(await document.field([...path,'title'],{signal})).value,privacy=(await document.field(['publication'],{signal})).value;
+   const value={value:figurePublicationChoices(privacy,collection.id)};
+   return {path,position,collection,definition:{title:typeof title==='string'?title:title.preview},value,revision:digest(serialize(value))};
+  }
+  const selected=path?(await document.field(path,{signal})).value:null;
   if(path&&selected?.id!==collection.id)throw new AppError('CATALOGUE_DAMAGED');
   if(collection.kind==='media'&&!selected)throw new AppError('MISSING');
   if(collection.kind==='figure'){
@@ -67,6 +76,10 @@ export async function replaceRecordValue(document,field,value,selected=null){
  selected??=await selectedRecordValue(document,field,{inspectResults:false});const path=selected.path;
  if(selected.fact)return replaceAttemptValue(document,value,selected);
  if(selected.resultId)return replaceResultValue(document,value,selected);
+ if(selected.collection?.kind==='figure-sharing'){
+  const privacy=(await document.field(['publication'])).value;
+  return document.property([],'publication',withFigurePublicationChoices(privacy,selected.collection.id,value.value));
+ }
  if(selected.collection?.kind==='figure')return selected.position<0?document.splice(['figures'],await document.tree.arrayLength(document.root,['figures']),0,[value.value]):document.replace(path,value.value);
  if(selected.collection?.kind==='media')return document.replace(path,{id:selected.collection.id,kind:selected.definition.mediaKind,...value.value});
  if(selected.collection){

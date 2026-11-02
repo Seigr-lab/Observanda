@@ -1,10 +1,10 @@
 import {recordValueLabel as label} from './record-value-controls.js';
 import {PUBLICATION_PARTS} from './record-publication-privacy.js';
-import {publicationPartsFields,updatePublicationPart} from './record-publication-controls.js';
+import {publicationPartsFields,updatePublicationPart,figureSharingFields,publicationChoices} from './record-publication-controls.js';
 import {recordPreparationUI} from './record-preparation-ui.js';
 import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
-import {contributorValueId,relationValueId,mediaValueId,figureValueId} from './record-value-model.js';
+import {contributorValueId,relationValueId,mediaValueId,figureValueId,figureSharingId} from './record-value-model.js';
 import {recordFigureView} from './record-figure-values-ui.js';
 import {recordAttemptView} from './record-attempt-values-ui.js';
 import {attemptValueField} from './record-attempt-value.js';
@@ -39,6 +39,7 @@ export function recordValuesView(options,lifecycle){
   heading:base=>base?text('heading',{field:label(base.field,base.definition)}):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
   fields(base,value,changed){
    const name=base.field,item=value.value;
+   if(figureSharingId(name))return figureSharingFields(item,base.definition.title,esc);
    if(resultValueId(name))return results.fields(base,value,changed);
    if(attemptValueField(name))return attempts.fields(base,value,changed);
    if(figureValueId(name))return figures.fields(base,value,changed);
@@ -61,8 +62,9 @@ export function recordValuesView(options,lifecycle){
    else control='<input data-record-value required maxlength="180" value="'+esc(item??'')+'">';
    return field(esc(label(name,base.definition)),control);
   },
-  preview:base=>base.field==='publication'?'<ul>'+['website','pdf'].map(target=>'<li>'+esc(text('publication_'+target))+': '+PUBLICATION_PARTS.filter(key=>base.value.value?.[target]?.[key]!==false).map(key=>esc(text('publication_'+key))).join(', ')+'</li>').join('')+'</ul>':resultValueId(base.field)?results.preview(base):attemptValueField(base.field)?attempts.preview(base):figureValueId(base.field)?figures.preview(base):mediaValueId(base.field)?media.preview(base):relationValueId(base.field)?relations.preview(base):contributorValueId(base.field)?'<p>'+esc(base.value.value?base.value.value.name+(base.value.value.role?' · '+base.value.value.role:''):text('contributorAbsent'))+'</p>':'<p>'+esc(display(base))+'</p>',
+  preview:base=>figureSharingId(base.field)?publicationChoices(base.value.value.website,base.value.value.pdf,esc):base.field==='publication'?'<ul>'+['website','pdf'].map(target=>'<li>'+esc(text('publication_'+target))+': '+PUBLICATION_PARTS.filter(key=>base.value.value?.[target]?.[key]!==false).map(key=>esc(text('publication_'+key))).join(', ')+'</li>').join('')+'</ul>':resultValueId(base.field)?results.preview(base):attemptValueField(base.field)?attempts.preview(base):figureValueId(base.field)?figures.preview(base):mediaValueId(base.field)?media.preview(base):relationValueId(base.field)?relations.preview(base):contributorValueId(base.field)?'<p>'+esc(base.value.value?base.value.value.name+(base.value.value.role?' · '+base.value.value.role:''):text('contributorAbsent'))+'</p>':'<p>'+esc(display(base))+'</p>',
   input(element,base,value){
+   if(figureSharingId(base?.field)&&['website','pdf'].includes(element.dataset.figureSharing)){value.value[element.dataset.figureSharing]=element.checked;return true;}
    if(base?.field==='publication'&&element.hasAttribute('data-publication-part')){value.value=updatePublicationPart(value.value,element);return true;}
    if(resultValueId(base?.field))return results.input(element);
    if(attemptValueField(base?.field))return attempts.input(element);

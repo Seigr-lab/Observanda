@@ -8,11 +8,36 @@ export const sourceNotebookAllowed=(book,target='website')=>!!book&&(target==='w
 export const sourceRecordAllowed=(record,metadata,target='website')=>(target==='website'?record.share===true:target==='pdf'&&record.sharePdf===true)&&(!metadata||metadata.notebooks.some(book=>book.id===record.notebookId&&sourceNotebookAllowed(book,target)));
 export const publicRecordSections=(record,target='website')=>(record.sections??[]).filter(section=>target==='website'?section.share!==false:target==='pdf'&&section.sharePdf===true);
 export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true);
-export function sourcePublicationRecord(record,target='website'){
+export function sourcePublicationRecord(record,target='website',retainedTargets=[]){
  const result={...record,sections:publicRecordSections(record,target),attachments:publicRecordAttachments(record,target)};
  for(const key of ['body','outcome'])if(!publicationPartAllowed(record,key,target))result[key]='';
  for(const key of ['contributors','tags','figures','relations'])if(!publicationPartAllowed(record,key,target))result[key]=[];
  for(const key of ['results','attempt','template'])if(!publicationPartAllowed(record,key,target))delete result[key];
+ const hidden=new Set(record.publication?.[target]?.hiddenFigures);
+ if(hidden.size&&result.figures)result.figures=result.figures.filter(figure=>!hidden.has(figure.id));
+ // Prose alternatives and captions may themselves contain withheld content.
+ // Strip the entire reference before website, PDF or search rendering.
+ let shown;
+ function permittedProse(node){
+  if(!node||typeof node!=='object')return node;
+  if(node.type==='book_figure'){
+   shown??=new Set([...(result.figures??[]),...result.attachments].map(item=>item.id));
+   return shown.has(node.attrs.figureId)?node:null;
+  }
+  if(!node.content)return node;
+  const content=node.content.map(permittedProse);if(!content.some((child,i)=>child!==node.content[i]))return node;
+  const kept=content.filter(Boolean);
+  if(!kept.length&&node.type==='blockquote')return null;
+  if(!kept.length&&node.type==='doc')kept.push({type:'paragraph',content:[]});
+  return {...node,content:kept};
+ }
+ if(result.body&&typeof result.body==='object')result.body=permittedProse(result.body);
+ result.sections=result.sections.map(section=>typeof section.body==='object'?{...section,body:permittedProse(section.body)}:section);
+ if((hidden.size||!publicationPartAllowed(record,'figures',target))&&result.results?.statements?.some(item=>item.kind==='figure')){
+  const plots=new Set((result.figures??[]).flatMap(f=>[f.id,...(f.kind==='panels'?f.panels.map(p=>p.figure.id):[])]));
+  for(const id of retainedTargets)plots.add(id);
+  result.results={...result.results,statements:result.results.statements.filter(item=>item.kind!=='figure'||plots.has(item.figureId))};
+ }
  // Consent and withheld values never become website content or public metadata.
  delete result.publication;return result;
 }

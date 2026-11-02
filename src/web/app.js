@@ -1190,7 +1190,7 @@ document.addEventListener('input', event => {
   if(labUI.input(el))return;
   if(el.dataset.recordBrowse){state.recordBrowse={...recordBrowse(state.recordBrowse),[el.dataset.recordBrowse]:el.value};refreshRecordResults();return;}
   if (el.id === 'search') { state.search = el.value;refreshRecordResults();return; }
-  if(el.hasAttribute('data-publication-part')&&el.closest('.record-draft-editor')){const record=entry();record.publication=updatePublicationPart(record.publication,el);dirtyRecord();return;}
+  if(el.matches('[data-publication-part],[data-publication-figure]')&&el.closest('.record-draft-editor')){const record=entry();record.publication=updatePublicationPart(record.publication,el);dirtyRecord();return;}
   if (el.dataset.entry) {
     const record=entry(),previousNotebook=record.notebookId;
     record[el.dataset.entry] = el.type === 'checkbox' ? el.checked : el.dataset.entry === 'tags' ? el.value.split(',').map(t => t.trim()).filter(Boolean) : el.value;

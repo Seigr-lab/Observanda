@@ -4,6 +4,8 @@ import {randomUUID} from 'node:crypto';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {RecordDocument} from '../src/record-document.js';
 import {retainedQueryProjection} from '../src/record-query-projection.js';
+import {withFigurePublicationChoices} from '../src/web/record-publication-privacy.js';
+import {createFigure} from '../src/web/figure-model.js';
 import {retainRecordText} from '../src/record-text-retention.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {recordRevision} from '../src/research.js';
@@ -27,6 +29,26 @@ function memory(){
   tree(){return new RecordValueTree(this);}
  };
 }
+test('changing a figure permission invalidates saved edition choices, labels and selectors while keeping private research search intact',async()=>{
+ const storage=memory(),record=structuredClone(sampleNotebook().entries[0]),first=createFigure(),second=createFigure();
+ first.title='Laboratory-only plot';second.title='Published control';
+ record.figures=[first,second];record.sections=[];record.attachments=[];record.body='Two instruments.';
+ const document=new RecordDocument(storage,await storage.tree().retain(record),{mutable:true});
+ const initial=await retainedQueryProjection(document,recordRevision(record));
+ let previous={document,tree:document.tree,root:initial.root};
+ for(const allow of [false,true]){
+  const privacy=withFigurePublicationChoices(null,first.id,{website:allow,pdf:true});
+  const current=await previous.document.property([],'publication',privacy);
+  const next=await retainedQueryProjection(current,recordRevision({...record,publication:privacy}),{previous});
+  const read=async key=>(await current.tree.selected(next.root,key)).value;
+  const ids=allow?[first.id,second.id]:[second.id];
+  assert.deepEqual((await read(['editionInventory','choice','figures'])).map(item=>item.id),ids);
+  assert.deepEqual((await read(['editionInventory','figures'])).map(item=>item.id),ids);
+  assert.deepEqual((await read(['publicationDescriptor','selectors'])).filter(item=>item.kind==='figure').map(item=>item.id),ids);
+  assert.equal((await read(['cardSources','figures'])).length,2);
+  previous={document:current,tree:current.tree,root:next.root};
+ }
+});
 test('edited query text reuses saved source fields instead of reconstructing the complete searchable record',async t=>{
  const measured=[];
  for(const count of [257,2003]){

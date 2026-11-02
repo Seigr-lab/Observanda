@@ -1,5 +1,6 @@
 import {revisionId} from './revision-model.js';
-import {validPublicationPrivacy} from './record-publication-privacy.js';
+import {validPublicationPrivacy,figureSharingId} from './record-publication-privacy.js';
+export {figureSharingId};
 import {validRecordDate} from './record-date.js';
 import {STATUSES,RECORD_TYPES} from './record-types.js';
 import {researchId,validContributors} from './record-model.js';
@@ -15,7 +16,7 @@ export const contributorValueId=field=>typeof field==='string'&&field.startsWith
 export const relationValueId=field=>typeof field==='string'&&field.startsWith('relation:')&&researchId(field.slice(9))?field.slice(9):null;
 export const mediaValueId=field=>typeof field==='string'&&field.startsWith('media:')&&researchId(field.slice(6))?field.slice(6):null;
 export const figureValueId=field=>typeof field==='string'&&field.startsWith('figure:')&&researchId(field.slice(7))?field.slice(7):null;
-export const recordValueCollection=field=>contributorValueId(field)?{id:contributorValueId(field),name:'contributors',kind:'contributor'}:relationValueId(field)?{id:relationValueId(field),name:'relations',kind:'relation'}:mediaValueId(field)?{id:mediaValueId(field),name:'attachments',kind:'media'}:figureValueId(field)?{id:figureValueId(field),name:'figures',kind:'figure'}:null;
+export const recordValueCollection=field=>contributorValueId(field)?{id:contributorValueId(field),name:'contributors',kind:'contributor'}:relationValueId(field)?{id:relationValueId(field),name:'relations',kind:'relation'}:mediaValueId(field)?{id:mediaValueId(field),name:'attachments',kind:'media'}:figureValueId(field)?{id:figureValueId(field),name:'figures',kind:'figure'}:figureSharingId(field)?{id:figureSharingId(field),name:'figures',kind:'figure-sharing'}:null;
 export const validRecordValueField=field=>recordValueFields.includes(field)||!!recordValueCollection(field)||!!attemptValueField(field)||!!resultValueId(field)||typeof field==='string'&&/^template:[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(field)&&!['__proto__','constructor','prototype'].includes(field.slice(9));
 export const validRecordValueBase=value=>value&&Object.keys(value).sort().join()==='field,revision,storageRevision'&&validRecordValueField(value.field)&&revisionId(value.revision)&&revisionId(value.storageRevision);
 // Draft admission preserves incomplete values. Final saves additionally run the
@@ -26,6 +27,7 @@ export function validRecordValue(value,field){
  if(attemptValueField(field))return validAttemptValue(item,field);
  if(resultValueId(field))return item===null||item?.id===resultValueId(field)&&validResultStatement(item,{draft:true});
  const contributor=contributorValueId(field);
+ if(figureSharingId(field))return item&&Object.keys(item).sort().join()==='pdf,website'&&typeof item.website==='boolean'&&typeof item.pdf==='boolean';
  if(figureValueId(field))return item?.id===figureValueId(field)&&figureIssues(item,{draft:true}).length===0;
  if(mediaValueId(field))return validMediaDetails(item);
  if(relationValueId(field))return item===null||validRelationValue(item);
