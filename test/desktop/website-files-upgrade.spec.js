@@ -16,7 +16,7 @@ async function chooseSite(page,siteId){
 
 test('upgrade opens previously saved default and named websites and publishes their saved files offline',async()=>{
  const previous=process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE;
- test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE||!previous,'Requires a packaged candidate and its alpha.21 predecessor.');
+ test.skip(!previous||!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires the alpha.21 predecessor and a packaged candidate or explicitly selected source Electron.');
  test.setTimeout(360000);
  const fixture=await websiteDesktopFixture(),output=path.join(fixture.directory,'published');
  const errors=[],onlineRoutes=[],offlineRoutes=[];
@@ -36,6 +36,7 @@ test('upgrade opens previously saved default and named websites and publishes th
   },{timeout:120000,message:'Opening the workspace must prepare the existing saved site'}).toBe(true);
   const upgradedMs=Math.round(performance.now()-started);
   phase='open original default and named work';await page.locator('#main-navigation').getByRole('button',{name:'Website editor',exact:true}).click();
+  await expect(page.frameLocator('#website-files-canvas').locator('body')).toContainText(previousDefaultText,{timeout:60000});
   await chooseSite(page,siteId);
   const sites=page.locator('select[data-website-file-site]');
   const other=await sites.locator('option').evaluateAll((options,id)=>options.map(option=>option.value).filter(value=>value&&value!==id),siteId);
@@ -47,6 +48,9 @@ test('upgrade opens previously saved default and named websites and publishes th
   const databases=await disableWebsiteResearch(fixture.directory,roots);expect(databases).toHaveLength(3);
   phase='open saved files with research unavailable';app=await fixture.start(undefined,{website:true});page=await app.firstWindow();watch(page,offlineRoutes);
   await chooseSite(page,siteId);
+  // Cold-start requests may finish before Electron exposes its first window.
+  // Capture them before the later reload resets this performance timeline.
+  offlineRoutes.push(...await page.evaluate(()=>performance.getEntriesByType('resource').map(row=>new URL(row.name).pathname).filter(route=>route.startsWith('/api/'))));
   const pages=page.locator('select[data-website-file-page]');
   const record=pages.locator('option').filter({hasText:'Retained observation'});
   await expect(record).toHaveCount(1);const entryPath=await record.getAttribute('value');await pages.selectOption(entryPath);
@@ -79,9 +83,13 @@ test('upgrade opens previously saved default and named websites and publishes th
   const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/language','/api/interface'].includes(route);
   expect([...new Set(offlineRoutes.filter(route=>!allowed(route)))]).toEqual([]);expect(errors).toEqual([]);
   for(const file of databases)expect((await stat(file)).isFile()).toBe(true);
-  console.log(JSON.stringify({predecessor:'alpha.21',automaticUpgradeMs:upgradedMs,previousSites:2,databasesUnavailable:databases.length,publishedMatchesPreview:true}));
+  console.log(JSON.stringify({predecessor:'alpha.21',packagedCandidate:Boolean(fixture.packaged),automaticUpgradeMs:upgradedMs,previousSites:2,databasesUnavailable:databases.length,publishedMatchesPreview:true}));
  }catch(error){
   const screen=await page?.locator('body').innerText({timeout:2000}).catch(()=>'');
-  console.error('Website upgrade qualification failed during '+phase+'\n'+(screen??'').slice(0,1400));throw error;
+  const state=await page?.evaluate(async()=>{
+   const response=await fetch('/api/website-files/preparation',{signal:AbortSignal.timeout(2000)});
+   return response.ok?(await response.json()).preparation:{status:response.status};
+  }).catch(()=>null);
+  console.error('Website upgrade qualification failed during '+phase+'\n'+JSON.stringify(state)+'\n'+(screen??'').slice(0,1400));throw error;
  }finally{await fixture.dispose(app);}
 });

@@ -11,12 +11,16 @@ import {desktopFixture} from './fixture.js';
 // Drive its real renderer over a disposable loopback Chromium debugging port.
 export async function websiteDesktopFixture(){
  const fixture=await desktopFixture('observanda-installed-website-');
- if(!fixture.packaged)return fixture;
+ if(!fixture.packaged&&!process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE)return fixture;
+ // Source Electron normally uses a shorter test profile. During an upgrade it
+ // must reopen the very same profile selected by the packaged predecessor.
+ if(!fixture.packaged)fixture.env.OBSERVANDA_DESKTOP_TEST_HOME=path.join(fixture.directory,'.observanda');
  const candidateVersion=JSON.parse(await readFile(new URL('../../package.json',import.meta.url),'utf8')).version;
  const env={...fixture.env};for(const key of ['NODE_OPTIONS','ELECTRON_RUN_AS_NODE','OBSERVANDA_DESKTOP_NODE','OBSERVANDA_DESKTOP_TEST_HOME','OBSERVANDA_POSTGRES_BIN','OBSERVANDA_TEST_POSTGRES_BIN'])delete env[key];
  const endpoint=path.join(fixture.directory,'.observanda','window','DevToolsActivePort');
  async function close(app){
   if(!app)return;
+  if(!app.child)return fixture.close(app);
   let timeout;
   try{
    if(app.child.exitCode===null&&app.child.signalCode===null){
@@ -28,6 +32,7 @@ export async function websiteDesktopFixture(){
   }finally{clearTimeout(timeout);await app.browser.close().catch(()=>{});}
  }
  return {...fixture,close,async start(program=fixture.packaged,{website=false,expectedVersion=candidateVersion}={}){
+  if(!program)return fixture.start(undefined,{website});
   const executable=await realpath(program),resources=path.join(path.dirname(executable),'resources');
   const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
   assert.equal(installed.version,expectedVersion);await access(path.join(resources,'app.asar'));
