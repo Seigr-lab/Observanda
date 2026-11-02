@@ -184,7 +184,7 @@ export class WebsiteFileStore{
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),css=manifest.files.find(file=>file.name===manifest.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
   return {site:this.site(manifest),path:page,html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
  }
- list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name);const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
+ list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
  create({id=randomUUID(),name,html,css='',signal}={}){
   name=title(name);html??='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeWebsiteText(name)+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+escapeWebsiteText(name)+'</h1></main></body></html>';
   return this.importFiles(id,{name,files:new Map([['index.html',html],['style.css',css]]),signal});
@@ -285,6 +285,7 @@ export class WebsiteFileStore{
   const relative=name=>{if(typeof name!=='string'||!name.startsWith('.observanda/'))throw new AppError('UNSAFE');websiteFileName(name.slice(12));return prefix+'/'+name.slice(12);};
   return {root:base.root,vault:base.vault,websiteId:id,websiteContext:true,baseWorkspace:base,
    withLock:operation=>store.scope(()=>operation(),{write:true}),
+   async deploymentOwnerId(){const {websiteDeploymentOwner}=await import('./website-publishing-migration.js');return websiteDeploymentOwner(this,id);},
    readMetadata:(name,limit=CONTROL_LIMIT)=>store.scope(async()=>{const bytes=await store.bytes(relative(name),{missing:true,limit});return bytes?.toString('utf8')??null;}),
    writeMetadata:(name,text)=>store.scope(()=>store.writeBytes(relative(name),Buffer.from(text)),{write:true}),
    removeMetadata:name=>store.scope(()=>store.remove(relative(name)),{write:true}),

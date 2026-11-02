@@ -225,7 +225,10 @@ export class Publisher {
       await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory);
       const receipts = await this.readFile(this.receiptsFile, {}), key = this.destinationKey(config);
       let receipt;
-      if (config.kind === 'ssh') receipt = await this.ssh.deploy(config.ssh, candidate, this.workspace.websiteId??workspaceId);
+      if (config.kind === 'ssh') {
+        const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
+        receipt=await this.ssh.deploy(config.ssh,candidate,owner);
+      }
       else {
         receipt=await deployGithub(this,candidate,config,{plan,journal:{},save:async()=>{},guard:async()=>{},pushed:async (value,journal)=>{await writeGithubOwnership(this.workspace,key,journal);await recordDeploymentInventory(this.workspace,key,value,preparedInventory);receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));}});
       }
