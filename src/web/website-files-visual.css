@@ -1,0 +1,12 @@
+.website-visual-style { display:grid;gap:.75rem;min-width:0; }
+.website-visual-style h3,.website-visual-style p { margin:0; }
+.website-visual-style label { display:grid;gap:.25rem;min-width:0; }
+.website-visual-style :is(select,input,button) { max-width:100%;min-width:0;font:inherit; }
+.website-visual-fields { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(9rem,100%),1fr));gap:.6rem; }
+.website-visual-fields input[type=color] { width:100%;min-height:2rem; }
+.website-visual-actions,.website-visual-link { display:flex;align-items:center;flex-wrap:wrap;gap:.35rem; }
+.website-visual-link[hidden] { display:none; }
+.website-visual-rich { margin:0;padding:.6rem;min-width:0;border:1px solid var(--border,#cbd3df); }
+.website-visual-rich button[aria-pressed=true] { border-color:currentColor;box-shadow:inset 0 -2px currentColor; }
+.website-visual-style button { overflow-wrap:anywhere; }
+.website-visual-link { margin-top:.5rem; }

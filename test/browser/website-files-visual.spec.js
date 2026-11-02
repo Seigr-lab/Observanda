@@ -1,0 +1,107 @@
+import {expect,test} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import {websiteMarkerShape,updateWebsiteSource} from '../../src/website-file-html.js';
+import {validateWebsiteCSS,validateWebsiteHTML} from '../../src/website-file-policy.js';
+
+const revision='a'.repeat(64), sourceId='b'.repeat(64);
+const policy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
+const fragment='<div data-observanda-part="body"><p>A permitted paragraph</p></div>';
+const saved='<!doctype html><html><head><title>Nested page</title><meta http-equiv="Content-Security-Policy" content="'+policy+'"><link rel="stylesheet" href="style.css"></head><body><main><section data-section-id="layout"><div class="container-content"><section data-section-id="text"><p>Nested <em>original</em> wording</p><p>Second paragraph</p></section></div></section><section data-observanda-source="'+sourceId+'" data-observanda-source-revision="'+revision+'">'+fragment+'</section></main></body></html>';
+const css='body { font-family: sans-serif }';
+const origin='http://127.0.0.1:48218', base='/api/website-files/preview/site/'+revision+'/';
+
+async function fixture(page){
+ let published;
+ await page.route(origin+'/**',async route=>{
+  const url=new URL(route.request().url());
+  if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:'<style>body{display:grid;grid-template-columns:22rem 1fr}iframe{width:100%;height:720px}</style><main id="styles"></main><iframe title="Canvas" sandbox="allow-same-origin" src="'+base+'index.html?canvas=1"></iframe>'});
+  if(url.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'none'"},body:'<title>Canvas</title>'});
+  if(url.pathname==='/published/index.html')return route.fulfill({contentType:'text/html',body:published.html});
+  if(url.pathname==='/published/style.css')return route.fulfill({contentType:'text/css',body:published.css});
+  if(/^\/(website-html-document|website-files-[a-z-]+)\.js$/.test(url.pathname)){
+    const source=await readFile(new URL('../../src/web'+url.pathname,import.meta.url));
+    return route.fulfill({contentType:'text/javascript',body:source});
+  }
+  throw Error('Unexpected request: '+url.pathname);
+ });
+ await page.goto(origin);
+ await page.evaluate(async({html,css,base})=>{
+   const {loadWebsiteCanvas,editWebsiteCanvas,websiteCanvasValue}=await import('/website-html-document.js');
+   const {bindWebsiteVisual,websiteVisualSections}=await import('/website-files-visual.js');
+   const frame=document.querySelector('iframe'),doc=frame.contentDocument;
+   loadWebsiteCanvas(doc,html,css,location.origin+base+'style.css');editWebsiteCanvas(doc);
+   window.visual=bindWebsiteVisual({document:doc,inspector:document.querySelector('#styles'),t:name=>name,
+     beforeChange:()=>{},change:()=>{},getCSS:()=>css,setCSS:value=>{css=value;}});
+   window.rows=()=>websiteVisualSections(doc).map(({node,depth,path})=>({name:node.dataset.sectionId,depth,path}));
+   window.saved=()=>({html:websiteCanvasValue(doc),css});
+ },{html:saved,css,base});
+ const frame=page.frameLocator('iframe');
+ return {frame,publish:async value=>{published=value;await page.goto(origin+'/published/index.html');}};
+}
+
+test('nested edit, rich text and visual styles survive saved HTML, external CSS and a source withdrawal',async({page})=>{
+ const {frame,publish}=await fixture(page);
+ const path=await page.evaluate(()=>window.rows().find(row=>row.name==='text'&&row.depth===1)?.path);
+ expect(path).toBeTruthy();
+ await page.evaluate(path=>window.visual.select(path,{edit:true}),path);
+ await page.keyboard.type('Authored ');
+ await expect(frame.locator('[data-section-id="text"] p').first()).toHaveText('Authored Nested original wording');
+ const property=name=>page.locator('[data-visual-property="'+name+'"]');
+ await property('font-size').fill('23');await property('line-height').fill('1.75');await property('letter-spacing').fill('1.2');
+ await page.getByRole('button',{name:'sectionApply',exact:true}).click();
+ await expect(frame.locator('[data-section-id="text"]')).toHaveCSS('font-size','23px');
+ const first=frame.locator('[data-section-id="text"] em');
+ await first.dblclick();
+ await page.locator('[data-visual-command="bold"]').click();
+ await expect(frame.locator('[data-section-id="text"] :is(b,strong)')).toHaveText('original');
+ await first.dblclick();
+ await page.locator('[data-visual-scope]').selectOption('selection');
+ await property('font-weight').fill('500');await page.getByRole('button',{name:'sectionApply',exact:true}).click();
+ await expect(first.locator('span')).toHaveCSS('font-weight','500');
+ await frame.locator('[data-observanda-part] p').dblclick();
+ await page.keyboard.type('Visible');
+ await page.locator('[data-visual-scope]').selectOption('page');
+ await property('padding').fill('17');await page.getByRole('button',{name:'sectionApply',exact:true}).click();
+ await page.locator('[data-visual-scope]').selectOption('site');
+ await property('font-family').selectOption({label:'sectionSerif'});await page.getByRole('button',{name:'sectionApply',exact:true}).click();
+ const output=await page.evaluate(()=>window.saved());
+ expect(output.html).toContain('Visible');expect(output.html).not.toMatch(/observanda-editor|contenteditable|style="/i);
+ expect(websiteMarkerShape(output.html)).toEqual(websiteMarkerShape(saved));
+ validateWebsiteHTML(output.html);validateWebsiteCSS(output.css);
+ const withdrawn=updateWebsiteSource(output.html,{id:sourceId,revision:'c'.repeat(64),previousHtml:fragment,visible:false});
+ expect(withdrawn).not.toContain('Visible');expect(withdrawn).toContain('Authored Nested');
+ await publish(output);
+ await expect(page.locator('[data-section-id="text"] p').first()).toHaveCSS('line-height','40.25px');
+ await expect(page.locator('[data-section-id="text"] em span')).toHaveCSS('font-weight','500');
+ await expect(page.locator('body')).toHaveCSS('padding-top','17px');
+ await expect(page.locator('body')).toHaveCSS('font-family','Georgia, serif');
+});
+
+test('rich text headings lists links and plain-text paste preserve the document privacy boundary',async({page})=>{
+ const {frame}=await fixture(page);
+ const paragraph=frame.getByText('Second paragraph',{exact:true});
+ await paragraph.dblclick();await page.getByRole('combobox',{name:'richHeading'}).selectOption('h3');
+ await expect(frame.locator('h3')).toHaveText('Second paragraph');
+ await frame.locator('h3').dblclick();await page.getByRole('button',{name:'richBullets',exact:true}).click();
+ await expect(frame.locator('ul li')).toHaveText('Second paragraph');
+ await frame.locator('li').dblclick();await page.getByRole('button',{name:'richLink',exact:true}).click();
+ await page.getByRole('textbox',{name:'richLinkAddress'}).fill('https://example.org/notes');
+ await page.getByRole('button',{name:'richApplyLink'}).click();
+ await expect(frame.locator('a')).toHaveAttribute('href','https://example.org/notes');
+ await frame.locator('a').dblclick();await page.getByRole('button',{name:'richUnlink'}).click();
+ await expect(frame.locator('a')).toHaveCount(0);
+ await frame.locator('li').dblclick();
+ await frame.locator('li').evaluate(li=>{
+   const clipboard=new DataTransfer();clipboard.setData('text/html','<img src="untrusted.png">');clipboard.setData('text/plain','Pasted');
+   li.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
+ });
+ await expect(frame.locator('li')).toContainText('Pasted');await expect(frame.locator('img')).toHaveCount(0);
+ await frame.locator('main').evaluate(main=>{
+   const range=main.ownerDocument.createRange();range.selectNodeContents(main);
+   main.ownerDocument.body.focus();
+   const select=main.ownerDocument.getSelection();select.removeAllRanges();select.addRange(range);
+ });
+ await page.keyboard.press('Delete');
+ await expect(frame.getByText('A permitted paragraph',{exact:true})).toBeVisible();
+ expect(websiteMarkerShape((await page.evaluate(()=>window.saved())).html)).toEqual(websiteMarkerShape(saved));
+});
