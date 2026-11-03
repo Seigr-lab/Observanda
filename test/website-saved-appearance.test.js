@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdir,mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID,randomBytes} from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
+import {Workspace} from '../src/storage.js';
+import {WebsiteFileStore} from '../src/website-file-store.js';
+import {savedAppearance} from '../src/website-saved-appearance.js';
+import {closeIdleMutationFiles} from '../src/mutation-files.js';
+
+test('appearance edits retain original HTML and CSS, update only the shared sheet, and reject stale or unsafe settings',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'saved-site-appearance-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace),site=randomUUID();
+ workspace.catalogue=workspace.openCatalogue=()=>assert.fail('Opened research storage');
+ const doc='<!doctype html>\n<html><head><title>Readings</title></head><body><p>Original text</p></body></html>',raw='/* exact source */\n.custom{color:navy}\n';
+ const base=await store.importFiles(site,{name:'Readings',files:new Map([['index.html',doc],['methods.html',doc],['style.css',raw]])});
+ const set=(expectedRevision,values)=>savedAppearance(store,site,{expectedRevision,values},true);
+ for(const values of [{accent:'red; background:url(unsafe)'},{reading:'url(x)'},{privateCaption:'unpublishable'}])assert.throws(()=>set(base.site.revision,values),{code:'INVALID'});
+ const first=await set(base.site.revision,{accent:'#CC7711',heading:'serif'}),a=await store.scope(()=>store.raw(site));
+ assert.deepEqual(a.appearance.values,{accent:'#cc7711',heading:'serif'});assert.equal(first.css,raw);
+ await assert.rejects(set(base.site.revision,{accent:'#000000'}),{code:'CONFLICT'});
+ const reads=[],writes=[],read=store.readText.bind(store),write=store.siteFile.bind(store);
+ const monitored=t.mock.method(store,'readText',(f,o)=>{reads.push(f.name);return read(f,o);});
+ const saved=t.mock.method(store,'siteFile',(...args)=>{writes.push(args[1]);return write(...args);});
+ const next=await set(first.site.revision,{accent:'#004488',heading:'sans'});monitored.mock.restore();saved.mock.restore();
+ assert.deepEqual(writes,['website-appearance.css']);assert.deepEqual(reads.filter(n=>n.endsWith('.html')),['index.html']);
+ const b=await store.scope(()=>store.raw(site));for(const p of b.pages)assert.equal(b.files.find(f=>f.name===p.path).sha256,a.files.find(f=>f.name===p.path).sha256);
+ const reset=await set(next.site.revision,null);assert.equal(reset.html,doc);assert.equal(reset.css,raw);
+ const result=await store.scope(()=>store.raw(site));assert.equal(result.appearance,undefined);assert.ok(!result.files.some(f=>f.appearanceSheet));
+});

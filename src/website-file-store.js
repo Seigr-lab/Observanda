@@ -33,6 +33,7 @@ import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-so
 import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
 import {prepareFeedUsage,finishFeedUsage} from './website-feed-usage-index.js';
+import {syncSavedAppearance,validateSavedAppearance} from './website-saved-appearance.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -196,6 +197,7 @@ export class WebsiteFileStore{
   }
   if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
   validateFeedFiles(value,names);
+  validateSavedAppearance(value);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -262,6 +264,7 @@ export class WebsiteFileStore{
  async commit(manifest,{signal}={}){
   manifest=await syncEntryStyles(this,manifest,signal);
   manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
+  manifest=await syncSavedAppearance(this,manifest,signal);
   manifest=retainWebsiteFeedAssets(manifest);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){

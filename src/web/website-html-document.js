@@ -20,7 +20,9 @@ export function loadWebsiteCanvas(document,html,css,stylesheet){
  for(const link of source.querySelectorAll('link[rel="stylesheet"][href]'))if(new URL(link.getAttribute('href'),base).href===stylesheet){link.dataset.observandaEditorStylesheet=link.getAttribute('href');link.removeAttribute('href');}
  const style=source.createElement('style');style.dataset.observandaEditor='';
  style.textContent=css.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,(match,a,b,c)=>{const url=(a??b??c).trim();if(!url||url.startsWith('#'))return match;return 'url('+JSON.stringify(new URL(url,stylesheet).href)+')';});
- source.head.append(style);document.replaceChild(document.importNode(source.documentElement,true),document.documentElement);
+ const current=[...source.querySelectorAll('link[data-observanda-editor-stylesheet]')].at(-1);
+ if(current)current.after(style);else if(source.head.querySelector('link[data-website-appearance]'))source.head.querySelector('link[data-website-appearance]').before(style);else source.head.append(style);
+ document.replaceChild(document.importNode(source.documentElement,true),document.documentElement);
 }
 export function websiteCanvasValue(document){
  const copy=document.cloneNode(true);

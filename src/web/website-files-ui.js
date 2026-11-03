@@ -24,6 +24,7 @@ import {websiteSourceGallery} from './website-files-source-gallery.js';
 import {presentationBlock,websitePlacementPresentation} from './website-placement-presentation.js';
 import {websiteFileFeeds} from './website-file-feeds.js';
 import {starterPage} from './website-file-starter.js';
+import {editWebsiteAppearance} from './website-files-appearance.js';
 
 const tr=(key,args)=>t('websiteFiles',key,args);
 
@@ -418,7 +419,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
-  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('destination','destination')+button('folderPublish','folder'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
+  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('destination','destination')+button('folderPublish','folder'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
   let body;
   if(stale)body=conflictingPage?conflictView():'';
   else if(form)body=formView();
@@ -662,6 +663,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    }
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page')showPageChecks({doc:websiteHTML(html),path:opened.path,directory:directory(),pages:previewPages(),t:tr,select:path=>visual?.select(path,{edit:true})});
+   else if(operation==='appearance'&&await beforeLeave(true)){
+    const base=opened,current=()=>opened===base&&!stale;
+    await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,
+     apply:values=>run(async()=>{
+      if(!current())throw Object.assign(Error(tr('changed')),{code:'WEBSITE_CHANGED'});
+      const saved=await request('appearance/save',{siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,values},{signal:controller.signal});
+      adopt(saved);render();return true;
+     },'saving')});
+   }
    else if(['duplicate','remove','move-up','move-down'].includes(operation)){
     documentChange(doc=>{const node=blockAt(doc,element.dataset.path);if(!movable(node))return;
      if(operation==='duplicate'){duplicateBlock(node);}else if(operation==='remove')node.remove();
