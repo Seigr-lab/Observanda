@@ -61,7 +61,7 @@ export function reviewSavedWebsite({site,directory,request,signal,t,edit,trigger
    }catch(reason){fail(reason);}
   };
  }
- async function drawDetails(){
+ async function drawDetails(focusHeading=false){
   const id=++drawId,path=selected;details.replaceChildren();
   if(!path)return;
   try{
@@ -78,24 +78,26 @@ export function reviewSavedWebsite({site,directory,request,signal,t,edit,trigger
    }
    if(result.total>windowSize){
     const nav=el('div',details);nav.className='inline-actions';
-    btn(nav,t('prevPage'),()=>{issueOffset-=windowSize;void drawDetails();}).disabled=issueOffset===0;
+    btn(nav,t('prevPage'),()=>{issueOffset-=windowSize;void drawDetails(true);}).disabled=issueOffset===0;
     el('span',nav,t('websiteReviewRange',{first:issueOffset+1,last:issueOffset+result.items.length,total:result.total}));
-    btn(nav,t('nextPage'),()=>{issueOffset+=windowSize;void drawDetails();}).disabled=issueOffset+result.items.length>=result.total;
+    btn(nav,t('nextPage'),()=>{issueOffset+=windowSize;void drawDetails(true);}).disabled=issueOffset+result.items.length>=result.total;
    }
+   if(focusHeading)section.focus();
   }catch(reason){fail(reason);}
  }
- function drawFiles(){
+ function drawFiles(focusSelection=false){
   filesList.replaceChildren();
   const slice=matches.slice(offset,offset+windowSize);
   if(!slice.some(f=>f.path===selected)){selected=slice[0]?.path;issueOffset=0;}
   for(const {path,total} of slice){
-   const b=btn(filesList,path+' ('+total+')',()=>{selected=path;issueOffset=0;drawFiles();});b.setAttribute('aria-pressed',String(path===selected));
+   const b=btn(filesList,path+' ('+total+')',()=>{selected=path;issueOffset=0;drawFiles(true);});b.setAttribute('aria-pressed',String(path===selected));
   }
   if(!slice.length)el('p',filesList,t('websiteReviewNoMatches'));
   fileNav.hidden=matches.length<=windowSize;prevFile.disabled=offset===0;nextFile.disabled=offset+windowSize>=matches.length;
+  if(focusSelection)filesList.querySelector('[aria-pressed=true]')?.focus();
   void drawDetails();
  }
- function moveFile(direction){offset+=direction*windowSize;drawFiles();}
+ function moveFile(direction){offset+=direction*windowSize;drawFiles(true);}
  search.oninput=()=>{const q=normalize(search.value);matches=files.filter(f=>normalize(f.path+' '+(model.pages.get(f.path)?.title??'')).includes(q));offset=0;drawFiles();};
  async function start(){
   const catalogue=await request('review/catalogue',pin,{signal:stop});stop.throwIfAborted();

@@ -37,11 +37,11 @@ test('review the published site, repair a cross-page link and describe a figure 
   let d=await check();
   await expect(d.getByRole('status',{name:'Check website'})).toContainText('5 findings in 3 files');
   expect(routes.some(url=>/spectrum\.svg$|absent\.png$/.test(url.pathname))).toBe(false);
-  await d.getByRole('button',{name:'index.html (3)',exact:true}).click();
+  const indexFindings=d.getByRole('button',{name:'index.html (3)',exact:true});await indexFindings.press('Enter');await expect(indexFindings).toBeFocused();
   const bad=d.locator('li').filter({hasText:'methods/assays.html#wrong'});
   await bad.locator('summary').click();
-  if(process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT)await d.screenshot({path:process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT});
   const address=bad.getByLabel('Destination URL or page');
+  if(process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT){await address.focus();await address.scrollIntoViewIfNeeded();await d.screenshot({path:process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT});}
   await address.fill('methods/assays.html#still-wrong');await bad.getByRole('button',{name:'Apply in editor'}).click();
   await expect(address).toBeFocused();await expect(d).toBeVisible();
   await address.fill('methods/assays.html#calibration');await bad.getByRole('button',{name:'Apply in editor'}).click();
