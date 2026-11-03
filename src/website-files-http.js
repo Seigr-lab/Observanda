@@ -119,6 +119,11 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    const write=operation==='appearance/save';if(write){onWrite();await check();}
    json(await savedAppearance(store,siteId,{...options,expectedRevision,signal},write));return true;
   }
+  if(operation==='review/catalogue'){
+   if(!revision(expectedRevision))throw new AppError('INVALID');
+   const inventory=await store.publicationInventory(siteId,{expectedRevision,signal});await check();
+   json({...inventory,files:[...inventory.files,'publication.json']});return true;
+  }
   if(operation==='publish-target'){
    await store.siteVersion(siteId,{signal});
    const target=await publisher(siteId);

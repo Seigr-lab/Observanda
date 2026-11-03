@@ -96,6 +96,11 @@ test('private drafts remain editable and a draft-only placement contributes no p
  const withdrew=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,title:'Withdrawn',visible:false},{token:withdrew});
  assert.doesNotMatch((await store.open(id,{path:draft})).html,/Source detail/);assert.equal((await store.export(id)).files.has(assetPath),false);
  await assert.rejects(store.file(id,assetPath,{revision:shared.site.revision,editor:true}),{code:'CONFLICT'});
+ const currentExport=await store.export(id);
+ store.readText=()=>assert.fail('Listing this site read a page or asset body');
+ const inventory=await store.publicationInventory(id,{expectedRevision:currentExport.revision});
+ assert.deepEqual(inventory.files.sort(),[...currentExport.files.keys()].sort());assert.deepEqual(inventory.pages,currentExport.site.pages);
+ await assert.rejects(store.publicationInventory(id,{expectedRevision:shared.site.revision}),{code:'CONFLICT'});
 });
 
 test('saved HTML, CSS and copied source survive unavailable research; changing visibility updates existing placements and revokes stale publications',async()=>{

@@ -11,7 +11,7 @@ function includeCompleteMarks(range){
  }
 }
 
-function validAddress(value,base){
+export function validWebsiteLink(value,base){
  if(!value||/[\\\s\u0000-\u001f]/.test(value))return false;
  if(value.startsWith('#'))return true;
  let url;try{url=new URL(value,base);}catch{return false;}
@@ -75,7 +75,7 @@ export function websiteTextLinks({document,tools,t,listen,safeRange,beforeChange
  }
  function submit(){
   const href=address.value.trim();
-  if(!validAddress(href,document.location.href)){address.setCustomValidity(t('badLink'));address.reportValidity();return;}
+  if(!validWebsiteLink(href,document.location.href)){address.setCustomValidity(t('badLink'));address.reportValidity();return;}
   if(!usable(saved)){dialog.close();return;}
   const range=saved.cloneRange(),node=anchor(range);dialog.close();saved=range;
   if(!restore())return;

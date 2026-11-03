@@ -24,7 +24,9 @@ import {websiteSourceGallery} from './website-files-source-gallery.js';
 import {presentationBlock,websitePlacementPresentation} from './website-placement-presentation.js';
 import {websiteFileFeeds} from './website-file-feeds.js';
 import {starterPage} from './website-file-starter.js';
+import {reviewSavedWebsite} from './website-site-review.js';
 import {editWebsiteAppearance} from './website-files-appearance.js';
+import {managedWebsiteContent} from './website-layer-model.js';
 
 const tr=(key,args)=>t('websiteFiles',key,args);
 
@@ -113,6 +115,36 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const id=newFeed?null:blockAt(doc,selected)?.closest('[data-website-feed]')?.dataset.websiteFeed;
   await feeds.open({site:opened.site,page:opened.path,blocks:structure(doc).map(label),feedId:id,trigger});
  }
+ function checkSavedSite(trigger){
+  const site=opened.site;
+  reviewSavedWebsite({site,directory:directory(),request,signal:controller.signal,t:tr,trigger,
+   onError:reason=>{if(['ACCESS_LOCKED','AUTH','WEBSITE_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);},
+   edit:(path,issue,repair)=>run(async()=>{
+    if(siteId()!==site.id||stale||opened.site.revision!==site.revision)throw Object.assign(Error(tr('changed')),{code:'CONFLICT'});
+    if(!await beforeLeave(true))return;
+    const owner=site.feedPages?.find(p=>p.path===path)?.ownerPage;
+    const page=await request('open',{siteId:site.id,path:owner??(path===site.cssPath?'index.html':path)},{signal:controller.signal});
+    if(page.site.revision!==site.revision)throw Object.assign(Error(tr('changed')),{code:'CONFLICT'});
+    adopt(page);history.replaceState(history.state,'',fileRoute(site.id));mode='visual';
+    if(repair){
+     documentChange(doc=>{
+      const node=websiteLayerAt(doc,issue.elementPath);
+      if(!node||node.closest(managedWebsiteContent))throw Error(tr('changed'));
+      if(issue.key==='missingAlt'&&node.localName==='img'&&!node.hasAttribute('alt'))node.alt=repair.value;
+      else if(['brokenLink','draftLink'].includes(issue.key)&&node.matches('a[href]'))node.setAttribute('href',repair.value);
+      else if(issue.key==='emptyLink'&&node.matches('a[href]'))node.setAttribute('aria-label',repair.value);
+      else throw Error(tr('changed'));
+     });
+     locatedPlacement=issue.blockPath??issue.elementPath;render();return;
+    }
+    if(issue.feedId){render();await feeds.open({site:page.site,page:page.path,blocks:structure(websiteHTML(page.html)).map(label),feedId:issue.feedId});return;}
+    if(owner){resetPreview();mode='preview';navigatePreview({path,hash:''});return;}
+    if(path===site.cssPath)mode='css';
+    if(['missingTitle','missingLang'].includes(issue.key)){mode='pages';pagesPanel.open();return;}
+    locatedPlacement=issue.blockPath??null;render();
+   })
+  });
+ }
  const picker=websiteFilesPicker({request,esc,site:()=>opened,blocks:()=>structure().map(label),
   onPickerPaint:placementDrag.paint,onPickerClose:placementDrag.reset,
   onSourceGallery:entry=>startFigures(null,entry),choosingGallerySource:()=>mode==='source-gallery',
@@ -166,7 +198,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function scrollToAnchor(doc,hash){if(!hash)return;let id;try{id=decodeURIComponent(hash.slice(1));}catch{return;}doc.getElementById(id)?.scrollIntoView();}
  function bindNavigation(doc,path,preview){
-  bindSavedLinks(doc,{url:baseURL(path),directory:directory(),pages:previewPages(),unavailable:()=>notify(tr('outsidePreview')),download:preview?(url,name)=>void downloadResource(url,name).catch(e=>notify(e.message,true)):null,navigate:page=>{
+  bindSavedLinks(doc,{url:baseURL(path),directory:directory(),pages:previewPages(),unavailable:()=>notify(tr('outsidePreview')),
+   external:preview?href=>window.open(href,'_blank','noopener,noreferrer'):null,download:preview?(url,name)=>void downloadResource(url,name).catch(e=>notify(e.message,true)):null,navigate:page=>{
    if(busy||stale)return;
    if(preview){navigatePreview(page);return;}
    if(opened.site.feedPages?.some(member=>member.path===page.path)){
@@ -419,7 +452,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
-  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('destination','destination')+button('folderPublish','folder'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
+  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('destination','destination')+button('folderPublish','folder')+button('checkWebsite','check-website'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
+  const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
   if(stale)body=conflictingPage?conflictView():'';
   else if(form)body=formView();
@@ -439,7 +473,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+'</div><iframe id="website-files-preview" class="website-files-canvas" title="'+esc(tr('preview'))+'" sandbox="allow-same-origin"></iframe>';
   else body=editorView();
   const toolbar=form||stale||composing?'':(opened?extraTools('chooseSite',siteSelector()):siteSelector())+(opened?pageToolbar():'');
-  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><h1>'+esc(title)+'</h1><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'</header>'+
+  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><h1>'+esc(title)+'</h1><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+guideButton+'</header>'+
    (toolbar?'<div class="website-files-toolbar website-page-controls">'+toolbar+'</div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    button('reopen','reopen','data-website-files-reopen '+(stale&&!awaitingAccess&&!conflictingPage?'':'hidden'))+body+'</fieldset>';
@@ -550,9 +584,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function publishUpdateView(){
   const title='<h2>'+esc(tr('publishUpdate'))+'</h2>';
-  if(mode==='publish-choose')return '<section class="panel website-files-publish">'+title+'<p>'+esc(tr('choosePublishTarget'))+'</p><div class="inline-actions">'+button('folderPublish','folder')+button('destination','destination')+button('closePreview','visual')+'</div></section>';
+  if(mode==='publish-choose')return '<section class="panel website-files-publish">'+title+'<p>'+esc(tr('choosePublishTarget'))+'</p><div class="inline-actions">'+button('folderPublish','folder')+button('destination','destination')+button('checkWebsite','check-website')+button('closePreview','visual')+'</div></section>';
   return '<section class="panel website-files-publish">'+title+'<p>'+esc(opened.site.name)+' · '+esc(destination.config.kind==='github'?'GitHub':'SSH')+'</p>'+(!plan?'<p>'+esc(remoteAddress(destination.config))+'</p>':'')+transferView()+reviewView()+
-   '<div class="inline-actions">'+(plan||destination.transfer?.uncertain?'':button('review','plan'))+button('destination','destination')+button('closePreview','visual')+'</div></section>';
+   '<div class="inline-actions">'+(plan||destination.transfer?.uncertain?'':button('review','plan'))+button('destination','destination')+button('checkWebsite','check-website')+button('closePreview','visual')+'</div></section>';
  }
  function transferView(){return remoteReceiptView(destination,opened.site.revision,{esc,t,tr,button});}
  function destinationView(){if(!destination)return '<p role="status">'+esc(tr('loading'))+'</p>';const config=destination.config;
@@ -663,6 +697,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    }
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page')showPageChecks({doc:websiteHTML(html),path:opened.path,directory:directory(),pages:previewPages(),t:tr,select:path=>visual?.select(path,{edit:true})});
+   else if(operation==='check-website'){if(await beforeLeave(true))checkSavedSite(element);}
    else if(operation==='appearance'&&await beforeLeave(true)){
     const base=opened,current=()=>opened===base&&!stale;
     await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,

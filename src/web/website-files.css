@@ -74,6 +74,30 @@
 .website-file-conflict textarea { width:100%;box-sizing:border-box;resize:vertical;font:inherit }
 .website-author-dialog { width:min(36rem,90vw); max-height:80vh; color:inherit; background:var(--surface,#fff); border:1px solid var(--border,#cbd3df); border-radius:.5rem; padding:1.3rem }
 .website-author-dialog::backdrop { background:#18324b66 }
+.website-author-dialog.website-site-review { width:min(58rem,calc(100vw - 3rem)); max-height:min(48rem,calc(100dvh - 2rem)); padding:0; overflow:hidden }
+.website-site-review[open] { display:flex; flex-direction:column }
+.website-site-review > header,.website-site-review > footer { padding:.8rem 1.1rem; flex:none }
+.website-site-review > header { border-bottom:1px solid var(--border,#cbd3df) }
+.website-site-review > header h2,.website-site-review > header p { margin:.25rem 0 }
+.website-review-body { min-height:0; overflow:auto; overscroll-behavior:contain; padding:1rem 1.1rem }
+.website-review-body progress { width:100% }
+.website-site-review > footer { display:flex; justify-content:flex-end; border-top:1px solid var(--border,#cbd3df) }
+.website-review-findings { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(15rem,2fr); gap:1rem }
+.website-review-findings h3 { margin:.35rem 0 }
+.website-review-file-list { display:grid; align-content:start; gap:.25rem }
+.website-review-file-list .button { text-align:start; justify-content:flex-start; overflow-wrap:anywhere; padding:.35rem .5rem }
+.website-review-file-list [aria-pressed=true] { background:var(--accent,#3659a9); color:white }
+.website-review-findings ul { list-style:none; margin:.5rem 0; padding:0 }
+.website-review-findings li { border-block-start:1px solid var(--border,#cbd3df); padding:.65rem 0 }
+.website-review-findings code { display:block; overflow-wrap:anywhere }
+.website-review-findings details { margin-block:.35rem }
+.website-review-findings summary { cursor:pointer; font-weight:600; color:var(--accent,#3659a9) }
+.website-review-findings form { margin-block:.45rem; grid-template-columns:minmax(0,1fr) auto; gap:.45rem; align-items:end }
+.website-review-finding { display:flex; align-items:baseline; justify-content:space-between; gap:.6rem }
+.website-review-finding > .button { flex:none; min-height:1.8rem; padding:.15rem .5rem }
+.website-review-finding > div { min-width:0 }
+.website-review-findings label { min-width:0 }
+.website-review-findings input:not([type=checkbox]) { width:100% }
 .website-author-dialog form,.website-author-dialog label,.website-gallery-items label,.website-file-pages label { display:grid; gap:.35rem; margin-block:.5rem }
 .website-author-dialog li { margin-block:.3rem }
 .website-gallery-drop { display:block; border:2px dashed var(--border,#8798b2); padding:1rem; margin:.8rem 0 }

@@ -1,13 +1,19 @@
+import {validWebsiteLink} from './website-files-text-link.js';
+
 // Both editor frames are sandboxed. Resolve links against the actual page,
 // and let the host open only files belonging to the current saved revision.
-export function savedPageLink(href, pageURL, directory, pages) {
+export function savedFileReference(href,pageURL,directory){
   let url;
   try { url = new URL(href, pageURL); } catch { return null; }
   if (url.origin !== directory.origin || !url.pathname.startsWith(directory.pathname) || url.searchParams.has('canvas') || url.username || url.password) return null;
   let path;
   try { path = decodeURIComponent(url.pathname.slice(directory.pathname.length)); } catch { return null; }
-  if (!pages.some(page => page.path === path)) return null;
+  if(!path||path.endsWith('/'))path+='index.html';
   return {path, hash: url.hash,search:url.search};
+}
+export function savedPageLink(href,pageURL,directory,pages){
+ const ref=savedFileReference(href,pageURL,directory);
+ return ref&&pages.some(page=>page.path===ref.path)?ref:null;
 }
 
 // A saved page can be interactive long before its images have loaded. Bind
@@ -36,7 +42,7 @@ export function openSavedPreview(frame,href,bind,failed){
   frame.src=href;waiting=requestAnimationFrame(ready);
 }
 
-export function bindSavedLinks(doc, {url, directory, pages, navigate, download, unavailable}) {
+export function bindSavedLinks(doc, {url, directory, pages, navigate, download, external, unavailable}) {
   const handle = event => {
     const link = event.target.closest?.('a[href]');
     if (!link || event.defaultPrevented) return;
@@ -45,8 +51,10 @@ export function bindSavedLinks(doc, {url, directory, pages, navigate, download, 
     const href = link.getAttribute('href');
     const page = savedPageLink(href, url, directory, pages);
     if (page) { navigate(page); return; }
-    const asset = new URL(href, url);
-    if (download && asset.origin === directory.origin && asset.pathname.startsWith(directory.pathname) && !asset.search && link.hasAttribute('download')) {
+    let asset;try{asset=new URL(href,url);}catch{unavailable();return;}
+    if (external && asset.origin !== directory.origin && ['https:','http:'].includes(asset.protocol) && validWebsiteLink(asset.href,url)) {
+      if(event.isTrusted)external(asset.href);
+    } else if (download && asset.origin === directory.origin && asset.pathname.startsWith(directory.pathname) && !asset.search && link.hasAttribute('download')) {
       download(asset.href, link.download);
     } else unavailable();
   };

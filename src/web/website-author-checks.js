@@ -1,26 +1,61 @@
-import {savedPageLink} from './website-files-navigation.js';
+import {savedFileReference} from './website-files-navigation.js';
+import {decodedWebsiteCSS,websiteCSSURLs} from './website-css-urls.js';
 
-export function checkAuthoredPage(doc,path,directory,pages){
+function visibleText(node){
+ if(node.nodeType===3)return node.textContent;
+ if(node.nodeType!==1||node.matches('script,style,template,[hidden],[aria-hidden="true"]'))return '';
+ if(node.localName==='img')return node.getAttribute('alt')??'';
+ return Array.from(node.childNodes,visibleText).join('');
+}
+export function pageAnchors(doc){
+ const anchors=new Set();
+ for(const node of doc.querySelectorAll('[id],a[name]')){
+  if(node.id)anchors.add(node.id);
+  if(node.localName==='a'&&node.name)anchors.add(node.name);
+ }
+ return anchors;
+}
+export function checkAuthoredPage(doc,path,directory,pages,{files,crossLink,anchors=pageAnchors(doc),pageNames,draftNames}={}){
  const issues=[],pageURL=new URL(path,directory),ids=new Set();
- const add=(key,node,detail='')=>issues.push({key,node,detail:detail.slice(0,100)});
+ const add=(key,node,detail='')=>issues.push({key,node,detail:String(detail).slice(0,200)});
+ if(!pageNames){const sourceDraft=pages.find(page=>page.path===path)?.draft===true;pageNames=new Set(pages.filter(p=>sourceDraft||!p.draft).map(p=>p.path));draftNames=new Set(pages.filter(p=>!sourceDraft&&p.draft).map(p=>p.path));}
  if(!doc.title.trim())add('missingTitle',doc.documentElement);
  if(!doc.documentElement.lang.trim())add('missingLang',doc.documentElement);
+ const check=(raw,node,link)=>{
+  let url;try{url=new URL(raw,pageURL);}catch{add(link?'brokenLink':'missingFile',node,raw);return;}
+  if(url.origin!==directory.origin)return;
+  const ref=savedFileReference(raw,pageURL,directory);
+  if(link&&ref&&draftNames?.has(ref.path)){add('draftLink',node,raw);return;}
+  if(!ref||((files||ref.path.endsWith('.html'))&&!(files?.has(ref.path)??pageNames.has(ref.path)))){
+   add(link?'brokenLink':'missingFile',node,raw);return;
+  }
+  if(!link||!ref.hash||!pageNames.has(ref.path))return;
+  let id;try{id=decodeURIComponent(ref.hash.slice(1));}catch{add('brokenLink',node,raw);return;}
+  if(id.toLowerCase()==='top')return;
+  if(ref.path===path){if(!anchors.has(id))add('brokenLink',node,raw);}
+  else crossLink?.({path:ref.path,id,node,href:raw});
+ };
  let level=0;
- for(const node of doc.querySelectorAll('[id],img,h1,h2,h3,h4,h5,h6,a[href]')){
+ for(const node of doc.querySelectorAll('[id],img,h1,h2,h3,h4,h5,h6,a[href],video,table,[src],[poster],link[href],use[href],image[href],[style],style')){
   if(node.id){if(ids.has(node.id))add('dupId',node,node.id);ids.add(node.id);}
-  if(node.localName==='img'&&!node.hasAttribute('alt'))add('missingAlt',node,node.getAttribute('src')??'');
-  if(/^H[1-6]$/.test(node.tagName)){
-   const next=Number(node.tagName[1]);if(next>level+1)add('badHeading',node,node.textContent);level=next;
+  const hidden=node.closest('[hidden],[aria-hidden="true"]');
+  if(!hidden){
+   if(node.localName==='img'&&!node.hasAttribute('alt'))add('missingAlt',node,node.getAttribute('src')??'');
+   if(/^H[1-6]$/.test(node.tagName)){
+    const next=Number(node.tagName[1]);if(next>level+1)add('badHeading',node,node.textContent);level=next;
+   }
+   if(node.localName==='video'&&!node.querySelector('track[kind="captions" i]'))add('reviewCaptions',node);
+   if(node.localName==='table'&&!['none','presentation'].includes(node.getAttribute('role'))&&!node.querySelector('th,[role="columnheader"],[role="rowheader"]'))add('reviewTableHeaders',node);
   }
-  if(node.localName!=='a')continue;
-  const label=node.getAttribute('aria-label')||node.textContent.trim()||node.querySelector('img[alt]')?.alt||node.getAttribute('title');
-  if(!label&&!node.getAttribute('aria-labelledby')?.split(/\s+/).some(id=>doc.getElementById(id)?.textContent.trim()))add('emptyLink',node);
-  const href=node.getAttribute('href');let url;try{url=new URL(href,pageURL);}catch{add('brokenLink',node,href);continue;}
-  const page=savedPageLink(href,pageURL,directory,pages);
-  if(url.origin===directory.origin&&/\.html$/.test(url.pathname)&&!page){add('brokenLink',node,href);continue;}
-  if(page?.path===path&&page.hash){let id;try{id=decodeURIComponent(page.hash.slice(1));}catch{}
-   if(!doc.getElementById(id)&&!doc.getElementsByName(id).length)add('brokenLink',node,href);
+  if(node.localName==='a'&&node.hasAttribute('href')){
+   const label=node.getAttribute('aria-label')?.trim()||visibleText(node).trim()||node.getAttribute('title')?.trim();
+   if(!hidden&&!label&&!node.getAttribute('aria-labelledby')?.split(/\s+/).some(id=>doc.getElementById(id)?.textContent.trim()))add('emptyLink',node);
+   check(node.getAttribute('href'),node,true);
   }
+  if(!files)continue;
+  for(const key of ['src','poster'])if(node.hasAttribute(key))check(node.getAttribute(key),node,false);
+  if(['link','image','use'].includes(node.localName)&&node.hasAttribute('href'))check(node.getAttribute('href'),node,false);
+  if(node.hasAttribute('style')||node.localName==='style')for(const url of websiteCSSURLs(decodedWebsiteCSS(node.localName==='style'?node.textContent:node.getAttribute('style'))))check(url,node,false);
  }
  return issues;
 }

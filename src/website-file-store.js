@@ -386,19 +386,31 @@ export class WebsiteFileStore{
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:content.size,sha256:content.sha256};
  },{signal});}
  export(id,{expectedRevision,signal}={}){return this.scope(async()=>{
-  const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
+  const manifest=await this.current(id,expectedRevision),{site,descriptors,styles}=await this.publicationFiles(manifest,signal,true);
+  const files=new Map([...descriptors].map(([name,file])=>[name,new WebsiteFileContent(this,id,manifest.revision,file)]));
+  if(styles.length&&!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
+  for(const file of styles)if(file.entryStyle!==entryStyleHash)files.set(file.name,await StyledEntryPage.open(this,manifest,file,signal));
+  return {revision:manifest.revision,site,files};
+ },{signal});}
+ publicationInventory(id,{expectedRevision,signal}={}){return this.scope(async()=>{
+  const manifest=await this.current(id,expectedRevision),{site,descriptors,styles}=await this.publicationFiles(manifest,signal,false);
+  const names=[...descriptors.keys()];if(styles.length&&!descriptors.has(entryStyleName))names.push(entryStyleName);
+  return {revision:manifest.revision,pages:[...site.pages,...(site.feedPages??[])],files:names};
+ },{signal});}
+ async publicationFiles(manifest,signal,renderPages){
+  const descriptors=new Map(),styles=[],pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
   const publicPages=manifest.pages.filter(page=>!page.draft),publicPaths=new Set(publicPages.map(p=>p.path));
   if(manifest.feeds?.some(feed=>feed.unavailable==='capacity'&&publicPaths.has(feed.path)))throw new AppError('WEBSITE_FEED_CAPACITY');
-  for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
-  const descriptors=new Map(manifest.files.map(f=>[f.name,f]));
-  for(const page of manifest.pages){
-   if(page.draft)continue;const file=descriptors.get(page.path);
-   if(!usesEntryStyle(page)&&!await fileHasEditorMenu(this,file,signal))continue;
-   if(!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
-   if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));
+  for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))descriptors.set(file.name,file);
+  for(const page of publicPages){
+   // A names-only review needs to know whether the shared stylesheet exists.
+   // Only the export needs to prepare the individual pages that use it.
+   if(!renderPages&&(styles.length||descriptors.has(entryStyleName)))break;
+   const file=descriptors.get(page.path);
+   if(usesEntryStyle(page)||await fileHasEditorMenu(this,file,signal))styles.push(file);
   }
-  return {revision:manifest.revision,site:this.site({...manifest,pages:publicPages,feeds:manifest.feeds?.filter(f=>publicPaths.has(f.path))}),files};
- },{signal});}
+  return {site:this.site({...manifest,pages:publicPages,feeds:manifest.feeds?.filter(f=>publicPaths.has(f.path))}),descriptors,styles};
+ }
  async source(id,{pending=false}={}){
   if(!hex(id))throw new AppError('INVALID');const directory=ROOT+'/sources/'+id;
   if(!pending&&(await this.pendingSources()).has(id))throw new AppError('CONFLICT');

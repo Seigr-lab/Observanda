@@ -3,6 +3,7 @@ import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {outputName} from './local-export-files.js';
 import {safeEquationElement} from './web/website-equation-markup.js';
+import {decodedWebsiteCSS,websiteCSSURLs} from './web/website-css-urls.js';
 
 const forbidden=new Set(['base','iframe','frame','frameset','object','embed','portal','fencedframe','foreignObject','animate','animateMotion','animateTransform','set']);
 const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
@@ -16,10 +17,10 @@ function localURL(value,file){
 }
 export function validateWebsiteCSS(css,{file='style.css',pictures}={}){
  if(typeof css!=='string'||Buffer.byteLength(css)>16*1024*1024)throw new AppError('LIMIT');
- const decoded=css.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\\([a-f0-9]{1,6})\s?/gi,(_,hex)=>String.fromCodePoint(Math.min(parseInt(hex,16),0x10ffff))).replace(/\\([^\r\n])/g,'$1');
+ const decoded=decodedWebsiteCSS(css);
  if(/@import\b|(?:image-set|cross-fade|expression|src)\s*\(|-moz-binding\s*:|(?:^|[;{])\s*behavior\s*:/i.test(decoded))throw new AppError('INVALID');
- for(const match of decoded.matchAll(/url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi)){
-  const name=localURL(match[1]??match[2]??match[3],file);if(name===null)throw new AppError('INVALID');if(name.startsWith('pictures/'))pictures?.add(name);
+ for(const url of websiteCSSURLs(decoded)){
+  const name=localURL(url,file);if(name===null)throw new AppError('INVALID');if(name.startsWith('pictures/'))pictures?.add(name);
  }
  return css;
 }

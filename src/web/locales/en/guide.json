@@ -362,44 +362,34 @@
           "id":"project-websites",
           "title":"Separate project websites",
           "paragraphs":[
-            "Choose {ui:websiteSites.title} above the website editor, then {ui:websiteSites.new} to name a website. Create separate websites for different audiences or destinations, such as a research journal and a Help site. Choose content separately for each website.",
-            "Each website owns its pages, design, public content choices, publishing destination and retained editions. New websites start with no records selected for publication. Choose records in Public content and save the website. These choices do not change your research originals or another website's selection.",
-            "The website name stays visible above its editor and publishing controls. Open {ui:websiteSites.destination} to choose a GitHub repository and branch or a dedicated SSH hosting directory for this website. Use a separate repository, website folder or hosting directory for each independent site. Review and publish each edition explicitly; creating or switching websites does not deploy anything.",
-            "The existing workspace website remains available in {ui:websiteSites.title}. To create another project website, return to that list. Website changes saved elsewhere can be refreshed through the Observanda logo; unsaved edits stay protected."
+            "Open {ui:websiteFiles.create} to give a site its own pages, styles and publishing destination. Use the website selector to switch sites and the page selector to open a saved HTML page.",
+            "{ui:websiteFiles.save} stores your changes. {ui:websiteFiles.preview} opens the saved page and its assets. The website editor can do both while the research databases are offline."
           ]
         },
         {
           "id": "appearance",
           "title": "Choose fonts, colours and layout",
           "paragraphs": [
-            "In Preferences, open {ui:appearance.title} to choose a theme, colours and fonts. {ui:appearance.saveAs} keeps a named design in this workspace; {ui:appearance.saveAppearance} saves the current changes. App text size, menu layout and header alignment are personal settings on this computer, independent of website text and layout.",
-            "Use {ui:appearance.previewContent} to switch between fictional examples and saved content selected for your website. The preview applies your current appearance without saving it or creating a reviewed release. {ui:appearance.previewPage} chooses a page; {ui:appearance.retryPreview} retries an interrupted preview without discarding your edits. Review and publish separately through Publishing or Website editor.",
-            "In {ui:fonts.title}, upload a TTF, OTF, WOFF or WOFF2 file. Variable fonts expose {ui:fonts.variableSettings}. Allow website embedding only when the font licence permits it. Hiding a font from pickers keeps existing text and saved editions intact."
+            "Open {ui:websiteFiles.siteAppearance} to work on the saved website’s palette and typography. Use the visual inspector for an individual section. Check both the home page and a nested page in the saved preview.",
+            "The appearance controls in Preferences also include personal settings for the workspace interface. Set the site’s appearance in the website editor when the change belongs in published pages."
           ]
         },
         {
           "id": "design",
           "title": "Build and review pages",
           "paragraphs": [
-            "Open Website editor to choose pages and arrange sections. Create a homepage if you want one. Use the Page tab to build the structure, then the dedicated edit control to change a selected section. Save website changes before preparing a release.",
-            "Choose which content may be public in {ui:websiteEditor.content}. The editing canvas may show unpublished content. Use {ui:websiteEditor.readingPreview} to browse the current draft without saving the website or preparing an edition. Use {ui:websiteEditor.prepareEdition} separately to prepare content for export or publishing.",
-            "Use {ui:websiteContent.search} in Public content to find a project or record. Project and record lists have separate page controls. Expand a record's Media row to select attachments and its card cover. Include all entries applies to the entire project, including records outside the current search or page.",
-            "In the Media library, use {ui:websiteMedia.search} and {ui:websiteMedia.kind} to find uploaded files. Image and research-media selectors offer {ui:websiteMedia.find} for larger libraries. Choosing media returns you to the same element. Gallery choices remain selected across searches and pages; arrange their display order in the selected-images list. Choosing research media does not make a private record or attachment public.",
-            "On {ui:websiteEditor.page}, choose {ui:websiteEditor.area} to work on page content, a sidebar or the footer. Create a design or reuse an existing one. Its elements use the same text, media, layout and style controls as the page. Use the dedicated Edit control, then Back to return without changing pages.",
-            "{ui:websiteEditor.default} applies a sidebar or footer to pages that use the site default, including future pages. {ui:websiteEditor.choosePages} opens a searchable list of pages. Choose a page type, find a title and check or uncheck its assignment. {ui:websitePages.done} returns to the design; Save website saves the changes. Shared edits affect every page using that design; {ui:websiteEditor.copy} creates an independent composition, including image presentation settings. Deleting a design removes it from every assigned page and can be undone before saving.",
-            "A {ui:websiteEditor.contents} element links the current page's visible section headings, using stable anchors. The same sidebar adapts its index on each page. Hidden or excluded sections do not enter the published index. Set sidebar position, width and scrolling behavior in {ui:websiteEditor.appearance}; narrow screens place the sidebar before the content.",
-            "Image and button links offer {ui:websitePages.chooseLink}. Find a page without leaving the current design, or enter an external address directly. Choosing a destination has its own undo step. Text links use the Link settings search.",
-            "Create a footer design to arrange text, images, links and containers. Existing footer text seeds its first text element. Powered by Observanda stays at the end of the same footer, using its surface, text color and text alignment. If you deliberately mix alignments, the credit follows the final visible text block. It is centered only when there is no authored footer. Save, reopen and review the exported website before publishing."
+            "Use {ui:websiteFiles.pagePanel} to create pages and set their titles, languages and draft status. In {ui:websiteFiles.visual}, select a section on the page to edit its text and appearance. Use {ui:websiteFiles.menu} to link pages across folders.",
+            "Choose which entries, writing sections and figures may appear on a website in the lab book. Use {ui:websiteFiles.pickerBrowse} to find a permitted entry by project, book, date or tag and inspect where it appears.",
+            "For a page that follows new entries and changes, insert an {ui:websiteFiles.feedBlock}. Choose all eligible entries or set filters. Design the repeated item once, including which fields or figures to show. An individual placement keeps its own presentation. Withdrawn parts disappear from the saved site.",
+            "Use {ui:websiteFiles.checkWebsite} to check links, files and accessibility findings across the public pages. Apply a repair in the editor, save the page, and check it again."
           ]
         },
         {
           "id": "local-export",
           "title": "Export into an existing local website",
           "paragraphs": [
-            "In Publishing, prepare and review the website, then choose {ui:publication.localExport}. Choose the existing website root or a dedicated subfolder. Relative links support both locations. Use {ui:localExport.review} to inspect every added, updated, removed and unchanged output file before confirming {ui:localExport.apply}.",
-            "The first export never overwrites existing files. Later exports update or remove only files previously written to that exact folder by this workspace. A manually changed or deleted file is a conflict: restore the expected file, move it yourself, or select another folder and review again. Unrelated pages and Git history stay untouched. No commit, push or upload happens automatically.",
-            "Export to a local copy and upload only after completion. Files are verified before switching, but the entire folder cannot switch atomically alongside unrelated files. During an interruption it can contain a partial edition and temporary public output files. Reopen the same edition through Website preparations, choose Export to local folder, and use Resume export. The saved review and recovery journal remain encrypted in the workspace. Discard preparation is available before file switching starts; afterward resume the pinned edition before preparing another export to that folder.",
-            "Keep the workspace and its backups: they retain ownership and recovery receipts for the destination. Copying a website alone does not transfer that ownership to another workspace. This workflow requires a local filesystem supporting hard links; network shares and directly served live folders are not qualified destinations. A completed export verifies its bytes on disk, not a hosted deployment or resistance to sudden power loss on every platform."
+            "Choose {ui:websiteFiles.publishUpdate} and {ui:websiteFiles.folderPublish} to publish the saved files. Select the website folder, review the files to add, replace or remove, then confirm. The next update can reuse that destination.",
+            "Resolve any conflict with a file changed outside Observanda before continuing. After an interruption, reopen the same folder review and resume the confirmed update. Open the exported HTML in an independent browser to check the reader’s copy."
           ]
         },
         {
@@ -414,9 +404,8 @@
           "id": "release",
           "title": "Publish an approved edition",
           "paragraphs": [
-            "Keep private evidence and operational details out of public selections. Check filenames, metadata, links and embedded figure data as well as visible prose. You can author an explanation that supporting evidence is unavailable publicly without exposing its private metadata.",
-            "Use {ui:publication.selectionTitle} before preparing an edition. Expand a record to withhold its main writing, selected sections, template fields, attachments or charts. Choices apply to this edition only. Records you do not change keep their saved public selection. Exact chart tables and CSV downloads start off and require an explicit selection for each chart. A chart itself still reveals plotted values through its SVG, marks and labels; withholding a CSV does not make those plotted values secret. Original datasets and source artifacts are never included automatically. Unavailable research references are listed in the private review, with their labels and destinations excluded from the public edition.",
-            "Saving, generating output, committing, pushing and verifying deployment are separate states. In Publishing, configure the destination and use {ui:publication.reviewTitle} to prepare the saved public selection. {ui:publication.preparations} reopens retained editions; {ui:publication.continue} leaves preparation running. Review returns to Publishing when opened there. Unsaved website designs can be inspected with {ui:websiteEditor.readingPreview}; {ui:websiteEditor.prepareEdition} starts the separate preparation workflow. Verify the deployed edition; a successful push alone does not establish that the website has updated. Static export also supports publication without an integrated host."
+            "Save the website, check its public pages, then choose {ui:websiteFiles.publishUpdate}. Draft pages stay out of the release. Lab-book changes affect the saved website before the externally hosted copy changes.",
+            "For GitHub or SSH, set {ui:websiteFiles.destination}, review the intended location and outgoing files, then confirm the transfer. If the connection is interrupted, use the transfer receipt to check its outcome before retrying. Verify the hosted website separately."
           ]
         },
         {

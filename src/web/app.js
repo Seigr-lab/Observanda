@@ -724,6 +724,7 @@ async function action(button){
   if(removingRecord)return;
   const fileAction=button.dataset.action;
   if(state.filesMode){
+    if(fileAction==='context-help'&&button.hasAttribute('data-saved-website-guide')){await taskHelp.open('publishing',button,['project-websites','design','appearance','local-export','release']);return;}
     if(fileAction==='website-files-back'){if(await websiteFiles?.beforeLeave())await leaveWebsiteFiles();return;}
     if(fileAction==='website-files-retry'){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
     if(fileAction?.startsWith('website-files-')||fileAction?.startsWith('github-')){await websiteFiles?.action(button);return;}

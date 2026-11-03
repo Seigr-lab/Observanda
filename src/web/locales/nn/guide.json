@@ -438,44 +438,34 @@
           "id": "project-websites",
           "title": "Separate prosjektnettstader",
           "paragraphs": [
-            "Vel {ui:websiteSites.title} over nettstadredigeringa, og deretter {ui:websiteSites.new} for å namngi ein nettstad. Opprett separate nettstader for ulike målgrupper eller mål, til dømes ein forskingsjournal og ein hjelpenettstad. Vel innhald separat for kvar nettstad.",
-            "Kvar nettstad eig sidene, utforminga, dei offentlege innhaldsvala, publiseringsmålet og dei bevarte utgåvene sine. Nye nettstader startar utan oppføringar valde for publisering. Vel oppføringar i Offentleg innhald og lagre nettstaden. Desse vala endrar ikkje forskingsoriginalane dine eller utvalet til ein annan nettstad.",
-            "Nettstadnamnet er framleis synleg over redigeringsverktøyet og publiseringskontrollane. Opne {ui:websiteSites.destination} for å velje eit GitHub-kodelager og ei grein eller ei eiga SSH-vertsmappe for denne nettstaden. Bruk eit eige kodelager, ei eiga nettstadmappe eller vertsmappe for kvar uavhengig nettstad. Sjå gjennom og publiser kvar utgåve eksplisitt; å opprette eller byte nettstad rullar ikkje ut noko.",
-            "Den eksisterande nettstaden til arbeidsområdet er framleis tilgjengeleg i {ui:websiteSites.title}. Gå tilbake til den lista for å opprette ein annan prosjektnettstad. Nettstadendringar som er lagra andre stader, kan oppdaterast gjennom Observanda-logoen; ulagra endringar blir verna."
+            "Opne {ui:websiteFiles.create} for å lage ein nettstad med eigne sider, stilar og publiseringsmål. Bruk nettstad- og sideveljarane til å opne ei lagra HTML-side.",
+            "{ui:websiteFiles.save} lagrar endringane. {ui:websiteFiles.preview} opnar den lagra sida med tilhøyrande filer. Begge delar fungerer når forskingsdatabasane er fråkopla."
           ]
         },
         {
           "id": "appearance",
           "title": "Vel skrifter, fargar og oppsett",
           "paragraphs": [
-            "Opne {ui:appearance.title} i Innstillingar for å velje tema, fargar og skrifter. {ui:appearance.saveAs} bevarer ei namngitt utforming i dette arbeidsområdet; {ui:appearance.saveAppearance} lagrar dei gjeldande endringane. Tekststorleik, menyoppsett og topptekstjustering i appen er personlege innstillingar på denne datamaskina, uavhengige av teksten og oppsettet til nettstaden.",
-            "Bruk {ui:appearance.previewContent} til å byte mellom oppdikta døme og lagra innhald som er valt for nettstaden din. Førehandsvisinga bruker den gjeldande utsjånaden utan å lagre han eller opprette ei gjennomgått utgåve. {ui:appearance.previewPage} vel ei side; {ui:appearance.retryPreview} prøver ei avbroten førehandsvising på nytt utan å forkaste endringane dine. Sjå gjennom og publiser separat gjennom Publisering eller Nettstadredigering.",
-            "Last opp ei TTF-, OTF-, WOFF- eller WOFF2-fil i {ui:fonts.title}. Variable skrifter viser {ui:fonts.variableSettings}. Tillat innebygging på nettstaden berre når skriftlisensen tillèt det. Å skjule ei skrift frå veljarane bevarer eksisterande tekst og lagra utgåver."
+            "Opne {ui:websiteFiles.siteAppearance} for å angi fargar og typografi for nettstaden. Bruk det visuelle panelet for éin bestemt seksjon. Kontroller både startsida og ei side i ei undermappe i den lagra førehandsvisinga.",
+            "Utsjånad under Innstillingar omfattar òg personlege val for grensesnittet i arbeidsområdet. Bruk utsjånaden i nettstadredigeringa når endringa skal gjelde publiserte sider."
           ]
         },
         {
           "id": "design",
           "title": "Bygg og sjå gjennom sider",
           "paragraphs": [
-            "Opne Nettstadredigering for å velje sider og ordne delar. Opprett ei heimeside om du vil ha ei. Bruk Side-fana til å byggje strukturen, og deretter den eigne redigeringskontrollen til å endre ein vald del. Lagre nettstadendringar før du førebur ei utgåve.",
-            "Vel kva innhald som kan vere offentleg i {ui:websiteEditor.content}. Redigeringsflata kan vise upublisert innhald. Bruk {ui:websiteEditor.readingPreview} til å bla gjennom det gjeldande utkastet utan å lagre nettstaden eller førebu ei utgåve. Bruk {ui:websiteEditor.prepareEdition} separat til å førebu innhald for eksport eller publisering.",
-            "Bruk {ui:websiteContent.search} i Offentleg innhald til å finne eit prosjekt eller ei oppføring. Prosjekt- og oppføringslister har separate sidekontrollar. Utvid medierada til ei oppføring for å velje vedlegg og kortframsida hennar. Ta med alle oppføringar gjeld heile prosjektet, òg oppføringar utanfor det gjeldande søket eller sida.",
-            "Bruk {ui:websiteMedia.search} og {ui:websiteMedia.kind} i mediebiblioteket til å finne opplasta filer. Bilet- og forskingsmedieveljarar tilbyr {ui:websiteMedia.find} for større bibliotek. Å velje medium tek deg tilbake til det same elementet. Gallerival held fram som valde på tvers av søk og sider; ordne visingsrekkjefølgja i lista over valde bilete. Å velje forskingsmedium gjer ikkje ei privat oppføring eller eit privat vedlegg offentleg.",
-            "På {ui:websiteEditor.page} vel du {ui:websiteEditor.area} for å arbeide med sideinnhald, eit sidefelt eller botnteksten. Opprett ei utforming eller bruk ei eksisterande om att. Elementa bruker dei same kontrollane for tekst, medium, oppsett og stil som sida. Bruk den eigne Rediger-kontrollen, og deretter Tilbake for å gå tilbake utan å byte side.",
-            "{ui:websiteEditor.default} bruker eit sidefelt eller ein botntekst på sider som bruker nettstadstandarden, òg framtidige sider. {ui:websiteEditor.choosePages} opnar ei søkbar sideliste. Vel ein sidetype, finn ein tittel og kryss av eller fjern avkryssinga for tildelinga. {ui:websitePages.done} går tilbake til utforminga; Lagre nettstad lagrar endringane. Delte endringar påverkar kvar side som bruker den utforminga; {ui:websiteEditor.copy} opprettar ein uavhengig komposisjon, medrekna innstillingar for biletvising. Å slette ei utforming fjernar henne frå alle tildelte sider og kan angrast før lagring.",
-            "Eit {ui:websiteEditor.contents}-element lenkjer til dei synlege deloverskriftene på den gjeldande sida med stabile anker. Det same sidefeltet tilpassar indeksen sin på kvar side. Skjulte eller utelatne delar kjem ikkje med i den publiserte indeksen. Still inn plassering, breidd og rulleåtferd for sidefeltet i {ui:websiteEditor.appearance}; smale skjermar plasserer sidefeltet før innhaldet.",
-            "Bilet- og knappelenkjer tilbyr {ui:websitePages.chooseLink}. Finn ei side utan å forlate den gjeldande utforminga, eller skriv inn ei ekstern adresse direkte. Å velje eit mål har sitt eige angresteg. Tekstlenkjer bruker søket i Lenkjeinnstillingar.",
-            "Opprett ei botntekstutforming for å ordne tekst, bilete, lenkjer og behaldarar. Eksisterande botntekst fyller det første tekstelementet. Driven av Observanda blir verande til slutt i den same botnteksten og bruker flata, tekstfargen og tekstjusteringa der. Dersom du med vilje blandar justeringar, følgjer krediteringa den siste synlege tekstblokka. Ho er berre midtstilt når det ikkje finst skriven botntekst. Lagre, opne på nytt og sjå gjennom den eksporterte nettstaden før publisering."
+            "Bruk {ui:websiteFiles.pagePanel} for å opprette sider og angi tittel, språk og utkaststatus. Vel ein seksjon i {ui:websiteFiles.visual} for å redigere tekst og utsjånad. Bruk {ui:websiteFiles.menu} for å lenkje sider i ulike mapper.",
+            "Vel i labboka kva oppføringar, tekstavsnitt og figurar som kan visast på nettstaden. Bruk {ui:websiteFiles.pickerBrowse} for å finne tillatne oppføringar etter prosjekt, bok, dato eller emneknagg og sjå kvar dei blir brukte.",
+            "Set inn {ui:websiteFiles.feedBlock} for å la sida følgje nye oppføringar og endringar. Ta med alle tillatne oppføringar eller vel filter. Utform felta og figurane i det gjentekne elementet éin gong. Ei enkelt innsetjing beheld si eiga utforming. Tilbaketrekte delar forsvinn frå den lagra nettstaden.",
+            "Bruk {ui:websiteFiles.checkWebsite} for å kontrollere lenkjer, filer og tilgjenge på dei offentlege sidene. Rett funnet i redigeringsverktøyet, lagre sida og kontroller på nytt."
           ]
         },
         {
           "id": "local-export",
           "title": "Eksporter til ein eksisterande lokal nettstad",
           "paragraphs": [
-            "Førebu og sjå gjennom nettstaden i Publisering, og vel deretter {ui:publication.localExport}. Vel den eksisterande nettstadrota eller ei eiga undermappe. Relative lenkjer støttar begge plasseringane. Bruk {ui:localExport.review} til å inspisere kvar lagd til, oppdatert, fjerna og uendra utdatafil før du stadfestar {ui:localExport.apply}.",
-            "Den første eksporten overskriv aldri eksisterande filer. Seinare eksportar oppdaterer eller fjernar berre filer som dette arbeidsområdet tidlegare har skrive til akkurat den mappa. Ei manuelt endra eller sletta fil er ein konflikt: gjenopprett den venta fila, flytt henne sjølv, eller vel ei anna mappe og sjå gjennom på nytt. Andre sider og Git-historikken blir ikkje endra. Ingen commit, push eller opplasting skjer automatisk.",
-            "Eksporter til ein lokal kopi og last opp først etter fullføring. Filer blir verifiserte før bytet, men heile mappa kan ikkje byte atomisk saman med uvedkomande filer. Under eit avbrot kan ho innehalde ei delvis utgåve og mellombelse offentlege utdatafiler. Opne den same utgåva på nytt gjennom Nettstadførebuingar, vel Eksporter til lokal mappe, og bruk Fortset eksport. Den lagra gjennomgangen og gjenopprettingsjournalen held fram krypterte i arbeidsområdet. Forkast førebuing er tilgjengeleg før filbytet byrjar; etterpå må du fortsetje den fastlåste utgåva før du førebur ein annan eksport til den mappa.",
-            "Ta vare på arbeidsområdet og tryggingskopiane: dei bevarer eigarskaps- og gjenopprettingskvitteringar for målet. Å kopiere ein nettstad åleine overfører ikkje eigarskapet til eit anna arbeidsområde. Denne arbeidsflyten krev eit lokalt filsystem som støttar harde lenkjer; nettverksdelingar og mapper som blir tente direkte på nettet, er ikkje kvalifiserte mål. Ein fullført eksport verifiserer byta på disk, ikkje ei vertsutrulling eller motstand mot brått straumbrot på kvar plattform."
+            "Vel {ui:websiteFiles.publishUpdate} og {ui:websiteFiles.folderPublish}. Vel mappa til nettstaden, gå gjennom filene som skal leggjast til, bytast ut eller fjernast, og stadfest. Neste oppdatering kan bruke same mål.",
+            "Løys konfliktar med filer som er endra utanfor Observanda. Etter eit avbrot opnar du gjennomgangen av same mappe og tek opp att den stadfesta oppdateringa. Opne den eksporterte HTML-sida i ein annan nettlesar for å kontrollere kopien lesaren får."
           ]
         },
         {
@@ -490,9 +480,8 @@
           "id": "release",
           "title": "Publiser ei godkjend utgåve",
           "paragraphs": [
-            "Hald privat dokumentasjon og driftsdetaljar utanfor offentlege utval. Kontroller filnamn, metadata, lenkjer og innebygde figurdata i tillegg til synleg prosa. Du kan skrive ei forklaring om at støttedokumentasjonen ikkje er offentleg tilgjengeleg utan å eksponere dei private metadataa hennar.",
-            "Bruk {ui:publication.selectionTitle} før du førebur ei utgåve. Utvid ei oppføring for å halde tilbake hovudteksten, valde delar, malfelt, vedlegg eller diagram. Vala gjeld berre denne utgåva. Oppføringar du ikkje endrar, bevarer det lagra offentlege utvalet sitt. Nøyaktige diagramtabellar og CSV-nedlastingar er slått av frå starten og krev eit uttrykkjeleg val for kvart diagram. Eit diagram i seg sjølv avslører framleis plotta verdiar gjennom SVG-en, merka og etikettane; å halde tilbake ein CSV gjer ikkje dei plotta verdiane hemmelege. Originaldatasett og kjeldeartefaktar blir aldri tekne med automatisk. Utilgjengelege forskingsreferansar blir lista i den private gjennomgangen, med etikettane og måla utelatne frå den offentlege utgåva.",
-            "Lagring, generering av utdata, commit, push og verifisering av utrulling er separate tilstandar. Konfigurer målet i Publisering og bruk {ui:publication.reviewTitle} til å førebu det lagra offentlege utvalet. {ui:publication.preparations} opnar bevarte utgåver på nytt; {ui:publication.continue} lèt førebuinga køyre vidare. Gjennomgang går tilbake til Publisering når han blei opna der. Ulagra nettstadutformingar kan inspiserast med {ui:websiteEditor.readingPreview}; {ui:websiteEditor.prepareEdition} startar den separate førebuingsarbeidsflyten. Verifiser den utrulla utgåva; ein vellukka push åleine fastslår ikkje at nettstaden er oppdatert. Statisk eksport støttar òg publisering utan ein integrert vert."
+            "Lagre nettstaden, kontroller dei offentlege sidene og vel {ui:websiteFiles.publishUpdate}. Utkast blir haldne utanfor publiseringa. Endringar i labboka kjem fram på den lagra nettstaden før den eksterne kopien blir oppdatert.",
+            "For GitHub eller SSH vel du {ui:websiteFiles.destination}, går gjennom målet og filene og stadfestar overføringa. Dersom sambandet blir brote, sjekkar du utfallet i kvitteringa før du prøver på nytt. Kontroller òg den publiserte nettstaden."
           ]
         },
         {
