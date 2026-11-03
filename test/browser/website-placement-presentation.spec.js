@@ -28,17 +28,26 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copies=canvas.locator('section[data-observanda-source="'+source.id+'"]');
   const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
+  const formats=panel.getByRole('group',{name:'Display as'}),preview=panel.getByRole('region',{name:'Preview'});
   async function enter(){await expect(toolbar).toBeEnabled();await toolbar.focus();await expect(toolbar).toBeFocused();await toolbar.press('Enter');await expect(panel).toBeVisible();}
   async function apply(){const button=panel.getByRole('button',{name:'Apply to this copy',exact:true});await button.focus();await button.press('Enter');await expect(panel).not.toBeVisible();}
   await expect(copies).toHaveCount(2);
   await enter();await panel.getByLabel('Entry copy on this page').selectOption('1');
-  await panel.getByLabel('Display as').selectOption('card');await panel.getByLabel('Content to show').selectOption('body');await apply();
+  await expect(formats.getByRole('radio')).toHaveCount(3);
+  const full=formats.getByRole('radio',{name:'Full entry',exact:true}),card=formats.getByRole('radio',{name:'Compact card',exact:true});
+  await expect(full).toBeEnabled();await expect(full).toBeChecked();await full.focus();await expect(full).toBeFocused();await full.press('ArrowRight');await expect(card).toBeChecked();await expect(card).toBeFocused();
+  await panel.getByLabel('Content to show').selectOption('body');await expect(preview).toContainText('Field measurements');await apply();
   await expect(copies.nth(1)).toHaveAttribute('data-observanda-display','card');
   await expect(copies.nth(1)).toContainText('Field measurements');await expect(copies.nth(1)).not.toContainText('Sampling method');
   await expect(copies.first()).toContainText('Sampling method');
   await page.locator('[data-website-file-page]').selectOption('methods.html');await expect(copies).toHaveCount(1);
   await copies.locator('h1,h2,h3').first().click();const contextual=page.locator('[data-placement-context]');await expect(contextual).toBeVisible();
-  await contextual.click();await panel.getByLabel('Display as').selectOption('section');
+  await contextual.click();await formats.getByRole('radio',{name:'Selected section',exact:true}).check();
+  await panel.getByLabel('Content to show').selectOption('section:'+source.sectionId);
+  await expect(preview).toContainText('the observer compared');await expect(panel.getByRole('button',{name:/^(Previous|Next)$/})).toHaveCount(0);
+  await expect(panel.locator('[role=status]')).toBeHidden();
+  await panel.press('Escape');await expect(panel).not.toBeVisible();await expect(contextual).toBeFocused();
+  await contextual.press('Enter');await formats.getByRole('radio',{name:'Selected section',exact:true}).check();
   await panel.getByLabel('Content to show').selectOption('section:'+source.sectionId);await apply();
   await expect(copies.first()).toContainText('the observer compared');await expect(copies.first()).not.toContainText('Field measurements');
   await page.reload();await page.locator('[data-website-file-page]').selectOption('methods.html');

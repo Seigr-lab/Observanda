@@ -30,6 +30,9 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
  }
  async function open({site,page,document:doc,selected,trigger}){
   close();
+  if(!document.querySelector('link[data-sheet="website-placement-presentation"]')){
+   const sheet=document.createElement('link');sheet.rel='stylesheet';sheet.href='/website-placement-presentation.css';sheet.dataset.sheet='website-placement-presentation';document.head.append(sheet);
+  }
   const {rows,initial}=occurrences(doc,selected),dialog=document.createElement('dialog');
   dialog.className='website-author-dialog website-presentation';dialog.dataset.websitePresentation='';
   const session={dialog,request:0,selected:initial,data:null};current=session;
@@ -41,8 +44,8 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   function button(parent,label,action){
    const node=add('button',parent,label);node.className='button';node.type='button';node.addEventListener('click',action);return node;
   }
-  function field(name,attr){
-   const label=add('label',dialog,t(name)),node=add('select',label);node.setAttribute(attr,'');return node;
+  function field(name,attr,parent=dialog){
+   const label=add('label',parent,t(name)),node=add('select',label);node.setAttribute(attr,'');return node;
   }
   const context=add('p',dialog,site.name+' · '+page),help=add('p',dialog,t('placementScope'));
   context.className=help.className='muted';
@@ -50,9 +53,18 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   const navigation=add('div');navigation.className='inline-actions';
   const prev=button(navigation,t('prevPage'),()=>load(Math.max(0,session.selected-pageSize)));
   const next=button(navigation,t('nextPage'),()=>load(Math.min(rows.length-1,session.selected+pageSize)));
-  const format=field('placementFormat','data-presentation-format');
-  for(const [key,label] of [['full','placementFull'],['card','placementCard'],['section','placementSection']])format.add(new Option(t(label),key));
-  const choice=field('placementContent','data-presentation-choice'),description=add('p'),pages=add('div');pages.className='inline-actions';
+  const format=add('fieldset');format.dataset.presentationFormat='';add('legend',format,t('placementFormat'));
+  const options=add('div',format);options.className='website-presentation-formats';
+  for(const [key,name] of [['full','placementFull'],['card','placementCard'],['section','placementSection']]){
+   const tile=add('label',options),radio=add('input',tile);
+   radio.type='radio';radio.name='website-entry-presentation';radio.value=key;tile.className='website-presentation-tile';
+   add('span',tile,t(name));
+  }
+  const content=add('div');content.className='website-presentation-content';
+  const choice=field('placementContent','data-presentation-choice',content);
+  const preview=add('section',content),previewHeading=add('strong',preview,t('pickerPreview')),description=add('p',preview);
+  preview.className='website-presentation-preview';previewHeading.id='website-presentation-preview';preview.setAttribute('aria-labelledby',previewHeading.id);
+  const pages=add('div',content);pages.className='inline-actions';
   const earlier=button(pages,t('prevPage'),()=>load(session.selected,offsets.at(-2)));
   const more=button(pages,t('nextPage'),()=>load(session.selected,session.data.next));
   const status=add('p');status.setAttribute('role','status');
@@ -63,13 +75,15 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   function controls(){
    const loaded=!!session.data;entry.disabled=busy||!rows.length;
    format.disabled=busy||!loaded;choice.disabled=busy||!loaded;
-   choice.parentElement.hidden=pages.hidden=formatKey==='full';description.hidden=formatKey==='full';
+   content.hidden=formatKey==='full';preview.hidden=!description.textContent;
+   pages.hidden=offsets.length<2&&session.data?.next==null;
    earlier.disabled=busy||offsets.length<2;more.disabled=busy||session.data?.next==null;
    prev.disabled=busy||session.selected<pageSize;next.disabled=busy||Math.floor(session.selected/pageSize)*pageSize+pageSize>=rows.length;
    apply.disabled=busy||!loaded||(formatKey!=='full'&&!desired)||(formatKey===saved?.format&&desired===saved?.choice);
    cancel.disabled=saving;
   }
   function showChoices(){
+   for(const radio of format.elements)radio.checked=radio.value===formatKey;
    choice.replaceChildren();if(formatKey==='card')choice.add(new Option(t('placementTitleOnly'),'title'));
    for(const item of items){
     if(formatKey==='section'&&item.kind!=='section')continue;
@@ -100,8 +114,8 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
     if(result.revision!==site.revision||result.sourceRevision!==pin().sourceRevision)throw Error(t('changedPageAccess'));
     session.data=result;items=result.items;const found=offsets.indexOf(offset);
     offsets=reset?[offset]:found===-1?[...offsets,offset]:offsets.slice(0,found+1);
-    if(reset){format.value=formatKey=result.presentation;desired=formatKey==='full'||result.unavailable?'':result.choice??(formatKey==='card'?'title':'');saved={format:formatKey,choice:desired};}
-    status.textContent=result.unavailable?t('placementUnavailable'):result.title;busy=false;showChoices();
+    if(reset){formatKey=result.presentation;desired=formatKey==='full'||result.unavailable?'':result.choice??(formatKey==='card'?'title':'');saved={format:formatKey,choice:desired};}
+    status.textContent=result.unavailable?t('placementUnavailable'):'';status.hidden=!status.textContent;busy=false;showChoices();
    }catch(error){fail(error);}
   }
   async function save(){
@@ -112,13 +126,13 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
    }catch(error){fail(error);}
   }
   entry.onchange=()=>load(Number(entry.value));
-  format.onchange=()=>{formatKey=format.value;desired=formatKey===saved?.format?saved.choice:formatKey==='card'?'title':'';showChoices();};
+  format.onchange=event=>{formatKey=event.target.value;desired=formatKey===saved?.format?saved.choice:formatKey==='card'?'title':'';showChoices();};
   choice.onchange=()=>{desired=choice.value;showChoices();};
   dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
   dialog.addEventListener('close',()=>{if(current===session)current=null;dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
   document.body.append(dialog);dialog.showModal();
   if(rows.length){await load(initial);if(current===session)entry.focus();}
-  else{for(const node of [entry,format,choice])node.parentElement.hidden=true;navigation.hidden=pages.hidden=description.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
+  else{entry.parentElement.hidden=format.hidden=content.hidden=navigation.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
  }
  return {open,close,revalidate};
 }
