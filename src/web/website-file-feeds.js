@@ -26,13 +26,15 @@ export function websiteFileFeeds({t,request,refresh,report}){
    for(const [value,label] of choices){const tile=el('label',row),input=el('input',tile);input.type='radio';input.name=key;input.value=value;el('span',tile,t(label));}
    return {group,value:()=>group.querySelector(':checked')?.value,set(value){for(const input of group.elements)input.checked=input.value===value;}};
   }
-  const h=el('h2',dialog,t('feedEditor'));h.id='website-feed-heading';dialog.setAttribute('aria-labelledby',h.id);
-  el('p',dialog,site.name+' · '+page).className='muted';
-  const list=field(dialog,'feedOnPage','select');list.dataset.feedSelect='';list.add(new Option(t('feedNew'),''));
-  for(const feed of data.feeds)list.add(new Option(feed.heading||t('feedEditor'),feed.id));
+  const header=el('header',dialog),h=el('h2',header,t('feedEditor'));h.id='website-feed-heading';dialog.setAttribute('aria-labelledby',h.id);
+  el('p',header,site.name+' · '+page).className='muted';
   const form=el('form');form.className='website-feed-form';
-  const editing=el('fieldset',form);editing.className='website-feed-editing';
-  const heading=field(editing,'feedHeading','input');heading.dataset.feedHeading='';heading.maxLength=200;
+  const body=el('div',form);body.className='website-feed-scroll';
+  const editing=el('fieldset',body);editing.className='website-feed-editing';
+  const titles=el('div',editing);titles.className='website-feed-titles';
+  const list=field(titles,'feedOnPage','select');list.dataset.feedSelect='';list.add(new Option(t('feedNew'),''));
+  for(const feed of data.feeds)list.add(new Option(feed.heading||t('feedEditor'),feed.id));
+  const heading=field(titles,'feedHeading','input');heading.dataset.feedHeading='';heading.maxLength=200;
   const scope=radios(editing,'feedScope',[['all','feedAll'],['filtered','feedFiltered']]);
   el('p',editing,t('feedScopeHelp')).className='muted';
   const filters=el('div',editing);filters.className='website-feed-filters';
@@ -44,14 +46,15 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const previous=btn(nav,'prevPage',()=>loadSearches(cursors.at(-2))),next=btn(nav,'nextPage',()=>loadSearches(after));
   const template=radios(editing,'feedTemplate',[['full','placementFull'],['card','placementCard'],['custom','feedCustom']]);
   const custom=el('div',editing);custom.className='website-feed-custom';const item=feedItemEditor(custom,{t,changed:()=>{dirty=true;}});
-  const layout=radios(editing,'feedLayout',[['list','feedList'],['grid','feedGrid']]);
-  const size=field(editing,'feedPageSize','input');size.type='number';size.min='1';size.max='100';size.step='1';size.required=true;size.dataset.feedPageSize='';
+  const paging=el('div',editing);paging.className='website-feed-paging';
+  const layout=radios(paging,'feedLayout',[['list','feedList'],['grid','feedGrid']]);
+  const size=field(paging,'feedPageSize','input');size.type='number';size.min='1';size.max='100';size.step='1';size.required=true;size.dataset.feedPageSize='';
   const position=field(editing,'feedPosition','select');position.dataset.feedPosition='';
   position.add(new Option(t('feedKeepPosition'),'keep'));position.add(new Option(t('pickerStart'),'start'));
   const blockPositions=blocks.map((text,i)=>new Option(t('feedBefore',{name:text,number:i+1}),String(i)));position.append(...blockPositions);
   position.add(new Option(t('pickerEnd'),'end'));
-  const status=el('p',form);status.setAttribute('role','status');
-  const actions=el('footer',form);const remove=btn(actions,'feedRemove',()=>write(true));btn(actions,'cancel',cancel);
+  const actions=el('footer',form),status=el('p',actions);status.setAttribute('role','status');
+  const remove=btn(actions,'feedRemove',()=>write(true));remove.classList.add('website-feed-remove');btn(actions,'cancel',cancel);
   const apply=el('button',actions,t('feedSave'));apply.type='submit';apply.className='button primary';apply.dataset.feedApply='';
   let selected='',selectedCriteria=null,filterName='',cursors=[],after=null,dirty=false,loading=false,saving=false,searchEpoch=0;
   dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get()}:null;

@@ -13,6 +13,28 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
+async function checkFeedDialogLayout(page,dialog){
+ const pageSize=dialog.locator('[data-feed-page-size]'),save=dialog.locator('[data-feed-apply]');
+ for(const [width,height] of [[1304,835],[1024,540]]){
+  await page.setViewportSize({width,height});await pageSize.focus();await expect(pageSize).toBeFocused();
+  const geometry=await dialog.evaluate(d=>{
+   const scroll=d.querySelector('.website-feed-scroll'),footer=d.querySelector('footer');
+   const box=node=>node.getBoundingClientRect();
+   return {dialogTop:box(d).top,dialogBottom:box(d).bottom,outerScroll:d.scrollTop,
+    bodyBottom:box(scroll).bottom,footerTop:box(footer).top,footerBottom:box(footer).bottom,
+    labelTop:box(d.querySelector('[data-feed-page-size]').parentElement).top,inputBottom:box(d.querySelector('[data-feed-page-size]')).bottom,
+    bodyTop:box(scroll).top,hasOverflow:scroll.scrollHeight>scroll.clientHeight};
+  });
+  expect(geometry.dialogTop).toBeGreaterThanOrEqual(0);expect(geometry.dialogBottom).toBeLessThanOrEqual(height);
+  expect(geometry.outerScroll).toBe(0);expect(geometry.bodyBottom).toBeLessThanOrEqual(geometry.footerTop+1);
+  expect(Math.abs(geometry.footerBottom-geometry.dialogBottom)).toBeLessThan(3);
+  expect(geometry.labelTop).toBeGreaterThanOrEqual(geometry.bodyTop-1);expect(geometry.inputBottom).toBeLessThanOrEqual(geometry.footerTop);
+  if(height===540)expect(geometry.hasOverflow).toBe(true);
+  await dialog.locator('[data-feed-position]').focus();await page.keyboard.press('Tab');await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
+  await page.keyboard.press('Tab');await expect(save).toBeFocused();
+ }
+ await page.setViewportSize({width:1304,height:835});
+}
 test('authors design, filter, rearrange and publish automatic entry feeds while research storage is offline',async({page,browser})=>{
  test.setTimeout(240000);page.setDefaultTimeout(20000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-entry-feeds-')),out=path.join(directory,'published'),database=process.env.OBSERVANDA_DATABASE_URL;
@@ -41,6 +63,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const edit=async(title,expected=title)=>{await feed.getByRole('heading',{name:title,exact:true}).click();await page.locator('[data-feed-context]').click();await expect(dialog.locator('[data-feed-heading]')).toHaveValue(expected);};
   await add();await expect(dialog.getByRole('radio',{name:'All eligible entries'})).toBeChecked();
   await expect(dialog.getByRole('radio',{name:'Full entry'})).toBeChecked();
+  await checkFeedDialogLayout(page,dialog);
   await dialog.locator('[data-feed-heading]').fill('All stations');await dialog.locator('[data-feed-page-size]').fill('2');
   await dialog.getByRole('radio',{name:'Grid',exact:true}).check();await save();
   const all=feed.filter({hasText:'All stations'});
