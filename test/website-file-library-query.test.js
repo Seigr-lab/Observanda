@@ -144,6 +144,7 @@ test('large sorted catalogues reuse an encrypted file-only result and make progr
   if(!shards.has(prefix))shards.set(prefix,{});
   const day=String(i%3+1).padStart(2,'0'),date='2024-01-'+day;
   const item={id,revision:id,projectId:null,notebookId:null,searchVersion:1,title:'Repeated '+('x'.repeat(172)),stamp:i,recordType:'observation',status:'completed',media:false,tags:[i%5?'other':'selected'],displayDate:date,dateFrom:date,dateTo:date,dateKnowledge:'known'};
+  if(i===4210)item.title='Selected';
   shards.get(prefix)[id]=item;names.push(id);if(!i||i%5===0)allowed.push(item);
  }
  allowed.sort((a,b)=>a.dateFrom.localeCompare(b.dateFrom)||a.id.localeCompare(b.id));
@@ -163,6 +164,11 @@ test('large sorted catalogues reuse an encrypted file-only result and make progr
  const noCache={...store,workspace:{root:workspace.root,vault:{}}},uncached=opts=>searchWebsiteLibrary(noCache,scope,opts);
  const pressured=await page(uncached,q,null,size),following=await page(uncached,q,pressured.next,size);
  assert.deepEqual(pressured.items.map(v=>v.id),first.items.map(v=>v.id));assert.deepEqual(following.items.map(v=>v.id),next.items.map(v=>v.id));
+ const ranked={search:'selected',sort:'relevance'};
+ for(const path of [request,uncached]){
+  const top=await page(path,ranked,null,1),second=await page(path,ranked,top.next,1);
+  assert.equal(top.items[0].id,names[4210]);assert.notEqual(second.items[0].id,top.items[0].id);
+ }
  const tags=options=>websiteLibraryFacets(noCache,scope,options),firstTag=await page(tags,{kind:'tag',criteria:{dateFrom:'2024-01-02',recordType:'observation'}},null,1);
  const nextTag=await page(tags,{kind:'tag',criteria:{dateFrom:'2024-01-02',recordType:'observation'}},firstTag.next,1);
  const dated=allowed.filter(item=>item.dateFrom>='2024-01-02').length;assert.equal(nextTag.items[0].title,'selected');assert.equal(nextTag.items[0].count,dated);
