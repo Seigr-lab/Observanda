@@ -20,6 +20,7 @@ import {websiteFilesMenu} from './website-files-menu.js';
 import {websiteFilesPicker} from './website-files-picker.js';
 import {websitePlacementDrag} from './website-files-placement-drag.js';
 import {websiteSourceGallery} from './website-files-source-gallery.js';
+import {presentationBlock,websitePlacementPresentation} from './website-placement-presentation.js';
 
 const tr=(key,args)=>t('websiteFiles',key,args);
 
@@ -81,6 +82,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  const placementDrag=websitePlacementDrag({site:()=>opened,available:()=>mode==='visual'&&!busy&&!stale,t:tr,
   place:selection=>void run(()=>insertContent('insert-source',selection)).catch(reason=>notify(reason.message,true))});
+ const presentation=websitePlacementPresentation({t:tr,request,
+  refresh:value=>{adopt(value);render();document.querySelector('[data-action="website-files-presentation"]')?.focus();},
+  onError:reason=>{if(['ACCESS_LOCKED','AUTH','CONFLICT','NOT_FOUND','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);}});
  const picker=websiteFilesPicker({request,esc,site:()=>opened,blocks:()=>structure().map(label),
   onPickerPaint:placementDrag.paint,onPickerClose:placementDrag.reset,
   onSourceGallery:entry=>startFigures(null,entry),choosingGallerySource:()=>mode==='source-gallery',
@@ -254,6 +258,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   await initialPage();waitForPreparation();
  }
  function clear(){
+  presentation.close();
   figures.reset();
   conflictingPage=null;awaitingAccess=false;
   compactViewport.removeEventListener('change',resizeTools);clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
@@ -328,7 +333,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    }else if(awaitingAccess){
     if(mode==='source-gallery')await figures.recover(opened);
     awaitingAccess=stale=false;error='';render();
-   }else{await picker.revalidate({signal:controller.signal});if(mode==='source-gallery')await figures.revalidate();}
+   }else{await picker.revalidate({signal:controller.signal});await presentation.revalidate(controller.signal);if(mode==='source-gallery')await figures.revalidate();}
   }catch(reason){
    if(reason.name==='AbortError'||!samePage())return;
    if(mode==='source-gallery'&&['GALLERY_EDIT_CONFLICT','NOT_FOUND'].includes(reason.code)){
@@ -421,7 +426,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes='<label>'+esc(tr('viewport'))+' <select data-website-file-viewport>'+['desktop','tablet','phone'].map(key=>'<option value="'+key+'" '+(viewport===key?'selected':'')+'>'+esc(tr(key))+'</option>').join('')+'</select></label>';
-  const toolbar='<div class="website-files-toolbar" role="group" aria-label="'+esc(tr('title'))+'">'+history+extraTools('title',tools+button('menu','menu')+button('checkPage','check-page')+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?sizes:''))+'</div>';
+  const toolbar='<div class="website-files-toolbar" role="group" aria-label="'+esc(tr('title'))+'">'+history+extraTools('title',tools+button('menu','menu')+button('checkPage','check-page')+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('placementTitle','presentation')+sizes:''))+'</div>';
   if(mode!=='visual')return toolbar+'<label>'+esc(tr(mode))+'<textarea class="website-files-code" aria-label="'+esc(tr(mode))+'" data-website-file-code="'+mode+'" spellcheck="false">'+esc(mode==='html'?html:css)+'</textarea></label>';
   const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'</select></label>'+button('addBlock','add-block');
   return toolbar+'<div class="website-files-editor"><aside tabindex="0" aria-label="'+esc(tr('structure'))+'"><div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+components.view()+'</aside><section class="website-files-stage"><div class="website-files-viewport" data-size="'+viewport+'"><iframe id="website-files-canvas" class="website-files-canvas" title="'+esc(tr('visual'))+'" sandbox="allow-same-origin"></iframe></div></section><aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside></div>';
@@ -456,7 +461,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const doc=frame.contentDocument;if(!doc||!frame.isConnected||!opened)return;
    loadWebsiteCanvas(doc,html,css,baseURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
-   visual=bindWebsiteVisual({document:doc,inspector:document.querySelector('[data-website-visual-inspector]'),t:tr,beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{selected=item?.path??null;hierarchy.selection(selected);}});
+   const inspector=document.querySelector('[data-website-visual-inspector]');
+   visual=bindWebsiteVisual({document:doc,inspector,t:tr,beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{
+    selected=item?.path??null;hierarchy.selection(selected);
+    const control=inspector.parentElement.querySelector('[data-placement-context]');
+    if(control)control.hidden=!presentationBlock(blockAt(doc,selected));
+   }});
+   inspector.parentElement.querySelector('[data-placement-context]')?.remove();
+   inspector.insertAdjacentHTML('beforebegin',button('placementTitle','presentation','data-placement-context hidden'));
    hierarchy.bindCanvas(doc);placementDrag.bindCanvas(doc,frame);
    if(locatedPlacement!==null){
     const target=blockAt(doc,locatedPlacement);
@@ -511,6 +523,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation.startsWith('menu-'))await menu.handle(operation,element);
    else if(operation.startsWith('picker-'))await picker.action(operation,element);
    else if(operation.startsWith('component-'))await components.action(operation,element);
+   else if(operation==='presentation'){
+    await save();const doc=websiteHTML(opened.html);
+    await presentation.open({site:opened.site,page:opened.path,document:doc,selected:blockAt(doc,selected),trigger:element});
+   }
    else if(operation==='media'){await save();await recordings.open(selected);mode='media';render();}
    else if(operation==='galleries'){
     const node=blockAt(websiteHTML(html),selected),group=node?.closest('[data-website-source-gallery]');
