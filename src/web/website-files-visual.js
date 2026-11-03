@@ -9,7 +9,7 @@ const source = '[data-observanda-source]';
 const part = '[data-observanda-part]';
 const linked = '[data-observanda-link]';
 const editable = 'h1,h2,h3,h4,h5,h6,p,li,figcaption,blockquote,summary,dt,dd,td,th,pre';
-const blocks = 'section,article,header,footer,aside,nav,figure,table,[data-section-id],[data-region-kind],'+part+
+const blocks = 'section,article,header,footer,aside,nav,figure,table,[data-section-id],[data-region-kind],[data-website-annotation],'+part+
   ',:is(body,main) > :is(h1,h2,h3,h4,h5,h6,p,ul,ol,blockquote,table,hr,img,video,audio,details,pre),:is(body,main) > div:not(.page-composition,.container-content)';
 const protectedNodes = source+','+part+','+linked+',[data-website-feed]';
 const outlineContents='h1,h2,h3,h4,h5,h6,p,ul,ol,li,dl,dt,dd,blockquote,details,summary,figcaption,pre,hr,img,video,audio,.website-columns>div,[data-website-instance]';
@@ -148,7 +148,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change});
   form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,styleActions);
-  const responsive=responsiveLayout({document,host:form,t,scope,selected:()=>selected,getCSS,getViewport,beforeChange,change,make,listen,
+  const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,beforeChange,change,make,listen,signal,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
   websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});
   inspector.replaceChildren(form);

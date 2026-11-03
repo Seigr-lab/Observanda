@@ -3,7 +3,7 @@ import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {outputName} from './local-export-files.js';
 import {safeEquationElement} from './web/website-equation-markup.js';
-import {decodedWebsiteCSS,websiteCSSURLs} from './web/website-css-urls.js';
+import {decodedWebsiteCSS,websiteCSSURLs,websiteCSSByteLimit} from './web/website-css-urls.js';
 
 const forbidden=new Set(['base','iframe','frame','frameset','object','embed','portal','fencedframe','foreignObject','animate','animateMotion','animateTransform','set']);
 const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
@@ -16,7 +16,7 @@ function localURL(value,file){
  try{websiteFileName(resolved);return /^(?:api|\.observanda)(?:\/|$)/i.test(resolved)?null:resolved;}catch{return null;}
 }
 export function validateWebsiteCSS(css,{file='style.css',pictures}={}){
- if(typeof css!=='string'||Buffer.byteLength(css)>16*1024*1024)throw new AppError('LIMIT');
+ if(typeof css!=='string'||Buffer.byteLength(css)>websiteCSSByteLimit)throw new AppError('LIMIT');
  const decoded=decodedWebsiteCSS(css);
  if(/@import\b|(?:image-set|cross-fade|expression|src)\s*\(|-moz-binding\s*:|(?:^|[;{])\s*behavior\s*:/i.test(decoded))throw new AppError('INVALID');
  for(const url of websiteCSSURLs(decoded)){

@@ -30,3 +30,8 @@
 .website-layout-inspector summary { cursor:pointer; font-weight:600; }
 .website-layout-inspector[open] > :not(summary) { margin-block-start:.65rem; }
 .website-layout-inspector[hidden] { display:none; }
+.website-layout-composer details { margin:.45rem 0; padding:.45rem; border-inline-start:2px solid var(--border,#cbd3df); }
+.website-layout-composer .website-visual-fields { margin:.4rem 0; }
+.website-area-row { display:grid; grid-template-columns:minmax(0,1fr) 4rem 4rem; align-items:end; gap:.45rem; border-block-end:1px solid var(--border,#cbd3df); padding:.3rem 0; }
+.website-area-row strong { overflow-wrap:anywhere; }
+.website-area-row input { min-width:0; max-width:100%; }

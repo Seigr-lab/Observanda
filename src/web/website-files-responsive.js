@@ -1,3 +1,6 @@
+import {websiteLayoutComposer,layoutProtected} from './website-layout-composer.js';
+import {websiteCSSByteLimit} from './website-css-urls.js';
+
 const widths={desktop:null,tablet:900,phone:600};
 const namePattern=/^ow-layout-[a-f0-9-]{36}$/;
 const valueLabels={block:'layoutBlock',flex:'layoutFlex',grid:'layoutGrid',row:'layoutRow',column:'layoutColumn','row-reverse':'layoutReverseRow','column-reverse':'layoutReverseColumn',nowrap:'layoutNoWrap',wrap:'layoutWrapLines','wrap-reverse':'layoutReverseWrap','row dense':'layoutDenseRows','column dense':'layoutDenseColumns',stretch:'layoutStretch',start:'sectionStart',center:'sectionCenter',end:'sectionEnd',baseline:'layoutBaseline','space-between':'layoutBetween','space-around':'layoutAround','space-evenly':'layoutEvenly',none:'layoutNone',solid:'layoutSolid',dashed:'layoutDashed',dotted:'layoutDotted',double:'layoutDouble'};
@@ -11,7 +14,8 @@ const fields=[
  ['justify-content','layoutJustify',['start','center','end','space-between','space-around','space-evenly']],
  ['gap','layoutGap','pair'],['padding','sectionPadding','box'],
  ['width','layoutWidth','size'],['min-width','layoutMinWidth','size'],['max-width','layoutMaxWidth','limit'],
- ['flex-basis','layoutBasis','size'],['border-width','layoutBorderWidth','box'],
+ ['flex-basis','layoutBasis','size'],['flex-grow','layoutGrow','factor'],['justify-self','layoutSelf',['stretch','start','center','end']],
+ ['border-width','layoutBorderWidth','box'],
  ['border-style','layoutBorderStyle',['none','solid','dashed','dotted','double']],
  ['border-color','layoutBorderColor','color'],['border-radius','layoutRadius','box']
 ];
@@ -20,6 +24,7 @@ function valueFor(type,value,property,win){
  const parts=value.split(/\s+/);
  if(Array.isArray(type))return type.includes(value)?value:null;
  if(type==='columns')return /^[1-9]\d*$/.test(value)&&Number.isSafeInteger(Number(value))?'repeat('+value+', minmax(0, 1fr))':null;
+ if(type==='factor')return value!==''&&Number.isFinite(Number(value))&&Number(value)>=0&&win.CSS.supports(property,value)?value:null;
  if(type==='color')return /^(?:#[0-9a-f]{3,8}|[a-z]+)$/i.test(value)&&win.CSS.supports(property,value)?value:null;
  if((type==='size'||type==='limit')&&['auto','fit-content','min-content','max-content',...(type==='limit'?['none']:[])].includes(value))return win.CSS.supports(property,value)?value:null;
  return parts.length<=(type==='box'?4:type==='pair'?2:1)&&parts.every(v=>lengths.test(v))&&win.CSS.supports(property,value)?value:null;
@@ -50,7 +55,18 @@ function update(css,name,view,style){
  const replacement=others.size?block.start+Object.keys(widths).filter(key=>others.has(key)).map(key=>others.get(key)).join('\n')+block.end:'';
  return block.at===-1?css+replacement:css.slice(0,block.at)+replacement+css.slice(block.until+block.end.length);
 }
-export function responsiveLayout({document,host,t,scope,selected,getCSS,getViewport,beforeChange,change,write,make,listen}){
+function layoutBlocks(css){
+ const found=new Map(),start=/\n\/\* Observanda layout (site|ow-layout-[a-f0-9-]{36}) \*\/\n/g;
+ for(let match;(match=start.exec(css));){
+  const name=match[1],end='\n/* End Observanda layout '+name+' */\n',at=css.indexOf(end,start.lastIndex);
+  if(at<0||found.has(name))throw new TypeError('Ambiguous layout style');
+  const stop=at+end.length,body=css.slice(start.lastIndex,at);
+  if(body.includes('\n/* Observanda layout '))throw new TypeError('Nested layout style');
+  found.set(name,{from:match.index,to:stop,body});start.lastIndex=stop;
+ }
+ return found;
+}
+export function responsiveLayout({document,host,before,t,scope,selected,selectNode,getCSS,getViewport,beforeChange,change,write,make,listen,signal}){
  const panel=make('details');panel.className='website-layout-inspector';const summary=make('summary',t('layoutTitle'));panel.append(summary);
  const device=make('p'),hint=make('p',t('layoutHint')),grid=make('div');grid.className='website-visual-fields';
  const controls=new Map(),touched=new Set();
@@ -66,12 +82,50 @@ export function responsiveLayout({document,host,t,scope,selected,getCSS,getViewp
   listen(control,'input',touch);listen(control,'change',touch);
  }
  const apply=make('button',t('layoutApply')),reset=make('button',t('layoutReset'));apply.type=reset.type='button';
- const actions=make('div');actions.className='website-visual-actions';actions.append(apply,reset);panel.append(device,hint,grid,actions);host.append(panel);
+ const actions=make('div');actions.className='website-visual-actions';actions.append(apply,reset);panel.append(device,hint,grid,actions);host.insertBefore(panel,before??null);
  function target(){return scope.value==='section'?selected():['page','site'].includes(scope.value)?document.body:null;}
  const identifier=node=>scope.value==='site'?'site':[...node.classList].find(name=>namePattern.test(name));
  const breakpoint=()=>{const view=getViewport?.()??'desktop';if(!Object.hasOwn(widths,view))throw new TypeError('Unexpected viewport');return view;};
+ const nodeClass=node=>[...node.classList].find(x=>namePattern.test(x));
+ const styles=()=>{const blocks=layoutBlocks(getCSS()),view=breakpoint();return node=>styleAt(document,blocks.get(nodeClass(node))?.body??'',view);};
+ function applyNodes(changes,mutate){
+  const view=breakpoint(),current=getCSS(),read=styles(),rules=new Map();
+  const counts=new Map();
+  for(const el of document.querySelectorAll('[class*="ow-layout-"]')){const name=nodeClass(el);if(name)counts.set(name,(counts.get(name)??0)+1);}
+  for(const {node,properties} of changes){
+   if(node.closest(layoutProtected))return false;
+   const prior=nodeClass(node),name=prior&&counts.get(prior)===1?prior:'ow-layout-'+crypto.randomUUID(),style=read(node);
+   for(const [property,value] of Object.entries(properties))if(value===null)style.removeProperty(property);else style.setProperty(property,value);
+   rules.set(name,{node,prior,name,style});
+  }
+  const transform=css=>{
+   const chunks=[],blocks=layoutBlocks(css);let from=0;
+   for(const [name,block] of blocks){
+    const rule=rules.get(name);if(!rule)continue;
+    chunks.push(css.slice(from,block.from),update(css.slice(block.from,block.to),name,view,rule.style));from=block.to;
+   }
+   chunks.push(css.slice(from));
+   for(const {name,prior,style} of rules.values())if(!blocks.has(name)){
+    const source=blocks.get(prior),base=source?css.slice(source.from,source.to).replaceAll(prior,name):'';
+    chunks.push(update(base,name,view,style));
+   }
+   return chunks.join('');
+  };
+  const next=transform(current);if(next===current)return true;
+  if(next.length>websiteCSSByteLimit||next.length>websiteCSSByteLimit/4&&new TextEncoder().encode(next).byteLength>websiteCSSByteLimit)return false;
+  const retained=layoutBlocks(next);
+  beforeChange();
+  mutate?.();
+  for(const {node,prior,name} of rules.values()){
+   if(prior&&prior!==name)node.classList.remove(prior);
+   node.classList.toggle(name,retained.has(name));
+  }
+  change();write(next,transform);refresh();return true;
+ }
+ const composer=websiteLayoutComposer({panel,before:hint,document,make,listen,t,selected:()=>scope.value==='section'?selected():null,selectNode,styles,applyNodes,breakpoint,signal});
  function refresh(){
-  const node=target(),view=breakpoint();panel.hidden=!node||!!node.closest('[data-observanda-link],[data-website-instance],[data-website-feed]');
+  const node=target(),view=breakpoint();panel.hidden=!node||!!node.closest(layoutProtected);
+  composer.refresh();
   touched.clear();apply.disabled=true;
   if(panel.hidden||!panel.open)return;
   const name=identifier(node),block=name?boundaries(getCSS(),name).text:'',style=styleAt(document,block,view);
