@@ -1,6 +1,7 @@
 import {parse,parseFragment,serializeOuter} from 'parse5';
 import {createHash} from 'node:crypto';
 import {galleryItemPlacement,galleryKey,itemKey} from './website-source-gallery-items.js';
+import {displayId,displayMode,displayPlacement,renderEntryPlacement} from './website-entry-display.js';
 import {updateMigrationView} from './website-migration-views.js';
 import {linkPlacement,linkShape,linkSource,updateEntryLink} from './website-entry-links.js';
 import {AppError} from './errors.js';
@@ -26,7 +27,7 @@ export function websiteSourcePlacements(html,previous=[]){
   if(!/^[a-f0-9]{64}$/.test(id)||!range(node).start||!Number.isInteger(range(node).end))throw new AppError('INVALID');
   for(let parent=node.parentNode;parent;parent=parent.parentNode)if(sourceId(parent)!==undefined)throw new AppError('INVALID');
   const revision=attr(node,'data-observanda-source-revision');if(!/^[a-f0-9]{64}$/.test(revision??''))throw new AppError('INVALID');
-  result.push({id,revision,...galleryItemPlacement(node)});
+  result.push({id,revision,...galleryItemPlacement(node),...displayPlacement(node)});
  }
  return result;
 }
@@ -72,7 +73,7 @@ function mergeParts(current,previous,next,{root=false}={}){
 export function websiteMarkerShape(html){
  const scopes=[];
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
-  if(attr(node,galleryKey)!==undefined)scopes.push('gallery:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
+  if(attr(node,galleryKey)!==undefined||attr(node,displayId)!==undefined)scopes.push('managed:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
   if(linkSource(node)!==undefined){
    let owner,part;for(let parent=node.parentNode;parent;parent=parent.parentNode){part??=partId(parent);owner??=sourceId(parent);}
    scopes.push(JSON.stringify(['link',owner,part,linkShape(node)]));continue;
@@ -86,7 +87,7 @@ export function websiteMarkerShape(html){
 // Only explicit source permission writes call this. Ordinary opening, preview
 // and publishing read the saved HTML unchanged. Stable component markers let a
 // newly allowed/revoked part change without losing its entry's page placement.
-export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextHtml='',visible=true,placements=[]}){
+export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextHtml='',visible=true,placements=[],entryDisplays={},displayChoices,page='index.html',title=''}){
  const next=partTree(nextHtml),previous=partTree(previousHtml),changes=[],links=new Map(placements.filter(item=>item.id===id&&item.link).map(item=>[item.link,item])),projection={};
  for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
   if(linkSource(node)===id){
@@ -96,6 +97,11 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
   if(sourceId(node)!==id)continue;const bounds=range(node),loc=location(node);
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
   if(attr(node,itemKey)!==undefined)continue;
+  const slot=attr(node,displayId);
+  if(slot!==undefined){
+   const display=entryDisplays[slot];if(!display||display.id!==id||display.presentation!==attr(node,displayMode))throw new AppError('FORMAT');
+   changes.push({start:loc.startOffset,end:loc.endOffset,text:renderEntryPlacement(node,{id,revision,title,visible,choices:displayChoices,page,display:{...display,slot}})});continue;
+  }
   if(attr(node,'data-observanda-view')){
    changes.push({start:loc.startOffset,end:loc.endOffset,text:updateMigrationView(node,{original:html.slice(loc.startOffset,loc.endOffset),previousHtml,html:nextHtml,visible,revision})});continue;
   }

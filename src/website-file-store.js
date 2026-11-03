@@ -23,6 +23,7 @@ import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './we
 import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from './website-component-storage.js';
 import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
+import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -40,12 +41,14 @@ function assetSources(pages){
  for(const page of pages)for(const row of page.placements){
   if(row.link)continue;
   if(!uses.has(row.id))uses.set(row.id,{all:false,names:new Set()});
-  const use=uses.get(row.id);if(row.gallery)use.names.add(row.asset);else use.all=true;
+  const use=uses.get(row.id);
+  if(row.gallery)use.names.add(row.asset);
+  else if(row.display)for(const asset of row.assets)use.names.add(asset);
+  else use.all=true;
  }
  return uses;
 }
 const sourceURL=(page,name)=>path.posix.relative(path.posix.dirname(page),name);
-const atPage=(html,page)=>page.includes('/')?html.replace(/(\b(?:src|href|poster)\s*=\s*["'])(assets\/[a-f0-9]{64}\.[a-z0-9]+)/gi,(_,prefix,name)=>prefix+sourceURL(page,name)):html;
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const siteName=id=>{if(id===null)return 'default';if(!uuid(id))throw new AppError('INVALID');return id;};
@@ -169,6 +172,10 @@ export class WebsiteFileStore{
    const source=await this.source(placement.id,{pending:true});
    if(!source||source.revision!==placement.revision||source.target!=='website')throw new AppError('CONFLICT');
    const all=allIds.get(source.id),published=publicIds.get(source.id);
+   if(all.names.size){
+    const available=new Set(source.assets.map(asset=>asset.name));
+    for(const name of all.names)if(!available.has(name))throw new AppError('CONFLICT');
+   }
    for(const asset of sourceFiles(source))if(all.all||all.names.has(asset.name))includeAsset(files,source,asset,!(published?.all||published?.names.has(asset.name)));
   }
   return [...files.values()];
@@ -288,6 +295,7 @@ export class WebsiteFileStore{
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
   if(former?.instances?.length)pages.at(-1).instances=former.instances;
   if(former?.sourceGalleries?.length)pages.at(-1).sourceGalleries=former.sourceGalleries;
+  if(former?.entryDisplays)pages.at(-1).entryDisplays=former.entryDisplays;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
   const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures,draft,signal});
@@ -394,7 +402,7 @@ export class WebsiteFileStore{
   const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
   await indexWebsiteSource(this,source,html,signal,pickerContext);
-  let galleryItems,after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
+  let galleryItems,displayChoices,after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
    const pages=new Map(manifest.pages.map(page=>[page.path,page]));
@@ -403,7 +411,8 @@ export class WebsiteFileStore{
     const hasSlots=page?.sourceGalleries?.some(group=>group.slots.some(slot=>slot.sourceId===sourceId));
     if(hasSlots||page?.placements.some(item=>item.id===sourceId)){
      if(visible&&hasSlots)galleryItems??=sourceGalleryItems(html,source.assets);
-     const original=await this.readText(descriptor,{signal}),ordinary=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible,placements:page.placements});
+     if(visible&&page.placements.some(p=>p.id===sourceId&&p.display))displayChoices??=entryDisplayChoices(html);
+     const original=await this.readText(descriptor,{signal}),ordinary=updateWebsiteSource(original,{id:sourceId,revision:source.revision,previousHtml:atPage(previousHtml,descriptor.name),html:atPage(html,descriptor.name),visible,placements:page.placements,entryDisplays:page.entryDisplays,displayChoices,page:page.path,title:source.title});
      const {html:updated,groups}=refreshSourceGalleries(ordinary,page,sourceId,source.revision,galleryItems);
      if(updated!==original||hasSlots)pages.set(page.path,{...page,title:websiteDocumentTitle(updated),placements:websiteSourcePlacements(updated,page.placements),...(groups.length?{sourceGalleries:groups}:{})});
      nextFiles.push(updated===original?descriptor:await this.siteFile(id,descriptor.name,updated,{signal,draft:descriptor.draft}));

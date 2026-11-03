@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {attr,descendants,words} from './website-migration-views.js';
@@ -7,6 +8,7 @@ import {websiteSourcePlacements,websiteInsertionOffset} from './website-file-htm
 import {websiteFileName,validateWebsiteHTML} from './website-file-policy.js';
 import {libraryStamp,checkLibraryStamp} from './website-file-library.js';
 import {researchId} from './web/research-reference.js';
+import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode} from './website-entry-display.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const owner=node=>attr(node,'data-observanda-source');
@@ -44,6 +46,7 @@ async function requireSource(store,sourceId,sourceRevision){
  const source=await store.source(sourceId);
  if(!source?.visible||source.target!=='website')throw new AppError('NOT_FOUND');
  if(source.revision!==sourceRevision)throw new AppError('CONFLICT');
+ return source;
 }
 async function openSourceSite(store,id,{sourceId,sourceRevision,expectedRevision}){
  if(!hex(expectedRevision))throw new AppError('INVALID');
@@ -124,6 +127,58 @@ function removeStyle(html,page,id){
  }
  return html;
 }
+function ensureStyle(html,page,id){
+ const document=parse(html,{sourceCodeLocationInfo:true}),nodes=[...descendants(document)];
+ const href=path.posix.relative(path.posix.dirname(page),'source-'+id+'.css');
+ if(nodes.some(n=>n.tagName==='link'&&attr(n,'rel')==='stylesheet'&&attr(n,'href')===href))return html;
+ const at=nodes.find(n=>n.tagName==='head')?.sourceCodeLocation?.startTag?.endOffset??nodes.find(n=>n.tagName==='html')?.sourceCodeLocation?.startTag?.endOffset??nodes.find(n=>n.nodeName==='#documentType')?.sourceCodeLocation?.endOffset??0;
+ return html.slice(0,at)+'<link rel="stylesheet" href="'+href+'">'+html.slice(at);
+}
+async function selectedDisplay(store,id,options){
+ const {path:pagePath,ordinal,sourceId,sourceRevision,expectedRevision,signal}=options;
+ websiteFileName(pagePath);if(!hex(expectedRevision)||!Number.isSafeInteger(ordinal)||ordinal<0)throw new AppError('INVALID');
+ const source=await requireSource(store,sourceId,sourceRevision),manifest=await store.current(id,expectedRevision);
+ const page=manifest.pages.find(p=>p.path===pagePath);if(!page)throw new AppError('NOT_FOUND');
+ const original=await store.readText(manifest.files.find(f=>f.name===pagePath),{signal});
+ const selected=parseLocations(original,page,sourceId,sourceRevision).found[ordinal];if(!selected)throw new AppError('NOT_FOUND');
+ if(selected.kind!=='block'||!locationOf(selected.node).editable)throw new AppError('CONFLICT');
+ const slot=attr(selected.node,displayId),previous=slot===undefined?null:page.entryDisplays?.[slot];
+ if(slot!==undefined&&(!previous||previous.id!==sourceId||previous.presentation!==attr(selected.node,displayMode)))throw new AppError('FORMAT');
+ const html=await store.readText(source.html,{signal});
+ return {manifest,page,source,node:selected.node,slot,previous,html,original};
+}
+export function placementPresentationOptions(store,id,options){
+ const {offset=0,limit=12,signal}=options;
+ if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>40)throw new AppError('INVALID');
+ return store.scope(async()=>{
+  const {manifest,previous,source,html}=await selectedDisplay(store,id,options),choices=entryDisplayChoices(html);
+  const items=[...choices.values()].slice(offset,offset+limit).map(({key,kind,title,text})=>({key,kind,title:title||null,preview:text.length>240?text.slice(0,239)+'…':text}));
+  const current=choices.get(previous?.choice),unavailable=Boolean(previous&&previous.choice!=='title'&&(!current||previous.presentation==='card'&&!current.text));
+  await requireSource(store,source.id,source.revision);await store.current(id,manifest.revision);
+  return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,revision:manifest.revision,sourceRevision:source.revision};
+ },{signal});
+}
+export function setPlacementPresentation(store,id,options){
+ const {presentation,choice=presentation==='card'?'title':null,signal}=options;
+ if(!['full','card','section'].includes(presentation)||presentation==='full'&&choice!==null)throw new AppError('INVALID');
+ return store.scope(async()=>{
+  const {manifest,page,source,node,slot,previous,html,original}=await selectedDisplay(store,id,options);
+  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null))return store.present(manifest,page.path,{signal});
+  const entries={...page.entryDisplays},key=slot??randomUUID(),display=presentation==='full'?null:{id:source.id,slot:key,presentation,choice};
+  if(display)entries[key]=display;else delete entries[key];
+  const output=renderEntryPlacement(node,{id:source.id,revision:source.revision,title:source.title,visible:true,html,choices:display?entryDisplayChoices(html):null,page:page.path,display,requireChoice:true});
+  const {startOffset,endOffset}=node.sourceCodeLocation;
+  let next=original.slice(0,startOffset)+output+original.slice(endOffset);
+  const placements=websiteSourcePlacements(next,page.placements);
+  const full=placements.some(p=>p.id===source.id&&!p.display&&!p.gallery&&!p.link);
+  next=full?ensureStyle(next,page.path,source.id):removeStyle(next,page.path,source.id);
+  validateWebsiteHTML(next,{file:page.path,scripts:await store.scripts(manifest.files)});
+  const pages=manifest.pages.map(p=>p===page?{...page,placements,entryDisplays:entries}:p);
+  const files=await store.siteAssets(manifest.files.filter(f=>f.name!==page.path),manifest.sources,pages);
+  files.push(await store.siteFile(id,page.path,next,{signal,draft:page.draft}));
+  return store.present(await store.commit({...manifest,files,pages},{signal}),page.path,{signal});
+ },{write:true,signal});
+}
 export function changeWebsitePlacement(store,id,operation,options){
  const {sourceId,sourceRevision,ordinal,path:pagePath,position,signal}=options;
  if(!Number.isInteger(ordinal)||ordinal<0||!['remove','move'].includes(operation)||operation==='remove'&&position!==undefined||operation==='move'&&position===undefined)throw new AppError('INVALID');
@@ -144,11 +199,13 @@ export function changeWebsitePlacement(store,id,operation,options){
    const offset=at<=start?at:at-block.length;html=html.slice(0,offset)+block+html.slice(offset);
   }
   if(html===previous)return store.present(manifest,pagePath,{signal});
-  const placements=websiteSourcePlacements(html,page.placements),lastOnPage=!placements.some(p=>p.id===sourceId&&!p.link&&!p.gallery);
+  const placements=websiteSourcePlacements(html,page.placements),lastOnPage=!placements.some(p=>p.id===sourceId&&!p.link&&!p.gallery&&!p.display);
   if(lastOnPage)html=removeStyle(html,pagePath,sourceId);
   const pictures=new Set(),recordings=new Set();
   validateWebsiteHTML(html,{file:pagePath,scripts:await store.scripts(manifest.files),pictures,recordings});
-  const pages=manifest.pages.map(p=>p===page?{...page,placements,pictures:[...pictures],recordings:[...recordings]}:p);
+  const entryDisplays={...page.entryDisplays};
+  if(operation==='remove')delete entryDisplays[attr(selected.node,displayId)];
+  const pages=manifest.pages.map(p=>p===page?{...page,placements,...(page.entryDisplays?{entryDisplays}:{}),pictures:[...pictures],recordings:[...recordings]}:p);
   const sources=[...new Map(pages.flatMap(p=>p.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
   const usedPictures=new Set([...pages.flatMap(p=>p.pictures??[]),...Object.values(manifest.pictureStyles??{}).flat()]),usedRecordings=new Set(pages.flatMap(p=>p.recordings??[]));
   let files=manifest.files.filter(f=>f.name!==pagePath&&(!f.picture||usedPictures.has(f.name))&&(!f.recording||usedRecordings.has(f.name)));

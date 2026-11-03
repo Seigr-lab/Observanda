@@ -10,7 +10,7 @@ import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 import {componentOperation} from './website-component-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
-import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement} from './website-file-placements.js';
+import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementPresentationOptions,setPlacementPresentation} from './website-file-placements.js';
 import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
@@ -83,7 +83,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
-  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|update|detach)$/.test(operation)||/^library\/(remove|move)-placement$/.test(operation)){onWrite();await check();}
+  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|update|detach)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
   if(operation==='session'){
    const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
@@ -111,6 +111,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    const selection=await folderPicker.choose({path:options.path??'',signal});await check();json(selection);return true;
   }
   if(operation==='library/placements'){json(await websiteSourceUsage(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='library/presentation-options'){json(await placementPresentationOptions(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='library/present-placement'){json(await setPlacementPresentation(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/move-placement'||operation==='library/remove-placement'){json(await changeWebsitePlacement(store,siteId,operation==='library/move-placement'?'move':'remove',{...options,expectedRevision,signal}));return true;}
   if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}

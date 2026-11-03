@@ -43,6 +43,7 @@ export function editWebsiteCanvas(document){
  // editable; source visibility changes replace these owned fragments on disk.
  for(const node of body.querySelectorAll('[data-observanda-source]')){
   node.dataset.observandaEditorEditable=node.getAttribute('contenteditable')??'absent';node.contentEditable='false';
+  if(node.hasAttribute('data-observanda-display-id'))continue;
   for(const part of node.querySelectorAll('[data-observanda-part]')){
    if(part.querySelector('[data-observanda-part]')||!part.textContent.trim())continue;
    part.dataset.observandaEditorEditable=part.getAttribute('contenteditable')??'absent';part.contentEditable='true';
