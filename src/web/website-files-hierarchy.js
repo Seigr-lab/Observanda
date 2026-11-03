@@ -66,11 +66,24 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   if(!changed)return;chosen=path;
   let visible=visibleRows(),index=visible.indexOf(row);
   if(index<0&&query){query='';controls.querySelector('input').value='';visible=visibleRows();index=visible.indexOf(row);}
-  offset=Math.max(0,Math.floor(index/pageSize)*pageSize);draw();
+  offset=Math.max(0,Math.floor(index/pageSize)*pageSize);draw();paintTrail();
  }
  function paint(host,doc){
   if(host!==list)bindList(host);
-  model=indexWebsiteLayers(doc);draw();
+  model=indexWebsiteLayers(doc);draw();paintTrail();
+ }
+ function paintTrail(){
+  const trail=root?.querySelector('[data-layer-trail]');if(!trail)return;
+  const file=node('span',site().path);file.className='website-trail-file';file.title=site().path;trail.replaceChildren(file);
+  let row=model?.byPath.get(chosen);const visible=[];
+  while(row&&visible.length<3){visible.unshift(row);row=row.parent;}
+  if(row)trail.append(node('span','…'));
+  for(const item of visible){
+   const active=item.path===chosen,crumb=node(active?'span':'button',item.label);crumb.title=item.label;
+   if(active)crumb.setAttribute('aria-current','location');
+   else{crumb.type='button';crumb.dataset.layerAncestor=item.path;crumb.setAttribute('aria-label',t('selectAncestor',{name:item.label}));}
+   trail.append(crumb);
+  }
  }
  function choose(path,canvasFocus){
   selection(path);selectLayer(path);
@@ -107,9 +120,10 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   else{closeDialog?.();hostEvents?.abort();model=list=controls=null;drag=null;removeMark();}
   root=doc.querySelector('[data-website-file-controls]');if(!root||!enabled())return;
   hostEvents=new AbortController();bindKeys(doc);
-  const header=root.querySelector('header');if(!header)return;
+  const trail=root.querySelector('[data-layer-trail]');if(trail)trail.onclick=event=>{const at=event.target.closest('[data-layer-ancestor]');if(at)choose(at.dataset.layerAncestor,true);};
+  const header=root.querySelector('.website-workspace-utilities')??root.querySelector('header');if(!header)return;
   let trigger=header.querySelector('[data-website-finder]');
-  if(!trigger){trigger=node('button',t('finderOpen'));trigger.type='button';trigger.dataset.websiteFinder='';trigger.className='button';trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');header.append(trigger);}
+  if(!trigger){trigger=node('button',t('finderOpen'));trigger.type='button';trigger.dataset.websiteFinder='';trigger.className='button';trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');header.append(trigger);}
   trigger.onclick=()=>openFinder();
  }
  function bindList(host){

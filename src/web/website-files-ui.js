@@ -465,23 +465,25 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   finally{checkBusy=false;}
  }
- function siteSelector(){
+ function siteSelector(inGroup=false){
   if(!sites.length)return '';
   const choose=opened?'':'<option value="" selected disabled>'+esc(tr('chooseSite'))+'</option>';
   const options=sites.map(site=>'<option value="'+esc(site.id)+'" '+(site.id===siteId()?'selected':'')+'>'+esc(site.name)+'</option>').join('');
-  return '<label>'+esc(tr('site'))+' <select class="website-file-select" data-website-file-site>'+choose+options+'</select></label>'+(nextSite?button('more','sites-more'):'');
+  const select='<select class="website-file-select" data-website-file-site aria-label="'+esc(tr('site'))+'">'+choose+options+'</select>';
+  return (inGroup?select:'<label>'+esc(tr('site'))+' '+select+'</label>')+(nextSite?button('more','sites-more'):'');
  }
  const compactViewport=window.matchMedia('(max-width:760px)');
  function extraTools(title,content){
-  return '<details data-website-tools '+(compactViewport.matches?'':'open')+'><summary>'+esc(tr(title))+'</summary><div class="website-extra-tools">'+content+'</div></details>';
+  const label=esc(tr(title));
+  return '<details class="website-task-group" data-website-tools aria-label="'+label+'" '+(compactViewport.matches?'':'open')+'><summary>'+label+'</summary><span class="website-task-label" aria-hidden="true">'+label+'</span><div class="website-extra-tools">'+content+'</div></details>';
  }
  function resizeTools(){for(const group of document.querySelectorAll('[data-website-tools]'))group.open=!compactViewport.matches;}
- function pageToolbar(){
+ function siteToolbar(){
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
-  return '<label>'+esc(tr('page'))+' <select class="website-file-select" data-website-file-page>'+options+'</select></label>'+
-   button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+
-   extraTools('pagePanel',button('pagePanel','pages')+button('addPage','new-page')+button('discard','discard')+button('download','download','data-website-file-requires-clean'));
-
+  const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
+  return extraTools('site',siteSelector(true)+button('create','new'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
+   extraTools('siteDesignTools',button('menu','menu')+button('siteAppearance','appearance')+button('designThemes','themes'))+
+   extraTools('siteReleaseTools',button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
  function unopenedView(){
   const state=session.preparation?.state;
@@ -498,7 +500,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
-  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('designThemes','themes')+button('destination','destination')+button('folderPublish','folder')+button('checkWebsite','check-website'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
+  const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','destination','folder'].includes(mode);
+  const currentTask=({menu:'menu',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':'publishUpdate','publish-choose':'publishUpdate'})[mode]??'title';
+  const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
   if(stale)body=conflictingPage?conflictView():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
@@ -518,9 +522,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+'</div><iframe id="website-files-preview" class="website-files-canvas" title="'+esc(tr('preview'))+'" sandbox="allow-same-origin"></iframe>';
   else body=editorView();
-  const toolbar=form||stale||composing?'':(opened?extraTools('chooseSite',siteSelector()):siteSelector())+(opened?pageToolbar():'');
-  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><h1>'+esc(title)+'</h1><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+guideButton+'</header>'+
-   (toolbar?'<div class="website-files-toolbar website-page-controls">'+toolbar+'</div>':'')+
+  const toolbar=authoring?siteToolbar():!opened&&!form?siteSelector():'';
+  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><div class="website-workspace-identity"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'<div class="website-workspace-utilities">'+guideButton+'</div></header>'+
+   (toolbar?'<nav class="website-files-toolbar website-page-controls" aria-label="'+esc(tr('site'))+'">'+toolbar+'</nav>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    button('reopen','reopen','data-website-files-reopen '+(stale&&!awaitingAccess&&!conflictingPage?'':'hidden'))+body+'</fieldset>';
  }
@@ -570,10 +574,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes='<label>'+esc(tr('viewport'))+' <select data-website-file-viewport>'+['desktop','tablet','phone'].map(key=>'<option value="'+key+'" '+(viewport===key?'selected':'')+'>'+esc(tr(key))+'</option>').join('')+'</select></label>';
-  const toolbar='<div class="website-files-toolbar" role="group" aria-label="'+esc(tr('title'))+'">'+history+extraTools('title',tools+button('menu','menu')+button('checkPage','check-page')+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('feedEditor','feeds')+button('placementTitle','presentation')+sizes:''))+'</div>';
+  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'?sizes:'')+'</div></div>';
   if(mode!=='visual')return toolbar+'<label>'+esc(tr(mode))+'<textarea class="website-files-code" aria-label="'+esc(tr(mode))+'" data-website-file-code="'+mode+'" spellcheck="false">'+esc(mode==='html'?html:css)+'</textarea></label>';
   const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option></select></label>'+button('addBlock','add-block');
-  return toolbar+'<div class="website-files-editor"><aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside><section class="website-files-stage"><div class="website-files-viewport" data-size="'+viewport+'"><iframe id="website-files-canvas" class="website-files-canvas" title="'+esc(tr('visual'))+'" sandbox="allow-same-origin"></iframe></div></section><aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside></div>';
+  return toolbar+'<div class="website-files-editor"><aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside><section class="website-files-stage"><div class="website-files-viewport" data-size="'+viewport+'"><iframe id="website-files-canvas" class="website-files-canvas" title="'+esc(tr('visual'))+'" sandbox="allow-same-origin"></iframe></div><nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section><aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside></div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}

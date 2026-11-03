@@ -1,7 +1,7 @@
 import {foldLayerText} from './website-layer-model.js';
 
 const cap=8;
-const tools=new Set(['visual','html','css','pages','new-page','menu','preview','check-page','galleries','media','folder','destination','save','download','picker-open','component-browse']);
+const tools=new Set(['visual','html','css','pages','new-page','menu','themes','appearance','preview','check-page','check-website','galleries','media','feeds','presentation','folder','destination','publish-update','save','download','picker-open','component-browse']);
 
 export function finderGroups({site,root,rows,t,openPage,selectLayer}){
  const groups=[];
@@ -67,7 +67,8 @@ export function openWebsiteFinder({doc,title,groups,t,valid,onClose}){
  }
  close.onclick=()=>dismiss();dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});input.addEventListener('input',paint);
  input.addEventListener('keydown',event=>{
-  if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();highlight(active+(event.key==='ArrowDown'?1:-1));}
+  if(event.key==='Escape'){event.preventDefault();dismiss();}
+  else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();highlight(active+(event.key==='ArrowDown'?1:-1));}
   else if(event.key==='Enter'){event.preventDefault();choose(active);}
  });
  dialog.showModal();input.focus();paint();
