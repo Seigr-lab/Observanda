@@ -1,6 +1,6 @@
 import {test,expect,chromium} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
-import {mkdir,readFile,stat} from 'node:fs/promises';
+import {mkdir,readdir,readFile,stat} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {sampleNotebook} from '../../src/sample.js';
@@ -152,6 +152,11 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(plate.locator('[data-feed-field="figures"]')).toHaveCSS('display','grid');
   const boxes=await plots.evaluateAll(images=>images.map(img=>img.getBoundingClientRect().left));expect(boxes[1]).toBeGreaterThan(boxes[0]);
   expect(await reader.content()).not.toMatch(/Second assay approved|Internal calibration canary|internal-serial-canary/);
+  // A private SVG or stale HTML file is public even without a link to it.
+  const names=await readdir(output,{recursive:true});
+  for(const file of names.filter(name=>/\.(?:html|css|json|svg|csv|vtt|js)$/i.test(name))){
+   expect(await readFile(path.join(output,file),'utf8'),file).not.toMatch(/never-export-this-canary|internal-serial-canary|Internal calibration canary|withdraw-this-result/);
+  }
   if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/10-published-plates.png'),fullPage:true});
   for(const database of sentinels)expect((await stat(database)).isFile()).toBe(true);
   expect(unexpected).toEqual([]);

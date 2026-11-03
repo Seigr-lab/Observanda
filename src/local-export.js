@@ -162,9 +162,11 @@ export class LocalExport {
    if(plan.state!=='applying'){
     await checkOriginals(plan,changes);
     plan.state='staging';await this.save(plan);
-    try{await operationStage('folderStage',{unit:'files'},()=>stageFiles(plan,candidate,(stage,file)=>{
-     if(stage==='staged')operationAdvance();return this.checkpoint(stage,file);
-    },changes));}catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}
+    const stage=()=>stageFiles(plan,candidate,(step,file)=>{
+     if(step==='staged')operationAdvance(1,'folderStage');return this.checkpoint(step,file);
+    },changes);
+    try{if(this.fileOwner)await operationStage('folderStage',{unit:'files'},stage);else await stage();}
+    catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}
     await checkOriginals(plan,changes);
     plan.state='applying';await this.save(plan);await this.checkpoint('ready');
    }
