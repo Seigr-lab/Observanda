@@ -323,6 +323,7 @@
   "menuEmpty": "No menu items yet.",
   "menuNew": "New menu item",
   "menuDestination": "Choose a saved page or enter a link.",
+  "menuChoosePage": "Choose a page",
   "menuProtected": "This link follows the entry’s publication visibility.",
   "viewport": "Canvas width",
   "desktop": "Desktop",

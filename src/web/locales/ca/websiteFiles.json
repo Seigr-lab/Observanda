@@ -323,6 +323,7 @@
   "menuEmpty": "El menú encara no té cap element.",
   "menuNew": "Element de menú nou",
   "menuDestination": "Tria una pàgina desada o introdueix un enllaç.",
+  "menuChoosePage": "Tria una pàgina",
   "menuProtected": "Aquest enllaç respecta la visibilitat de publicació de l’entrada.",
   "viewport": "Amplada del llenç",
   "desktop": "Escriptori",

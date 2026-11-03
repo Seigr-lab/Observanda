@@ -45,9 +45,14 @@ export function websitePageRows(pages){
 }
 export function websitePageWindow(rows,{search='',state='all',offset=0}={}){
  const words=normalize(search.trim()).split(/\s+/).filter(Boolean);
- const matches=rows.filter(row=>(state==='all'||(state==='draft')===Boolean(row.draft))&&words.every(word=>row.query.includes(word)));
- const start=Math.max(0,Math.min(offset,Math.max(0,Math.ceil(matches.length/windowSize)-1)*windowSize));
- return {rows:matches.slice(start,start+windowSize),total:matches.length,start,end:Math.min(start+windowSize,matches.length)};
+ const wanted=Math.max(0,offset),selected=[],last=[];let total=0;
+ for(const row of rows){
+  if(state!=='all'&&(state==='draft')!==Boolean(row.draft)||!words.every(word=>row.query.includes(word)))continue;
+  if(total%windowSize===0)last.length=0;
+  last.push(row);if(total>=wanted&&selected.length<windowSize)selected.push(row);total++;
+ }
+ const start=Math.min(wanted,Math.max(0,Math.ceil(total/windowSize)-1)*windowSize);
+ return {rows:start===wanted?selected:last,total,start,end:Math.min(start+windowSize,total),previous:Math.max(0,start-windowSize)};
 }
 export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDocument,changed=()=>{},close}){
  let signature='',pageSignature='',base=null,draft=null,rows=[],search='',state='all',offset=0,touched=false;

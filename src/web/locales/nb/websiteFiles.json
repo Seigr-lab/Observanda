@@ -323,6 +323,7 @@
   "menuEmpty": "Menyen har ingen punkter ennå.",
   "menuNew": "Nytt menypunkt",
   "menuDestination": "Velg en lagret side eller skriv inn en lenke.",
+  "menuChoosePage": "Velg en side",
   "menuProtected": "Denne lenken følger oppføringens synlighet ved publisering.",
   "viewport": "Lerretsbredde",
   "desktop": "Datamaskin",

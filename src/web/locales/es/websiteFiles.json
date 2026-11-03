@@ -323,6 +323,7 @@
   "menuEmpty": "El menú aún no tiene elementos.",
   "menuNew": "Nuevo elemento de menú",
   "menuDestination": "Elige una página guardada o introduce un enlace.",
+  "menuChoosePage": "Elegir una página",
   "menuProtected": "Este enlace respeta la visibilidad de publicación de la entrada.",
   "viewport": "Ancho del lienzo",
   "desktop": "Escritorio",
