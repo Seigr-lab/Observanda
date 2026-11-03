@@ -14,6 +14,7 @@ test('a 10,000-entry rule reads each compact shard once and reads no research or
   scope:async(fn,opts)=>{assert.equal(opts.write,true);return fn(scope);},control:async path=>{
    reads.set(path,(reads.get(path)??0)+1);
    if(path.endsWith('/generation.json'))return 'current';
+   if(path.includes('/pending-scopes/'))return {kind:'source',target:'website',known:false,projectId:null,notebookId:null};
    if(path.includes('feed-index'))return overrides;
    if(path.includes('picker/00.json'))return rows;
    assert.fail('Unexpected file read');
