@@ -6,14 +6,20 @@ import {escapeWebsiteText as esc} from './website-file-html.js';
 import {attr,descendants} from './website-migration-views.js';
 import {compileWebsiteFeedTemplate,feedContentAtPage} from './website-feed-template.js';
 import {readFeedSource} from './website-feed-source.js';
+import {websiteHTMLByteLimit} from './website-file-policy.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
 import es from './web/locales/es/websiteFeeds.json' with {type:'json'};
 import nb from './web/locales/nb/websiteFeeds.json' with {type:'json'};
 import nn from './web/locales/nn/websiteFeeds.json' with {type:'json'};
+import enErrors from './web/locales/en/errors.json' with {type:'json'};
+import caErrors from './web/locales/ca/errors.json' with {type:'json'};
+import esErrors from './web/locales/es/errors.json' with {type:'json'};
+import nbErrors from './web/locales/nb/errors.json' with {type:'json'};
+import nnErrors from './web/locales/nn/errors.json' with {type:'json'};
 
 export const feedMarker='data-website-feed';
-export const maxPageBytes=16*1024*1024;
+export const maxPageBytes=websiteHTMLByteLimit;
 export const digest=value=>createHash('sha256').update(value).digest('hex');
 export const feedCSS=`:where(.website-feed){margin-block:var(--section-space,2rem);color:inherit}
 :where(.website-feed-items){display:grid;gap:var(--card-gap,1rem);align-items:start}
@@ -54,7 +60,8 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
   const instance=feed.id+'-'+member.id,withContent=feed.template==='full'||custom?.needsContent;
   const html=withContent?shared?.html??await store.readText(source.html,{signal}):'';
   if(withContent&&shared)shared.html=html;
-  let markup=custom?custom.render({row:source.feedRow,html,page,instance}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(source.title)+'</h3>';
+  let markup=custom?custom.render({row:source.feedRow,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(source.title)+'</h3>';
+  if(Buffer.byteLength(markup)>maxPageBytes)throw new AppError('WEBSITE_FEED_CAPACITY');
   let used=new Map(),style=null,styleKey='';
   if(withContent){
    ({markup,used}=memberAssets(markup,page,source));
@@ -80,7 +87,7 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
 // its own site refresh is still outstanding. Its last committed row and assets
 // remain valid in the fenced intermediate revision until its writer finishes.
 export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
- if(!old||feed.template!==old.template||feed.itemHTML!==old.itemHTML)return async()=>null;
+ if(!old||old.unavailable||feed.template!==old.template||feed.itemHTML!==old.itemHTML)return async()=>null;
  const revisions=new Map(old.members.map(row=>[row.id,row.revision])),locations=new Map(),cache=new Map();
  for(const group of old.groups)for(const id of group.ids)locations.set(id,group);
  const files=new Map(manifest.files.map(f=>[f.name,f]));
@@ -115,7 +122,11 @@ export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
  };
 }
 export function feedSection(feed,rows,page,previous,next,language){
- const messages=({en,ca,es,nb,nn})[language.toLowerCase().split('-')[0]]??en;
+ const locale=language.toLowerCase().split('-')[0],messages=({en,ca,es,nb,nn})[locale]??en;
+ if(feed.unavailable==='capacity'){
+  const message=({en:enErrors,ca:caErrors,es:esErrors,nb:nbErrors,nn:nnErrors}[locale]??enErrors).WEBSITE_FEED_CAPACITY;
+  return {markup:'<section class="website-feed" id="website-feed-'+feed.id+'" '+feedMarker+'="'+feed.id+'"><h2>'+esc(feed.heading)+'</h2><p role="status">'+esc(message)+'</p></section>',assets:[]};
+ }
  const links=new Set([feedStyle]),assets=[];
  for(const row of rows){if(row.style)links.add(row.style);for(const descriptor of row.assets.values())assets.push(descriptor);}
  const css=[...links].map(name=>'<link rel="stylesheet" href="'+esc(relative(page,name))+'">').join('');

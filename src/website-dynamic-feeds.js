@@ -10,6 +10,7 @@ import {compileWebsiteFeedTemplate} from './website-feed-template.js';
 import {changeGroups,initialGroups} from './website-feed-groups.js';
 import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName} from './website-feed-render.js';
 import {continuationShell} from './website-feed-shell.js';
+import {styledPageHTML} from './website-entry-styles.js';
 
 const registry='.observanda/website-files/feed-sites',hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const scopeFile=id=>registry+'/'+id+'.json';
@@ -18,7 +19,7 @@ const buckets=site=>new Set((site?.feeds??[]).map(feed=>bucket(feed.criteria)));
 const bucketDir=key=>registry+'/scopes/'+key;
 function publicDefinition(feed){
  const {id,path,heading,criteria,layout,template,itemHTML,pageSize}=feed;
- return {id,path,heading,criteria,layout,template,...(template==='custom'?{itemHTML}:{}),pageSize,total:feed.members.length,pages:feed.groups.length};
+ return {id,path,heading,criteria,layout,template,...(template==='custom'?{itemHTML}:{}),pageSize,total:feed.members.length,pages:feed.groups.length,...(feed.unavailable?{unavailable:feed.unavailable}:{})};
 }
 function sitePage(manifest,path){
  websiteFileName(path);const page=manifest.pages.find(p=>p.path===path);if(!page)throw new AppError('NOT_FOUND');return page;
@@ -88,7 +89,10 @@ export function validateFeedFiles(manifest,files){
     members.add(id);
    }
   }
-  if(index!==feed.members.length)throw new AppError('FORMAT');
+  if(feed.unavailable==='capacity'){
+   if(feed.groups.length!==1||index||feed.groups[0].assets.length)throw new AppError('FORMAT');
+   for(const row of feed.members){if(!hex(row.id)||!hex(row.revision)||members.has(row.id))throw new AppError('FORMAT');members.add(row.id);}
+  }else if(feed.unavailable||index!==feed.members.length)throw new AppError('FORMAT');
  }
 }
 export function websiteFeedOccurrences(manifest,sourceId){
@@ -168,7 +172,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
  let hostMarkup='';
  if(feed){
   const byId=new Map(feed.members.map(m=>[m.id,m])),render=makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared),priorRow=priorFeedRows(store,manifest,old,feed,original,signal);
-  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,manifest.cssPath,page.draft]));
+  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,manifest.cssPath,page.draft,feed.unavailable]));
   let shell;
   for(let i=0;i<groups.length;i++){
    signal?.throwIfAborted();
@@ -186,14 +190,15 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
     if(bytes>maxPageBytes){split=rows.length;break;}rows.push(row);
    }
    if(split!==null){
-    if(split===0&&i!==0)throw new AppError('LIMIT');
+    if(split===0&&i!==0)throw new AppError('WEBSITE_FEED_CAPACITY');
     const overflow=group.ids.splice(split);groups.splice(i+1,0,{key:randomUUID(),ids:overflow});i--;continue;
    }
-   const {markup,assets}=feedSection(feed,rows,file,prev,next,slot.language);
+   let {markup,assets}=feedSection(feed,rows,file,prev,next,slot.language);
+   if(feed.unavailable&&Buffer.byteLength(slot.insert(markup))>maxPageBytes)markup=markup.replace(/<h2>[^<]*<\/h2>/,'');
    if(i>0)shell??=continuationShell(slot.insert('<section '+feedMarker+'="'+feed.id+'"></section>'),feed,page.draft?'draft-styles.css':manifest.cssPath);
-   const html=i===0?slot.insert(markup):shell.render(markup);
+   const html=styledPageHTML(i===0?slot.insert(markup):shell.render(markup),file).html;
    if(Buffer.byteLength(html)>maxPageBytes){
-    if(!group.ids.length||i>0&&group.ids.length<2)throw new AppError('LIMIT');
+    if(!group.ids.length||i>0&&group.ids.length<2)throw new AppError('WEBSITE_FEED_CAPACITY');
     const count=group.ids.length===1?0:Math.ceil(group.ids.length/2);
     groups.splice(i+1,0,{key:randomUUID(),ids:group.ids.splice(count)});i--;continue;
    }
@@ -214,6 +219,21 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
  }
  await stylesheet(store,manifest,files,feedList,signal);
  return {...manifest,files:[...files.values()],feeds:feedList};
+}
+async function materializeUpdate(store,manifest,old,feed,groups,signal,shared){
+ try{return await materialize(store,manifest,old,feed,groups,undefined,signal,shared);}
+ catch(error){
+  if(error.code!=='WEBSITE_FEED_CAPACITY')throw error;
+  // Finish a legitimate grant even when the configured page cannot contain
+  // one approved item. Keep the private rule editable and block publication.
+  return materialize(store,manifest,old,{...feed,unavailable:'capacity'},[{key:'host',ids:[]}],undefined,signal,shared);
+ }
+}
+export async function reflowFeedShell(store,manifest,feed,key,signal){
+ const old={...feed,groups:feed.groups.map(g=>g.key===key?{...g,stamp:null}:g)};
+ const next={...feed};delete next.shellHost;
+ const groups=feed.groups.map(g=>({key:g.key,ids:[...g.ids]}));
+ return materializeUpdate(store,manifest,old,next,groups,signal,{});
 }
 function requireExpected(revision){if(!hex(revision))throw new AppError('INVALID');}
 export function readWebsiteFeed(store,siteId,{expectedRevision,path,feedId,signal}){
@@ -274,7 +294,10 @@ export async function refreshFeedBatch(store,sources,{signal}={}){
      if(!groups[0].ids.length&&groups.length>1)groups[0].ids=groups.splice(1,1)[0].ids;
     }
    }
-   manifest=await materialize(store,manifest,feed,{...feed,members},groups,undefined,signal,shared);changed=true;
+   const next={...feed,members};delete next.unavailable;
+   if(feed.unavailable)groups=initialGroups(members,feed.pageSize);
+   manifest=await materializeUpdate(store,manifest,feed,next,groups,signal,shared);
+   changed=true;
   }
   if(changed)await store.commit(manifest,{signal});
  }

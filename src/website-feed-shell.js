@@ -4,7 +4,8 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {attr,descendants} from './website-migration-views.js';
 import {escapeWebsiteText as esc} from './website-file-html.js';
-import {validateWebsiteHTML} from './website-file-policy.js';
+import {validateWebsiteHTML,websiteHTMLByteLimit} from './website-file-policy.js';
+import {styledPageHTML} from './website-entry-styles.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
 import es from './web/locales/es/websiteFeeds.json' with {type:'json'};
@@ -63,7 +64,7 @@ export function continuationShell(hostHTML,feed,cssPath){
  const prefix=output.slice(0,at)+back,suffix=output.slice(at+token.length);
  return {stamp:createHash('sha256').update(prefix+'\0'+suffix).digest('hex'),render:markup=>prefix+markup+suffix};
 }
-export async function syncFeedShells(store,manifest,signal){
+export async function syncFeedShells(store,manifest,signal,reflow){
  if(!manifest.feeds?.some(feed=>feed.groups.length>1))return manifest;
  const files=new Map(manifest.files.map(f=>[f.name,f])),hosts=new Map(),feeds=[];
  for(const feed of manifest.feeds){
@@ -75,7 +76,12 @@ export async function syncFeedShells(store,manifest,signal){
    if(file.feedShell===shell.stamp)continue;
    const html=await store.readText(file,{signal}),node=[...descendants(parse(html,{sourceCodeLocationInfo:true}))].find(n=>attr(n,'data-website-feed')===feed.id),loc=node?.sourceCodeLocation;
    if(!loc?.endTag)throw new AppError('FORMAT');
-   const output=shell.render(html.slice(loc.startOffset,loc.endOffset));validateWebsiteHTML(output,{file:name});
+   const output=styledPageHTML(shell.render(html.slice(loc.startOffset,loc.endOffset)),name).html;
+   if(Buffer.byteLength(output)>websiteHTMLByteLimit){
+    const partial={...manifest,files:[...files.values()],feeds:[...feeds,...manifest.feeds.slice(feeds.length)]};
+    return syncFeedShells(store,await reflow(store,partial,feed,g.key,signal),signal,reflow);
+   }
+   validateWebsiteHTML(output,{file:name});
    files.set(name,{...await store.siteFile(manifest.id,name,output,{draft:host.draft,signal}),feedPage:feed.id,feedShell:shell.stamp});
   }
   feeds.push({...feed,shellHost:host.sha256});

@@ -28,7 +28,7 @@ import {sourceGalleryItems,refreshSourceGalleries} from './website-source-galler
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
 import {fileHasEditorMenu} from './website-menu-styles.js';
-import {clearFeedSubscription,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
+import {clearFeedSubscription,reflowFeedShell,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
 import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-source.js';
 import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
@@ -257,9 +257,9 @@ export class WebsiteFileStore{
  }
  site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(manifest.feeds?.length?{feedPages:websiteFeedPages(manifest)}:{}),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
-  manifest=retainWebsiteFeedAssets(manifest);
   manifest=await syncEntryStyles(this,manifest,signal);
-  manifest=await syncFeedShells(this,manifest,signal);
+  manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
+  manifest=retainWebsiteFeedAssets(manifest);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){
    const refs=new Map(manifest.sources.map(row=>[row.id,row]));
@@ -278,8 +278,8 @@ export class WebsiteFileStore{
   // leave an unused index row, but can never create an unindexed live copy.
   const oldOrdinary=new Set(previous?.sources.map(source=>source.id)),newOrdinary=new Set(value.sources.map(source=>source.id));
   const previousSources=new Set(oldOrdinary),currentSources=new Set(newOrdinary);
-  if(previous?.feedPlacementsIndexed)for(const feed of previous.feeds??[])for(const member of feed.members)previousSources.add(member.id);
-  for(const feed of value.feeds??[])for(const member of feed.members)currentSources.add(member.id);
+  if(previous?.feedPlacementsIndexed)for(const feed of previous.feeds??[])if(!feed.unavailable)for(const member of feed.members)previousSources.add(member.id);
+  for(const feed of value.feeds??[])if(!feed.unavailable)for(const member of feed.members)currentSources.add(member.id);
   for(const id of currentSources)if(!previousSources.has(id)||!oldOrdinary.has(id)&&newOrdinary.has(id)){
    await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id,...(!oldOrdinary.has(id)&&!newOrdinary.has(id)?{feedOnly:true}:{})},{signal});
   }
@@ -383,6 +383,8 @@ export class WebsiteFileStore{
  },{signal});}
  export(id,{expectedRevision,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
+  const publicPages=manifest.pages.filter(page=>!page.draft),publicPaths=new Set(publicPages.map(p=>p.path));
+  if(manifest.feeds?.some(feed=>feed.unavailable==='capacity'&&publicPaths.has(feed.path)))throw new AppError('WEBSITE_FEED_CAPACITY');
   for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
   const descriptors=new Map(manifest.files.map(f=>[f.name,f]));
   for(const page of manifest.pages){
@@ -391,7 +393,6 @@ export class WebsiteFileStore{
    if(!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
    if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));
   }
-  const publicPages=manifest.pages.filter(page=>!page.draft),publicPaths=new Set(publicPages.map(p=>p.path));
   return {revision:manifest.revision,site:this.site({...manifest,pages:publicPages,feeds:manifest.feeds?.filter(f=>publicPaths.has(f.path))}),files};
  },{signal});}
  async source(id,{pending=false}={}){

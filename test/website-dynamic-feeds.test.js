@@ -130,3 +130,38 @@ test('large allowed articles split at the supported HTML byte budget without dro
  }
  assert.equal(text.filter(html=>html.includes('First measurement')).length,1);assert.equal(text.filter(html=>html.includes('Second measurement')).length,1);
 });
+
+test('an individually valid near-limit source completes its grant, blocks only affected publication, and can be repaired file-only',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-feed-capacity-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();if(path.dirname(root)!==path.resolve(os.tmpdir())||!path.basename(root).startsWith('website-feed-capacity-'))throw Error('Unexpected fixture');await rm(root,{recursive:true,force:true,maxRetries:12,retryDelay:120});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace);
+ workspace.openCatalogue=workspace.catalogue=()=>assert.fail('Capacity repair opened research');
+ const site=randomUUID(),privateSite=randomUUID(),draft='draft/notes.html';
+ const file='<html><head><title>Examples</title></head><body><main><h1>Examples</h1></main></body></html>';
+ const files=new Map([['index.html',file],['style.css','']]),draftFiles=new Map([[draft,file],['draft-styles.css','']]);
+ for(const id of [site,privateSite])await store.importFiles(id,{name:'Examples',files,draftFiles});
+ const provenance={workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()},sourceId=websiteSourceId(provenance);
+ async function put(html){const token=await store.beginSourceUpdate({sourceId,target:'website',provenance});return store.putSource({sourceId,provenance,title:'Retained observation',html},{token});}
+ await put('<p>Previous body</p>');
+ async function make(id,path,options={}){return saveWebsiteFeed(store,id,{expectedRevision:await store.siteVersion(id),path,heading:'Field entries',...options});}
+ const pub=await make(site,'index.html'),privateFeed=await make(privateSite,draft);
+ const envelope='<!doctype html><html><head><title>Content</title></head><body></body></html>';
+ const header='<p>Current large measurement ',footer='</p>';
+ const large=header+'x'.repeat(maxPageBytes-Buffer.byteLength(envelope+header+footer))+footer;
+ assert.equal(Buffer.byteLength(large+envelope),maxPageBytes);await put(large);
+ assert.deepEqual(await store.scope(()=>store.pendingSources()),new Set());
+ const blocked=await store.open(site),details=await readWebsiteFeed(store,site,{expectedRevision:blocked.site.revision,path:'index.html',feedId:pub.feedId});
+ assert.equal(details.feed.unavailable,'capacity');assert.equal(details.feed.total,1);assert.match(blocked.html,/HTML page limit/i);
+ assert.doesNotMatch(blocked.html,/Previous body|Current large measurement|Retained observation/);
+ await assert.rejects(WebsiteFilesCandidate.open(store,site,blocked.site.revision),{code:'WEBSITE_FEED_CAPACITY'});
+ const privateState=await store.open(privateSite,{path:draft});
+ assert.equal((await readWebsiteFeed(store,privateSite,{expectedRevision:privateState.site.revision,path:draft,feedId:privateFeed.feedId})).feed.unavailable,'capacity');
+ const privateEdition=await WebsiteFilesCandidate.open(store,privateSite,privateState.site.revision);await privateEdition.verify({});assert.ok(!privateEdition.files.has(draft));
+ await assert.rejects(make(site,'index.html',{feedId:pub.feedId}),{code:'WEBSITE_FEED_CAPACITY'});assert.equal(await store.siteVersion(site),blocked.site.revision);
+ const recovered=await make(site,'index.html',{feedId:pub.feedId,template:'card'});assert.match(recovered.html,/Retained observation/);assert.doesNotMatch(recovered.html,/Previous body|Current large measurement/);
+ const candidate=await WebsiteFilesCandidate.open(store,site,recovered.site.revision);await candidate.verify({});
+ const smaller=await put('<p>Current concise measurement</p>');const reopened=await store.open(privateSite,{path:draft});
+ assert.match(reopened.html,/Current concise measurement/);
+ const live=await readWebsiteFeed(store,privateSite,{expectedRevision:reopened.site.revision,path:draft,feedId:privateFeed.feedId});
+ assert.equal(live.feed.unavailable,undefined);assert.equal((await store.scope(()=>store.source(sourceId))).revision,smaller.revision);
+});
