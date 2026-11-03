@@ -99,6 +99,17 @@ test('an authored feed republishes new lab grants, changed writing and section w
   const checkURL=url=>{const pathname=new URL(url).pathname;if(pathname.startsWith('/api/')&&!pathname.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/language','/api/interface'].includes(pathname))unexpected.push(pathname);};
   app.context().on('request',r=>checkURL(r.url()));
   await expect(canvas().locator('[data-website-feed]')).toContainText('Released instrument observations',{timeout:60000});
+  await page.evaluate(()=>{
+   const fetch=window.fetch.bind(window);window.feedProgress={};
+   window.fetch=async(...args)=>{
+    const response=await fetch(...args),op=new URL(response.url).pathname.replace('/api/website-files/','');
+    if(['feed/save','folder/plan','folder/apply'].includes(op)){
+     const type=response.headers.get('content-type');
+     window.feedProgress[op]=response.clone().text().then(text=>({type,events:text.trim().split('\n').map(line=>JSON.parse(line))}));
+    }
+    return response;
+   };
+  });
   for(const url of await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>r.name)))checkURL(url);
   await page.locator('[data-website-file-block]').selectOption('paragraph');
   await page.getByRole('button',{name:'Insert element',exact:true}).click();
@@ -144,5 +155,10 @@ test('an authored feed republishes new lab grants, changed writing and section w
   if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/10-published-plates.png'),fullPage:true});
   for(const database of sentinels)expect((await stat(database)).isFile()).toBe(true);
   expect(unexpected).toEqual([]);
+  for(const [op,stage] of [['feed/save','feedRender'],['folder/plan','folderCompare'],['folder/apply','folderWrite']]){
+   const {type,events}=await page.evaluate(op=>window.feedProgress[op],op);expect(type).toContain('application/x-ndjson');
+   expect(events.some(event=>event.progress?.stage===stage&&event.progress.completed>0)).toBe(true);
+   expect(events.at(-1).result).toBeTruthy();
+  }
  }finally{await browser?.close();await fixture.dispose(app);}
 });

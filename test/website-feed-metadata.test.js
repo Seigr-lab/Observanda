@@ -11,6 +11,34 @@ import {PublicationConversion} from '../src/publication-conversion.js';
 import {saveWebsiteFeed} from '../src/website-dynamic-feeds.js';
 import {enumerateFeedMembers} from '../src/website-feed-query.js';
 import {makeFeedRenderer} from '../src/website-feed-render.js';
+import {sampleNotebook} from '../src/sample.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
+
+test('retained entry styles share one public file while a footer actually present in the row retains its own rules',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'website-feed-styles-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const book=sampleNotebook(),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace);
+ const start=await store.create({name:'Reports'}),id=start.site.id,notebookId=book.entries[0].notebookId;
+ let common,first;
+ for(const hasFooter of [false,false,true]){
+  const record={...book.entries[1],id:randomUUID(),notebookId,sections:[],attachments:[],share:true};
+  const provenance={recordId:record.id,workspaceId:workspace.vault.id,notebookId},sourceId=websiteSourceId(provenance);
+  first??={sourceId,provenance};
+  const converted=await convertPublicationRecord({},book,record);assert.ok(converted.visible);
+  if(common)assert.equal(common,converted.css);common=converted.css;
+  // Model the CSS already stored by an earlier producer, including the record-
+  // specific page rule. A real footer in the saved markup must retain it.
+  const rule='[data-page="entry:'+record.id+'"] .site-footer{--footer-text-align:center}';
+  const css=converted.css.slice(0,-1)+rule+'\n}',html=converted.html+(hasFooter?'<div data-page="entry:'+record.id+'"><footer class="site-footer">Note</footer></div>':'');
+  await store.putSource({sourceId,provenance,title:record.title,html,css,assets:converted.assets},{token:await store.beginSourceUpdate({sourceId,target:'website',provenance})});
+ }
+ await saveWebsiteFeed(store,id,{expectedRevision:start.site.revision,path:'index.html',heading:'Entries',template:'full',layout:'list',pageSize:1});
+ const {files}=await store.export(id);
+ assert.equal([...files.keys()].filter(name=>name.startsWith('feed-assets/styles-')).length,2);
+ await store.putSource({...first,title:'Withdrawn',visible:false},{token:await store.beginSourceUpdate({...first,target:'website'})});
+ const current=await store.export(id);
+ assert.equal([...current.files.keys()].filter(name=>name.startsWith('feed-assets/styles-')).length,2);
+});
 
 test('card and metadata templates share index and fence reads but still reject replayed publication metadata',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'website-feed-metadata-'));await mkdir(path.join(root,'.observanda'));

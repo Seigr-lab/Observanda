@@ -15,6 +15,7 @@ import {researchId} from './web/research-reference.js';
 import {destinationDirectory,within,outputName,sameFile,stageFiles,checkOriginals,applyFiles,cleanFiles} from './local-export-files.js';
 import {LocalExportManifest,emptyExportCounts,validExportCounts,validateExportMember} from './local-export-manifest.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
+import {operationStage,operationAdvance} from './operation-progress.js';
 
 const folder='.observanda/local-exports/';
 const planFile=id=>{if(!researchId(id))throw new AppError('INVALID');return folder+id+'.json';};
@@ -83,7 +84,7 @@ export class LocalExport {
    const changes=this.manifest.builder('changes'),counts=emptyExportCounts();
    const add=async(name,previous,next)=>{
     const actual=await nativeExportFingerprint(root,name),kind=!sameFile(actual,previous)?'conflict':sameFile(previous,next)?'unchanged':!previous?'added':!next?'removed':'replaced';
-    await changes.append({path:name,kind,before:previous,after:next});counts[kind]++;
+    await changes.append({path:name,kind,before:previous,after:next});counts[kind]++;operationAdvance(1,'folderCompare');
    };
    for await(const [name,content] of this.fileWindow(candidate.files)){
     outputName(name);const previous=await this.manifest.find(before,name);
@@ -161,14 +162,17 @@ export class LocalExport {
    if(plan.state!=='applying'){
     await checkOriginals(plan,changes);
     plan.state='staging';await this.save(plan);
-    try{await stageFiles(plan,candidate,this.checkpoint,changes);}catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}
+    try{await operationStage('folderStage',{unit:'files'},()=>stageFiles(plan,candidate,(stage,file)=>{
+     if(stage==='staged')operationAdvance();return this.checkpoint(stage,file);
+    },changes));}catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}
     await checkOriginals(plan,changes);
     plan.state='applying';await this.save(plan);await this.checkpoint('ready');
    }
    // File fingerprints, retained originals and no-clobber stage links prove
    // the unfinished tail on recovery. Checkpoint small batches instead of
    // rewriting the journal for every file; always retain the final position.
-   await applyFiles(plan,this.checkpoint,async count=>{if(count-plan.applied>=32||count===this.total(plan)&&count>plan.applied){plan.applied=count;await this.save(plan);}},changes);
+   let observed=0;
+   await applyFiles(plan,this.checkpoint,async count=>{operationAdvance(count-observed,'folderWrite');observed=count;if(count-plan.applied>=32||count===this.total(plan)&&count>plan.applied){plan.applied=count;await this.save(plan);}},changes);
    await this.checkpoint('verified');
    plan.state='completed';plan.completedAt=new Date().toISOString();
    const files=this.manifest.builder('files');for await(const change of changes())if(change.after)await files.append({path:change.path,...change.after});

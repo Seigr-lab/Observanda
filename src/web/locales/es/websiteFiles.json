@@ -1,4 +1,11 @@
 {
+  "feedScan": "Buscando entradas disponibles",
+  "feedRender": "Componiendo las entradas en las páginas del sitio",
+  "feedCommit": "Guardando la revisión de la colección",
+  "folderVerify": "Verificando los archivos del sitio",
+  "folderCompare": "Comparando la carpeta de destino",
+  "folderStage": "Preparando los archivos del sitio",
+  "folderWrite": "Actualizando la carpeta publicada",
   "feedFigureLayout": "Disposición de las figuras dentro de cada entrada",
   "feedCapacity": "Una entrada con este diseño es demasiado grande para una sola página HTML. Elige una tarjeta compacta, usa menos campos en el diseño personalizado o elimina esta colección antes de publicar.",
   "publishUpdate": "Publicar actualización",

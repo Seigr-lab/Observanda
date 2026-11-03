@@ -1,4 +1,11 @@
 {
+  "feedScan": "Finner tilgjengelige oppføringer",
+  "feedRender": "Plasserer oppføringer på nettsidene",
+  "feedCommit": "Lagrer strømrevisjonen",
+  "folderVerify": "Kontrollerer nettstedets filer",
+  "folderCompare": "Sammenligner målmappen",
+  "folderStage": "Klargjør nettstedets filer",
+  "folderWrite": "Oppdaterer publiseringsmappen",
   "feedFigureLayout": "Figuroppsett i hver oppføring",
   "feedCapacity": "En oppføring med denne utformingen er for stor for én HTML-side. Velg kompakt kort, bruk færre felt i en egendefinert utforming eller fjern strømmen før publisering.",
   "publishUpdate": "Publiser oppdatering",

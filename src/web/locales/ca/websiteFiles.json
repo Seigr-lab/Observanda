@@ -1,4 +1,11 @@
 {
+  "feedScan": "Cercant entrades disponibles",
+  "feedRender": "Maquetant les entrades a les pàgines del lloc web",
+  "feedCommit": "Desant la revisió del canal",
+  "folderVerify": "Verificant els fitxers del lloc web",
+  "folderCompare": "Comparant la carpeta de destinació",
+  "folderStage": "Preparant els fitxers del lloc web",
+  "folderWrite": "Actualitzant la carpeta publicada",
   "feedFigureLayout": "Disposició de les figures dins de cada entrada",
   "feedCapacity": "Una entrada amb aquest disseny és massa gran per a una sola pàgina HTML. Trieu una targeta compacta, utilitzeu menys camps al disseny personalitzat o elimineu el canal abans de publicar.",
   "publishUpdate": "Publica l’actualització",

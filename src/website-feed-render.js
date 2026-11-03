@@ -7,6 +7,7 @@ import {attr,descendants} from './website-migration-views.js';
 import {compileWebsiteFeedTemplate,feedContentAtPage} from './website-feed-template.js';
 import {readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {websiteHTMLByteLimit} from './website-file-policy.js';
+import {retainedArticleCSS} from './website-entry-styles.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
 import es from './web/locales/es/websiteFeeds.json' with {type:'json'};
@@ -78,12 +79,17 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
    if(source.css.size){
     styleKey=source.css.sha256;let sheet=styles.get(styleKey);
     if(!sheet){
-     const css=shared?.css??await store.readText(source.css,{signal}),scope='[data-website-feed-style="'+styleKey+'"]';
-     if(shared)shared.css=css;
-     const scoped=css.includes('@scope ([data-observanda-source])')?css.replaceAll('[data-observanda-source]',scope):'@scope ('+scope+') {\n'+css+'\n}';
-     const name=isolated('styles-'+(draft?'draft-':'')+styleKey+'.css'),file=await store.siteFile(siteId,name,scoped,{signal,draft});
-     const references=new Set(css.match(/assets\/[a-f0-9]{64}\.[a-z0-9]+/g)??[]);
-     sheet={file,references};styles.set(styleKey,sheet);
+     const saved=shared?.css??await store.readText(source.css,{signal});
+     if(shared)shared.css=saved;
+     const css=retainedArticleCSS(saved,source.provenance?.recordId,markup);
+     if(css!==saved){styleKey=digest(css);sheet=styles.get(styleKey);}
+     if(!sheet){
+      const scope='[data-website-feed-style="'+styleKey+'"]';
+      const scoped=css.includes('@scope ([data-observanda-source])')?css.replaceAll('[data-observanda-source]',scope):'@scope ('+scope+') {\n'+css+'\n}';
+      const name=isolated('styles-'+(draft?'draft-':'')+styleKey+'.css'),file=await store.siteFile(siteId,name,scoped,{signal,draft});
+      const references=new Set(css.match(/assets\/[a-f0-9]{64}\.[a-z0-9]+/g)??[]);
+      sheet={file,references};styles.set(styleKey,sheet);
+     }
     }
     style=sheet.file.name;used.set(style,{...sheet.file,sourceId:source.id,feedAsset:true});
     for(const asset of source.assets)if(sheet.references.has(asset.name))used.set(isolated(asset.name),{...asset,name:isolated(asset.name),sourceId:source.id,feedAsset:true});

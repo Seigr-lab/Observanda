@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {operationStage,operationAdvance} from './operation-progress.js';
 import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
@@ -156,6 +157,12 @@ function reservePath(files,name,id){
  const previous=files.get(name);if(previous&&previous.feedPage!==id)throw new AppError('CONFLICT');
 }
 function stylesheet(store,manifest,files,feeds,signal){
+ // Other feeds can still reference their previous layout until regenerated.
+ // Reclaim a generated stylesheet once every remaining feed identifies its own.
+ if(feeds.every(feed=>feed.layoutAsset)){
+  const used=new Set(feeds.map(feed=>feed.layoutAsset));
+  for(const [name,file] of files)if(file.feedStyle&&!used.has(name))files.delete(name);
+ }
  const previous=files.get(feedStyle);if(previous&&!previous.feedStyle)throw new AppError('CONFLICT');files.delete(feedStyle);
  if(!feeds.length)return;
  const draft=feeds.every(feed=>manifest.pages.find(p=>p.path===feed.path).draft);
@@ -165,12 +172,13 @@ function stylesheet(store,manifest,files,feeds,signal){
 async function materialize(store,manifest,old,feed,groups,position,signal,shared,renderer){
  const page=sitePage(manifest,feed?.path??old.path),files=new Map(manifest.files.map(f=>[f.name,f]));
  const id=feed?.id??old.id,original=await store.readText(files.get(page.path),{signal}),slot=hostSlot(original,id,Boolean(old),position);
- const previous=new Map(old?.groups.map(g=>[g.key,g])??[]),rendered=[];
+ const compatible=old?.layoutAsset===feedStyle?old:null;
+ const previous=new Map(compatible?.groups.map(g=>[g.key,g])??[]),rendered=[];
  const feedList=(manifest.feeds??[]).filter(f=>f.id!==id);
  let hostMarkup='';
  if(feed){
   const {render}=renderer??makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared);
-  const byId=new Map(feed.members.map(m=>[m.id,m])),priorRow=priorFeedRows(store,manifest,old,feed,original,signal);
+  const byId=new Map(feed.members.map(m=>[m.id,m])),priorRow=priorFeedRows(store,manifest,compatible,feed,original,signal);
   const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,manifest.cssPath,page.draft,feed.unavailable]));
   let shell;
   for(let i=0;i<groups.length;i++){
@@ -178,7 +186,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
    const group=groups[i],file=pageName(feed,group.key),prev=groups[i-1]?.key??null,next=groups[i+1]?.key??null;
    const stamp=digest(JSON.stringify([templatePin,prev,next,group.ids.map(key=>byId.get(key)?.revision)])),prior=previous.get(group.key);
    if(prior?.stamp===stamp){
-    if(i===0)hostMarkup=slot.old;rendered.push(prior);continue;
+    if(i===0)hostMarkup=slot.old;rendered.push(prior);operationAdvance(group.ids.length,'feedRender');continue;
    }
    if(i>0)reservePath(files,file,id);
    const rows=[];let bytes=i===0?Buffer.byteLength(slot.shell):0;
@@ -206,8 +214,9 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
     validateWebsiteHTML(html,{file});files.set(file,{...await store.siteFile(manifest.id,file,html,{draft:page.draft,signal}),feedPage:id,feedShell:shell.stamp});
    }
    rendered.push({key:group.key,ids:group.ids,stamp,assets});
+   operationAdvance(group.ids.length,'feedRender');
   }
-  feedList.push({...feed,groups:rendered});
+  feedList.push({...feed,groups:rendered,layoutAsset:feedStyle});
  }
  const kept=new Set(rendered.map(g=>g.key));
  for(const g of old?.groups??[])if(g.key!=='host'&&!kept.has(g.key))files.delete(pageName(old,g.key));
@@ -251,10 +260,12 @@ export function saveWebsiteFeed(store,siteId,options){
   const manifest=await store.current(siteId,expectedRevision),page=sitePage(manifest,path);
   const old=feedId==null?null:selectedFeed(manifest,feedId,path),feed=feedDefinition(options,old?.id??randomUUID());
   const renderer=makeFeedRenderer(feed,false,siteId,Boolean(page.draft));
-  const members=await enumerateFeedMembers(store,feed.criteria,{signal,admittedRows:renderer.admittedRows});
+  const members=await operationStage('feedScan',{unit:'records'},()=>enumerateFeedMembers(store,feed.criteria,{signal,admittedRows:renderer.admittedRows}));
   const groups=initialGroups(members,feed.pageSize,old?.groups);
-  const next=await materialize(store,manifest,old,{...feed,members},groups,position,signal,undefined,renderer);
-  return {...await store.present(await store.commit(next,{signal}),path,{signal}),feedId:feed.id};
+  const next=await operationStage('feedRender',{unit:'records',total:members.length},()=>materialize(store,manifest,old,{...feed,members},groups,position,signal,undefined,renderer));
+  return operationStage('feedCommit',{unit:'items',total:1},async()=>{
+   const saved=await store.present(await store.commit(next,{signal}),path,{signal});operationAdvance();return {...saved,feedId:feed.id};
+  });
  },{write:true,signal});
 }
 export function removeWebsiteFeed(store,siteId,{expectedRevision,path,feedId,signal}){

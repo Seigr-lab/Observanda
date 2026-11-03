@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {operationAdvance} from './operation-progress.js';
 import {researchId} from './web/research-reference.js';
 import {libraryQuery,matchesQuery,compareLibraryRows,libraryMatchRank} from './website-file-library-query.js';
 import {libraryStamp,checkLibraryStamp,scanEligibleWebsiteRows,indexedWebsiteRow} from './website-file-library.js';
@@ -35,6 +36,7 @@ export function enumerateFeedMembers(store,criteria,{signal,admittedRows}={}){
   const stamp=await libraryStamp(store);if(await siteHasPendingSources(store,{sources:[],feeds:[{criteria,members:[]}]},stamp.pending))throw new AppError('CONFLICT');
   const writer=admittedRows&&researchId(stamp.generation)?store.writerToken():null,result=[];let prefix,overlay;
   for await(const row of scanEligibleWebsiteRows(store,scope,stamp,{signal})){
+   operationAdvance(1,'feedScan');
    signal?.throwIfAborted();
    if(prefix!==row.id.slice(0,2)){prefix=row.id.slice(0,2);overlay=await feedRowShard(store,prefix,signal);}
    const live=overlay[row.id],current=live?.baseRevision===row.revision;

@@ -1,5 +1,6 @@
 import {feedItemEditor} from './website-feed-item-editor.js';
 import {websiteSearchChoices} from './website-files-picker-refinements.js';
+import {operationProgress} from './operation-progress-ui.js';
 
 const hasFilter=criteria=>Object.keys(criteria??{}).length>0;
 export function websiteFileFeeds({t,request,refresh,report}){
@@ -68,7 +69,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const blockPositions=blocks.map((text,i)=>new Option(t('feedBefore',{name:text,number:i+1}),String(i)));position.append(...blockPositions);
   position.add(new Option(t('pickerEnd'),'end'));
   const actions=el('footer',form),status=el('p',actions);status.setAttribute('role','status');
-  const remove=btn(actions,'feedRemove',()=>write(true));remove.classList.add('website-feed-remove');btn(actions,'cancel',cancel);
+  const remove=btn(actions,'feedRemove',()=>write(true));remove.classList.add('website-feed-remove');const cancelButton=btn(actions,'cancel',cancel);
   const apply=el('button',actions,t('feedSave'));apply.type='submit';apply.className='button primary';apply.dataset.feedApply='';
   let selected='',selectedCriteria=null,filterName='',cursors=[],after=null,dirty=false,loading=false,saving=false,searchEpoch=0;
   dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get(),arrangement:item.draft()}:null;
@@ -97,7 +98,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   direct.oninput=changeRule;
   function paint(){
    custom.hidden=template.value()!=='custom';filters.hidden=scope.value()!=='filtered';
-   remove.hidden=!selected;apply.disabled=loading||saving||(!filters.hidden&&!selectedCriteria);
+   remove.hidden=!selected;remove.disabled=loading||saving;cancelButton.disabled=saving;apply.disabled=loading||saving||(!filters.hidden&&!selectedCriteria);
    nav.hidden=cursors.length<2&&after===null;previous.disabled=cursors.length<2;next.disabled=after===null;
    status.hidden=!status.textContent;
   }
@@ -138,10 +139,11 @@ export function websiteFileFeeds({t,request,refresh,report}){
     if(position.value!=='keep')payload.position=['start','end'].includes(position.value)?position.value:{before:Number(position.value)};
    }
    saving=true;editing.disabled=list.disabled=true;paint();
+   const progress=deleting?null:operationProgress({host:body,stageText:t,title:()=>t('feedSave'),compact:true,disableControls:false});
    try{
-    const value=await request(deleting?'feed/remove':'feed/save',payload);
+    const value=await request(deleting?'feed/remove':'feed/save',payload,progress?{onProgress:progress.update}:undefined);
     if(current===dialog){close();refresh(value);}
-   }catch(error){fail(error);}finally{saving=false;editing.disabled=list.disabled=false;paint();}
+   }catch(error){fail(error);}finally{progress?.close();saving=false;editing.disabled=list.disabled=false;paint();}
   }
   form.onsubmit=e=>{e.preventDefault();void write(false).catch(fail);};
   form.oninput=e=>{if(e.target!==find)dirty=true;};form.onchange=paint;

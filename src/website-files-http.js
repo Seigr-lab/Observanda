@@ -5,6 +5,8 @@ import {WebsiteFilesCandidate} from './website-files-candidate.js';
 import {Publisher} from './publishing.js';
 import {websitePublicationMetadata} from './website-publication-metadata.js';
 import {rememberPublishTarget,websitePublishTarget} from './website-publish-target.js';
+import {operationResponse} from './operation-response.js';
+import {operationStage,operationAdvance} from './operation-progress.js';
 import {savedWebsiteSearches} from './website-saved-searches.js';
 import {LocalExport} from './local-export.js';
 import {LocalExportManifest} from './local-export-manifest.js';
@@ -39,6 +41,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
  const store=new WebsiteFileStore(workspace),operation=url.pathname.slice(prefix.length);
  const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
  const signal=controller.signal;
+ const observed=task=>req.headers?.accept==='application/x-ndjson'?operationResponse(req,res,task,json):task().then(json);
  const publisher=async siteId=>{
   const metadata=websitePublicationMetadata(await store.publicationWorkspace(siteId));
   return new Publisher(workspace.root,{...publisherOptions,workspace:metadata,authorizeCandidate:async candidate=>{
@@ -118,7 +121,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(['feed/read','feed/save','feed/remove'].includes(operation)){
    const {readWebsiteFeed,saveWebsiteFeed,removeWebsiteFeed}=await import('./website-dynamic-feeds.js');
    const run=operation==='feed/read'?readWebsiteFeed:operation==='feed/save'?saveWebsiteFeed:removeWebsiteFeed;
-   json(await run(store,siteId,{...options,expectedRevision,signal}));return true;
+   const task=()=>run(store,siteId,{...options,expectedRevision,signal});
+   if(operation==='feed/save')await observed(task);else json(await task());return true;
   }
   if(operation.startsWith('library/saved-searches/')){json(await savedWebsiteSearches(store,operation.slice('library/saved-searches/'.length),{...options,siteId,signal}));return true;}
   if(operation==='gallery/source-read'){json(await readSourceGallery(store,siteId,{...options,expectedRevision,signal}));return true;}
@@ -172,14 +176,19 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('folder/')){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const metadata=websitePublicationMetadata(await store.publicationWorkspace(siteId));
+   let candidate;
+   const savedCandidate=async()=>candidate??=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});
    const local=new LocalExport(metadata,{fileOwner:{locked:(_directory,task)=>store.withSite(siteId,expectedRevision,task),
     completed:plan=>rememberPublishTarget(metadata,'folder',plan.directory,plan.completedAt),candidate:async reviewId=>{
-    const value=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});if(value.reviewId!==reviewId)throw new AppError('STALE');await value.verify({signal});return value;
+    const value=await savedCandidate();if(value.reviewId!==reviewId)throw new AppError('STALE');
+    await operationStage('folderVerify',{unit:'files',total:value.files.size},()=>value.verify({signal,onFile:()=>operationAdvance()}));return value;
    }}});
-   if(operation==='folder/plan'){const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});json({...await local.plan({reviewId:candidate.reviewId,directory:options.directory}),currentReviewId:candidate.reviewId});}
+   if(operation==='folder/plan')await observed(()=>operationStage('folderCompare',{unit:'files'},async()=>{
+    const value=await savedCandidate();return {...await local.plan({reviewId:value.reviewId,directory:options.directory}),currentReviewId:value.reviewId};
+   }));
    else if(operation==='folder/page')json(await local.page({id:options.id,offset:options.offset}));
    else if(operation==='folder/discard')json(await local.discard({id:options.id}));
-   else if(operation==='folder/apply')json(await local.apply({id:options.id,reviewed:options.reviewed}));
+   else if(operation==='folder/apply')await observed(()=>operationStage('folderWrite',{unit:'files'},()=>local.apply({id:options.id,reviewed:options.reviewed})));
    else throw new AppError('NOT_FOUND');return true;
   }
   if(operation==='plan'||operation==='publish'){

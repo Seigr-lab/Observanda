@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {operationProgress} from './operation-progress-ui.js';
 
 const windowSize=6;
 const kinds=['added','replaced','removed','unchanged','conflict'];
@@ -22,7 +23,12 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
  const button=(key,op,disabled=false)=>'<button type="button" class="button'+(op==='apply'?' primary':'')+'" data-action="website-files-folder-'+op+'" '+(disabled?'disabled':'')+'>'+text(key)+'</button>';
  const pin=()=>({siteId:site().site.id,expectedRevision:site().site.revision});
  const matches=scope=>scope&&scope.siteId===site()?.site.id&&scope.expectedRevision===site().site.revision&&current();
- const command=(op,data,scope=pin())=>request('folder/'+op,{...scope,...data});
+ const command=async(op,data,scope=pin())=>{
+  const host=document.querySelector('[data-folder-review-panel]');
+  const progress=host&&['plan','apply'].includes(op)?operationProgress({host,stageText:key=>t('websiteFiles',key),title:()=>msg('changes'),compact:true,disableControls:false}):null;
+  try{return await request('folder/'+op,{...scope,...data},progress?{onProgress:progress.update}:undefined);}
+  finally{progress?.close();}
+ };
  const ready=()=>review&&page&&matches(review.scope)&&page.id===review.id&&page.reviewId===review.currentReviewId&&directory===page.directory&&!page.counts.conflict&&page.state!=='discarded'&&!(page.state==='completed'&&page.cleaned);
  const clearReview=()=>{epoch++;review=acknowledged=page=null;offset=0;};
  const focus=selector=>requestAnimationFrame(()=>document.querySelector('[data-folder-review-panel] '+selector)?.focus({preventScroll:true}));

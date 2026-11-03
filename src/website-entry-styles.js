@@ -6,6 +6,15 @@ import {attr,descendants} from './website-migration-views.js';
 import {displayId,displayMode} from './website-entry-display.js';
 import {menuCSS,hasEditorMenu} from './website-menu-styles.js';
 
+// A standalone publication page has a record-specific footer alignment.
+// The retained article has no such footer. Keep every rule when a template
+// actually contains that class, or when the sheet is not in the generated form.
+export function retainedArticleCSS(css,recordId,html){
+ if(!recordId||html.includes('site-footer')||!css.includes('@scope ([data-observanda-source])'))return css;
+ const rule=/\n\[data-page="entry:([0-9a-f-]{36})"\] \.site-footer\{--footer-text-align:(?:start|center|end|left|right|justify)\}\n\}$/u.exec(css);
+ return rule&&rule[1]===recordId?css.slice(0,rule.index)+'\n}':css;
+}
+
 // Zero-specificity defaults leave the site's typography, theme and authored
 // selectors in control. The same file is used by the editor and static pages.
 export const entryCSS=`:where(.website-entry-card,.website-entry-section){box-sizing:border-box;max-inline-size:100%;overflow-wrap:anywhere;margin-block:var(--card-gap,1rem);color:inherit}

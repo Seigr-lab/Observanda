@@ -1,4 +1,11 @@
 {
+  "feedScan": "Finding eligible entries",
+  "feedRender": "Rendering entries on website pages",
+  "feedCommit": "Saving the feed revision",
+  "folderVerify": "Verifying website files",
+  "folderCompare": "Comparing the destination folder",
+  "folderStage": "Staging website files",
+  "folderWrite": "Updating the published folder",
   "feedFigureLayout": "Layout of figures within each entry",
   "feedCapacity": "An entry and its layout are too large for one HTML page. Choose Compact card, use fewer fields in Custom design, or remove this feed before publishing.",
   "publishUpdate": "Publish update",

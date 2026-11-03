@@ -6,6 +6,7 @@ import {AppError} from './errors.js';
 import {projectPublication} from './publication-projection.js';
 import {publicationPage} from './publication-page.js';
 import {renderPublication,escapeHTML} from './publication.js';
+import {retainedArticleCSS} from './website-entry-styles.js';
 import {sourcePublicationRecord,sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {publicationPartAllowed} from './web/record-publication-privacy.js';
 import {proseDocument} from './web/prose-model.js';
@@ -108,7 +109,8 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  // page header, body typography and root variables must not restyle the website.
  let css=candidate.styles.fonts+'\n@scope ([data-observanda-source]) {\n'+[candidate.styles.common,candidate.styles.rich,...candidate.styles.blocks].join('\n')+'\n}';for(const [name,replacement] of assetPaths)css=css.split(name).join(replacement);
  const title='<section data-observanda-part="title"><h2>'+escapeHTML(record.title)+'</h2></section>';
- const output={visible:true,html:title+serializeOuter(article),css,assets};
+ const fragment=title+serializeOuter(article);
+ const output={visible:true,html:fragment,css:retainedArticleCSS(css,record.id,fragment),assets};
  if(channel==='pdf'){
   const page=context.entries[0],figures=page.figures.filter(figure=>!hasRetainedFigure(figure)&&validFigure(figure)),allowed=new Set(figures.map(figure=>figure.id));
   const images=page.attachments.filter(item=>item.kind==='image').map(item=>({id:item.id,path:assetPaths.get('media/'+item.id+'.png'),label:item.alt||item.caption||''}));
