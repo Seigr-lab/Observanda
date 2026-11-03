@@ -4,6 +4,7 @@ import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {attr,descendants} from './website-migration-views.js';
 import {displayId,displayMode} from './website-entry-display.js';
+import {menuCSS,hasEditorMenu} from './website-menu-styles.js';
 
 // Zero-specificity defaults leave the site's typography, theme and authored
 // selectors in control. The same file is used by the editor and static pages.
@@ -15,28 +16,29 @@ export const entryCSS=`:where(.website-entry-card,.website-entry-section){box-si
 :where(.website-entry-section>h2){margin-block:0 .55em}
 :where(.website-entry-section img,.website-entry-section video){max-inline-size:100%;height:auto}
 @media print{:where(.website-entry-card){break-inside:avoid}}
-`;
+`+menuCSS;
 export const entryStyleHash=createHash('sha256').update(entryCSS).digest('hex');
-export const entryStyleName='entry-display-'+entryStyleHash.slice(0,20)+'.css';
+export const entryStyleName='website-display-'+entryStyleHash.slice(0,20)+'.css';
 const marker='data-website-entry-stylesheet';
 export const usesEntryStyle=page=>Boolean(page?.placements.some(row=>row.display));
 export function styledPageHTML(html,page){
- if(!html.includes(displayId)&&!html.includes(marker))return {html,used:false};
+ if(!html.includes(displayId)&&!html.includes(marker)&&!html.includes('data-website-menu'))return {html,used:false,menu:false};
  const nodes=[...descendants(parse(html,{sourceCodeLocationInfo:true}))];
- const used=nodes.some(n=>n.tagName==='section'&&attr(n,displayId)!==undefined&&['card','section'].includes(attr(n,displayMode)));
+ const menu=hasEditorMenu(nodes),used=menu||nodes.some(n=>n.tagName==='section'&&attr(n,displayId)!==undefined&&['card','section'].includes(attr(n,displayMode)));
  const links=nodes.filter(n=>n.tagName==='link'&&attr(n,marker)!==undefined);
  const href=path.posix.relative(path.posix.dirname(page),entryStyleName);
- if(used&&links.length===1&&links[0].parentNode?.tagName==='head'&&attr(links[0],'href')===href&&attr(links[0],'rel')==='stylesheet'&&links[0].attrs.length===3)return {html,used};
+ if(used&&links.length===1&&links[0].parentNode?.tagName==='head'&&attr(links[0],'href')===href&&attr(links[0],'rel')==='stylesheet'&&links[0].attrs.length===3)return {html,used,menu};
  const head=nodes.find(n=>n.tagName==='head'),at=head?.sourceCodeLocation?.startTag?.endOffset??nodes.find(n=>n.tagName==='html')?.sourceCodeLocation?.startTag?.endOffset??nodes.find(n=>n.nodeName==='#documentType')?.sourceCodeLocation?.endOffset??0;
  const changes=links.map(n=>({start:n.sourceCodeLocation.startOffset,end:n.sourceCodeLocation.endOffset,text:''}));
  if(used)changes.push({start:at,end:at,text:'<link rel="stylesheet" href="'+href+'" '+marker+'="">'});
  for(const {start,end,text} of changes.sort((a,b)=>b.start-a.start))html=html.slice(0,start)+text+html.slice(end);
- return {html,used};
+ return {html,used,menu};
 }
 export async function syncEntryStyles(store,manifest,signal){
- const pages=manifest.pages.filter(usesEntryStyle),managed=manifest.files.filter(f=>f.entryDisplaySheet);
+ const files=new Map(manifest.files.map(f=>[f.name,f]));
+ const pages=manifest.pages.filter(p=>usesEntryStyle(p)||files.get(p.path)?.editorMenu),managed=manifest.files.filter(f=>f.entryDisplaySheet);
  if(!pages.length&&!managed.length)return manifest;
- const files=new Map(manifest.files.map(f=>[f.name,f])),draft=pages.every(p=>p.draft);
+ const draft=pages.every(p=>p.draft);
  const collision=files.get(entryStyleName);
  if(pages.length&&collision&&!collision.entryDisplaySheet)throw new AppError('CONFLICT');
  for(const sheet of managed)files.delete(sheet.name);

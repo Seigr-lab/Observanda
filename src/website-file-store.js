@@ -25,6 +25,7 @@ import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.j
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
+import {fileHasEditorMenu} from './website-menu-styles.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -165,12 +166,12 @@ export class WebsiteFileStore{
   return {name,blob,...saved,contentType:value?.contentType??contentType(name)};
  }
  async siteFile(id,name,value,{draft,signal}={}){
-  let used=false;
+  let used=false,editorMenu;
   if(name.endsWith('.html')&&typeof value==='string'){
-   const page=styledPageHTML(value,name);value=page.html;used=page.used;
+   const page=styledPageHTML(value,name);value=page.html;used=page.used;editorMenu=page.menu;
    if(Buffer.byteLength(value)>TEXT_LIMIT)throw new AppError('LIMIT');
   }
-  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{})};
+  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu})};
  }
  validBlob(file,id,sources){
   const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sources.some(item=>item.id===file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
@@ -275,7 +276,7 @@ export class WebsiteFileStore{
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
  async present(manifest,page='index.html',{signal}={}){
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
-  const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash&&usesEntryStyle(manifest.pages.find(p=>p.path===page));
+  const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash;
   return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
  }
  list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
@@ -344,22 +345,26 @@ export class WebsiteFileStore{
  withSite(id,revision,operation){return this.scope(async()=>{const manifest=await this.current(id,revision);return operation(this.site(manifest));},{write:true});}
  file(id,name,{revision,signal,editor=false}={}){return this.scope(async()=>{
   websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);
-  if(!descriptor&&name===entryStyleName&&manifest.pages.some(p=>(editor||!p.draft)&&usesEntryStyle(p))){
-   return {bytes:Buffer.from(entryCSS),contentType:'text/css; charset=utf-8',revision:manifest.revision,sha256:entryStyleHash,size:Buffer.byteLength(entryCSS)};
+  if(name===entryStyleName&&(!descriptor||descriptor.draft&&!editor)){
+   const files=new Map(manifest.files.map(f=>[f.name,f]));
+   for(const page of manifest.pages)if((editor||!page.draft)&&(usesEntryStyle(page)||await fileHasEditorMenu(this,files.get(page.path),signal))){
+    await this.current(id,manifest.revision);return {bytes:Buffer.from(entryCSS),contentType:'text/css; charset=utf-8',revision:manifest.revision,sha256:entryStyleHash,size:Buffer.byteLength(entryCSS)};
+   }
   }
   if(!descriptor||editor!==true&&(descriptor.draft||descriptor.picture&&!publicPictureNames(manifest).has(name)||descriptor.recording&&!publicRecordingNames(manifest).has(name)))throw new AppError('NOT_FOUND');
-  const legacy=descriptor.entryStyle!==entryStyleHash&&name.endsWith('.html')&&usesEntryStyle(manifest.pages.find(p=>p.path===name));
+  const legacy=descriptor.entryStyle!==entryStyleHash&&name.endsWith('.html')&&(usesEntryStyle(manifest.pages.find(p=>p.path===name))||await fileHasEditorMenu(this,descriptor,signal));
   const content=legacy?await StyledEntryPage.open(this,manifest,descriptor,signal):new WebsiteFileContent(this,id,manifest.revision,descriptor);
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:content.size,sha256:content.sha256};
  },{signal});}
  export(id,{expectedRevision,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
-  for(const file of manifest.files)if(!file.draft&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
-  const pages=manifest.pages.filter(p=>!p.draft&&usesEntryStyle(p));
-  if(pages.length){
+  for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
+  const descriptors=new Map(manifest.files.map(f=>[f.name,f]));
+  for(const page of manifest.pages){
+   if(page.draft)continue;const file=descriptors.get(page.path);
+   if(!usesEntryStyle(page)&&!await fileHasEditorMenu(this,file,signal))continue;
    if(!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
-   const descriptors=new Map(manifest.files.map(f=>[f.name,f]));
-   for(const page of pages){const file=descriptors.get(page.path);if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));}
+   if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));
   }
   return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};
  },{signal});}
