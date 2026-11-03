@@ -43,6 +43,7 @@ export async function indexWebsiteSource(store,source,html,signal,context){
  entries[source.id]=item;
  await store.writeControl(shardFile(source.id),entries,{signal});
  await store.writeControl(generation,randomUUID(),{signal});
+ return item;
 }
 // Called by the producer under the file writer. Enrich an existing projection
 // without recopying the entry, reopening its body or changing a website head.
@@ -96,11 +97,11 @@ async function census(store,scope,epoch,signal){
   await view.loading;return view;
  }
 }
-async function visitWindow(store,names,at,stamp,{signal,visit}){
+async function visitWindow(store,names,at,stamp,{signal,visit,carry}){
  let visited=0,older=0,groups=0,group=null,metadata;
  for(;at<names.length&&visited<scanLimit&&older<olderLimit;at++,visited++){
   signal?.throwIfAborted();const id=names[at];if(stamp.pending.has(id))continue;
-  if(group!==id.slice(0,2)){if(++groups>32)break;group=id.slice(0,2);metadata=await shard(store,id);}
+  if(group!==id.slice(0,2)){if(++groups>32)break;group=id.slice(0,2);metadata=carry?.key===group?carry.rows:await shard(store,id);if(carry){carry.key=group;carry.rows=metadata;}}
   let item=metadata[id];
   if(item===undefined||item&&item.searchVersion!==1){
    // Recover only approved fields from a saved fragment when its compact
@@ -127,6 +128,24 @@ async function visitWindow(store,names,at,stamp,{signal,visit}){
   if(visit(item)===false){at++;break;}
  }
  return at;
+}
+// A whole rule evaluation streams compact rows once, without repeatedly
+// searching the same shards for each successive sorted result page.
+export async function* scanEligibleWebsiteRows(store,scope,stamp,{signal}={}){
+ const view=await census(store,scope,stamp.generation,signal),carry={};
+ let at=0;
+ while(at<view.names.length){
+  const batch=[];
+  at=await visitWindow(store,view.names,at,stamp,{signal,carry,visit:row=>{batch.push(row);}});
+  yield* batch;
+ }
+}
+export async function indexedWebsiteRow(store,source,{signal}={}){
+ if(!source?.visible||source.target!=='website')return null;
+ const prior=(await shard(store,source.id))[source.id];
+ if(prior?.revision===source.revision&&prior.searchVersion===1)return prior;
+ const fragment=parseFragment(await store.readText(source.html,{signal}));
+ return {...describe(source,excerpt(fragment,source.title),prior??{}),...websiteSearchFields(fragment)};
 }
 async function sourceRows(store,names,stamp,signal){
  const ordered=[...names].sort(),rows=new Map();let at=0;
