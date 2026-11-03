@@ -49,7 +49,7 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
   const folder=page.directory.split(/[\\/]/).filter(Boolean).at(-1)??page.directory;
   const info='<div class="website-folder-summary"><div><h3 tabindex="-1" data-folder-heading>'+text('changes')+'</h3><p>'+text('folder')+' · <strong>'+esc(folder)+'</strong></p><p role="status">'+text(page.state,{done:page.applied,total:page.total})+'</p></div>'+
    '<ul aria-label="'+text('changes')+'">'+kinds.filter(kind=>counts[kind]||kind==='conflict').map(kind=>'<li data-file-change="'+kind+'" '+(counts[kind]?'data-present':'')+'>'+text(kind,{count:counts[kind]})+'</li>').join('')+'</ul></div>';
-  const pages=previous?[]:site().site.pages,list=page.files.slice(offset-page.offset,offset-page.offset+windowSize);
+  const pages=previous?[]:[...site().site.pages,...(site().site.feedPages??[])],list=page.files.slice(offset-page.offset,offset-page.offset+windowSize);
   const rows='<section class="website-folder-files"><h4 tabindex="-1" data-folder-list>'+text('files')+'</h4><ul>'+list.map(file=>fileRow(file,pages)).join('')+'</ul>'+
    (page.total>windowSize?'<div class="website-folder-pagination">'+button('previous','previous',offset===0)+'<span aria-live="polite">'+text('fileRange',{first:offset+1,last:offset+list.length,total:page.total})+'</span>'+button('next','next',offset+list.length>=page.total)+'</div>':'')+'</section>';
   const examples=page.files.flatMap((file,i)=>file.kind==='conflict'?[{file,i}]:[]).slice(0,3);
@@ -64,7 +64,7 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
   if(page&&(page.state!==value.state||page.reviewId!==value.reviewId||page.directory!==value.directory||value.counts.conflict))acknowledged=null;
   page=value;offset=at;return true;
  }
- return {view,reset(){session++;native=false;directory='';clearReview();},async loadChooser(){
+ return {view,reset(initialDirectory=''){session++;native=false;directory=initialDirectory;clearReview();},async loadChooser(){
   const token=session,scope=pin();let capability;
   try{capability=await command('chooser',{},scope);}catch(error){if(['ACCESS_LOCKED','AUTH'].includes(error.code))throw error;return;}
   if(token===session&&matches(scope)&&capability?.mode==='native'){native=true;render();}

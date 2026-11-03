@@ -43,6 +43,7 @@ export class LocalExport {
    await this.workspace.writeMetadata(planFile(plan.id),serialize(plan));
    if(owner)await this.workspace.writeMetadata(ownerFile(plan.directory),serialize(owner));
    await this.workspace.writeMetadata(reviewFile(plan.reviewId),serialize({id:plan.id}));
+   if(owner&&plan.state==='completed'&&!plan.cleaned)await this.fileOwner?.completed?.(plan);
   }));
  }
  async directory(value){

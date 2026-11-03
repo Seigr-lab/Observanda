@@ -61,11 +61,37 @@ test('GitHub destination review, ownership and upload use the file revision with
   const publisherOptions={request:remote.request,connection:{summary:async()=>({connected:true}),token:async()=>'synthetic_session_secret_1234567890'}};
   const call=async(operation,options={})=>{let result;await websiteFilesHttp({method:'POST'},new EventEmitter(),{url:new URL('/api/website-files/'+operation,'http://localhost'),workspace,publisherOptions,body:async()=>({siteId,expectedRevision,...options}),check:async()=>{},json:value=>{result=value;}});return result;};
   const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:true});
-  const saved=await call('destination/save',{config,etag:'new'});const reviewed=await call('plan',{configEtag:saved.etag});
+  assert.deepEqual(await call('publish-target'),{kind:'choose'});
+  const saved=await call('destination/save',{config,etag:'new'});
+  const selected=await call('publish-target');assert.equal(selected.kind,'remote');assert.equal(selected.destination.etag,saved.etag);
+  const reviewed=await call('plan',{configEtag:saved.etag});
   const page=await call('plan/page',{configEtag:saved.etag,id:reviewed.id,kind:'added',offset:0});assert.ok(page.items.includes('index.html'));
   await assert.rejects(call('publish',{configEtag:saved.etag,destinationReviewed:true}),{code:'PUBLISH_STALE'});
   await assert.rejects(call('publish',{configEtag:saved.etag,destinationReview:reviewed.id,destinationReviewed:false}),{code:'PUBLISH_STALE'});
   const {receipt}=await call('publish',{configEtag:saved.etag,destinationReview:reviewed.id,destinationReviewed:true});assert.equal(receipt.status,'uploaded-awaiting-pages');
   assert.ok(remote.blobs.has(sha('blob',Buffer.from(initial.html))));assert.ok(remote.blobs.has(sha('blob',Buffer.from(initial.css))));
+ }finally{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true});}
+});
+
+test('SSH update review pages the exact outgoing files without connecting to the destination',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'obs-site-ssh-'));await mkdir(path.join(root,'.observanda'));
+ try{
+  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace);
+  workspace.catalogue=()=>assert.fail('SSH review opened research');
+  const siteId=randomUUID(),html='<!doctype html><html><body><main>Lab release</main></body></html>';
+  const files=new Map([['index.html',html],['style.css','']]);
+  for(let i=0;i<34;i++)files.set('assays/'+i+'.html',html);
+  const page=await store.importFiles(siteId,{name:'Research',files}),expectedRevision=page.site.revision;
+  const call=async(operation,options={})=>{let result;await websiteFilesHttp({method:'POST'},new EventEmitter(),{
+   url:new URL('/api/website-files/'+operation,'http://localhost'),workspace,check:async()=>{},
+   publisherOptions:{request:()=>assert.fail('Review contacted a remote service')},body:async()=>({siteId,expectedRevision,...options}),json:value=>{result=value;},
+  });return result;};
+  const config=defaultPublishing();config.kind='ssh';Object.assign(config.ssh,{host:'host.example',user:'research',directory:'/srv/atlas'});
+  const saved=await call('destination/save',{config,etag:'new'}),configEtag=saved.etag;
+  assert.equal((await call('publish-target')).destination.config.kind,'ssh');
+  const plan=await call('plan',{configEtag});assert.equal(plan.included.length,32);
+  const next=await call('plan/page',{configEtag,id:plan.id,kind:'included',offset:plan.windows.included.next});
+  assert.deepEqual([...plan.included,...next.items].sort(),[...files.keys(),'publication.json'].sort());assert.equal(next.next,null);
+  await assert.rejects(call('plan/page',{configEtag,id:randomUUID(),kind:'included',offset:32}),{code:'PUBLISH_STALE'});
  }finally{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true});}
 });

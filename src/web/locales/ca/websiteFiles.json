@@ -1,4 +1,6 @@
 {
+  "publishUpdate": "Publica l’actualització",
+  "choosePublishTarget": "Trieu on voleu publicar aquest lloc web. Podreu revisar la destinació i els canvis als fitxers abans d’enviar-los.",
   "pickerManageSearch": "Gestiona la cerca",
   "pickerRenameSearch": "Canvia el nom",
   "pickerReplaceFilters": "Utilitza els filtres actuals",

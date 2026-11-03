@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {starterPage,starterStyles} from './web/website-file-starter.js';
 import {readFile} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -281,8 +282,10 @@ export class WebsiteFileStore{
   return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
  }
  list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
- create({id=randomUUID(),name,html,css='',signal}={}){
-  name=title(name);html??='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeWebsiteText(name)+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+escapeWebsiteText(name)+'</h1></main></body></html>';
+ create({id=randomUUID(),name,html,css,language,signal}={}){
+  name=title(name);
+  css??=html==null?starterStyles:'';
+  html??=starterPage({title:name,stylesheet:'style.css',language},escapeWebsiteText);
   return this.importFiles(id,{name,files:new Map([['index.html',html],['style.css',css]]),signal});
  }
  importFiles(id,{name,files,draftFiles=new Map(),expectedRevision,signal,onFile}={}){return this.scope(async()=>{

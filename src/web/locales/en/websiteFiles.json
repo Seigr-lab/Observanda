@@ -1,4 +1,6 @@
 {
+  "publishUpdate": "Publish update",
+  "choosePublishTarget": "Choose where to publish this website. You will review the destination and file changes before sending them.",
   "pickerManageSearch": "Manage search",
   "pickerRenameSearch": "Rename search",
   "pickerReplaceFilters": "Use current filters",

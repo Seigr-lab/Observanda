@@ -1,4 +1,6 @@
 {
+  "publishUpdate": "Publiser oppdatering",
+  "choosePublishTarget": "Velg hvor nettstedet skal publiseres. Du får se mål og filendringer før du sender dem.",
   "pickerManageSearch": "Administrer søk",
   "pickerRenameSearch": "Gi søket nytt navn",
   "pickerReplaceFilters": "Bruk gjeldende filtre",

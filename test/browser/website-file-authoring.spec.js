@@ -8,6 +8,25 @@ const savedSite={id,name:'Recovered site',revision:'c'.repeat(64),cssPath:'style
 const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><html><body><main><h1>Original saved home</h1></main></body></html>'};
 const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
 
+test('publish update shows the configured SSH site and its reviewed files before enabling transfer',async({page})=>{
+ const transfers=[],config={kind:'ssh',ssh:{host:'lab.example',directory:'/srv/atlas'}};
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([savedSite],{state:'ready'});
+  if(route.endsWith('/open'))return savedPage;
+  if(route.endsWith('/version'))return {revision:savedSite.revision};
+  if(route.endsWith('/publish-target'))return {kind:'remote',destination:{config,etag:'selected'}};
+  if(route.endsWith('/plan'))return {id:'review-id',included:['index.html'],counts:{included:1},windows:{included:{offset:0,next:null}}};
+  if(route.endsWith('/publish')){transfers.push(data);return {receipt:{status:'published'}};}
+  throw Error('Unexpected route '+route);
+ });
+ await mountFilesEditor(page);await page.getByRole('button',{name:'Publish update',exact:true}).click();
+ const review=page.locator('[data-website-files-review]'),send=review.getByRole('button',{name:'Publish website'});
+ await expect(review).toContainText('lab.example:/srv/atlas');await review.locator('summary').click();
+ await expect(review.getByText('index.html',{exact:true})).toBeVisible();await expect(send).toBeDisabled();
+ expect(transfers).toHaveLength(0);await review.getByRole('checkbox').check();await expect(send).toBeEnabled();
+ await send.click();await expect.poll(()=>transfers.length).toBe(1);expect(transfers[0]).toMatchObject({siteId:savedSite.id,expectedRevision:savedSite.revision,configEtag:'selected',destinationReview:'review-id',destinationReviewed:true});
+});
+
 test('a pending grant hides the page and open review, then restores the current draft after cancellation',async({page})=>{
  let pending=false;
  await page.exposeFunction('filesAPI',route=>{
