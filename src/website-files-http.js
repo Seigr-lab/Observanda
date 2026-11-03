@@ -153,8 +153,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
   if(operation==='media/library'){json(await websiteRecordingLibrary(store,siteId,{...options,expectedRevision,signal}));return true;}
-  if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,signal}));return true;}
-  if(operation==='menu/save'){json(await store.saveMenu(siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,menuId:options.menuId,signal}));return true;}
+  if(operation==='menu/save'){await observed(()=>operationStage('menuSave',{unit:'files'},()=>store.saveMenu(siteId,{...options,expectedRevision,signal})));return true;}
   if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}
   if(operation==='save'){
    if(Object.hasOwn(options,'recordings')||Object.hasOwn(options,'receivePictures'))throw new AppError('INVALID');

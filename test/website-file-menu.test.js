@@ -17,6 +17,35 @@ async function fixture(t){
  return {store:new WebsiteFileStore(workspace),id:randomUUID(),workspace};
 }
 const item=(label,href,children=[])=>({key:null,label,href,children});
+test('shared authoring updates the existing primary navigation even when converted pages started with different links',async t=>{
+ const {store,id}=await fixture(t);
+ const page=links=>'<html><body><div class="site-top"><nav aria-label="Website">'+links+'</nav></div><main><nav class="page-contents"><a href="#method">In this chapter</a></nav><h1 id="method">Methods</h1></main></body></html>';
+ const initial=await store.importFiles(id,{name:'Protocols',files:new Map([['index.html',page('<a href="index.html">Home</a><a href="notes.html">Notes</a>')],['notes.html',page('<a href="index.html">Back</a>')],['style.css','']])});
+ const base=await store.menu(id,{expectedRevision:initial.site.revision});base.items[1].label='Field notes';
+ const saved=await store.saveMenu(id,{expectedRevision:initial.site.revision,path:'notes.html',items:base.items});
+ assert.equal(saved.html.match(/<nav\b/g).length,2);assert.match(saved.html,/<nav class="page-contents"><a href="#method">In this chapter<\/a><\/nav>/);
+ assert.deepEqual(readWebsiteMenu(saved.html,'notes.html').items.map(i=>i.label),['Home','Field notes']);
+});
+test('named navigation is created, moved, inherited and removed independently of the main menu',async t=>{
+ const {store,id}=await fixture(t),menuId=randomUUID(),nested='methods/index.html';
+ const html=prefix=>'<html><body><header><nav aria-label="Website"><a href="'+prefix+'index.html">Overview</a></nav></header><main>Retained writing</main><footer><small>Laboratory</small></footer></body></html>';
+ const imported=await store.importFiles(id,{name:'Methods',files:new Map([['index.html',html('')],[nested,html('../')],['style.css','']])});
+ const edit={menuId,name:'Research protocols',position:'footer',path:nested,items:[item('Methods',nested)]};
+ const first=await store.saveMenu(id,{...edit,create:true,expectedRevision:imported.site.revision});
+ assert.match(first.html,/<footer><small>Laboratory<\/small><nav[^>]+aria-label="Research protocols"/);
+ assert.match(first.html,/href="index.html" aria-current="page">Methods/);assert.deepEqual(readWebsiteMenu(first.html,nested).items.map(i=>i.label),['Overview']);
+ await assert.rejects(store.saveMenu(id,{...edit,create:true,expectedRevision:first.site.revision}),{code:'CONFLICT'});
+ const fresh=await store.save(id,{path:'protocols/new.html',html:'<html><body><main>New study</main></body></html>',css:'',expectedRevision:first.site.revision});
+ assert.equal(readWebsiteMenu(fresh.html,fresh.path,[],menuId).items[0].href,nested);
+ const {menus,items}=await store.menu(id,{expectedRevision:fresh.site.revision,menuId});assert.deepEqual(menus,[{id:menuId,name:edit.name,position:'footer'}]);
+ const updated=await store.saveMenu(id,{...edit,name:'Lab navigation',position:'header',items,expectedRevision:fresh.site.revision});
+ assert.match(updated.html,/<\/nav><nav[^>]+aria-label="Lab navigation"/);assert.match(updated.html,/<footer><small>Laboratory<\/small><\/footer>/);
+ const removed=await store.saveMenu(id,{...edit,remove:true,items:[],expectedRevision:updated.site.revision});
+ for(const name of ['index.html',nested,'protocols/new.html']){
+  const page=await store.open(id,{path:name});assert.doesNotMatch(page.html,/data-website-menu-id/);assert.deepEqual(readWebsiteMenu(page.html,name).items.map(i=>i.label),['Overview']);
+ }
+ await assert.rejects(store.menu(id,{expectedRevision:removed.site.revision,menuId}),{code:'NOT_FOUND'});
+});
 test('shared saved navigation preserves custom markup, nesting, page-relative links and an atomic site revision',async t=>{
  const {store,id}=await fixture(t),sub='pages/team.html';
  const page=prefix=>'<!doctype html><html><head><title>Team</title></head><body><div class="site-top"><a class="brand" href="'+prefix+'index.html">Lab</a><nav aria-label="Website"><ul class="site-menu custom"><li class="original"><a class="author" href="'+prefix+'index.html"><strong>Home</strong></a><details class="site-submenu"><summary>▼</summary><ul class="site-menu"><li><a href="'+prefix+sub+'">Team</a></li></ul></details></li></ul><a data-book-index href="'+prefix+'browse.html">Browse</a></nav></div><main>Unrelated &amp; intact</main><nav class="page-contents"><a href="#notes">Notes</a></nav></body></html>';

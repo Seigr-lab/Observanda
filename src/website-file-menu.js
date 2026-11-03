@@ -42,9 +42,22 @@ function sourceTree(container,page,prior,byKey,prefix=''){
  }
  return result;
 }
-export function readWebsiteMenu(html,page,placements=[]){
- const document=parse(html,{sourceCodeLocationInfo:true}),nodes=[...descendants(document)],navs=nodes.filter(node=>node.tagName==='nav');
- const candidates=[...new Set([
+export function menuDocument(html){return parse(html,{sourceCodeLocationInfo:true});}
+function authoredNav(node){
+ for(let n=node;n;n=n.parentNode)if(['data-observanda-source','data-observanda-part','data-website-instance','data-website-feed','data-website-source-gallery'].some(key=>has(n,key)))return false;
+ return true;
+}
+export function namedWebsiteMenus(document){
+ const menus=new Map();
+ for(const nav of descendants(document))if(nav.tagName==='nav'&&has(nav,'data-website-menu-id')&&authoredNav(nav)){
+  const id=attr(nav,'data-website-menu-id');if(menus.has(id))throw new AppError('FORMAT');
+  menus.set(id,{id,name:attr(nav,'aria-label'),position:attr(nav,'data-website-menu-position'),nav});
+ }
+ return menus;
+}
+export function readWebsiteMenu(html,page,placements=[],id=null){
+ const document=typeof html==='string'?menuDocument(html):html,nodes=[...descendants(document)],navs=nodes.filter(node=>node.tagName==='nav'&&authoredNav(node)&&!has(node,'data-website-menu-id'));
+ const candidates=id?[namedWebsiteMenus(document).get(id)?.nav].filter(Boolean):[...new Set([
   ...navs.filter(n=>has(n,'data-website-menu')),
   ...navs.filter(n=>attr(n,'aria-label')==='Website'||hasClass(n.parentNode,'site-top')),
   ...navs.filter(n=>children(n).some(child=>list(child)&&hasClass(child,'site-menu'))),
@@ -56,9 +69,10 @@ export function readWebsiteMenu(html,page,placements=[]){
   const byKey=new Map(),siblings=container===nav?[]:children(nav).filter(node=>node.tagName==='a');
   const entries=siblings.length?{childNodes:children(nav).flatMap(node=>node===container?children(node):node.tagName==='a'?[node]:[])}:container;
   const items=sourceTree(entries,page,prior,byKey);
-  if(items)return {document,nav,container,page,byKey,items,siblings};
+  if(items)return {document,nav,container,page,byKey,items,siblings,id};
  }
- return {document,page,byKey:new Map(),items:[]};
+ if(id&&candidates.length)throw new AppError('FORMAT');
+ return {document,page,byKey:new Map(),items:[],id};
 }
 function checkHref(href,pages){
  if(typeof href!=='string'||!href||href.length>4096||href.trim()!==href||href.startsWith('/')||/[\u0000-\u001f\\]/.test(href))fail();
@@ -94,7 +108,10 @@ export function menuTargetOwner(html){
 function sameMenu(base,local){
  if(!local.nav)return false;
  if(base.byKey.size!==local.byKey.size)return false;
- for(const [key,original] of base.byKey){const other=local.byKey.get(key);if(!other||original.href!==other.href||managed(original.link)!==managed(other.link))return false;}
+ for(const [key,original] of base.byKey){
+  const other=local.byKey.get(key);
+  if(!other||original.href!==other.href||original.blocked!==other.blocked||['data-observanda-source','data-observanda-link'].some(key=>attr(original.link,key)!==attr(other.link,key)))return false;
+ }
  return true;
 }
 function rename(link,label){
@@ -124,16 +141,20 @@ function cloneAt(node,from,to){
 }
 // Rewrite only the primary menu. Unrecognized custom navigation and neighboring
 // controls (such as the published research browser) keep their original bytes.
-export function writeWebsiteMenu(html,page,previous,base,items,owners){
- const local=readWebsiteMenu(html,page,previous),match=sameMenu(base,local),owned=local.nav&&has(local.nav,'data-website-menu');
- const existing=match||owned?local:null,prior=[...previous],keys=new Set(prior.filter(item=>item.link).map(item=>item.link));
+export function writeWebsiteMenu(html,page,previous,base,items,owners,definition=null){
+ const local=readWebsiteMenu(html,page,previous,base.id),match=sameMenu(base,local),owned=local.nav&&has(local.nav,'data-website-menu');
+ const primary=local.nav&&(attr(local.nav,'aria-label')==='Website'||hasClass(local.nav.parentNode,'site-top')||hasClass(local.container,'site-menu'));
+ const existing=match||owned||primary?local:null,prior=[...previous],keys=new Set(prior.filter(item=>item.link).map(item=>item.link));
  let sequence=0;
  function assign(link,target){
   let key;do{key=String(++sequence);}while(keys.has(key));keys.add(key);put(link,'data-observanda-link-key',key);
   prior.push({link:key,href:target});
  }
  function row(item,index,flat=false){
-  const localRow=existing?.byKey.get(item.key),original=localRow??base.byKey.get(item.key);
+  const reference=base.byKey.get(item.key),sameSlot=existing?.byKey.get(item.key);
+  // A page may have had a different primary menu before it was shared.
+  // Position alone never transfers another link's label, grants or attributes.
+  const localRow=match?sameSlot:null,original=localRow??reference;
   const to=relative(page,original?.blocked?original.href:item.href),owner=owners.get(item.href);
   const previousOwner=original&&(attr(original.link,'data-observanda-source')??attr(original.link,'data-observanda-link'));
   const replacesOwner=previousOwner&&owner&&owner.id!==previousOwner;
@@ -183,19 +204,45 @@ export function writeWebsiteMenu(html,page,previous,base,items,owners){
   const loc=existing.container.sourceCodeLocation;
   const content=list(existing.container)||flat?asHTML:'<ul class="site-menu">'+asHTML+'</ul>';
   const changes=[{start:loc.startTag.endOffset,end:loc.endTag.startOffset,value:content}];
+  if(!has(existing.nav,'data-website-menu')){
+   const insert=existing.nav.sourceCodeLocation.startTag.endOffset-1;
+   changes.push({start:insert,end:insert,value:' data-website-menu=""'});
+  }
   if(existing.siblings?.length){
    for(const node of existing.siblings){const {startOffset:start,endOffset:end}=node.sourceCodeLocation;changes.push({start,end,value:''});}
    changes.push({start:loc.startOffset,end:loc.startOffset,value:before.map(serializeOuter).join('')},
     {start:loc.endOffset,end:loc.endOffset,value:after.map(serializeOuter).join('')});
   }
   for(const change of changes.sort((a,b)=>b.start-a.start||b.end-a.end))html=html.slice(0,change.start)+change.value+html.slice(change.end);
+  if(base.id&&definition){
+   const updated=readWebsiteMenu(html,page,previous,base.id).nav,loc=updated.sourceCodeLocation;
+   const moved=attr(updated,'data-website-menu-position')!==definition.position;
+   put(updated,'aria-label',definition.name);put(updated,'data-website-menu-position',definition.position);
+   const markup=serializeOuter(updated);
+   html=html.slice(0,loc.startOffset)+(moved?'':markup)+html.slice(loc.endOffset);
+   if(moved)html=placeNamedMenu(html,markup,definition.position);
+  }
   return {html,prior};
  }
- if(!items.length)return {html,prior};
+ if(!items.length&&!base.id)return {html,prior};
  const body=[...descendants(local.document)].find(node=>node.tagName==='body'),nodes=children(body),main=nodes.find(node=>node.tagName==='main');
  const at=main?.sourceCodeLocation?.startOffset??body.sourceCodeLocation?.startTag?.endOffset??nodes[0]?.sourceCodeLocation?.startOffset??0;
  const nav=base.nav?clone(base.nav):fragment('<nav aria-label="Website"></nav>');put(nav,'data-website-menu','');
  if(flat)inner(nav,rows);
  else{const ul=list(base.container)?clone(base.container):fragment('<ul class="site-menu"></ul>');inner(ul,rows);inner(nav,[...before,ul,...after]);}
+ if(base.id){
+  put(nav,'data-website-menu-id',base.id);put(nav,'aria-label',definition.name);put(nav,'data-website-menu-position',definition.position);
+  return {html:placeNamedMenu(html,serializeOuter(nav),definition.position),prior};
+ }
  return {html:html.slice(0,at)+serializeOuter(nav)+html.slice(at),prior};
+}
+function placeNamedMenu(html,nav,position){
+ const doc=menuDocument(html),body=[...descendants(doc)].find(n=>n.tagName==='body'),nodes=children(body);
+ const area=[...descendants(body)].find(node=>{
+  if(node.tagName!==position&&!(position==='header'&&hasClass(node,'site-top')))return false;
+  for(let p=node;p&&p!==body;p=p.parentNode)if(['main','article','section','aside','nav'].includes(p.tagName)||has(p,'hidden'))return false;
+  return authoredNav(node);
+ }),loc=area?.sourceCodeLocation?.endTag;
+ const at=loc?.startOffset??(position==='footer'?(body.sourceCodeLocation?.endTag?.startOffset??nodes.at(-1)?.sourceCodeLocation?.endOffset??html.length):(body.sourceCodeLocation?.startTag?.endOffset??nodes[0]?.sourceCodeLocation?.startOffset??0));
+ return html.slice(0,at)+nav+html.slice(at);
 }

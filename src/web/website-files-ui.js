@@ -18,6 +18,7 @@ import {websiteFilesComponents} from './website-files-components.js';
 import {websiteFilesRecordings} from './website-files-recordings.js';
 import {suggestedPagePath,websiteFilesPages} from './website-files-pages.js';
 import {websiteFilesMenu} from './website-files-menu.js';
+import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
 import {websitePlacementDrag} from './website-files-placement-drag.js';
 import {websiteSourceGallery} from './website-files-source-gallery.js';
@@ -82,7 +83,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const previewPages=()=>[...opened.site.pages,...(opened.site.feedPages??[])];
  const gallery=websiteFilesGallery({t:tr,esc,path:()=>opened.path,url:baseURL,read:()=>websiteHTML(html),update:doc=>{html=serializeWebsiteHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
  const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
- const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
+ const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
+ async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
  const components=websiteFilesComponents({request,tr,esc,site:()=>opened,selected:()=>selected,save,adopt,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -366,6 +368,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const newer=html!==submitted.html||css!==submitted.css;if(newer){opened=value;stale=false;error='';changed();}else{adopt(value);gallery.reset();if(mode==='gallery')gallery.open(selected);}
   return value;
  }
+ async function saveAuthoring(){
+  if(figures.dirty())await figures.action('apply');
+  if(menu.dirty())await menu.save();
+  if(pagesPanel.dirty())await pagesPanel.save();
+  await save();
+ }
  async function beforeLeave(fromAction=false){
   if(busy&&!fromAction)return false;
   if(recordings.dirty()){if(!confirm(tr('recordingDiscard')))return false;recordings.reset();}
@@ -532,10 +540,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function movable(node){return movableWebsiteLayer(node);}
  function bind(){
   visual?.destroy();visual=null;
-  for(const name of ['website-files','website-files-visual','website-files-hierarchy']){
+  for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
   hierarchy.bindHost(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  if(mode==='menu')menu.bind();
   const preview=document.getElementById('website-files-preview');
   if(preview){
    const entry=trail[step]??{path:opened.path,hash:''};
@@ -559,13 +568,18 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
    visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,
+    menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
     beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{
     selected=item?.path??null;hierarchy.selection(selected);components.selection();
     const control=inspector.parentElement.querySelector('[data-placement-context]');
     if(control)control.hidden=!presentationBlock(blockAt(doc,selected));
     const feedControl=inspector.parentElement.querySelector('[data-feed-context]');
     if(feedControl)feedControl.hidden=!blockAt(doc,selected)?.closest('[data-website-feed]');
+    const nav=menuCanvasTarget(blockAt(doc,selected)),menuControl=inspector.parentElement.querySelector('[data-menu-context]');
+    if(menuControl){menuControl.hidden=!nav;menuControl.dataset.menuId=nav?.dataset.websiteMenuId??'';inspector.hidden=Boolean(nav);}
    }});
+   inspector.parentElement.querySelector('[data-menu-context]')?.remove();
+   inspector.insertAdjacentHTML('beforebegin',button('menuEdit','menu','data-menu-context hidden'));
    inspector.parentElement.querySelector('[data-placement-context]')?.remove();
    inspector.insertAdjacentHTML('beforebegin',button('placementTitle','presentation','data-placement-context hidden'));
    inspector.parentElement.querySelector('[data-feed-context]')?.remove();
@@ -646,7 +660,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(mode==='pages'&&pagesPanel.dirty()&&!operation.startsWith('pages-')&&operation!=='discard')await pagesPanel.save();
    if(mode==='menu'&&menu.dirty()&&!operation.startsWith('menu-')&&operation!=='discard')await menu.save();
 
-   if(operation==='save'){if(figures.dirty())await figures.action('apply');if(menu.dirty())await menu.save();if(pagesPanel.dirty())await pagesPanel.save();await save();render();}
+   if(operation==='save'){await saveAuthoring();render();}
    else if(operation==='undo'||operation==='redo'){
     const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;
     if(from.length){to.push(historyEntry());const prior=from.pop();({html,css}=prior);
@@ -668,7 +682,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='form-cancel'){form=null;render();}
    else if(operation==='pages'){if(await beforeLeave(true)){mode='pages';pagesPanel.open();}}
    else if(operation.startsWith('pages-'))await pagesPanel.handle(operation,element);
-   else if(operation==='menu'){if(await beforeLeave(true)){await menu.open();mode='menu';render();}}
+   else if(operation==='menu')await openMenu(element.dataset.menuId||null);
    else if(operation.startsWith('menu-'))await menu.handle(operation,element);
    else if(operation.startsWith('picker-'))await picker.action(operation,element);
    else if(operation.startsWith('component-'))await components.action(operation,element);
@@ -771,5 +785,5 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();
  });return true;}
- return {load,clear,view,bind,checkVersion:poll,action,input,submit,save:()=>run(()=>figures.dirty()?figures.action('apply'):save(),'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
+ return {load,clear,view,bind,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
 }

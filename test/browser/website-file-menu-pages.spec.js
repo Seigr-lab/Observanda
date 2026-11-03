@@ -33,9 +33,9 @@ test('an author finds a public page by title or folder and saves the exact menu 
   const menu=page.getByRole('region',{name:'Website menu',exact:true});
   await menu.getByRole('button',{name:'Add menu item'}).press('Enter');
   await menu.getByLabel('Menu label',{exact:true}).fill('Southern protocol');
-  await expect(menu.locator('option,[data-menu-path]')).toHaveCount(0);
+  await expect(menu.locator('.website-menu-pages option,[data-menu-path]')).toHaveCount(0);
   const choose=menu.getByRole('button',{name:'Choose a page'});await choose.press('Enter');
-  const find=menu.getByRole('searchbox'),rows=menu.locator('[data-menu-path]');await expect(find).toBeFocused();
+  const find=menu.locator('[data-menu-page-search]'),rows=menu.locator('[data-menu-path]');await expect(find).toBeFocused();
   await expect(rows).toHaveCount(40);await expect(menu.getByRole('status')).toHaveText('1–40 of 93 pages');
   await menu.getByRole('button',{name:'Next pages'}).press('Enter');await expect(rows.first()).toBeFocused();
   await menu.getByRole('button',{name:'Next pages'}).press('Enter');await expect(rows).toHaveCount(13);
