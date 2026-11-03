@@ -24,6 +24,7 @@ import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from 
 import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
+import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -89,6 +90,27 @@ export class WebsiteFileContent extends FileContent{
  verifyMetadata(options){return this.verify(options);}
 }
 
+// An older saved revision has no generated stylesheet. Its read-only preview
+// and export use the same transformation as a subsequent explicit file save.
+class StyledEntryPage extends WebsiteFileContent{
+ static async open(store,site,descriptor,signal){
+  const content=new StyledEntryPage(store,site.id,site.revision,descriptor);
+  const bytes=await content.render(signal);content.size=bytes.length;content.sha256=hash(bytes);return content;
+ }
+ async render(signal){
+  return this.store.scope(async()=>{
+   await this.store.current(this.siteId,this.revision);
+   const raw=await this.store.readText(this.descriptor,{signal});
+   const bytes=Buffer.from(styledPageHTML(raw,this.descriptor.name).html);
+   await this.store.current(this.siteId,this.revision);return bytes;
+  },{signal});
+ }
+ async *read(start=0,end=this.size-1,{signal}={}){
+  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start||end>=this.size)throw new AppError('INVALID');
+  const bytes=await this.render(signal);if(bytes.length!==this.size||hash(bytes)!==this.sha256)throw new AppError('MEDIA_INVALID');
+  yield bytes.subarray(start,end+1);
+ }
+}
 export class WebsiteFileStore{
  constructor(workspace){this.workspace=workspace;}
  absolute(relative){return path.join(this.workspace.root,...relative.split('/'));}
@@ -143,7 +165,12 @@ export class WebsiteFileStore{
   return {name,blob,...saved,contentType:value?.contentType??contentType(name)};
  }
  async siteFile(id,name,value,{draft,signal}={}){
-  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return draft?{...file,draft:true}:file;
+  let used=false;
+  if(name.endsWith('.html')&&typeof value==='string'){
+   const page=styledPageHTML(value,name);value=page.html;used=page.used;
+   if(Buffer.byteLength(value)>TEXT_LIMIT)throw new AppError('LIMIT');
+  }
+  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{})};
  }
  validBlob(file,id,sources){
   const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sources.some(item=>item.id===file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
@@ -218,6 +245,7 @@ export class WebsiteFileStore{
  }
  site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
+  manifest=await syncEntryStyles(this,manifest,signal);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){
    const refs=new Map(manifest.sources.map(row=>[row.id,row]));
@@ -247,7 +275,8 @@ export class WebsiteFileStore{
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
  async present(manifest,page='index.html',{signal}={}){
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
-  return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:await this.readText(selected,{signal}),css:css?await this.readText(css,{signal}):''};
+  const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash&&usesEntryStyle(manifest.pages.find(p=>p.path===page));
+  return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
  }
  list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
  create({id=randomUUID(),name,html,css='',signal}={}){
@@ -315,13 +344,23 @@ export class WebsiteFileStore{
  withSite(id,revision,operation){return this.scope(async()=>{const manifest=await this.current(id,revision);return operation(this.site(manifest));},{write:true});}
  file(id,name,{revision,signal,editor=false}={}){return this.scope(async()=>{
   websiteFileName(name);const manifest=await this.current(id,revision),descriptor=manifest.files.find(file=>file.name===name);
+  if(!descriptor&&name===entryStyleName&&manifest.pages.some(p=>(editor||!p.draft)&&usesEntryStyle(p))){
+   return {bytes:Buffer.from(entryCSS),contentType:'text/css; charset=utf-8',revision:manifest.revision,sha256:entryStyleHash,size:Buffer.byteLength(entryCSS)};
+  }
   if(!descriptor||editor!==true&&(descriptor.draft||descriptor.picture&&!publicPictureNames(manifest).has(name)||descriptor.recording&&!publicRecordingNames(manifest).has(name)))throw new AppError('NOT_FOUND');
-  const content=new WebsiteFileContent(this,id,manifest.revision,descriptor);
-  return {content,contentType:descriptor.contentType,revision:manifest.revision,size:descriptor.size,sha256:descriptor.sha256,};
+  const legacy=descriptor.entryStyle!==entryStyleHash&&name.endsWith('.html')&&usesEntryStyle(manifest.pages.find(p=>p.path===name));
+  const content=legacy?await StyledEntryPage.open(this,manifest,descriptor,signal):new WebsiteFileContent(this,id,manifest.revision,descriptor);
+  return {content,contentType:descriptor.contentType,revision:manifest.revision,size:content.size,sha256:content.sha256};
  },{signal});}
  export(id,{expectedRevision,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision),files=new Map(),pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
   for(const file of manifest.files)if(!file.draft&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))files.set(file.name,new WebsiteFileContent(this,id,manifest.revision,file));
+  const pages=manifest.pages.filter(p=>!p.draft&&usesEntryStyle(p));
+  if(pages.length){
+   if(!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
+   const descriptors=new Map(manifest.files.map(f=>[f.name,f]));
+   for(const page of pages){const file=descriptors.get(page.path);if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));}
+  }
   return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};
  },{signal});}
  async source(id,{pending=false}={}){
@@ -426,24 +465,29 @@ export class WebsiteFileStore{
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
  },{write:true,signal});}
  insertSource(id,{sourceId,sourceRevision,...options}={}){return this.insertSources(id,{...options,sources:[{sourceId,sourceRevision}]},{requirePins:false});}
- insertSources(id,{expectedRevision,path:page='index.html',sources,position='end',signal}={}, {requirePins=true}={}){return this.scope(async()=>{
-  if(!hex(expectedRevision)||!Array.isArray(sources)||!sources.length||sources.length>40||sources.some(row=>!hex(row?.sourceId)||(requirePins||row.sourceRevision!==undefined)&&!hex(row.sourceRevision))||new Set(sources.map(row=>row.sourceId)).size!==sources.length)throw new AppError('INVALID');
+ insertSources(id,{expectedRevision,path:page='index.html',sources,position='end',presentation='full',signal}={}, {requirePins=true}={}){return this.scope(async()=>{
+  if(!['full','card'].includes(presentation)||!hex(expectedRevision)||!Array.isArray(sources)||!sources.length||sources.length>40||sources.some(row=>!hex(row?.sourceId)||(requirePins||row.sourceRevision!==undefined)&&!hex(row.sourceRevision))||new Set(sources.map(row=>row.sourceId)).size!==sources.length)throw new AppError('INVALID');
   const manifest=await this.current(id,expectedRevision),destination=manifest.pages.find(row=>row.path===page);
   if(!destination)throw new AppError('NOT_FOUND');
   const files=new Map(manifest.files.map(file=>[file.name,file])),body=await this.readText(files.get(page),{signal});
-  const placements=new Map(manifest.sources.map(row=>[row.id,row])),fragments=[],styles=[];let bytes=Buffer.byteLength(body);
+  const placements=new Map(manifest.sources.map(row=>[row.id,row])),entries={...destination.entryDisplays},fragments=[],styles=[];let bytes=Buffer.byteLength(body);
   for(const {sourceId,sourceRevision} of sources){
    signal?.throwIfAborted();const source=await this.source(sourceId);
    if(!source?.visible||source.target!=='website')throw new AppError('NOT_FOUND');
    if(sourceRevision!==undefined&&source.revision!==sourceRevision)throw new AppError('CONFLICT');
+   placements.set(sourceId,{id:sourceId,revision:source.revision});
+   if(presentation==='card'){
+    const slot=randomUUID(),display={id:sourceId,slot,presentation,choice:'title'};entries[slot]=display;
+    fragments.push({id:sourceId,revision:source.revision,title:source.title,display});continue;
+   }
    bytes+=source.html.size;if(bytes>TEXT_LIMIT)throw new AppError('LIMIT');
    fragments.push({id:sourceId,revision:source.revision,html:atPage(await this.readText(source.html,{signal}),page)});
-   placements.set(sourceId,{id:sourceId,revision:source.revision});for(const asset of sourceFiles(source))includeAsset(files,source,asset,Boolean(destination.draft));
+   for(const asset of sourceFiles(source))includeAsset(files,source,asset,Boolean(destination.draft));
    const href=sourceURL(page,styleName(sourceId));if(!body.includes('href="'+href+'"'))styles.push('<link rel="stylesheet" href="'+href+'">');
   }
   let html=insertWebsiteSources(body,fragments,position);if(styles.length)html=html.replace(/<\/head\s*>/i,styles.join('')+'</head>');
   if(Buffer.byteLength(html)>TEXT_LIMIT)throw new AppError('LIMIT');
-  const pages=manifest.pages.map(row=>row===destination?{...row,placements:websiteSourcePlacements(html,row.placements)}:row);
+  const pages=manifest.pages.map(row=>row===destination?{...row,placements:websiteSourcePlacements(html,row.placements),...(presentation==='card'?{entryDisplays:entries}:{})}:row);
   files.set(page,await this.siteFile(id,page,html,{signal,draft:destination.draft}));
   const saved=await this.commit({...manifest,files:[...files.values()],sources:[...placements.values()],pages},{signal});
   return this.present(saved,page,{signal});

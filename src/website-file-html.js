@@ -129,7 +129,9 @@ export function websiteInsertionOffset(document,position){
 }
 export function insertWebsiteSources(html,sources,position='end'){
  const at=websiteInsertionOffset(parse(html,{sourceCodeLocationInfo:true}),position);
- const fragment=sources.map(({id,revision,html:content})=>'<section data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'">'+content+'</section>').join('');
+ const fragment=sources.map(({id,revision,html:content,title,display})=>display?
+  renderEntryPlacement({attrs:[]},{id,revision,title,visible:true,display}):
+  '<section data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'">'+content+'</section>').join('');
  return html.slice(0,at)+fragment+html.slice(at);
 }
 
