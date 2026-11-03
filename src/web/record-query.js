@@ -6,13 +6,14 @@ import {STATUSES} from './record-types.js';
 import {BOOK_JOURNEYS,readingJourney} from './book-journeys.js';
 import {researchCardSources} from './research-card-items.js';
 import {attemptReferences,attemptSearchText} from './attempt-model.js';
+import {parseRecordTagList} from './record-tags-model.js';
 
 const text=(value,max=512)=>typeof value==='string'?value.slice(0,max):'';
 export function recordBrowse(value={}) {
  value=value&&typeof value==='object'?value:{};
  return {...(value.journey&&value.journey!=='all'?{journey:BOOK_JOURNEYS.includes(value.journey)?value.journey:'all'}:{}),dateKnowledge:['known','estimated','unknown'].includes(value.dateKnowledge)?value.dateKnowledge:'all',tags:text(value.tags),tagMode:value.tagMode==='any'?'any':'all',from:text(value.from,10),to:text(value.to,10),domain:text(value.domain,80)||'all',status:STATUSES.includes(value.status)?value.status:'all',sort:['date-asc','title'].includes(value.sort)?value.sort:'date-desc'};
 }
-export const browseTags=value=>[...new Set(value.tags.split(',').map(t=>t.trim().toLocaleLowerCase()).filter(Boolean))];
+export const browseTags=value=>[...new Set(parseRecordTagList(value.tags))];
 export const browseActive=value=>[value.journey&&value.journey!=='all',value.dateKnowledge!=='all',value.tags.trim(),value.from,value.to,value.domain!=='all',value.status!=='all',value.sort!=='date-desc'].filter(Boolean).length;
 export function browseIssue(value) {
  if(value.dateKnowledge==='unknown'&&(value.from||value.to))return 'Clear the date range to show records with unknown dates.';
@@ -30,8 +31,7 @@ export function recordQueryMatcher({notebook='all',filter='all',search='',browse
   if(notebook!=='all'&&e.notebookId!==notebook||!matchesRecordType(e,filter))return false;
   if(b.domain!=='all'&&(e.template?.profileId??'general')!==b.domain||b.status!=='all'&&e.status!==b.status)return false;
   if(b.dateKnowledge!=='all'&&dateKnowledge(e.occurredOn)!==b.dateKnowledge||!dateInRange(e.occurredOn,b.from,b.to))return false;
-  const recordTags=new Set(e.tags.map(t=>t.toLocaleLowerCase()));
-  if(tags.length&&!(b.tagMode==='any'?tags.some(t=>recordTags.has(t)):tags.every(t=>recordTags.has(t))))return false;
+  if(tags.length){const recordTags=new Set(e.tags);if(!(b.tagMode==='any'?tags.some(t=>recordTags.has(t)):tags.every(t=>recordTags.has(t))))return false;}
   return !needle||(e.searchText??recordSearchText(e)).includes(needle);
  };
 }

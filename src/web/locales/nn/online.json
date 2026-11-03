@@ -59,7 +59,7 @@
   "outcome": "Utfall",
   "tags": "Emneknaggar",
   "detailsHelp": "Lagre desse detaljane og malverdiane når du er klar. Endringar i same felt blir gjennomgåtte før lagring. Ulagra detaljar blir i denne opne visinga; berre delt skriving har automatisk lokal gjenoppretting av utkast.",
-  "detailsTagsHelp": "Skil etikettar med komma. Opptil 12 etikettar, kvar på høgst 40 teikn.",
+  "detailsTagsHelp": "Taggane skil mellom store og små bokstavar og kan ha opptil 40 teikn kvar. Skil dei med komma og set doble hermeteikn rundt taggar som inneheld komma.",
   "detailsTagsLimit": "Bruk høgst 40 teikn i kvart etikettnamn.",
   "detailsConflict": "Nokon har endra desse felta. Samanlikn begge versjonane og vel kva for ein du vil behalde før lagring.",
   "detailsYours": "Endringa di",

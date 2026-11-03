@@ -18,7 +18,7 @@ export function recordTagActions({state,api,esc,current,refresh,reveal,render,re
  async function execute(reading,command){
   const key=owner(reading),storageContext=state.storage?.contextId,owned=()=>state.page==='record-reader'&&state.storage?.contextId===storageContext&&state.book?.id===command.workspaceId&&state.selected===command.recordId&&!state.access?.locked;
   pending.set(key,command);saving=true;render();
-  try{const result=await api('/api/research/records/tags',command,{adopt:false});pending.delete(key);const draft=drafts.get(key);if(draft){if(command.action==='add'&&draft.add?.trim()===command.tag)draft.add='';else if(command.action==='rename')delete draft.editing;}
+  try{const result=await api('/api/research/records/tags',command,{adopt:false});pending.delete(key);const draft=drafts.get(key);if(draft){if(command.action==='add'&&draft.add===command.tag)draft.add='';else if(command.action==='rename')delete draft.editing;}
    if(owned()){await refresh();if(owned())await reveal(result.position);}
   }catch(error){if(['INVALID','MISSING','FORMAT','WORKSPACE_CHANGED','RECORD_CHANGED','TAG_EXISTS','INTAKE_COMPLETION'].includes(error.code))pending.delete(key);if(error.code==='RECORD_CHANGED'&&owned())await refresh();throw error;}
   finally{saving=false;render();}
@@ -33,7 +33,7 @@ export function recordTagActions({state,api,esc,current,refresh,reveal,render,re
    if(action==='cancel'){delete draft.editing;drafts.set(key,draft);render();return true;}
    if(!['add','rename','remove'].includes(action))return true;
    if(action!=='add'&&tag===undefined)return true;
-   const value=action==='remove'?null:(action==='add'?draft.add:draft.editing?.value)?.trim();if(action!=='remove'&&!validRecordTag(value))throw Error(text('tagInvalid'));
+   const value=action==='remove'?null:(action==='add'?draft.add:draft.editing?.value);if(action!=='remove'&&!validRecordTag(value))throw Error(text('tagInvalid'));
    if(action==='remove'&&!confirm(text('confirmRemoveTag',{tag})))return true;
    await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,id:crypto.randomUUID(),action,position:action==='add'?null:position,tag:value,expectedRevision:action==='rename'?draft.editing.revision:page.revision});
   }catch(error){report(error);}return true;

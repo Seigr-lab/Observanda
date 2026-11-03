@@ -36,7 +36,7 @@ export class LiveResearch{
   const write=['preparation-rebase','preparation-change','preparation-save','preparation-remove','steps','fields','comment','creation','creationFields','creationChoices','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
   // Authorization and the actual access/mutation share a transaction, including
   // grants, current team membership and records moved out of the shared scope.
-  return organizationTransaction(this.workspace,()=>this.workspace.catalogue(async store=>{
+  const execute=()=>organizationTransaction(this.workspace,()=>this.workspace.catalogue(async store=>{
    const access=await this.authorized(identity,scope,{write});
    if(['creation','creationFields','creationChoices','create'].includes(operation)){
     const creation=new LiveRecordCreation(this.workspace);
@@ -110,6 +110,18 @@ export class LiveResearch{
    for(const head of page.items){valid(head?.recordId===record.id,'MATERIAL_MISSING');const doc=await materials.read(head);items.push({id:head.id,kind:head.kind,title:head.title,revision:head.revision,...(head.kind==='artifact'?{name:doc.content.name,size:doc.content.size,sha256:doc.content.sha256,sourcePath:doc.content.sourcePath??null,sourcePurpose:doc.content.sourcePurpose??null,provenance:doc.content.provenance??''}:{})});}
    return {items,next:page.next};
   }));
+  if(operation==='fields'&&Array.isArray(data.changes)&&data.changes.some(change=>change?.field==='tags')){
+   // Check current record membership before fencing any copied content. The
+   // actual write independently rechecks the grant in its own transaction.
+   await this.workspace.catalogue(async store=>{
+    const access=await this.authorized(identity,scope,{write:true});valid(uuid(data.recordId));
+    const row=await store.member(await store.snapshot(),data.recordId);
+    valid(row&&access.notebookIds.includes(row.notebookId),'COLLABORATION_DENIED');
+   });
+   const {PublicationConversion}=await import('../publication-conversion.js');
+   return new PublicationConversion(this.workspace).mutate(this.workspace,{route:'/api/research/records/tags',data:{workspaceId:scope.workspaceId,recordId:data.recordId}},execute);
+  }
+  return execute();
  }
  async present(identity,scope,access,recordId,clientId){
   valid(uuid(clientId));const now=Date.now();for(const [key,item] of this.presence)if(item.at<now-15000)this.presence.delete(key);

@@ -1,4 +1,5 @@
 import {noticeLayout} from './notice-layout.js';
+import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {websiteEditingGuard} from './website-editing-guard.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
 import {publicationReviewChoicesUI} from './publication-review-choices.js';
@@ -912,7 +913,7 @@ function renderEditor() {
       ${recordDateFields(e.occurredOn,{field,option,esc})}
       ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}
       <p class="muted">${esc(appText('locationLabel',{location:locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId)}))}</p>
-      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="${esc(appText('tagExample'))}">`)}${recordFields(e,{field,option,esc})}${recordDetails.contributors(e)}
+      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<textarea data-entry="tags" rows="1" placeholder="${esc(appText('tagExample'))}">${esc(formatRecordTagList(e.tags))}</textarea>`)}${recordFields(e,{field,option,esc})}${recordDetails.contributors(e)}
     </section></details>
     <details class="record-edit-group" data-disclosure="draft-activity"><summary>${esc(ux('activity'))}</summary>${recordActivity.view()}${workflow.view()}</details></article>`;
 }
@@ -1193,7 +1194,7 @@ document.addEventListener('input', event => {
   if(el.matches('[data-publication-part],[data-publication-figure]')&&el.closest('.record-draft-editor')){const record=entry();record.publication=updatePublicationPart(record.publication,el);dirtyRecord();return;}
   if (el.dataset.entry) {
     const record=entry(),previousNotebook=record.notebookId;
-    record[el.dataset.entry] = el.type === 'checkbox' ? el.checked : el.dataset.entry === 'tags' ? el.value.split(',').map(t => t.trim()).filter(Boolean) : el.value;
+    record[el.dataset.entry] = el.type === 'checkbox' ? el.checked : el.dataset.entry === 'tags' ? parseRecordTagList(el.value) : el.value;
     if(el.dataset.entry==='notebookId'&&previousNotebook!==record.notebookId){
       record.share=false;if(record.sharePdf)record.sharePdf=false;state.notebook=record.notebookId;
       state.project=state.book.notebooks.find(n=>n.id===record.notebookId)?.projectId??null;

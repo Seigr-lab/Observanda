@@ -59,7 +59,7 @@
   "outcome": "Resultat",
   "tags": "Etiquetes",
   "detailsHelp": "Guarda aquests detalls i els valors de la plantilla quan estiguin a punt. Els canvis al mateix camp es revisen abans de guardar-los. Els detalls no guardats es mantenen en aquesta vista oberta; només l'escriptura compartida té recuperació automàtica d'esborranys locals.",
-  "detailsTagsHelp": "Separa les etiquetes amb comes. Fins a 12 etiquetes de 40 caràcters com a màxim cadascuna.",
+  "detailsTagsHelp": "Les etiquetes distingeixen majúscules i minúscules i poden tenir fins a 40 caràcters cadascuna. Separeu-les amb comes i poseu entre cometes les que continguin una coma.",
   "detailsTagsLimit": "Utilitza com a màxim 40 caràcters per a cada nom d'etiqueta.",
   "detailsConflict": "Algú ha canviat aquests camps. Compara les dues versions i tria quina vols conservar abans de guardar.",
   "detailsYours": "La teva edició",

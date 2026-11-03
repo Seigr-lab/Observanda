@@ -12,6 +12,39 @@ import {StructureCommands} from '../src/structure-commands.js';
 import {executeResearchRequest} from '../src/research-requests.js';
 import {PublicationConversion} from '../src/publication-conversion.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
+import {recordRevision} from '../src/research.js';
+import {RecordContent} from '../src/record-content.js';
+
+test('a whole-record tag save updates only the tags in both previously converted compositions',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-converted-tags-')),book=sampleNotebook(),record=book.entries[2];
+ book.entries=[record];book.notebooks.find(b=>b.id===record.notebookId).sharePdf=true;
+ record.share=false;record.sharePdf=false;record.tags=[];record.body='The composed text';
+ const {workspace,vault}=await encryptedFixture(directory,book);
+ t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const files=new WebsiteFileStore(workspace),publicationConversion=new PublicationConversion(workspace,{store:files}),identity={workspaceId:book.id,recordId:record.id};
+ const cmd=(route,data)=>executeResearchRequest(workspace,'/api/research/records/'+route,data,{publicationConversion});
+ for(const field of ['share','sharePdf']){const base=await cmd('values/read',{...identity,field});await cmd('values/save',{...identity,field,expectedRevision:base.revision,value:{value:true}});}
+ const sources=await Promise.all(['website','pdf'].map(target=>files.sourceForRecord({...identity,target})));
+ const oldPdf=(await files.sourceStatus(sources[1].id)).source;
+ publicationConversion.capture=()=>{throw Error('Unrelated research content was reconverted');};
+ async function saveTags(tags){
+  const current=(await workspace.read()).book.entries[0];
+  await cmd('save',{workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(current),record:{...current,tags,body:'Research text edited after conversion.'}}]});
+ }
+ await saveTags(['Co','CO','<ion, "peak">']);
+ for(const {id,target} of sources){
+  const doc=await files.getSource(id,{target});assert.match(doc.html,/&lt;ion, "peak"&gt;/);assert.match(doc.html,/The composed text/);assert.doesNotMatch(doc.html,/Research text edited after conversion/);
+ }
+ assert.equal((await files.sourceStatus(sources[1].id)).source.pdfParts.blob,oldPdf.pdfParts.blob);
+ assert.equal((await files.searchLibrary({tags:['<ion, "peak">']})).items.length,1);
+ await saveTags([]);for(const {id,target} of sources)assert.doesNotMatch((await files.getSource(id,{target})).html,/data-observanda-part="tags"/);
+ const header=await new RecordContent(workspace).read({...identity,pagedHeader:true}),operation={...identity,id:randomUUID(),action:'add',position:null,tag:'Replayed measurement',expectedRevision:header.collections.tags.revision};
+ const update=files.updateSourceTags;files.updateSourceTags=async()=>{throw Error('Interrupted tag update');};
+ await assert.rejects(cmd('tags',operation),/Interrupted tag update/);files.updateSourceTags=update;
+ assert.equal((await files.sourceStatus(sources[0].id)).pending.tagsOnly,true);
+ await cmd('tags',operation);
+ for(const {id,target} of sources){const saved=await files.getSource(id,{target});assert.match(saved.html,/Replayed measurement/);assert.match(saved.html,/The composed text/);}
+});
 
 test('explicit research saves update a placed HTML entry and withdrawing consent invalidates the old publication',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-entry-conversion-')),book=sampleNotebook(),record=book.entries[2],section={id:randomUUID(),title:'New method',body:'Released method details',share:false};

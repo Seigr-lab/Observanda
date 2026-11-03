@@ -14,6 +14,7 @@ import {FileContent} from './file-content.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {AppError} from './errors.js';
 import {assertPublicFiles} from './privacy.js';
+import {replaceSourceTags} from './website-source-tags.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
 import {publicPictureNames,saveWebsitePictures} from './website-picture-files.js';
 import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
@@ -405,7 +406,7 @@ export class WebsiteFileStore{
   return revision;
  },{signal});}
  advancePdfVersion(signal){return this.writeControl(ROOT+'/pdf-version.json',randomUUID(),{signal});}
- beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false,reviveRevision}={}){return this.scope(async()=>{
+ beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false,reviveRevision,tagsOnly=false}={}){return this.scope(async()=>{
   if(!hex(sourceId)||target!==undefined&&!['website','pdf'].includes(target))throw new AppError('INVALID');
   const path=ROOT+'/sources/'+sourceId+'/pending.json',token=randomUUID(),saved=await this.control(path,{missing:true});
   const previous=saved?saved.previous:await this.source(sourceId,{pending:true}),known=saved?.target??previous?.target;
@@ -415,7 +416,7 @@ export class WebsiteFileStore{
   const seed=resumeSeed&&saved?.seed===true&&(saved.previous===null||reviveRevision!==undefined);
   if(ifAbsent&&!seed&&(saved||previous&&reviveRevision===undefined||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
   target??=known;
-  const journal={token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved),...(resumeSeed?{seed:true}:{})};
+  const journal={token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved),...(resumeSeed?{seed:true}:{}),...(tagsOnly&&(!saved||saved.tagsOnly)?{tagsOnly:true}:{})};
   // An absent source has no placements. Record bootstrap ownership first so
   // a crash cannot leave an anonymous fence which no writer may safely adopt.
   if(ifAbsent&&resumeSeed)await this.writeControl(path,journal,{signal});
@@ -444,6 +445,19 @@ export class WebsiteFileStore{
   const prior=pending.previous,previousHtml=prior?await this.readText(prior.html,{signal}):'',files=[];
   if(visible)for(const asset of assets){if(!/^assets\/[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(asset.path??''))throw new AppError('INVALID');const descriptor=await this.descriptor(asset.path,asset,{signal,owner:directory});if(asset.path.slice(7,71)!==descriptor.sha256)throw new AppError('MEDIA_INVALID');files.push(descriptor);}
   const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
+  return this.#commitSource(source,html,previousHtml,pending,pickerContext,signal);
+ },{write:true,signal});}
+ updateSourceTags(sourceId,{tags,provenance,pickerContext,token,signal}){return this.scope(async()=>{
+  if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');
+  const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json'),prior=pending.previous;
+  if(pending.token!==token||!prior?.visible||prior.target!==provenance.target||websiteSourceId(provenance)!==sourceId)throw new AppError('CONFLICT');
+  const previousHtml=await this.readText(prior.html,{signal}),html=replaceSourceTags(previousHtml,tags);
+  const source={...prior,provenance,html:await this.descriptor('fragment.html',html,{signal,owner:directory})};delete source.revision;
+  source.revision=hash(plain(source));
+  return this.#commitSource(source,html,previousHtml,pending,pickerContext,signal);
+ },{write:true,signal});}
+ async #commitSource(source,html,previousHtml,pending,pickerContext,signal){
+  const {id:sourceId,target,visible,provenance}=source,directory=ROOT+'/sources/'+sourceId,prior=pending.previous;
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
   await indexWebsiteSource(this,source,html,signal,pickerContext);
   let galleryItems,displayChoices,after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
@@ -467,8 +481,8 @@ export class WebsiteFileStore{
    await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages),sources},{signal});
   }after=sites.next;}while(after!==null);
   if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
-  await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:sourceTitle,revision:source.revision,visible,target};
- },{write:true,signal});}
+  await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:source.title,revision:source.revision,visible,target};
+ }
  insertSource(id,{sourceId,sourceRevision,...options}={}){return this.insertSources(id,{...options,sources:[{sourceId,sourceRevision}]},{requirePins:false});}
  insertSources(id,{expectedRevision,path:page='index.html',sources,position='end',presentation='full',signal}={}, {requirePins=true}={}){return this.scope(async()=>{
   if(!['full','card'].includes(presentation)||!hex(expectedRevision)||!Array.isArray(sources)||!sources.length||sources.length>40||sources.some(row=>!hex(row?.sourceId)||(requirePins||row.sourceRevision!==undefined)&&!hex(row.sourceRevision))||new Set(sources.map(row=>row.sourceId)).size!==sources.length)throw new AppError('INVALID');

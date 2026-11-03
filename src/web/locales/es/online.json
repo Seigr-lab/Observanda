@@ -59,7 +59,7 @@
   "outcome": "Resultado",
   "tags": "Etiquetas",
   "detailsHelp": "Guarda estos detalles y valores de plantilla cuando quieras. Los cambios en el mismo campo se revisan antes de guardar. Los detalles sin guardar permanecen en esta vista abierta; solo el texto compartido tiene recuperación automática de borrador local.",
-  "detailsTagsHelp": "Separa las etiquetas con comas. Hasta 12 etiquetas de un máximo de 40 caracteres cada una.",
+  "detailsTagsHelp": "Las etiquetas distinguen mayúsculas y minúsculas y admiten hasta 40 caracteres cada una. Sepáralas con comas y entrecomilla las que contengan una coma.",
   "detailsTagsLimit": "Utiliza un máximo de 40 caracteres para cada nombre de etiqueta.",
   "detailsConflict": "Alguien ha cambiado estos campos. Compara ambas versiones y elige qué conservar antes de guardar.",
   "detailsYours": "Tu modificación",

@@ -19,7 +19,7 @@ export function recordBrowseFields(state,records,{esc,field,option,domains:known
  return `<p class="muted record-search-scope" id="record-search-scope">${esc(ux('scopeHelp'))}</p><div class="inline-actions record-sort-options">${sorting}${browseActive(b)?'<button type="button" class="button" data-action="clear-record-filters">'+esc(ux('clearFilters'))+' ('+browseActive(b)+')</button>':''}</div><details class="record-browse" ${browseActive(b)?'open':''}><summary id="record-filter-summary">${esc(ux('filters'))}${browseActive(b)?' ('+browseActive(b)+')':''}</summary>
   <div class="record-browse-fields">
   ${field(esc(t('book','journey')),`<select data-record-browse="journey">${BOOK_JOURNEYS.map(j=>option(j,t('book',j),b.journey??'all')).join('')}</select>`)}
-  ${field(esc(tr('tags')),`<input data-record-browse="tags" maxlength="512" value="${esc(b.tags)}" placeholder="${esc(tr('browseTagsPlaceholder'))}" aria-describedby="record-tags-help">`)}
+  ${field(esc(tr('tags')),`<textarea rows="1" data-record-browse="tags" maxlength="512" placeholder="${esc(tr('browseTagsPlaceholder'))}" aria-describedby="record-tags-help">${esc(b.tags)}</textarea>`)}
   ${field(esc(tr('browseMatchTags')),`<select data-record-browse="tagMode">${option('all',tr('browseAllTags'),b.tagMode)}${option('any',tr('browseAnyTags'),b.tagMode)}</select>`)}
   ${field(esc(tr('browseFrom')),`<input type="date" data-record-browse="from" value="${esc(b.from)}">`)}
   ${field(esc(tr('browseThrough')),`<input type="date" data-record-browse="to" value="${esc(b.to)}">`)}

@@ -30,6 +30,7 @@ function commandTargets(route,data){
  const records=new Map(),books=new Set(),previousLocations=[];
  const add=(id,notebook=null)=>{if(researchId(id))records.set(id,notebook);};
  switch(route){
+ case '/api/research/records/tags':add(data.recordId);break;
  case '/api/research/records/values/save': if(!['share','sharePdf','publication'].includes(data.field)&&!figureSharingId(data.field)&&!(typeof data.field==='string'&&data.field.startsWith('media:')))return null;add(data.recordId);break;
  case '/api/research/records/writing/save':if(!data.sectionId||!data.value||!['share','sharePdf'].some(key=>Object.hasOwn(data.value,key)))return null;add(data.recordId);break;
  case '/api/research/records/sections':if(data.action==='move')return null;add(data.recordId);break;
@@ -55,16 +56,21 @@ async function visibleParts(document,field,target){
   if(collectionAllowed(flag,target,field))keys.push((await document.tree.selected(item.value,['id'])).value);
  }return keys.sort();
 }
-async function status(metadata,row,document,target){
+async function status(metadata,row,document,target,{tagsOnly=false}={}){
  const record={id:row.id,notebookId:row.notebookId??(await document.field(['notebookId'])).value,[consentKey(target)]:(await document.field([consentKey(target)])).value};
  const provenance=identity(metadata,row.id,record.notebookId,target);if(!provenance)throw new AppError('CATALOGUE_DAMAGED');
- const visible=sourceRecordAllowed(record,metadata,target);let permissions=null;
- if(visible){
+ const visible=sourceRecordAllowed(record,metadata,target);let permissions=null,tagsRevision=null;
+ if(visible&&tagsOnly){
+  if((await document.field(['publication',target,'tags'])).value!==false)tagsRevision=await document.reference(['tags']);
+  permissions={tags:!!tagsRevision};
+ }else if(visible){
   const publication=(await document.field(['publication'])).value;
-  permissions={parts:PUBLICATION_PARTS.filter(key=>publicationPartAllowed({publication},key,target)),sections:await visibleParts(document,'sections',target),attachments:await visibleParts(document,'attachments',target)};
+  if(publicationPartAllowed({publication},'tags',target))tagsRevision=await document.reference(['tags']);
+  permissions={parts:PUBLICATION_PARTS.filter(key=>publicationPartAllowed({publication},key,target))};
+  permissions.sections=await visibleParts(document,'sections',target);permissions.attachments=await visibleParts(document,'attachments',target);
   if(permissions.parts.includes('figures')&&publication?.[target]?.hiddenFigures?.length)permissions.hiddenFigures=[...publication[target].hiddenFigures].sort();
  }
- return {provenance,sourceId:websiteSourceId(provenance),visible,signature:digest(serialize(permissions)),revision:row.revision};
+ return {provenance,sourceId:websiteSourceId(provenance),visible,signature:digest(serialize(permissions)),revision:row.revision,tagsRevision};
 }
 
 async function states(storage,targets,workspaceId,selectedChannels=channels){
@@ -77,7 +83,7 @@ async function states(storage,targets,workspaceId,selectedChannels=channels){
    for await(const row of index.members(snapshot.membership,{notebookId}))rows.set(row.id,row);
   }
   for(const [id] of targets.records)if(!rows.has(id)){const row=await store.member(snapshot,id);if(row)rows.set(id,row);}
-  for(const row of rows.values())await withRecordDocument(store,row.id,row.revision,async doc=>{for(const target of selectedChannels){const value=await status(metadata,row,doc,target);result.set(value.sourceId,{...value,snapshotId});}});
+  for(const row of rows.values())await withRecordDocument(store,row.id,row.revision,async doc=>{for(const target of selectedChannels){const value=await status(metadata,row,doc,target,targets);result.set(value.sourceId,{...value,snapshotId});}});
   // A new entry or a move may introduce a second identity that also needs a
   // write fence before the research transaction can commit.
   for(const locations of [targets.records,targets.previousLocations??[]])for(const [id,notebookId] of locations)if(notebookId)for(const target of selectedChannels){const provenance=identity(metadata,id,notebookId,target);if(!provenance)continue;const sourceId=websiteSourceId(provenance);if(!result.has(sourceId))result.set(sourceId,{sourceId,provenance,visible:false,signature:null,revision:null});}
@@ -144,6 +150,19 @@ export class PublicationConversion{
   });
   const output=await convertPublicationRecord(storage,metadata,record,{target});if(!output.visible)throw new AppError('RECORD_CHANGED');
   return this.files.putSource({sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output},{token});
+ }
+ async captureTags(storage,state,token){
+  const {provenance,sourceId,revision}=state,target=provenance.target;
+  const {tags,metadata}=await storage.catalogue(async store=>{
+   const snapshot=await store.snapshot(),row=await store.member(snapshot,provenance.recordId);
+   if(!row||row.revision!==revision)throw new AppError('RECORD_CHANGED');
+   return withRecordDocument(store,row.id,revision,async document=>{
+    const admission=await status(snapshot.metadata,row,document,target,{tagsOnly:true});
+    if(!admission.visible||admission.sourceId!==sourceId||!admission.tagsRevision||admission.tagsRevision!==state.tagsRevision)throw new AppError('RECORD_CHANGED');
+    return {tags:(await document.field(['tags'])).value,metadata:snapshot.metadata};
+   });
+  });
+  return this.files.updateSourceTags(sourceId,{token,tags,provenance:{...provenance,revision,recordRevision:revision,snapshotId:state.snapshotId},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined});
  }
  async seedWebsites(provenances,withOwner,{signal,onSource}={}){
   const pending=new Map(),sources=new Map(),existing=[];
@@ -231,6 +250,7 @@ export class PublicationConversion{
  }
  async mutate(storage,{route,data},operation){
   const targets=commandTargets(route,data);if(!targets)return operation();
+  targets.tagsOnly=route==='/api/research/records/tags';
   const basis=targets.books.size&&['/api/workspace/notebook','/api/workspace/structure'].includes(route)?data.etag:null;
   if(targets.rehome)await storage.catalogue(async store=>{
    if(!revisionId(basis))throw new AppError('INVALID');
@@ -261,14 +281,16 @@ export class PublicationConversion{
   }
   // After this point every affected site fails closed until its new website
   // files are committed. A lost response can be retried on the same source.
-  try{for(const [id,state] of before){const prior=await this.files.sourceStatus(id);pending.set(id,{prior,token:await this.files.beginSourceUpdate({sourceId:id,target:state.provenance.target}),state});}}
+  try{for(const [id,state] of before){if(targets.tagsOnly&&!state.tagsRevision)continue;const prior=await this.files.sourceStatus(id);pending.set(id,{prior,token:await this.files.beginSourceUpdate({sourceId:id,target:state.provenance.target,tagsOnly:targets.tagsOnly}),state});}}
   catch(error){await Promise.allSettled([...pending].filter(([,item])=>!item.prior.pending).map(([sourceId,{token}])=>this.files.cancelSourceUpdate({sourceId,token})));throw error;}
   let result,error;try{result=await operation();}catch(failure){error=failure;}
   const after=await states(storage,targets,workspaceId);
-  for(const [id,value] of after)if(!pending.has(id)){if(value.visible)throw new AppError('CONFLICT');}
+  for(const [id,value] of after)if(!pending.has(id)&&(targets.tagsOnly?value.tagsRevision:value.visible))throw new AppError('CONFLICT');
   for(const [id,{prior,token,state}] of pending){
    const next=after.get(id)??{...state,visible:false,signature:null,revision:null};
-   if(!prior.pending&&next.visible===state.visible&&next.signature===state.signature&&(error||prior.source||!next.visible))await this.files.cancelSourceUpdate({sourceId:id,token});
+   const samePermissions=next.visible===state.visible&&next.signature===state.signature;
+   if(!prior.pending&&samePermissions&&next.tagsRevision===state.tagsRevision&&(error||prior.source||!next.visible))await this.files.cancelSourceUpdate({sourceId:id,token});
+   else if(prior.source?.visible&&next.visible&&next.tagsRevision&&samePermissions&&(!prior.pending&&next.tagsRevision!==state.tagsRevision||targets.tagsOnly&&prior.pending?.tagsOnly))await this.captureTags(storage,next,token);
    else if(!next.visible&&!prior.source&&!prior.pending)await this.files.cancelSourceUpdate({sourceId:id,token});
    else await this.capture(storage,next,token);
   }

@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {parseRecordTagList,formatRecordTagList} from '../src/web/record-tags-model.js';
 import assert from 'node:assert/strict';
 import {queryFixture} from './record-query-fixture.js';
 import {queryRecords,recordBrowse,browseIssue} from '../src/web/record-query.js';
@@ -8,7 +9,7 @@ import {validateNotebook} from '../src/model.js';
 test('combined tags, dates and retained lab types query the selected hierarchy without duplicating or mutating records',()=>{
  const book=queryFixture(),before=structuredClone(book);validateNotebook(book);
  const scoped=recordsIn(book,book.projects[0].id);
- const results=queryRecords(scoped,{search:'shared',browse:{tags:'SOUND, summer',from:'2026-06-01',to:'2026-06-30',domain:'arts-creative',sort:'date-asc'}});
+ const results=queryRecords(scoped,{search:'shared',browse:{tags:'sound, summer',from:'2026-06-01',to:'2026-06-30',domain:'arts-creative',sort:'date-asc'}});
  assert.deepEqual(results.map(e=>e.title),['Summer take 1','Summer take 2']);assert.equal(results[0],book.entries[0]);assert.equal(results[0].share,false);
  assert.deepEqual(queryRecords(scoped,{browse:{tags:'sound,summer',domain:'arts-creative',status:'incomplete'}}).map(e=>e.title),['Summer take 2']);
  assert.deepEqual(queryRecords(scoped,{search:'recorder stopped'}).map(e=>e.title),['Summer take 2']);
@@ -23,6 +24,15 @@ test('tag any/all, exact names, inclusive boundaries, record types and lab book 
  assert.equal(queryRecords(scope,{browse:{from:'2026-06-01',to:'2026-06-01'}})[0].title,'Summer take 1');
  assert.equal(queryRecords(scope,{notebook:book.notebooks[0].id,browse:{tags:'sound'}}).length,0);
  assert.deepEqual(queryRecords(scope,{filter:'template:'+book.entries[0].template.id}).map(e=>e.title),['Summer take 1']);
+});
+test('literal tag filters distinguish case and preserve commas, quotes and authored whitespace',()=>{
+ const tags=['Co','CO','Cr, Ni','standard "A"',' baseline '];
+ assert.deepEqual(parseRecordTagList(formatRecordTagList(tags)),tags);
+ const book=queryFixture(),model=book.entries[0],entries=tags.map((tag,index)=>({...model,id:String(index),tags:[tag]}));
+ const find=query=>queryRecords(entries,{browse:{tags:query}}).map(r=>r.tags[0]);
+ assert.deepEqual(find('Co'),['Co']);assert.deepEqual(find('CO'),['CO']);assert.deepEqual(find('co'),[]);
+ assert.deepEqual(find('"Cr, Ni"'),['Cr, Ni']);assert.deepEqual(find('"standard ""A"""'),['standard "A"']);
+ assert.deepEqual(find('" baseline "'),[' baseline ']);
 });
 test('invalid date ranges explain empty results and sorting remains deterministic',()=>{
  const book=queryFixture();assert.match(browseIssue(recordBrowse({from:'2026-02-30'})),/valid/);

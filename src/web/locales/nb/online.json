@@ -59,7 +59,7 @@
   "outcome": "Utfall",
   "tags": "Etiketter",
   "detailsHelp": "Lagre disse detaljene og malverdiene når du er klar. Endringer i samme felt gjennomgås før lagring. Ulagrede detaljer blir i denne åpne visningen; bare delt skriving har automatisk lokal gjenoppretting av utkast.",
-  "detailsTagsHelp": "Skill etiketter med komma. Opptil 12 etiketter, hver på høyst 40 tegn.",
+  "detailsTagsHelp": "Taggene skiller mellom store og små bokstaver og kan ha opptil 40 tegn hver. Skill dem med komma og sett doble anførselstegn rundt tagger som inneholder komma.",
   "detailsTagsLimit": "Bruk høyst 40 tegn i hvert etikettnavn.",
   "detailsConflict": "Noen har endret disse feltene. Sammenlign begge versjonene og velg hvilken du vil beholde før lagring.",
   "detailsYours": "Din endring",

@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {STATUSES} from './record-types.js';
 import {onlineDetailFieldsFor,onlineDetails,sameDetail,templateDetailName} from './online-details-model.js';
 import {templateFieldInput,templateFieldLabel,templateInputValue} from './custom-field-input.js';
@@ -11,11 +12,11 @@ export function onlineRecordDetails({remote,esc,onChange,notify}){
  let form=null,base=null,latest=null,recordId=null,request=null,busy=false,readOnly=false,disposed=false,generation=0,fields=[],custom=new Map();
  const conflicts=new Map();
  const button=(key,action,field='')=>'<button type="button" class="button" data-detail-action="'+action+'" data-detail-field="'+esc(field)+'">'+esc(tr(key))+'</button>';
- const display=(name,value)=>name==='tags'?(value??[]).join(', '):name==='status'?tr('status_'+value):custom.get(name)?.type==='boolean'&&value!==null?tr(value?'creationYes':'creationNo'):value??'';
+ const display=(name,value)=>name==='tags'?formatRecordTagList(value):name==='status'?tr('status_'+value):custom.get(name)?.type==='boolean'&&value!==null?tr(value?'creationYes':'creationNo'):value??'';
  const label=name=>custom.has(name)?templateFieldLabel(custom.get(name)):tr(labels[name]);
- function value(name){const text=form.elements[name].value;if(custom.has(name))return text===''&&base[name]===null?null:templateInputValue(custom.get(name),text);return name==='tags'?text.split(',').map(v=>v.trim()).filter(Boolean):name==='outcome'&&base.outcome===null&&text===''?null:text;}
+ function value(name){const text=form.elements[name].value;if(custom.has(name))return text===''&&base[name]===null?null:templateInputValue(custom.get(name),text);return name==='tags'?parseRecordTagList(text):name==='outcome'&&base.outcome===null&&text===''?null:text;}
  function changes(){return fields.filter(name=>!sameDetail(value(name),base[name])).map(name=>({field:name,before:base[name],value:value(name)}));}
- function setValue(name,next){form.elements[name].value=name==='tags'?(next??[]).join(', '):next??'';}
+ function setValue(name,next){form.elements[name].value=name==='tags'?formatRecordTagList(next):next??'';}
  function controls(){
   if(!form)return;for(const name of fields){const input=form.elements[name];if(input.tagName==='SELECT')input.disabled=busy||!!request||readOnly;else{input.disabled=busy;input.readOnly=!!request||readOnly;}}
   const submit=form.querySelector('[type="submit"]');submit.disabled=busy||readOnly||conflicts.size>0;submit.textContent=tr(request?'retrySend':'saveDetails');
@@ -65,7 +66,7 @@ export function onlineRecordDetails({remote,esc,onChange,notify}){
  }
  function mount(host,record,role){
   recordId=record.id;fields=onlineDetailFieldsFor(record);custom=new Map((record.template?.fields??[]).map(f=>[templateDetailName(f),f]));base=onlineDetails(record);latest=structuredClone(base);readOnly=role!=='editor';request=null;conflicts.clear();
-  host.innerHTML='<form data-live-details><h4>'+esc(tr('detailsTitle'))+'</h4><div class="online-details-grid"><label class="field">'+esc(tr('recordTitle'))+'<input name="title" required maxlength="180"></label><label class="field">'+esc(tr('progress'))+'<select name="status" aria-label="'+esc(tr('progress'))+'">'+STATUSES.map(status=>'<option value="'+esc(status)+'">'+esc(tr('status_'+status))+'</option>').join('')+'</select></label><label class="field">'+esc(tr('outcome'))+'<textarea name="outcome" rows="2" maxlength="500"></textarea></label><label class="field">'+esc(tr('tags'))+'<input name="tags" aria-label="'+esc(tr('tags'))+'"><span class="muted">'+esc(tr('detailsTagsHelp'))+'</span></label></div><p class="muted">'+esc(tr(readOnly?'reader':'detailsHelp'))+'</p><p class="muted" data-publication-owner>'+esc(tr('publicationOwner'))+'</p><div data-detail-conflicts role="status"></div><p data-detail-status role="status"></p><div class="module-actions"><button type="submit" class="button">'+esc(tr('saveDetails'))+'</button>'+button('detailsDiscard','discard')+'</div></form>';
+  host.innerHTML='<form data-live-details><h4>'+esc(tr('detailsTitle'))+'</h4><div class="online-details-grid"><label class="field">'+esc(tr('recordTitle'))+'<input name="title" required maxlength="180"></label><label class="field">'+esc(tr('progress'))+'<select name="status" aria-label="'+esc(tr('progress'))+'">'+STATUSES.map(status=>'<option value="'+esc(status)+'">'+esc(tr('status_'+status))+'</option>').join('')+'</select></label><label class="field">'+esc(tr('outcome'))+'<textarea name="outcome" rows="2" maxlength="500"></textarea></label><label class="field">'+esc(tr('tags'))+'<textarea name="tags" aria-label="'+esc(tr('tags'))+'"></textarea><span class="muted">'+esc(tr('detailsTagsHelp'))+'</span></label></div><p class="muted">'+esc(tr(readOnly?'reader':'detailsHelp'))+'</p><p class="muted" data-publication-owner>'+esc(tr('publicationOwner'))+'</p><div data-detail-conflicts role="status"></div><p data-detail-status role="status"></p><div class="module-actions"><button type="submit" class="button">'+esc(tr('saveDetails'))+'</button>'+button('detailsDiscard','discard')+'</div></form>';
   form=host.querySelector('form');
   if(custom.size){const section=document.createElement('section');section.innerHTML='<h4>'+esc(record.template.label)+'</h4>'+(record.template.description?'<p>'+esc(record.template.description)+'</p>':'')+'<div class="online-details-grid">'+[...custom].map(([name,f])=>'<label class="field">'+esc(templateFieldLabel(f))+templateFieldInput(f,base[name],{esc,attrs:'name="'+esc(name)+'"'})+'</label>').join('')+'</div>';form.querySelector('.online-details-grid').after(section);}
   for(const name of fields)setValue(name,base[name]);controls();

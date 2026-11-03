@@ -59,7 +59,7 @@
  "outcome":"Outcome",
  "tags":"Tags",
  "detailsHelp":"Save these details and template values when ready. Changes to the same field are reviewed before saving. Unsaved details stay in this open view; only shared writing has automatic local draft recovery.",
- "detailsTagsHelp":"Separate tags with commas. Up to 12 tags, each at most 40 characters.",
+ "detailsTagsHelp": "Tags are case-sensitive, up to 40 characters each. Separate tags with commas and quote any tag that contains a comma.",
  "detailsTagsLimit":"Use at most 40 characters for each tag name.",
  "detailsConflict":"Someone changed these fields. Compare both versions, then choose which to keep before saving.",
  "detailsYours":"Your edit",
