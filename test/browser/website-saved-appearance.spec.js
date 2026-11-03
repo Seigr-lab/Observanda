@@ -18,6 +18,45 @@ import {contentBuffer} from '../../src/file-content.js';
 import {mountFilesEditor} from './mount-files-editor.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
+test('author named themes on a folder and one section and open the styled publication in a separate reader',async({page,browser})=>{
+ test.setTimeout(120000);page.setDefaultTimeout(12000);
+ const dir=await mkdtemp(path.join(os.tmpdir(),'website-atlas-themes-')),root=path.join(dir,'workspace'),out=path.join(dir,'public');let reader;
+ try{
+  await mkdir(path.join(root,'.observanda'),{recursive:true});await mkdir(out);
+  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace),id=randomUUID();
+  workspace.catalogue=workspace.openCatalogue=()=>{throw Error('Themes accessed research');};
+  const file=(title,section,css)=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="'+css+'"></head><body><main><h1>'+title+'</h1><section id="traces"><h2>'+section+'</h2><p>Fluorescence peaks at 526 nm.</p></section></main></body></html>';
+  const methods='atlas/optics.html',maps='atlas/maps.html';
+  await store.importFiles(id,{name:'Field methods',files:new Map([['index.html',file('Publications','Atlas','style.css')],[methods,file('Optical measurements','Instrument traces','../style.css')],[maps,file('Station maps','River stations','../style.css')],['style.css','body{margin:2rem}']])});
+  await page.exposeFunction('filesAPI',async(route,data)=>{let result;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL(route,'https://website.test'),body:async()=>data??{},json:r=>{result=r;},check:async()=>{},title:'Field methods',preparation:async()=>({state:'ready',defaultSiteId:id})});return result;});
+  await mountFilesEditor(page);
+  await page.route('https://website.test/api/website-files/preview/**',async route=>{
+   const u=new URL(route.request().url());if(u.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',body:'<!doctype html><body></body>'});
+   const [,revision,name]=u.pathname.match(/\/preview\/[^/]+\/([a-f0-9]{64})\/(.+)$/),f=await store.file(id,name,{revision,editor:true});
+   return route.fulfill({contentType:f.contentType,body:f.bytes??await contentBuffer(f.content)});
+  });
+  const canvas=page.frameLocator('#website-files-canvas');
+  await page.locator('[data-website-file-page]').selectOption(methods);await expect(canvas.getByRole('heading',{name:'Optical measurements'})).toBeVisible();
+  const themes=page.getByRole('button',{name:'Themes',exact:true}),dialog=page.getByRole('dialog',{name:'Themes'}),apply=dialog.getByRole('button',{name:'Save theme'});
+  await themes.click();await dialog.getByLabel('Theme name').fill('Field atlas');await dialog.getByRole('combobox',{name:'Palette',exact:true}).selectOption('field');
+  await dialog.getByRole('combobox',{name:'Apply to',exact:true}).selectOption('folder');await apply.click();await expect(dialog).not.toBeVisible();
+  await expect(canvas.locator('body')).toHaveCSS('background-color','rgb(250, 246, 238)');
+  await canvas.locator('#traces').click({position:{x:3,y:3}});
+  await themes.click();await dialog.getByRole('combobox',{name:'Theme library',exact:true}).selectOption('');await dialog.getByLabel('Theme name').fill('Instrument panel');
+  await dialog.getByRole('combobox',{name:'Palette',exact:true}).selectOption('night');await dialog.getByRole('combobox',{name:'Apply to',exact:true}).selectOption('section');
+  await expect(dialog.frameLocator('iframe').locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  if(process.env.OBSERVANDA_THEME_PROOF)await dialog.screenshot({path:process.env.OBSERVANDA_THEME_PROOF});
+  await apply.click();await expect(dialog).not.toBeVisible();await page.reload();await page.locator('[data-website-file-page]').selectOption(methods);
+  await expect(canvas.locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  const revision=await store.siteVersion(id),candidate=await WebsiteFilesCandidate.open(store,id,revision);await candidate.verify({});
+  const folder=new LocalExport(websitePublicationMetadata(store.publicationWorkspace(id)),{fileOwner:{locked:(_dir,work)=>store.withSite(id,revision,work),candidate:async()=>candidate}});
+  const plan=await folder.plan({reviewId:candidate.reviewId,directory:out});await folder.apply({id:plan.id,reviewed:true});
+  reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(out,methods)).href);await expect(reader.locator('#traces')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  await expect(reader.locator('body')).toHaveCSS('background-color','rgb(250, 246, 238)');await reader.goto(pathToFileURL(path.join(out,maps)).href);
+  await expect(reader.locator('body')).toHaveCSS('background-color','rgb(250, 246, 238)');await reader.goto(pathToFileURL(path.join(out,'index.html')).href);
+  await expect(reader.locator('body')).not.toHaveAttribute('data-website-page-theme',/.+/);
+ }finally{await reader?.close();await closeIdleMutationFiles();await rm(dir,{recursive:true,force:true,maxRetries:12,retryDelay:100});}
+});
 test('site appearance previews and publishes shared scientific pages while raw and private styles stay independently owned',async({page,browser})=>{
  test.setTimeout(120000);page.setDefaultTimeout(12000);const dir=await mkdtemp(path.join(os.tmpdir(),'website-appearance-')),root=path.join(dir,'workspace'),out=path.join(dir,'publication');
  await mkdir(path.join(root,'.observanda'),{recursive:true});await mkdir(out);let visitor;

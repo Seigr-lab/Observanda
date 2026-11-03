@@ -498,7 +498,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
-  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('destination','destination')+button('folderPublish','folder')+button('checkWebsite','check-website'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
+  const headerActions=opened&&!form&&!stale&&!composing&&!choosingTarget?extraTools('site',button('create','new')+button('siteAppearance','appearance')+button('designThemes','themes')+button('destination','destination')+button('folderPublish','folder')+button('checkWebsite','check-website'))+button('publishUpdate','publish-update','data-website-file-requires-clean'):'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
   if(stale)body=conflictingPage?conflictView():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
@@ -759,12 +759,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page')showPageChecks({doc:websiteHTML(html),path:opened.path,directory:directory(),pages:previewPages(),t:tr,select:path=>visual?.select(path,{edit:true})});
    else if(operation==='check-website'){if(await beforeLeave(true))checkSavedSite(element);}
-   else if(operation==='appearance'&&await beforeLeave(true)){
+   else if(['appearance','themes'].includes(operation)&&await beforeLeave(true)){
     const base=opened,current=()=>opened===base&&!stale;
-    await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,
+    const themes=operation==='themes',node=themes&&selected!=null?blockAt(websiteHTML(base.html),selected):null;
+    await editWebsiteAppearance({opened:base,directory:directory(),request,t:tr,signal:controller.signal,current,trigger:element,themes,blockPath:node?selected:null,sectionTitle:node?label(node):'',
      apply:values=>run(async()=>{
       if(!current())throw Object.assign(Error(tr('changed')),{code:'WEBSITE_CHANGED'});
-      const saved=await request('appearance/save',{siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,values},{signal:controller.signal});
+      const saved=await request(themes?'themes/change':'appearance/save',{siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,...(themes?values:{values})},{signal:controller.signal});
       adopt(saved);render();return true;
      },'saving')});
    }

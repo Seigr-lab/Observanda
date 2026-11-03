@@ -34,6 +34,7 @@ import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
 import {prepareFeedUsage,finishFeedUsage} from './website-feed-usage-index.js';
 import {syncSavedAppearance,validateSavedAppearance} from './website-saved-appearance.js';
+import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -187,7 +188,7 @@ export class WebsiteFileStore{
    const page=styledPageHTML(value,name);value=page.html;used=page.used;editorMenu=page.menu;
    if(Buffer.byteLength(value)>TEXT_LIMIT)throw new AppError('LIMIT');
   }
-  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu})};
+  const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(name.endsWith('.html')&&typeof value==='string'&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{})};
  }
  validBlob(file,id,sourceIds){
   const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sourceIds.has(file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
@@ -205,6 +206,7 @@ export class WebsiteFileStore{
   if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
   validateFeedFiles(value,names);
   validateSavedAppearance(value);
+  validateWebsiteThemes(value);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -276,6 +278,7 @@ export class WebsiteFileStore{
   manifest=await syncEntryStyles(this,manifest,signal);
   manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
   manifest=await syncSavedAppearance(this,manifest,signal);
+  manifest=await syncWebsiteThemes(this,manifest,signal);
   manifest=retainWebsiteFeedAssets(manifest);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){

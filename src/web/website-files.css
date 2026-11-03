@@ -112,6 +112,19 @@
 .website-appearance-dialog { width:min(64rem,94vw) }
 .website-appearance-columns { display:grid; grid-template-columns:minmax(13rem,1fr) minmax(14rem,2fr); gap:1rem }
 .website-appearance-columns iframe { width:100%; min-height:18rem; height:48vh; border:1px solid var(--ui-border,currentColor); background:white }
+.website-author-dialog.website-appearance-dialog { width:min(66rem,94vw); height:min(47rem,90vh); max-height:90vh; padding:0; overflow:hidden; color:var(--ui-text,#203040); background:var(--ui-surface,#fff) }
+.website-appearance-dialog > form { box-sizing:border-box; display:grid; grid-template-rows:auto auto minmax(0,1fr) auto auto; height:100%; gap:0; margin:0 }
+.website-appearance-dialog > form > h2 { margin:0; padding:1rem 1.2rem .25rem }
+.website-appearance-dialog > form > p { margin:0; padding:.3rem 1.2rem .75rem }
+.website-appearance-dialog > form > [role=status]:empty { padding:0 }
+.website-appearance-dialog .website-appearance-columns { grid-template-columns:minmax(13rem,19rem) minmax(0,1fr); min-height:0; gap:0; border-block:1px solid var(--ui-border,#cbd3df) }
+.website-appearance-columns > :first-child { overflow:auto; overscroll-behavior:contain; min-height:0; padding:.7rem 1rem }
+.website-appearance-columns > :last-child { min-height:0; min-width:0; padding:.7rem 1rem; display:grid; grid-template-rows:auto auto minmax(0,1fr); gap:.25rem; background:var(--ui-background,#f3f5f8); border-inline-start:1px solid var(--ui-border,#cbd3df) }
+.website-appearance-columns > :last-child h3 { margin:0; font-size:1rem }
+.website-appearance-columns > :last-child iframe { box-sizing:border-box; min-height:0; height:100%; border-color:var(--ui-border,#cbd3df) }
+.website-appearance-dialog footer { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.65rem 1rem }
+.website-appearance-dialog footer [type=submit] { color:var(--ui-on-accent,#fff); background:var(--ui-accent,#3659a9); border-color:var(--ui-accent,#3659a9) }
+.website-appearance-dialog footer button:nth-last-child(2) { margin-inline-start:auto }
 .website-appearance-color { display:grid; grid-template-columns:minmax(0,1fr) 7rem; align-items:end; gap:.4rem }
 .website-appearance-color input { max-width:100%; box-sizing:border-box }
 .website-appearance-dialog footer { display:flex; justify-content:end; gap:.5rem }
