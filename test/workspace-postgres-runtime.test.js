@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {Client} from 'pg';
-import {startManagedPostgres,stopManagedPostgres} from '../src/postgres-runtime.js';
+import {runtimeCommand,startManagedPostgres,stopManagedPostgres} from '../src/postgres-runtime.js';
 import {WorkspacePostgres} from '../src/workspace-postgres.js';
 import {workspaceDatabaseLease} from '../src/workspace-database-lease.js';
 import {seal,unseal,clearVault} from '../src/encryption.js';
@@ -95,6 +95,20 @@ test('lifecycle cancellation can stop a database interrupted before initializati
  const stopped=await stopManagedPostgres({directory,env:environment(),workspace:{...workspace,deleteId}});assert.equal(stopped.stopped,true);await stopped.close();
  const state=JSON.parse(unseal(await readFile(path.join(directory,'service.observanda')),workspace.vault.key,'Observanda/workspace-postgresql/v1/'+workspace.vault.id));assert.equal(state.phase,'initializing');assert.equal(state.running,false);await assert.rejects(readFile(path.join(directory,'data/postmaster.pid')),{code:'ENOENT'});
  await unlink(marker);const resumed=await f.start(workspace);assert.equal((await query(resumed.env,'SELECT 1 AS intact'))[0].intact,1);
+});
+
+test('a frozen Windows deletion refuses a stale PID that names another live PostgreSQL server',{skip:process.platform!=='win32'},async t=>{
+ const f=await fixture(t),a=await f.create('former'),b=await f.create('independent');
+ await (await f.start(a)).close();
+ const other=await f.start(b),directory=path.join(a.root,'.observanda/postgresql'),deleteId=randomUUID();
+ const otherLock=await readFile(path.join(b.root,'.observanda/postgresql/data/postmaster.pid'));
+ await writeFile(path.join(directory,'data/postmaster.pid'),otherLock);
+ // pg_ctl reports this stale PID as running; status alone cannot authorize a stop.
+ await runtimeCommand(path.join(environment().OBSERVANDA_POSTGRES_BIN,'pg_ctl.exe'),['-D',path.join(directory,'data'),'status']);
+ await writeFile(path.join(a.root,'.observanda/delete-workspace.json'),JSON.stringify({version:1,id:deleteId,source:a.root}));
+ await assert.rejects(stopManagedPostgres({directory,env:environment(),workspace:{...a,deleteId}}),{code:'DATABASE_RUNNING'});
+ assert.deepEqual(await query(other.env,'SELECT 42 AS intact'),[{intact:42}]);
+ assert.deepEqual(await readFile(path.join(directory,'data/postmaster.pid')),otherLock);
 });
 
 

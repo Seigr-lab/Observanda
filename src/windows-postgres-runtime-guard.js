@@ -33,17 +33,20 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
  const relative=file=>{const value=path.relative(directory,path.resolve(file));if(!value||value==='..'||value.startsWith('..'+path.sep)||path.isAbsolute(value))throw new AppError('UNSAFE');return value.split(path.sep).join('/');};
  const file=(action,target,options={})=>request('file',{action,relative:relative(target),...options});
  const optional=async operation=>{try{return await operation();}catch(error){if(error.code==='ENOENT')return null;throw error;}};
+ const readIdentified=async(target,limit)=>{const result=await file('read',target,{limit});return {bytes:Buffer.from(result.data,'base64'),identity:result.identity};};
  const files={
   stat:(target,{directory:folder=false,missing=false}={})=>missing?optional(()=>file('stat',target,{folder})):file('stat',target,{folder}),
-  async read(target,{limit=16384,encoding}={}){const bytes=Buffer.from((await file('read',target,{limit})).data,'base64');return encoding?bytes.toString(encoding):bytes;},
+  readIdentified,
+  async read(target,{limit=16384,encoding}={}){const {bytes}=await readIdentified(target,limit);return encoding?bytes.toString(encoding):bytes;},
   write:(target,bytes)=>file('write',target,{data:(Buffer.isBuffer(bytes)?bytes:Buffer.from(bytes,'utf8')).toString('base64')}),
   removeTree:target=>optional(()=>file('remove-tree',target)),rename:(source,target)=>file('rename',source,{folder:true,target:relative(target)}),unlink:target=>optional(()=>file('unlink',target))
  };
  return {directory,identity:receipt.identity,cached:receipt.cached,files,processId:child.pid,inspectSource:(source,{parentIdentity,expectedIdentity})=>request('inspect-source',{source,parentIdentity,expectedIdentity}),sourceFence:(source,options)=>request('source-fence',{source,...options}),lease:{close:async()=>{}},
+  stopWitness:receipt.localStopSupported?options=>request('local-stop-witness',options):null,
   async run(command,args,{signal:commandSignal,capture=false}={}){
    commandSignal?.throwIfAborted();let cancelled;
    const abort=()=>{cancelled??=request('cancel');void cancelled.catch(()=>{});};commandSignal?.addEventListener('abort',abort,{once:true});
-   try{const result=await request('run',{command,args,capture});await cancelled;if(commandSignal?.aborted)throw new AppError('DATABASE_CANCELLED');if(result.exitCode!==0)throw new AppError('DATABASE_INSTALL');return result.stdout??'';}
+   try{const result=await request('run',{command,args,capture});await cancelled;if(commandSignal?.aborted)throw new AppError('DATABASE_CANCELLED');if(result.exitCode!==0)throw Object.assign(new AppError('DATABASE_INSTALL'),{exitCode:result.exitCode});return result.stdout??'';}
    finally{commandSignal?.removeEventListener('abort',abort);}
   },close
  };

@@ -12,6 +12,7 @@ import {createReadStream,createWriteStream} from 'node:fs';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
 import {createHash,randomBytes} from 'node:crypto';
+import {localStopWitness} from './postgres-stop-witness.js';
 import {pipeline} from 'node:stream/promises';
 import {Transform} from 'node:stream';
 import {fileURLToPath} from 'node:url';
@@ -174,7 +175,14 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
  const files=postgresRuntimeFiles(guard),checkVersion=bin=>version(bin,(command,args,options)=>guard.run(command,args,options));
  // Kernel-owned locks cannot collide with unrelated TCP services.
  const ownership=guard.lease??await (workspace?workspaceDatabaseLease(directory):managerLease(directory));
- let leaseClosing;const lease={close:()=>leaseClosing??=(async()=>{try{await ownership.close();}finally{const result=await guard.close();if(result?.stopped)mayBeRunning=false;}})()};
+ let leaseClosing;const lease={close:()=>leaseClosing??=(async()=>{
+  try{await ownership.close();}finally{
+   const result=await guard.close();
+   // A stop-only job launched no postmaster. Its exit proves nothing about
+   // a different job that may still hold the cluster.
+   if(result?.stopped&&!stopOnly)mayBeRunning=false;
+  }
+ })()};
  const stateFile=path.join(directory,'service.observanda'),data=path.join(directory,'data'),portableKey=workspace?Buffer.from(workspace.vault.key):null;
  const aad=workspace?'Observanda/workspace-postgresql/v1/'+workspace.vault.id:null;
  const protector=workspace?{protect:bytes=>seal(bytes,portableKey,aad),unprotect:bytes=>unseal(bytes,portableKey,aad)}:windows?new WindowsProtector():null;
@@ -228,13 +236,17 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   if((await files.read(path.join(data,'PG_VERSION'),{limit:128,encoding:'utf8'})).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
   verifiedCluster=true;
   mayBeRunning=!!await files.stat(path.join(data,'postmaster.pid'),{missing:true});
-  let running=false;try{await ctl(['status']);running=true;}catch{}
+  let running=false,statusExit;try{await ctl(['status']);running=true;}catch(error){statusExit=error.exitCode;}
+  // The deletion owner has already closed its managed instance. A live PID
+  // seen by a newly acquired Windows guard could belong to another cluster.
+  if(running&&windows&&stopOnly&&workspace?.deleteId)throw new AppError('DATABASE_RUNNING');
   if(running){await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;}
   if(stopOnly){
+   if(mayBeRunning&&statusExit===3&&workspace?.deleteId&&(await localStopWitness({guard,config,workspace,data,verify:true}))?.stopped)mayBeRunning=false;
    if(mayBeRunning)throw new AppError('DATABASE_RUNNING');budget.stopped(directory);config.running=false;await save();let closing;
    return {managed:true,stopped:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{portableKey?.fill(0);await lease.close();})()};
   }
-  config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;}await save();
+  config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
   onProgress({stage:'start'});
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
   // WAL recovery on network storage can exceed a minute. Wait for readiness
@@ -247,7 +259,19 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
   }finally{await admin.end();}
   await verifyManagedApplication(config,{signal});
+  if(workspace&&guard.stopWitness){
+   const witness=await localStopWitness({guard,config,workspace,data}).catch(error=>{
+    if(error.code==='DATABASE_GUARD_UNAVAILABLE')throw error;
+    return null;
+   });
+   if(witness?.ticket)config.localStopTicket=witness.ticket;
+  }
   if(config.phase==='initializing'){config.phase='ready';await save();}
+  else if(config.localStopTicket){
+   // The required running configuration was already saved before launch.
+   // Failure to persist optional proof leaves deletion recovery conservative.
+   try{await save();}catch(error){if(error.code==='DATABASE_GUARD_UNAVAILABLE')throw error;delete config.localStopTicket;}
+  }
   signal?.throwIfAborted();
   reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
@@ -255,7 +279,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{retireStorage();try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
  }catch(error){
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
-  if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
+  if(verifiedCluster&&!stopOnly)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
   try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);}
   if(error instanceof AppError)throw error;
   throw new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_RUNTIME');

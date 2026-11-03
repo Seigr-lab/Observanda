@@ -33,6 +33,8 @@ namespace Observanda {
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool QueryInformationJobObject(IntPtr job,int kind,out JobAccounting value,uint size,IntPtr length);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool AssignProcessToJobObject(IntPtr job,IntPtr process);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateJobObject(IntPtr job,uint code);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr OpenProcess(uint access,bool inherit,uint id);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern bool IsProcessInJob(IntPtr process,IntPtr job,out bool belongs);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool TerminateProcess(IntPtr process,uint code);
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool CreateProcessW(string app,StringBuilder command,IntPtr processSecurity,IntPtr threadSecurity,bool inherit,uint flags,IntPtr environment,string cwd,ref Startup startup,out ProcessInfo process);
   [DllImport("kernel32.dll",SetLastError=true)] static extern uint ResumeThread(IntPtr thread);
@@ -206,7 +208,7 @@ namespace Observanda {
    guardJob=CreateJobObject(IntPtr.Zero,null);if(guardJob==IntPtr.Zero)throw new Win32Exception();var limits=new ExtendedLimits{Basic=new BasicLimits{Flags=0x2000}};if(!SetInformationJobObject(guardJob,9,ref limits,(uint)Marshal.SizeOf(typeof(ExtendedLimits))))throw new Win32Exception();
    guardNull=CreateFile("NUL",0xC0000000,3,IntPtr.Zero,3,0,IntPtr.Zero);if(guardNull.IsInvalid||!SetHandleInformation(guardNull.DangerousGetHandle(),1,1))throw new Win32Exception();
    foreach(int kind in new int[]{-10,-11,-12})if(!SetHandleInformation(GetStdHandle(kind),1,0))throw new Win32Exception();
-   return new {identity=Identity(Information(guardRoot,true)),cached=cached,created=created};
+   return new {identity=Identity(Information(guardRoot,true)),cached=cached,created=created,localStopSupported=driveType==3&&!guardPath.StartsWith(@"\\")};
   }
   static string GuardQuote(string value){if(value.IndexOf('\0')>=0)throw new Failure("INVALID");var result=new StringBuilder("\"");int slashes=0;foreach(char ch in value){if(ch=='\\'){slashes++;continue;}if(ch=='\"'){result.Append('\\',slashes*2+1);result.Append(ch);}else{result.Append('\\',slashes);result.Append(ch);}slashes=0;}result.Append('\\',slashes*2);return result.Append('"').ToString();}
   static void GuardRenameSibling(SafeFileHandle file,string name,bool replace=false){
@@ -240,7 +242,7 @@ namespace Observanda {
     if(action=="remove-tree"){GuardRemoveTree(member.Parent,member.Name);return new {ok=true};}
     bool folder=Flag(command,"folder");using(var handle=Open(member.Parent,member.Name,folder,0x80000000|((action=="rename"||action=="unlink")?0x10000u:0))){Info info=Information(handle,folder);
      if(action=="stat")return new {size=Bytes(info),identity=Identity(info)};
-     if(action=="read"){int limit=Number(command,"limit");if(limit<0||limit>16384||Bytes(info)>limit)throw new Failure("LIMIT");using(var stream=new FileStream(handle,FileAccess.Read,4096,false)){byte[] bytes=new byte[(int)Bytes(info)];int offset=0;while(offset<bytes.Length){int count=stream.Read(bytes,offset,bytes.Length-offset);if(count==0)throw new Failure("CONFLICT");offset+=count;}if(stream.ReadByte()!=-1)throw new Failure("CONFLICT");try{return new {data=Convert.ToBase64String(bytes)};}finally{Array.Clear(bytes,0,bytes.Length);}}}
+     if(action=="read"){int limit=Number(command,"limit");if(limit<0||limit>16384||Bytes(info)>limit)throw new Failure("LIMIT");using(var stream=new FileStream(handle,FileAccess.Read,4096,false)){byte[] bytes=new byte[(int)Bytes(info)];int offset=0;while(offset<bytes.Length){int count=stream.Read(bytes,offset,bytes.Length-offset);if(count==0)throw new Failure("CONFLICT");offset+=count;}if(stream.ReadByte()!=-1)throw new Failure("CONFLICT");try{return new {data=Convert.ToBase64String(bytes),identity=Identity(info)};}finally{Array.Clear(bytes,0,bytes.Length);}}}
      if(action=="unlink"){Delete(handle);return new {ok=true};}
      if(action=="rename"){try{using(var target=new GuardMember(Text(command,"target"))){if(Identity(Information(member.Parent,true))!=Identity(Information(target.Parent,true)))throw new Failure("UNSAFE");GuardRenameSibling(handle,target.Name);}}catch(Exception error){error.Data["runtimePhase"]="directory-publication";throw;}return new {ok=true};}
      throw new Failure("INVALID");
@@ -260,10 +262,46 @@ namespace Observanda {
    }
   }
   static void GuardStop(){if(guardJob==IntPtr.Zero)return;if(!TerminateJobObject(guardJob,1))throw new Win32Exception();for(;;){JobAccounting value;if(!QueryInformationJobObject(guardJob,1,out value,(uint)Marshal.SizeOf(typeof(JobAccounting)),IntPtr.Zero))throw new Win32Exception();if(value.Active==0)break;Thread.Sleep(10);}var thread=guardThread;if(thread!=null)thread.Join();}
+  static readonly byte[] stopEntropy=Encoding.UTF8.GetBytes("Observanda/guarded-local-postmaster/v1");
+  static bool NoLocalProcess(int pid){
+   IntPtr process=OpenProcess(0x1000,false,(uint)pid);
+   if(process==IntPtr.Zero)return Marshal.GetLastWin32Error()==87;
+   CloseHandle(process);
+   return false;
+  }
+  static object LocalStopWitness(Dictionary<string,object> command){
+   int pid=Number(command,"pid"),port=Number(command,"port");
+   string binding=Text(command,"binding");
+   object optional;
+   if(pid<=0||port<1||port>65535||binding.Length!=64||guardRoot==null||guardJob==IntPtr.Zero)throw new Failure("INVALID");
+   var unavailable=new {ticket=(string)null,stopped=false};
+   if(guardPath.StartsWith(@"\\")||GetDriveType(Path.GetPathRoot(guardPath))!=3)return unavailable;
+   byte[] payload=Encoding.UTF8.GetBytes("v1/"+pid+"/"+port+"/"+binding);
+   try{
+    if(!command.TryGetValue("ticket",out optional)||optional==null){
+     IntPtr process=OpenProcess(0x1000,false,(uint)pid);
+     if(process==IntPtr.Zero)return unavailable;
+     try{
+      bool ours;
+      if(!IsProcessInJob(process,guardJob,out ours)||!ours)return unavailable;
+     }finally{CloseHandle(process);}
+     return new {ticket=Convert.ToBase64String(ProtectedData.Protect(payload,stopEntropy,DataProtectionScope.LocalMachine)),stopped=false};
+    }
+    string ticket=optional as string;
+    if(ticket==null||ticket.Length>4096)return unavailable;
+    byte[] witness=ProtectedData.Unprotect(Convert.FromBase64String(ticket),stopEntropy,DataProtectionScope.LocalMachine);
+    if(witness.Length!=payload.Length)return unavailable;
+    int difference=0;
+    for(int i=0;i<witness.Length;i++)difference|=witness[i]^payload[i];
+    if(difference!=0||!NoLocalProcess(pid))return unavailable;
+    foreach(var listener in System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())if(listener.Port==port)return unavailable;
+    return new {ticket=(string)null,stopped=NoLocalProcess(pid)};
+   }catch(CryptographicException){return unavailable;}catch(FormatException){return unavailable;}catch(System.Net.NetworkInformation.NetworkInformationException){return unavailable;}
+  }
   public static void RunPostgresGuard(){
    Environment.SetEnvironmentVariable("LC_ALL","C");Environment.SetEnvironmentVariable("LANG","C");
    input=Console.OpenStandardInput();rawOutput=Console.OpenStandardOutput();output=new StreamWriter(rawOutput,new UTF8Encoding(false));GuardSend(new {ready=true});
-   try{using(var reader=new StreamReader(input,new UTF8Encoding(false,true))){string line;while((line=reader.ReadLine())!=null){if(line.Length>131072)throw new Failure("INVALID");int id=0;try{var command=json.Deserialize<Dictionary<string,object>>(line);id=Number(command,"id");string operation=Text(command,"operation");if(operation=="admit")GuardSend(new {id=id,result=GuardAdmit(command)});else if(operation=="inspect")GuardSend(new {id=id,result=GuardInspectStorage(command)});else if(operation=="probe-create")GuardSend(new {id=id,result=GuardProbeCreate(command)});else if(operation=="inspect-source")GuardSend(new {id=id,result=GuardInspectSource(command)});else if(operation=="source-fence")GuardSend(new {id=id,result=GuardSourceFence(command)});else if(operation=="file")GuardSend(new {id=id,result=GuardFileOperation(command)});else if(operation=="run")GuardLaunch(command,id);else if(operation=="cancel"){GuardStop();GuardSend(new {id=id,result=new {stopped=true}});}else if(operation=="close"){guardClosing=true;GuardStop();GuardSend(new {id=id,result=new {stopped=true}});break;}else throw new Failure("INVALID");}catch(Exception error){var failure=error as Failure;GuardSend(new {id=id,error=failure==null?Error(error):failure.Code,reason=error is GuardFailure?error.Message:null,diagnostic=error.ToString()+" phase="+Convert.ToString(error.Data["runtimePhase"])});}}}}
+   try{using(var reader=new StreamReader(input,new UTF8Encoding(false,true))){string line;while((line=reader.ReadLine())!=null){if(line.Length>131072)throw new Failure("INVALID");int id=0;try{var command=json.Deserialize<Dictionary<string,object>>(line);id=Number(command,"id");string operation=Text(command,"operation");if(operation=="admit")GuardSend(new {id=id,result=GuardAdmit(command)});else if(operation=="inspect")GuardSend(new {id=id,result=GuardInspectStorage(command)});else if(operation=="probe-create")GuardSend(new {id=id,result=GuardProbeCreate(command)});else if(operation=="inspect-source")GuardSend(new {id=id,result=GuardInspectSource(command)});else if(operation=="local-stop-witness")GuardSend(new {id=id,result=LocalStopWitness(command)});else if(operation=="source-fence")GuardSend(new {id=id,result=GuardSourceFence(command)});else if(operation=="file")GuardSend(new {id=id,result=GuardFileOperation(command)});else if(operation=="run")GuardLaunch(command,id);else if(operation=="cancel"){GuardStop();GuardSend(new {id=id,result=new {stopped=true}});}else if(operation=="close"){guardClosing=true;GuardStop();GuardSend(new {id=id,result=new {stopped=true}});break;}else throw new Failure("INVALID");}catch(Exception error){var failure=error as Failure;GuardSend(new {id=id,error=failure==null?Error(error):failure.Code,reason=error is GuardFailure?error.Message:null,diagnostic=error.ToString()+" phase="+Convert.ToString(error.Data["runtimePhase"])});}}}}
    finally{guardClosing=true;try{GuardStop();}finally{if(guardAdmissionKey!=null)Array.Clear(guardAdmissionKey,0,guardAdmissionKey.Length);if(guardJob!=IntPtr.Zero)CloseHandle(guardJob);if(guardNull!=null)guardNull.Dispose();if(guardPinStream!=null)guardPinStream.Dispose();else if(guardPin!=null)guardPin.Dispose();if(guardRoot!=null)guardRoot.Dispose();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}}
   }
  }

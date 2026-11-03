@@ -64,6 +64,20 @@ test('native job ownership stops actual PostgreSQL descendants when the guard he
  await guard.run(path.join(bin,'initdb.exe'),['-D',data,'-U','guard_test','--auth=trust','--encoding=UTF8','--no-locale']);
  await guard.run(path.join(bin,'pg_ctl.exe'),['-D',data,'-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+number+' -c shared_buffers=16MB -c max_connections=10','-w','-t','30','start']);
  const pid=Number((await readFile(path.join(data,'postmaster.pid'),'utf8')).split('\n')[0]);assert.ok(pid>0);await assert.rejects(rename(directory,path.join(f.root,'moved')));
+ const binding='a'.repeat(64),scope={pid,port:number,binding};
+ const {ticket}=await guard.stopWitness(scope);assert.equal(typeof ticket,'string');
+ assert.equal((await guard.stopWitness({...scope,ticket})).stopped,false);
+ assert.equal((await guard.stopWitness({...scope,pid:process.pid})).ticket,null);
  process.kill(guard.processId,'SIGKILL');await guard.close().catch(error=>{assert.equal(error.code,'DATABASE_GUARD_UNAVAILABLE');});await eventually(()=>{try{process.kill(pid,0);return false;}catch(error){if(error.code==='ESRCH')return true;throw error;}});
+ const recovered=await f.acquire(directory);
+ await assert.rejects(recovered.run(path.join(bin,'pg_ctl.exe'),['-D',data,'status']),{code:'DATABASE_INSTALL',exitCode:3});
+ assert.equal((await recovered.stopWitness({...scope,ticket,binding:'b'.repeat(64)})).stopped,false);
+ assert.equal((await recovered.stopWitness({...scope,ticket,port:number===65535?65534:number+1})).stopped,false);
+ assert.equal((await recovered.stopWitness({...scope,ticket:'unreadable'})).stopped,false);
+ const listener=createServer();await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(number,'127.0.0.1',resolve);});
+ try{assert.equal((await recovered.stopWitness({...scope,ticket})).stopped,false);}
+ finally{await new Promise(resolve=>listener.close(resolve));}
+ assert.equal((await recovered.stopWitness({...scope,ticket})).stopped,true);
+ await recovered.close();
  await rename(directory,path.join(f.root,'moved'));assert.match((await readFile(path.join(f.root,'moved','data','PG_VERSION'),'utf8')).trim(),/^(16|17|18)$/);
 });
