@@ -1,4 +1,5 @@
 {
+  "feedFigureLayout": "Figuroppsett i kvar oppføring",
   "feedCapacity": "Ei oppføring med denne utforminga er for stor for éi HTML-side. Vel kompakt kort, bruk færre felt i ei eigendefinert utforming eller fjern straumen før publisering.",
   "publishUpdate": "Publiser oppdatering",
   "choosePublishTarget": "Vel kvar nettstaden skal publiserast. Du får sjå målet og filendringane før du sender dei.",

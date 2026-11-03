@@ -24,6 +24,7 @@ async function addInstrumentPlates(page){
  await dialog.getByRole('radio',{name:'Custom design'}).check();
  await dialog.getByText('Arrange fields',{exact:true}).click();
  await dialog.locator('[data-feed-field="content"]').uncheck();await dialog.locator('[data-feed-field="figures"]').check();
+ await dialog.getByLabel('Layout of figures within each entry').selectOption('grid');
  await dialog.locator('[data-feed-apply]').click();
  await expect(dialog).toHaveCount(0);
 }
@@ -137,6 +138,8 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(plate).toContainText('Calibrated emission');await expect(plate).toContainText('Baseline emission');
   const plots=plate.locator('img');await expect(plots).toHaveCount(2);
   await expect.poll(()=>plots.evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0))).toBe(true);
+  await expect(plate.locator('[data-feed-field="figures"]')).toHaveCSS('display','grid');
+  const boxes=await plots.evaluateAll(images=>images.map(img=>img.getBoundingClientRect().left));expect(boxes[1]).toBeGreaterThan(boxes[0]);
   expect(await reader.content()).not.toMatch(/Second assay approved|Internal calibration canary|internal-serial-canary/);
   if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/10-published-plates.png'),fullPage:true});
   for(const database of sentinels)expect((await stat(database)).isFile()).toBe(true);

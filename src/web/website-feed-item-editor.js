@@ -1,6 +1,6 @@
 import {feedFields} from './website-feed-fields.js';
 const fields=Object.keys(feedFields);
-const orderedHTML=keys=>'<article>\n'+keys.map(key=>'  <'+feedFields[key].tag+' data-feed-field="'+key+'"></'+feedFields[key].tag+'>').join('\n')+'\n</article>';
+const orderedHTML=(keys,grid=false)=>'<article>\n'+keys.map(key=>'  <'+feedFields[key].tag+' data-feed-field="'+key+'"'+(key==='figures'&&grid?' class="website-feed-figure-grid"':'')+'></'+feedFields[key].tag+'>').join('\n')+'\n</article>';
 
 // The arrangement is an explicit way to replace an item template. Opening a
 // saved design never parses and serializes its authored markup back to storage.
@@ -8,6 +8,8 @@ export function feedItemEditor(parent,{t,changed}){
  const make=(tag,holder,text)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;holder.append(el);return el;};
  const layout=make('details',parent);make('summary',layout,t('feedArrange'));
  const order=make('ol',layout);order.className='website-feed-fields';
+ const figureLabel=make('label',layout,t('feedFigureLayout')),figureLayout=make('select',figureLabel);
+ figureLayout.dataset.feedFigureLayout='';figureLayout.add(new Option(t('feedList'),'list'));figureLayout.add(new Option(t('feedGrid'),'grid'));
  const build=make('button',layout,t('feedUseFields'));build.type='button';build.className='button';
  make('p',layout,t('feedArrangeHelp')).className='muted';
  const raw=make('details',parent);make('summary',raw,t('feedItemHTML'));
@@ -15,7 +17,7 @@ export function feedItemEditor(parent,{t,changed}){
  make('p',raw,t('feedBindingHelp')).className='muted';
  let keys=[],active=new Set(),generated=false,pending=false,dragged=null;
  const selected=()=>keys.filter(key=>active.has(key));
- function apply(){input.value=orderedHTML(selected());generated=true;pending=false;build.disabled=true;changed();}
+ function apply(){input.value=orderedHTML(selected(),figureLayout.value==='grid');generated=true;pending=false;build.disabled=true;changed();}
  function arrange(focus){
   if(generated)apply();else{pending=true;changed();}
   paint(focus);
@@ -44,19 +46,23 @@ export function feedItemEditor(parent,{t,changed}){
     button.onclick=()=>move(key,enabled[i+step]);
    }
   });
+  figureLabel.hidden=!active.has('figures');
   build.hidden=generated;build.disabled=!active.size||!pending;if(focus)order.querySelector('[data-feed-field="'+focus+'"]').focus({preventScroll:true});
  }
  function readOrder(){
   const template=document.createElement('template');template.innerHTML=input.value;
   const found=[...new Set([...template.content.querySelectorAll('[data-feed-field]')].map(n=>n.dataset.feedField).filter(k=>fields.includes(k)))];
-  active=new Set(found);keys=[...found,...fields.filter(k=>!active.has(k))];generated=input.value===orderedHTML(found);pending=false;paint();
+  const grid=Boolean(template.content.querySelector('[data-feed-field="figures"].website-feed-figure-grid'));
+  figureLayout.value=grid?'grid':'list';
+  active=new Set(found);keys=[...found,...fields.filter(k=>!active.has(k))];generated=input.value===orderedHTML(found,grid);pending=false;paint();
  }
  build.onclick=()=>{apply();paint();};
+ figureLayout.onchange=()=>arrange();
  input.oninput=changed;input.onchange=readOrder;
  return {set(value,draft=null){
   input.value=value??orderedHTML(['title','content']);readOrder();
-  if(draft){active=new Set(draft);keys=[...draft,...fields.filter(k=>!active.has(k))];pending=true;paint();}
- },get:()=>input.value,draft:()=>pending?selected():null,forSave(){
+  if(draft){active=new Set(draft.fields);keys=[...draft.fields,...fields.filter(k=>!active.has(k))];figureLayout.value=draft.figureLayout;pending=true;paint();}
+ },get:()=>input.value,draft:()=>pending?{fields:selected(),figureLayout:figureLayout.value}:null,forSave(){
   if(pending||!active.size){layout.open=true;(active.size?build:order.querySelector('input'))?.focus();throw Error(t('feedFinishFields'));}
   return input.value;
  }};

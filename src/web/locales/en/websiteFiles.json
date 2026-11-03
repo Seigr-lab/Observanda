@@ -1,4 +1,5 @@
 {
+  "feedFigureLayout": "Layout of figures within each entry",
   "feedCapacity": "An entry and its layout are too large for one HTML page. Choose Compact card, use fewer fields in Custom design, or remove this feed before publishing.",
   "publishUpdate": "Publish update",
   "choosePublishTarget": "Choose where to publish this website. You will review the destination and file changes before sending them.",

@@ -1,4 +1,5 @@
 {
+  "feedFigureLayout": "Disposición de las figuras dentro de cada entrada",
   "feedCapacity": "Una entrada con este diseño es demasiado grande para una sola página HTML. Elige una tarjeta compacta, usa menos campos en el diseño personalizado o elimina esta colección antes de publicar.",
   "publishUpdate": "Publicar actualización",
   "choosePublishTarget": "Elija dónde publicar este sitio web. Podrá revisar el destino y los cambios en los archivos antes de enviarlos.",

@@ -26,6 +26,8 @@ export const feedCSS=`:where(.website-feed){margin-block:var(--section-space,2re
 :where(.website-feed[data-layout="grid"]>.website-feed-items){grid-template-columns:repeat(auto-fit,minmax(min(18rem,100%),1fr))}
 :where(.website-feed-item){min-inline-size:0;overflow-wrap:anywhere}
 :where(.website-feed-item img,.website-feed-item video){max-inline-size:100%;height:auto}
+:where(.website-feed-figure-grid){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr));gap:var(--card-gap,1rem);align-items:start}
+:where(.website-feed-figure-grid > *){min-inline-size:0;max-inline-size:100%}
 :where(.website-feed[data-template="card"] .website-feed-item){padding:var(--card-padding,1rem);border:1px solid var(--page-border,currentColor);border-radius:var(--corner-radius,.4rem);background:var(--page-surface,transparent)}
 :where(.website-feed-item>:first-child){margin-block-start:0}
 :where(.website-feed-nav){display:flex;gap:1rem;flex-wrap:wrap;justify-content:space-between;margin-block:1rem}

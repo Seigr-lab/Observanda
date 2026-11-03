@@ -1,4 +1,5 @@
 {
+  "feedFigureLayout": "Disposició de les figures dins de cada entrada",
   "feedCapacity": "Una entrada amb aquest disseny és massa gran per a una sola pàgina HTML. Trieu una targeta compacta, utilitzeu menys camps al disseny personalitzat o elimineu el canal abans de publicar.",
   "publishUpdate": "Publica l’actualització",
   "choosePublishTarget": "Trieu on voleu publicar aquest lloc web. Podreu revisar la destinació i els canvis als fitxers abans d’enviar-los.",
