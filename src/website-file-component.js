@@ -86,7 +86,7 @@ function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=fal
 export function prepareComponent(html,from,context){
  return rewrite(oneRoot(html),{...context,from,to:'index.html'});
 }
-function render(main,instance,page,context){
+export function renderComponentInstance(main,instance,page,context){
  const root=oneRoot(main.html);
  rewrite(root,{...context,from:'index.html',to:page.path,instance:instance.id,originalIds:instance.originalIds,draft:page.draft});
  put(root,marker,instance.id);return serializeOuter(root);
@@ -106,7 +106,7 @@ function changesFor(html,edits){
 }
 function rewriteAt(html,node,replacement){const loc=location(node);return changesFor(html,[{start:loc.startOffset,end:loc.endOffset,html:replacement}]);}
 export function makeFirstInstance(html,doc,blockPath,main,instance,page,context){
- const node=atPath(doc,blockPath);return rewriteAt(html,node,render(main,instance,page,context));
+ const node=atPath(doc,blockPath);return rewriteAt(html,node,renderComponentInstance(main,instance,page,context));
 }
 export function insertComponent(html,doc,position,blockPath,main,instance,page,context){
  let offset;
@@ -119,14 +119,14 @@ export function insertComponent(html,doc,position,blockPath,main,instance,page,c
   const loc=location(target);offset=position==='before'?loc.startOffset:loc.endOffset;
  }
  if(!Number.isInteger(offset))invalid();
- return html.slice(0,offset)+render(main,instance,page,context)+html.slice(offset);
+ return html.slice(0,offset)+renderComponentInstance(main,instance,page,context)+html.slice(offset);
 }
 export function rewriteComponentInstances(html,doc,main,page,context,{detach}={}){
  const matches=new Map((page.instances??[]).filter(i=>i.component===main.id&&(!detach||i.id===detach)).map(i=>[i.id,i])),changes=[];
  for(const node of nodes(doc)){
   const id=attr(node,marker),instance=matches.get(id);if(!instance)continue;
   matches.delete(id);const loc=location(node);node.attrs=node.attrs.filter(a=>a.name!==marker);
-  changes.push({start:loc.startOffset,end:loc.endOffset,html:detach?serializeOuter(node):render(main,instance,page,context)});
+  changes.push({start:loc.startOffset,end:loc.endOffset,html:detach?serializeOuter(node):renderComponentInstance(main,instance,page,context)});
  }
  if(matches.size||detach&&!changes.length)conflict();return changesFor(html,changes);
 }
@@ -138,7 +138,7 @@ export function checkComponentInstances(html,page,context){
   const id=attr(node,marker);if(id===undefined)continue;
   const instance=instances.get(id),main=context.components.get(instance?.component);if(!main)conflict();
   ancestry(node.parentNode);instances.delete(id);
-  if(render(main,instance,page,{...context,verifyOnly:true})!==serializeOuter(node))conflict();
+  if(renderComponentInstance(main,instance,page,{...context,verifyOnly:true})!==serializeOuter(node))conflict();
   for(const child of nodes(node)){const id=attr(child,'id');if(id&&ids.get(id)!==1)conflict();}
  }
  if(instances.size)conflict();

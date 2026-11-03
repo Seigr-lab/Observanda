@@ -447,6 +447,7 @@
           "title": "Vel skrifter, fargar og oppsett",
           "paragraphs": [
             "Opne {ui:websiteFiles.siteAppearance} for å angi fargar og typografi for nettstaden. Bruk det visuelle panelet for éin bestemt seksjon. Kontroller både startsida og ei side i ei undermappe i den lagra førehandsvisinga.",
+            "Vel ein seksjon på arbeidsflata og opne {ui:websiteFiles.componentLibrary} for å bruke tilknytte kopiar på fleire sider. For å bruke eit sideoppsett om att opnar du {ui:websiteFiles.pagePanel}, vel {ui:websiteFiles.designManage} og gjev utforminga av den offentlege sida eit namn. Under {ui:websiteFiles.addPage} vel du {ui:websiteFiles.designChoose}. Den nye sida får sin eigen tekst og held på koplingane til bibliotekseksjonane.",
             "Utsjånad under Innstillingar omfattar òg personlege val for grensesnittet i arbeidsområdet. Bruk utsjånaden i nettstadredigeringa når endringa skal gjelde publiserte sider."
           ]
         },

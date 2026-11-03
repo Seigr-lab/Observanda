@@ -228,3 +228,14 @@
 .component-uses { display:grid; gap:.25rem; margin-block:.4rem }
 .component-uses [data-instance] { text-align:start; justify-content:start }
 .component-uses [data-instance] small { margin:0 }
+.website-page-form { width:min(100%,46rem); margin:1rem auto; padding:1.3rem }
+.website-page-form form { display:grid; gap:1rem }
+.website-page-form h2,.website-page-form p,.website-page-form fieldset { margin:0 }
+.website-page-form .website-page-form-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr)); gap:.85rem }
+.website-page-form label { display:grid; gap:.3rem; font-weight:600 }
+.website-page-form :is(input,select) { width:100%; min-width:0; padding:.45rem .6rem; color:inherit; font:inherit; font-weight:normal; background:var(--surface,#fff); border:1px solid var(--border,#bac5d4); border-radius:.25rem }
+.website-page-form fieldset { display:grid; gap:.7rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.75rem .9rem }
+.website-page-form legend { font-weight:650; padding-inline:.3rem }
+.website-page-form .website-page-design-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.4rem; align-items:end }
+.website-page-form button { justify-self:start }
+.website-page-form .inline-actions { display:flex; justify-content:flex-end; gap:.4rem; border-top:1px solid var(--border,#cbd3df); padding-top:.85rem }

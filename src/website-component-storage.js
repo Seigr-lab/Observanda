@@ -29,7 +29,7 @@ export function checkComponentManifest(manifest,files){
   placements.add(row.id);
  }
 }
-function contextOf(manifest){
+export function componentContext(manifest){
  const components=map(list(manifest),'id'),pages=map(manifest.pages,'path'),files=map(manifest.files,'name');
  const themes=new Set(manifest.themeBook?.items.map(theme=>theme.id)??[]);
  return {components,pages,files,themes};
@@ -49,7 +49,7 @@ export function retainComponentAssets(manifest){
  return {...manifest,files:[...files.values()]};
 }
 export function checkSavedComponents(manifest,page,html){
- if(page?.instances?.length||/data-website-instance/i.test(html))checkComponentInstances(html,page??{},contextOf(manifest));
+ if(page?.instances?.length||/data-website-instance/i.test(html))checkComponentInstances(html,page??{},componentContext(manifest));
 }
 export function componentOperation(store,operation,id,{expectedRevision,path='index.html',name,component,instance,html,position,blockPath,query='',offset=0,signal}={}){
  if(!revision(expectedRevision))fail();
@@ -76,7 +76,7 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
    }
    return {revision:expectedRevision,items,total,next:offset+12<total?offset+12:null};
   }
-  const context=contextOf(manifest),main=context.components.get(component),visible=main&&(!main.draft||page.draft);
+  const context=componentContext(manifest),main=context.components.get(component),visible=main&&(!main.draft||page.draft);
   if(operation==='usage'){
    if(!visible)throw new AppError('NOT_FOUND');if(!Number.isSafeInteger(offset)||offset<0)fail();
    const items=[];let total=0;

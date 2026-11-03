@@ -107,7 +107,10 @@ test('an authored component is placed, edited once and published on two independ
   await expect(instance.getByRole('link')).toHaveAttribute('href', '../method.html');
   await expect(library.getByText('Placements 2 · Pages 2')).toBeVisible();
   await library.getByRole('button',{name:'Where used'}).click();
-  if(process.env.OBSERVANDA_COMPONENT_SCREENSHOT)await page.screenshot({path:process.env.OBSERVANDA_COMPONENT_SCREENSHOT});
+  if(process.env.OBSERVANDA_COMPONENT_SCREENSHOT){
+   await expect(library.locator('[data-instance]')).toHaveCount(2);await expect(library.getByRole('button',{name:'Where used'})).toBeEnabled();
+   await library.locator('[data-instance]').last().scrollIntoViewIfNeeded();await page.screenshot({path:process.env.OBSERVANDA_COMPONENT_SCREENSHOT});
+  }
   await library.locator('[data-instance]').filter({hasText:'index.html'}).click();
   await expect(choosePage).toHaveValue('index.html');
 

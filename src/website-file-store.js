@@ -34,6 +34,7 @@ import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
 import {prepareFeedUsage,finishFeedUsage} from './website-feed-usage-index.js';
 import {syncSavedAppearance,validateSavedAppearance} from './website-saved-appearance.js';
+import {validatePageDesigns} from './website-page-designs.js';
 import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
@@ -206,6 +207,7 @@ export class WebsiteFileStore{
   if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
   validateFeedFiles(value,names);
   validateSavedAppearance(value);
+  validatePageDesigns(value);
   validateWebsiteThemes(value);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
@@ -353,7 +355,7 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  menu(id,options){return readSiteMenu(this,id,options);}
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
- save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,signal}={}){return this.scope(async()=>{
+ save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,signal}={},designInstances){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
   if(manifest.files.some(file=>file.name===page&&file.feedPage))throw new AppError('CONFLICT');
   const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
@@ -366,7 +368,8 @@ export class WebsiteFileStore{
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
   }
-  checkSavedComponents(manifest,former,html);
+  if(designInstances&&former)throw new AppError('CONFLICT');
+  checkSavedComponents(manifest,designInstances?{path:page,instances:designInstances}:former,html);
   if(!former){
    ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
    validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
@@ -377,7 +380,7 @@ export class WebsiteFileStore{
    const viewerCSS=await readFile(new URL('./web/public-gallery.css',import.meta.url),'utf8');files.push(await this.siteFile(id,'public-gallery.css',viewerCSS,{signal}));
   }
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
-  if(former?.instances?.length)pages.at(-1).instances=former.instances;
+  if(designInstances?.length||former?.instances?.length)pages.at(-1).instances=designInstances??former.instances;
   if(former?.sourceGalleries?.length)pages.at(-1).sourceGalleries=former.sourceGalleries;
   if(former?.entryDisplays)pages.at(-1).entryDisplays=former.entryDisplays;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);

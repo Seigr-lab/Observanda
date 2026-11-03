@@ -541,11 +541,30 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    button('continueDraft','continue-draft')+button('reopen','reopen')+'</section>';
  }
  function formView(){
+  if(form.type==='design'){
+   const name=field('designName',form.name,'required maxlength="160"');
+   const remove=form.local?button('designForget','design-forget'):'';
+   return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr('designManage'))+'</h2><code>'+esc(opened.path)+'</code><p>'+esc(tr('designHelp'))+'</p>'+name+'<div class="inline-actions"><button type="submit" class="button primary">'+esc(tr('designSave'))+'</button>'+remove+button('cancel','form-cancel')+'</div></form></section>';
+  }
   const isPage=form.type==='page',label=isPage?'addPage':'create';
   const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
   const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
-  return '<section class="panel"><form data-website-files-form><h2>'+esc(tr(label))+'</h2>'+name+path+
+  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+'</div>'+(isPage?pageDesignChoice():'')+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
+ }
+ function pageDesignChoice(){
+  if(!form.designs)return button('designChoose','design-choose')+'<p class="hint">'+esc(tr('designDiscover'))+'</p>';
+  const {items,total,next,previous}=form.designs;
+  const options='<option value="">'+esc(tr('designBlank'))+'</option>'+items.map(item=>'<option value="'+esc(item.id)+'"'+(item.id===form.designId?' selected':'')+'>'+esc(item.name)+'</option>').join('');
+  const filter=total>8||form.designQuery?'<div class="website-page-design-search">'+field('designSearch',form.designQuery??'','maxlength="160"')+button('pickerFind','design-search')+'</div>':'';
+  return '<fieldset><legend>'+esc(tr('designChoose'))+'</legend>'+filter+
+   '<label>'+esc(tr('designSelect'))+' <select data-website-file-field="designId">'+options+'</select></label>'+
+   '<p class="hint">'+esc(tr('designHelp'))+'</p>'+
+   (total>items.length?'<p>'+esc(tr('componentResults',{first:form.designOffset+1,last:form.designOffset+items.length,total}))+'</p>':(!total?'<p>'+esc(tr('designDiscover'))+'</p>':''))+
+   (form.designOffset?button('pickerPrevious','design-previous','data-offset="'+previous+'"'):'')+(next!==null?button('pickerNext','design-next','data-offset="'+next+'"'):'')+'</fieldset>';
+ }
+ function designs(action,options={}){
+  return request('page-designs',{siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,action,...options},{signal:controller.signal});
  }
  function editorView(){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('')+'</span>';
@@ -570,6 +589,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function movable(node){return movableWebsiteLayer(node);}
  function bind(){
   visual?.destroy();visual=null;
+  const designFilter=document.querySelector('[data-website-file-field="designSearch"]');
+  if(designFilter)designFilter.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();designFilter.form.querySelector('[data-action="website-files-design-search"]').click();}};
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
@@ -713,8 +734,18 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='discard'||operation==='reopen')await discard();
    else if(operation==='new'){if(await beforeLeave(true)){form={type:'new'};render();}}
    else if(operation==='new-page'){if(await beforeLeave(true)){
-    form={type:'page',title:'',path:'',customPath:false,taken:new Set(opened.site.pages.map(page=>page.path.toLowerCase()))};render();
+    form={type:'page',title:'',path:'',customPath:false,designId:'',designQuery:'',designOffset:0,taken:new Set(opened.site.pages.map(page=>page.path.toLowerCase()))};render();
    }}
+   else if(operation==='design-manage'&&await beforeLeave(true)){
+    const {local,revision}=await designs('list');form={type:'design',local,revision,name:local?.name??''};render();
+   }
+   else if(['design-choose','design-search','design-next','design-previous'].includes(operation)&&form?.type==='page'){
+    const offset=Number(element.dataset.offset??0);form.designs=await designs('list',{offset,query:form.designQuery});form.designOffset=offset;
+    if(!form.designs.items.some(item=>item.id===form.designId))form.designId='';render();
+   }
+   else if(operation==='design-forget'&&form?.type==='design'&&form.local){
+    const result=await designs('forget',{expectedRevision:form.revision});adopt(result);form=null;mode='pages';pagesPanel.open();
+   }
    else if(operation==='sites-more'){const result=await request('list',{limit:100,after:nextSite});sites.push(...result.items.filter(item=>!sites.some(site=>site.id===item.id)));nextSite=result.next;render();}
 
    else if(operation==='form-cancel'){form=null;render();}
@@ -795,6 +826,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      element.form.querySelector('[data-website-file-field="pagePath"]').value=form.path;
     }
    }else if(element.dataset.websiteFileField==='pagePath'){form.path=element.value;form.customPath=Boolean(form.path);}
+   else if(element.dataset.websiteFileField==='designId')form.designId=element.value;
+   else if(element.dataset.websiteFileField==='designSearch')form.designQuery=element.value;
    return true;
   }
   if(components.input(element)||pagesPanel.input(element)||folder.input(element)||picker.input(element)||menu.input(element)||gallery.input(element)||figures.input(element))return true;
@@ -811,15 +844,21 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  async function submit(element){if(!element.matches('[data-website-files-form]'))return false;if(!element.reportValidity())return true;await run(async()=>{
   const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result;
   if(form.type==='new')result=await request('create',{name:value('name'),language:document.documentElement.lang||'en'});
+  else if(form.type==='design'){
+   result=await designs('name',{expectedRevision:form.revision,name:value('designName')});adopt(result);form=null;mode='pages';pagesPanel.open();return;
+  }
   else if(form.type==='page'){
    const title=value('pageTitle'),path=value('pagePath');
    if(form.taken.has(path.toLowerCase()))throw Error(tr('duplicatePage'));
    // A newly added page uses the public site's stylesheet even when the
    // current page has private CSS dedicated to its unpublished draft.
-   const publicPage=draftPage()?await request('open',{siteId:siteId(),path:'index.html'}):opened;
-   const style='../'.repeat(path.split('/').length-1)+publicPage.site.cssPath;
-   const language=websiteHTML(publicPage.html).documentElement.lang||document.documentElement.lang||'en';
-   result=await request('save',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,html:starterPage({title,stylesheet:style,language},esc),css:publicPage.css});
+   if(form.designId)result=await designs('use',{expectedRevision:form.designs.revision,design:form.designId,destination:path,title,language:document.documentElement.lang||'en',labels:{heading:tr('heading'),text:tr('paragraph'),image:tr('altText')}});
+   else{
+    const publicPage=draftPage()?await request('open',{siteId:siteId(),path:'index.html'}):opened;
+    const style='../'.repeat(path.split('/').length-1)+publicPage.site.cssPath;
+    const language=websiteHTML(publicPage.html).documentElement.lang||document.documentElement.lang||'en';
+    result=await request('save',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,html:starterPage({title,stylesheet:style,language},esc),css:publicPage.css});
+   }
   }
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();

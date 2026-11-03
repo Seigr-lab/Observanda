@@ -371,6 +371,7 @@
           "title": "Choose fonts, colours and layout",
           "paragraphs": [
             "Open {ui:websiteFiles.siteAppearance} to work on the saved website’s palette and typography. Use the visual inspector for an individual section. Check both the home page and a nested page in the saved preview.",
+            "Select a section on the canvas and open {ui:websiteFiles.componentLibrary} to keep linked copies on several pages. To reuse a page layout, open {ui:websiteFiles.pagePanel}, choose {ui:websiteFiles.designManage} and name the public page’s design. In {ui:websiteFiles.addPage}, choose {ui:websiteFiles.designChoose}. The new page has its own writing and keeps any linked library sections.",
             "The appearance controls in Preferences also include personal settings for the workspace interface. Set the site’s appearance in the website editor when the change belongs in published pages."
           ]
         },

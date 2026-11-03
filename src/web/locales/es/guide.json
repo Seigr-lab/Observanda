@@ -447,6 +447,7 @@
           "title": "Elegir fuentes, colores y distribución",
           "paragraphs": [
             "Abre {ui:websiteFiles.siteAppearance} para definir la paleta y la tipografía del sitio guardado. Usa el inspector visual para una sección específica. Revisa la portada y una página anidada en la vista previa guardada.",
+            "Selecciona una sección en el lienzo y abre {ui:websiteFiles.componentLibrary} para mantener copias vinculadas en varias páginas. Para reutilizar un diseño, abre {ui:websiteFiles.pagePanel}, selecciona {ui:websiteFiles.designManage} y da un nombre al diseño de la página pública. En {ui:websiteFiles.addPage}, selecciona {ui:websiteFiles.designChoose}. La página nueva tiene su propia redacción y conserva las secciones vinculadas de la biblioteca.",
             "Las opciones de apariencia de Preferencias también incluyen ajustes personales de la interfaz. Para cambiar las páginas publicadas, usa la apariencia del editor del sitio."
           ]
         },

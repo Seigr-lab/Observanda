@@ -92,7 +92,7 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
    '<label>'+esc(tr('pageDescription'))+'<textarea data-page-setting="description"'+(base.descriptionManaged?' readonly':'')+'>'+esc(draft.description)+'</textarea></label>'+
    '<label>'+esc(tr('pageLanguage'))+'<input data-page-setting="language" value="'+esc(draft.language)+'" placeholder="en" autocapitalize="none" spellcheck="false"></label>'+
    (base.titleManaged||base.descriptionManaged?'<p>'+esc(tr('pageManaged'))+'</p>':'')+button('savePageSettings','save',!touched))+
-   button('closePages','close')+'</section>';
+   (!site().site.pages.find(p=>p.path===site().path)?.draft?'<button type="button" class="button" data-action="website-files-design-manage">'+esc(tr('designManage'))+'</button>':'')+button('closePages','close')+'</section>';
  }
  function repaintResults(){const host=document.querySelector('[data-pages-results]');if(host)host.innerHTML=results();}
  function input(el){

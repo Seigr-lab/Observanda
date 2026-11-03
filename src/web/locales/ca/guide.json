@@ -447,6 +447,7 @@
           "title": "Tria tipografies, colors i disposició",
           "paragraphs": [
             "Obriu {ui:websiteFiles.siteAppearance} per configurar la paleta i la tipografia del lloc desat. Utilitzeu l’inspector visual per a una secció concreta. Reviseu la portada i una pàgina imbricada a la previsualització desada.",
+            "Seleccioneu una secció al llenç i obriu {ui:websiteFiles.componentLibrary} per mantenir còpies vinculades en diverses pàgines. Per reutilitzar un disseny, obriu {ui:websiteFiles.pagePanel}, trieu {ui:websiteFiles.designManage} i doneu nom al disseny de la pàgina pública. A {ui:websiteFiles.addPage}, trieu {ui:websiteFiles.designChoose}. La pàgina nova té la seva pròpia redacció i conserva les seccions vinculades de la biblioteca.",
             "Les opcions d’aparença de Preferències també inclouen ajustos personals de la interfície. Per canviar les pàgines publicades, utilitzeu l’aparença de l’editor del lloc."
           ]
         },

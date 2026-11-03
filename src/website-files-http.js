@@ -7,6 +7,7 @@ import {websitePublicationMetadata} from './website-publication-metadata.js';
 import {rememberPublishTarget,websitePublishTarget} from './website-publish-target.js';
 import {savedAppearance} from './website-saved-appearance.js';
 import {websiteThemes} from './website-scoped-themes.js';
+import {websitePageDesigns} from './website-page-designs.js';
 import {publishWebsiteTransfer,remoteTransferStatus,settleWebsiteTransfer} from './website-remote-transfer.js';
 import {operationResponse} from './operation-response.js';
 import {operationStage,operationAdvance,operationTotal,operationWork} from './operation-progress.js';
@@ -115,6 +116,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation==='page-designs'){
+   if(options.action!=='list'){onWrite();await check();}
+   json(await websitePageDesigns(store,siteId,{...options,expectedRevision,signal}));return true;
+  }
   if(operation==='themes/read'||operation==='themes/change'){
    const write=operation==='themes/change';if(write){onWrite();await check();}
    json(await websiteThemes(store,siteId,{...options,expectedRevision,signal},write));return true;

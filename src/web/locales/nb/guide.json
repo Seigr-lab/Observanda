@@ -447,6 +447,7 @@
           "title": "Velg skrifter, farger og oppsett",
           "paragraphs": [
             "Åpne {ui:websiteFiles.siteAppearance} for å angi nettstedets farger og typografi. Bruk det visuelle panelet for én bestemt seksjon. Kontroller både startsiden og en side i en undermappe i den lagrede forhåndsvisningen.",
+            "Velg en seksjon på arbeidsflaten og åpne {ui:websiteFiles.componentLibrary} for å bruke tilknyttede kopier på flere sider. For å gjenbruke et sideoppsett åpner du {ui:websiteFiles.pagePanel}, velger {ui:websiteFiles.designManage} og gir designet til den offentlige siden et navn. Under {ui:websiteFiles.addPage} velger du {ui:websiteFiles.designChoose}. Den nye siden får sin egen tekst og beholder tilknytningen til bibliotekseksjonene.",
             "Utseende under Innstillinger omfatter også personlige valg for arbeidsområdets grensesnitt. Bruk utseendet i nettstedsredigeringen når endringen skal gjelde publiserte sider."
           ]
         },
