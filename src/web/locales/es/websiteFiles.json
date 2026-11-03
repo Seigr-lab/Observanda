@@ -624,5 +624,8 @@
   "feedBindingHelp": "Usa elementos vacíos con data-feed-field igual a title, date, type, tags o content. Para content, usa un contenedor como div.",
   "feedFieldTitle": "Título de la entrada",
   "feedFieldContent": "Contenido autorizado de la entrada",
-  "feedRestoreDraft": "La página guardada ha cambiado. ¿Restaurar la configuración del listado sin guardar? Cancelar descarta esta configuración."
+  "feedRestoreDraft": "La página guardada ha cambiado. ¿Restaurar la configuración del listado sin guardar? Cancelar descarta esta configuración.",
+  "pickerFeedUse": "Listado «{name}» · {reference}",
+  "pickerFeedOrigin": "Listado en {page}",
+  "pickerFeedInclusion": "Los filtros del listado incluyen esta entrada. Edita el listado para cambiar su contenido."
 }

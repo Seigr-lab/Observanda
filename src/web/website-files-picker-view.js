@@ -48,7 +48,7 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner,types,
   const list=state.siteList;
   if(!list)return button('pickerFindWebsites','sites-open');
   return '<section class="website-picker-sites"><h4>'+label('pickerWebsitesUsing')+'</h4>'+
-   (list.items.length?'<table aria-label="'+label('pickerWebsitesUsing')+'"><thead><tr>'+['pickerSitesColumn','pickerPlacementsColumn','pickerPagesColumn'].map(k=>'<th scope="col">'+label(k)+'</th>').join('')+'</tr></thead><tbody>'+list.items.map((row,i)=>'<tr><th scope="row"><button type="button" class="website-picker-link" data-action="website-files-picker-use-site" '+((state.usageSite?.siteId??destination.site.id)===row.siteId?'aria-current="true" ':'')+'data-index="'+i+'">'+esc(row.siteTitle)+'</button></th><td>'+esc(count(row.total))+'</td><td>'+esc(count(row.pageCount))+'</td></tr>').join('')+'</tbody></table>':'<p>'+label('pickerNoWebsites')+'</p>')+
+   (list.items.length?'<table aria-label="'+label('pickerWebsitesUsing')+'"><thead><tr>'+['pickerSitesColumn','pickerPlacementsColumn','pickerPagesColumn'].map(k=>'<th scope="col">'+label(k)+'</th>').join('')+'</tr></thead><tbody>'+list.items.map((row,i)=>'<tr><th scope="row"><button type="button" class="website-picker-link" data-action="website-files-picker-use-site" aria-describedby="picker-site-'+i+'" '+((state.usageSite?.siteId??destination.site.id)===row.siteId?'aria-current="true" ':'')+'data-index="'+i+'">'+esc(row.siteTitle)+'</button><small id="picker-site-'+i+'" title="'+esc(row.siteId)+'">'+esc(row.siteId.slice(0,8))+'</small></th><td>'+esc(count(row.total))+'</td><td>'+esc(count(row.pageCount))+'</td></tr>').join('')+'</tbody></table>':'<p>'+label('pickerNoWebsites')+'</p>')+
    (state.sitePage?button('pickerPrevious','sites-previous'):'')+(list.next?button('pickerNext','sites-next'):'')+button('pickerThisWebsite','sites-close')+'</section>';
  }
  function places(){
@@ -57,9 +57,11 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner,types,
    (Number.isSafeInteger(placements.pageCount)?'<p>'+label('pickerPageCount',{count:placements.pageCount})+'</p>':'')+
    (placements.total?'<ol start="'+(state.placeOffset+1)+'">'+placements.items.map((row,i)=>{
     const name=(row.draft?msg('draftPage',{title:row.pageTitle||row.path}):row.pageTitle||row.path);
-    const target='<button type="button" class="website-picker-link" data-action="website-files-picker-jump" data-index="'+i+'" aria-label="'+label('pickerLocate')+' · '+esc(name)+' · '+label('pickerOccurrence',{n:row.ordinal+1})+'">'+esc(name)+'</button><small>'+esc(row.path)+' · '+label('pickerOccurrence',{n:row.ordinal+1})+(row.sectionTitle?' · '+esc(row.sectionTitle):'')+'</small>';
+    const place=row.kind==='feed'?label('pickerFeedUse',{name:row.sectionTitle,reference:row.feedId.slice(0,8)}):label('pickerOccurrence',{n:row.ordinal+1});
+    const context=row.kind==='feed'?label('pickerFeedOrigin',{page:row.ownerPage}):esc(row.sectionTitle??'');
+    const target='<button type="button" class="website-picker-link" data-action="website-files-picker-jump" data-index="'+i+'" aria-label="'+label('pickerLocate')+' · '+esc(name)+' · '+place+'">'+esc(name)+'</button><small>'+esc(row.path)+' · '+place+(context?' · '+context:'')+'</small>';
     return '<li>'+target+' <div class="inline-actions">'+
-     (row.editable?button('pickerRemoveHere','review-remove','data-index="'+i+'"'):'<small>'+label('pickerManagedUse')+'</small>')+'</div>'+
+     (row.editable?button('pickerRemoveHere','review-remove','data-index="'+i+'"'):'<small>'+label(row.kind==='feed'?'pickerFeedInclusion':'pickerManagedUse')+'</small>')+'</div>'+
      (state.confirm===i?'<p>'+label('pickerRemovalNotice')+'</p>'+button('pickerConfirmRemove','remove-placement','data-index="'+i+'"')+button('cancel','cancel-remove'):'')+'</li>';
    }).join('')+'</ol>':'<p>'+label('pickerUnused')+'</p>')+
    (state.placeOffset?button('pickerPrevious','places-previous'):'')+(placements.next!=null?button('pickerNext','places-next'):'')+(state.pane==='detail'?button('pickerFindWebsites','sites-open'):'')+'</section>';

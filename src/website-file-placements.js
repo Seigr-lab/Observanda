@@ -7,6 +7,8 @@ import {linkSource} from './website-entry-links.js';
 import {websiteSourcePlacements,websiteInsertionOffset} from './website-file-html.js';
 import {websiteFileName,validateWebsiteHTML} from './website-file-policy.js';
 import {libraryStamp,checkLibraryStamp} from './website-file-library.js';
+import {websiteFeedOccurrences} from './website-dynamic-feeds.js';
+import {siteHasPendingSources} from './website-feed-fence.js';
 import {researchId} from './web/research-reference.js';
 import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode} from './website-entry-display.js';
 
@@ -34,6 +36,8 @@ function parseLocations(html,page,id,revision){
  const document=parse(html,{sourceCodeLocationInfo:true}),found=[];
  for(const node of descendants(document)){
   const link=linkSource(node)===id;if(!link&&owner(node)!==id)continue;
+  let feed=false;for(let parent=node.parentNode;parent;parent=parent.parentNode)if(attr(parent,'data-website-feed')!==undefined){feed=true;break;}
+  if(feed)continue;
   if(attr(node,link?'data-observanda-link-revision':'data-observanda-source-revision')!==revision)throw new AppError('CONFLICT');
   found.push({node,kind:link?'link':attr(node,'data-observanda-view')!==undefined||node.tagName!=='section'?'view':'block'});
  }
@@ -60,7 +64,7 @@ export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,li
  return store.scope(async()=>{
   const stamp=await libraryStamp(store);await requireSource(store,sourceId,sourceRevision);
   const directory='.observanda/website-files/sources/'+sourceId+'/placements',cursor=after===null?null:after+'.json';
-  const window=await store.names(directory,{after:cursor,limit,directories:false}),items=[];
+  const window=await store.names(directory,{after:cursor,limit,directories:false}),items=[],pendingScopes=new Map();
   for(const member of window.items){
    signal?.throwIfAborted();
    const siteId=member.slice(0,-5);
@@ -69,23 +73,23 @@ export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,li
    if(!row)continue;
    if(row.siteId!==siteId||row.sourceId!==sourceId)throw new AppError('FORMAT');
    const site=await store.raw(siteId,{missing:true}),placement=site?.sources.find(p=>p.id===sourceId);
-   if(!placement||site.sources.some(p=>stamp.pending.has(p.id)))continue;
-   if(placement.revision!==sourceRevision)throw new AppError('CONFLICT');
-   let total=0,pageCount=0;
+   if(!site||await siteHasPendingSources(store,site,stamp.pending,pendingScopes))continue;
+   if(placement&&placement.revision!==sourceRevision)throw new AppError('CONFLICT');
+   const feedUses=websiteFeedOccurrences(site,sourceId),paths=new Set(feedUses.map(row=>row.path));let total=feedUses.length;
    for(const page of site.pages){
     let matched=false;
     for(const p of page.placements)if(p.id===sourceId){
      if(p.revision!==sourceRevision)throw new AppError('CONFLICT');
      matched=true;total++;
     }
-    if(matched)pageCount++;
+    if(matched)paths.add(page.path);
    }
    if(!total){
     const dormant=site.pages.some(page=>page.sourceGalleries?.some(group=>group.slots.some(slot=>slot.sourceId===sourceId&&slot.unavailable)));
-    if(dormant)continue;
+    if(!placement||dormant)continue;
     throw new AppError('FORMAT');
    }
-   items.push({siteId,siteTitle:site.name,revision:site.revision,total,pageCount});
+   items.push({siteId,siteTitle:site.name,revision:site.revision,total,pageCount:paths.size});
   }
   // Recheck the returned pages of this reverse index only, even for an entry
   // shared by many sites. The file library needs no global site enumeration.
@@ -100,13 +104,13 @@ export function websiteSourceUsage(store,id,options){
  if(currentPage!==undefined)websiteFileName(currentPage);
  return store.scope(async()=>{
   const stamp=await libraryStamp(store),manifest=await openSourceSite(store,id,options),items=[];
-  let total=0,pageCount=0,onPage=0;
-  const files=new Map(manifest.files.map(f=>[f.name,f]));
+  let total=0,onPage=0,files;const paths=new Set();
   for(const page of manifest.pages){
    signal?.throwIfAborted();
    const count=page.placements.reduce((n,p)=>n+Number(p.id===sourceId),0);if(!count)continue;
-   pageCount++;if(page.path===currentPage)onPage=count;
+   paths.add(page.path);if(page.path===currentPage)onPage=count;
    if(total+count>offset&&items.length<limit){
+    files??=new Map(manifest.files.filter(file=>file.name.endsWith('.html')).map(file=>[file.name,file]));
     const {found}=parseLocations(await store.readText(files.get(page.path),{signal}),page,sourceId,sourceRevision);
     for(let ordinal=Math.max(0,offset-total);ordinal<count&&items.length<limit;ordinal++){
      const {node,kind}=found[ordinal];items.push({path:page.path,pageTitle:page.title,draft:Boolean(page.draft),ordinal,kind,...locationOf(node)});
@@ -114,8 +118,12 @@ export function websiteSourceUsage(store,id,options){
    }
    total+=count;
   }
+  for(const row of websiteFeedOccurrences(manifest,sourceId)){
+   if(total>=offset&&items.length<limit)items.push(row);
+   paths.add(row.path);if(row.path===currentPage)onPage++;total++;
+  }
   await store.current(id,manifest.revision);await checkLibraryStamp(store,stamp);
-  return {items,total,pageCount,...(currentPage===undefined?{}:{onPage}),next:offset+items.length<total?offset+items.length:null,revision:manifest.revision,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
+  return {items,total,pageCount:paths.size,...(currentPage===undefined?{}:{onPage}),next:offset+items.length<total?offset+items.length:null,revision:manifest.revision,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
  },{signal});
 }
 function removeStyle(html,page,id){

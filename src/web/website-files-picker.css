@@ -82,6 +82,7 @@
 .website-picker-sites table { width:100%; border-collapse:collapse; margin:.25rem 0 .65rem }
 .website-picker-sites :is(td,th) { border-bottom:1px solid var(--border,#c1c8d3); padding:.4rem .25rem; text-align:end; vertical-align:top }
 .website-picker-sites th:first-child { text-align:start }
+.website-picker-sites th small { display:block; font-weight:normal; color:var(--muted,#505d70); }
 .website-picker-sites thead { font-size:.85em }
 .website-picker-detail h4 { margin-top:.7rem }
 .website-picker-detail ul,.website-picker-detail ol,.website-picker-queue ol { padding-inline-start:1.25rem }

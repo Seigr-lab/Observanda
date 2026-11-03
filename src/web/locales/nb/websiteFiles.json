@@ -624,5 +624,8 @@
   "feedBindingHelp": "Bruk tomme elementer med data-feed-field satt til title, date, type, tags eller content. Bruk en beholder som div for content.",
   "feedFieldTitle": "Oppføringstittel",
   "feedFieldContent": "Tillatt innhold i oppføringen",
-  "feedRestoreDraft": "Den lagrede siden er endret. Vil du gjenopprette de ulagrede listeinnstillingene? Avbryt forkaster disse innstillingene."
+  "feedRestoreDraft": "Den lagrede siden er endret. Vil du gjenopprette de ulagrede listeinnstillingene? Avbryt forkaster disse innstillingene.",
+  "pickerFeedUse": "Listen «{name}» · {reference}",
+  "pickerFeedOrigin": "Liste på {page}",
+  "pickerFeedInclusion": "Filtrene for listen inkluderer denne oppføringen. Rediger listen for å endre hva den inneholder."
 }

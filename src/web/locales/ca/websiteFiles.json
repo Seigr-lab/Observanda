@@ -624,5 +624,8 @@
   "feedBindingHelp": "Utilitzeu elements buits amb data-feed-field igual a title, date, type, tags o content. Per a content, utilitzeu un contenidor com ara div.",
   "feedFieldTitle": "Títol de l’entrada",
   "feedFieldContent": "Contingut autoritzat de l’entrada",
-  "feedRestoreDraft": "La pàgina desada ha canviat. Voleu restaurar els ajustos del llistat que no heu desat? Si cancel·leu, es descartaran aquests ajustos."
+  "feedRestoreDraft": "La pàgina desada ha canviat. Voleu restaurar els ajustos del llistat que no heu desat? Si cancel·leu, es descartaran aquests ajustos.",
+  "pickerFeedUse": "Llistat «{name}» · {reference}",
+  "pickerFeedOrigin": "Llistat a {page}",
+  "pickerFeedInclusion": "Els filtres del llistat inclouen aquesta entrada. Editeu el llistat per canviar-ne el contingut."
 }

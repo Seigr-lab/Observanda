@@ -624,5 +624,8 @@
   "feedBindingHelp": "Use empty elements with data-feed-field set to title, date, type, tags or content. Use a container such as div for content.",
   "feedFieldTitle": "Entry title",
   "feedFieldContent": "Permitted entry content",
-  "feedRestoreDraft": "The saved page changed. Restore your unsaved feed settings? Cancel discards these settings."
+  "feedRestoreDraft": "The saved page changed. Restore your unsaved feed settings? Cancel discards these settings.",
+  "pickerFeedUse": "Feed “{name}” · {reference}",
+  "pickerFeedOrigin": "Feed on {page}",
+  "pickerFeedInclusion": "Included by this feed’s filters. Edit the feed to change what it includes."
 }
