@@ -29,11 +29,13 @@ export function websitePlacementDrag({site,available,place,t}){
   dialog.ondragstart=e=>{
    const row=e.target.closest('[data-picker-drag-handle]')?.closest('[data-picker-row]'),page=site();
    if(!docked||!row||!page||!available()){e.preventDefault();return;}
+   row.setAttribute('data-picker-dragging','');
+   dialog.querySelector('.website-drag-instructions').textContent=t('pickerDragging',{title:row.querySelector('[data-action="website-files-picker-select"]').textContent});
    drag={token:crypto.randomUUID(),sourceId:row.dataset.pickerRow,sourceRevision:row.dataset.pickerRevision,
     siteId:page.site.id,revision:page.site.revision,path:page.path};
    e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData(dragType,drag.token);
   };
-  dialog.ondragend=()=>{drag=null;clearLine();};
+  dialog.ondragend=()=>{drag=null;clearLine();dialog.querySelector('[data-picker-dragging]')?.removeAttribute('data-picker-dragging');const hint=dialog.querySelector('.website-drag-instructions');if(hint)hint.textContent=t('pickerDropHelp');};
   // Opening a title in the compact list restores its full details and placement controls.
   for(const title of dialog.querySelectorAll('[data-action="website-files-picker-select"]')){
    title.onclick=()=>{if(docked){docked=false;display();}};
@@ -61,6 +63,7 @@ export function websitePlacementDrag({site,available,place,t}){
    if(!dest){e.dataTransfer.dropEffect='none';clearLine();return;}
    e.dataTransfer.dropEffect='copy';
    if(!line){line=frame.ownerDocument.createElement('div');line.className='website-placement-line';line.setAttribute('aria-hidden','true');frame.ownerDocument.body.append(line);}
+   line.dataset.hint=dest.position==='end'?t('pickerEnd'):t('pickerDropBefore',{number:dest.position.before+1});
    const bounds=frame.getBoundingClientRect();
    Object.assign(line.style,{left:bounds.left+'px',width:frame.clientWidth+'px',top:Math.min(bounds.bottom-3,Math.max(bounds.top,bounds.top+dest.y))+'px'});
   });

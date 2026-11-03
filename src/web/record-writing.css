@@ -20,7 +20,14 @@
 .record-contributor-values li{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem}
 .record-contributor-values li p{flex:1 1 14rem;margin:0;min-width:0;overflow-wrap:anywhere}
 .record-contributor-values .button{white-space:normal;overflow-wrap:anywhere;max-width:100%}
-.record-tags li{margin-block:1rem;overflow-wrap:anywhere}.record-tags label{min-width:0;max-width:100%}.record-tags input{display:block;max-width:100%;min-width:0}.record-tags .button{white-space:normal}
+.record-tags{max-width:48rem}
+.record-tags ul{padding:0;margin:.4rem 0 .7rem;list-style:none}
+.record-tags li{display:grid;grid-template-columns:minmax(8rem,1fr) auto;align-items:center;gap:.75rem;padding:.45rem .25rem;border-bottom:1px solid var(--border,#c6cfdb);overflow-wrap:anywhere}
+.record-tags li>span{justify-self:start;border:1px solid var(--border,#c6cfdb);border-radius:.3rem;padding:.14rem .5rem;background:var(--surface-alt,#f0f3f8);font-size:.92rem;line-height:1.4}
+.record-tags .inline-actions{display:flex;align-items:end;flex-wrap:wrap;gap:.4rem;margin:0}
+.record-tags label{min-width:0;max-width:100%;margin:0;font-size:.85rem}.record-tags input{display:block;height:2.1rem;max-width:100%;min-width:0}
+.record-tags .button{min-height:2rem;padding:.2rem .65rem;font-size:.85rem;white-space:normal}
+@container(max-width:34rem){.record-tags li{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:700px){.record-writing{padding:1rem}.record-writing .button{white-space:normal}}
 .result-figure-choices { display: grid; gap: .5rem; margin-block: .75rem; }
 .result-figure-choices button { white-space: normal; overflow-wrap: anywhere; }

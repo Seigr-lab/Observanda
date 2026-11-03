@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,randomUUID} from 'node:crypto';
-import {mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {parseFragment} from 'parse5';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
+import {savedWebsiteSearches} from '../src/website-saved-searches.js';
+import {WebsiteFilesCandidate} from '../src/website-files-candidate.js';
 import {websiteSearchFields} from '../src/website-file-library-fields.js';
 import {searchWebsiteLibrary,websiteLibraryFacets} from '../src/website-file-library.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
@@ -81,6 +83,10 @@ test('fielded search, contextual tag counts and duplicate-safe pages use permitt
  assert.deepEqual(await ids({tags:['Co','café']}),[a]);assert.deepEqual(await ids({tags:['CO']}),[b]);assert.deepEqual(await ids({tags:['cafe']}),[]);
  assert.deepEqual(new Set(await ids({tags:['Co','CO'],tagMode:'any'})),new Set([a,b,c,d]));
  assert.deepEqual(new Set(await ids({search:'cafe',searchField:'tag'})),new Set([a,b]));
+ assert.deepEqual(await ids({search:'cafe',searchField:'exact-tag'}),[]);
+ assert.deepEqual(await ids({search:'CO',searchField:'exact-tag'}),[b]);
+ assert.deepEqual(new Set(await ids({search:'angstrom 2',searchField:'exact-title'})),new Set([a,b]));
+ assert.deepEqual(await ids({search:'angstrom',searchField:'exact-title'}),[]);
  assert.deepEqual(await ids({search:'angstrom',searchField:'reference'}),[]);assert.deepEqual(await ids({search:b,searchField:'reference'}),[b]);
  assert.deepEqual(await ids({dateFrom:'2024-02-29',dateTo:'2024-02-29',dateKnowledge:'estimated'}),[a]);
  assert.deepEqual(await ids({dateFrom:'2024-03-05',dateTo:'2024-03-05',status:'planned',recordType:'experiment'}),[c]);
@@ -99,6 +105,36 @@ test('fielded search, contextual tag counts and duplicate-safe pages use permitt
  assert.deepEqual(await ids({tags:['CO']}),[]);assert.deepEqual((await page(facets,{kind:'tag',search:'CO',criteria:{notebookId}},null,20)).items.map(v=>v.id),['Co']);
  await files.cancelSourceUpdate({sourceId:b,token:fence});await assert.rejects(request({sort:'date-desc',after:second.next}),{code:'WEBSITE_CHANGED'});
  await assert.rejects(request({dateFrom:'2024-02-30'}),{code:'INVALID'});
+});
+
+test('a named search stores only encrypted author criteria, isolated from public files and other sites',async t=>{
+ const {workspace,files,put}=await fixture(t),{site}=await files.create({name:'Chemistry'}),another=(await files.create({name:'Other atlas'})).site;
+ const id=randomUUID(),name='Internal calibration review',criteria={search:'CO',searchField:'exact-tag'},save=(data)=>savedWebsiteSearches(files,'save',{siteId:site.id,id,name,criteria,...data});
+ const row=await save({}),retry=await save({});assert.equal(row.revision,retry.revision);
+ const run=async()=>{const {items}=await savedWebsiteSearches(new WebsiteFileStore(workspace),'list',{siteId:site.id});assert.equal(items.length,1);return files.searchLibrary(items[0].criteria);};
+ assert.equal((await run()).items.length,0);
+ const admitted=await put('Gas trace',metadata(exact('2024-02-01'),['CO']));
+ await put('Metal trace',metadata(exact('2024-02-01'),['Co']));
+ assert.deepEqual((await run()).items.map(entry=>entry.id),[admitted]);
+ const sealed=await readFile(path.join(workspace.root,'.observanda','website-files','sites',site.id,'saved-searches.json'));assert.equal(sealed.includes(Buffer.from(name)),false);
+ assert.deepEqual((await savedWebsiteSearches(files,'list',{siteId:another.id})).items,[]);
+ const candidate=await WebsiteFilesCandidate.open(files,site.id,site.revision);assert.ok(![...candidate.files.keys()].some(name=>name.includes('saved-search')));
+ await assert.rejects(save({id:randomUUID(),name:name.toUpperCase()}),{code:'CONFLICT'});
+ await assert.rejects(save({revision:randomUUID(),name:'Obsolete change'}),{code:'CONFLICT'});
+ await assert.rejects(savedWebsiteSearches(files,'remove',{siteId:site.id,id,revision:randomUUID()}),{code:'CONFLICT'});
+ await savedWebsiteSearches(files,'remove',{siteId:site.id,id,revision:row.revision});assert.deepEqual((await savedWebsiteSearches(files,'list',{siteId:site.id})).items,[]);
+});
+
+test('ranked pages prioritize a known title ahead of an exact tag and incidental owner metadata',async t=>{
+ const {files,put}=await fixture(t);
+ const tagged=await put('Unrelated title',metadata(exact('2024-01-01'),['signal']));
+ const prefix=await put('Signal response',metadata(exact('2024-01-01'),[]));
+ const titleMatch=await put('Signal',metadata(exact('2024-01-01'),[]));
+ await put('Signal notes',metadata(exact('2024-01-01'),[]),{visible:false});
+ const q={search:'signal',sort:'relevance'},request=options=>files.searchLibrary(options);
+ const one=await page(request,q,null,1),two=await page(request,q,one.next,1),three=await page(request,q,two.next,1);
+ assert.deepEqual([one,two,three].map(p=>p.items[0].id),[titleMatch,prefix,tagged]);
+ const byId=await page(request,{search:tagged,sort:'relevance'},null,1);assert.equal(byId.items[0].id,tagged);
 });
 
 test('large sorted catalogues reuse an encrypted file-only result and make progress with a bounded fallback',async t=>{

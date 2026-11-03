@@ -6,6 +6,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {Workspace} from '../../src/storage.js';
 import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from '../../src/website-file-library.js';
+import {savedWebsiteSearches} from '../../src/website-saved-searches.js';
 import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
@@ -40,6 +41,9 @@ test('filter permitted saved entries by date, type, status and exact tags and re
     case 'library/search':return store.searchLibrary(data);
     case 'library/facets':if(data.kind==='tag')tagReads++;return store.scope(scope=>websiteLibraryFacets(store,scope,data));
     case 'library/validate':return store.scope(()=>validateWebsiteLibraryRows(store,data));
+    case 'library/saved-searches/list':return savedWebsiteSearches(store,'list',data);
+    case 'library/saved-searches/save':return savedWebsiteSearches(store,'save',data);
+    case 'library/saved-searches/remove':return savedWebsiteSearches(store,'remove',data);
     default:throw Error('Unexpected route '+route);
    }
   });
@@ -60,5 +64,21 @@ test('filter permitted saved entries by date, type, status and exact tags and re
   await d.locator('.website-picker-applied').getByRole('button',{name:'Remove Co',exact:true}).press('Enter');await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Gas analysis');
   await d.locator('[data-picker-search]').fill('absent');await d.locator('[data-picker-search]').press('Enter');await expect(rows).toHaveCount(0);await expect(d.locator('.website-picker-entry-list')).toContainText('No matching content');
   await d.locator('.website-picker-entry-list').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(4);await expect(d.locator('.website-picker-queue')).toContainText('Ångström baseline');
+  await rows.filter({hasText:'Gas analysis'}).getByRole('button',{name:'Filter by tag CO',exact:true}).click();
+  await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Gas analysis');
+  await d.getByRole('button',{name:'Saved searches',exact:true}).click();
+  await d.getByLabel('Search name',{exact:true}).fill('Gas series');await d.getByRole('button',{name:'Save current search'}).click();
+  await expect(d.getByRole('button',{name:'Gas series',exact:true})).toBeVisible();
+  await d.getByRole('button',{name:'Close content picker'}).click();await page.reload();
+  await page.getByRole('button',{name:'Browse available content'}).click();
+  await d.getByRole('button',{name:'Saved searches',exact:true}).click();await d.getByRole('button',{name:'Gas series',exact:true}).click();
+  await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Gas analysis');
+  await d.getByRole('button',{name:'Saved searches',exact:true}).click();
+  await d.getByRole('button',{name:'Manage search',exact:true}).click();
+  await d.locator('[data-picker-saved-rename]').fill('Confirmed gas series');await d.getByRole('button',{name:'Rename search',exact:true}).click();
+  await expect(d.getByRole('button',{name:'Confirmed gas series',exact:true})).toBeVisible();
+  await d.getByRole('button',{name:'Manage search',exact:true}).click();
+  await d.getByRole('button',{name:'Remove saved search Confirmed gas series'}).click();await d.getByRole('button',{name:'Confirm removal'}).click();
+  await expect(d.getByRole('button',{name:'Confirmed gas series',exact:true})).toHaveCount(0);
  }finally{await closeIdleMutationFiles();await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:120});}
 });

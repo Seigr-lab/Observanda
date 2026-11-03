@@ -4,6 +4,7 @@ import {WebsiteFileStore} from './website-file-store.js';
 import {WebsiteFilesCandidate} from './website-files-candidate.js';
 import {Publisher} from './publishing.js';
 import {websitePublicationMetadata} from './website-publication-metadata.js';
+import {savedWebsiteSearches} from './website-saved-searches.js';
 import {LocalExport} from './local-export.js';
 import {serveContent} from './file-content.js';
 import {publicationExportHttp} from './publication-export-http.js';
@@ -16,7 +17,7 @@ import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','save','insert-source','insert-sources','gallery/source-save','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','save','insert-source','insert-sources','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 // Only files belonging to this saved revision can be embedded. The same
@@ -102,6 +103,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation.startsWith('library/saved-searches/')){json(await savedWebsiteSearches(store,operation.slice('library/saved-searches/'.length),{...options,siteId,signal}));return true;}
   if(operation==='gallery/source-read'){json(await readSourceGallery(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='gallery/source-save'){json(await saveSourceGallery(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='folder/chooser'||operation==='folder/choose'){

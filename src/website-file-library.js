@@ -5,7 +5,7 @@ import {researchId} from './web/research-reference.js';
 import {attr,descendants} from './website-migration-views.js';
 import {projectedRecordMetadata,projectedSourceOverview} from './website-source-overview.js';
 import {websiteSearchFields,fold} from './website-file-library-fields.js';
-import {libraryQuery,matchesQuery,compareLibraryRows,fingerprint,libraryCursor,readLibraryCursor} from './website-file-library-query.js';
+import {libraryQuery,matchesQuery,compareLibraryRows,libraryMatchRank,fingerprint,libraryCursor,readLibraryCursor} from './website-file-library-query.js';
 
 const root='.observanda/website-files',index=root+'/picker',generation=index+'/generation.json';
 const views=new WeakMap(),legacyViews=new WeakMap(),validId=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
@@ -164,7 +164,7 @@ async function facetWindow(store,view,stamp,signal){
 function result(items,next,stamp,extra={}){
  return {items,next,generation:stamp.generation,visibilityToken:stamp.visibilityToken,...extra};
 }
-function sortedPoint(row){return {id:row.id,title:row.title,dateFrom:row.dateFrom??null,dateTo:row.dateTo??null};}
+function sortedPoint(row,q){return {id:row.id,title:row.title,dateFrom:row.dateFrom??null,dateTo:row.dateTo??null,...(q.sort==='relevance'?{rank:libraryMatchRank(row,q)}:{})};}
 function validPoint(point){return validId(point?.id)&&typeof point.title==='string'&&point.title.length<=200&&[point.dateFrom,point.dateTo].every(d=>d===null||typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d));}
 function boundedInsert(rows,row,compare,limit){
  let lo=0,hi=rows.length;while(lo<hi){const m=(lo+hi)>>>1;if(compare(rows[m],row)<0)lo=m+1;else hi=m;}
@@ -189,13 +189,13 @@ async function walkPage(store,view,facets,stamp,key,point,signal,make,visit){
 }
 async function sortedLarge(store,view,facets,stamp,key,q,point,limit,signal){
  const order=(a,b)=>compareLibraryRows(a,b,q.sort,q.locale),seek=point?.seek??null;
- if(seek&&!validPoint(seek))throw new AppError('INVALID');
+ if(seek&&(!validPoint(seek)||q.sort==='relevance'&&(!Number.isInteger(seek.rank)||seek.rank<0||seek.rank>5)))throw new AppError('INVALID');
  if(!point?.walk){
   const {pinnedQueryResults}=await import('./pinned-query-result.js');
-  const sorted=await pinnedQueryResults.window({workspace:store.workspace,ownerId:store.workspace.vault.id,snapshotId:stamp.visibilityToken,queryHash:key,order,point:sortedPoint,after:seek,limit,signal},async check=>({
+  const sorted=await pinnedQueryResults.window({workspace:store.workspace,ownerId:store.workspace.vault.id,snapshotId:stamp.visibilityToken,queryHash:key,order,point:row=>row,after:seek,limit,signal},async check=>({
    rows:(async function*(){
     let at=0;while(at<view.names.length){check();const window=[];
-     at=await visitWindow(store,view.names,at,stamp,{signal,visit:item=>{if(matchesQuery(item,q))window.push(sortedPoint(item));}});
+     at=await visitWindow(store,view.names,at,stamp,{signal,visit:item=>{if(matchesQuery(item,q))window.push(sortedPoint(item,q));}});
      await checkLibraryStamp(store,stamp);yield* window;
     }
    })()
@@ -206,7 +206,7 @@ async function sortedLarge(store,view,facets,stamp,key,q,point,limit,signal){
   }
  }
  const page=await walkPage(store,view,facets,stamp,key+':'+limit,point,signal,()=>[],(rows,row)=>{
-  if(matchesQuery(row,q)&&(!seek||order(row,seek)>0))boundedInsert(rows,sortedPoint(row),order,limit+1);
+  if(matchesQuery(row,q)){const candidate=sortedPoint(row,q);if(!seek||order(candidate,seek)>0)boundedInsert(rows,candidate,order,limit+1);}
  });
  if(page.next)return {items:[],next:page.next};
  const retained=page.data.slice(0,limit);
@@ -224,10 +224,12 @@ export async function searchWebsiteLibrary(store,scope,options={}){
  else if(ready&&facets.keys){
   let names=view.names;
   if(q.sort!=='default'){
-   const orderKey=q.sort+(q.sort.startsWith('title')?q.locale:'');
+   const orderKey=q.sort==='relevance'?key:q.sort+(q.sort.startsWith('title')?q.locale:'');
    if(!facets.orders.has(orderKey)){
     if(facets.orders.size>=4)facets.orders.delete(facets.orders.keys().next().value);
-    facets.orders.set(orderKey,[...facets.keys.values()].sort((a,b)=>compareLibraryRows(a,b,q.sort,q.locale)).map(row=>row.id));
+    let rows=[...facets.keys.values()];
+    if(q.sort==='relevance')rows=rows.filter(row=>matchesQuery(row,q)).map(row=>sortedPoint(row,q));
+    facets.orders.set(orderKey,rows.sort((a,b)=>compareLibraryRows(a,b,q.sort,q.locale)).map(row=>row.id));
    }
    names=facets.orders.get(orderKey);
   }

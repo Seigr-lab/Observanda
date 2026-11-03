@@ -44,6 +44,8 @@ test('dock the library and drop a permitted entry between authored sections in t
   await expect(dialog.locator('[data-picker-row]')).toHaveCount(6);
   await dialog.getByRole('button',{name:'Place on canvas'}).click();
   await expect(dialog).toHaveAttribute('data-placement-dock','');
+  const dock=await dialog.boundingBox(),frame=await page.locator('#website-files-canvas').boundingBox();
+  expect(dock.x+dock.width).toBeLessThanOrEqual(frame.x+1);
   const row=dialog.locator('[data-picker-row]').first(),sourceId=await row.getAttribute('data-picker-row');
   const handle=await row.locator('[data-picker-drag-handle]').boundingBox(),block=await target.boundingBox();
   await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();
