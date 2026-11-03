@@ -77,14 +77,22 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await dialog.locator('[data-feed-saved-search]').selectOption(rule.id);await dialog.getByRole('radio',{name:'Custom design',exact:true}).check();
   await dialog.getByText('Arrange fields',{exact:true}).click();await dialog.locator('[data-feed-field=tags]').check();
   await dialog.getByRole('button',{name:'Move up · Tags'}).click();
+  const row=key=>dialog.locator('.website-feed-fields li').filter({has:page.locator('[data-feed-field="'+key+'"]')});
+  await row('tags').locator('.website-feed-grip').dragTo(row('title'));
   await dialog.locator('.website-feed-custom summary').filter({hasText:'Item HTML'}).click();
-  await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(/data-feed-field="tags"/);
+  await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(/data-feed-field="tags"[\s\S]+data-feed-field="title"/);
   await dialog.locator('[data-feed-item-html]').fill(customHTML);await dialog.locator('[data-feed-position]').selectOption('start');await save();
   await expect(feed).toHaveCount(2);const western=feed.filter({hasText:'Western stations'});
   await expect(feed.first()).toContainText('Western stations');await expect(western.locator('.tide-plate')).toHaveCount(2);
   await expect(western).not.toContainText('Transect station 2');await expect(western).not.toContainText('private-landowner-canary');
   await page.reload();await edit('Western stations');await dialog.locator('.website-feed-custom summary').filter({hasText:'Item HTML'}).click();
   await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(customHTML);
+  await dialog.getByText('Arrange fields',{exact:true}).click();await dialog.locator('[data-feed-field="tables"]').check();
+  await dialog.locator('[data-feed-apply]').click();await expect(dialog.getByRole('status').filter({hasText:'Use this arrangement'})).toBeVisible();
+  await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(customHTML);
+  await dialog.getByRole('button',{name:'Use this arrangement'}).click();
+  await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(/data-feed-field="tables"/);
+  await dialog.locator('[data-feed-item-html]').fill(customHTML);
   await dialog.getByRole('radio',{name:'Grid',exact:true}).check();await dialog.locator('[data-feed-position]').selectOption('end');await save();
   await expect(feed.last()).toContainText('Western stations');await expect(western).toHaveAttribute('data-layout','grid');
   // A new eligible composition joins the existing filtered feed without an
