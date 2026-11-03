@@ -100,7 +100,8 @@ test('card and metadata templates share index and fence reads but still reject r
   for(const name of ['head','feed'])assert.equal(fullReads.filter(file=>file.endsWith('/sources/'+id+'/'+name+'.json')).length,1);
   for(const key of ['picker','feed-index'])assert.equal(fullReads.filter(file=>file.endsWith('/'+key+'/'+id.slice(0,2)+'.json')).length,1);
  }
- assert.equal(fullWrites.filter(name=>name.includes('/placements/')).length,2);
+ assert.equal(fullWrites.filter(name=>name.includes('/placements/')).length,0);
+ assert.equal(fullWrites.filter(name=>name.includes('/feed-usage/nodes/')).length,1);
  sourceReads.mock.restore();fullControls.mock.restore();fullControlsWritten.mock.restore();
 
  await publish('Revised field survey','2026-06-03','high tide');

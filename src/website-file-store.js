@@ -32,6 +32,7 @@ import {clearFeedSubscription,reflowFeedShell,refreshFeedSubscriptions,retainWeb
 import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-source.js';
 import {syncFeedShells} from './website-feed-shell.js';
 import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
+import {prepareFeedUsage,finishFeedUsage} from './website-feed-usage-index.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -272,24 +273,22 @@ export class WebsiteFileStore{
    manifest={...manifest,sources:[...refs.values()]};
   }
   manifest=retainComponentAssets(manifest);
-  if(manifest.feeds?.length)manifest={...manifest,feedPlacementsIndexed:true};
+  if(manifest.feeds?.length)manifest={...manifest,feedPlacementsIndexed:2};
   const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   const bytes=Buffer.from(plain(value));if(bytes.length>CONTROL_LIMIT)throw new AppError('LIMIT');
   await writeFeedSubscription(this,value,previous,signal);
-  // Register placement before publishing the new site head. A crash may
-  // leave an unused index row, but can never create an unindexed live copy.
+  // Direct copies retain their own per-source registrations. Feed-only
+  // membership is registered as one ordered batch against this site head.
+  const feedUsage=await prepareFeedUsage(this,previous,value,signal);
   const oldOrdinary=new Set(previous?.sources.map(source=>source.id)),newOrdinary=new Set(value.sources.map(source=>source.id));
-  const previousSources=new Set(oldOrdinary),currentSources=new Set(newOrdinary);
-  if(previous?.feedPlacementsIndexed)for(const feed of previous.feeds??[])if(!feed.unavailable)for(const member of feed.members)previousSources.add(member.id);
-  for(const feed of value.feeds??[])if(!feed.unavailable)for(const member of feed.members)currentSources.add(member.id);
-  for(const id of currentSources)if(!previousSources.has(id)||!oldOrdinary.has(id)&&newOrdinary.has(id)){
-   await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id,...(!oldOrdinary.has(id)&&!newOrdinary.has(id)?{feedOnly:true}:{})},{signal});
+  for(const id of newOrdinary)if(!oldOrdinary.has(id)){
+   await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id},{signal});
   }
   await this.writeBytes(directory+'/revisions/'+value.revision+'.json',bytes,{signal});await this.writeControl(directory+'/head.json',{revision:value.revision},{signal});
+  await finishFeedUsage(this,feedUsage,signal);
   await clearFeedSubscription(this,value,previous);
   if(previous&&previous.revision!==value.revision){
-   for(const id of previousSources)if(!currentSources.has(id))await this.remove(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json');
-   for(const id of oldOrdinary)if(currentSources.has(id)&&!newOrdinary.has(id))await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id,feedOnly:true},{signal});
+   for(const id of oldOrdinary)if(!newOrdinary.has(id))await this.remove(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json');
    const retained=new Set(value.files.map(file=>file.blob));
    for(const blob of new Set(previous.files.map(file=>file.blob)))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
    await this.remove(directory+'/revisions/'+previous.revision+'.json');

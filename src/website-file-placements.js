@@ -9,6 +9,7 @@ import {websiteFileName,validateWebsiteHTML} from './website-file-policy.js';
 import {libraryStamp,checkLibraryStamp} from './website-file-library.js';
 import {websiteFeedOccurrences} from './website-dynamic-feeds.js';
 import {siteHasPendingSources} from './website-feed-fence.js';
+import {feedUsageWindow,checkFeedUsageRoot} from './website-feed-usage-index.js';
 import {researchId} from './web/research-reference.js';
 import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode} from './website-entry-display.js';
 
@@ -64,14 +65,18 @@ export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,li
  return store.scope(async()=>{
   const stamp=await libraryStamp(store);await requireSource(store,sourceId,sourceRevision);
   const directory='.observanda/website-files/sources/'+sourceId+'/placements',cursor=after===null?null:after+'.json';
-  const window=await store.names(directory,{after:cursor,limit,directories:false}),items=[],pendingScopes=new Map();
-  for(const member of window.items){
+  const ordinary=await store.names(directory,{after:cursor,limit,directories:false}),{ids:indexed,stamp:usageRoot}=await feedUsageWindow(store,sourceId,after,limit,signal);
+  const files=new Set(ordinary.items),candidates=[...new Set([...files,...indexed.map(id=>id+'.json')])].sort();
+  const window=candidates.slice(0,limit),items=[],pendingScopes=new Map();
+  for(const member of window){
    signal?.throwIfAborted();
    const siteId=member.slice(0,-5);
    if(!researchId(siteId)||member!==siteId+'.json')throw new AppError('FORMAT');
-   const row=await store.control(directory+'/'+member,{missing:true});
-   if(!row)continue;
-   if(row.siteId!==siteId||row.sourceId!==sourceId)throw new AppError('FORMAT');
+   if(files.has(member)){
+    const row=await store.control(directory+'/'+member,{missing:true});
+    if(!row&&!indexed.includes(siteId))continue;
+    if(row&&(row.siteId!==siteId||row.sourceId!==sourceId))throw new AppError('FORMAT');
+   }
    const site=await store.raw(siteId,{missing:true}),placement=site?.sources.find(p=>p.id===sourceId);
    if(!site||await siteHasPendingSources(store,site,stamp.pending,pendingScopes))continue;
    if(placement&&placement.revision!==sourceRevision)throw new AppError('CONFLICT');
@@ -94,8 +99,8 @@ export function websitesUsingSource(store,{sourceId,sourceRevision,after=null,li
   // Recheck the returned pages of this reverse index only, even for an entry
   // shared by many sites. The file library needs no global site enumeration.
   for(const item of items)if(await store.siteVersion(item.siteId,{signal})!==item.revision)throw new AppError('WEBSITE_CHANGED');
-  await checkLibraryStamp(store,stamp);
-  return {items,next:window.next?.slice(0,-5)??null,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
+  await checkFeedUsageRoot(store,usageRoot);await checkLibraryStamp(store,stamp);
+  return {items,next:ordinary.next||candidates.length>limit?window.at(-1).slice(0,-5):null,generation:stamp.generation,visibilityToken:stamp.visibilityToken};
  },{signal});
 }
 export function websiteSourceUsage(store,id,options){
