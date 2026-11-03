@@ -1,4 +1,5 @@
 {
+  "WEBSITE_FEED_CAPACITY": "En oppføringsstrøm overskrider grensen for én HTML-side. Åpne oppføringsstrømmene på den aktuelle siden, og velg en mindre utforming før publisering.",
   "WEBSITE_CHANGED": "Innholdet på nettstedet eller tilgangene er endret. Last inn visningen på nytt før du fortsetter.",
   "INSTALL_FILE_MISSING": "En installasjonsfil for Observanda mangler. Reparer eller installer Observanda på nytt.",
   "DATABASE_GUARD_STORAGE": "Databaselagringen kan ikke sikre verifisert privat tilgang og beskyttelse av mapper. Eksisterende data er bevart. Velg lagring med støttede tilgangskontroller, eller be administratoren flytte databasen til en verifisert privat mappe.",

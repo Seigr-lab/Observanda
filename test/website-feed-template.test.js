@@ -34,3 +34,23 @@ test('layout admission rejects active markup, fake ownership, resource URLs and 
   assert.throws(()=>compileWebsiteFeedTemplate(html),{code:'INVALID'});
  }
 });
+
+test('a scientific page repeats permitted figures, data tables and results without the surrounding entry',()=>{
+ const design=compileWebsiteFeedTemplate('<article><div data-feed-field="figures"></div><div data-feed-field="tables"></div><div data-feed-field="results"></div></article>');
+ const html='<section data-observanda-part="body">Unselected narrative</section><section data-observanda-part="section:abc"><h3>Observations</h3>'+
+  '<figure id="emission" data-observanda-part="figure:one"><img src="'+asset+'" alt="Emission"><figcaption>Emission spectrum</figcaption></figure>'+
+  '<figure data-observanda-part="media:two"><img src="'+asset+'" alt="Specimen"><figcaption>Microscope image</figcaption></figure>'+
+  '<table><caption>Calibration</caption><tr><th id="measure">Depth</th><td headers="measure">3 m</td></tr></table></section>'+
+  '<section data-observanda-part="results">Released result <a href="#emission">See emission</a></section><div hidden><figure data-observanda-part="figure:hidden">Withdrawn</figure></div>';
+ assert.ok(design.needsContent);const output=design.render({row,page:'archives/plates.html',instance:'lab-a',html});
+ assert.match(output,/Emission spectrum/);assert.match(output,/Microscope image/);assert.match(output,/\.\.\/assets\//);
+ assert.match(output,/<caption>Calibration<\/caption>/);assert.match(output,/Released result/);
+ const all=[...descendants(parseFragment(output))];assert.equal(attr(all.find(n=>n.tagName==='a'),'href'),'#'+attr(all.find(n=>n.tagName==='figure'),'id'));
+ assert.doesNotMatch(output,/Unselected narrative|Withdrawn|<h3>Observations/);
+});
+test('repetition stops at the caller’s byte budget and includes multibyte text and markup',()=>{
+ const design=compileWebsiteFeedTemplate('<div data-feed-field="content"></div><div data-feed-field="content"></div>');
+ const entry={row,page:'index.html',instance:'plate',html:'<p>Δ</p>'},size=Buffer.byteLength(design.render(entry));
+ assert.equal(Buffer.byteLength(design.render({...entry,maxBytes:size})),size);
+ assert.throws(()=>design.render({...entry,maxBytes:size-1}),{code:'WEBSITE_FEED_CAPACITY'});
+});

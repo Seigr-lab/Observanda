@@ -26,8 +26,9 @@ export function validateWebsiteCSS(css,{file='style.css',pictures}={}){
 function externalLink(value){
  try{const url=new URL(value);return url.protocol==='mailto:'||['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!/^(?:localhost|127\.|\[::1\])/.test(url.hostname)&&!/^\/api(?:\/|$)/i.test(url.pathname);}catch{return false;}
 }
+export const websiteHTMLByteLimit=16*1024*1024;
 export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pictures,recordings}={}){
- if(typeof html!=='string'||Buffer.byteLength(html)>16*1024*1024)throw new AppError('LIMIT');
+ if(typeof html!=='string'||Buffer.byteLength(html)>websiteHTMLByteLimit)throw new AppError('LIMIT');
  const root=parse(html);
  function visit(node,inPlacement=false,inEquation=false,inMath=false){
   inPlacement ||= node.attrs?.some(attr=>attr.name==='data-observanda-source'||attr.name==='data-observanda-link')??false;

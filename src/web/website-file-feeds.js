@@ -1,4 +1,5 @@
 import {feedItemEditor} from './website-feed-item-editor.js';
+import {websiteSearchChoices} from './website-files-picker-refinements.js';
 
 const hasFilter=criteria=>Object.keys(criteria??{}).length>0;
 export function websiteFileFeeds({t,request,refresh,report}){
@@ -35,14 +36,27 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const list=field(titles,'feedOnPage','select');list.dataset.feedSelect='';list.add(new Option(t('feedNew'),''));
   for(const feed of data.feeds)list.add(new Option(feed.heading||t('feedEditor'),feed.id));
   const heading=field(titles,'feedHeading','input');heading.dataset.feedHeading='';heading.maxLength=200;
+  const capacity=el('p',editing);capacity.hidden=true;capacity.setAttribute('role','status');
   const scope=radios(editing,'feedScope',[['all','feedAll'],['filtered','feedFiltered']]);
   el('p',editing,t('feedScopeHelp')).className='muted';
   const filters=el('div',editing);filters.className='website-feed-filters';
-  const find=field(filters,'feedFindSearch','input');find.type='search';find.maxLength=160;
-  const findButton=btn(filters,'pickerFind',()=>loadSearches(null,true));
-  const saved=field(filters,'feedSavedFilter','select');saved.dataset.feedSavedSearch='';
+  const direct=el('div',filters);direct.className='website-feed-query';
+  const ruleControls=new Map();
+  for(const [key,label,type] of [
+   ['search','pickerSearch','search'],['searchField','pickerSearchField','select'],['filter','pickerFilter','select'],
+   ['dateFrom','pickerFromDate','date'],['dateTo','pickerToDate','date'],['sort','pickerSort','select'],
+  ]){
+   const control=field(direct,label,type==='select'?'select':'input');control.dataset.feedCriterion=key;
+   if(type==='select')for(const [value,name] of Object.entries(websiteSearchChoices[key]))control.add(new Option(t(name),value));
+   else{control.type=type;if(type==='search')control.maxLength=160;}
+   ruleControls.set(key,control);
+  }
+  const presets=el('details',filters);presets.dataset.feedPresets='';el('summary',presets,t('feedFindSearch'));
+  const find=field(presets,'feedFindSearch','input');find.type='search';find.maxLength=160;
+  const findButton=btn(presets,'pickerFind',()=>loadSearches(null,true));
+  const saved=field(presets,'feedSavedFilter','select');saved.dataset.feedSavedSearch='';
   const summary=el('dl',filters);summary.className='website-feed-criteria';
-  const nav=el('div',filters);nav.className='inline-actions';
+  const nav=el('div',presets);nav.className='inline-actions';
   const previous=btn(nav,'prevPage',()=>loadSearches(cursors.at(-2))),next=btn(nav,'nextPage',()=>loadSearches(after));
   const template=radios(editing,'feedTemplate',[['full','placementFull'],['card','placementCard'],['custom','feedCustom']]);
   const custom=el('div',editing);custom.className='website-feed-custom';const item=feedItemEditor(custom,{t,changed:()=>{dirty=true;}});
@@ -57,7 +71,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const remove=btn(actions,'feedRemove',()=>write(true));remove.classList.add('website-feed-remove');btn(actions,'cancel',cancel);
   const apply=el('button',actions,t('feedSave'));apply.type='submit';apply.className='button primary';apply.dataset.feedApply='';
   let selected='',selectedCriteria=null,filterName='',cursors=[],after=null,dirty=false,loading=false,saving=false,searchEpoch=0;
-  dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get()}:null;
+  dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get(),arrangement:item.draft()}:null;
   function showCriteria(){
    const labels={search:'pickerSearch',searchField:'pickerSearchField',filter:'pickerFilter',dateFrom:'pickerFromDate',dateTo:'pickerToDate',dateKnowledge:'pickerDate',recordType:'pickerType',status:'pickerStatus',tags:'pickerTags',projectId:'pickerProject',notebookId:'pickerBook',sort:'pickerSort',tagMode:'pickerTags'};
    summary.replaceChildren();
@@ -67,6 +81,20 @@ export function websiteFileFeeds({t,request,refresh,report}){
    }
    summary.hidden=!summary.children.length;
   }
+  function fillRule(){
+   for(const [key,control] of ruleControls)control.value=selectedCriteria?.[key]??(control.tagName==='SELECT'?control.options[0].value:'');
+  }
+  function changeRule(){
+   const next={...selectedCriteria};
+   for(const [key,control] of ruleControls){
+    const value=control.value.trim();
+    if(value&&!(control.tagName==='SELECT'&&value===control.options[0].value))next[key]=value;else delete next[key];
+   }
+   selectedCriteria=hasFilter(next)?next:null;
+   saved.value='';filterName='';if(saved.options[0])saved.options[0].textContent=t('feedChooseSearch');
+   dirty=true;showCriteria();message();
+  }
+  direct.oninput=changeRule;
   function paint(){
    custom.hidden=template.value()!=='custom';filters.hidden=scope.value()!=='filtered';
    remove.hidden=!selected;apply.disabled=loading||saving||(!filters.hidden&&!selectedCriteria);
@@ -95,9 +123,10 @@ export function websiteFileFeeds({t,request,refresh,report}){
    if(current!==dialog)return;
    searchEpoch++;selected=id;list.value=id;selectedCriteria=hasFilter(feed?.criteria)?feed.criteria:null;filterName='';
    heading.value=feed?.heading??'';scope.set(selectedCriteria?'filtered':'all');template.set(feed?.template??'full');layout.set(feed?.layout??'list');
+   capacity.hidden=feed?.unavailable!=='capacity';capacity.textContent=capacity.hidden?'':t('feedCapacity');
    size.value=String(feed?.pageSize??12);position.options[0].disabled=!id;position.value=id?'keep':'end';
-   item.set(feed?.itemHTML);find.value='';cursors=[];after=null;saved.replaceChildren();dirty=false;showCriteria();message();
-   if(selectedCriteria)await loadSearches(null,true);
+   item.set(feed?.itemHTML);find.value='';cursors=[];after=null;saved.replaceChildren();dirty=false;fillRule();showCriteria();message();
+   if(selectedCriteria&&presets.open)await loadSearches(null,true);
   }
   async function write(deleting){
    if(saving||loading||!deleting&&!form.reportValidity()||deleting&&!confirm(t('feedRemoveConfirm')))return;
@@ -105,7 +134,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    if(!deleting){
     if(scope.value()==='filtered'&&!selectedCriteria){message(t('feedChooseSearch'));return;}
     Object.assign(payload,{heading:heading.value.trim(),criteria:scope.value()==='filtered'?selectedCriteria:{},template:template.value(),layout:layout.value(),pageSize:size.valueAsNumber});
-    if(payload.template==='custom')payload.itemHTML=item.get();
+    if(payload.template==='custom')payload.itemHTML=item.forSave();
     if(position.value!=='keep')payload.position=['start','end'].includes(position.value)?position.value:{before:Number(position.value)};
    }
    saving=true;editing.disabled=list.disabled=true;paint();
@@ -114,14 +143,15 @@ export function websiteFileFeeds({t,request,refresh,report}){
     if(current===dialog){close();refresh(value);}
    }catch(error){fail(error);}finally{saving=false;editing.disabled=list.disabled=false;paint();}
   }
-  form.onsubmit=e=>{e.preventDefault();void write(false);};
+  form.onsubmit=e=>{e.preventDefault();void write(false).catch(fail);};
   form.oninput=e=>{if(e.target!==find)dirty=true;};form.onchange=paint;
   list.onchange=async()=>{
    if(dirty&&!confirm(t('discardConfirm'))){list.value=selected;return;}
    loading=true;editing.disabled=list.disabled=true;paint();try{await choose(list.value);}catch(error){list.value=selected;fail(error);}finally{loading=false;editing.disabled=list.disabled=false;paint();}
   };
-  scope.group.onchange=()=>{paint();if(scope.value()==='filtered'&&!saved.options.length)void loadSearches(null,true);};
-  saved.onchange=()=>{const opt=saved.selectedOptions[0];if(opt?.feedCriteria){selectedCriteria=opt.feedCriteria;filterName=opt.textContent;saved.options[0].textContent=filterName;}showCriteria();paint();};
+  scope.group.onchange=paint;
+  presets.ontoggle=()=>{if(presets.open&&!saved.options.length)void loadSearches(null,true);};
+  saved.onchange=()=>{const opt=saved.selectedOptions[0];if(opt?.feedCriteria){selectedCriteria=opt.feedCriteria;filterName=opt.textContent;saved.options[0].textContent=filterName;fillRule();}showCriteria();paint();};
   find.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();findButton.click();}};
   dialog.addEventListener('cancel',event=>{event.preventDefault();cancel();});
   dialog.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();event.stopPropagation();if(!saving&&!loading)form.requestSubmit();}});
@@ -133,7 +163,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    await choose(restore?(data.feeds.some(f=>f.id===pending.selected)?pending.selected:''):feedId??'');
    if(restore&&current===dialog){
     heading.value=pending.heading;scope.set(pending.scope);selectedCriteria=pending.criteria;template.set(pending.template);layout.set(pending.layout);
-    size.value=pending.size;item.set(pending.itemHTML);dirty=true;if(pending.scope==='filtered')await loadSearches(null,true);
+    size.value=pending.size;item.set(pending.itemHTML,pending.arrangement);dirty=true;fillRule();if(pending.scope==='filtered'&&presets.open)await loadSearches(null,true);
    }
   }catch(error){close();report(error);}finally{loading=false;editing.disabled=list.disabled=false;paint();if(current===dialog)(selected?list:heading).focus();}
  }

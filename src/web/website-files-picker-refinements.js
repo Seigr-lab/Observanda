@@ -6,6 +6,7 @@ const choices={
  tagMode:{all:'pickerMatchAllTags',any:'pickerMatchAnyTags'},
  sort:{default:'pickerDefaultOrder',relevance:'pickerBestMatch','date-desc':'pickerNewest','date-asc':'pickerOldest','title-asc':'pickerTitleAZ','title-desc':'pickerTitleZA'}
 };
+export {choices as websiteSearchChoices};
 export function websitePickerRefinements(state,{msg,esc,types,statusLabel,button,facet,savedOpen}){
  types??={ids:[],statuses:[],label:value=>value};
  const label=key=>esc(msg(key));

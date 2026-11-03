@@ -7,6 +7,26 @@ import {sampleNotebook} from '../../src/sample.js';
 import {websiteDesktopFixture} from './installed-website-app.js';
 import {createWebsiteWorkspace,selectEntry,disableWebsiteResearch} from './website-workspace-fixture.js';
 import {selectLine} from './website-authoring-journey.js';
+import {createFigure} from '../../src/web/figure-model.js';
+import {defaultPublicationPrivacy} from '../../src/web/record-publication-privacy.js';
+
+async function addInstrumentPlates(page){
+ const add=page.locator('[data-action="website-files-new-page"]'),tools=add.locator('xpath=ancestor::details[1]');
+ if(!await add.isVisible())await tools.locator('summary').click();
+ await add.click();await page.getByLabel('Page title',{exact:true}).fill('Instrument plates');
+ await page.getByLabel('Page file name',{exact:true}).fill('atlas/plates.html');
+ await page.locator('[data-website-files-form] button[type=submit]').click();
+ await page.locator('[data-website-file-block]').selectOption('feed');await page.getByRole('button',{name:'Insert element',exact:true}).click();
+ const dialog=page.locator('dialog[data-website-feed-dialog]');
+ await dialog.locator('[data-feed-heading]').fill('Public instrument traces');
+ await dialog.getByRole('radio',{name:'Matching search'}).check();
+ await dialog.locator('[data-feed-criterion="filter"]').selectOption('media');
+ await dialog.getByRole('radio',{name:'Custom design'}).check();
+ await dialog.getByText('Arrange fields',{exact:true}).click();
+ await dialog.locator('[data-feed-field="content"]').uncheck();await dialog.locator('[data-feed-field="figures"]').check();
+ await dialog.locator('[data-feed-apply]').click();
+ await expect(dialog).toHaveCount(0);
+}
 
 async function submitLabChanges(page,source,next){
  await page.evaluate(async({source,next})=>{
@@ -66,6 +86,10 @@ test('an authored feed republishes new lab grants, changed writing and section w
   expect(first).toContain('withdraw-this-result');expect(first).not.toMatch(/never-export-this-canary|release-this-result/);
   const next={...sampleNotebook().entries[2],id:randomUUID(),notebookId:source.labBookId,title:'Downstream fluorescence',body:'Second assay approved.',share:false,
    sections:[{id:randomUUID(),title:'Operator notes',body:'internal-serial-canary',share:false}]};
+  next.figures=['Baseline emission','Calibrated emission','Internal calibration canary'].map((title,i)=>{
+   const plot=createFigure();plot.title=title;plot.series[0].points=[{x:0,y:8+i,error:null},{x:1,y:15+i,error:null},{x:2,y:12+i,error:null}];return plot;
+  });
+  next.publication=defaultPublicationPrivacy();next.publication.website.hiddenFigures=[next.figures[2].id];
   await submitLabChanges(page,source,next);
   await fixture.close(app);app=null;
   const sentinels=await disableWebsiteResearch(fixture.directory,[path.join(fixture.directory,name),...source.roots]);
@@ -90,6 +114,7 @@ test('an authored feed republishes new lab grants, changed writing and section w
   expect(firstPreview+' '+await block.innerText()).toMatch(/Second assay approved/);
   await page.getByRole('button',{name:'Return to editing',exact:true}).click();
   await expect(canvas().locator('[data-website-feed]')).toBeVisible();
+  await addInstrumentPlates(page);
   await publish();await expect(page.getByLabel('Destination folder',{exact:true})).toHaveValue(output);
   await confirm();
   browser=await chromium.launch();const reader=await browser.newPage({javaScriptEnabled:false});
@@ -99,10 +124,21 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(reader.locator('.website-feed-item').first()).toHaveCSS('background-color','rgb(255, 255, 255)');
   if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/09-published-feed.png')});
   const html=[await reader.content()];
-  await reader.locator('[data-website-feed] a[rel=next]').click();html.push(await reader.content());
+  await reader.locator('[data-website-feed] a[rel=next]').click();
+  await expect(reader.locator('[data-website-feed] a[rel=prev]')).toBeVisible();
+  await expect(reader.locator('[data-website-feed] [role=listitem]')).toHaveCount(1);
+  html.push(await reader.content());
   expect(html.join(' ')).toMatch(/Corrected reading: 526 nm/);expect(html.join(' ')).toMatch(/Second assay approved/);
   expect(html.join(' ')).not.toMatch(/never-export-this-canary|internal-serial-canary|withdraw-this-result/);
   await reader.locator('[data-website-feed] a[rel=prev]').click();await expect(reader.getByRole('heading',{name:'Fluorescence atlas',exact:true})).toBeVisible();
+  await reader.goto(pathToFileURL(path.join(output,'atlas','plates.html')).href);
+  const plate=reader.locator('[data-website-feed-source]').filter({hasText:'Downstream fluorescence'});
+  await expect(reader.locator('[data-website-feed-source]')).toHaveCount(1);
+  await expect(plate).toContainText('Calibrated emission');await expect(plate).toContainText('Baseline emission');
+  const plots=plate.locator('img');await expect(plots).toHaveCount(2);
+  await expect.poll(()=>plots.evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0))).toBe(true);
+  expect(await reader.content()).not.toMatch(/Second assay approved|Internal calibration canary|internal-serial-canary/);
+  if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/10-published-plates.png'),fullPage:true});
   for(const database of sentinels)expect((await stat(database)).isFile()).toBe(true);
   expect(unexpected).toEqual([]);
  }finally{await browser?.close();await fixture.dispose(app);}

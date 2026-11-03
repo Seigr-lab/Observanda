@@ -1,4 +1,5 @@
 {
+  "WEBSITE_FEED_CAPACITY": "Un canal supera el límit d’una pàgina HTML. Obriu els canals d’entrades de la pàgina afectada i trieu un disseny més petit abans de publicar.",
   "WEBSITE_CHANGED": "El contingut del lloc web o els seus permisos han canviat. Torna a carregar la vista actual abans de continuar.",
   "INSTALL_FILE_MISSING": "Falta un fitxer de la instal·lació de l’Observanda. Repareu o torneu a instal·lar l’Observanda.",
   "DATABASE_GUARD_STORAGE": "L'emmagatzematge de la base de dades no pot garantir l'accés privat verificat i la protecció dels directoris. Les dades existents s'han conservat. Selecciona un emmagatzematge amb controls d'accés compatibles o demana a l'administrador que traslladi la base de dades a un directori privat verificat.",

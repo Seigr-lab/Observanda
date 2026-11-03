@@ -73,9 +73,10 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const customHTML='<article class="tide-plate">\n  <h3 data-feed-field="title"></h3>\n  <p data-feed-field="tags"></p>\n  <div data-feed-field="content"></div>\n</article>';
   await add();await dialog.locator('[data-feed-heading]').fill('Western stations');
   await dialog.getByRole('radio',{name:'Matching search',exact:true}).check();
+  await dialog.locator('[data-feed-presets] > summary').click();
   await dialog.locator('[data-feed-saved-search]').selectOption(rule.id);await dialog.getByRole('radio',{name:'Custom design',exact:true}).check();
   await dialog.getByText('Arrange fields',{exact:true}).click();await dialog.locator('[data-feed-field=tags]').check();
-  await dialog.getByRole('button',{name:'Move up · Tags'}).click();await dialog.getByRole('button',{name:'Use this arrangement'}).click();
+  await dialog.getByRole('button',{name:'Move up · Tags'}).click();
   await dialog.locator('.website-feed-custom summary').filter({hasText:'Item HTML'}).click();
   await expect(dialog.locator('[data-feed-item-html]')).toHaveValue(/data-feed-field="tags"/);
   await dialog.locator('[data-feed-item-html]').fill(customHTML);await dialog.locator('[data-feed-position]').selectOption('start');await save();
