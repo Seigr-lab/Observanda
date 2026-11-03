@@ -65,8 +65,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    if(!match||!researchId(match[1]))throw new AppError('INVALID');
    const policy=previewPolicy(url.origin+prefix+'preview/'+match[1]+'/'+match[2]+'/');
    if(url.searchParams.get('canvas')==='1'){
-    const site=await store.checkRevision(match[1],match[2]);
-    if(!site.pages.some(page=>page.path===decodeURIComponent(match[3])))throw new AppError('NOT_FOUND');
+    await store.canvasDocument(match[1],decodeURIComponent(match[3]),match[2],{signal});
     res.setHeader('Content-Security-Policy',policy);res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head></head><body></body></html>');return true;
    }
    const file=await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal,editor:true});
@@ -155,7 +154,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='media/library'){json(await websiteRecordingLibrary(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,menuId:options.menuId,signal}));return true;}
   if(operation==='menu/save'){await observed(()=>operationStage('menuSave',{unit:'files'},()=>store.saveMenu(siteId,{...options,expectedRevision,signal})));return true;}
-  if(operation==='version'){json({revision:await store.siteVersion(siteId,{signal})});return true;}
+  if(operation==='version'){
+   if(options.path!==undefined&&(typeof options.path!=='string'||!options.path.endsWith('.html')||!revision(expectedRevision)))throw new AppError('INVALID');
+   json(await store.versionStatus(siteId,{path:options.path,expectedRevision,signal}));return true;
+  }
   if(operation==='save'){
    if(Object.hasOwn(options,'recordings')||Object.hasOwn(options,'receivePictures'))throw new AppError('INVALID');
    const {path,html,css,title}=options;json(await store.save(siteId,{path,html,css,title,expectedRevision,signal}));return true;

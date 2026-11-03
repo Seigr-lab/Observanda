@@ -1,4 +1,6 @@
 {
+  "savedPageWaiting": "Venter på tilgang til siden",
+  "savedPageWaitingDetail": "Observanda sjekker hvilket lagret innhold som kan vises. Du kan forlate redigeringsverktøyet eller prøve på nytt her.",
   "menuMissingLabel": "Gi dette menyelementet en etikett.",
   "menuInvalidLink": "Velg en offentlig side, et sidefragment eller en gyldig ekstern adresse for denne lenken.",
   "menuScope": "Navigasjonen deles av sidene på dette nettstedet.",

@@ -162,6 +162,10 @@ test('version polling uses compact files and observes PDF fences, cancellation, 
   const websiteId=websiteSourceId({...provenance,target:'website'}),webToken=await writer.beginSourceUpdate({sourceId:websiteId,target:'website'});
   await writer.putSource({sourceId:websiteId,title:'Website source',html:'<p>Public</p>'},{token:webToken});
   const placed=await writer.insertSource(id,{expectedRevision:site.site.revision,sourceId:websiteId});
+  const overlay=await writer.beginSourceUpdate({sourceId:websiteId,target:'website',liveOnly:true,feedBackfill:true});
+  assert.equal(await reader.siteVersion(id),placed.site.revision);
+  await assert.rejects(writer.putSource({sourceId:websiteId,title:'Withdrawn',target:'website',visible:false},{token:overlay}),{code:'CONFLICT'});
+  await writer.cancelSourceUpdate({sourceId:websiteId,token:overlay});
   const {content}=await reader.file(id,'index.html',{revision:placed.site.revision});
   reads.length=0;
   assert.match((await contentBuffer(content)).toString(),/Public/);
@@ -171,7 +175,14 @@ test('version polling uses compact files and observes PDF fences, cancellation, 
   await assert.rejects(contentBuffer(content),{code:'CONFLICT'});
   await writer.cancelSourceUpdate({sourceId:websiteId,token:edit});
   assert.equal(await reader.siteVersion(id),placed.site.revision);assert.equal(await reader.pdfVersion(),settled);
-  await writer.save(id,{path:'index.html',expectedRevision:placed.site.revision,html:placed.html,css:'body { color: teal }'});
+  const unchanged=await writer.save(id,{expectedRevision:placed.site.revision,path:'methods.html',html:'<html><head><title>Methods</title></head><body><main>Methods</main></body></html>',css:placed.css});
+  const version=await reader.versionStatus(id,{expectedRevision:placed.site.revision,path:'index.html'});
+  assert.equal(version.revision,unchanged.site.revision);assert.equal(version.surfaceStamp,placed.surfaceStamp);
+  const mounted=await reader.file(id,placed.site.cssPath,{revision:placed.assetStamp,editor:true});
+  assert.equal((await contentBuffer(mounted.content)).toString(),placed.css);
+  await writer.save(id,{path:'index.html',expectedRevision:unchanged.site.revision,html:placed.html,css:'body { color: teal }'});
+  await assert.rejects(reader.file(id,placed.site.cssPath,{revision:placed.assetStamp,editor:true}),{code:'CONFLICT'});
+  await assert.rejects(reader.file(id,'index.html',{revision:placed.assetStamp,editor:true}),{code:'CONFLICT'});
   await assert.rejects(contentBuffer(content),{code:'CONFLICT'});
  }finally{
   await closeIdleMutationFiles();assert.equal(path.dirname(temporary),os.tmpdir());assert.ok(path.basename(temporary).startsWith('website-version-'));

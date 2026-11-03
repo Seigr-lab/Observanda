@@ -52,7 +52,7 @@ import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
 import {forgetWorkspace} from './preferences.js';
 import {operationStage} from './operation-progress.js';
-import {OperationalDiagnostics,withDiagnostics,diagnostic,diagnosticPhase} from './operational-diagnostics.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic,diagnosticPhase,diagnosticRoute} from './operational-diagnostics.js';
 import {diskCapacity} from './disk-capacity.js';
 import {serviceHealth} from './service-health.js';
 import {UserProfile} from './user-profile.js';
@@ -1531,7 +1531,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        json(safe,safe.code==='WORKLOAD_BUSY'?503:safe.code==='REQUEST_TIMEOUT'?408:identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422);
       }else res.destroy();
     } finally {
-      if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,pendingRequests:pending.size,activeWrites});
+      if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:diagnosticRoute(req.url),durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,pendingRequests:pending.size,activeWrites});
       releaseRead?.();req.activity?.finish();req.admission?.release();releaseAdmissionClose();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
     }
   }))));

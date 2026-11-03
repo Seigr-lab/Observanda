@@ -11,6 +11,17 @@ const scopes=new AsyncLocalStorage();
 const inside=(root,file)=>{const relative=path.relative(root,path.resolve(file));return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export const nativeDestination=file=>[...(scopes.getStore()??[])].reverse().find(scope=>scope.active&&inside(scope.root,file));
 
+async function* fileBlocks(handle,chunkSize,signal,limit=Number.MAX_SAFE_INTEGER){
+ const before=await handle.stat({bigint:true});if(before.size>BigInt(limit))throw new AppError('LIMIT');
+ for(let position=0;position<Number(before.size);){
+  signal?.throwIfAborted();const bytes=Buffer.allocUnsafe(Math.min(chunkSize,Number(before.size)-position));
+  const {bytesRead}=await handle.read(bytes,0,bytes.length,position);if(!bytesRead)throw new AppError('CONFLICT');
+  position+=bytesRead;yield bytes.subarray(0,bytesRead);
+ }
+ const after=await handle.stat({bigint:true});
+ if(['dev','ino','size','mtimeNs','ctimeNs'].some(key=>before[key]!==after[key]))throw new AppError('CONFLICT');
+}
+
 // A transfer keeps both directory objects until publication. Metadata helpers
 // use this scope too; moving a name cannot redirect a later archive or marker.
 export function withNativeDestination(root,operation){
@@ -60,14 +71,15 @@ export function withNativeDestination(root,operation){
    async *stream(file,{signal,chunkSize=1024*1024}={}){
     if(!Number.isSafeInteger(chunkSize)||chunkSize<1||chunkSize>1114112)throw new AppError('INVALID');
     const handle=await scope.member(file,(parent,name)=>parent.file(name));
-    try{const before=await handle.stat({bigint:true});if(before.size>BigInt(Number.MAX_SAFE_INTEGER))throw new AppError('LIMIT');let position=0;
-     while(position<Number(before.size)){signal?.throwIfAborted();const bytes=Buffer.allocUnsafe(Math.min(chunkSize,Number(before.size)-position)),{bytesRead}=await handle.read(bytes,0,bytes.length,position);if(!bytesRead)throw new AppError('CONFLICT');position+=bytesRead;yield bytes.subarray(0,bytesRead);}
-     const after=await handle.stat({bigint:true});if(['dev','ino','size','mtimeNs','ctimeNs'].some(key=>before[key]!==after[key]))throw new AppError('CONFLICT');
-    }finally{await handle.close();}
+    try{yield* fileBlocks(handle,chunkSize,signal);}finally{await handle.close();}
    },
-   async read(file,{limit=32*1024*1024,encoding}={}){
-    if(!Number.isSafeInteger(limit)||limit<0)throw new AppError('INVALID');const parts=[];let size=0;
-    for await(const bytes of scope.stream(file)){size+=bytes.length;if(size>limit)throw new AppError('LIMIT');parts.push(bytes);}const bytes=Buffer.concat(parts,size);return encoding?bytes.toString(encoding):bytes;
+   async read(file,{limit=32*1024*1024,encoding,missing=false}={}){
+    if(!Number.isSafeInteger(limit)||limit<0)throw new AppError('INVALID');
+    const handle=await scope.member(file,(parent,name)=>parent?.file(name,{missing}),{missing});if(!handle)return null;
+    try{
+     const parts=[];for await(const bytes of fileBlocks(handle,1024*1024,undefined,limit))parts.push(bytes);
+     const value=Buffer.concat(parts);return encoding?value.toString(encoding):value;
+    }finally{await handle.close();}
    },
    async hash(file,options){const hash=createHash('sha256');for await(const bytes of scope.stream(file,options))hash.update(bytes);return hash.digest('hex');},
    async remove(file,{missing=false}={}){return scope.member(file,async(parent,name)=>{const stat=await parent?.stat(name,{missing});if(stat)await parent.remove(name,{identity:stat.identity});},{missing});},

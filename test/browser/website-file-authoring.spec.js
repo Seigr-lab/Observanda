@@ -48,6 +48,30 @@ test('a pending grant hides the page and open review, then restores the current 
  await expect(heading).toHaveText('Original saved home with new writing');await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeEnabled();
 });
 
+test('a revision confined to another page keeps the mounted canvas, pending writing, selection and undo history',async({page})=>{
+ let current=savedSite,opens=0,checks=0,lastWrite;
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const surfaceStamp='1'.repeat(64);
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([savedSite],{state:'ready'});
+  if(route.endsWith('/open')){opens++;return {...savedPage,surfaceStamp,site:current};}
+  if(route.endsWith('/version')){checks++;return {revision:current.revision,site:current,surfaceStamp};}
+  if(route.endsWith('/save')){lastWrite=data;return {...savedPage,site:current,surfaceStamp,html:data.html};}
+  throw Error('Unexpected route '+route);
+ });
+ await mountFilesEditor(page);
+ const canvas=page.frameLocator('#website-files-canvas'),heading=canvas.getByRole('heading');
+ await expect(heading).toHaveText('Original saved home');await heading.click();await page.keyboard.press('End');await page.keyboard.type(' edited');
+ await expect(heading).toHaveText('Original saved home edited');expect(errors).toEqual([]);
+ await heading.evaluate(node=>{window.editorWitness=node;});await page.keyboard.press('Shift+ArrowLeft');
+ current={...savedSite,revision:'d'.repeat(64),pages:[...savedSite.pages,{path:'plates.html',title:'New plates'}]};
+ await expect(page.locator('[data-website-file-page] option[value="plates.html"]')).toHaveCount(1,{timeout:12000});
+ expect(await heading.evaluate(n=>n===window.editorWitness&&n.ownerDocument.getSelection().toString()==='d')).toBe(true);
+ expect(opens).toBe(1);expect(checks).toBeGreaterThan(0);await expect(page.getByRole('button',{name:'Undo',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Save website',exact:true}).click();await expect.poll(()=>lastWrite?.expectedRevision).toBe(current.revision);
+ expect(lastWrite.html).toContain('Original saved home edited');
+});
+
 test('a prepared website opens from saved files without another user action',async({page})=>{
  const calls=[];let checks=0;
  await page.exposeFunction('filesAPI',route=>{

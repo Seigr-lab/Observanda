@@ -1,4 +1,6 @@
 {
+  "savedPageWaiting": "Waiting for access to this page",
+  "savedPageWaitingDetail": "Observanda is checking which saved content may be shown. You can leave the editor or retry here.",
   "menuMissingLabel": "Give this menu item a label.",
   "menuInvalidLink": "Choose a public page, a page fragment, or a valid external address for this link.",
   "menuScope": "Navigation is shared across the pages of this website.",

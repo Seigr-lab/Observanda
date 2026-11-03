@@ -14,6 +14,17 @@ for(const stage of ['website-source-entry','website-source-find','website-source
 for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])phases.add(stage);
 for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist','website-storage-upgrade'])phases.add(stage);
 const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor','website-files']);
+const websiteRoutes=new Set(['website-version','website-open','website-canvas','website-asset','website-save']);
+export function diagnosticRoute(url){
+ const path=url?.split('?')[0]??'';
+ if(path.startsWith('/api/website-files/preview/'))return /[?&]canvas=1(?:&|$)/.test(url)?'website-canvas':'website-asset';
+ const group=path.split('/')[2];
+ if(group==='website-files'){
+  const action=path.slice('/api/website-files/'.length);
+  if(['version','open','save'].includes(action))return 'website-'+action;
+ }
+ return group;
+}
 for(const stage of ['edition-capture','edition-clean','edition-input','edition-permissions','edition-pin','edition-directory','edition-render','edition-finish'])phases.add(stage);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs'],'database-queue':['databaseQueueEntries','databaseQueueMs'],'database-cursor':['databaseCursorBatches','databaseCursorMs']});
 // Logical work, including cache uses, is distinct from physical I/O and RSS.
@@ -33,7 +44,7 @@ export function diagnosticEvent(event,data={}){
  const value={time:new Date().toISOString(),event};
  if(correlation(data.correlation))value.correlation=data.correlation;
  if(phases.has(data.phase))value.phase=data.phase;
- if(routes.has(data.route))value.route=data.route;
+ if(routes.has(data.route)||websiteRoutes.has(data.route))value.route=data.route;
  if(['GET','POST'].includes(data.method))value.method=data.method;
  if(data.error)value.code=codeOf(data.error);
  for(const key of counters)if(Number.isFinite(data[key])&&data[key]>=0&&data[key]<=Number.MAX_SAFE_INTEGER)value[key]=Math.round(data[key]);

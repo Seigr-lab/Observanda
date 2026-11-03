@@ -1,4 +1,6 @@
 {
+  "savedPageWaiting": "Esperando acceso a esta página",
+  "savedPageWaitingDetail": "Observanda está comprobando qué contenido guardado puede mostrarse. Puedes salir del editor o volver a intentarlo aquí.",
   "menuMissingLabel": "Asigna una etiqueta a este elemento del menú.",
   "menuInvalidLink": "Elige una página pública, un fragmento de página o una dirección externa válida para este enlace.",
   "menuScope": "La navegación se comparte entre las páginas de este sitio web.",

@@ -1,4 +1,6 @@
 {
+  "savedPageWaiting": "S’està esperant l’accés a aquesta pàgina",
+  "savedPageWaitingDetail": "Observanda està comprovant quin contingut desat es pot mostrar. Pots sortir de l’editor o tornar-ho a provar aquí.",
   "menuMissingLabel": "Dona una etiqueta a aquest element del menú.",
   "menuInvalidLink": "Tria una pàgina pública, un fragment de pàgina o una adreça externa vàlida per a aquest enllaç.",
   "menuScope": "La navegació és compartida per totes les pàgines d’aquest lloc web.",
