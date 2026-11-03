@@ -1,7 +1,8 @@
 import {AppError} from './errors.js';
+import {researchId} from './web/research-reference.js';
 import {libraryQuery,matchesQuery,compareLibraryRows,libraryMatchRank} from './website-file-library-query.js';
 import {libraryStamp,checkLibraryStamp,scanEligibleWebsiteRows,indexedWebsiteRow} from './website-file-library.js';
-import {feedRowShard,readFeedSource} from './website-feed-source.js';
+import {feedRowShard,readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {siteHasPendingSources} from './website-feed-fence.js';
 export {readFeedSource};
 
@@ -28,16 +29,23 @@ function member(row,q){
 export function compareFeedMembers(a,b,criteria={}){
  return compareLibraryRows(a,b,criteria.sort??'default',criteria.locale??'en');
 }
-export function enumerateFeedMembers(store,criteria,{signal}={}){
+export function enumerateFeedMembers(store,criteria,{signal,admittedRows}={}){
  const q=libraryQuery(normalizeFeedCriteria(criteria));
  return store.scope(async scope=>{
   const stamp=await libraryStamp(store);if(await siteHasPendingSources(store,{sources:[],feeds:[{criteria,members:[]}]},stamp.pending))throw new AppError('CONFLICT');
-  const result=[];let prefix,overlay;
+  const writer=admittedRows&&researchId(stamp.generation)?store.writerToken():null,result=[];let prefix,overlay;
   for await(const row of scanEligibleWebsiteRows(store,scope,stamp,{signal})){
    signal?.throwIfAborted();
    if(prefix!==row.id.slice(0,2)){prefix=row.id.slice(0,2);overlay=await feedRowShard(store,prefix,signal);}
-   const live=overlay[row.id],selected=member(live?.baseRevision===row.revision?(live.row?{...row,...live.row}:null):row,q);
-   if(selected)result.push(selected);
+   const live=overlay[row.id],current=live?.baseRevision===row.revision;
+   if(current&&live.row!==null&&(live.row?.id!==row.id||typeof live.row.revision!=='string'||!/^[a-f0-9]{64}$/.test(live.row.revision)||typeof live.row.title!=='string'))throw new AppError('FORMAT');
+   const effective=current?live.row&&{...row,...live.row}:row,selected=member(effective,q);
+   if(!selected)continue;
+   result.push(selected);
+   // The site writer owns the scan and render under one fence snapshot. Carry
+   // only the base projection. The renderer must still check both source heads
+   // before it can distinguish a current row from a replayed index or tombstone.
+   if(writer&&(!live||current))admittedRows.set(selected,{writer,base:feedTemplateMetadata(row)});
   }
   await checkLibraryStamp(store,stamp);
   return result.sort((a,b)=>compareLibraryRows(a,b,q.sort,q.locale));

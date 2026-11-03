@@ -5,7 +5,7 @@ import {AppError} from './errors.js';
 import {escapeWebsiteText as esc} from './website-file-html.js';
 import {attr,descendants} from './website-migration-views.js';
 import {compileWebsiteFeedTemplate,feedContentAtPage} from './website-feed-template.js';
-import {readFeedSource} from './website-feed-source.js';
+import {readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {websiteHTMLByteLimit} from './website-file-policy.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
@@ -51,18 +51,26 @@ function memberAssets(markup,page,source){
 }
 export function makeFeedRenderer(feed,pending,siteId,draft,shared){
  const custom=feed.template==='custom'?compileWebsiteFeedTemplate(feed.itemHTML):null;
- const styles=new Map();
- return async function render(store,member,page,signal){
-  let source=shared?.source;
-  if(!source||source.id!==member.id||source.revision!==member.revision){
-   source=await readFeedSource(store,member.id,member.revision,{signal,pending});
-   if(shared){shared.source=source;shared.html=null;shared.css=null;}
+ const withContent=feed.template==='full'||custom?.needsContent,admittedRows=new WeakMap(),styles=new Map();
+ async function render(store,member,page,signal){
+  let admission=admittedRows.get(member);
+  if(admission&&admission.writer!==store.writerToken())admission=null;
+  let row=admission?.verified,source;
+  if(!row){
+   source=shared?.source;
+   if(!source||source.id!==member.id||source.revision!==member.revision){
+    source=await readFeedSource(store,member.id,member.revision,{signal,pending:pending||Boolean(admission),indexedRow:admission?.base});
+    if(shared){shared.source=source;shared.html=null;shared.css=null;}
+   }
+   if(!source?.visible||source.target!=='website'||source.revision!==member.revision)throw new AppError('CONFLICT');
+   row=source.feedRow;
   }
-  if(!source?.visible||source.target!=='website'||source.revision!==member.revision)throw new AppError('CONFLICT');
-  const instance=feed.id+'-'+member.id,withContent=feed.template==='full'||custom?.needsContent;
+  if(row?.id!==member.id||row.revision!==member.revision)throw new AppError('CONFLICT');
+  if(admission&&!withContent&&!admission.verified){admission.verified=feedTemplateMetadata(row);delete admission.base;}
+  const instance=feed.id+'-'+member.id;
   const html=withContent?shared?.html??await store.readText(source.html,{signal}):'';
   if(withContent&&shared)shared.html=html;
-  let markup=custom?custom.render({row:source.feedRow,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(source.title)+'</h3>';
+  let markup=custom?custom.render({row,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(row.title)+'</h3>';
   if(Buffer.byteLength(markup)>maxPageBytes)throw new AppError('WEBSITE_FEED_CAPACITY');
   let used=new Map(),style=null,styleKey='';
   if(withContent){
@@ -81,8 +89,9 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
     for(const asset of source.assets)if(sheet.references.has(asset.name))used.set(isolated(asset.name),{...asset,name:isolated(asset.name),sourceId:source.id,feedAsset:true});
    }
   }
-  return {assets:used,style,html:'<article class="website-feed-item" role="listitem" data-website-feed-source="'+source.id+'"'+(styleKey?' data-website-feed-style="'+styleKey+'"':'')+'>'+markup+'</article>'};
- };
+  return {assets:used,style,html:'<article class="website-feed-item" role="listitem" data-website-feed-source="'+member.id+'"'+(styleKey?' data-website-feed-style="'+styleKey+'"':'')+'>'+markup+'</article>'};
+ }
+ return {render,admittedRows};
 }
 // Reuse an unchanged member's sealed row when its neighbours or page change.
 // In particular, a second pending source may already have a newer head while

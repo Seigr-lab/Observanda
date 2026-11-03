@@ -6,7 +6,6 @@ import {attr,descendants} from './website-migration-views.js';
 import {websiteInsertionOffset} from './website-file-html.js';
 import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {normalizeFeedCriteria,enumerateFeedMembers,feedMemberForSource,compareFeedMembers} from './website-feed-query.js';
-import {compileWebsiteFeedTemplate} from './website-feed-template.js';
 import {changeGroups,initialGroups} from './website-feed-groups.js';
 import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName} from './website-feed-render.js';
 import {continuationShell} from './website-feed-shell.js';
@@ -31,8 +30,7 @@ function selectedFeed(manifest,id,path){
 function feedDefinition(options,id){
  const {path,heading,criteria={},template='full',layout='list',pageSize=12,itemHTML}=options;
  if(typeof heading!=='string'||!heading.trim()||heading.length>200||!['full','card','custom'].includes(template)||!['list','grid'].includes(layout)||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new AppError('INVALID');
- if(template==='custom')compileWebsiteFeedTemplate(itemHTML);
- else if(itemHTML!==undefined&&itemHTML!==null&&itemHTML!=='')throw new AppError('INVALID');
+ if(template!=='custom'&&itemHTML!==undefined&&itemHTML!==null&&itemHTML!=='')throw new AppError('INVALID');
  return {id,path,heading:heading.trim(),criteria:normalizeFeedCriteria(criteria),layout,template,...(template==='custom'?{itemHTML}:{}),pageSize};
 }
 function hostSlot(html,id,existing,position){
@@ -164,14 +162,15 @@ function stylesheet(store,manifest,files,feeds,signal){
  if(previous&&Boolean(previous.draft)===draft){files.set(feedStyle,previous);return;}
  return store.siteFile(manifest.id,feedStyle,feedCSS,{draft,signal}).then(file=>files.set(feedStyle,{...file,feedStyle:true}));
 }
-async function materialize(store,manifest,old,feed,groups,position,signal,shared){
+async function materialize(store,manifest,old,feed,groups,position,signal,shared,renderer){
  const page=sitePage(manifest,feed?.path??old.path),files=new Map(manifest.files.map(f=>[f.name,f]));
  const id=feed?.id??old.id,original=await store.readText(files.get(page.path),{signal}),slot=hostSlot(original,id,Boolean(old),position);
  const previous=new Map(old?.groups.map(g=>[g.key,g])??[]),rendered=[];
  const feedList=(manifest.feeds??[]).filter(f=>f.id!==id);
  let hostMarkup='';
  if(feed){
-  const byId=new Map(feed.members.map(m=>[m.id,m])),render=makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared),priorRow=priorFeedRows(store,manifest,old,feed,original,signal);
+  const {render}=renderer??makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared);
+  const byId=new Map(feed.members.map(m=>[m.id,m])),priorRow=priorFeedRows(store,manifest,old,feed,original,signal);
   const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,manifest.cssPath,page.draft,feed.unavailable]));
   let shell;
   for(let i=0;i<groups.length;i++){
@@ -249,11 +248,12 @@ export function saveWebsiteFeed(store,siteId,options){
  if(!researchId(siteId))throw new AppError('INVALID');
  const {expectedRevision,path,feedId,position,signal}=options;requireExpected(expectedRevision);
  return store.scope(async()=>{
-  const manifest=await store.current(siteId,expectedRevision);sitePage(manifest,path);
+  const manifest=await store.current(siteId,expectedRevision),page=sitePage(manifest,path);
   const old=feedId==null?null:selectedFeed(manifest,feedId,path),feed=feedDefinition(options,old?.id??randomUUID());
-  const members=await enumerateFeedMembers(store,feed.criteria,{signal});
+  const renderer=makeFeedRenderer(feed,false,siteId,Boolean(page.draft));
+  const members=await enumerateFeedMembers(store,feed.criteria,{signal,admittedRows:renderer.admittedRows});
   const groups=initialGroups(members,feed.pageSize,old?.groups);
-  const next=await materialize(store,manifest,old,{...feed,members},groups,position,signal);
+  const next=await materialize(store,manifest,old,{...feed,members},groups,position,signal,undefined,renderer);
   return {...await store.present(await store.commit(next,{signal}),path,{signal}),feedId:feed.id};
  },{write:true,signal});
 }

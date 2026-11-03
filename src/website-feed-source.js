@@ -13,6 +13,7 @@ const members=source=>source?[source.html,source.css,...source.assets,...(source
 const filesOf=source=>members(source).map(file=>file.blob);
 const table=prefix=>{if(!/^[0-9a-f]{2}$/.test(prefix))throw new AppError('INVALID');return root+'/feed-index/'+prefix+'.json';};
 export async function feedRowShard(store,prefix,signal){return await store.control(table(prefix),{missing:true,signal})??{};}
+export function feedTemplateMetadata({id,revision,title,displayDate,recordType,tags}){return {id,revision,title,displayDate,recordType,tags};}
 
 async function rowFor(store,source,base,html,context,signal){
  const parent=await indexedWebsiteRow(store,base,{signal});
@@ -22,13 +23,18 @@ function checkedOverlay(value,id){
  if(value&&(!hex(value.baseRevision)||value.source?.id!==id||!hex(value.source.revision)||value.source.target!=='website'||typeof value.source.visible!=='boolean'||(value.source.visible?value.row?.revision!==value.source.revision:value.row!==null)))throw new AppError('FORMAT');
  return value;
 }
-export async function readFeedSource(store,id,revision,{signal,pending=false,includeWithdrawn=false}={}){
+export async function readFeedSource(store,id,revision,{signal,pending=false,includeWithdrawn=false,indexedRow}={}){
  signal?.throwIfAborted();const base=await store.source(id,{pending});if(!base?.visible||base.target!=='website')throw new AppError('NOT_FOUND');
  const overlay=checkedOverlay(await store.control(directory(id)+'/feed.json',{missing:true,signal}),id);
- const effective=overlay?.baseRevision===base.revision?{...overlay.source,feedRow:overlay.row}:{...base,feedRow:await indexedWebsiteRow(store,base,{signal})};
- if(!effective.visible&&!includeWithdrawn)throw new AppError('NOT_FOUND');
- if(revision&&effective.revision!==revision)throw new AppError('CONFLICT');
- return effective;
+ const current=overlay?.baseRevision===base.revision,source=current?overlay.source:base;
+ if(!source.visible&&!includeWithdrawn)throw new AppError('NOT_FOUND');
+ if(revision&&source.revision!==revision)throw new AppError('CONFLICT');
+ if(current)return {...source,feedRow:overlay.row};
+ // Only an already-read picker row from this source revision may stand in
+ // for another shard read. The authoritative base and live controls above
+ // remain necessary even for layouts that render just a title.
+ if(indexedRow?.id===id&&indexedRow.revision===base.revision&&indexedRow.title===base.title)return {...base,feedRow:indexedRow};
+ return {...base,feedRow:await indexedWebsiteRow(store,base,{signal})};
 }
 
 // Keep old file references until all affected pages commit. The journal makes

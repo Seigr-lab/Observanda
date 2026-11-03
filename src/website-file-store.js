@@ -121,14 +121,16 @@ class StyledEntryPage extends WebsiteFileContent{
 export class WebsiteFileStore{
  constructor(workspace){this.workspace=workspace;}
  absolute(relative){return path.join(this.workspace.root,...relative.split('/'));}
+ writerToken(){const held=active.getStore();return held?.root===this.workspace.root?held.writerToken:null;}
  async scope(operation,{write=false,signal}={}){
   const prior=active.getStore();if(prior?.root===this.workspace.root){if(write&&!prior.write)throw new AppError('LOCKED');return operation(prior.scope);}
   signal?.throwIfAborted();await this.workspace.requireStorageKey();if(!this.workspace.vault?.id||!Buffer.isBuffer(this.workspace.vault.key))throw new AppError('ACCESS_LOCKED');await assertWorkspaceAvailable(this.workspace.root);
   return withNativeDestination(this.workspace.root,async scope=>{
    await scope.admit();let lease;
    if(write){await scope.ensure(ROOT);const deadline=Date.now()+30000;for(;;){try{lease=await scope.member(this.absolute(ROOT+'/writer'),(directory,name)=>directory.lease(name));break;}catch(error){if(error.code!=='EBUSY'||Date.now()>=deadline)throw error;await delay(25,undefined,{signal});}}}
-   try{await assertWorkspaceAvailable(this.workspace.root);const run=admission=>active.run({root:this.workspace.root,scope,write,admission},()=>operation(scope));return await (write?withStagingCapacity(this.workspace,run,{signal}):run());}
-   finally{await lease?.close();}
+   const held={root:this.workspace.root,scope,write,writerToken:write?Symbol():null};
+   try{await assertWorkspaceAvailable(this.workspace.root);const run=admission=>{held.admission=admission;return active.run(held,()=>operation(scope));};return await (write?withStagingCapacity(this.workspace,run,{signal}):run());}
+   finally{held.writerToken=null;await lease?.close();}
   });
  }
  async bytes(relative,{limit=CONTROL_LIMIT,missing=false}={}){
