@@ -31,7 +31,8 @@ export function checkComponentManifest(manifest,files){
 }
 function contextOf(manifest){
  const components=map(list(manifest),'id'),pages=map(manifest.pages,'path'),files=map(manifest.files,'name');
- return {components,pages,files};
+ const themes=new Set(manifest.themeBook?.items.map(theme=>theme.id)??[]);
+ return {components,pages,files,themes};
 }
 export function retainComponentAssets(manifest){
  if(!manifest.components?.length)return manifest;
@@ -52,8 +53,8 @@ export function checkSavedComponents(manifest,page,html){
 }
 export function componentOperation(store,operation,id,{expectedRevision,path='index.html',name,component,instance,html,position,blockPath,query='',offset=0,signal}={}){
  if(!revision(expectedRevision))fail();
- const write=['create','insert','update','detach'].includes(operation);
- if(!write&&!['list','main'].includes(operation))fail();
+ const write=['create','insert','update','detach','remove'].includes(operation);
+ if(!write&&!['list','main','usage'].includes(operation))fail();
  return store.scope(async()=>{
   const manifest=await store.current(id,expectedRevision),page=manifest.pages.find(row=>row.path===path);
   if(!page)throw new AppError('NOT_FOUND');
@@ -62,14 +63,43 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
    const term=query.trim().toLowerCase(),items=[];let total=0;
    for(const item of list(manifest)){
     if(item.draft&&!page.draft||!item.name.toLowerCase().includes(term))continue;
-    if(total>=offset&&items.length<12)items.push({id:item.id,name:item.name});total++;
+    if(total>=offset&&items.length<12)items.push({id:item.id,name:item.name,instances:0,pages:0,draft:Boolean(item.draft),removable:true});total++;
+   }
+   const shown=map(items,'id');
+   for(const owner of manifest.pages){
+    const counted=new Set();
+    for(const placed of owner.instances??[]){
+     const item=shown.get(placed.component);if(!item)continue;
+     item.removable=false;if(owner.draft&&!page.draft)continue;
+     item.instances++;if(!counted.has(item.id)){counted.add(item.id);item.pages++;}
+    }
    }
    return {revision:expectedRevision,items,total,next:offset+12<total?offset+12:null};
   }
   const context=contextOf(manifest),main=context.components.get(component),visible=main&&(!main.draft||page.draft);
+  if(operation==='usage'){
+   if(!visible)throw new AppError('NOT_FOUND');if(!Number.isSafeInteger(offset)||offset<0)fail();
+   const items=[];let total=0;
+   for(const owner of manifest.pages){
+    if(owner.draft&&!page.draft)continue;
+    for(const row of owner.instances??[])if(row.component===component){
+     if(total>=offset&&items.length<12)items.push({instance:row.id,path:owner.path,title:owner.title});
+     total++;
+    }
+   }
+   return {revision:expectedRevision,items,total,next:offset+12<total?offset+12:null};
+  }
   if(operation==='main'){
    if(!visible)throw new AppError('NOT_FOUND');
    return {revision:expectedRevision,id:main.id,name:main.name,html:main.html};
+  }
+  if(operation==='remove'){
+   if(!visible)throw new AppError('NOT_FOUND');
+   if(manifest.pages.some(owner=>owner.instances?.some(row=>row.component===component)))fail();
+   const components=list(manifest).filter(row=>row.id!==component),kept=new Set([...manifest.pages.flatMap(p=>[...(p.pictures??[]),...(p.recordings??[])]),...Object.values(manifest.pictureStyles??{}).flat()]);
+   const files=manifest.files.filter(file=>!file.picture&&!file.recording||kept.has(file.name));
+   const candidate={...manifest,components,files};await store.assertSources(candidate);
+   return store.present(await store.commit(candidate,{signal}),path,{signal});
   }
   if(operation==='detach'&&!page.instances?.some(i=>i.id===instance))fail();
   const current=operation==='detach'?context.components.get(page.instances.find(i=>i.id===instance).component):operation==='create'?null:main;

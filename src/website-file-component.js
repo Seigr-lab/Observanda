@@ -10,14 +10,14 @@ const marker='data-website-instance';
 const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
 const children=new Set([...blocks,...'span strong em b i u s sup sub small mark code br a time figcaption caption colgroup col thead tbody tfoot tr th td li dt dd summary source track'.split(' ')]);
 const containers=new Set('body main section article aside div blockquote li dd'.split(' '));
-const common=new Set('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby'.split(' '));
+const common=new Set('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby data-section-id data-website-theme'.split(' '));
 const playerAttrs=['src','controls','loop','muted','preload'];
 const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
  audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording','data-website-equation']};
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
-const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item','data-website-feed',marker,'data-website-menu','hidden'].includes(a.name));
+const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item','data-website-feed','data-website-feed-source','data-website-source-gallery',marker,'data-website-menu','hidden'].includes(a.name));
 const nodes=root=>[...descendants(root)].filter(node=>node.tagName);
 
 function oneRoot(html){
@@ -36,7 +36,7 @@ function safeStyle(value){
   for(const call of part.matchAll(/([\w-]+)\s*\(/g))if(!/^(?:rgb|rgba|hsl|hsla|calc|min|max|clamp)$/i.test(call[1]))invalid();
  }
 }
-function rewrite(root,{from,to,pages,files,draft,instance,originalIds=false,verifyOnly=false}){
+function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=false,verifyOnly=false}){
  const ids=new Map(),pictures=new Map(),recordings=new Map();
  for(const node of descendants(root))if(node.nodeName==='#comment')invalid();
  for(const node of nodes(root)){
@@ -64,6 +64,10 @@ function rewrite(root,{from,to,pages,files,draft,instance,originalIds=false,veri
    continue;
   }
   if(!children.has(node.tagName)||node.namespaceURI!=='http://www.w3.org/1999/xhtml')invalid();
+  const theme=attr(node,'data-website-theme');
+  if(theme!==undefined&&!themes?.has(theme)){
+   if(!instance)invalid();node.attrs=node.attrs.filter(a=>a.name!=='data-website-theme');
+  }
   if(['track','source'].includes(node.tagName)&&!['audio','video'].includes(node.parentNode?.tagName))invalid();
   for(const attribute of node.attrs){
    const {name,value}=attribute;if(!common.has(name)&&!attributes[node.tagName]?.includes(name))invalid();

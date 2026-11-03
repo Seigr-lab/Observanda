@@ -9,7 +9,7 @@ import {Workspace} from '../../src/storage.js';
 import {createNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
-import {startServer} from '../../src/server.js';
+import {testServer} from '../device-fixture.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 
@@ -36,11 +36,6 @@ const authoredFiles = new Map([
  caption{text-align:left;font-weight:bold}a{color:#176456}`]
 ]);
 
-async function capture(info, name, locator) {
- const file = info.outputPath(name + '.png');
- await locator.screenshot({path:file});
- await info.attach(name, {path:file, contentType:'image/png'});
-}
 
 async function servePublishedFiles(output) {
  const published = new Map();
@@ -58,7 +53,7 @@ async function servePublishedFiles(output) {
  return server;
 }
 
-test('an authored component is placed, edited once and published on two independent pages through the files-only editor', async ({page, context}, info) => {
+test('an authored component is placed, edited once and published on two independent pages through the files-only editor', async ({page, context}) => {
  test.setTimeout(120000);
  const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-reusable-pages-'));
  const output = path.join(directory, 'Field handbook');
@@ -69,11 +64,11 @@ test('an authored component is placed, edited once and published on two independ
   await mkdir(output);
   await new WebsiteFileStore(fixture.workspace).importFiles(randomUUID(), {name:'Coastal handbook', files:authoredFiles});
   catalogue = mock.method(Workspace.prototype, 'openCatalogue', () => { throw Error('Unexpected research catalogue access'); });
-  app = await startServer({
+  app = await testServer({
    root:fixture.workspace.root, deviceStore:fixture.deviceStore,
    preferencesFile:path.join(directory, 'preferences.json'), port:0
   });
-  const url = new URL(app.url);
+  const url = new URL(app.origin);url.hash=app.launchToken;
   url.searchParams.set('view', 'website');
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', req => {
@@ -87,20 +82,34 @@ test('an authored component is placed, edited once and published on two independ
   const library = page.locator('[data-website-components]');
   const choosePage = page.locator('[data-website-file-page]');
   const instance = canvas.locator('[data-website-instance]');
-  await expect(canvas.getByRole('heading', {name:'Coastal research handbook'})).toBeVisible();
-  await library.getByRole('button', {name:'Browse components'}).click();
+  await expect.poll(async()=>errors.length?errors.join('\n'):await canvas.getByRole('heading', {name:'Coastal research handbook'}).count(),{timeout:15000}).toBe(1);
+  const originalCanvas=await page.locator('#website-files-canvas').elementHandle();
+  await page.getByRole('button', {name:'Reusable library',exact:true}).click();
+  await expect(library.getByText('Your library is empty.',{exact:false})).toBeVisible();
+  expect(await originalCanvas.evaluate(node=>node.isConnected)).toBe(true);
   await canvas.locator('#sampling-card').click({position:{x:9, y:9}});
   await library.getByLabel('Component name', {exact:true}).fill('Calibration panel');
   await library.getByRole('button', {name:'Create from selected block'}).click();
   await expect(instance).toHaveCount(1);
   await expect(instance.getByRole('table', {name:'Reference measurements'})).toBeVisible();
+  const savedCanvas=await page.locator('#website-files-canvas').elementHandle();
+  await library.getByLabel('Search component names').fill('unmatched');
+  await expect(library.getByText('No matching components.')).toBeVisible();
+  await library.getByLabel('Search component names').fill('Calib');
+  await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
+  expect(await savedCanvas.evaluate(node=>node.isConnected)).toBe(true);
 
   await choosePage.selectOption('field/stations.html');
   await expect(canvas.getByRole('heading', {name:'Station observations'})).toBeVisible();
-  await library.getByRole('button', {name:'Browse components'}).click();
+  await expect(library.getByLabel('Search component names')).toHaveValue('Calib');
   await library.locator('[data-component-field="position"]').selectOption('end');
   await library.getByRole('button', {name:'Insert instance'}).click();
   await expect(instance.getByRole('link')).toHaveAttribute('href', '../method.html');
+  await expect(library.getByText('Placements 2 · Pages 2')).toBeVisible();
+  await library.getByRole('button',{name:'Where used'}).click();
+  if(process.env.OBSERVANDA_COMPONENT_SCREENSHOT)await page.screenshot({path:process.env.OBSERVANDA_COMPONENT_SCREENSHOT});
+  await library.locator('[data-instance]').filter({hasText:'index.html'}).click();
+  await expect(choosePage).toHaveValue('index.html');
 
   await library.getByRole('button', {name:'Edit main component'}).click();
   const dialog = page.getByRole('dialog', {name:'Edit main component'});
@@ -109,7 +118,6 @@ test('an authored component is placed, edited once and published on two independ
   await page.keyboard.press('End');
   await page.keyboard.type(' protocol');
   await expect(main.getByRole('heading', {name:revisedHeading})).toBeVisible();
-  await capture(info, 'main-component-editor', dialog);
   await dialog.getByRole('button', {name:'Update all instances'}).click();
   await expect(dialog).toHaveCount(0);
   await expect(instance.getByRole('heading', {name:revisedHeading})).toBeVisible();
@@ -133,9 +141,9 @@ test('an authored component is placed, edited once and published on two independ
   const origin = 'http://127.0.0.1:' + publicServer.address().port;
   const viewer = await context.newPage();
   const instanceIds = new Set();
-  for (const [file, title, href, image] of [
-   ['index.html', 'Coastal research handbook', 'method.html', 'published-handbook'],
-   ['field/stations.html', 'Station observations', '../method.html', 'published-stations']
+  for (const [file, title, href] of [
+   ['index.html', 'Coastal research handbook', 'method.html'],
+   ['field/stations.html', 'Station observations', '../method.html']
   ]) {
    await viewer.goto(origin + '/' + file);
    await expect(viewer.getByRole('heading', {name:title})).toBeVisible();
@@ -146,7 +154,6 @@ test('an authored component is placed, edited once and published on two independ
    await expect(linked.getByRole('cell', {name:'32.4'})).toBeVisible();
    const anchor = linked.getByRole('link');
    await expect(anchor).toHaveAttribute('href', href);
-   await capture(info, image, viewer.locator('main'));
    await anchor.click();
    await expect(viewer).toHaveURL(origin + '/method.html');
    await expect(viewer.getByRole('heading', {name:'Sampling method'})).toBeVisible();

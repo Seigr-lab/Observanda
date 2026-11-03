@@ -96,7 +96,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
-  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|update|detach)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
+  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|update|detach|remove)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
   if(operation==='session'){
    const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;

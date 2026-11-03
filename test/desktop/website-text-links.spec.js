@@ -59,7 +59,7 @@ test('authors external links in page prose and a reusable table cell, then publi
   await page.getByRole('button',{name:english.save,exact:true}).click();
 
   const library=page.locator('[data-website-components]');
-  await library.getByRole('button',{name:english.componentBrowse}).click();
+  await page.getByRole('button',{name:english.componentLibrary,exact:true}).click();
   await canvas.locator('#station').click({position:{x:8,y:8}});
   await library.getByLabel(english.componentName,{exact:true}).fill('Specimen panel');
   await library.getByRole('button',{name:english.componentCreate}).click();

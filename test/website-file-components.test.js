@@ -9,6 +9,7 @@ import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
+import {pageComponentDocument,selectComponentBlock} from '../src/website-file-component.js';
 import {componentOperation} from '../src/website-component-storage.js';
 import {contentBuffer} from '../src/file-content.js';
 import {websiteFilesHttp} from '../src/website-files-http.js';
@@ -37,6 +38,9 @@ test('a private main propagates to deep public and draft pages in one pinned rev
  assert.match(state.html,/href="next.html"/);assert.match(state.html,/<\/section><p>End/);
  const copy=/data-website-instance="([^"]+)"/.exec(state.html)[1];assert.ok(state.html.includes('aria-labelledby="wc-'+copy+'-lead"'));
  state=await op('insert',state.site.revision,{component:main.id,path:'private.html',position:'end'});
+ const publicItem=(await op('list',state.site.revision)).items[0];assert.equal(publicItem.instances,2);assert.equal(publicItem.pages,2);
+ const publicUses=await op('usage',state.site.revision,{component:main.id}),allUses=await op('usage',state.site.revision,{component:main.id,path:'private.html'});
+ assert.deepEqual(publicUses.items.map(row=>row.path),['index.html','pages/next.html']);assert.equal(allUses.total,3);
  const stale=state.site.revision;let commits=0;const commit=store.commit.bind(store);store.commit=async(...args)=>{commits++;return commit(...args);};
  state=await op('update',stale,{component:main.id,name:main.name,html:frag.replace('Old title','Edited title')});assert.equal(commits,1);
  for(const path of ['index.html','pages/next.html','private.html'])assert.match((await store.open(id,{path})).html,/Edited title/);
@@ -136,4 +140,10 @@ test('typed audio, video and VTT retain private main ownership and leave the pub
  state=await op('update',state.site.revision,{component:main.id,name:main.name,html:'<p>Recordings removed</p>'});
  for(const name of names)assert.equal((await published()).files.has(name),false);
  for(const blob of blobs)await assert.rejects(stat(store.absolute(blob)),{code:'ENOENT'});
+});
+test('feed and source-gallery captions cannot be detached from their permission owner into reusable definitions',()=>{
+ for(const marker of ['data-website-feed','data-website-feed-source','data-website-source-gallery']){
+  const document=pageComponentDocument('<html><body><main><section '+marker+'="owned"><p>Granted only here</p></section></main></body></html>');
+  assert.throws(()=>selectComponentBlock(document,'0/0/0'),{code:'INVALID'});
+ }
 });
