@@ -11,7 +11,7 @@ const linked = '[data-observanda-link]';
 const editable = 'h1,h2,h3,h4,h5,h6,p,li,figcaption,blockquote,summary,dt,dd,td,th,pre';
 const blocks = 'section,article,header,footer,aside,nav,figure,table,[data-section-id],[data-region-kind],'+part+
   ',:is(body,main) > :is(h1,h2,h3,h4,h5,h6,p,ul,ol,blockquote,table,hr,img,video,audio,details,pre),:is(body,main) > div:not(.page-composition,.container-content)';
-const protectedNodes = source+','+part+','+linked;
+const protectedNodes = source+','+part+','+linked+',[data-website-feed]';
 const outlineContents='h1,h2,h3,h4,h5,h6,p,ul,ol,li,dl,dt,dd,blockquote,details,summary,figcaption,pre,hr,img,video,audio,.website-columns>div,[data-website-instance]';
 
 /** Paths are relative to body and use element-child indices in the saved HTML. */
@@ -26,7 +26,7 @@ export function websiteVisualSections(document,{includeContents=false}={}) {
     if (row.node.matches(chrome+',script,style,template,svg,[hidden]')) continue;
     const section = row.node.matches(blocks)||(includeContents&&row.node.matches(outlineContents));
     if (section) entries.push(row);
-    children(row.node, row.path+'/', row.depth+(section ? 1 : 0));
+    if(!row.node.hasAttribute('data-website-feed'))children(row.node, row.path+'/', row.depth+(section ? 1 : 0));
   }
   return entries;
 }
@@ -194,9 +194,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
         control.options[0].textContent=t('sectionInherit')+' · '+resolved;
         control.value=[...control.options].find(o=>o.value.replaceAll(' ','')===value.replaceAll(' ',''))?.value??'';
       }
-      control.disabled=selectionScope&&['padding','text-align'].includes(field.name);
+      control.disabled=scope.value==='section'&&!!selected?.hasAttribute('data-website-feed')||selectionScope&&['padding','text-align'].includes(field.name);
     }
-    touched.clear();apply.disabled=true;
+    touched.clear();apply.disabled=true;reset.disabled=scope.value==='section'&&!!selected?.hasAttribute('data-website-feed');
     edit.hidden=!selected;
     edit.disabled=!selected||!editableText(selected,document);
     edit.title=edit.disabled?t('sectionNoText'):'';
@@ -204,6 +204,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     responsive.refresh();
   }
   function setSelected(node, scroll=false, fromOutline=false) {
+    node=node?.closest('[data-website-feed]')??node;
     if (!node || !(node.matches(blocks)||(fromOutline&&node.matches(outlineContents))) || node.closest(chrome)) return;
     const same=node===selected;
     selected=node;hover=null;
@@ -257,6 +258,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   listen(document,'scroll',schedule,{capture:true,passive:true});listen(win,'resize',schedule);
 
   function commit(resetAll) {
+    if(scope.value==='section'&&selected?.hasAttribute('data-website-feed'))return;
     const selectionScope=scope.value==='selection',site=scope.value==='site';
     if(selectionScope&&!styleRange(range,body))return;
     const changes=new Map();

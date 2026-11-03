@@ -5,7 +5,7 @@ const block='section[data-observanda-source]:not([data-observanda-view])';
 const pageSize=24;
 export function presentationBlock(node){
  const section=node?.closest(block);
- return section&&!section.parentElement?.closest(marker+',header,footer,nav,template,[hidden],[data-website-instance],[data-website-menu],[data-record-id],[data-public-record]')&&!section.querySelector(marker+',[data-website-instance]')?section:null;
+ return section&&!section.parentElement?.closest(marker+',header,footer,nav,template,[hidden],[data-website-instance],[data-website-menu],[data-record-id],[data-public-record],[data-website-feed]')&&!section.querySelector(marker+',[data-website-instance]')?section:null;
 }
 function occurrences(doc,selected){
  const counts=new Map(),rows=[];let initial=0;

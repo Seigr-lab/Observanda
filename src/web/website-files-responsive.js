@@ -71,7 +71,7 @@ export function responsiveLayout({document,host,t,scope,selected,getCSS,getViewp
  const identifier=node=>scope.value==='site'?'site':[...node.classList].find(name=>namePattern.test(name));
  const breakpoint=()=>{const view=getViewport?.()??'desktop';if(!Object.hasOwn(widths,view))throw new TypeError('Unexpected viewport');return view;};
  function refresh(){
-  const node=target(),view=breakpoint();panel.hidden=!node||!!node.closest('[data-observanda-link],[data-website-instance]');
+  const node=target(),view=breakpoint();panel.hidden=!node||!!node.closest('[data-observanda-link],[data-website-instance],[data-website-feed]');
   touched.clear();apply.disabled=true;
   if(panel.hidden||!panel.open)return;
   const name=identifier(node),block=name?boundaries(getCSS(),name).text:'',style=styleAt(document,block,view);

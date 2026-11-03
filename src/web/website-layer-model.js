@@ -1,6 +1,6 @@
 import {websiteVisualSections} from './website-files-visual.js';
 
-const protectedContent='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-observanda-editor],[data-image-gallery],[data-website-recording]';
+const protectedContent='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-observanda-editor],[data-image-gallery],[data-website-recording],[data-website-feed]';
 const fixed='header,footer,nav,[hidden],main,'+protectedContent;
 const flow='body,main,article,section,aside,div,li,dd,blockquote,figure,details,td,th';
 const leafText='h1,h2,h3,h4,h5,h6,p,figcaption,summary,dt,dd';

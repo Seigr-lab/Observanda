@@ -41,9 +41,9 @@ export function editWebsiteCanvas(document){
  const body=document.body;body.dataset.observandaEditorEditable=body.getAttribute('contenteditable')??'absent';body.contentEditable='true';
  // Provenance wrappers must remain intact. Authored surrounding layout stays
  // editable; source visibility changes replace these owned fragments on disk.
- for(const node of body.querySelectorAll('[data-observanda-source]')){
+ for(const node of body.querySelectorAll('[data-observanda-source],[data-website-feed]')){
   node.dataset.observandaEditorEditable=node.getAttribute('contenteditable')??'absent';node.contentEditable='false';
-  if(node.hasAttribute('data-observanda-display-id'))continue;
+  if(node.hasAttribute('data-observanda-display-id')||node.closest('[data-website-feed]'))continue;
   for(const part of node.querySelectorAll('[data-observanda-part]')){
    if(part.querySelector('[data-observanda-part]')||!part.textContent.trim())continue;
    part.dataset.observandaEditorEditable=part.getAttribute('contenteditable')??'absent';part.contentEditable='true';

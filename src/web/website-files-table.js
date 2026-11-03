@@ -1,6 +1,6 @@
 // These controls edit the authored HTML table in the canvas. Converted
 // records and linked content remain under their own publication permissions.
-const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor]';
+const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-feed]';
 const tag=node=>node?.localName;
 function grid(table){
  const rows=Array.from(table.rows),width=rows[0]?.cells.length;

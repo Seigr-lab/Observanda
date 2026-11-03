@@ -1,0 +1,24 @@
+.website-author-dialog.website-feed-dialog { width:min(44rem,92vw); }
+.website-feed-dialog [hidden] { display:none!important; }
+.website-feed-dialog h2 { margin:0; }
+.website-feed-dialog h2 + p { margin:.3rem 0 1rem; }
+.website-feed-dialog fieldset { min-width:0; margin:0; padding:0; border:0; }
+.website-feed-dialog fieldset:not(.website-feed-editing) { margin-block:.8rem; }
+.website-feed-dialog legend { padding:0; font-weight:650; margin-bottom:.35rem; }
+.website-feed-dialog .website-feed-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr)); gap:.45rem; }
+.website-feed-dialog .website-feed-choices label { display:flex; align-items:center; gap:.45rem; min-height:2.7rem; margin:0; padding:.4rem .6rem; border:1px solid var(--border,#b8c4d4); border-radius:.4rem; cursor:pointer; }
+.website-feed-choices label:has(:checked) { border-color:var(--accent,#3455ad); box-shadow:inset 0 0 0 1px var(--accent,#3455ad); background:color-mix(in srgb,var(--accent,#3455ad) 7%,var(--surface,#fff)); }
+.website-feed-choices label:has(:focus-visible) { outline:2px solid var(--accent,#3455ad); outline-offset:2px; }
+.website-feed-dialog input[type=radio],.website-feed-dialog input[type=checkbox] { width:1rem; height:1rem; flex:none; margin:0; accent-color:var(--accent,#3455ad); }
+.website-feed-dialog :is(select,textarea,input:not([type=radio],[type=checkbox])) { max-width:100%; min-width:0; }
+.website-feed-dialog textarea { font-family:monospace; }
+.website-feed-filters,.website-feed-custom { padding:.7rem .85rem; border-inline-start:3px solid var(--border,#b8c4d4); }
+.website-feed-criteria { display:grid; grid-template-columns:auto 1fr; gap:.25rem .85rem; overflow-wrap:anywhere; }
+.website-feed-criteria dt { font-weight:600; }.website-feed-criteria dd { margin:0; }
+.website-feed-custom details { margin-block:.5rem; }
+.website-feed-fields { display:grid; gap:.4rem; padding-inline-start:1.4rem; }
+.website-feed-fields li { padding-inline-start:.3rem; }
+.website-feed-fields li label { display:inline-flex; align-items:center; gap:.4rem; margin:0 .8rem 0 0; }
+.website-feed-fields button { margin-inline-end:.3rem; }
+.website-feed-dialog footer { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:flex-end; padding-block:.75rem .3rem; border-top:1px solid var(--border,#b8c4d4); position:sticky; bottom:0; background:var(--surface,#fff); }
+.website-feed-dialog footer button:first-child { margin-inline-end:auto; }
