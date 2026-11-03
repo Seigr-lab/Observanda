@@ -52,7 +52,10 @@ test('moves across containers with the keyboard and onto the canvas, preserving 
  await expect(canvas.locator('#nest > #specimen')).toHaveText('Individual specimen');
  await expect(list.locator('[aria-current=true]')).toContainText('Individual specimen');
  const filter=page.getByRole('searchbox',{name:'Filter page layers'});await filter.fill('permissioned');
- await choose('Permissioned text');await expect(list.getByRole('button',{name:'Move to…'})).toHaveCount(0);
+ const protectedRows=list.getByRole('button',{name:'Permissioned text',exact:true});
+ await protectedRows.first().click();await expect(list.getByRole('button',{name:'Move to…'})).toBeVisible();
+ await expect(list.getByRole('button',{name:'Remove',exact:true})).toHaveCount(0);
+ await protectedRows.last().click();await expect(list.getByRole('button',{name:'Move to…'})).toHaveCount(0);
  await filter.fill('individual specimen');
  const source=list.locator('[draggable=true]').first(),target=canvas.locator('#landing');
  await source.scrollIntoViewIfNeeded();await target.scrollIntoViewIfNeeded();

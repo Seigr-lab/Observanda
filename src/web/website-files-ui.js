@@ -551,7 +551,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    loadWebsiteCanvas(doc,html,css,baseURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
-   visual=bindWebsiteVisual({document:doc,inspector,t:tr,beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{
+   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,
+    beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:baseURL(opened.site.cssPath),getViewport:()=>viewport,onSelect:item=>{
     selected=item?.path??null;hierarchy.selection(selected);
     const control=inspector.parentElement.querySelector('[data-placement-context]');
     if(control)control.hidden=!presentationBlock(blockAt(doc,selected));
@@ -709,8 +710,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      },'saving')});
    }
    else if(['duplicate','remove','move-up','move-down'].includes(operation)){
-    documentChange(doc=>{const node=blockAt(doc,element.dataset.path);if(!movable(node))return;
-     if(operation==='duplicate'){duplicateBlock(node);}else if(operation==='remove')node.remove();
+    documentChange(doc=>{const node=blockAt(doc,element.dataset.path);if(!node)return;
+     if(operation==='duplicate'){if(movable(node))duplicateBlock(node);}else if(operation==='remove'){if(movable(node))node.remove();}
      else{const up=operation==='move-up',move=websiteLayerMove(node,up?node.previousElementSibling:node.nextElementSibling,up?'before':'after');if(move)selected=move();}
     });
    }

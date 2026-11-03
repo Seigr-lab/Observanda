@@ -14,6 +14,12 @@
 .website-files-structure .website-layer-toggle,.website-files-structure .website-layer-label { border:0; color:inherit; background:transparent; cursor:pointer; text-align:start; font:inherit; padding:.25rem }
 .website-files-structure .website-layer-label { flex:1 1 0; min-width:0; overflow-wrap:anywhere; white-space:normal }
 .website-files-structure .website-layer-toggle { flex:none }
+.website-files-structure .website-layer-grip { flex:none; border:0; border-radius:.25rem; background:transparent; color:var(--muted,CanvasText); font:1rem/1 system-ui; padding:.25rem; cursor:grab }
+.website-files-structure .website-layer-grip:hover,.website-files-structure .website-layer-grip:focus-visible { background:var(--surface-2,ButtonFace); color:CanvasText }
+.website-files-structure .website-layer-grip:active { cursor:grabbing }
+.website-layer-drop-guide { position:fixed; z-index:10000; pointer-events:none; box-sizing:border-box; border-block-start:3px solid #3158a8 }
+.website-layer-drop-guide[data-position=inside] { border:2px solid #3158a8; background:#3158a811 }
+.website-layer-drop-guide::after { content:attr(data-hint); position:absolute; right:0; bottom:100%; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#3158a8; color:white; font:600 .75rem/1.4 system-ui; padding:.1rem .4rem; border-radius:.2rem }
 .website-layer-actions { flex:1 0 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem }
 .website-layer-actions .button { min-height:2rem;padding:.2rem .35rem;font-size:.86rem }
 [data-layer-controls]>div { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem; margin:.3rem 0 }

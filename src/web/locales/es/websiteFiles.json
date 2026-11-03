@@ -539,6 +539,8 @@
   "finderSearch": "Buscar por nombre o ruta",
   "finderEmpty": "Sin resultados",
   "finderOpen": "Buscar páginas y herramientas",
+  "layerDrag": "Mover",
+  "layerDragHint": "Arrastra {name} para moverlo o haz clic para elegir un destino.",
   "layerMove": "Mover a…",
   "layerMoveUnavailable": "Este elemento ya no se puede mover aquí.",
   "layerInside": "Dentro de",

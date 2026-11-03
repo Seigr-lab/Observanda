@@ -74,7 +74,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,layerDrag,menuTarget,openMenu}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -91,11 +91,14 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   frame.style.cssText='all:initial!important;position:fixed!important;top:0!important;left:0!important;z-index:2147483647!important;pointer-events:none!important;';
   body.append(frame);
   const shadow=frame.attachShadow({mode:'open'});
-  const outline=document.createElement('div'), action=document.createElement('button');
+  const outline=document.createElement('div'), actions=document.createElement('div'), action=document.createElement('button'), grip=document.createElement('button');
   const overlayStyle=document.createElement('style');
-  overlayStyle.textContent='div{position:fixed;box-sizing:border-box;border:2px solid #3859b2;pointer-events:none}button{position:fixed;pointer-events:auto;border:1px solid #25428b;border-radius:4px;background:white;color:#182e65;font:600 13px/1.4 system-ui;padding:4px 10px;cursor:pointer}button:focus-visible{outline:3px solid #cf7600}[hidden]{display:none}';
+  outline.className='outline';actions.className='actions';grip.className='grip';
+  overlayStyle.textContent='.outline{position:fixed;box-sizing:border-box;border:2px solid #3859b2;pointer-events:none}.actions{display:flex;position:fixed;gap:2px}.actions button{pointer-events:auto;border:1px solid #25428b;border-radius:4px;background:white;color:#182e65;font:600 13px/1.4 system-ui;padding:4px 8px;white-space:nowrap;cursor:pointer}.actions .grip{cursor:grab}.actions .grip:active{cursor:grabbing}button:focus-visible{outline:3px solid #cf7600}[hidden]{display:none!important}';
   action.type='button'; action.textContent=t('sectionEdit');
-  outline.hidden=action.hidden=true; shadow.append(overlayStyle,outline,action);
+  grip.type='button';grip.style.touchAction='none';grip.textContent='⠿ '+t('layerDrag');grip.hidden=true;
+  overlayStyle.textContent+='.actions.moving button{pointer-events:none}';
+  actions.append(grip,action);outline.hidden=actions.hidden=true;shadow.append(overlayStyle,outline,actions);
 
   // A linked label and its destination belong to the linked entry's privacy
   // grant. Keep both intact even inside a freely editable source paragraph.
@@ -140,11 +143,11 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   }
   const edit=make('button',t('sectionEditText')), apply=make('button',t('sectionApply')), reset=make('button',t('sectionReset'));
   edit.type=reset.type='button';apply.type='submit';
-  const actions=make('div');actions.className='website-visual-actions';actions.append(apply,reset);
+  const styleActions=make('div');styleActions.className='website-visual-actions';styleActions.append(apply,reset);
   const rich=websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange:range=>safeRange(range,body)});
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change});
-  form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,actions);
+  form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,styleActions);
   const responsive=responsiveLayout({document,host:form,t,scope,selected:()=>selected,getCSS,getViewport,beforeChange,change,make,listen,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
   websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});
@@ -153,18 +156,21 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   function position() {
     timer=0;
     const node=hover??selected;
-    if(!node?.isConnected){outline.hidden=action.hidden=true;return;}
+    if(!node?.isConnected){outline.hidden=actions.hidden=true;return;}
     const rect=node.getBoundingClientRect();
     const visible=rect.width>0&&rect.height>0&&rect.bottom>0&&rect.right>0&&rect.top<win.innerHeight&&rect.left<win.innerWidth;
-    outline.hidden=action.hidden=!visible;
+    outline.hidden=actions.hidden=!visible;
     if(!visible)return;
+    grip.hidden=!layerDrag?.canMove(node);
+    grip.title=t('layerDragHint',{name:node.getAttribute('aria-label')||node.localName});
+    action.textContent=t(openMenu&&menuTarget?.(node)?'menuEdit':'sectionEdit');
     Object.assign(outline.style,{left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',height:rect.height+'px'});
     // Prefer the area outside the section. A floating action over the first
     // line would eat its clicks in narrow canvases and small text sections.
-    const buttonHeight=action.offsetHeight;
+    const buttonHeight=actions.offsetHeight;
     const above=rect.top-buttonHeight, below=rect.bottom;
-    action.style.top=(above>=0?above:Math.min(win.innerHeight-buttonHeight,below))+'px';
-    action.style.left=Math.max(0,Math.min(win.innerWidth,rect.right)-action.offsetWidth)+'px';
+    actions.style.top=(above>=0?above:Math.min(win.innerHeight-buttonHeight,below))+'px';
+    actions.style.left=Math.max(0,Math.min(win.innerWidth,rect.right)-actions.offsetWidth)+'px';
   }
   function schedule(){if(!timer)timer=win.requestAnimationFrame(position);}
   function showPaint(control,name,value){
@@ -220,7 +226,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     leaf?.focus({preventScroll:true});const caret=document.createRange();caret.setStart(text,0);caret.collapse(true);
     const selection=win.getSelection();selection.removeAllRanges();selection.addRange(caret);text.parentElement.scrollIntoView({block:'nearest'});schedule();
   }
-  listen(action,'click',()=>{setSelected(hover??selected);editSelected();});
+  listen(action,'click',()=>{const node=hover??selected,menu=openMenu&&menuTarget?.(node);if(menu){openMenu(menu);return;}setSelected(node);editSelected();});
+  layerDrag?.bindGrip(grip,()=>hover??selected,signal);
   listen(edit,'click',editSelected);
   listen(scope,'change',refresh);
   listen(body,'pointerover',event=>{

@@ -539,6 +539,8 @@
   "finderSearch": "Cerca per nom o camí",
   "finderEmpty": "Cap resultat",
   "finderOpen": "Cerca pàgines i eines",
+  "layerDrag": "Mou",
+  "layerDragHint": "Arrossega {name} per moure’l o fes clic per triar la destinació.",
   "layerMove": "Mou a…",
   "layerMoveUnavailable": "Aquest element ja no es pot moure aquí.",
   "layerInside": "Dins de",

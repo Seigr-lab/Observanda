@@ -3,7 +3,8 @@ import {websiteVisualSections} from './website-files-visual.js';
 const protectedContent='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-observanda-editor],[data-image-gallery],[data-website-recording],[data-website-feed]';
 export const managedWebsiteContent=protectedContent+',[data-website-menu],[data-website-source-gallery]';
 const fixed='header,footer,nav,[hidden],main,'+protectedContent;
-const flow='body,main,article,section,aside,div,li,dd,blockquote,figure,details,td,th';
+const flow='body,header,footer,main,article,section,aside,div,li,dd,blockquote,figure,details,td,th';
+const indivisible='nav,'+managedWebsiteContent;
 const leafText='h1,h2,h3,h4,h5,h6,p,figcaption,summary,dt,dd';
 const listItem=/^(LI|DT|DD)$/;
 
@@ -28,18 +29,26 @@ function withinContent(node){
  return (main??node.ownerDocument.body).contains(node);
 }
 export function movableWebsiteLayer(node){
- return !!node&&withinContent(node)&&!node.matches('html,body,'+fixed+',summary,figcaption,td,th')&&!node.querySelector('header,footer,nav,'+protectedContent);
+ return !!node&&withinContent(node)&&!node.closest(managedWebsiteContent)&&!node.matches('html,body,'+fixed+',summary,figcaption,td,th')&&!node.querySelector('header,footer,nav,'+managedWebsiteContent);
+}
+// Reordering preserves the whole subtree. Generated entries, component instances
+// and navigation may travel intact, but their descendants belong to their owner.
+export function reorderableWebsiteLayer(node){
+ return !!node&&node.ownerDocument.body.contains(node)&&!node.closest('[hidden],.skip,[data-observanda-editor]')&&
+  !node.matches('html,body,summary,figcaption,td,th,[data-observanda-part],[data-observanda-link]')&&!node.parentElement?.closest(indivisible);
 }
 function accepts(parent,node){
- if(!withinContent(parent)||parent.closest('a,button,label,summary,p,h1,h2,h3,h4,h5,h6'))return false;
+ if(!parent||parent.ownerDocument!==node.ownerDocument||!parent.ownerDocument.body.contains(parent)||parent.closest(indivisible+',a,button,label,summary,p,h1,h2,h3,h4,h5,h6,[hidden]'))return false;
  if(parent.matches('ol,ul'))return node.matches('li');
  if(parent.matches('dl'))return node.matches('dt,dd');
+ if((node.matches('main')||node.querySelector('main'))&&parent.closest('main,article,aside,footer,header,nav'))return false;
+ if((node.matches('header,footer')||node.querySelector('header,footer'))&&parent.closest('header,footer'))return false;
  return !listItem.test(node.tagName)&&parent.matches(flow);
 }
 
 /** Returning an operation rather than moving during dragover keeps the saved tree intact. */
 export function websiteLayerMove(node,target,placement){
- if(!movableWebsiteLayer(node)||!withinContent(target)||node===target||node.contains(target))return null;
+ if(!reorderableWebsiteLayer(node)||!target||node===target||node.contains(target)||target.closest('[hidden],.skip,[data-observanda-editor]'))return null;
  let parent,anchor;
  if(placement==='inside'){
   parent=target.querySelector(':scope > .container-content:only-child,:scope > .page-composition:only-child')??target;
@@ -50,7 +59,8 @@ export function websiteLayerMove(node,target,placement){
   if((placement==='before'&&target.matches('summary,figure > figcaption:first-child'))||
      (placement==='after'&&target.matches('figure > figcaption:last-child')))return null;
  }else return null;
- if(!accepts(parent,node)||node===anchor||(node.parentNode===parent&&node.nextSibling===anchor))return null;
+ if(!accepts(parent,node)||node===anchor||node.parentNode===parent&&(
+   placement==='before'&&node.nextElementSibling===target||placement==='after'&&node.previousElementSibling===target||placement==='inside'&&node.nextElementSibling===anchor))return null;
  return ()=>{parent.insertBefore(node,anchor);return layerPath(node);};
 }
 export function foldLayerText(value){return String(value??'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();}

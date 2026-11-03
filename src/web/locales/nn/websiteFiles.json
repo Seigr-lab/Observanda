@@ -539,6 +539,8 @@
   "finderSearch": "Søk etter namn eller sti",
   "finderEmpty": "Ingen treff",
   "finderOpen": "Finn sider og verktøy",
+  "layerDrag": "Flytt",
+  "layerDragHint": "Dra {name} for å flytte elementet, eller klikk for å velje ei plassering.",
   "layerMove": "Flytt til …",
   "layerMoveUnavailable": "Dette elementet kan ikkje lenger flyttast hit.",
   "layerInside": "Inni",
