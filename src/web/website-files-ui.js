@@ -5,6 +5,7 @@ import {websiteFilesFolder} from './website-files-folder.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
+import {remoteAddress,remoteReceiptView} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,showPageChecks} from './website-files-dialogs.js';
@@ -63,6 +64,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   if(target.kind==='remote'){
    destination=target.destination;destinationDirty=false;mode='publish-review';render();
+   const prior=destination.transfer;
+   if(prior&&(['running','failed'].includes(prior.state)||prior.revision===opened.site.revision&&prior.configEtag===destination.etag))return;
    plan=await request('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag},{signal:controller.signal});render();return;
   }
   mode='publish-choose';render();
@@ -544,16 +547,16 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function publishUpdateView(){
   const title='<h2>'+esc(tr('publishUpdate'))+'</h2>';
   if(mode==='publish-choose')return '<section class="panel website-files-publish">'+title+'<p>'+esc(tr('choosePublishTarget'))+'</p><div class="inline-actions">'+button('folderPublish','folder')+button('destination','destination')+button('closePreview','visual')+'</div></section>';
-  return '<section class="panel website-files-publish">'+title+'<p>'+esc(opened.site.name)+' · '+esc(destination.config.kind==='github'?'GitHub':'SSH')+'</p>'+reviewView()+
-   '<div class="inline-actions">'+(plan?'':button('review','plan'))+button('destination','destination')+button('closePreview','visual')+'</div></section>';
+  return '<section class="panel website-files-publish">'+title+'<p>'+esc(opened.site.name)+' · '+esc(destination.config.kind==='github'?'GitHub':'SSH')+'</p>'+(!plan?'<p>'+esc(remoteAddress(destination.config))+'</p>':'')+transferView()+reviewView()+
+   '<div class="inline-actions">'+(plan||destination.transfer?.uncertain?'':button('review','plan'))+button('destination','destination')+button('closePreview','visual')+'</div></section>';
  }
+ function transferView(){return remoteReceiptView(destination,opened.site.revision,{esc,t,tr,button});}
  function destinationView(){if(!destination)return '<p role="status">'+esc(tr('loading'))+'</p>';const config=destination.config;
-  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>SSH</option></select></label>'+(config.kind==='github'?github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>':['host','port','user','directory','identity'].map(key=>field(key,config.ssh[key==='identity'?'identityFile':key]??'','data-destination-group="ssh"')).join(''))+field('publicUrl',config.publicUrl??'')+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+reviewView()+'</section>';
+  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>SSH</option></select></label>'+(config.kind==='github'?github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>':['host','port','user','directory','identity'].map(key=>field(key,config.ssh[key==='identity'?'identityFile':key]??'','data-destination-group="ssh"')).join(''))+field('publicUrl',config.publicUrl??'')+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+(destinationDirty?'':transferView())+reviewView()+'</section>';
  }
  function reviewView(){
   if(!plan)return '';
-  const review=plan.plan??plan,{kind,github,ssh}=destination.config;
-  const address=kind==='github'?github.owner+'/'+github.repository+' / '+github.branch+' / '+(github.directory||''):ssh.host+':'+ssh.directory;
+  const review=plan.plan??plan,address=remoteAddress(destination.config);
   const lists=['included','added','replaced','removed','unchanged','preserved','conflicts'].filter(key=>Array.isArray(review[key])).map(key=>{
    const count=review.counts?.[key]??review[key].length;
    const label=key==='included'?t('localExport','files')+' ('+count+')':t('publication',key,{count});
@@ -564,6 +567,32 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return '<section data-website-files-review><h3>'+esc(tr('review'))+'</h3><p>'+esc(address)+'</p>'+lists.join('')+confirm+'</section>';
  }
  async function saveDestination(){if(!destination)return;destination=await request('destination/save',{siteId:siteId(),config:destination.config,etag:destination.etag});destinationDirty=false;onDirty(dirty);plan=null;render();}
+ async function remoteAction(operation){
+  if(stale||dirty||destinationDirty||!destination)throw Error(tr('changed'));
+  const id=siteId(),transfer=destination.transfer,epoch=generation,signal=controller?.signal;
+  const data={siteId:id,expectedRevision:opened.site.revision,configEtag:destination.etag};
+  const active=()=>epoch===generation&&id===opened?.site.id&&!signal?.aborted&&!stale;
+  const refresh=async()=>{const latest=await request('destination',{siteId:id},{signal});if(active())destination=latest;};
+  try{
+   if(operation==='publish'||operation==='publish-retry'){
+    const retry=operation==='publish-retry';
+    if(retry?(!transfer||transfer.revision!==data.expectedRevision||transfer.configEtag!==data.configEtag):(!plan||!document.querySelector('[data-website-files-confirm]')?.checked))throw Error(tr('confirm'));
+    const result=await request('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true},{signal});
+    if(!active())return;
+    destination={...destination,receipt:result.receipt,transfer:result.transfer};notify(t('publication','livePending'));
+   }else if(operation==='publish-settle'){
+    if(!transfer)throw Error(tr('changed'));
+    await request('publish/settle',{...data,id:transfer.id},{signal});if(active())await refresh();
+   }else{
+    await request('publish/verify',{...data,commit:destination.receipt.commit},{signal});if(active())await refresh();
+   }
+  }catch(reason){
+   if(active()&&!['ACCESS_LOCKED','AUTH','CONFLICT','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code)){
+    try{await refresh();}catch{/* Retain the last authenticated destination if disconnected. */}
+   }
+   throw reason;
+  }finally{if(active()){plan=null;render();}}
+ }
  async function action(element){const name=element.dataset.action;if(name?.startsWith('github-')&&mode==='destination'){await run(()=>github.action(element));return true;}if(!name?.startsWith('website-files-'))return false;const operation=name.slice('website-files-'.length);if(busy)return true;flushCanvas();
   await run(async()=>{
    if(mode==='media'&&recordings.dirty()&&!['save','reopen'].includes(operation)){if(!confirm(tr('recordingDiscard')))return;recordings.reset();mode='visual';}
@@ -638,10 +667,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
    else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await request('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
-   else if(operation==='publish'){
-    if(!document.querySelector('[data-website-files-confirm]')?.checked||!plan||stale||dirty||destinationDirty)throw Error(tr('confirm'));
-    const result=await request('publish',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,destinationReview:(plan.plan??plan).id,destinationReviewed:true});plan=null;notify(result.message||tr('published'));render();
-   }
+   else if(['publish','publish-retry','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){
