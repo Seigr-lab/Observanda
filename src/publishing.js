@@ -3,6 +3,7 @@ import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {liveManifestReceipt} from './publication-live-budget.js';
+import {LocalExportManifest} from './local-export-manifest.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
 import {publicationText} from './web/publication-messages.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
@@ -191,8 +192,11 @@ export class Publisher {
       if(/^[a-f0-9-]{36}$/.test(receipt.deploymentId??''))await this.workspace.writeMetadata('.observanda/deployment-verifications/'+receipt.deploymentId+'.json',serialize(verification));
     });
     try{
-      const expected=await liveManifestReceipt(this.workspace,key,receipt);if(!expected)throw new LiveVerificationError('publication.json','metadata');
-      const verification=await verifyLiveFiles(this.liveRequest,base,expected,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress});
+      const fileOnly=this.workspace.websiteContext===true;
+      if(fileOnly&&(!receipt.fileInventory||inventory?.version!==2))throw new LiveVerificationError('publication.json','metadata');
+      const expected=fileOnly?receipt:await liveManifestReceipt(this.workspace,key,receipt);if(!expected)throw new LiveVerificationError('publication.json','metadata');
+      const verification=await verifyLiveFiles(this.liveRequest,base,expected,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress,
+        ...(fileOnly?{fileManifest:new LocalExportManifest(this.workspace),removedCount:inventory.removed.root?.count??0}:{})});
       await store(verification);return {verification,message:publicationText('liveVerified',{count:verification.files,removed:verification.removed})};
     }catch(error){
       if(!(error instanceof LiveVerificationError))throw error;
@@ -205,37 +209,49 @@ export class Publisher {
     const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):config.ssh;
     return digest(serialize({kind:config.kind,destination}));
   }
-  async deploy(candidate, expectedConfigEtag, workspaceId, review={}) {
-    await verifyPublicationCandidate(candidate);
+  async deploy(candidate, expectedConfigEtag, workspaceId, review={},transfer) {
     const saved = await this.read();
     if (!saved.configured || saved.etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
     const config = saved.config;
-    let plan=await this.readDestinationPlan(candidate,expectedConfigEtag,review);
+    // The native SSH protocol verifies the candidate inside the writer lease
+    // before contacting the host. Avoid reading every saved asset twice.
+    if(!transfer||config.kind!=='ssh'||this.ssh.deploy!==SSHHost.prototype.deploy)await verifyPublicationCandidate(candidate);
+    let plan=transfer?.plan??await this.readDestinationPlan(candidate,expectedConfigEtag,review);
     if(!plan&&config.kind==='github'){plan=await this.buildDestinationPlan(candidate,expectedConfigEtag);if(plan.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');}
     await enforcePublishingLimits(candidate,config);
-    const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:githubRemovedPaths(this.workspace,plan,config.github?.directory)});
+    const inventoryKey=this.destinationKey(config),journal=transfer?.journal??{};
+    const preparedInventory=journal.liveInventory??await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:githubRemovedPaths(this.workspace,plan,config.github?.directory)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
-    return this.workspace.withLock(async () => {
+    const run=async () => {
       if(this.authorizeCandidate)await this.authorizeCandidate(candidate);
       else{
        await publicationWorkspace(this.workspace).lockWebsite();
        if (!await publicationRevisionCurrent(this.workspace,candidate)) throw new AppError('STALE');
       }
       if ((await this.read()).etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
-      await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory);
+      await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory,journal.receipt);
+      if(transfer&&!journal.liveInventory){journal.liveInventory=preparedInventory;await transfer.save(journal);}
       const receipts = await this.readFile(this.receiptsFile, {}), key = this.destinationKey(config);
+      const record=async value=>{
+        if(transfer?.fileInventory)value.fileInventory=transfer.fileInventory;
+        if(config.kind==='github')await writeGithubOwnership(this.workspace,key,journal);
+        await recordDeploymentInventory(this.workspace,key,value,preparedInventory);
+        receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));
+      };
+      const persist=value=>this.workspace.withPublicationMetadataBatch?this.workspace.withPublicationMetadataBatch(()=>record(value)):record(value);
+      const options={journal,save:transfer?.save??(async()=>{}),guard:async()=>{},signal:transfer?.signal};
       let receipt;
       if (config.kind === 'ssh') {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
-        receipt=await this.ssh.deploy(config.ssh,candidate,owner);
+        receipt=await this.ssh.deploy(config.ssh,candidate,owner,{...options,indexedFiles:!!transfer});
       }
       else {
-        receipt=await deployGithub(this,candidate,config,{plan,journal:{},save:async()=>{},guard:async()=>{},pushed:async (value,journal)=>{await writeGithubOwnership(this.workspace,key,journal);await recordDeploymentInventory(this.workspace,key,value,preparedInventory);receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));}});
+        receipt=await deployGithub(this,candidate,config,{...options,plan,pushed:persist});
       }
-      await recordDeploymentInventory(this.workspace,key,receipt,preparedInventory);
-      receipts[key] = receipt; await this.workspace.writeMetadata('.observanda/publishing-receipts.json', serialize(receipts));
+      if(config.kind==='ssh')await persist(receipt);
       return receipt;
-    });
+    };
+    return transfer?this.workspace.withTransferLease(run):this.workspace.withLock(run);
   }
 }
 

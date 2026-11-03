@@ -23,6 +23,9 @@ export function websitePublicationMetadata(base){
   });
  }
  return {...base,withLock:locked,withPublicationMetadataBatch:locked,withPublicationMetadataSnapshot:locked,
+  // Keep the site writer across remote side effects, but commit every transfer
+  // checkpoint to disk before the provider can change its branch or link.
+  withTransferLease:operation=>base.withLock(async()=>{await locked(()=>{});return operation();}),
   readMetadata:(name,limit)=>locked(async()=>{const pending=local.getStore();if(!pending.has(name))return base.readMetadata(name,limit);const value=pending.get(name);if(value!==null&&limit!==undefined&&Buffer.byteLength(value)>limit)throw new AppError('LIMIT');return value;}),
   writeMetadata:(name,value)=>locked(async()=>{if(name===journal||typeof value!=='string')throw new AppError('INVALID');local.getStore().set(name,value);}),
   removeMetadata:name=>locked(async()=>{if(name===journal)throw new AppError('INVALID');local.getStore().set(name,null);})};

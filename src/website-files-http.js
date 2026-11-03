@@ -5,6 +5,7 @@ import {WebsiteFilesCandidate} from './website-files-candidate.js';
 import {Publisher} from './publishing.js';
 import {websitePublicationMetadata} from './website-publication-metadata.js';
 import {rememberPublishTarget,websitePublishTarget} from './website-publish-target.js';
+import {publishWebsiteTransfer,remoteTransferStatus,settleWebsiteTransfer} from './website-remote-transfer.js';
 import {operationResponse} from './operation-response.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {savedWebsiteSearches} from './website-saved-searches.js';
@@ -21,7 +22,7 @@ import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 async function sshReview(metadata,id,revision,etag){
@@ -116,7 +117,9 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='publish-target'){
    await store.siteVersion(siteId,{signal});
    const target=await publisher(siteId);
-   json(await websitePublishTarget(target.workspace,()=>target.read()));return true;
+   json(await websitePublishTarget(target.workspace,async()=>{
+    const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};
+   }));return true;
   }
   if(['feed/read','feed/save','feed/remove'].includes(operation)){
    const {readWebsiteFeed,saveWebsiteFeed,removeWebsiteFeed}=await import('./website-dynamic-feeds.js');
@@ -152,8 +155,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='destination'||operation==='destination/save'){
    json(await store.withSite(siteId,undefined,async()=>{
     const target=await publisher(siteId);
-    if(operation==='destination')return target.read();
+    if(operation==='destination'){const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};}
     return target.workspace.withLock(async()=>{
+     const previous=await target.read(),transfer=await remoteTransferStatus(target,previous);
+     if(transfer?.uncertain)throw new AppError('PUBLISH_PENDING');
      const saved=await target.save(options.config,options.etag);
      await rememberPublishTarget(target.workspace,'remote');return saved;
     });
@@ -191,6 +196,15 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    else if(operation==='folder/apply')await observed(()=>operationStage('folderWrite',{unit:'files'},()=>local.apply({id:options.id,reviewed:options.reviewed})));
    else throw new AppError('NOT_FOUND');return true;
   }
+  if(operation==='publish/settle'){
+   if(!revision(expectedRevision)||!researchId(options.id))throw new AppError('INVALID');
+   const target=await publisher(siteId);json(await withPublication(()=>store.withSite(siteId,expectedRevision,()=>settleWebsiteTransfer(target,{...options,signal}))));return true;
+  }
+  if(operation==='publish/verify'){
+   if(!revision(expectedRevision)||typeof options.configEtag!=='string'||typeof options.commit!=='string')throw new AppError('INVALID');
+   await store.checkRevision(siteId,expectedRevision);const target=await publisher(siteId);
+   json(await target.verifyLive({configEtag:options.configEtag,commit:options.commit,signal,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)}));return true;
+  }
   if(operation==='plan'||operation==='publish'){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues}),target=await publisher(siteId);
@@ -214,12 +228,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    else {
     if(options.destinationReviewed!==true||!researchId(options.destinationReview))throw new AppError('PUBLISH_STALE');
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
-    const ssh=saved.config.kind==='ssh';
-    if(ssh)await sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag);
-    const receipt=await withPublication(async()=>{
+    const result=await withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
      await rememberPublishTarget(target.workspace,'remote');
-     return target.deploy(candidate,options.configEtag,workspace.vault?.id,{...(!ssh?{destinationReview:options.destinationReview}:{}),destinationReviewed:true});
-    });json({receipt});
+     return publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
+    }));json(result);
    }
    return true;
   }

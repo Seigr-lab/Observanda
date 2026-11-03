@@ -35,13 +35,41 @@ function checkRoot(directory,create){
  return `safe_dir /; prefix=''; for part in ${components}; do prefix="$prefix/$part"; ${create?'ensure_dir':'safe_dir'} "$prefix"; done; `;
 }
 
+// Reconcile an obsolete review without transmitting any old candidate bytes.
+// A lost unlock may be retried; only the operation's own claim can be removed.
+export async function settleSSHTransfer(host,c,owner,attempt,{signal,checksums}={}){
+ const {journal,releaseId}=attempt;
+ if(!/^[a-f0-9-]{36}$/.test(owner)||!/^[a-f0-9-]{36}$/.test(journal.nonce)||!/^[a-f0-9]{64}$/.test(releaseId)||journal.releaseId!==releaseId||journal.parent!==undefined&&!pointer(journal.parent))throw new AppError('JOB_DAMAGED');
+ const root=c.directory,q=shellQuote,lock=q(root+'/.publishing-lock'),current=q(root+'/current'),marker=q(root+'/.observanda-owner');
+ const components=root.slice(1).split('/').map(q).join(' '),expected=q('releases/'+releaseId);
+ const inspect=`set -eu; ${pathGuards}
+  safe_dir /; prefix=''; for part in ${components}; do prefix="$prefix/$part"; if test ! -e "$prefix" && test ! -L "$prefix"; then printf absent; exit 0; fi; safe_dir "$prefix"; done
+  if test ! -e ${marker} && test ! -L ${marker}; then test -z "$(find ${q(root)} -mindepth 1 -maxdepth 1 -print -quit)"; printf absent; exit 0; fi
+  safe_file ${marker}; test "$(cat ${marker})" = ${q(owner)}
+  if test -L ${current}; then actual=$(readlink ${current}); else test ! -e ${current}; actual='-'; fi
+  ${journal.parent===undefined?'':`test "$actual" = ${q(journal.parent)} || test "$actual" = ${expected};`}
+  if test -L ${lock} || test -e ${lock}; then test -L ${lock}; test "$(readlink ${lock})" = ${q(journal.nonce)}; fi; `;
+ const answer=await host.command(c,inspect+`printf '%s' "$actual"`,'',{signal});
+ const remote=answer.trim();
+ if(remote==='absent'){if(journal.pushAttempted)throw new AppError('PUBLISH_STALE');return false;}
+ if(!pointer(remote))throw new AppError('PUBLISH_STALE');
+ const active=!!journal.pushAttempted&&remote==='releases/'+releaseId;
+ const count=attempt.fileInventory?.root?.count;
+ if(active&&(!Number.isSafeInteger(count)||count!==attempt.manifest.manifestFiles+1||typeof checksums!=='function'))throw new AppError('JOB_DAMAGED');
+ const release=q(root+'/releases/'+releaseId);
+ const verify=active?`safe_dir ${q(root+'/releases')}; safe_tree ${release}; cd ${release}; test "$(find . -type f | wc -l | tr -d ' ')" = ${count}; sha256sum -c - >/dev/null; `:'';
+ const completed=await host.command(c,inspect+`test "$actual" = ${q(remote)}; ${verify}if test -L ${lock}; then rm ${lock}; fi; printf settled`,active?checksums():'',{signal});
+ if(completed.trim()!=='settled')throw new AppError('PUBLISH_STALE');
+ return active;
+}
+
 // The operation's symlink is an atomic remote claim. It is retained on any
 // uncertain result and only its owner may resume or release it. A durable local
 // checkpoint precedes every possible current-link switch.
-export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal}={}){
+export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal,indexedFiles=false}={}){
  await verifyPublicationCandidate(candidate);if(!/^[a-f0-9-]{36}$/.test(owner))throw new AppError('PUBLISH_CONFIG');
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);signal?.throwIfAborted();await save(structuredClone(journal));};
- const indexed=candidate.version===3;
+ const indexed=candidate.version===3||indexedFiles;
  const report=key=>progress({stage:publicationText(key),done:journal.uploadedCount??journal.uploaded?.length??0,total:candidate.files.size});
  if(!journal.nonce){Object.assign(journal,{nonce:randomUUID(),...(indexed?{uploadedCount:0}:{uploaded:[]}),total:candidate.files.size,releaseId:candidate.id,lockAttempted:true});await checkpoint();}
  if(journal.releaseId!==candidate.id||(indexed?(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>candidate.files.size):!Array.isArray(journal.uploaded))||!/^[a-f0-9-]{36}$/.test(journal.nonce))throw new AppError('JOB_DAMAGED');

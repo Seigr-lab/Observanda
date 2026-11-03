@@ -15,7 +15,7 @@ export class LiveVerificationError extends Error{
 }
 // At most four streaming requests, each with an exact trusted byte budget,
 // an idle deadline and a nonrefreshing deadline scaled to that byte budget.
-export async function verifyLiveFiles(request,base,receipt,{removed=[],signal,progress=async()=>{},timeoutMs=30000,deadlineMs}={}){
+export async function verifyLiveFiles(request,base,receipt,{removed=[],fileManifest,removedCount=0,signal,progress=async()=>{},timeoutMs=30000,deadlineMs}={}){
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>2147483647||deadlineMs!==undefined&&(!Number.isSafeInteger(deadlineMs)||deadlineMs<1))throw new AppError('INVALID');
  const root=new URL(base.endsWith('/')?base:base+'/'),controller=new AbortController(),combined=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
  async function read(name,{bytes,max=bytes,sha,consume,absent=false}={}){
@@ -47,24 +47,45 @@ export async function verifyLiveFiles(request,base,receipt,{removed=[],signal,pr
   }catch(error){if(error instanceof LiveVerificationError||error instanceof AppError)throw error;combined.throwIfAborted();throw new LiveVerificationError(name,'unavailable');}
   finally{clearTimeout(timer);clearTimeout(deadline);combined.removeEventListener('abort',abort);if(reader)reader.cancel().catch(()=>{});scope.abort();}
  }
+ const fail=reason=>new LiveVerificationError('publication.json',reason);
+ async function verifyRows(pending,first,files,removedCount){
+   const total=files+removedCount;let scheduled=0,done=0,bytes=first.bytes;
+   if(!Number.isSafeInteger(total))throw fail('inventory');
+   const worker=async()=>{while(true){combined.throwIfAborted();const item=await pending.next();if(item.done)return;if(++scheduled>total)throw fail('inventory');const f=item.value,result=await read(f.path,{bytes:f.bytes,sha:f.sha256,absent:f.absent});bytes+=result.bytes;await progress({done:++done,total});}};
+   try{
+    const workers=Array.from({length:Math.min(4,Math.max(1,total))},()=>worker().catch(error=>{controller.abort(error);throw error;}));
+    const outcomes=await Promise.allSettled(workers),failure=outcomes.find(o=>o.status==='rejected');if(failure)throw failure.reason;
+   }finally{await pending.return();}
+   if(done!==total)throw fail('inventory');
+   await read('publication.json',{bytes:first.bytes,sha:receipt.manifestHash});
+   return {at:new Date().toISOString(),manifestHash:receipt.manifestHash,url:new URL('publication.json',root).href,files:files+1,removed:removedCount,bytes};
+ }
  try{
+  if(!validLiveManifestBudget(receipt))throw fail('metadata');
+  if(!/^[a-f0-9]{64}$/.test(receipt.manifestHash??'')||typeof receipt.releaseId!=='string'||!receipt.releaseId)throw fail('manifest');
+  if(fileManifest){
+   const ref=receipt.fileInventory;
+   if(ref?.type!=='files'||ref.root?.count!==receipt.manifestFiles+1||!Number.isSafeInteger(removedCount)||removedCount<0)throw fail('metadata');
+   const descriptor=await fileManifest.find(ref,'publication.json');
+   if(descriptor?.path!=='publication.json'||descriptor.bytes!==receipt.manifestBytes||descriptor.sha256!==receipt.manifestHash)throw fail('metadata');
+   const first=await read(descriptor.path,{bytes:descriptor.bytes,sha:descriptor.sha256});
+   async function* rows(){
+    for await(const file of fileManifest.entries(ref))if(file.path!==descriptor.path)yield file;
+    let previous='';
+    for await(const path of removed){
+     if(!safePath(path)||path<=previous||await fileManifest.find(ref,path))throw fail('inventory');previous=path;yield {path,absent:true};
+    }
+   }
+   return await verifyRows(rows(),first,receipt.manifestFiles,removedCount);
+  }
   return await withScratch(async work=>{
-   let files;const fail=reason=>new LiveVerificationError('publication.json',reason);
-   if(!/^[a-f0-9]{64}$/.test(receipt.manifestHash??'')||typeof receipt.releaseId!=='string'||!receipt.releaseId)throw fail('manifest');
-   if(!validLiveManifestBudget(receipt))throw fail('metadata');
+   let files;
    const first=await withScratch(async raw=>{
     let stored;const first=await read('publication.json',{bytes:receipt.manifestBytes,sha:receipt.manifestHash,consume:async(chunks,signal)=>{stored=await spoolLiveManifest(chunks,raw,receipt.manifestBytes,{signal,fail});}});
     files=await retainLiveManifest(stored.chunks({signal:combined}),work,receipt.releaseId,{signal:combined,fail,expectedFiles:receipt.manifestFiles,maxBytes:receipt.manifestBytes});return first;
    },{signal:combined});
-   const removedCount=await retainRemovedLivePaths(work,removed,{signal:combined,fail}),total=files+removedCount;
-   let done=0,bytes=first.bytes;const pending=work.items();
-   const worker=async()=>{while(true){combined.throwIfAborted();const item=await pending.next();if(item.done)return;const f=item.value,result=await read(f.path,{bytes:f.bytes,sha:f.sha256,absent:f.absent});bytes+=result.bytes;await progress({done:++done,total});}};
-   try{
-    const workers=Array.from({length:Math.min(4,total)},()=>worker().catch(error=>{controller.abort(error);throw error;}));
-    const outcomes=await Promise.allSettled(workers),failure=outcomes.find(o=>o.status==='rejected');if(failure)throw failure.reason;
-   }finally{await pending.return();}
-   await read('publication.json',{bytes:first.bytes,sha:receipt.manifestHash});
-   return {at:new Date().toISOString(),manifestHash:receipt.manifestHash,url:new URL('publication.json',root).href,files:files+1,removed:removedCount,bytes};
+   const removedCount=await retainRemovedLivePaths(work,removed,{signal:combined,fail});
+   return verifyRows(work.items(),first,files,removedCount);
   },{signal:combined});
  }finally{controller.abort();}
 }
