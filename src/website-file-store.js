@@ -28,6 +28,10 @@ import {sourceGalleryItems,refreshSourceGalleries} from './website-source-galler
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
 import {fileHasEditorMenu} from './website-menu-styles.js';
+import {clearFeedSubscription,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
+import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-source.js';
+import {syncFeedShells} from './website-feed-shell.js';
+import {pendingScopeFile,siteHasPendingSources,sourceFenceScope} from './website-feed-fence.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -175,18 +179,20 @@ export class WebsiteFileStore{
   }
   const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});return {...file,...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu})};
  }
- validBlob(file,id,sources){
-  const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sources.some(item=>item.id===file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
+ validBlob(file,id,sourceIds){
+  const own=siteOwner(id,file.draft)+'/files/',source=typeof file.sourceId==='string'&&sourceIds.has(file.sourceId)?ROOT+'/sources/'+file.sourceId+'/files/':null;
   const base=file.blob?.startsWith(own)?own:source&&file.blob?.startsWith(source)?source:null;
   return base!==null&&file.blob.slice(base.length).startsWith(file.sha256+'.')&&/^[a-f0-9]{64}\.[a-z0-9]{1,12}$/.test(file.blob.slice(base.length));
  }
  validateManifest(value,id){
   if(value?.version!==1||value.id!==id||!hex(value.revision)||!Array.isArray(value.files)||!Array.isArray(value.pages)||!Array.isArray(value.sources))throw new AppError('FORMAT');
-  const names=new Map();for(const file of value.files){websiteFileName(file.name);if(names.has(file.name)||file.draft!==undefined&&file.draft!==true||!this.validBlob(file,id,value.sources)||!Number.isSafeInteger(file.size)||file.size<0||!hex(file.sha256)||typeof file.contentType!=='string')throw new AppError('FORMAT');names.set(file.name,file);}
+  const sourceIds=new Set(value.sources.map(row=>row.id)),feedIds=new Set((value.feeds??[]).flatMap(feed=>feed.members.map(row=>row.id)));
+  const names=new Map();for(const file of value.files){websiteFileName(file.name);if(names.has(file.name)||file.draft!==undefined&&file.draft!==true||!this.validBlob(file,id,file.feedAsset?feedIds:sourceIds)||!Number.isSafeInteger(file.size)||file.size<0||!hex(file.sha256)||typeof file.contentType!=='string')throw new AppError('FORMAT');names.set(file.name,file);}
   for(const page of value.pages){
    if(!names.has(page.path)||names.get(page.path).draft!==page.draft||!page.path.endsWith('.html')||!Array.isArray(page.placements))throw new AppError('FORMAT');
   }
   if(!names.has('index.html')||names.get('index.html').draft)throw new AppError('FORMAT');
+  validateFeedFiles(value,names);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -234,21 +240,26 @@ export class WebsiteFileStore{
   },{missing:true});
   return id=>{const i=prefix(id);return Boolean(bits[i>>>3]&(1<<(i&7)));};
  }
- async fence(sourceId,set,signal){
+ async fence(sourceId,set,signal,scope){
+  if(!hex(sourceId))throw new AppError('INVALID');
   const entries=await this.pendingSources();if(set)entries.add(sourceId);else entries.delete(sourceId);
+  if(set)await this.writeControl(pendingScopeFile(sourceId),scope??sourceFenceScope(null,null),{signal});
   if(entries.size)await this.writeControl(ROOT+'/pending.json',[...entries],{signal});else await this.remove(ROOT+'/pending.json');
+  if(!set)await this.remove(pendingScopeFile(sourceId));
  }
  async current(id,revision){
   const manifest=await this.raw(id);if(revision!==undefined&&revision!==manifest.revision)throw new AppError('CONFLICT');
   // A permission writer publishes this fence *before* changing research and
   // clears it only after every affected HTML/page manifest is committed. An
   // ordinary read checks one tiny file regardless of the number of sources.
-  if(manifest.sources.length){const pending=await this.pendingSources();if(manifest.sources.some(item=>pending.has(item.id)))throw new AppError('CONFLICT');}
+  if((manifest.sources.length||manifest.feeds?.length)&&await siteHasPendingSources(this,manifest,await this.pendingSources()))throw new AppError('CONFLICT');
   return manifest;
  }
- site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),cssPath:page?.draft?draftStyle:manifest.cssPath};}
+ site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(manifest.feeds?.length?{feedPages:websiteFeedPages(manifest)}:{}),cssPath:page?.draft?draftStyle:manifest.cssPath};}
  async commit(manifest,{signal}={}){
+  manifest=retainWebsiteFeedAssets(manifest);
   manifest=await syncEntryStyles(this,manifest,signal);
+  manifest=await syncFeedShells(this,manifest,signal);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){
    const refs=new Map(manifest.sources.map(row=>[row.id,row]));
@@ -259,16 +270,24 @@ export class WebsiteFileStore{
    manifest={...manifest,sources:[...refs.values()]};
   }
   manifest=retainComponentAssets(manifest);
+  if(manifest.feeds?.length)manifest={...manifest,feedPlacementsIndexed:true};
   const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   const bytes=Buffer.from(plain(value));if(bytes.length>CONTROL_LIMIT)throw new AppError('LIMIT');
+  await writeFeedSubscription(this,value,previous,signal);
   // Register placement before publishing the new site head. A crash may
   // leave an unused index row, but can never create an unindexed live copy.
-  const previousSources=new Set(previous?.sources.map(source=>source.id));for(const source of value.sources)if(!previousSources.has(source.id)){
-   await this.writeControl(ROOT+'/sources/'+source.id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:source.id},{signal});
+  const oldOrdinary=new Set(previous?.sources.map(source=>source.id)),newOrdinary=new Set(value.sources.map(source=>source.id));
+  const previousSources=new Set(oldOrdinary),currentSources=new Set(newOrdinary);
+  if(previous?.feedPlacementsIndexed)for(const feed of previous.feeds??[])for(const member of feed.members)previousSources.add(member.id);
+  for(const feed of value.feeds??[])for(const member of feed.members)currentSources.add(member.id);
+  for(const id of currentSources)if(!previousSources.has(id)||!oldOrdinary.has(id)&&newOrdinary.has(id)){
+   await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id,...(!oldOrdinary.has(id)&&!newOrdinary.has(id)?{feedOnly:true}:{})},{signal});
   }
   await this.writeBytes(directory+'/revisions/'+value.revision+'.json',bytes,{signal});await this.writeControl(directory+'/head.json',{revision:value.revision},{signal});
+  await clearFeedSubscription(this,value,previous);
   if(previous&&previous.revision!==value.revision){
-   const currentSources=new Set(value.sources.map(source=>source.id));for(const source of previous.sources)if(!currentSources.has(source.id))await this.remove(ROOT+'/sources/'+source.id+'/placements/'+siteName(value.id)+'.json');
+   for(const id of previousSources)if(!currentSources.has(id))await this.remove(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json');
+   for(const id of oldOrdinary)if(currentSources.has(id)&&!newOrdinary.has(id))await this.writeControl(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json',{siteId:value.id,sourceId:id,feedOnly:true},{signal});
    const retained=new Set(value.files.map(file=>file.blob));
    for(const blob of new Set(previous.files.map(file=>file.blob)))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
    await this.remove(directory+'/revisions/'+previous.revision+'.json');
@@ -277,11 +296,12 @@ export class WebsiteFileStore{
  async readText(descriptor,{signal}={}){if(descriptor.size>TEXT_LIMIT)throw new AppError('LIMIT');const parts=[];for await(const bytes of new WebsiteFileContent(this,undefined,null,descriptor).read(0,descriptor.size-1,{signal}))parts.push(bytes);return Buffer.concat(parts).toString('utf8');}
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
  async present(manifest,page='index.html',{signal}={}){
-  websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
+  websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||selected.feedPage||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
   const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash;
-  return {site,path:page,sourceStamp:hash(plain(manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
+  const feedStamps=manifest.feeds?.filter(f=>f.path===page).flatMap(f=>f.groups.map(g=>g.stamp))??[];
+  return {site,path:page,sourceStamp:hash(plain(feedStamps.length?[manifest.sources,feedStamps]:manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
  }
- list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(manifest.sources.some(source=>pending.has(source.id))){item.pages=[];item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
+ list(options={}){return this.scope(async()=>{const page=await this.names(ROOT+'/sites',options),items=[],pending=await this.pendingSources(),cache=new Map();for(const name of page.items){const manifest=await this.raw(name==='default'?null:name,{missing:true});if(!manifest)continue;const item=this.site(manifest);if(await siteHasPendingSources(this,manifest,pending,cache)){item.pages=[];delete item.feedPages;item.pending=true;}items.push(item);}return {items,next:page.next};},options);}
  create({id=randomUUID(),name,html,css,language,signal}={}){
   name=title(name);
   css??=html==null?starterStyles:'';
@@ -306,13 +326,14 @@ export class WebsiteFileStore{
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
  save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
+  if(manifest.files.some(file=>file.name===page&&file.feedPage))throw new AppError('CONFLICT');
   const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
   const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
   const scripts=await this.scripts(manifest.files),htmlPictures=new Set(),cssPictures=new Set(),recordingNames=new Set();
   const addViewer=!scripts.has('public-gallery.js')&&typeof html==='string'&&html.includes('public-gallery.js');
   if(addViewer)scripts.add('public-gallery.js');
   validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});validateWebsiteCSS(css,{file:cssPath,pictures:cssPictures});
-  if(former?.placements.length||placements.length||former?.sourceGalleries?.length){
+  if(former?.placements.length||placements.length||former?.sourceGalleries?.length||manifest.feeds?.some(f=>f.path===page)||html.includes('data-website-feed')){
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
    if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
   }
@@ -370,7 +391,8 @@ export class WebsiteFileStore{
    if(!files.has(entryStyleName))files.set(entryStyleName,Buffer.from(entryCSS));
    if(file.entryStyle!==entryStyleHash)files.set(page.path,await StyledEntryPage.open(this,manifest,file,signal));
   }
-  return {revision:manifest.revision,site:this.site({...manifest,pages:manifest.pages.filter(page=>!page.draft)}),files};
+  const publicPages=manifest.pages.filter(page=>!page.draft),publicPaths=new Set(publicPages.map(p=>p.path));
+  return {revision:manifest.revision,site:this.site({...manifest,pages:publicPages,feeds:manifest.feeds?.filter(f=>publicPaths.has(f.path))}),files};
  },{signal});}
  async source(id,{pending=false}={}){
   if(!hex(id))throw new AppError('INVALID');const directory=ROOT+'/sources/'+id;
@@ -409,7 +431,7 @@ export class WebsiteFileStore{
   return revision;
  },{signal});}
  advancePdfVersion(signal){return this.writeControl(ROOT+'/pdf-version.json',randomUUID(),{signal});}
- beginSourceUpdate({sourceId,target,signal,ifAbsent=false,resumeSeed=false,reviveRevision,tagsOnly=false}={}){return this.scope(async()=>{
+ beginSourceUpdate({sourceId,target,provenance,signal,ifAbsent=false,resumeSeed=false,reviveRevision,tagsOnly=false,liveOnly=false,policySignature,tagsRevision,feedBackfill=false,feedRemoval=false}={}){return this.scope(async()=>{
   if(!hex(sourceId)||target!==undefined&&!['website','pdf'].includes(target))throw new AppError('INVALID');
   const path=ROOT+'/sources/'+sourceId+'/pending.json',token=randomUUID(),saved=await this.control(path,{missing:true});
   const previous=saved?saved.previous:await this.source(sourceId,{pending:true}),known=saved?.target??previous?.target;
@@ -420,10 +442,17 @@ export class WebsiteFileStore{
   if(ifAbsent&&!seed&&(saved||previous&&reviveRevision===undefined||(await this.pendingSources()).has(sourceId)))throw new AppError('EXISTS');
   target??=known;
   const journal={token,previous,target,startedAt:saved?.startedAt??new Date().toISOString(),recovered:Boolean(saved),...(resumeSeed?{seed:true}:{}),...(tagsOnly&&(!saved||saved.tagsOnly)?{tagsOnly:true}:{})};
+  if(liveOnly&&(!saved||saved.liveOnly))journal.liveOnly=true;
+  if(feedBackfill&&(!saved||saved.feedBackfill))journal.feedBackfill=true;
+  if(feedRemoval&&journal.liveOnly&&(!saved||saved.feedRemoval))journal.feedRemoval=true;
+  const policy=saved?saved.policySignature:policySignature;
+  if(hex(policy)){journal.policySignature=policy;journal.tagsRevision=saved?saved.tagsRevision??null:tagsRevision??null;}
   // An absent source has no placements. Record bootstrap ownership first so
   // a crash cannot leave an anonymous fence which no writer may safely adopt.
+  const owner=provenance??previous?.provenance;
+  if(owner&&websiteSourceId({...owner,target})!==sourceId)throw new AppError('INVALID');
   if(ifAbsent&&resumeSeed)await this.writeControl(path,journal,{signal});
-  await this.fence(sourceId,true,signal);
+  await this.fence(sourceId,true,signal,sourceFenceScope(target,owner));
   if(!(ifAbsent&&resumeSeed))await this.writeControl(path,journal,{signal});
   if(target==='pdf')await this.advancePdfVersion(signal);
   return token;
@@ -450,21 +479,23 @@ export class WebsiteFileStore{
   const source={id:sourceId,title:sourceTitle,target,visible,provenance,html:await this.descriptor('fragment.html',visible?html:'',{signal,owner:directory}),css:await this.descriptor('source.css',visible?css:'',{signal,owner:directory}),assets:files};if(visible&&target==='pdf'){if(!pdfParts||pdfParts.version!==1)throw new AppError('PDF_SOURCE_CONTENT');source.pdfParts=await this.descriptor('composition.json',plain(pdfParts),{signal,owner:directory});}source.revision=hash(plain(source));
   return this.#commitSource(source,html,previousHtml,pending,pickerContext,signal);
  },{write:true,signal});}
- updateSourceTags(sourceId,{tags,provenance,pickerContext,token,signal}){return this.scope(async()=>{
+ updateSourceTags(sourceId,{tags,provenance,pickerContext,token,signal,liveOutput}){return this.scope(async()=>{
   if(!hex(sourceId)||!uuid(token))throw new AppError('INVALID');
   const directory=ROOT+'/sources/'+sourceId,pending=await this.control(directory+'/pending.json'),prior=pending.previous;
   if(pending.token!==token||!prior?.visible||prior.target!==provenance.target||websiteSourceId(provenance)!==sourceId)throw new AppError('CONFLICT');
   const previousHtml=await this.readText(prior.html,{signal}),html=replaceSourceTags(previousHtml,tags);
   const source={...prior,provenance,html:await this.descriptor('fragment.html',html,{signal,owner:directory})};delete source.revision;
   source.revision=hash(plain(source));
-  return this.#commitSource(source,html,previousHtml,pending,pickerContext,signal);
+  return this.#commitSource(source,html,previousHtml,pending,pickerContext,signal,tags,liveOutput);
  },{write:true,signal});}
- async #commitSource(source,html,previousHtml,pending,pickerContext,signal){
+ async #commitSource(source,html,previousHtml,pending,pickerContext,signal,tags,liveOutput){
   const {id:sourceId,target,visible,provenance}=source,directory=ROOT+'/sources/'+sourceId,prior=pending.previous;
   await this.writeControl(directory+'/head.json',source,{signal});if(provenance)await this.writeControl(recordIndex(provenance.workspaceId,provenance.recordId,target),{sourceId},{signal});
-  await indexWebsiteSource(this,source,html,signal,pickerContext);
+  const indexed=await indexWebsiteSource(this,source,html,signal,pickerContext);
+  const {live,retired,retained}=await synchronizeFeedSource(this,source,{tags,liveOutput,previous:prior,context:pickerContext,row:indexed,signal});
   let galleryItems,displayChoices,after=null;do{const sites=await this.names(directory+'/placements',{after,limit:25,directories:false});for(const member of sites.items){
    signal?.throwIfAborted();const row=await this.control(directory+'/placements/'+member);if(row.sourceId!==sourceId||siteName(row.siteId)+'.json'!==member)throw new AppError('FORMAT');
+   if(row.feedOnly)continue;
    const id=row.siteId,manifest=await this.raw(id,{missing:true});if(!manifest?.sources.some(value=>value.id===sourceId))continue;
    const pages=new Map(manifest.pages.map(page=>[page.path,page]));
    const nextFiles=[];for(const descriptor of manifest.files){
@@ -483,7 +514,9 @@ export class WebsiteFileStore{
    const nextPages=[...pages.values()],sources=[...new Map(nextPages.flatMap(page=>page.placements.map(({id,revision})=>[id,{id,revision}]))).values()];
    await this.commit({...manifest,pages:nextPages,files:await this.siteAssets(nextFiles,sources,nextPages),sources},{signal});
   }after=sites.next;}while(after!==null);
-  if(prior){const retained=new Set([source.html,source.css,...source.assets,...(source.pdfParts?[source.pdfParts]:[])].map(file=>file.blob));for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
+  await refreshFeedSubscriptions(this,live,{signal});
+  await releasePreviousFeedSource(this,retired,retained,signal);
+  if(prior){for(const file of [prior.html,prior.css,...prior.assets,...(prior.pdfParts?[prior.pdfParts]:[])])if(!retained.has(file.blob))await this.remove(file.blob);}
   await this.finishSourceUpdate(sourceId,target,signal,pending.seed);return {id:sourceId,title:source.title,revision:source.revision,visible,target};
  }
  insertSource(id,{sourceId,sourceRevision,...options}={}){return this.insertSources(id,{...options,sources:[{sourceId,sourceRevision}]},{requirePins:false});}

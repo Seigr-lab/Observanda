@@ -2,6 +2,7 @@ import {AppError} from './errors.js';
 import {libraryQuery,matchesQuery,compareLibraryRows,libraryMatchRank} from './website-file-library-query.js';
 import {libraryStamp,checkLibraryStamp,scanEligibleWebsiteRows,indexedWebsiteRow} from './website-file-library.js';
 import {feedRowShard,readFeedSource} from './website-feed-source.js';
+import {siteHasPendingSources} from './website-feed-fence.js';
 export {readFeedSource};
 
 const fields=['search','searchField','filter','dateFrom','dateTo','dateKnowledge','recordType','status','tagMode','sort','projectId','notebookId','tags','locale'];
@@ -30,7 +31,7 @@ export function compareFeedMembers(a,b,criteria={}){
 export function enumerateFeedMembers(store,criteria,{signal}={}){
  const q=libraryQuery(normalizeFeedCriteria(criteria));
  return store.scope(async scope=>{
-  const stamp=await libraryStamp(store);if(stamp.pending.size)throw new AppError('CONFLICT');
+  const stamp=await libraryStamp(store);if(await siteHasPendingSources(store,{sources:[],feeds:[{criteria,members:[]}]},stamp.pending))throw new AppError('CONFLICT');
   const result=[];let prefix,overlay;
   for await(const row of scanEligibleWebsiteRows(store,scope,stamp,{signal})){
    signal?.throwIfAborted();

@@ -8,6 +8,7 @@ import {AppError} from './errors.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
 const descendants=function*(node){for(const child of node.childNodes??[]){yield child;yield* descendants(child);}};
+const ordinaryNodes=function*(node){for(const child of node.childNodes??[]){yield child;if(attr(child,'data-website-feed')===undefined)yield* ordinaryNodes(child);}};
 const location=node=>node?.sourceCodeLocation;
 const range=node=>({start:location(node)?.startTag?.endOffset,end:location(node)?.endTag?.startOffset});
 const partId=node=>attr(node,'data-observanda-part');
@@ -17,7 +18,7 @@ export const escapeWebsiteText=value=>String(value).replace(/[&<>"']/g,char=>({'
 
 export function websiteSourcePlacements(html,previous=[]){
  const result=[],keys=new Set(),prior=new Map(previous.filter(item=>item.link).map(item=>[item.link,item]));
- for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+ for(const node of ordinaryNodes(parse(html,{sourceCodeLocationInfo:true}))){
   if(linkSource(node)!==undefined){
    const placement=linkPlacement(node,prior);
    if(keys.has(placement.link)||sourceId(node)!==undefined)throw new AppError('INVALID');
@@ -72,8 +73,8 @@ function mergeParts(current,previous,next,{root=false}={}){
 }
 export function websiteMarkerShape(html){
  const scopes=[];
- for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
-  if(attr(node,galleryKey)!==undefined||attr(node,displayId)!==undefined)scopes.push('managed:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
+ for(const node of ordinaryNodes(parse(html,{sourceCodeLocationInfo:true}))){
+  if(attr(node,galleryKey)!==undefined||attr(node,displayId)!==undefined||attr(node,'data-website-feed')!==undefined)scopes.push('managed:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
   if(linkSource(node)!==undefined){
    let owner,part;for(let parent=node.parentNode;parent;parent=parent.parentNode){part??=partId(parent);owner??=sourceId(parent);}
    scopes.push(JSON.stringify(['link',owner,part,linkShape(node)]));continue;
@@ -89,7 +90,7 @@ export function websiteMarkerShape(html){
 // newly allowed/revoked part change without losing its entry's page placement.
 export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextHtml='',visible=true,placements=[],entryDisplays={},displayChoices,page='index.html',title=''}){
  const next=partTree(nextHtml),previous=partTree(previousHtml),changes=[],links=new Map(placements.filter(item=>item.id===id&&item.link).map(item=>[item.link,item])),projection={};
- for(const node of descendants(parse(html,{sourceCodeLocationInfo:true}))){
+ for(const node of ordinaryNodes(parse(html,{sourceCodeLocationInfo:true}))){
   if(linkSource(node)===id){
    const loc=location(node);
    changes.push({start:loc.startOffset,end:loc.endOffset,text:updateEntryLink(node,links.get(attr(node,'data-observanda-link-key')),{revision,visible,html:nextHtml,previousHtml},projection)});continue;

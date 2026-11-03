@@ -17,7 +17,7 @@ const attributes={a:['href','rel','target'],img:['src','alt','width','height','l
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
-const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item',marker,'data-website-menu','hidden'].includes(a.name));
+const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item','data-website-feed',marker,'data-website-menu','hidden'].includes(a.name));
 const nodes=root=>[...descendants(root)].filter(node=>node.tagName);
 
 function oneRoot(html){
