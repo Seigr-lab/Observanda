@@ -57,9 +57,9 @@ test('page structure retains readable labels and keyboard actions in desktop win
  test.skip(!process.env.OBSERVANDA_DESKTOP_EXECUTABLE&&process.env.OBSERVANDA_QUALIFY_SOURCE_WEBSITE!=='1','Requires an isolated desktop qualification.');
  test.setTimeout(180000);
  const fixture=await websiteDesktopFixture(),metrics=[];
- let app;
+ let app,page,completed=false;
  try{
-  app=await fixture.start(undefined,{expectedVersion:process.env.OBSERVANDA_WEBSITE_LAYOUT_VERSION});const page=await app.firstWindow();
+  app=await fixture.start(undefined,{expectedVersion:process.env.OBSERVANDA_WEBSITE_LAYOUT_VERSION});page=await app.firstWindow();
   await createWebsiteWorkspace(page,fixture.directory,'Layout study');
   const id=await page.evaluate(async labels=>{
    const {contextId}=await(await fetch('/api/storage')).json(),html='<!doctype html><html><body><main>'+labels.map(label=>'<section><h2>'+label+'</h2></section>').join('')+'</main></body></html>';
@@ -124,5 +124,14 @@ test('page structure retains readable labels and keyboard actions in desktop win
   await first.getByRole('button',{name:catalan.remove,exact:true}).press('Enter');await expect(rows).toHaveCount(2);
   await page.getByRole('button',{name:catalan.undo,exact:true}).press('Enter');await expect(rows).toHaveCount(3);
   await expect(first).toContainText(labels[0]);
- }finally{await fixture.dispose(app);}
+  const save=page.getByRole('button',{name:catalan.save,exact:true});if(await save.isEnabled())await save.press('Enter');
+  await expect(page.locator('[data-website-files-status]')).toHaveText(catalan.saved);
+  await page.reload();await expect(rows).toHaveCount(3);await expect(first).toContainText(labels[0]);
+  completed=true;
+ }finally{
+  // On an assertion failure this disposable profile is about to be removed.
+  // Its native leave prompt must not block teardown or obscure the failure.
+  if(!completed&&page&&!page.isClosed())await page.evaluate(()=>window.addEventListener('beforeunload',event=>event.stopImmediatePropagation(),{capture:true,once:true})).catch(()=>{});
+  await fixture.dispose(app);
+ }
 });
