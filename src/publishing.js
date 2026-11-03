@@ -101,7 +101,7 @@ export class Publisher {
     if(typeof replaceExisting!=='boolean'||archiveBranch!==null&&(!replaceExisting||!githubArchiveBranch(archiveBranch)))throw new AppError('INVALID');
     signal?.throwIfAborted();
     const remote=(route,missing=false)=>{signal?.throwIfAborted();return this.github(route,'GET',undefined,missing,signal);};
-    await verifyPublicationCandidate(candidate,{signal});
+    await verifyPublicationCandidate(candidate,{signal,remoteProgress:this.workspace.websiteContext===true});
     const saved=await this.read();
     if(!saved.configured||saved.etag!==configEtag||saved.config.kind!=='github')throw new AppError('PUBLISH_STALE');
     const c=saved.config.github,base=`/repos/${c.owner}/${c.repository}`,repo=await remote(base);
@@ -215,7 +215,7 @@ export class Publisher {
     const config = saved.config;
     // The native SSH protocol verifies the candidate inside the writer lease
     // before contacting the host. Avoid reading every saved asset twice.
-    if(!transfer||config.kind!=='ssh'||this.ssh.deploy!==SSHHost.prototype.deploy)await verifyPublicationCandidate(candidate);
+    if(!transfer||config.kind!=='ssh'||this.ssh.deploy!==SSHHost.prototype.deploy)await verifyPublicationCandidate(candidate,{signal:transfer?.signal,remoteProgress:!!transfer});
     let plan=transfer?.plan??await this.readDestinationPlan(candidate,expectedConfigEtag,review);
     if(!plan&&config.kind==='github'){plan=await this.buildDestinationPlan(candidate,expectedConfigEtag);if(plan.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');}
     await enforcePublishingLimits(candidate,config);
@@ -239,7 +239,7 @@ export class Publisher {
         receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));
       };
       const persist=value=>this.workspace.withPublicationMetadataBatch?this.workspace.withPublicationMetadataBatch(()=>record(value)):record(value);
-      const options={journal,save:transfer?.save??(async()=>{}),guard:async()=>{},signal:transfer?.signal};
+      const options={journal,save:transfer?.save??(async()=>{}),guard:async()=>{},signal:transfer?.signal,uploads:transfer?.uploads};
       let receipt;
       if (config.kind === 'ssh') {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;

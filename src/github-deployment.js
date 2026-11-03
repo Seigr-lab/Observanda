@@ -11,7 +11,7 @@ const sha=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 // Both synchronous publishing and durable jobs use this one GitHub adapter.
 // Checkpoints precede the branch write. Retrying a lost response reconciles it;
 // content-addressed blobs, trees and explicitly dated commits are reusable.
-export async function deployGithub(publisher,candidate,config,{plan=null,journal,save,guard,progress=async()=>{},signal,pushed=async()=>{}}){
+export async function deployGithub(publisher,candidate,config,{plan=null,journal,save,guard,progress=async()=>{},signal,pushed=async()=>{},uploads}){
  if(plan)admitGithubPlan(plan);
  const c=config.github,base=`/repos/${c.owner}/${c.repository}`;
  const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard(method==='GET'?{phase:'read'}:undefined);return publisher.github(base+route,method,data,missing,signal);};
@@ -30,6 +30,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  const reader=githubPlanReader(publisher.workspace,journal,{signal}),uploaded=journal.document?null:new Set(journal.uploaded),total=reader.count('uploads');
  if(journal.document&&(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>total))throw new AppError('PUBLISH_STALE');
  journal.total=total;const report=stage=>progress({stage,done:journal.uploadedCount??uploaded.size,total});
+ uploads?.start(journal.uploadedCount??uploaded.size,total);
  const expected={count:reader.count('entries')+reader.count('preservedEntries'),get:async path=>await reader.get('entries',path)??await reader.get('preservedEntries',path)};
  const repo=await call('');if(repo.id!==journal.repositoryId||!repo.permissions?.push)throw new AppError('PUBLISH_STALE');
  const head=await call(`/git/ref/heads/${c.branch}`,'GET',undefined,true),current=head?.object?.sha??null;
@@ -51,9 +52,11 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
    if(uploaded?.has(entry.sha))continue;
    await report(messages.uploading);
    const source=c.directory?entry.path.slice(c.directory.length+1):entry.path;
-   const blob=await call('/git/blobs','POST',new GithubBlobBody(await candidate.files.get(source)));
+   const body=new GithubBlobBody(await candidate.files.get(source)),blob=await call('/git/blobs','POST',body);
    if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');if(journal.document)journal.uploadedCount++;else{journal.uploaded.push(entry.sha);uploaded.add(entry.sha);}await checkpoint();
+   uploads?.confirmed(1,body.size);
   }
+  uploads?.phase('remoteActivate');
   await buildGithubTree(call,journal,{reader,checkpoint,signal,onProgress:(done,total)=>progress({stage:messages.buildingTree,done,total})});
   await verifyRemoteGithubTree(call,journal.tree,expected,{signal});
   await report(messages.committing);
@@ -75,7 +78,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
    else await call('/git/refs','POST',{ref:`refs/heads/${c.branch}`,sha:journal.commit});
   }
  }
- const verified=await call(`/git/ref/heads/${c.branch}`);
+ uploads?.phase('remoteConfirm');const verified=await call(`/git/ref/heads/${c.branch}`);
  if(verified.object?.sha!==journal.commit)throw new AppError('PUBLISH_STALE');
  journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',...(journal.archive?{archive:journal.archive}:{})};
  Object.assign(journal.receipt,await reviewedManifest(candidate));

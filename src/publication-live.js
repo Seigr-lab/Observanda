@@ -51,7 +51,9 @@ export async function verifyLiveFiles(request,base,receipt,{removed=[],fileManif
  async function verifyRows(pending,first,files,removedCount){
    const total=files+removedCount;let scheduled=0,done=0,bytes=first.bytes;
    if(!Number.isSafeInteger(total))throw fail('inventory');
-   const worker=async()=>{while(true){combined.throwIfAborted();const item=await pending.next();if(item.done)return;if(++scheduled>total)throw fail('inventory');const f=item.value,result=await read(f.path,{bytes:f.bytes,sha:f.sha256,absent:f.absent});bytes+=result.bytes;await progress({done:++done,total});}};
+   const report=()=>progress(fileManifest?{done:done+1,total:total+1,bytes}:{done,total});
+   if(fileManifest)await report(); // publication.json has already matched its pinned bytes and hash.
+   const worker=async()=>{while(true){combined.throwIfAborted();const item=await pending.next();if(item.done)return;if(++scheduled>total)throw fail('inventory');const f=item.value,result=await read(f.path,{bytes:f.bytes,sha:f.sha256,absent:f.absent});bytes+=result.bytes;done++;await report();}};
    try{
     const workers=Array.from({length:Math.min(4,Math.max(1,total))},()=>worker().catch(error=>{controller.abort(error);throw error;}));
     const outcomes=await Promise.allSettled(workers),failure=outcomes.find(o=>o.status==='rejected');if(failure)throw failure.reason;

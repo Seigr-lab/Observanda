@@ -5,6 +5,7 @@ import {reviewedManifest} from './publication-live-budget.js';
 import {settleSSHTransfer} from './ssh-deployment.js';
 import {LocalExportManifest} from './local-export-manifest.js';
 import {contentHash,contentSize} from './file-content.js';
+import {operationStage,operationAdvance,operationTransfer,operationTransferred} from './operation-progress.js';
 
 const key=destination=>'.observanda/website-transfers/'+destination+'.json';
 const terminal=new Set(['completed','settled']);
@@ -25,6 +26,16 @@ function summary(value){
 }
 export async function remoteTransferStatus(target,saved){return summary(await read(target,saved));}
 
+// Upload cursors include confirmed items from earlier attempts. The byte
+// count covers only payload acknowledged during this connection's attempt.
+function uploadProgress(){
+ let phase;
+ return {start(files,totalFiles){phase='remoteUpload';operationTransfer({phase,files,totalFiles,bytes:0});},
+  phase(next){if(phase!==next){phase=next;operationTransfer({phase});}},
+  verified(files){operationTransfer({files});},
+  confirmed(files,bytes){operationTransferred({files,bytes});}};
+}
+
 export async function publishWebsiteTransfer(target,candidate,{configEtag,id,validateSSH,ownerId,signal,retryPages=false}){
  return target.workspace.withTransferLease(async()=>{
   const saved=await target.read();if(!saved.configured||saved.etag!==configEtag)throw new AppError('PUBLISH_STALE');
@@ -42,7 +53,7 @@ export async function publishWebsiteTransfer(target,candidate,{configEtag,id,val
    if(saved.config.kind==='ssh')fileInventory=(await validateSSH()).inventory;
    else{
     const builder=new LocalExportManifest(target.workspace).builder('files');
-    for(const [path,content] of candidate.files){signal?.throwIfAborted();await builder.append({path,bytes:contentSize(content),sha256:contentHash(content)});}
+    await operationStage('remoteIndexFiles',{unit:'files',total:candidate.files.size},async()=>{for(const [path,content] of candidate.files){signal?.throwIfAborted();await builder.append({path,bytes:contentSize(content),sha256:contentHash(content)});operationAdvance();}});
     fileInventory=await builder.finish();
    }
    const now=new Date().toISOString();
@@ -51,7 +62,7 @@ export async function publishWebsiteTransfer(target,candidate,{configEtag,id,val
   value.state='running';value.errorCode=null;await write(target,value);
   const save=async journal=>{value.journal=journal;value.updatedAt=new Date().toISOString();await write(target,value);};
   try{
-   const receipt=await target.deploy(candidate,configEtag,ownerId,{destinationReviewed:true},{plan:value.plan,journal:value.journal,save,signal,fileInventory:value.fileInventory});
+   const receipt=await target.deploy(candidate,configEtag,ownerId,{destinationReviewed:true},{plan:value.plan,journal:value.journal,save,signal,fileInventory:value.fileInventory,uploads:uploadProgress()});
    value.journal.receipt=receipt;value.state='completed';await save(value.journal);
    return {receipt,transfer:summary(value)};
   }catch(error){

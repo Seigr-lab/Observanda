@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
-import {writePublicFile,contentHash} from './file-content.js';
+import {writePublicFile,contentHash,contentSize} from './file-content.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationText} from './web/publication-messages.js';
 import {reviewedManifest,validLiveManifestBudget} from './publication-live-budget.js';
@@ -66,13 +66,14 @@ export async function settleSSHTransfer(host,c,owner,attempt,{signal,checksums}=
 // The operation's symlink is an atomic remote claim. It is retained on any
 // uncertain result and only its owner may resume or release it. A durable local
 // checkpoint precedes every possible current-link switch.
-export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal,indexedFiles=false}={}){
- await verifyPublicationCandidate(candidate);if(!/^[a-f0-9-]{36}$/.test(owner))throw new AppError('PUBLISH_CONFIG');
+export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal,indexedFiles=false,uploads}={}){
+ await verifyPublicationCandidate(candidate,{signal,remoteProgress:!!uploads});if(!/^[a-f0-9-]{36}$/.test(owner))throw new AppError('PUBLISH_CONFIG');
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);signal?.throwIfAborted();await save(structuredClone(journal));};
  const indexed=candidate.version===3||indexedFiles;
  const report=key=>progress({stage:publicationText(key),done:journal.uploadedCount??journal.uploaded?.length??0,total:candidate.files.size});
  if(!journal.nonce){Object.assign(journal,{nonce:randomUUID(),...(indexed?{uploadedCount:0}:{uploaded:[]}),total:candidate.files.size,releaseId:candidate.id,lockAttempted:true});await checkpoint();}
  if(journal.releaseId!==candidate.id||(indexed?(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>candidate.files.size):!Array.isArray(journal.uploaded))||!/^[a-f0-9-]{36}$/.test(journal.nonce))throw new AppError('JOB_DAMAGED');
+ uploads?.start(journal.uploadedCount??journal.uploaded.length,candidate.files.size);
  const root=c.directory,stage=root+'/.stage-'+journal.nonce,release=root+'/releases/'+candidate.id,lock=root+'/.publishing-lock',current=root+'/current',next=root+'/.current-'+journal.nonce,q=shellQuote;
  const call=async(script,input='',phase)=>{await guard(phase?{phase}:undefined);signal?.throwIfAborted();return host.command(c,script,input,{signal});};
  const owned=`test -L ${q(lock)}; test "$(readlink ${q(lock)})" = ${q(journal.nonce)}; `;
@@ -91,7 +92,9 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
   const observed=(await call(`set -eu; ${pathGuards}${checkRoot(root,false)}${checkOwner}safe_dir ${releases}; if test -e ${q(lock)} || test -L ${q(lock)}; then ${owned}:; fi; ${readCurrent}`,'','read')).trim();
   if(!pointer(journal.parent)||!pointer(observed)||observed!==journal.parent&&observed!=='releases/'+candidate.id)throw new AppError('PUBLISH_STALE');
   if(observed==='releases/'+candidate.id){
+   uploads?.phase('remoteConfirm');
    await call(`set -eu; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)}; ${verify(release,true)}`,checksums(),'read');
+   uploads?.verified(candidate.files.size);
    journal.commit=candidate.id;journal.receipt??=await receipt();if(!validLiveManifestBudget(journal.receipt))Object.assign(journal.receipt,await reviewedManifest(candidate));await checkpoint();
    await releaseClaim();journal.released=true;await checkpoint();await report('sshConfirmed');return journal.receipt;
   }
@@ -121,7 +124,7 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
    (umask 077; mkdir ${q(stage)}); safe_dir ${q(stage)}; printf new
   fi`)).trim();
  if(!['sealed','staged','new'].includes(exists))throw new AppError('PUBLISH_SSH');
- if(exists==='new'){if(indexed)journal.uploadedCount=0;else journal.uploaded=[];await checkpoint();}
+ if(exists==='new'){if(indexed)journal.uploadedCount=0;else journal.uploaded=[];await checkpoint();uploads?.start(0,candidate.files.size);}
  if(exists!=='sealed'){
   const upload=async batch=>{
    const temp=await mkdtemp(path.join(os.tmpdir(),'observanda-publish-')),directories=new Set(),written=[];
@@ -137,6 +140,7 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
     }
     await guard();signal?.throwIfAborted();await host.run('sftp',[...host.args(c),'-P',String(c.port),'-b','-',`${c.user}@${c.host}`],{cwd:temp,input:commands.join('\n')+'\n',signal});
     if(indexed)journal.uploadedCount+=batch.length;else journal.uploaded.push(...batch.map(([name])=>name));await checkpoint();
+    uploads?.confirmed(batch.length,batch.reduce((bytes,[,content])=>bytes+contentSize(content),0));
    }finally{
     // These bounded batch paths were created below this operation's mkdtemp.
     for(const name of written)await unlink(path.join(temp,name)).catch(()=>{});
@@ -150,13 +154,14 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
    batch.push(item);if(batch.length===25){await upload(batch);batch=[];}
   }
   if(batch.length)await upload(batch);
-  await report('sshVerify');await call(`set -eu; ${owned}${verify(stage)}`,checksums());
+  uploads?.phase('remoteConfirm');await report('sshVerify');await call(`set -eu; ${owned}${verify(stage)}`,checksums());
   await call(`set -eu; ${owned}test ! -e ${q(release)}; test ! -L ${q(release)}; mv -T ${q(stage)} ${q(release)};`);
  }
- await report('sshVerify');await call(`set -eu; ${owned}${verify(release)}`,checksums());
+ uploads?.phase('remoteConfirm');await report('sshVerify');await call(`set -eu; ${owned}${verify(release)}`,checksums());
  if(indexed)journal.uploadedCount=candidate.files.size;else journal.uploaded=[...candidate.files.keys()];journal.commit=candidate.id;await checkpoint();
+ uploads?.verified(candidate.files.size);
  if(!journal.receipt){
-  journal.pushAttempted=true;await checkpoint();await report('sshSwitch');
+  journal.pushAttempted=true;await checkpoint();uploads?.phase('remoteActivate');await report('sshSwitch');
   await call(`set -eu; ${owned}actual=$(${readCurrent}); test "$actual" = ${q(journal.parent)} || test "$actual" = ${q('releases/'+candidate.id)}; if test "$actual" != ${q('releases/'+candidate.id)}; then if test -L ${q(next)}; then test "$(readlink ${q(next)})" = ${q('releases/'+candidate.id)}; else test ! -e ${q(next)}; ln -sT ${q('releases/'+candidate.id)} ${q(next)}; fi; mv -Tf ${q(next)} ${q(current)}; fi; test "$(readlink ${q(current)})" = ${q('releases/'+candidate.id)};`);
   journal.receipt=await receipt();await checkpoint();
  }

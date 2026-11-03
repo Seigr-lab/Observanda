@@ -34,7 +34,7 @@ export class WebsiteFilesCandidate {
    if(/\.(?:html|css|json|svg|csv|js|vtt)$/i.test(name)){
     if(await hasPrivateTextStream(checked,this.blockedValues,{signal}))throw new AppError('PRIVACY',[{field:'website file'}]);
    }else for await(const _ of checked()){ /* Validate binary assets in one pass. */ }
-   await onFile?.();
+   await onFile?.(contentSize(content));
   }
   await this.store.checkRevision(this.siteId,this.revision);
  }

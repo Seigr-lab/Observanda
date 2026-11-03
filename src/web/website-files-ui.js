@@ -5,7 +5,7 @@ import {websiteFilesFolder} from './website-files-folder.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
-import {remoteAddress,remoteReceiptView} from './website-remote-receipt.js';
+import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,showPageChecks} from './website-files-dialogs.js';
@@ -52,6 +52,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let pendingHistoryFocus=null;
  const request=(operation,data,options={})=>api('/api/website-files/'+operation,data,{...options,owner:null,adopt:false});
  const siteId=()=>opened?.site.id;
+ const remoteRequest=(operation,data,options={})=>remoteProgressRequest(request,operation,data,{signal:controller?.signal,t,tr,...options});
  const draftPage=()=>opened?.site.pages.find(page=>page.path===opened.path)?.draft===true;
  let nextSite=null,preparationTimer=null,missingSite=false;
  let requestedSite=null,openPublishing=false;
@@ -70,7 +71,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    destination=target.destination;destinationDirty=false;mode='publish-review';render();
    const prior=destination.transfer;
    if(prior&&(['running','failed'].includes(prior.state)||prior.revision===opened.site.revision&&prior.configEtag===destination.etag))return;
-   plan=await request('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag},{signal:controller.signal});render();return;
+   plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag});render();return;
   }
   mode='publish-choose';render();
  }
@@ -615,14 +616,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(operation==='publish'||operation==='publish-retry'||operation==='publish-pages'){
     const retry=operation!=='publish';
     if(retry?(!transfer||transfer.revision!==data.expectedRevision||transfer.configEtag!==data.configEtag):(!plan||!document.querySelector('[data-website-files-confirm]')?.checked))throw Error(tr('confirm'));
-    const result=await request('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true,...(operation==='publish-pages'?{retryPages:true}:{})},{signal});
+    const result=await remoteRequest('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true,...(operation==='publish-pages'?{retryPages:true}:{})},{signal});
     if(!active())return;
     destination={...destination,receipt:result.receipt,transfer:result.transfer};notify(t('publication','livePending'));
    }else if(operation==='publish-settle'){
     if(!transfer)throw Error(tr('changed'));
-    await request('publish/settle',{...data,id:transfer.id},{signal});if(active())await refresh();
+    await remoteRequest('publish/settle',{...data,id:transfer.id},{signal});if(active())await refresh();
    }else{
-    await request('publish/verify',{...data,commit:destination.receipt.commit},{signal});if(active())await refresh();
+    await remoteRequest('publish/verify',{...data,commit:destination.receipt.commit},{signal});if(active())await refresh();
    }
   }catch(reason){
    if(active()&&!['ACCESS_LOCKED','AUTH','CONFLICT','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code)){
@@ -719,7 +720,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='destination')await showDestination();
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
-   else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await request('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
+   else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
    else if(['publish','publish-retry','publish-pages','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }

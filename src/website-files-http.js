@@ -8,7 +8,7 @@ import {rememberPublishTarget,websitePublishTarget} from './website-publish-targ
 import {savedAppearance} from './website-saved-appearance.js';
 import {publishWebsiteTransfer,remoteTransferStatus,settleWebsiteTransfer} from './website-remote-transfer.js';
 import {operationResponse} from './operation-response.js';
-import {operationStage,operationAdvance} from './operation-progress.js';
+import {operationStage,operationAdvance,operationTotal,operationWork} from './operation-progress.js';
 import {savedWebsiteSearches} from './website-saved-searches.js';
 import {LocalExport} from './local-export.js';
 import {LocalExportManifest} from './local-export-manifest.js';
@@ -208,41 +208,39 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   }
   if(operation==='publish/settle'){
    if(!revision(expectedRevision)||!researchId(options.id))throw new AppError('INVALID');
-   const target=await publisher(siteId);json(await withPublication(()=>store.withSite(siteId,expectedRevision,()=>settleWebsiteTransfer(target,{...options,signal}))));return true;
+   const target=await publisher(siteId);await observed(()=>operationStage('remoteSettleProgress',{},()=>withPublication(()=>store.withSite(siteId,expectedRevision,()=>settleWebsiteTransfer(target,{...options,signal})))));return true;
   }
   if(operation==='publish/verify'){
    if(!revision(expectedRevision)||typeof options.configEtag!=='string'||typeof options.commit!=='string')throw new AppError('INVALID');
    await store.checkRevision(siteId,expectedRevision);const target=await publisher(siteId);
-   json(await target.verifyLive({configEtag:options.configEtag,commit:options.commit,signal,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)}));return true;
+   await observed(()=>operationStage('remoteLiveCheck',{unit:'files'},()=>{
+    let completed=0,bytes=0,total;return target.verifyLive({configEtag:options.configEtag,commit:options.commit,signal,beforeCommit:()=>store.checkRevision(siteId,expectedRevision),
+     progress:value=>{operationAdvance(value.done-completed);completed=value.done;operationWork({bytes:value.bytes-bytes});bytes=value.bytes;if(total===undefined){total=value.total;operationTotal(total);}}});
+   }));return true;
   }
   if(operation==='plan'||operation==='publish'){
    if(!revision(expectedRevision))throw new AppError('INVALID');
-   const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues}),target=await publisher(siteId);
-   // GitHub review and all deployments verify the complete candidate at their
-   // trust boundary. Avoid a second pass across every website asset here.
-   await check();
-   if(operation==='plan'){
+   if(operation==='publish'&&(options.destinationReviewed!==true||!researchId(options.destinationReview)))throw new AppError('PUBLISH_STALE');
+   const target=await publisher(siteId);
+   await observed(()=>operationStage(operation==='plan'?'remoteReview':'remotePublish',{},async()=>{
+    const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});await check();
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
-    if(saved.config.kind==='ssh'){
-     await candidate.verify({signal});
+    if(operation==='plan'&&saved.config.kind==='ssh'){
+     await operationStage('remoteCheckFiles',{unit:'files',total:candidate.files.size},()=>candidate.verify({signal,onFile:bytes=>{operationAdvance();operationWork({bytes});}}));
      const list=new LocalExportManifest(target.workspace),files=list.builder('files');
-     for(const [name,content] of candidate.files){signal.throwIfAborted();await files.append({path:name,bytes:contentSize(content),sha256:contentHash(content)});}
+     await operationStage('remoteIndexFiles',{unit:'files',total:candidate.files.size},async()=>{for(const [name,content] of candidate.files){signal.throwIfAborted();await files.append({path:name,bytes:contentSize(content),sha256:contentHash(content)});operationAdvance();}});
      const inventory=await files.finish(),count=candidate.files.size;
      const review={id:randomUUID(),kind:'ssh',requiresReview:true,files:count,revision:expectedRevision,configEtag:options.configEtag};
      await store.withSite(siteId,expectedRevision,()=>target.workspace.writeMetadata(sshReviewKey,JSON.stringify({...review,inventory})));
      const rows=await list.page(inventory,{offset:0,limit:32});
-     json({...review,counts:{included:count},included:rows.map(row=>row.path),windows:{included:{offset:0,next:count>rows.length?rows.length:null}}});
+     return {...review,counts:{included:count},included:rows.map(row=>row.path),windows:{included:{offset:0,next:count>rows.length?rows.length:null}}};
     }
-    else json(await target.reviewDestination(candidate,options.configEtag,{signal,replaceExisting:options.replaceExisting===true,archiveBranch:options.archiveBranch??null,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)}));
-   }
-   else {
-    if(options.destinationReviewed!==true||!researchId(options.destinationReview))throw new AppError('PUBLISH_STALE');
-    const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
-    const result=await withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
+    if(operation==='plan')return target.reviewDestination(candidate,options.configEtag,{signal,replaceExisting:options.replaceExisting===true,archiveBranch:options.archiveBranch??null,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)});
+    return withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
      await rememberPublishTarget(target.workspace,'remote');
      return publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,retryPages:options.retryPages===true,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
-    }));json(result);
-   }
+    }));
+   }));
    return true;
   }
   throw new AppError('NOT_FOUND');

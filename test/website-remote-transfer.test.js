@@ -11,6 +11,7 @@ import {websiteFilesHttp} from '../src/website-files-http.js';
 import {defaultPublishing} from '../src/publishing.js';
 import {githubFixture} from './github-fixture.js';
 import {sshFixture} from './ssh-fixture.js';
+import {withOperationProgress} from '../src/operation-progress.js';
 
 async function fixture(t,options){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-file-transfer-'));await mkdir(path.join(root,'.observanda'));
@@ -54,7 +55,10 @@ test('saved HTML SSH publication settles a lost activation after an edit, withou
  const cfg=defaultPublishing();cfg.kind='ssh';cfg.ssh=remote.config;
  const config=await call('destination/save',{config:cfg,etag:'new'}),plan=await call('plan',{expectedRevision:page.site.revision,configEtag:config.etag}),intent=confirmation(plan,page.site,config);
  let lost=false;remote.setHook((command,phase)=>{if(!lost&&phase==='after'&&command.args.at(-1).includes('mv -Tf')){lost=true;throw Error('Lost SSH switch reply');}});
- await assert.rejects(call('publish',intent));assert.ok(lost);remote.setHook(null);
+ const observed=[];await assert.rejects(withOperationProgress(value=>observed.push(value),()=>call('publish',intent)));assert.ok(lost);remote.setHook(null);
+ const upload=observed.map(v=>v.transfer).filter(v=>v?.phase==='remoteUpload'&&v.files===plan.counts.included).at(-1);
+ const delivered=await Promise.all(plan.included.map(name=>readFile(path.join(remote.directory,'site','current',name))));
+ assert.equal(upload?.bytes,delivered.reduce((total,file)=>total+file.length,0));
  const failed=(await call('destination')).transfer;assert.equal(failed.uncertain,true);
  const changed=await call('save',{expectedRevision:page.site.revision,path:page.path,css:page.css,html:page.html.replace('</main>','<p>Revised field notes.</p></main>')});
  assert.notEqual(changed.site.revision,page.site.revision);

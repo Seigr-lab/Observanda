@@ -4,6 +4,7 @@ import {contentSize,contentStream} from './file-content.js';
 import {serialize} from './storage.js';
 import {AppError} from './errors.js';
 import {githubTreeEntries} from './github-trees.js';
+import {operationStage,operationAdvance} from './operation-progress.js';
 
 const same=(a,b)=>a?.sha===b?.sha&&a?.mode===b?.mode&&a?.type===b?.type;
 const ownershipPath=key=>`.observanda/publishing-ownership/${key}.json`;
@@ -97,11 +98,14 @@ async function buildIndexedGithubFilePlan(workspace,candidate,files,ownership,di
  const replaceable=name=>replaceExisting&&(!prefix||name.startsWith(prefix))&&!protectedGithubPath(name);
  let visited=0;const report=async stage=>{if(++visited%32===0)await onProgress({stage:stage+' ('+visited+')',done:0,total:0});};
  const mark=(kind,path)=>index.add(kind,path,{path});
- for await(const entry of files){signal?.throwIfAborted();githubTreeFiles({tree:[entry]});if(await index.get('remote',entry.path))throw new AppError('PUBLISH_REMOTE');await index.add('remote',entry.path,entry);await report('Reading repository files');}
+ const step=(stage,total,work)=>workspace.websiteContext?operationStage(stage,{total,unit:'files'},work):work();
+ await step('remoteReadRepository',undefined,async()=>{
+  for await(const entry of files){signal?.throwIfAborted();githubTreeFiles({tree:[entry]});if(await index.get('remote',entry.path))throw new AppError('PUBLISH_REMOTE');await index.add('remote',entry.path,entry);await report('Reading repository files');operationAdvance(1,'remoteReadRepository');}
+ });
  await index.flush();
  const owned=ownership?.version===2?githubPlanReader(workspace,ownership,{signal}):{get:async(kind,path)=>(ownership?.files??[]).find(row=>row.path===path)??null,async *values(){yield* ownership?.files??[];}};
  for await(const old of owned.values('entries'))if(!replaceable(old.path)&&!same(old,await index.get('remote',old.path)))await mark('conflicts',old.path);
- for await(const [name,content] of candidate.files){
+ await step('remoteCompareFiles',candidate.files.size,async()=>{for await(const [name,content] of candidate.files){
   signal?.throwIfAborted();await report('Checking exported website files');const entry={path:prefix+name,mode:'100644',type:'blob',sha:await githubBlobHash(content,{signal})};githubTreeFiles({tree:[entry]});
   await index.add('entries',entry.path,entry);if(!await index.get('uploads',entry.sha))await index.add('uploads',entry.sha,entry);
   const lower=entry.path.toLowerCase(),target=await index.get('targets',lower);
@@ -109,19 +113,21 @@ async function buildIndexedGithubFilePlan(workspace,candidate,files,ownership,di
   const parts=lower.split('/');parts.pop();while(parts.length){await mark('ancestors',parts.join('/'));parts.pop();}
   const current=await index.get('remote',entry.path);
   if(!current)await mark('added',entry.path);else if(same(entry,current))await mark('unchanged',entry.path);else if(!protectedGithubPath(entry.path)&&(replaceable(entry.path)||await owned.get('entries',entry.path)))await mark('replaced',entry.path);else await mark('conflicts',entry.path);
- }
+  operationAdvance(1,'remoteCompareFiles');
+ }});
  await index.flush();
- for await(const entry of index.values('remote')){
+ await step('remoteCompareRepository',index.count('remote'),async()=>{for await(const entry of index.values('remote')){
   await report('Comparing repository files');
   let removed=false;
   if(!await index.get('entries',entry.path)){if(!protectedGithubPath(entry.path)&&(replaceable(entry.path)||!replaceExisting&&await owned.get('entries',entry.path))){await mark('removed',entry.path);removed=true;}else{await mark('preserved',entry.path);await index.add('preservedEntries',entry.path,entry);}}
   // A replacement builds a new tree, so explicitly removed files, submodules
   // and case aliases cannot create implicit directory/file overwrites.
-  if(removed&&replaceExisting)continue;
+  if(removed&&replaceExisting){operationAdvance(1,'remoteCompareRepository');continue;}
   const lower=entry.path.toLowerCase(),target=await index.get('targets',lower);
   if(await index.get('ancestors',lower)||target&&target.path!==entry.path)await mark('conflicts',entry.path);
   const parts=lower.split('/');parts.pop();while(parts.length){if(await index.get('targets',parts.join('/')))await mark('conflicts',entry.path);parts.pop();}
- }
+  operationAdvance(1,'remoteCompareRepository');
+ }});
  const document=await index.finish();
  // Build-only indexes have no role in review, resume or retained ownership.
  for(const key of ['remote','targets','ancestors'])delete document.collections[key];

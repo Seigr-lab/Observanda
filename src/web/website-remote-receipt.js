@@ -1,3 +1,19 @@
+import {operationProgress} from './operation-progress-ui.js';
+import {progressUnit} from './progress-units.js';
+
+export async function remoteProgressRequest(request,operation,data,{signal,t,tr}){
+ const title=()=>tr(operation==='plan'?'remoteReview':operation==='publish/verify'?'remoteLiveCheck':operation==='publish/settle'?'remoteSettleProgress':'remotePublish');
+ const host=document.querySelector('.website-files-publish'),number=n=>n.toLocaleString(document.documentElement.lang||undefined);
+ const progress=operationProgress({host,stageText:tr,title,compact:true,disableControls:false,presentation:value=>{
+  const transfer=value.transfer,total=transfer?.totalFiles??value.total,completed=transfer?.files??value.completed??0;
+  const label=transfer?tr(transfer.phase):value.stage==='preparing'?title():tr(value.stage);
+  const count=transfer?tr('remoteConfirmedFiles',{done:number(completed),total:number(total)}):value.unit==='files'?t('operationProgress',total===undefined?'count':'countTotal',{count:number(completed),total:number(total??0),unit:progressUnit('files')}):'';
+  const bytes=transfer?.bytes??(['remoteCheckFiles','remoteLiveCheck'].includes(value.stage)?value.activity?.bytes:undefined);
+  return {count,work:transfer?label:'',detail:bytes===undefined?'':tr(transfer?'remoteAttemptBytes':'remoteCheckedBytes',{bytes:number(bytes)}),path:'',barLabel:label,total,completed};
+ }});
+ try{return await request(operation,data,{signal,onProgress:progress.update});}finally{progress.close();}
+}
+
 export function remoteAddress(config){
  if(config.kind==='github'){
   const {owner,repository,branch,directory}=config.github;

@@ -5,6 +5,7 @@ import {verifyPublication,verifyPublicationManifest} from './publication.js';
 import {admitRetainedPublicFile,assertPublicFiles} from './privacy.js';
 import {AppError} from './errors.js';
 import {WebsiteFilesCandidate} from './website-files-candidate.js';
+import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
 export class RetainedPublicationFiles{
  constructor(workspace,stored,output,{blockedValues=[]}={}){this.workspace=workspace;this.stored=stored;this.output=output;this.blockedValues=blockedValues;this.size=output.count('files');}
  static async open(workspace,stored,options={}){return new RetainedPublicationFiles(workspace,stored,await openPublicationOutput(workspace,stored,options),options);}
@@ -24,8 +25,11 @@ export class RetainedPublicationFiles{
   for await(const {file,content} of this.contents({signal})){signal?.throwIfAborted();await this.admit(file,content,{privacy});await onFile?.();}
  }
 }
-export async function verifyPublicationCandidate(candidate,{allowDesign=false,signal,privacy=true,onFile}={}){
- if(candidate instanceof WebsiteFilesCandidate)return candidate.verify({signal,onFile});
+export async function verifyPublicationCandidate(candidate,{allowDesign=false,signal,privacy=true,onFile,remoteProgress=false}={}){
+ if(candidate instanceof WebsiteFilesCandidate){
+  if(remoteProgress)return operationStage('remoteCheckFiles',{unit:'files',total:candidate.files.size},()=>candidate.verify({signal,onFile:bytes=>{operationAdvance();operationWork({bytes});return onFile?.(bytes);}}));
+  return candidate.verify({signal,onFile});
+ }
  if(!(candidate.files instanceof RetainedPublicationFiles))return privacy?verifyPublication(candidate,{allowDesign}):verifyPublicationManifest(candidate);
  if(candidate.partial||candidate.designOnly)throw new AppError('INVALID');
  if(candidate.id!==candidate.files.stored.id||candidate.reviewId!==candidate.files.stored.reviewId)throw new AppError('STALE');
