@@ -110,7 +110,11 @@ export class LiveResearch{
    for(const head of page.items){valid(head?.recordId===record.id,'MATERIAL_MISSING');const doc=await materials.read(head);items.push({id:head.id,kind:head.kind,title:head.title,revision:head.revision,...(head.kind==='artifact'?{name:doc.content.name,size:doc.content.size,sha256:doc.content.sha256,sourcePath:doc.content.sourcePath??null,sourcePurpose:doc.content.sourcePurpose??null,provenance:doc.content.provenance??''}:{})});}
    return {items,next:page.next};
   }));
-  if(operation==='fields'&&Array.isArray(data.changes)&&data.changes.some(change=>change?.field==='tags')){
+  const feedFields=operation==='fields'&&Array.isArray(data.changes)?data.changes.map(change=>change?.field):
+   operation==='steps'&&Array.isArray(data.steps)?[data.field==='body'?'body':'sections']:
+   operation==='attempt-append'||operation==='preparation-save'||operation==='preparation-remove'?['attempt']:
+   operation==='link-write'?['relations']:null;
+  if(feedFields?.length){
    // Check current record membership before fencing any copied content. The
    // actual write independently rechecks the grant in its own transaction.
    await this.workspace.catalogue(async store=>{
@@ -119,7 +123,8 @@ export class LiveResearch{
     valid(row&&access.notebookIds.includes(row.notebookId),'COLLABORATION_DENIED');
    });
    const {PublicationConversion}=await import('../publication-conversion.js');
-   return new PublicationConversion(this.workspace).mutate(this.workspace,{route:'/api/research/records/tags',data:{workspaceId:scope.workspaceId,recordId:data.recordId}},execute);
+   const route=feedFields.length===1&&feedFields[0]==='tags'?'/api/research/records/tags':'/internal/publication/live-fields';
+   return new PublicationConversion(this.workspace).mutate(this.workspace,{route,data:{workspaceId:scope.workspaceId,recordId:data.recordId,fields:feedFields,sectionId:operation==='steps'&&data.field?.startsWith('section:')?data.field.slice(8):null}},execute);
   }
   return execute();
  }

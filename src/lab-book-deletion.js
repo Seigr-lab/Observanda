@@ -52,7 +52,7 @@ export class LabBookDeletions extends OwnedStorageDeletions{
   await provider.stopLabBookForDeletion(root,this.labBookId,vault,id);const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
   try{await assertLabBookDatabaseStopped(root,this.labBookId,vault);}finally{await lease.close();}
  }
- async run(vault,{id,expectedName,check=async()=>{},checkpoint=async()=>{},onProgress}={}){
+ async run(vault,{id,expectedName,check=async()=>{},checkpoint=async()=>{},onProgress,beforeFreeze,onFrozen=async()=>{}}={}){
   if(!researchId(id)||typeof expectedName!=='string')throw new AppError('INVALID');
   const directory=await privateDirectory(this.project.root,'.observanda/lab-book-creation');
   return trackProjectTransfer(this.file(id),()=>withWriterLease(path.join(directory,'book-'+this.labBookId+'.lock'),async()=>{
@@ -61,7 +61,7 @@ export class LabBookDeletions extends OwnedStorageDeletions{
     if(value.directory!==expectedName)throw new AppError('CONFLICT');
     if(value.phase==='complete')return {id,labBookId:this.labBookId,complete:true};
     if(value.phase==='prepared'&&!await workspaceDeletion(value.source)){await this.discard(id);value=null;}
-    else return {...await this.finish(id,{vault,checkpoint,onProgress}),labBookId:this.labBookId};
+    else{await onFrozen(value);return {...await this.finish(id,{vault,checkpoint,onProgress}),labBookId:this.labBookId};}
    }else if(value&&value.phase!=='complete')throw new AppError('STORAGE_DELETE_BUSY');
    const entry=await this.registry.locate(this.labBookId);if(entry.directory!==expectedName)throw new AppError('CONFLICT');
    if(await new LabBookRenames(this.project).pending(this.labBookId))throw new AppError('STORAGE_RENAMING');
@@ -69,7 +69,7 @@ export class LabBookDeletions extends OwnedStorageDeletions{
    const storage=new LabBookStorage(entry.root,this.labBookId,vault);
    await this.ready(storage,await this.binding(entry.root));
    const review={...await this.review(storage,{protectedPaths:[this.project.root]}),projectId:this.project.projectId,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory:entry.directory};
-   await check();return {...await this.begin(storage,review,{id,checkpoint,onProgress}),labBookId:this.labBookId};
+   await check();return {...await this.begin(storage,review,{id,checkpoint,onProgress,beforeFreeze,onFrozen}),labBookId:this.labBookId};
   }));
  }
 }

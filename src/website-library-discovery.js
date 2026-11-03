@@ -6,9 +6,11 @@ import {SnapshotIndex} from './snapshot-index.js';
 import {researchId} from './web/research-reference.js';
 import {sourceNotebookAllowed} from './web/source-publication-permissions.js';
 import {runWebsiteUpgrade,upgradeControl} from './website-upgrade-lease.js';
+import {indexHistoricalSources,reconcileHistoricalMembership} from './website-feed-discovery.js';
 import {setTimeout as delay} from 'node:timers/promises';
 
 const windowSize=40;
+const discoveryVersion=2;
 const locked=error=>['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code);
 function* flatMembers(records,after){for(let i=(after??-1)+1;i<records.length;i++)yield records[i];}
 
@@ -39,29 +41,31 @@ export async function seedEligibleWebsiteOwner(store,reader,namespace,{signal}={
  if(!researchId(namespace))throw new AppError('INVALID');
  const name='eligible-entries-'+namespace,control=upgradeControl(name);
  const read=()=>store.scope(()=>store.control(control,{missing:true}),{signal});
- const receipt=await read();if(receipt?.version===1&&receipt.complete===true)return;
+ const receipt=await read();if(receipt?.version===discoveryVersion&&receipt.complete===true)return;
  return runWebsiteUpgrade(store,name,async()=>{
   const converter=new PublicationConversion(store.workspace,{store});let saved=await read();
-  if(saved?.version===1&&saved.complete===true)return;
+  if(saved?.version===discoveryVersion&&saved.complete===true)return;
+  await indexHistoricalSources(store,signal);
   let retries=0;
   for(;;){
    signal?.throwIfAborted();
    const {value:page}=await reader.use(namespace,undefined,async(catalogue,snapshot,{snapshotId})=>{
     if(snapshot.metadata.id!==namespace)throw new AppError('DATABASE_LOCATION');
-    const after=saved?.version===1&&saved.snapshotId===snapshotId?saved.after:null;
+    const after=saved?.version===discoveryVersion&&saved.snapshotId===snapshotId?saved.after:null;
     return {...await grantWindow(catalogue,snapshot,after,signal),snapshotId};
    });
    try{
     if(page.grants.length)await converter.seedWebsites(page.grants,consume=>reader.use(namespace,undefined,(catalogue,snapshot,context)=>{
      if(context.snapshotId!==page.snapshotId)throw new AppError('RECORD_CHANGED');
      return consume(catalogue,snapshot,context);
-    }),{signal});
+    }),{signal,refreshHistoricalLive:true});
+    if(page.after===null)await reconcileHistoricalMembership(store,reader,namespace,page.snapshotId,converter,signal);
    }catch(error){
     if(!['RECORD_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(error.code)||++retries>4)throw error;
     await delay(100*retries,undefined,{signal});continue;
    }
    retries=0;
-   saved={version:1,snapshotId:page.snapshotId,after:page.after,complete:page.after===null};
+   saved={version:discoveryVersion,snapshotId:page.snapshotId,after:page.after,complete:page.after===null};
    await store.scope(()=>store.writeControl(control,saved,{signal}),{write:true,signal});
    if(saved.complete)return;
   }

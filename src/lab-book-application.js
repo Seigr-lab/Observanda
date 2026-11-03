@@ -66,7 +66,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
   if(!data||Object.keys(data).sort().join()!=='expectedName,id')throw new AppError('INVALID');
   if(selected.operation.endsWith('/resume')&&receipt?.id!==data.id)throw new AppError('NOT_FOUND');
   const root=receipt?.id===data.id?await deletions.authenticationRoot(receipt):(await registry.locate(selected.labBookId)).root;
-  let key;try{if(root)key=await keyFor(root);await check();await stopJobs();return await deletions.run(key,{...data,check:bookAccess?()=>bookAccess.check():check,onProgress:options.onProgress});}finally{await clearVault(key);}
+  let key;try{if(root)key=await keyFor(root);await check();await stopJobs();return await deletions.run(key,{...data,...options.publicationConversion?.deletionHooks(),check:bookAccess?()=>bookAccess.check():check,onProgress:options.onProgress});}finally{await clearVault(key);}
  }
  if(!['research','rename','settings','access','transfer','reference'].includes(selected.bookOperation))throw new AppError('NOT_FOUND');
  const placement=selected.operation==='lab-books/storage/details'?await options.placementStatus?.():null;

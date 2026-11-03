@@ -84,7 +84,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
   const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
   try{await assertProjectDatabaseStopped(root,this.projectId,vault);}finally{await lease.close();}
  }
- async run(vault,{id,expectedRoot,checkpoint=async()=>{},onProgress,check=async()=>{},onFrozen=async()=>{},withProject,withBook,placeChild}={}){
+ async run(vault,{id,expectedRoot,checkpoint=async()=>{},onProgress,check=async()=>{},beforeFreeze,onFrozen=async()=>{},withProject,withBook,placeChild}={}){
   if(!researchId(id)||expectedRoot!==undefined&&typeof expectedRoot!=='string')throw new AppError('INVALID');
   return trackProjectTransfer(this.file(this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'delete',()=>projectDeletionMembership(id,async()=>{
    await check();let value=await this.receipt();
@@ -116,7 +116,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
      await this.preservation.run({withProject,withBook,check,checkpoint,placeChild});
     }
     this.preservation=null;const plan=await review();
-    await check();return {...await this.begin(storage,plan,{id,checkpoint,onProgress,onFrozen}),projectId:this.projectId};
+    await check();return {...await this.begin(storage,plan,{id,checkpoint,onProgress,beforeFreeze,onFrozen}),projectId:this.projectId};
    }finally{this.bookOwners.close();this.bookOwners=null;this.preservation=null;}
   })));
  }

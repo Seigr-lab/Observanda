@@ -183,7 +183,9 @@ export class ProjectApplication{
     }
     await this.jobs.invalidateProject(selected.projectId);
     owners=new ProjectLocationAccess(this,client,{check:root?current:check});
-    return await deletions.run(vault,{id:data.id,...(!resume?{expectedRoot:data.expectedRoot}:{}),check:root?current:check,onProgress,withProject:(id,use)=>owners.withProject(id,use),placeChild:(child,placement)=>this.renames.reparent(client,child.projectId,{id:child.id,...placement},{check:root?current:check}),withBook:(project,id,use)=>owners.withProject(project.projectId,parent=>owners.withBook(parent,id,use)),onFrozen:async value=>{
+    const feeds=this.publicationConversion?.deletionHooks();
+    return await deletions.run(vault,{id:data.id,...(!resume?{expectedRoot:data.expectedRoot}:{}),check:root?current:check,onProgress,withProject:(id,use)=>owners.withProject(id,use),placeChild:(child,placement)=>this.renames.reparent(client,child.projectId,{id:child.id,...placement},{check:root?current:check}),withBook:(project,id,use)=>owners.withProject(project.projectId,parent=>owners.withBook(parent,id,use)),beforeFreeze:feeds?.beforeFreeze,onFrozen:async value=>{
+     await feeds?.onFrozen(value);
      this.calendars.invalidateProject(selected.projectId);
      for(const saved of this.credentials)if(saved.root===value.source||saved.root?.startsWith(value.source+path.sep)){await clearVault(saved.vault);saved.expires=0;this.credentials.delete(saved);}
     }});

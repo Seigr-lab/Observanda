@@ -87,7 +87,7 @@ export class OwnedStorageDeletions{
   return {...inventory,source,title:snapshot.metadata.title,etag:snapshot.etag,descriptor,binding,
    descriptorHash:await fingerprint(path.join(source,descriptor)),accessHash:await fingerprint(path.join(source,'.observanda/access.json'))};
  }
- async begin(workspace,review,{id=randomUUID(),onFrozen=async()=>{},checkpoint=async()=>{},onProgress}={}){
+ async begin(workspace,review,{id=randomUUID(),beforeFreeze=async()=>{},onFrozen=async()=>{},checkpoint=async()=>{},onProgress}={}){
   if(!uuid(id))throw new AppError('INVALID');if(!this.validBinding(review?.binding))throw new AppError('DATABASE_LOCATION');if(this.busy)throw new AppError('LOCKED');this.busy=true;
   let lease;try{lease=await this.lease(review.source);return await withOperationProgress(onProgress,async()=>{
    let receipt;
@@ -98,6 +98,7 @@ export class OwnedStorageDeletions{
     await operationStage('delete-check',{unit:'files'},async()=>{for await(const item of files(review.source,'',{skipDatabase:true})){operationItem(item.name);operationAdvance();}});
     receipt={...review,title:workspace.vault?.key?'':review.title,version:1,id,phase:'prepared',databaseRemoved:false};
     await this.prepareReceipt(workspace,receipt);await this.save(receipt);await checkpoint('prepared',receipt);
+    await beforeFreeze(receipt);
     await atomicWrite(path.join(review.source,DELETE_MARKER),serialize({version:1,id:receipt.id,source:receipt.source}));
     receipt.phase='frozen';await this.save(receipt);
    });
