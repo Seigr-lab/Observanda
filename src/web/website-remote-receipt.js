@@ -24,6 +24,7 @@ export function remoteReceiptView(destination,revision,{esc,t,tr,button}){
    button('remoteSettle','publish-settle'):'')+
   (transfer?.state==='settled'?'<p role="status">'+esc(tr('remoteSettled'))+'</p>':'')+
   (receipt?'<p>'+esc(status)+'</p><dl>'+line(tr('remoteRelease'),receipt.releaseId)+line(tr('remoteCommit'),receipt.commit)+line(tr('remoteRecorded'),date(receipt.at))+'</dl>'+
+   (same&&transfer?.state==='completed'&&receipt.status==='uploaded-pages-setup-required'?button('remoteRetryPages','publish-pages'):'')+
    (live?'<p>'+esc(live.failed?tr('remoteLiveFailed'):t('publication','liveVerified',{count:live.files,removed:live.removed??0}))+'</p>':'')+
    (config.publicUrl||config.kind==='github'&&config.github.pages!==false?button('remoteVerify','publish-verify'):''):'')+'</section>';
 }

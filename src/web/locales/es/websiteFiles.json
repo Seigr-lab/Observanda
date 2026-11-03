@@ -1,4 +1,5 @@
 {
+  "remoteRetryPages": "Volver a intentar la configuración de GitHub Pages",
   "remoteUnknown": "El destino aún no ha confirmado el resultado final. Reanuda la transferencia aprobada o comprueba su resultado antes de iniciar otra.",
   "remoteIncomplete": "La transferencia no terminó. Puedes volver a intentarlo con la misma versión revisada.",
   "remoteProgress": "Se han subido {done} de {total} elementos.",

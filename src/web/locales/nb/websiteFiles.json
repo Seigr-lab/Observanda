@@ -1,4 +1,5 @@
 {
+  "remoteRetryPages": "Prøv å konfigurere GitHub Pages på nytt",
   "remoteUnknown": "Målet har ikke bekreftet sluttresultatet. Fortsett den godkjente overføringen eller sjekk resultatet før du starter en ny.",
   "remoteIncomplete": "Overføringen ble ikke fullført. Du kan prøve den samme gjennomgåtte versjonen på nytt.",
   "remoteProgress": "Lastet opp {done} av {total} elementer.",

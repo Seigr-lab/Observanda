@@ -25,7 +25,7 @@ function summary(value){
 }
 export async function remoteTransferStatus(target,saved){return summary(await read(target,saved));}
 
-export async function publishWebsiteTransfer(target,candidate,{configEtag,id,validateSSH,ownerId,signal}){
+export async function publishWebsiteTransfer(target,candidate,{configEtag,id,validateSSH,ownerId,signal,retryPages=false}){
  return target.workspace.withTransferLease(async()=>{
   const saved=await target.read();if(!saved.configured||saved.etag!==configEtag)throw new AppError('PUBLISH_STALE');
   let value=await read(target,saved);
@@ -33,8 +33,9 @@ export async function publishWebsiteTransfer(target,candidate,{configEtag,id,val
    if(value.revision!==candidate.revision||value.releaseId!==candidate.id||value.configEtag!==configEtag||value.state==='settled')throw new AppError('PUBLISH_STALE');
    // Verify the current permission and revision even if delivery was already acknowledged.
    await target.authorizeCandidate(candidate);
-   if(value.state==='completed')return {receipt:value.journal.receipt,transfer:summary(value)};
+   if(value.state==='completed'&&!(retryPages&&value.kind==='github'&&value.journal.receipt?.status==='uploaded-pages-setup-required'))return {receipt:value.journal.receipt,transfer:summary(value)};
   }else{
+   if(retryPages)throw new AppError('PUBLISH_STALE');
    if(value&&needsSettlement(value))throw new AppError('PUBLISH_PENDING');
    const plan=saved.config.kind==='github'?await target.readDestinationPlan(candidate,configEtag,{destinationReview:id,destinationReviewed:true}):null;
    let fileInventory;

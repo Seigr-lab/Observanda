@@ -84,3 +84,19 @@ test('closing an interrupted GitHub archive creation checks the reviewed reposit
  remote.branches.set(archive,parent);const finished=await call('publish/settle',request);
  assert.equal(finished.state,'settled');assert.equal(finished.receipt,null);assert.equal(remote.head,parent);
 });
+
+test('retrying a failed Pages setup reuses the confirmed branch commit and reviewed files',async t=>{
+ const remote=githubFixture({branch:'main',initialFiles:{'README.md':'Keep'}});
+ const {page,call}=await fixture(t,{request:remote.request,connection:{summary:()=>({connected:true}),token:()=> 'synthetic-token'}});
+ const cfg=defaultPublishing();Object.assign(cfg.github,{owner:'example',repository:'notebook',branch:'main',directory:'atlas',pages:true});
+ const config=await call('destination/save',{config:cfg,etag:'new'});
+ const plan=await call('plan',{expectedRevision:page.site.revision,configEtag:config.etag}),intent=confirmation(plan,page.site,config);
+ remote.setHook((row,phase)=>{if(phase==='before'&&row.route.endsWith('/pages')&&row.method==='POST')throw Error('Pages configuration unavailable');});
+ const first=await call('publish',intent);assert.equal(first.receipt.status,'uploaded-pages-setup-required');
+ const head=remote.head,writes=remote.calls.filter(c=>c.method==='POST'&&c.route.endsWith('/git/blobs')).length;
+ remote.setHook(null);const retried=await call('publish',{...intent,retryPages:true});
+ assert.equal(retried.receipt.status,'uploaded-awaiting-pages');assert.equal(retried.receipt.commit,head);
+ assert.equal(remote.calls.filter(c=>c.method==='POST'&&c.route.endsWith('/git/blobs')).length,writes);
+ assert.equal(remote.calls.filter(c=>c.method==='PATCH'&&c.route.includes('/git/refs/heads/')).length,1);
+ assert.deepEqual(remote.pages.source,{branch:'main',path:'/'});
+});

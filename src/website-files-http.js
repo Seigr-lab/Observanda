@@ -230,7 +230,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
     const result=await withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
      await rememberPublishTarget(target.workspace,'remote');
-     return publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
+     return publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,retryPages:options.retryPages===true,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
     }));json(result);
    }
    return true;

@@ -574,10 +574,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const active=()=>epoch===generation&&id===opened?.site.id&&!signal?.aborted&&!stale;
   const refresh=async()=>{const latest=await request('destination',{siteId:id},{signal});if(active())destination=latest;};
   try{
-   if(operation==='publish'||operation==='publish-retry'){
-    const retry=operation==='publish-retry';
+   if(operation==='publish'||operation==='publish-retry'||operation==='publish-pages'){
+    const retry=operation!=='publish';
     if(retry?(!transfer||transfer.revision!==data.expectedRevision||transfer.configEtag!==data.configEtag):(!plan||!document.querySelector('[data-website-files-confirm]')?.checked))throw Error(tr('confirm'));
-    const result=await request('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true},{signal});
+    const result=await request('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true,...(operation==='publish-pages'?{retryPages:true}:{})},{signal});
     if(!active())return;
     destination={...destination,receipt:result.receipt,transfer:result.transfer};notify(t('publication','livePending'));
    }else if(operation==='publish-settle'){
@@ -667,7 +667,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
    else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await request('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
-   else if(['publish','publish-retry','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
+   else if(['publish','publish-retry','publish-pages','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){

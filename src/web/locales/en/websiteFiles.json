@@ -1,4 +1,5 @@
 {
+  "remoteRetryPages": "Retry GitHub Pages setup",
   "remoteUnknown": "The destination has not confirmed the final result. Resume the approved transfer or check its outcome before starting another.",
   "remoteIncomplete": "The transfer did not finish. You can retry the same reviewed version.",
   "remoteProgress": "Uploaded {done} of {total} items.",
