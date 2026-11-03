@@ -1,5 +1,6 @@
 import {selectionMarkStates,setSelectionMark} from './website-files-rich-marks.js';
 import {websiteTextLinks} from './website-files-text-link.js';
+import {scientificClipboard,insertClipboardMarkup} from './website-files-clipboard.js';
 
 const blockSelector='p,h1,h2,h3,h4,h5,h6,li,blockquote,div,figcaption,td,th,summary,pre';
 const owned='[data-observanda-part],[data-observanda-source],[data-observanda-link]';
@@ -113,8 +114,9 @@ export function websiteRichText({document,host,t,listen,make,beforeChange,change
   listen(document.body,'paste',event=>{
     event.preventDefault();
     const selection=win.getSelection();if(!selection.rangeCount||!safeRange(selection.getRangeAt(0)))return;
+    const markup=scientificClipboard(document,event.clipboardData?.getData('text/html'));
     const text=event.clipboardData?.getData('text/plain');
-    if(text){beforeChange();document.execCommand('insertText',false,text);change();}
+    if(markup||text){beforeChange();if(markup)insertClipboardMarkup(document,markup,selection);else document.execCommand('insertText',false,text);change();}
   });
   sync();
   return {toolbar};

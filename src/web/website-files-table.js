@@ -1,6 +1,7 @@
 // These controls edit the authored HTML table in the canvas. Converted
 // records and linked content remain under their own publication permissions.
-const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-feed]';
+import {readDelimitedTable,MAX_TABLE_TEXT} from './tabular-data.js';
+const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-feed],[data-website-instance]';
 const tag=node=>node?.localName;
 function grid(table){
  const rows=Array.from(table.rows),width=rows[0]?.cells.length;
@@ -108,5 +109,45 @@ export function websiteTableTools({document,inspector,translate:t,beforeChange,c
   table=next;cell=element?.closest('td,th');if(cell?.closest('table')!==table)cell=null;
   cell??=pick(0,0);refresh();
  }
+ function pasteGrid(event){
+  const text=event.clipboardData?.getData('text/plain');if(!text?.includes('\t'))return;
+  const selection=document.getSelection();if(!selection?.rangeCount)return;
+  const range=selection.getRangeAt(0),element=node=>node.nodeType===1?node:node.parentElement;
+  const first=element(range.startContainer).closest('td,th');if(!first||!first.isContentEditable)return;
+  event.preventDefault();event.stopPropagation();select(first);
+  if(!editable())return;
+  const shape=grid(table);
+  if(!shape||element(range.endContainer).closest('td,th')!==first){info.textContent=t('tablePasteStart');return;}
+  let rows;
+  if(text.length>MAX_TABLE_TEXT){info.textContent=t('tablePasteSize');return;}
+  try{rows=readDelimitedTable(text,{delimiter:'\t',header:false,minColumns:1,preserveEmptyRows:true}).rows;}
+  catch{info.textContent=t('tablePasteMalformed');return;}
+  const group=first.parentElement.parentElement,start=first.parentElement.sectionRowIndex,column=first.cellIndex;
+  const width=Math.max(shape.width,column+rows[0].cells.length),end=start+rows.length;
+  if(end>group.rows.length&&tag(group)!=='tbody'){info.textContent=t('tablePasteConflict');return;}
+  // Check the whole target before mutating. Leave rich labels, totals and
+  // other row groups intact, and never coerce scientific values to numbers.
+  for(const existing of [...group.rows].slice(start,end)){
+   const targets=[...existing.cells].slice(column,column+rows[0].cells.length);
+   if(targets.some(node=>[...node.children].some(child=>tag(child)!=='br'))){info.textContent=t('tablePasteConflict');return;}
+  }
+  if(width*(shape.rows.length+Math.max(0,end-group.rows.length))*9>MAX_TABLE_TEXT){info.textContent=t('tablePasteSize');return;}
+  change(()=>{
+   if(width>shape.width)for(const existing of shape.rows){
+    const ref=existing.cells[shape.width-1],newCells=document.createDocumentFragment();
+    for(let c=shape.width;c<width;c++)newCells.append(blankCell(document,ref.scope==='row'?null:ref));
+    existing.append(newCells);
+   }
+   if(end>group.rows.length){
+    const model=[...first.parentElement.cells],newRows=document.createDocumentFragment();
+    for(let r=group.rows.length;r<end;r++){const row=document.createElement('tr');for(const ref of model)row.append(blankCell(document,ref));newRows.append(row);}
+    group.append(newRows);
+   }
+   const targetRows=[...group.rows].slice(start,end);
+   for(const [r,row] of rows.entries())for(const [c,value] of row.cells.entries()){cell=targetRows[r].cells[column+c];cell.textContent=value;}
+   const caret=document.createRange();caret.selectNodeContents(cell);caret.collapse(false);selection.removeAllRanges();selection.addRange(caret);
+  });
+ }
+ document.addEventListener('paste',pasteGrid,{capture:true,signal});
  return {select,destroy(){controller.abort();tools.remove();table=cell=null;}};
 }

@@ -18,7 +18,8 @@ async function fixture(page){
   if(url.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'none'"},body:'<title>Canvas</title>'});
   if(url.pathname==='/published/index.html')return route.fulfill({contentType:'text/html',body:published.html});
   if(url.pathname==='/published/style.css')return route.fulfill({contentType:'text/css',body:published.css});
-  if(/^\/(website-html-document|website-files-[a-z-]+)\.js$/.test(url.pathname)){
+  if(['/locales/en/figureDiagnostics.json','/locales/languages.json'].includes(url.pathname))return route.fulfill({contentType:'application/json',body:await readFile(new URL('../../src/web'+url.pathname,import.meta.url))});
+  if(/^\/(website-html-document|website-links|website-files-[a-z-]+|tabular-data|model-messages|i18n\/runtime)\.js$/.test(url.pathname)){
     const source=await readFile(new URL('../../src/web'+url.pathname,import.meta.url));
     return route.fulfill({contentType:'text/javascript',body:source});
   }

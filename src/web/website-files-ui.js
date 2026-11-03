@@ -1,6 +1,6 @@
 import './i18n/catalogues/websiteFiles.js';
 import {t} from './i18n/index.js';
-import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,websiteCanvasValue,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
+import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,websiteCanvasValue,canvasSelection,restoreCanvasSelection,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
 import {websiteFilesFolder} from './website-files-folder.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
@@ -46,6 +46,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let locatedPlacement=null;
  let pendingCanvas=null,canvasTimer=null;
  let undo=[],redo=[],lastCheckpoint=0,historyBytes=0;
+ let pendingHistoryFocus=null;
  const request=(operation,data,options={})=>api('/api/website-files/'+operation,data,{...options,owner:null,adopt:false});
  const siteId=()=>opened?.site.id;
  const draftPage=()=>opened?.site.pages.find(page=>page.path===opened.path)?.draft===true;
@@ -303,7 +304,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   conflictingPage=null;awaitingAccess=false;
   compactViewport.removeEventListener('change',resizeTools);clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
  }
- function checkpoint(force=false){const now=Date.now();if(force||now-lastCheckpoint>350||!undo.length){flushCanvas();undo.push({html,css});historyBytes+=html.length+css.length;while(undo.length>50||historyBytes>8*1024*1024&&undo.length>1){const oldest=undo.shift();historyBytes-=oldest.html.length+oldest.css.length;}lastCheckpoint=now;}redo=[];}
+ function historyEntry(){return {html,css,selection:canvasSelection(document.getElementById('website-files-canvas')?.contentDocument)};}
+ function checkpoint(force=false){const now=Date.now();if(force||now-lastCheckpoint>350||!undo.length){flushCanvas();undo.push(historyEntry());historyBytes+=html.length+css.length;while(undo.length>50||historyBytes>8*1024*1024&&undo.length>1){const oldest=undo.shift();historyBytes-=oldest.html.length+oldest.css.length;}lastCheckpoint=now;}redo=[];}
  function documentChange(operation){flushCanvas();checkpoint(true);const document=websiteHTML(html);operation(document);html=serializeWebsiteHTML(document);changed();render();}
  function ensureStyle(doc){const url=baseURL(opened.site.cssPath);if(![...doc.querySelectorAll('link[rel="stylesheet"][href]')].some(link=>new URL(link.getAttribute('href'),baseURL()).href===url)){const link=doc.createElement('link');link.rel='stylesheet';link.href='../'.repeat(opened.path.split('/').length-1)+opened.site.cssPath;doc.head.append(link);}}
  function blockDialog(edit,style=''){
@@ -508,7 +510,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     }else scrollToAnchor(doc,entry.hash);
    },()=>notify(tr('failed'),true));
   }
-  const frame=document.getElementById('website-files-canvas');if(frame){frame.onload=()=>{
+  const frame=document.getElementById('website-files-canvas'),historyFocus=pendingHistoryFocus;pendingHistoryFocus=null;if(frame){frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!frame.isConnected||!opened)return;
    loadWebsiteCanvas(doc,html,css,baseURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
@@ -537,9 +539,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    doc.addEventListener('keydown',event=>{
     if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
     const op=({s:'save',y:'redo',z:event.shiftKey?'redo':'undo'})[event.key.toLowerCase()];if(!op)return;
-    event.preventDefault();void action({dataset:{action:'website-files-'+op}}).catch(e=>notify(e.message,true));
+    event.preventDefault();void action({dataset:{action:'website-files-'+op},fromCanvas:true}).catch(e=>notify(e.message,true));
    });
    scrollToAnchor(doc,anchor);anchor='';
+   if(historyFocus&&(document.activeElement===document.body||document.activeElement===frame))restoreCanvasSelection(doc,historyFocus.selection);
   };frame.src=baseURL()+'?canvas=1';}
   const list=document.querySelector('[data-website-files-structure]');if(list)bindStructure(list);
   paintStructure();paintStatus();if(opened&&!timer)timer=setInterval(()=>void poll(),5000);
@@ -600,7 +603,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(mode==='menu'&&menu.dirty()&&!operation.startsWith('menu-')&&operation!=='discard')await menu.save();
 
    if(operation==='save'){if(figures.dirty())await figures.action('apply');if(menu.dirty())await menu.save();if(pagesPanel.dirty())await pagesPanel.save();await save();render();}
-   else if(operation==='undo'||operation==='redo'){const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;if(from.length){to.push({html,css});({html,css}=from.pop());historyBytes=undo.reduce((n,item)=>n+item.html.length+item.css.length,0);lastCheckpoint=0;changed();render();}}
+   else if(operation==='undo'||operation==='redo'){
+    const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;
+    if(from.length){to.push(historyEntry());const prior=from.pop();({html,css}=prior);
+     if(element.fromCanvas)pendingHistoryFocus={selection:prior.selection};
+     historyBytes=undo.reduce((n,item)=>n+item.html.length+item.css.length,0);lastCheckpoint=0;changed();render();}
+   }
    else if(operation==='continue-draft'&&conflictingPage){
     const reviewed=conflictingPage,value=await request('open',{siteId:siteId(),path:opened.path});
     if(value.site.revision!==reviewed.site.revision||value.sourceStamp!==reviewed.sourceStamp){updateFromSaved(value);return;}

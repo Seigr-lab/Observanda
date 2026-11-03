@@ -50,6 +50,37 @@ export function editWebsiteCanvas(document){
   }
  }
 }
+
+// History snapshots contain saved HTML. Address selection endpoints in that
+// same tree, excluding transient handles inserted by the editor.
+const authoredChildren=node=>Array.from(node.childNodes).filter(n=>!n.hasAttribute?.('data-observanda-editor'));
+export function canvasSelection(document){
+ const selection=document?.getSelection();if(!selection?.rangeCount)return null;
+ function point(node,offset){
+  if(!document.body.contains(node))return null;
+  if(node.nodeType!==3)offset=Array.from(node.childNodes).slice(0,offset).filter(n=>!n.hasAttribute?.('data-observanda-editor')).length;
+  const path=[];
+  while(node!==document.body){
+   const at=authoredChildren(node.parentNode).indexOf(node);if(at<0)return null;
+   path.push(at);node=node.parentNode;
+  }
+  return {path:path.reverse(),offset};
+ }
+ const anchor=point(selection.anchorNode,selection.anchorOffset),focus=point(selection.focusNode,selection.focusOffset);
+ return anchor&&focus?{anchor,focus}:null;
+}
+export function restoreCanvasSelection(document,bookmark){
+ document.body.focus({preventScroll:true});if(!bookmark)return;
+ function resolve(point){
+  let node=document.body;
+  for(const at of point.path){node=authoredChildren(node)[at];if(!node)return null;}
+  const host=node.nodeType===1?node:node.parentElement;if(!host?.isContentEditable)return null;
+  if(node.nodeType===3)return [node,Math.min(point.offset,node.length)];
+  const child=authoredChildren(node)[point.offset];return [node,child?Array.prototype.indexOf.call(node.childNodes,child):node.childNodes.length];
+ }
+ const anchor=resolve(bookmark.anchor),focus=resolve(bookmark.focus);
+ if(anchor&&focus)document.getSelection().setBaseAndExtent(...anchor,...focus);
+}
 // Update a dirty authored page only when the saved changes are confined to its
 // existing converted placements. Independent edits by another author require
 // explicit conflict handling. Never save or undo a withdrawn source revision.
