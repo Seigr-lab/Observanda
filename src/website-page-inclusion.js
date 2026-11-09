@@ -154,7 +154,7 @@ export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,revi
    if(openReviews.get(vault)?.key===key)openReviews.delete(vault);
    return store.present(saved,path,{signal});
   }catch(error){
-   if((await store.raw(siteId)).revision===expectedRevision)for(const blob of added)await store.remove(blob);
+   if((await store.raw(siteId)).revision===expectedRevision)for(const blob of added)await store.discardStaged(blob);
    throw error;
   }
  },{write:apply,signal});

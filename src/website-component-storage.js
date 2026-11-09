@@ -155,7 +155,7 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
   await store.assertSources(candidate);
   return await store.present(await store.commit(candidate,{signal}),path,{signal});
   }catch(error){
-   if(staged.size&&(await store.raw(id)).revision===expectedRevision)for(const blob of staged)await store.remove(blob);
+   if(staged.size&&(await store.raw(id)).revision===expectedRevision)for(const blob of staged)await store.discardStaged(blob);
    throw error;
   }
  },{write,signal});

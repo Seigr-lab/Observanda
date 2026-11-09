@@ -280,3 +280,11 @@
 .website-page-inclusion ul { list-style:none; margin:.7rem 0; padding:0 }
 .website-page-inclusion li { display:grid;grid-template-columns:minmax(8rem,1fr) minmax(0,3fr);gap:.65rem;padding:.35rem 0;border-bottom:1px solid var(--border) }
 .website-page-inclusion li span { overflow-wrap:anywhere }
+.website-version-panel{display:grid;gap:1rem;align-content:start;min-width:0}
+.website-version-panel>header,.website-version-controls{display:flex;flex-wrap:wrap;align-items:end;gap:.5rem .85rem}
+.website-version-panel>header{align-items:center;justify-content:space-between}
+.website-version-controls label{display:grid;gap:.25rem;max-width:100%}
+.website-version-controls select,.website-version-controls input{max-width:min(100%,32rem)}
+.website-version-diff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;min-width:0}
+.website-version-diff pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:24rem;overflow:auto;border:1px solid var(--border);padding:.75rem}
+.website-version-impact{display:grid;gap:.5rem;list-style:none;padding:0}

@@ -27,6 +27,9 @@ import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} f
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 import {onResponseClose} from './response-close.js';
+import {websiteVersions} from './website-versions.js';
+import {restoreWebsitePageVersion} from './website-version-restore.js';
+import {websiteVersionDesign} from './website-version-design.js';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
@@ -42,11 +45,11 @@ async function sshReview(metadata,id,revision,etag){
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,folderPicker,withPublication=work=>work()}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,actor,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,folderPicker,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
- const store=new WebsiteFileStore(workspace),operation=url.pathname.slice(prefix.length);
+ const store=new WebsiteFileStore(workspace,{actor}),operation=url.pathname.slice(prefix.length);
  const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);
  const signal=controller.signal;
  const observed=task=>req.headers?.accept==='application/x-ndjson'?operationResponse(req,res,task,json):task().then(json);
@@ -132,6 +135,15 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation.startsWith('versions/')){
+   const action=operation.slice('versions/'.length);
+   if(['name','release','restore','restore-design'].includes(action)){onWrite();await check();}
+   const request={...options,expectedRevision,signal};
+   if(action==='review'||action==='restore')json(await restoreWebsitePageVersion(store,siteId,request,action==='restore'));
+   else if(action==='review-design'||action==='restore-design')json(await websiteVersionDesign(store,siteId,request,action==='restore-design'));
+   else json(await websiteVersions(store,siteId,action,request));
+   return true;
+  }
   if(operation==='page/create'){
    onWrite();await check();const {path,title,language,inclusion}=options;
    json(await store.createPage(siteId,{expectedRevision,path,title,language,inclusion,signal}));return true;

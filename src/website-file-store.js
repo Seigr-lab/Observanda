@@ -40,6 +40,7 @@ import {validatePageDesigns} from './website-page-designs.js';
 import {addPageStyle,newPageStylesheet,pageStylesheet,sharedDraftStyle,validatePageStyles} from './website-page-style.js';
 import {preparePublicPageFiles,privateWebsiteNames,publicText,websiteFileReferences} from './website-page-dependencies.js';
 import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
+import {beginVersionWrite,prepareVersionRetention} from './website-version-retention.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -153,7 +154,7 @@ class RenderedWebsiteFile extends WebsiteFileContent{
  }
 }
 export class WebsiteFileStore{
- constructor(workspace){this.workspace=workspace;}
+ constructor(workspace,{actor}={}){this.workspace=workspace;this.versionActor=actor??{kind:'workspace'};}
  absolute(relative){return path.join(this.workspace.root,...relative.split('/'));}
  writerToken(){const held=active.getStore();return held?.root===this.workspace.root?held.writerToken:null;}
  async scope(operation,{write=false,signal}={}){
@@ -180,6 +181,11 @@ export class WebsiteFileStore{
  }
  writeControl(relative,value,options){return this.writeBytes(relative,Buffer.from(plain(value)),options);}
  async remove(relative){return active.getStore().scope.remove(this.absolute(relative),{missing:true});}
+ async discardStaged(blob){
+  // A retry can reuse an old encrypted blob that is still held by an earlier
+  // version. Only files physically created by this writer are rollback work.
+  if(active.getStore()?.created?.delete(blob))await this.remove(blob);
+ }
  async names(relative,{after=null,limit=25,directories=true}={}){
   if(after!==null&&typeof after!=='string'||!Number.isInteger(limit)||limit<1||limit>100)throw new AppError('INVALID');
   const items=[];let hasMore=false;
@@ -205,7 +211,11 @@ export class WebsiteFileStore{
   // file in this owner. Authenticate an existing descriptor before using it.
   const exists=await scope.stat(file,{missing:true});let saved=expected;
   if(exists)await scope.member(file,async(directory,member)=>{const handle=await directory.file(member);try{await segmentedFileHeader(handle,this.workspace.vault.key,this.workspace.fileAAD(file),expected);}finally{await handle.close();}});
-  else saved=await writeSegmentedContent(this.workspace,file,source,{expected,signal,admission:active.getStore()?.admission,reserveBytes:64*1024*1024,exclusive:true});
+  else{
+   const writer=active.getStore();
+   saved=await writeSegmentedContent(this.workspace,file,source,{expected,signal,admission:writer.admission,reserveBytes:64*1024*1024,exclusive:true});
+   (writer.created??=new Set()).add(blob);
+  }
   return {name,blob,...saved,contentType:value?.contentType??contentType(name)};
  }
  async siteFile(id,name,value,{draft,signal}={}){
@@ -348,6 +358,14 @@ export class WebsiteFileStore{
    const files=page?history.files.filter(f=>!live.has(f.name)&&(page.draft||!f.draft)):[];
    if(files.length)value.editHistory={...history,files};
   }
+  const stage=await beginVersionWrite(this,active.getStore().scope,value,previous,signal);
+  let base=previous,oldIndex=stage.old,bootstrap;
+  if(previous&&!previous.versionIndex){
+   bootstrap=await prepareVersionRetention(this,previous,null,{signal,index:oldIndex,adopted:true});
+   base={...previous,versionIndex:bootstrap.ref};oldIndex=undefined;
+  }
+  const retained=await prepareVersionRetention(this,value,base,{...options.versioning,signal,index:oldIndex});
+  value.versionIndex=retained.ref;
   delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   const bytes=Buffer.from(plain(value));if(bytes.length>CONTROL_LIMIT)throw new AppError('LIMIT');
   await writeFeedSubscription(this,value,previous,signal);
@@ -361,13 +379,15 @@ export class WebsiteFileStore{
   await this.writeBytes(directory+'/revisions/'+value.revision+'.json',bytes,{signal});await this.writeControl(directory+'/head.json',{revision:value.revision},{signal});
   await finishFeedUsage(this,feedUsage,signal);
   await clearFeedSubscription(this,value,previous);
+  // Keep the previous index until ordinary resources have been collected so
+  // an interrupted writer can resume from that small, durable pointer.
+  for(const blob of retained.retired)if(blob!==previous?.versionIndex?.blob)await this.remove(blob);
+  if(previous?.versionIndex&&retained.retired.includes(previous.versionIndex.blob))await this.remove(previous.versionIndex.blob);
   if(previous&&previous.revision!==value.revision){
    for(const id of oldOrdinary)if(!newOrdinary.has(id))await this.remove(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json');
-   const blobs=revision=>new Set([...revision.files,...(revision.editHistory?.files??[]),...(revision.publicPageFiles??[]).map(r=>r.file)].map(file=>file.blob));
-   const retained=blobs(value);
-   for(const blob of blobs(previous))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
    await this.remove(directory+'/revisions/'+previous.revision+'.json');
-  }return value;
+  }
+  await this.remove(stage.journal);return value;
  }
  async readText(descriptor,{signal}={}){if(descriptor.size>TEXT_LIMIT)throw new AppError('LIMIT');const parts=[];for await(const bytes of new WebsiteFileContent(this,undefined,null,descriptor).read(0,descriptor.size-1,{signal}))parts.push(bytes);return Buffer.concat(parts).toString('utf8');}
  async scripts(files){const allowed=new Set();for(const descriptor of files)if(descriptor.name.endsWith('.js')){assertPublicFiles(new Map([[descriptor.name,await this.readText(descriptor)]]));allowed.add(descriptor.name);}return allowed;}
@@ -438,9 +458,15 @@ export class WebsiteFileStore{
   const html=addPageStyle(design?.html??starterPage({title:pageTitle,stylesheet:baseStyle,language},escapeWebsiteText),page,stylePath);
   return this.save(id,{expectedRevision,path:page,html,css:design?.css??'',title:pageTitle,signal},design?.instances,{stylePath,draft:inclusion==='private'||undefined});
  },{write:true,signal});}
- save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,recovery,signal}={},designInstances,creation){return this.scope(async()=>{
+ save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,recovery,signal}={},designInstances,creation,restoration){return this.scope(async()=>{
   if(!hex(expectedRevision))throw new AppError('INVALID');
-  const manifest=await this.current(id,expectedRevision);
+  let manifest=await this.current(id,expectedRevision);
+  if(restoration){
+   const files=new Map(manifest.files.map(f=>[f.name,f]));
+   for(const f of restoration.resources)files.set(f.name,f);
+   const pages=manifest.pages.map(p=>p.path===page?{...p,instances:restoration.instances}:p);
+   manifest={...manifest,files:[...files.values()],pages};
+  }
   if(!creation&&!manifest.pages.some(p=>p.path===page))throw new AppError('NOT_FOUND');
   const inspected=await this.inspectPageSource(manifest,page,html,css,signal,designInstances,creation);
   const {former,draft,cssPath,scripts,htmlPictures,cssPictures,recordingNames,addViewer}=inspected,sources=new Map();
@@ -475,7 +501,7 @@ export class WebsiteFileStore{
    const uploads=recovered?.recordings.length?[...recovered.recordings,...(recordings??[])]:recordings;
    media=await saveWebsiteRecordings(this,manifest,{files:pictures.files,pages,names:recordingNames,uploads,draft,signal});
    retention=retainEditHistory(manifest,media.files,historyKey,page);
-   saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal,history:retention.history});
+   saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal,history:retention.history,...(restoration?{versioning:{restoredFrom:restoration.version}}:{})});
   }catch(error){if((await this.raw(id)).revision===manifest.revision){await pictures.rollback();await media?.rollback();}throw error;}
   const result=await this.present(saved,page,{signal});
   if(retention.history)result.historyAssetStamp=editHistoryStamp(saved);

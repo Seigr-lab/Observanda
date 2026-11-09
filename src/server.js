@@ -569,6 +569,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(!otherResearchSession&&worker?.emptyClaims>0&&!worker.running&&!worker.active)await worker.stop();
        }
        return await websiteFilesHttp(req,res,{url,workspace,contextId:selectedContext.id,title:workspaceFolderName(selectedContext.root),body,json,check:req.checkWriter,blockedValues,folderPicker:websiteFolderPicker,
+        actor:accessState.access.value?.username?{kind:'user',label:accessState.access.value.username}:{kind:'workspace'},
         publisherOptions:{...publishingOptions,connection:github?.forWorkspace(selectedContext.root)},
         withPublication:async work=>{if(publishing)throw new AppError('GITHUB_PUBLICATION_BUSY');publishing=true;try{return await work();}finally{publishing=false;}},
         githubAccount:async(operation,data)=>{

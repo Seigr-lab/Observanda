@@ -15,7 +15,7 @@ export async function saveWebsitePictures(store,manifest,{files,pages,style,html
  const known=new Map(files.filter(f=>f.name.startsWith('pictures/')).map(f=>[f.name,f]));
  const referenced=new Set([...htmlPictures,...cssPictures]);
  const added=[],priorBlobs=new Set(manifest.files.map(file=>file.blob));
- const rollback=async()=>{for(const blob of new Set(added.map(f=>f.blob)))if(!priorBlobs.has(blob))await store.remove(blob);};
+ const rollback=async()=>{for(const blob of new Set(added.map(f=>f.blob)))if(!priorBlobs.has(blob))await store.discardStaged(blob);};
  try{
   if(receivePictures)for await(const {name,bytes} of receivePictures()){
    if(known.has(name)||!referenced.has(name))throw new AppError('INVALID');

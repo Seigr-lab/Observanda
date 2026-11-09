@@ -20,6 +20,7 @@ import {websiteFilesRecordings} from './website-files-recordings.js';
 import {websiteHistoryMedia} from './website-history-media.js';
 import {rebaseAuthoredPage,rebasePageHistory} from './website-history-rebase.js';
 import {suggestedPagePath,websiteFilesPages} from './website-files-pages.js';
+import {websiteFilesVersions} from './website-files-versions.js';
 import {websiteFilesMenu} from './website-files-menu.js';
 import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
@@ -103,6 +104,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length)):null;};
  const gallery=websiteFilesGallery({t:tr,esc,recoveredPicture,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=serializeWebsiteHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
  const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,request,adopt:adoptRelated,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
+ const versions=websiteFilesVersions({site:()=>opened,esc,tr,request,signal:()=>controller?.signal,render,run,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
@@ -300,6 +302,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function hideUnverifiedPage(retry,saved=null,message='changed'){
   if(stale&&awaitingAccess&&retry&&!saved&&!conflictingPage)return;
+  if(mode==='versions'){versions.reset();mode='visual';}
   if(!stale&&retry&&mode==='visual'){
    const frame=document.getElementById('website-files-canvas'),doc=frame?.contentDocument;
    if(doc?.body)waitingView={page:opened.path,revision:opened.site.revision,selection:document.activeElement===frame?canvasSelection(doc):null,scroll:doc.scrollingElement?.scrollTop??0};
@@ -389,7 +392,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   await initialPage();waitForPreparation();
  }
  function clear(){
-  recovery.reset();
+  recovery.reset();versions.reset();
   waitingView=null;openingAfterFence=false;
   presentation.close();
   feeds.clear();
@@ -530,7 +533,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function siteToolbar(){
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
-  return extraTools('site',siteSelector(true)+button('create','new'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
+  return extraTools('site',siteSelector(true)+button('create','new')+button('versionsTitle','versions'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
    extraTools('siteDesignTools',button('menu','menu')+button('siteAppearance','appearance')+button('designThemes','themes'))+
    extraTools('siteReleaseTools',button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
@@ -539,7 +542,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(state==='preparing')return '<p role="status" data-website-preparation>'+esc(preparationMessage(session.preparation))+'</p>';
   if(missingSite||state!=='ready'){
    const message=missingSite?'unavailable':state==='failed'?'preparationFailed':'workspaceCheck';
-   return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('retry','retry')+'</section>';
+   return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('create','new')+button('retry','retry')+'</section>';
   }
   return '<section class="panel"><p>'+esc(tr('noWebsite'))+'</p>'+button('create','new')+'</section>';
  }
@@ -562,6 +565,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='destination')body=destinationView();
   else if(mode==='menu')body=menu.view();
   else if(mode==='pages')body=pagesPanel.view();
+  else if(mode==='versions')body=versions.view();
   else if(mode==='media')body=recordings.view();
   else if(composing)body=figures.view(picker.view());
   else if(mode==='gallery'){
@@ -782,6 +786,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(mode==='menu'&&menu.dirty()&&!operation.startsWith('menu-')&&operation!=='discard')await menu.save();
 
    if(operation.startsWith('recovery-'))await recovery.action(operation.slice(9),element.dataset.recoveryId);
+   else if(operation==='versions'&&await beforeLeave(true)){mode='versions';await versions.open();}
+   else if(operation.startsWith('versions-')&&mode==='versions')await versions.action(operation.slice(9));
    else if(operation==='save'){await saveAuthoring();render();}
    else if(operation==='undo'||operation==='redo'){
     const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;
@@ -894,6 +900,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){
+  if(mode==='versions'&&versions.input(element))return true;
   if(element.matches('[data-website-files-confirm]')){paintStatus();return true;}
   if(form?.type==='page'&&element.closest('[data-website-files-form]')){
    if(element.dataset.websiteFileField==='pageTitle'){

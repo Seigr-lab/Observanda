@@ -122,7 +122,7 @@ export async function saveWebsiteRecordings(store,manifest,{files,pages,names,up
  const referenced=new Set(pages.flatMap(page=>page.recordings??[]));
  const known=new Map(files.filter(file=>file.recording).map(file=>[file.name,file]));
  const added=[],formerBlobs=new Set(manifest.files.map(file=>file.blob));
- const rollback=async()=>{for(const blob of new Set(added.map(file=>file.blob)))if(!formerBlobs.has(blob))await store.remove(blob);};
+ const rollback=async()=>{for(const blob of new Set(added.map(file=>file.blob)))if(!formerBlobs.has(blob))await store.discardStaged(blob);};
  try{
   for(const upload of uploads){
    if(!resource.test(upload.name)||files.some(file=>file.name===upload.name)||known.has(upload.name)||!names.has(upload.name))invalid();
