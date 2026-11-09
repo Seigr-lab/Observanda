@@ -457,5 +457,6 @@
   "DATASET_WEIGHTED_FIT_UNITS": "Bruk erklærte X- og Y-einingar og ei differansevarianseining med dimensjonane til Y i andre, eller la alle tre einingane vere uerklærte og etikettane tomme. Referanse- og evalueringskoordinatar bruker den valde X-eininga og origoet.",
   "PUBLISH_ARCHIVE_BRANCH": "Arkivgreina er utilgjengeleg eller endra. Vel eit ubrukt greinnamn og sjå gjennom kodelageret på nytt. Ingen eksisterande grein blir skriven over.",
   "ACCESS_STATE_CHANGED": "Desse tilgangsinnstillingane finst ikkje i den tiltrudde historikken på denne eininga. Kontroller og importer gjeldande tilgangsinnstillingar frå ei tiltrudd eining før du opnar denne kopien.",
-  "ACCESS_SAVE_UNCERTAIN": "Lagringa av tilgangsinnstillingane vart avbroten. Dei nye påloggingsopplysningane kan allereie vere aktive. Opne arbeidsområdet på nytt og prøv dei nye opplysningane først."
+  "ACCESS_SAVE_UNCERTAIN": "Lagringa av tilgangsinnstillingane vart avbroten. Dei nye påloggingsopplysningane kan allereie vere aktive. Opne arbeidsområdet på nytt og prøv dei nye opplysningane først.",
+  "WEBSITE_APPROVAL_REQUIRED": "Denne nettstaden krev ein godkjend gjennomgang av den gjeldande lagra utgåva før han blir publisert. Be om ein gjennomgang, eller be ein gjennomgåar om å godkjenne han."
 }

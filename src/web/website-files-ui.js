@@ -28,6 +28,7 @@ import {websiteFilesLifecycle} from './website-files-lifecycle.js';
 import {websiteFilesVersions} from './website-files-versions.js';
 import {websiteFilesReleases} from './website-files-releases.js';
 import {websiteFilesDiscovery} from './website-files-discovery.js';
+import {websiteFilesReview} from './website-files-review.js';
 import {websiteFilesMenu} from './website-files-menu.js';
 import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
@@ -140,6 +141,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }else{adoptRelated(value);history.replaceState(history.state,'',fileRoute(value.site.id));render();}
  }});
  const releases=websiteFilesReleases({request,site:()=>opened,esc,tr,t,signal:()=>controller?.signal});
+ const review=websiteFilesReview({request,site:()=>opened,esc,tr,signal:()=>controller?.signal,document:()=>websiteHTML(html),selection:()=>selected,
+  locate:path=>{review.reset();locatedPlacement=path;mode='visual';render();}});
  const discovery=websiteFilesDiscovery({request,site:()=>opened,esc,tr,signal:()=>controller?.signal,adopt:value=>adoptRelated(value)});
  const versions=websiteFilesVersions({site:()=>opened,esc,tr,request,signal:()=>controller?.signal,render,run,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
@@ -348,6 +351,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(mode==='versions'){versions.reset();mode='visual';}
   if(mode==='releases'){releases.reset();mode='visual';}
   if(mode==='discovery'){discovery.reset();mode='visual';}
+  if(mode==='review'){review.reset();mode='visual';}
   if(sourcePane.pending)mode=sourcePane.kind;
   sourcePane.reset();
   if(!stale&&retry&&mode==='visual'){
@@ -441,7 +445,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   await initialPage();waitForPreparation();
  }
  function clear(){
-  recovery.reset();sourcePane.reset();versions.reset();releases.reset();discovery.reset();lifecycle.reset();
+  recovery.reset();sourcePane.reset();versions.reset();releases.reset();discovery.reset();review.reset();lifecycle.reset();
   waitingView=null;openingAfterFence=false;
   presentation.close();
   viewport.reset();
@@ -603,7 +607,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
   return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site')+button('versionsTitle','versions'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
    extraTools('siteDesignTools',button('menu','menu')+button('siteAppearance','appearance')+button('designThemes','themes')+button('styleLibrary','styles'))+
-   extraTools('siteReleaseTools',button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
+   extraTools('siteReleaseTools',button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
  function unopenedView(){
   const state=session.preparation?.state;
@@ -621,7 +625,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
   const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','destination','folder'].includes(mode);
-  const currentTask=({menu:'menu',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle'})[mode]??'title';
+  const currentTask=({menu:'menu',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';
   const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
@@ -637,6 +641,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='versions')body=versions.view();
   else if(mode==='releases')body=releases.view();
   else if(mode==='discovery')body=discovery.view();
+  else if(mode==='review')body=review.view();
   else if(mode==='media')body=recordings.view();
   else if(composing)body=figures.view(picker.view());
   else if(mode==='gallery'){
@@ -876,6 +881,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='versions'&&await beforeLeave(true)){mode='versions';await versions.open();}
    else if(operation==='releases'&&await beforeLeave(true)){mode='releases';releases.reset();render();await releases.open();render();releases.focus();}
    else if(operation.startsWith('releases-')&&mode==='releases')await releaseAction(operation.slice(9),element);
+   else if(operation==='review'&&await beforeLeave(true)){mode='review';review.reset();render();await review.open();render();review.focus();}
+   else if(operation==='review-close'&&mode==='review'){review.reset();mode='visual';render();}
+   else if(operation.startsWith('review-')&&mode==='review'){if(await review.action(operation.slice(7),element)!=='left'){render();}}
    else if(operation==='discovery'&&await beforeLeave(true)){mode='discovery';discovery.reset();render();await discovery.open();render();discovery.focus();}
    else if(operation==='discovery-close'&&mode==='discovery'){discovery.reset();mode='visual';render();}
    else if(operation.startsWith('discovery-')&&mode==='discovery'){await discovery.action(operation.slice(10));render();discovery.focus();}
@@ -1035,6 +1043,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function input(element){
   if(mode==='versions'&&versions.input(element))return true;
+  if(mode==='review'){
+   const handled=review.input(element);
+   if(handled?.then){void run(async()=>{await handled;render();});return true;}
+   if(handled)return true;
+  }
   if(mode==='discovery'){
    const handled=discovery.input(element);
    if(handled==='rerender'&&(element.type==='checkbox'||element.localName==='select')){

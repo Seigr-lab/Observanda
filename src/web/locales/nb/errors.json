@@ -457,5 +457,6 @@
   "DATASET_WEIGHTED_FIT_UNITS": "Bruk oppgitte X- og Y-enheter og en differansevariansenhet med dimensjonene til Y i annen, eller la alle tre enhetene være udeklarerte og etikettene tomme. Referanse- og evalueringskoordinater bruker den valgte X-enheten og origo.",
   "PUBLISH_ARCHIVE_BRANCH": "Arkivgrenen er utilgjengelig eller endret. Velg et ubrukt grennavn og gjennomgå repositoriet på nytt. Ingen eksisterende gren blir overskrevet.",
   "ACCESS_STATE_CHANGED": "Disse tilgangsinnstillingene finnes ikke i den betrodde historikken på denne enheten. Kontroller og importer gjeldende tilgangsinnstillinger fra en betrodd enhet før du åpner denne kopien.",
-  "ACCESS_SAVE_UNCERTAIN": "Lagringen av tilgangsinnstillingene ble avbrutt. De nye påloggingsopplysningene kan allerede være aktive. Åpne arbeidsområdet på nytt og prøv de nye opplysningene først."
+  "ACCESS_SAVE_UNCERTAIN": "Lagringen av tilgangsinnstillingene ble avbrutt. De nye påloggingsopplysningene kan allerede være aktive. Åpne arbeidsområdet på nytt og prøv de nye opplysningene først.",
+  "WEBSITE_APPROVAL_REQUIRED": "Dette nettstedet krever en godkjent gjennomgang av den gjeldende lagrede utgaven før det publiseres. Be om en gjennomgang, eller be en gjennomgåer om å godkjenne den."
 }

@@ -457,5 +457,6 @@
   "DATASET_WEIGHTED_FIT_UNITS": "Utiliza unidades declaradas de X e Y y una unidad de diferencia de varianza con las dimensiones de Y al cuadrado, o deja las tres unidades sin declarar y sus etiquetas vacías. Las coordenadas de referencia y evaluación utilizan la unidad X y el origen seleccionados.",
   "PUBLISH_ARCHIVE_BRANCH": "La rama de archivo no está disponible o ha cambiado. Elige un nombre de rama sin utilizar y revisa de nuevo el repositorio. No se sobrescribirá ninguna rama existente.",
   "ACCESS_STATE_CHANGED": "Estos ajustes de acceso no constan en el historial de confianza de este dispositivo. Revisa e importa los ajustes de acceso actuales desde un dispositivo de confianza antes de abrir esta copia.",
-  "ACCESS_SAVE_UNCERTAIN": "Se interrumpió el guardado de los ajustes de acceso. Puede que las nuevas credenciales ya estén activas. Vuelve a abrir el espacio de trabajo y prueba primero las nuevas credenciales."
+  "ACCESS_SAVE_UNCERTAIN": "Se interrumpió el guardado de los ajustes de acceso. Puede que las nuevas credenciales ya estén activas. Vuelve a abrir el espacio de trabajo y prueba primero las nuevas credenciales.",
+  "WEBSITE_APPROVAL_REQUIRED": "Este sitio web requiere una revisión aprobada de la edición guardada actual antes de publicarse. Solicita una revisión o pide a una persona revisora que la apruebe."
 }

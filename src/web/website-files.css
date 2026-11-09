@@ -382,4 +382,7 @@
 .website-discovery form label{display:grid;gap:.25rem}
 .website-discovery-link{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end}.website-discovery-link label{display:grid;gap:.25rem}
 .website-discovery-group{padding-inline-start:1.2rem}.website-discovery-group [aria-current]{font-weight:600}
+.website-team-review-list{padding-inline-start:1.2rem}.website-team-review-list>li{padding:.5rem 0;border-block-end:1px solid var(--border,#b9c4d0)}
+.website-team-review-list>li[data-resolved]{opacity:.75}.website-team-review label{display:grid;gap:.25rem;margin-block:.4rem}
+.website-team-review-replies{padding-inline-start:1rem}
 .website-files-publish label.website-inline-check{display:flex;gap:.5rem;align-items:center}

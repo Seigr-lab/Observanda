@@ -457,5 +457,6 @@
   "DATASET_WEIGHTED_FIT_UNITS": "Utilitza unitats declarades X i Y i una unitat de variància de diferència amb les dimensions de Y al quadrat, o deixa les tres unitats sense declarar i les etiquetes buides. Les coordenades de referència i d'avaluació utilitzen la unitat i l'origen X seleccionats.",
   "PUBLISH_ARCHIVE_BRANCH": "La branca d'arxiu no està disponible o ha canviat. Tria un nom de branca no utilitzat i torna a revisar el repositori. No se sobreescriurà cap branca existent.",
   "ACCESS_STATE_CHANGED": "Aquests ajustos d'accés no consten a l'historial de confiança d'aquest dispositiu. Revisa i importa els ajustos d'accés actuals des d'un dispositiu de confiança abans d'obrir aquesta còpia.",
-  "ACCESS_SAVE_UNCERTAIN": "S'ha interromput el desament dels ajustos d'accés. Pot ser que les credencials noves ja estiguin actives. Torna a obrir l'espai de treball i prova primer les credencials noves."
+  "ACCESS_SAVE_UNCERTAIN": "S'ha interromput el desament dels ajustos d'accés. Pot ser que les credencials noves ja estiguin actives. Torna a obrir l'espai de treball i prova primer les credencials noves.",
+  "WEBSITE_APPROVAL_REQUIRED": "Aquest lloc web requereix una revisió aprovada de l’edició desada actual abans de publicar-lo. Sol·licita una revisió o demana a una persona revisora que l’aprovi."
 }
