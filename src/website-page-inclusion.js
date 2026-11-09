@@ -94,7 +94,7 @@ function visibility(row,draft){
  if(draft)next.draft=true;else delete next.draft;
  return next;
 }
-export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,reviewId,offset=0,signal},apply=false){
+export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,reviewId,offset=0,signal},apply=false,archive=false){
  if(!/^[a-f0-9]{64}$/.test(expectedRevision??'')||!['private','included'].includes(inclusion)||!Number.isSafeInteger(offset)||offset<0)throw new AppError('INVALID');
  websiteFileName(path);
  return store.scope(async()=>{
@@ -107,7 +107,7 @@ export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,revi
    return present(cached);
   }
   const manifest=await store.current(siteId,expectedRevision),page=manifest.pages.find(p=>p.path===path);
-  if(!page)throw new AppError('NOT_FOUND');
+  if(!page||page.archived)throw new AppError('NOT_FOUND');
   const included=inclusion==='included',draft=!included;
   if(path==='index.html'&&draft)throw new AppError('WEBSITE_HOME_REQUIRED');
   if(Boolean(page.draft)===draft)throw new AppError('CONFLICT');
@@ -118,6 +118,7 @@ export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,revi
   }
   if(plan.pin!==reviewId)throw new AppError('CONFLICT');
   const files=byName(manifest.files),nextPage=visibility(page,draft),previous=new Set(manifest.files.map(f=>f.blob)),added=new Set();
+  if(archive){if(!draft)throw new AppError('INVALID');nextPage.archived=true;}
   const keep=file=>{files.set(file.name,file);if(!previous.has(file.blob))added.add(file.blob);};
   try{
    for(const name of plan.change)keep(await store.ownFile(siteId,files.get(name),draft,signal));
@@ -152,7 +153,7 @@ export function pageInclusion(store,siteId,{expectedRevision,path,inclusion,revi
    await store.assertSources(candidate);
    const saved=await store.commit(candidate,{signal});
    if(openReviews.get(vault)?.key===key)openReviews.delete(vault);
-   return store.present(saved,path,{signal});
+   return store.present(saved,archive?'index.html':path,{signal});
   }catch(error){
    if((await store.raw(siteId)).revision===expectedRevision)for(const blob of added)await store.discardStaged(blob);
    throw error;

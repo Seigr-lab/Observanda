@@ -11,6 +11,8 @@ import {savedAppearance} from './website-saved-appearance.js';
 import {websiteThemes} from './website-scoped-themes.js';
 import {websitePageDesigns} from './website-page-designs.js';
 import {pageInclusion} from './website-page-inclusion.js';
+import {archivedWebsitePages,websitePageLifecycle} from './website-page-lifecycle.js';
+import {websiteSiteLifecycle} from './website-site-lifecycle.js';
 import {publishWebsiteTransfer,remoteTransferStatus,settleWebsiteTransfer} from './website-remote-transfer.js';
 import {operationResponse} from './operation-response.js';
 import {operationStage,operationAdvance,operationTotal,operationWork} from './operation-progress.js';
@@ -135,6 +137,12 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation==='page/archive-list'){json(await archivedWebsitePages(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(['page/review-lifecycle','page/apply-lifecycle','site/review-lifecycle','site/apply-lifecycle'].includes(operation)){
+   const write=operation.includes('/apply-');if(write){onWrite();await check();}
+   const handler=operation.startsWith('site/')?websiteSiteLifecycle:websitePageLifecycle;
+   json(await handler(store,siteId,{...options,expectedRevision,signal},write));return true;
+  }
   if(operation.startsWith('versions/')){
    const action=operation.slice('versions/'.length);
    if(['name','release','restore','restore-design'].includes(action)){onWrite();await check();}

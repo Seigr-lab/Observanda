@@ -86,16 +86,43 @@ function replaceMapped(input,pattern,replacement){
  }
  return {text:parts.join(''),origin};
 }
-export function omitPrivateStyleURLs(css,file,blocked){
- const tokens=[...websiteCSSURLTokens(decodedWebsiteCSS(css))].filter(t=>blocked.has(websiteLocalURL(t.value,file)?.toLowerCase()));
- if(!tokens.length)return css;
+function* authoredCSSRanges(css){
+ for(let i=0;i<css.length;i++){
+  if(css[i]==='\\'){i++;continue;}
+  if(css[i]==='/'&&css[i+1]==='*'){
+   const start=i,end=css.indexOf('*/',i+2);i=end===-1?css.length:end+1;yield [start,i];continue;
+  }
+  const quote=css[i];if(quote!=='"'&&quote!=="'")continue;
+  const start=i;
+  while(++i<css.length){if(css[i]==='\\')i++;else if(css[i]===quote||css[i]==='\n'||css[i]==='\r'||css[i]==='\f')break;}
+  yield [start,i];
+ }
+}
+function originalStyleOffsets(css){
  const comments=replaceMapped(css,/\/\*[\s\S]*?\*\//g,()=>'');
  const hex=replaceMapped(comments.text,/\\([a-f0-9]{1,6})\s?/gi,m=>String.fromCodePoint(Math.min(parseInt(m[1],16),0x10ffff)));
  const escapes=replaceMapped(hex.text,/\\([^\r\n])/g,m=>m[1]);
- const original=(offset,end)=>comments.origin(hex.origin(escapes.origin(offset,end),end),end);
- const parts=[];let at=0;
- for(const t of tokens){parts.push(css.slice(at,original(t.start,false)),'none');at=original(t.end,true);}
+ return (offset,end)=>comments.origin(hex.origin(escapes.origin(offset,end),end),end);
+}
+export function replaceWebsiteStyleURLs(css,replacement,{authoredOnly=false}={}){
+ const parts=[],ranges=authoredOnly?authoredCSSRanges(css):null;
+ let at=0,original,range;
+ for(const token of websiteCSSURLTokens(decodedWebsiteCSS(css))){
+  const value=replacement(token.value);if(value===undefined)continue;
+  original??=originalStyleOffsets(css);
+  const start=original(token.start,false);
+  if(ranges){
+   range??=ranges.next();
+   while(!range.done&&range.value[1]<start)range=ranges.next();
+   if(!range.done&&range.value[0]<=start||start>0&&/[\w-]/.test(css[start-1]))continue;
+  }
+  parts.push(css.slice(at,start),value);at=original(token.end,true);
+ }
+ if(!parts.length)return css;
  parts.push(css.slice(at));return parts.join('');
+}
+export function omitPrivateStyleURLs(css,file,blocked){
+ return replaceWebsiteStyleURLs(css,url=>blocked.has(websiteLocalURL(url,file)?.toLowerCase())?'none':undefined);
 }
 
 export function privateWebsiteNames(manifest){return new Set(manifest.files.filter(file=>file.draft).map(file=>file.name.toLowerCase()));}

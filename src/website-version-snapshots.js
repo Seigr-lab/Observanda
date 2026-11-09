@@ -27,7 +27,7 @@ export async function readVersionJSON(store,id,file){
 }
 function pageSettings(page){
  const result={path:page.path};
- for(const key of ['draft','stylePath','sharedDraftBase','instances'])if(page[key]!==undefined)result[key]=page[key];
+ for(const key of ['pageId','draft','stylePath','sharedDraftBase','instances'])if(page[key]!==undefined)result[key]=page[key];
  return result;
 }
 // Capture only changed authored page bytes. A source synchronization may change

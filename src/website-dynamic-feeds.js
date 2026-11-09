@@ -244,6 +244,14 @@ export async function reflowFeedShell(store,manifest,feed,key,signal){
  const groups=feed.groups.map(g=>({key:g.key,ids:[...g.ids]}));
  return materializeUpdate(store,manifest,old,next,groups,signal,{});
 }
+// The owning page already contains the new, empty slot. Build its first
+// materialization from the saved membership through the usual grant checks.
+export function duplicateWebsiteFeed(store,manifest,original,id,path,keys,signal){
+ const {shellHost,layoutAsset,groups,...definition}=original;
+ const slots=groups.map(group=>({key:group.key==='host'?'host':keys.get(group.key),ids:[...group.ids]}));
+ const feed={...definition,id,path};
+ return materializeUpdate(store,manifest,{id,path,groups:[]},feed,slots,signal,{});
+}
 function requireExpected(revision){if(!hex(revision))throw new AppError('INVALID');}
 export function readWebsiteFeed(store,siteId,{expectedRevision,path,feedId,signal}){
  if(!researchId(siteId))throw new AppError('INVALID');

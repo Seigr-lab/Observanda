@@ -4,6 +4,7 @@ import {componentContext,checkSavedComponents} from './website-component-storage
 import {pageComponentDocument,prepareComponent,rewriteComponentInstances} from './website-file-component.js';
 import {validateWebsiteHTML} from './website-file-policy.js';
 import {versionContext} from './website-versions.js';
+import {websitePageIdentity} from './website-page-paths.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function value(manifest,kind){
@@ -80,7 +81,19 @@ export function websiteVersionDesign(store,id,options,apply=false){
   if(kind==='component'){
    definition=await componentReview(store,ctx,component,signal);({rows,status}=definition);
   }else{
-   desired=value(ctx.saved.settings,kind);rows=changeRows(kind,value(ctx.current,kind),desired);
+   desired=value(ctx.saved.settings,kind);
+   if(kind==='themeBook'||kind==='pageDesigns'){
+    const currentOwners=new Map(ctx.current.pages.map(p=>[websitePageIdentity(id,p),p]));
+    const savedOwners=new Map(ctx.saved.pages.map(p=>[p.path,p]));
+    const address=original=>{
+     const former=savedOwners.get(original),current=former&&currentOwners.get(websitePageIdentity(id,former));
+     if(!current){status='unavailable';return original;}
+     return current.path;
+    };
+    if(kind==='themeBook')desired={...desired,pages:Object.fromEntries(Object.entries(desired.pages).map(([key,theme])=>[address(key),theme]))};
+    else desired=desired.map(d=>({...d,source:address(d.source)}));
+   }
+   rows=changeRows(kind,value(ctx.current,kind),desired);
   }
   const token=digest(JSON.stringify([expectedRevision,version,path,kind,component,status,rows]));
   await store.current(id,expectedRevision);

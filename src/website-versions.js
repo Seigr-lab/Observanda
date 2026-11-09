@@ -5,6 +5,8 @@ import {archivedBlobs,currentFileBlobs,maxNamed,maxVersions,readVersionIndex,ret
 import {governedResources,readVersionJSON} from './website-version-snapshots.js';
 import {pageStylesheet} from './website-page-style.js';
 import {parse} from 'parse5';
+import {randomUUID} from 'node:crypto';
+import {websitePageIdentity,movedWebsiteText} from './website-page-paths.js';
 
 const validRevision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const invalid=()=>{throw new AppError('INVALID');};
@@ -40,8 +42,14 @@ function changeWindow(before,after,offset){
 // Only authored text, the current projection, and explicitly acknowledged
 // omissions may enter a comparison. No historical source snapshot is read.
 export async function versionPage(store,context,page,signal){
- const {saved,current,files,held,governed}=context,former=saved.pages.find(p=>p.path===page);
- const owner=current.pages.find(p=>p.path===page),file=files.get(page),raw=file?await store.readText(file,{signal}):'';
+ const {saved,current,files,held,governed}=context;
+ const owner=current.pages.find(p=>p.path===page);
+ if(owner?.archived)return {status:'private',raw:'',owner};
+ const file=files.get(page),raw=file?await store.readText(file,{signal}):'';
+ const owners=new Map(current.pages.map(p=>[websitePageIdentity(current.id,p),p]));
+ const earlier=new Map(saved.pages.map(p=>[websitePageIdentity(current.id,p),p]));
+ const atPath=saved.pages.find(p=>p.path===page),former=owner?earlier.get(websitePageIdentity(current.id,owner)):atPath;
+ if(!former&&atPath||!owner&&former&&owners.has(websitePageIdentity(current.id,former)))return {status:'occupied',raw,owner,former};
  if(!former)return {status:'currentOnly',raw,owner};
  if(former.unavailable||!held.has(former.document?.file.blob))return {status:'unavailable',raw,owner,former};
  let version;
@@ -52,8 +60,18 @@ export async function versionPage(store,context,page,signal){
    version.slots=version.slots.map((slot,i)=>({...slot,stamp:former.stamps[i]}));
   }
  }
- else if(former.document.kind==='html')version=authoredPageVersion(await store.readText(former.document.file,{signal}),page,governed);
+ else if(former.document.kind==='html')version=authoredPageVersion(await store.readText(former.document.file,{signal}),former.path,governed);
  else throw new AppError('FORMAT');
+ const moved=new Map();
+ for(const [id,p] of earlier){const destination=owners.get(id)?.path;if(destination&&destination!==p.path)moved.set(p.path.toLowerCase(),destination);}
+ if(version&&moved.size){
+  // Rebase the earlier author's own markup before filling its permission
+  // slots. Current grant bytes are already relative to the current page.
+  const token='<!--'+randomUUID()+'-->',text=version.chunks.join(token);
+  const chunks=movedWebsiteText(text,former.path,owner?.path??former.path,moved).split(token);
+  if(chunks.length!==version.chunks.length)throw new AppError('FORMAT');
+  version={...version,chunks};
+ }
  const result=renderPageVersion(version,raw,page,governed);
  if(!result.available)return {status:'unavailable',raw,owner,former};
  const status=former.draft&&owner&&!owner.draft?'private':result.currentOnly?'newSources':'ready';
@@ -89,8 +107,8 @@ export function websiteVersions(store,id,operation,options){
   const row=await versionPage(store,context,path,signal);
   const style=pageStylesheet(context.saved.settings,row.former),selected=context.assets.get(style);
   const currentName=pageStylesheet(current,row.owner),now=context.files.get(currentName);
-  const priorCSS=area==='css'&&selected&&context.held.has(selected.blob)?await store.readText(selected,{signal}):null;
-  const activeCSS=area==='css'&&now?await store.readText(now,{signal}):'';
+  const priorCSS=area==='css'&&row.former&&row.status!=='occupied'&&selected&&context.held.has(selected.blob)?await store.readText(selected,{signal}):null;
+  const activeCSS=area==='css'&&!row.owner?.archived&&now?await store.readText(now,{signal}):'';
   await store.current(id,expectedRevision);
   const before=area==='css'?priorCSS:row.html??null,after=area==='css'?activeCSS:row.raw;
   const difference=changeWindow(before===null?null:area==='text'?readableText(before):before,area==='text'?readableText(after):after,textOffset);

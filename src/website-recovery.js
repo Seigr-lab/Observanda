@@ -244,6 +244,24 @@ async function list(store,directory,{site,path,limit=25,cursor:token,signal}){
 export function inspectWebsiteRecovery(store,site,{path,limit,cursor,signal}){
  pageKey(site,path);return list(store,pageIndex(site,path),{site,path,limit,cursor,signal});
 }
+// Path changes check only acknowledged receipts for this page. An old index
+// row left by an interrupted checkpoint cannot block the page indefinitely.
+export async function hasWebsitePageRecovery(store,site,path,signal){
+ pageKey(site,path);
+ const directory=pageIndex(site,path);
+ let after=null;
+ do{
+  const batch=await store.names(directory,{after,limit:32,directories:false});after=batch.next;
+  for(const name of batch.items){
+   signal?.throwIfAborted();
+   const ref=await store.control(directory+'/'+name,{missing:true});if(!ref)continue;
+   if(ref.siteId!==site||ref.path!==path)fail('FORMAT');
+   const r=await record(store,site,path,ref.id);
+   if(r&&r.revision===ref.revision&&orderName(r)===name)return true;
+  }
+ }while(after);
+ return false;
+}
 export function listWebsiteRecovery(store,{limit,cursor,signal}={}){
  return list(store,catalogue,{limit,cursor,signal});
 }

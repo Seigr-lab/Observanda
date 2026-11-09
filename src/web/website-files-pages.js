@@ -100,7 +100,7 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
   const conflict=touched&&pageSignature!==key();
   return '<section class="panel website-file-pages"><h2>'+esc(tr('pagePanel'))+'</h2><label>'+esc(tr('pageSearch'))+'<input type="search" data-pages-search value="'+esc(search)+'"></label>'+
    '<label>'+esc(tr('pageVisibility'))+'<select data-pages-state>'+[['all','allPages'],['public','pagePublic'],['draft','pagePrivate']].map(([value,label])=>'<option value="'+value+'"'+(state===value?' selected':'')+'>'+esc(tr(label))+'</option>').join('')+'</select></label>'+
-   '<div data-pages-results>'+results()+'</div><h3>'+esc(tr('pageSettings'))+'</h3><p><code>'+esc(site().path)+'</code></p>'+inclusionView()+
+   '<div data-pages-results>'+results()+'</div><h3>'+esc(tr('pageSettings'))+'</h3><p><code>'+esc(site().path)+'</code></p><button type="button" class="button" data-action="website-files-manage-page">'+esc(tr('lifeManagePage'))+'</button>'+inclusionView()+
    (conflict?'<p role="alert">'+esc(tr('changed'))+'</p>'+button('reopen','reload'):
    '<label>'+esc(tr('pageTitle'))+'<input data-page-setting="title" value="'+esc(draft.title)+'" maxlength="200"'+(base.titleManaged?' readonly':'')+'></label>'+
    '<label>'+esc(tr('pageDescription'))+'<textarea data-page-setting="description"'+(base.descriptionManaged?' readonly':'')+'>'+esc(draft.description)+'</textarea></label>'+
