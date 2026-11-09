@@ -9,6 +9,7 @@ import {starterPage} from './web/website-file-starter.js';
 import {componentContext} from './website-component-storage.js';
 import {renderComponentInstance} from './website-file-component.js';
 import {publicPictureNames} from './website-picture-files.js';
+import {designStyleCopies} from './website-design-styles.js';
 import {publicRecordingNames,websiteRecordingKind} from './website-recordings.js';
 
 const invalid=()=>{throw new AppError('INVALID');};
@@ -45,7 +46,7 @@ function usable(files,page){
  const file=page&&files.get(page.path);
  return file&&!page.draft&&!file.draft&&!file.sourceId&&!file.feedPage;
 }
-function pageDesignHTML(manifest,owner,file,html,destination,title,language,labels){
+function pageDesignHTML(manifest,owner,file,html,destination,title,language,labels,styles){
  const context=componentContext(manifest),instances=[],sourceInstances=new Map((owner.instances??[]).map(i=>[i.id,i]));
  const pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
  const feedHosts=new Set(manifest.feeds?.map(feed=>feed.path));
@@ -80,6 +81,10 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   }else if(type==='img'?!asset.picture||!pictures.has(name):websiteRecordingKind(asset)!==type||!recordings.has(name))return null;
   return esc(path.posix.relative(outDir,name)+(hash?'#'+hash:''));
  }
+ function designClass(node){
+  const classes=(attr(node,'class')??'').split(/\s+/).map(c=>layoutClasses.has(c)?c:styles.copy(c)).filter(Boolean);
+  return classes.length?' class="'+esc(classes.join(' '))+'"':'';
+ }
  function designNode(node){
   if(!node.tagName||skipped(node))return '';
   const placed=attr(node,'data-website-instance');
@@ -90,17 +95,23 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
    return renderComponentInstance(definition,instance,{path:destination},context);
   }
   const tag=node.tagName;if(!slots.has(tag))return '';
-  const classes=(attr(node,'class')??'').split(/\s+/).filter(c=>layoutClasses.has(c)).join(' '),style=layoutStyle(attr(node,'style')),theme=attr(node,'data-website-theme');
-  let attrs=(classes?' class="'+esc(classes)+'"':'')+(style?' style="'+esc(style)+'"':'');
+  let url;
+  if(tag==='a'){
+   url=resource(attr(node,'href'),'link');if(!url)return {open:'',close:'',sample:''};
+  }else if(tag==='img'){
+   url=resource(attr(node,'src'),'img');if(!url)return '';
+  }else if(tag==='audio'||tag==='video'){
+   const source=node.childNodes.find(child=>child.tagName==='source'&&!skipped(child));
+   url=resource(attr(node,'src')??(source?attr(source,'src'):''),tag);if(!url)return '';
+  }
+  const style=layoutStyle(attr(node,'style')),theme=attr(node,'data-website-theme');
+  let attrs=designClass(node)+(style?' style="'+esc(style)+'"':'');
+  if(tag==='p'&&attr(node,'data-website-annotation')==='')attrs+=' data-website-annotation=""';
   const anchor=anchors.get(attr(node,'id'));if(anchor)attrs+=' id="'+anchor+'"';
   if(theme&&context.themes.has(theme)&&file.usedThemes?.includes(theme))attrs+=' data-website-theme="'+esc(theme)+'"';
   if(tag==='hr')return '<hr'+attrs+'>';
-  if(tag==='img'){
-   const url=resource(attr(node,'src'),'img');return url?'<img'+attrs+' src="'+url+'" alt="'+esc(settings.image)+'">':'';
-  }
+  if(tag==='img')return '<img'+attrs+' src="'+url+'" alt="'+esc(settings.image)+'">';
   if(tag==='audio'||tag==='video'){
-   const source=node.childNodes.find(child=>child.tagName==='source'&&!skipped(child)),url=resource(attr(node,'src')??(source?attr(source,'src'):''),tag);
-   if(!url)return '';
    const tracks=node.childNodes.flatMap(track=>{
     if(track.tagName!=='track'||skipped(track))return [];
     const href=resource(attr(track,'src'),'track'),lang=attr(track,'srclang')??'',kind=attr(track,'kind');
@@ -108,9 +119,7 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
    }).join('');
    return '<'+tag+attrs+' controls preload="metadata" src="'+url+'">'+tracks+'</'+tag+'>';
   }
-  if(tag==='a'){
-   const url=resource(attr(node,'href'),'link');return url?{open:'<a'+attrs+' href="'+url+'">',close:'</a>',sample:settings.text}:{open:'',close:'',sample:''};
-  }
+  if(tag==='a')return {open:'<a'+attrs+' href="'+url+'">',close:'</a>',sample:settings.text};
   const sample=/^(?:h[2-6]|summary|caption|th)$/.test(tag)?settings.heading:/^(?:p|pre|td|li|blockquote|figcaption|strong|em|b|i|u|sub|sup|mark|code)$/.test(tag)?settings.text:'';
   return {open:'<'+tag+attrs+'>',close:'</'+tag+'>',sample};
  }
@@ -125,7 +134,11 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   const part=designNode(entry.node);if(typeof part==='string'){append(part);continue;}
   append(part.open);stack.push({start:chunks.length,close:part.close,sample:part.sample});queue(entry.node.childNodes??[]);
  }
- const starter=starterPage({title,language,stylesheet:path.posix.relative(outDir,manifest.cssPath)},esc);
+ let starter=starterPage({title,language,stylesheet:path.posix.relative(outDir,manifest.cssPath)},esc);
+ if(allowed){
+  const heading=root.childNodes.find(n=>n.tagName==='h1'&&!skipped(n));
+  starter=starter.replace('<body><main><h1>',()=>'<body'+designClass(body)+'><main'+(root===body?'':designClass(root))+'><h1'+(heading?designClass(heading):'')+'>');
+ }
  return {html:starter.replace('</main>',()=>chunks.join('')+'</main>'),instances};
 }
 export function websitePageDesigns(store,siteId,options){
@@ -160,7 +173,8 @@ export function websitePageDesigns(store,siteId,options){
   const file=manifest.files.find(f=>f.name===owner.path),css=manifest.files.find(f=>f.name===manifest.cssPath);
   if(!file||file.draft||!css||css.draft||css.sourceId)invalid();
   const title=named(options.title),language=typeof options.language==='string'&&options.language.length<=80?options.language:'en';
-  const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels);
-  return store.save(siteId,{expectedRevision,path:out,html:generated.html,css:await store.readText(css,{signal}),title,signal},generated.instances);
+  const styles=designStyleCopies(await store.readText(css,{signal}));
+  const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels,styles);
+  return store.save(siteId,{expectedRevision,path:out,html:generated.html,css:styles.stylesheet(),title,signal},generated.instances);
  },{write:action!=='list',signal});
 }

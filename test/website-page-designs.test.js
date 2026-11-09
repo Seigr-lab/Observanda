@@ -10,6 +10,20 @@ import {componentOperation} from '../src/website-component-storage.js';
 import {websitePageDesigns} from '../src/website-page-designs.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {websiteThemes} from '../src/website-scoped-themes.js';
+import {designStyleCopies} from '../src/website-design-styles.js';
+import {writeVisualStyle} from '../src/web/website-files-visual-style.js';
+
+test('designs copy only the selected generated declarations and keep their cascade position',()=>{
+ const title='ow-visual-'+randomUUID(),duplicate='ow-visual-'+randomUUID(),unrelated='ow-visual-'+randomUUID();
+ const style=(name,declarations)=>writeVisualStyle('',name,{length:1,cssText:declarations});
+ const valid=style(title,'color: rgb(12, 34, 56); --page-text: rgb(12, 34, 56);');
+ const css=valid+style(duplicate,'padding: 12px;')+style(duplicate,'padding: 14px;')+style(unrelated,'content: "annotation wording";')+'\nmain section {color: navy;}';
+ const design=designStyleCopies(css);
+ const first=design.copy(title),second=design.copy(title);
+ assert.notEqual(first,second);assert.notEqual(first,title);assert.ok(first&&second);
+ assert.equal(design.copy(unrelated),null);assert.equal(design.copy(duplicate),null);assert.equal(design.copy('free-form'),null);
+ assert.equal(design.stylesheet(),valid+valid.replaceAll(title,first)+valid.replaceAll(title,second)+css.slice(valid.length));
+});
 
 const wrap=(title,body)=>'<html lang="en"><head><title>'+title+'</title></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
 test('a public page design uses the latest structure, new linked instances and public website-owned files only',async t=>{
@@ -21,8 +35,9 @@ test('a public page design uses the latest structure, new linked instances and p
  let page=await store.importFiles(siteId,{name:'Atlas',files:new Map([['index.html',wrap('Existing home','<p>Home</p>')],[source,wrap('Derived research title','<section><p>Prose</p></section>')],['style.css','main{padding:1rem}']]),draftFiles:new Map([['private/notes.html',wrap('PRIVATE PLAN','')],['private/unnamed.png','SECRET PRIVATE BYTES'],['draft-styles.css','/* PRIVATE CSS */']])});
  let revision=page.site.revision;
  const act=(action,opts={})=>websitePageDesigns(store,siteId,{expectedRevision:revision,action,path:source,...opts});
- const revised=wrap('Derived research title','<section class="website-columns" data-section-id="research-label" style="display:grid;gap:2rem"><h2 id="old-instrument-label">Withheld figure name</h2><p><a href="#old-instrument-label">Old section</a> <a href="../index.html">Research-derived label</a> <a href="../private/notes.html">SECRET DRAFT TITLE</a></p><figure><img alt="Research-derived alt" src="../'+photo+'"><img src="../private/unnamed.png" alt="Private figure"></figure><table><tr><th>Concentration</th><td>92.018</td></tr></table></section><aside><p>Instrument legend</p><a href="../index.html">Lab home</a></aside>');
- page=await store.save(siteId,{expectedRevision:revision,path:source,html:revised,css:'main{padding:1rem}',receivePictures:async function*(){yield {name:photo,bytes:Buffer.from('Owned public photo')};}});revision=page.site.revision;
+ const privateStyle='ow-visual-'+randomUUID(),donorCSS=writeVisualStyle('main{padding:1rem}',privateStyle,{length:1,cssText:'padding: 71px;'});
+ const revised=wrap('Derived research title','<section class="website-columns" data-section-id="research-label" style="display:grid;gap:2rem"><h2 id="old-instrument-label">Withheld figure name</h2><p><a href="#old-instrument-label">Old section</a> <a href="../index.html">Research-derived label</a> <a href="../private/notes.html">SECRET DRAFT TITLE</a></p><figure><img alt="Research-derived alt" src="../'+photo+'"><img class="'+privateStyle+'" src="../private/unnamed.png" alt="Private figure"></figure><table><tr><th>Concentration</th><td>92.018</td></tr></table></section><aside><p>Instrument legend</p><a href="../index.html">Lab home</a></aside>');
+ page=await store.save(siteId,{expectedRevision:revision,path:source,html:revised,css:donorCSS,receivePictures:async function*(){yield {name:photo,bytes:Buffer.from('Owned public photo')};}});revision=page.site.revision;
  const comp=await componentOperation(store,'create',siteId,{path:source,expectedRevision:revision,blockPath:'0/2',name:'Public legend'});revision=comp.site.revision;
  const id=(await componentOperation(store,'list',siteId,{path:source,expectedRevision:revision})).items[0].id;
  const provenance={workspaceId:workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()},entryId=websiteSourceId(provenance);
@@ -42,6 +57,7 @@ test('a public page design uses the latest structure, new linked instances and p
  page=await store.save(siteId,{path:source,expectedRevision:revision,html:original.replace('</main>','<blockquote>RECENT SOURCE WRITING</blockquote></main>'),css:page.css});revision=page.site.revision;
  await assert.rejects(act('use',{...options,expectedRevision:old}),{code:'CONFLICT'});
  page=await act('use',options);revision=page.site.revision;
+ assert.equal(page.css.split('padding: 71px;').length-1,1,'only the original rule for the omitted asset can remain');
  assert.match(page.html,/<title>Plate calibration<\/title>/);assert.match(page.html,/<blockquote>New writing<\/blockquote>/);
  assert.match(page.html,/class="website-columns" style="display:grid;gap:2rem"/);assert.match(page.html,/<td>New writing<\/td>/);
  const anchor=/<h2 id="(section-[a-f\d-]+)">/.exec(page.html)[1];assert.ok(page.html.includes('href="#'+anchor+'"'));assert.doesNotMatch(page.html,/old-instrument-label/);

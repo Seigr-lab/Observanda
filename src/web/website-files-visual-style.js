@@ -12,6 +12,7 @@ const properties = {
   'text-align': ['--section-heading-align', '--section-body-align', '--section-item-heading-align', '--section-details-align', '--section-caption-align', '--section-button-align']
 };
 const classFormat = /^ow-visual-[a-f0-9-]{36}$/;
+export const generatedAppearanceProperties = new Set(Object.entries(properties).flatMap(([property,aliases])=>[property,...aliases]));
 
 export function visualClass(node) {
   return [...node.classList].find(name=>classFormat.test(name));

@@ -113,6 +113,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const observer=new win.ResizeObserver(schedule);
   const fields=visualStyleFields(document,t), controls=new Map(), paintLabels=new Map(), touched=new Set();
   const form=make('form'); form.className='website-visual-style';
+  // Other inspector tools (such as adding an annotation) validate their
+  // own inputs. An empty field in a closed tool cannot block a style edit.
+  form.noValidate=true;
   const title=make('h3',t('sectionAppearance')), prompt=make('p',t('sectionSelectPrompt'));
   const scope=make('select'); scope.dataset.visualScope='';
   const labelled=(text,control)=>{const label=make('label');label.append(make('span',text),control);return label;};
@@ -272,6 +275,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     for(const field of fields){
       const control=controls.get(field.name);
       if(control.disabled||(!resetAll&&!touched.has(field.name)))continue;
+      if(!resetAll&&!control.reportValidity())return;
       changes.set(field.name,resetAll||!control.value?'':control.value+(field.unit??''));
     }
     if(!changes.size)return;
