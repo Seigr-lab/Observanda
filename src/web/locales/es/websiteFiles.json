@@ -355,6 +355,8 @@
   "folderPublish": "Publicar en una carpeta",
   "undo": "Deshacer",
   "redo": "Rehacer",
+  "historyMediaUnavailable": "La acción «{operation}» necesita un archivo multimedia que ya no está disponible en esta sesión de edición. La página actual sigue abierta.",
+  "historySharedChanged": "Algunos cambios anteriores de la página se solapan con el contenido compartido más reciente y no se pueden volver a aplicar.",
   "duplicatePage": "El archivo ya existe. Elige otro nombre de archivo.",
   "title": "Editor del sitio web",
   "workspace": "Volver al espacio de trabajo",

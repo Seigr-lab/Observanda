@@ -8,6 +8,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
 import {websitePictureUpload} from '../src/website-picture-upload.js';
+import {retainEditHistory} from '../src/website-edit-history.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 
 test('a saved gallery commits its pictures together, rejects truncated uploads, and retires removed pictures',async t=>{
@@ -32,4 +33,41 @@ test('a saved gallery commits its pictures together, rejects truncated uploads, 
  const removed=await store.save(id,{expectedRevision:saved.site.revision,path:'index.html',html:created.html,css:''});
  const files=(await store.export(id,{expectedRevision:removed.site.revision})).files;
  for(const name of names)assert.ok(!files.has(name));
+});
+
+test('only the editing page can restore its retired image and published files exclude retired bytes',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-history-gallery-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{key:randomBytes(32),id:randomUUID()}),store=new WebsiteFileStore(workspace);
+ const id=randomUUID(),historyKey=randomUUID(),name='pictures/'+randomUUID()+'.png';
+ const png=await readFile(new URL('../src/preview-assets/image.png',import.meta.url)),created=await store.create({id,name:'Image history'});
+ const html=created.html.replace('</main>','<img src="'+name+'" alt="Specimen"></main>');
+ const saved=await store.save(id,{expectedRevision:created.site.revision,historyKey,html,css:'',receivePictures:async function*(){yield {name,bytes:png};}});
+ const removed=await store.save(id,{expectedRevision:saved.site.revision,historyKey,html:created.html,css:''}),revision=removed.site.revision;
+ assert.ok(removed.historyAssetStamp);assert.ok(!(await store.export(id,{expectedRevision:revision})).files.has(name));
+ assert.ok(!(await store.publicationInventory(id,{expectedRevision:revision})).files.includes(name));
+ await assert.rejects(store.file(id,name,{revision,editor:true}),{code:'NOT_FOUND'});
+ await assert.rejects(store.file(id,name,{revision:removed.historyAssetStamp}),{code:'CONFLICT'});
+ const held=(await store.file(id,name,{revision:removed.historyAssetStamp,editor:true})).content;
+ assert.deepEqual(Buffer.concat(await Array.fromAsync(held.read())),png);
+ const status=(key,path)=>store.versionStatus(id,{path,expectedRevision:revision,historyKey:key,media:[name]});
+ assert.equal((await status(historyKey,'index.html')).mediaAvailable,true);
+ assert.equal((await status(randomUUID(),'index.html')).mediaAvailable,false);
+ assert.equal((await status(historyKey,'other.html')).mediaAvailable,false);
+ for(const [key,path] of [[randomUUID(),'index.html'],[historyKey,'other.html']]){
+  await assert.rejects(store.save(id,{path,historyKey:key,expectedRevision:revision,html,css:''}),{code:'INVALID'});
+  assert.equal((await store.open(id)).site.revision,revision);
+ }
+ const restored=await store.save(id,{expectedRevision:revision,historyKey,html,css:''});
+ assert.ok((await store.export(id,{expectedRevision:restored.site.revision})).files.has(name));assert.equal(restored.historyAssetStamp,undefined);
+});
+
+test('session media retention admits only bounded website-owned files',()=>{
+ const key=randomUUID(),page='index.html';
+ const picture=(overrides={})=>({name:'pictures/'+randomUUID()+'.png',contentType:'image/png',picture:true,size:1024,...overrides});
+ const large=picture({size:129*1024*1024}),privateSource=picture({sourceId:'f'.repeat(64)}),fromFeed=picture({feedAsset:true});
+ const owned=Array.from({length:258},()=>picture());
+ const files=[large,privateSource,fromFeed,...owned];
+ const manifest={files,pages:[{path:page,pictures:files.map(f=>f.name)}]};
+ assert.deepEqual(retainEditHistory(manifest,[],key,page).history.files,owned.slice(0,256));
 });

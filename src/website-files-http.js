@@ -93,7 +93,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    onWrite();await check();
    const {data,pictures}=await websitePictureUpload(req,signal);
    if(!researchId(data.siteId))throw new AppError('INVALID');
-   json(await store.save(data.siteId,{html:data.html,css:data.css,path:data.path,expectedRevision:data.expectedRevision,receivePictures:pictures,signal}));return true;
+   json(await store.save(data.siteId,{html:data.html,css:data.css,path:data.path,expectedRevision:data.expectedRevision,historyKey:data.historyKey,receivePictures:pictures,signal}));return true;
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
@@ -166,11 +166,11 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation==='menu/save'){await observed(()=>operationStage('menuSave',{unit:'files'},()=>store.saveMenu(siteId,{...options,expectedRevision,signal})));return true;}
   if(operation==='version'){
    if(options.path!==undefined&&(typeof options.path!=='string'||!options.path.endsWith('.html')||!revision(expectedRevision)))throw new AppError('INVALID');
-   json(await store.versionStatus(siteId,{path:options.path,expectedRevision,signal}));return true;
+   json(await store.versionStatus(siteId,{path:options.path,historyKey:options.historyKey,media:options.media,expectedRevision,signal}));return true;
   }
   if(operation==='save'){
    if(Object.hasOwn(options,'recordings')||Object.hasOwn(options,'receivePictures'))throw new AppError('INVALID');
-   const {path,html,css,title}=options;json(await store.save(siteId,{path,html,css,title,expectedRevision,signal}));return true;
+   const {path,html,css,title,historyKey}=options;json(await store.save(siteId,{path,html,css,title,historyKey,expectedRevision,signal}));return true;
   }
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-sources'){json(await store.insertSources(siteId,{...options,expectedRevision,signal}));return true;}

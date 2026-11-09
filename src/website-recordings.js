@@ -83,7 +83,7 @@ export async function readRecordingUpload(request,signal){
 export async function saveRecordingUpload(store,upload,{signal,check}={}){
  const {data,uploads,bytes}=upload;
  await store.checkRevision(data.siteId,data.expectedRevision);
- const save=async()=>{await check?.();return store.save(data.siteId,{expectedRevision:data.expectedRevision,path:data.path,html:data.html,css:data.css,recordings:uploads,signal});};
+ const save=async()=>{await check?.();return store.save(data.siteId,{expectedRevision:data.expectedRevision,path:data.path,html:data.html,css:data.css,historyKey:data.historyKey,recordings:uploads,signal});};
  if(!data.recording){for await(const _ of bytes())invalid();return save();}
  const {name,size,label}=data.recording,workspace=store.workspace,ext=resource.exec(name)[1],kind=ext==='wav'?'audio':'video';
  const {policy}=await new MediaPolicy(workspace).read();if(size>policy.maxUploadBytes)throw new AppError('MEDIA_LIMIT');

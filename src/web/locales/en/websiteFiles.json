@@ -355,6 +355,8 @@
   "folderPublish": "Publish to folder",
   "undo": "Undo",
   "redo": "Redo",
+  "historyMediaUnavailable": "{operation} needs a media file that is no longer available in this editing session. Your current page is still open.",
+  "historySharedChanged": "Some earlier page edits overlap the latest shared content and cannot be replayed.",
   "duplicatePage": "This file already exists. Choose a different page file name.",
   "title": "Website editor",
   "workspace": "Back to workspace",

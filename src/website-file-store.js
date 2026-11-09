@@ -24,6 +24,7 @@ import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMa
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
 import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from './website-component-storage.js';
 import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
+import {editHistory,editHistoryStamp,retainEditHistory,validateEditHistory} from './website-edit-history.js';
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
@@ -208,6 +209,7 @@ export class WebsiteFileStore{
   validateFeedFiles(value,names);
   validateSavedAppearance(value);
   validatePageDesigns(value);
+  validateEditHistory(this,value,names);
   validateWebsiteThemes(value);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
@@ -276,7 +278,8 @@ export class WebsiteFileStore{
   return manifest;
  }
  site(manifest,page){return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:manifest.pages.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(manifest.feeds?.length?{feedPages:websiteFeedPages(manifest)}:{}),cssPath:page?.draft?draftStyle:manifest.cssPath};}
- async commit(manifest,{signal}={}){
+ async commit(manifest,options={}){
+  const {signal}=options;
   manifest=await syncEntryStyles(this,manifest,signal);
   manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
   manifest=await syncSavedAppearance(this,manifest,signal);
@@ -293,7 +296,15 @@ export class WebsiteFileStore{
   }
   manifest=retainComponentAssets(manifest);
   if(manifest.feeds?.length)manifest={...manifest,feedPlacementsIndexed:2};
-  const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,canvasAssets:canvasAssetStamp(manifest),version:1,updatedAt:new Date().toISOString()};delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
+  const previous=await this.raw(manifest.id,{missing:true}),value={...manifest,canvasAssets:canvasAssetStamp(manifest),version:1,updatedAt:new Date().toISOString()};
+  const history=Object.hasOwn(options,'history')?options.history:manifest.editHistory;
+  delete value.editHistory;
+  if(history?.expires>Date.now()){
+   const page=value.pages.find(p=>p.path===history.page),live=new Set(value.files.map(f=>f.name));
+   const files=page?history.files.filter(f=>!live.has(f.name)&&(page.draft||!f.draft)):[];
+   if(files.length)value.editHistory={...history,files};
+  }
+  delete value.revision;value.revision=hash(plain(value));const directory=ROOT+'/sites/'+siteName(value.id);
   const bytes=Buffer.from(plain(value));if(bytes.length>CONTROL_LIMIT)throw new AppError('LIMIT');
   await writeFeedSubscription(this,value,previous,signal);
   // Direct copies retain their own per-source registrations. Feed-only
@@ -308,8 +319,9 @@ export class WebsiteFileStore{
   await clearFeedSubscription(this,value,previous);
   if(previous&&previous.revision!==value.revision){
    for(const id of oldOrdinary)if(!newOrdinary.has(id))await this.remove(ROOT+'/sources/'+id+'/placements/'+siteName(value.id)+'.json');
-   const retained=new Set(value.files.map(file=>file.blob));
-   for(const blob of new Set(previous.files.map(file=>file.blob)))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
+   const blobs=revision=>new Set([...revision.files,...(revision.editHistory?.files??[])].map(file=>file.blob));
+   const retained=blobs(value);
+   for(const blob of blobs(previous))if(!retained.has(blob)&&(blob.startsWith(directory+'/files/')||blob.startsWith(directory+'/drafts/files/')))await this.remove(blob);
    await this.remove(directory+'/revisions/'+previous.revision+'.json');
   }return value;
  }
@@ -355,7 +367,7 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  menu(id,options){return readSiteMenu(this,id,options);}
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
- save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,signal}={},designInstances){return this.scope(async()=>{
+ save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,signal}={},designInstances){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
   if(manifest.files.some(file=>file.name===page&&file.feedPage))throw new AppError('CONFLICT');
   const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
@@ -374,7 +386,10 @@ export class WebsiteFileStore{
    ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
    validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
   }
-  const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
+  const historyFiles=editHistory(manifest,historyKey,page);
+  const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);
+  for(const file of historyFiles)if(htmlPictures.has(file.name)||cssPictures.has(file.name)||recordingNames.has(file.name))files.push(file);
+  files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
   if(addViewer)files.push(await this.siteFile(id,'public-gallery.js',PUBLIC_GALLERY_SCRIPT,{signal}));
   if(html.includes('public-gallery.css')&&!files.some(file=>file.name==='public-gallery.css')){
    const viewerCSS=await readFile(new URL('./web/public-gallery.css',import.meta.url),'utf8');files.push(await this.siteFile(id,'public-gallery.css',viewerCSS,{signal}));
@@ -386,27 +401,37 @@ export class WebsiteFileStore{
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
   const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures,draft,signal});
-  let saved,media;try{
+  let saved,media,retention;try{
    media=await saveWebsiteRecordings(this,manifest,{files:pictures.files,pages,names:recordingNames,uploads:recordings,draft,signal});
-   saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal});
+   retention=retainEditHistory(manifest,media.files,historyKey,page);
+   saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal,history:retention.history});
   }catch(error){if((await this.raw(id)).revision===manifest.revision){await pictures.rollback();await media?.rollback();}throw error;}
-  return this.present(saved,page,{signal});
+  const result=await this.present(saved,page,{signal});
+  if(retention.history)result.historyAssetStamp=editHistoryStamp(saved);
+  return result;
  },{write:true,signal});}
  checkRevision(id,revision){return this.scope(async()=>this.site(await this.current(id,revision)));}
  canvasDocument(id,page,token,{signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id);
-  if(manifest.revision!==token&&this.assetStamp(manifest)!==token)throw new AppError('CONFLICT');
+  if(!hex(token)||manifest.revision!==token&&this.assetStamp(manifest)!==token&&editHistoryStamp(manifest)!==token)throw new AppError('CONFLICT');
   if(!manifest.pages.some(p=>p.path===page))throw new AppError('NOT_FOUND');
  },{signal});}
  siteVersion(id,options={}){return this.versionStatus(id,options).then(value=>value.revision);}
- versionStatus(id,{path,expectedRevision,signal}={}){return this.scope(async()=>{
+ versionStatus(id,{path,expectedRevision,historyKey,media,signal}={}){return this.scope(async()=>{
   const head=await this.control(ROOT+'/sites/'+siteName(id)+'/head.json',{limit:1024});
   if(!hex(head?.revision))throw new AppError('FORMAT');
   const pending=await this.pendingSources(),changed=path&&expectedRevision!==head.revision;
-  if(!changed&&!pending.size)return head;
+  if(media!==undefined&&(!Array.isArray(media)||media.some(n=>typeof n!=='string'||!n.startsWith('pictures/')&&!n.startsWith('recordings/'))))throw new AppError('INVALID');
+  if(!changed&&!pending.size&&!media?.length)return head;
   const manifest=await this.revisionManifest(id,head.revision);
   if(await siteHasPendingSources(this,manifest,pending))throw new AppError('CONFLICT');
-  if(!changed)return head;
+  if(!changed){
+   if(!media?.length)return head;
+   const page=manifest.pages.find(p=>p.path===path);
+   const held=editHistory(manifest,historyKey,path);
+   const admitted=new Set([...manifest.files,...held].filter(file=>!file.sourceId&&!file.feedAsset&&(page?.draft||!file.draft)).map(file=>file.name));
+   return {...head,mediaAvailable:!!page&&media.every(name=>admitted.has(name)),...(held.length?{historyAssetStamp:editHistoryStamp(manifest)}:{})};
+  }
   const file=manifest.files.find(file=>file.name===path);
   return {...head,surfaceStamp:this.surfaceStamp(manifest,path),site:this.site(manifest,file)};
  },{signal});}
@@ -414,8 +439,9 @@ export class WebsiteFileStore{
  file(id,name,{revision,signal,editor=false}={}){return this.scope(async()=>{
   websiteFileName(name);
   const follow=editor&&hex(revision)&&!name.endsWith('.html');
-  const manifest=await this.current(id,follow?undefined:revision),descriptor=manifest.files.find(file=>file.name===name);
-  if(follow&&manifest.revision!==revision&&this.assetStamp(manifest)!==revision)throw new AppError('CONFLICT');
+  const manifest=await this.current(id,follow?undefined:revision),historyAccess=follow&&editHistoryStamp(manifest)===revision;
+  const descriptor=manifest.files.find(file=>file.name===name)??(historyAccess&&manifest.editHistory.expires>Date.now()?manifest.editHistory.files.find(file=>file.name===name):null);
+  if(follow&&manifest.revision!==revision&&this.assetStamp(manifest)!==revision&&!historyAccess)throw new AppError('CONFLICT');
   if(name===entryStyleName&&(!descriptor||descriptor.draft&&!editor)){
    const files=new Map(manifest.files.map(f=>[f.name,f]));
    for(const page of manifest.pages)if((editor||!page.draft)&&(usesEntryStyle(page)||await fileHasEditorMenu(this,files.get(page.path),signal))){

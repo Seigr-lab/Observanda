@@ -80,10 +80,15 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
    if(token!==epoch||site()?.site.id!==pin.siteId||site()?.path!==pin.path||site()?.site.revision!==value.revision)return;
    offset=start;next=value.next;total=value.total;revision=value.revision;items=value.items;results();
   }catch(error){
-   if(error.name==='AbortError'||task.signal.aborted)return;
+   if(error.name==='AbortError'||task.signal.aborted||token!==epoch||site()?.site.revision!==pin.expectedRevision)return;
    const target=panel()?.querySelector('[data-component-results]');if(target)target.textContent=error.message||tr('failed');
    if(['ACCESS_LOCKED','AUTH','WEBSITE_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(error.code))throw error;
-  }finally{if(token===epoch)controller=null;}
+  }finally{
+   if(token===epoch){
+    controller=null;
+    if(opened&&panel()?.isConnected&&site()?.site.revision!==pin.expectedRevision)void list().catch(report);
+   }
+  }
  }
  function browse(open){
   if(!open){const current=canvas;reset();canvas=current;}else opened=true;
@@ -107,6 +112,7 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
  async function write(op,options){
   const pin=local(),result=await request('components/'+op,{...pin,...options});
   if(site()?.site.id!==pin.siteId||site()?.path!==pin.path||site().site.revision!==pin.expectedRevision)return;
+  controller?.abort();controller=null;epoch++;
   closeDialog();adopt(result);if(op==='create'){name='';query='';}revision=null;render();
  }
  async function place(id,where,blockPath){

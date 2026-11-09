@@ -5,7 +5,7 @@ const authored=doc=>[...doc.querySelectorAll('audio,video')].filter(node=>!node.
 const relative=(path,name)=>'../'.repeat(path.split('/').length-1)+name;
 const recordingPath=(page,name)=>new URL(name,new URL(page,'https://website.invalid/')).pathname.slice(1);
 
-export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,adopt,render,run,notify,close}){
+export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,adopt,historyKey,render,run,notify,close}){
  let doc=null,revision=null,pagePath=null,index=-1,items=[],next=null,modified=false;
  const player=()=>authored(doc)[index];
  const figure=node=>node?.closest('figure[data-website-recording]');
@@ -94,7 +94,7 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    if(data.get('defaultTrack')){for(const other of media.querySelectorAll('track[default]'))other.removeAttribute('default');track.default=true;}
    media.append(track);trackText.push({name,text:await vtt.text()});
   }
-  const header=new TextEncoder().encode(JSON.stringify({siteId:site().id,path:pagePath,expectedRevision:revision,html:serializeWebsiteHTML(copy),css:css(),recording:record,tracks:trackText}));
+  const header=new TextEncoder().encode(JSON.stringify({siteId:site().id,path:pagePath,expectedRevision:revision,historyKey:historyKey?.(),html:serializeWebsiteHTML(copy),css:css(),recording:record,tracks:trackText}));
   const size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,header.length);
   const result=await request('media/save',new Blob(file?[size,header,file]:[size,header],{type:'application/octet-stream'}));
   reset();adopt(result);close();

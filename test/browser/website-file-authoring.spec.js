@@ -8,6 +8,101 @@ const savedSite={id,name:'Recovered site',revision:'c'.repeat(64),cssPath:'style
 const savedPage={site:savedSite,path:'index.html',css:'',html:'<!doctype html><html><body><main><h1>Original saved home</h1></main></body></html>'};
 const sessionWith=(sites,preparation)=>({workspaceId:id,title:'Lab',sites,preparation});
 
+test('undo checks current access before replaying a saved page transaction',async({page})=>{
+ let site={...savedSite},granted=true,checks=0;
+ const source='4'.repeat(64),grantedPart='<section data-observanda-source="'+source+'" data-observanda-source-revision="'+source+'"><p data-observanda-part="text">Selected field text</p></section>';
+ let html=savedPage.html.replace('</main>',grantedPart+'</main>');
+ const open=()=>({...savedPage,site,html,sourceStamp:granted?source:'5'.repeat(64)});
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([site],{state:'ready'});
+  if(route.endsWith('/open'))return open();
+  if(route.endsWith('/version')){checks++;return {revision:site.revision};}
+  if(route.endsWith('/save')){html=data.html;site={...site,revision:'d'.repeat(64)};return open();}
+  throw Error('Unexpected route '+route);
+ });
+ await page.clock.install();await mountFilesEditor(page);
+ const canvas=page.frameLocator('#website-files-canvas'),heading=canvas.getByRole('heading');
+ await heading.click();await page.keyboard.press('End');await page.keyboard.type(' amended');
+ await page.getByRole('button',{name:'Save website',exact:true}).click();
+ const undo=page.getByRole('button',{name:'Undo',exact:true});
+ await expect(undo).toBeEnabled();
+ granted=false;html=html.replace(/<section data-observanda-source=[\s\S]+?<\/section>/,'');site={...site,revision:'e'.repeat(64)};
+ const before=checks;await undo.click();await expect.poll(()=>checks).toBeGreaterThan(before);
+ await expect(page.locator('#website-files-canvas')).toHaveCount(0);
+ await page.clock.fastForward(5100);
+ await expect(heading).toHaveText('Original saved home amended');
+ await expect(canvas.getByText('Selected field text')).toHaveCount(0);
+ await expect(undo).toBeDisabled();
+});
+
+test('a rejected undo identifies unavailable media and keeps unsaved writing and history intact',async({page})=>{
+ const picture='pictures/677a25bc-7713-49a6-8521-a4ff11e918bf.png';
+ const nested='pictures/377a25bc-7713-49a6-8521-a4ff11e918bc.png';let available=false,checked=[];
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([savedSite],{state:'ready'});
+  if(route.endsWith('/open'))return {...savedPage,css:'.cover{background-image:URL('+picture+')}',html:savedPage.html.replace('</main>','<template><template><img alt="Local sample" src="'+nested+'"></template></template></main>')};
+  if(route.endsWith('/version')){if(data.media)checked=data.media;return {revision:savedSite.revision,...(data.media?.length?{mediaAvailable:available}:{})};}
+  throw Error('Unexpected route '+route);
+ });
+ await mountFilesEditor(page);
+ const heading=page.frameLocator('#website-files-canvas').getByRole('heading'),undo=page.getByRole('button',{name:'Undo',exact:true});
+ await heading.click();await page.keyboard.press('End');await page.keyboard.insertText(' changed');
+ await undo.click();await expect(page.locator('[data-website-files-status]')).toContainText('Undo needs a media file');
+ expect(checked.sort()).toEqual([picture,nested].sort());await expect(heading).toHaveText('Original saved home changed');await expect(undo).toBeEnabled();
+ available=true;await undo.click();await expect(heading).toHaveText('Original saved home');
+});
+
+test('a late component listing cannot replace the library for the acknowledged edit',async({page})=>{
+ let release,arrived,finished,created=false;const old=new Promise(r=>{release=r;}),pending=new Promise(r=>{arrived=r;}),delivered=new Promise(r=>{finished=r;});
+ const component='c2d03233-dd69-4e31-8039-de949983f917',instance='b520d6ba-4d83-440a-a98d-736bc58bcf30';
+ const site=()=>created?{...savedSite,revision:'b'.repeat(64)}:savedSite;
+ const opened=()=>({...savedPage,site:site(),html:savedPage.html.replace('</main>','<section '+(created?'data-website-instance="'+instance+'"':'')+'><h2>Field card</h2></section></main>')});
+ await page.exposeFunction('filesAPI',async(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([site()],{state:'ready'});
+  if(route.endsWith('/open'))return opened();
+  if(route.endsWith('/version'))return {revision:site().revision};
+  if(route.endsWith('/components/create')){created=true;return opened();}
+  if(route.endsWith('/components/list')){
+   if(data.expectedRevision===savedSite.revision){arrived();await old;finished();return {errorCode:'CONFLICT',message:'Obsolete component response'};}
+   return {revision:site().revision,items:[{id:component,name:'Field card',instances:1,pages:1}],total:1,next:null};
+  }
+  throw Error('Unexpected route '+route);
+ });
+ try{
+  await mountFilesEditor(page);const canvas=page.frameLocator('#website-files-canvas'),library=page.locator('[data-website-components]');
+  await page.getByRole('button',{name:'Reusable library',exact:true}).click();await pending;
+  await canvas.locator('section').click({position:{x:2,y:2}});await library.getByLabel('Component name',{exact:true}).fill('Field card');
+  await library.getByRole('button',{name:'Create from selected block'}).click();
+  await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();release();await delivered;
+  await expect(library).not.toContainText('Obsolete component response');await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
+ }finally{release();}
+});
+
+test('undo never changes the other identical paragraph when the edited occurrence becomes a shared component',async({page})=>{
+ const label='Repeated measurement interval',amended=label+' amended';
+ let site=savedSite,html=savedPage.html.replace('</main>','<section><p>'+label+'</p></section><section><p>'+amended+'</p></section></main>'),component=false;
+ const open=()=>({...savedPage,site,html});
+ await page.exposeFunction('filesAPI',(route,data)=>{
+  if(route.endsWith('/session'))return sessionWith([site],{state:'ready'});
+  if(route.endsWith('/open'))return open();
+  if(route.endsWith('/version'))return {revision:site.revision};
+  if(route.endsWith('/save')){html=data.html;site={...site,revision:'a'.repeat(64)};return open();}
+  if(route.endsWith('/components/list'))return {items:[],next:null,total:0,revision:site.revision};
+  if(route.endsWith('/components/create')){
+   component=true;html=html.replace('<section><p>'+amended,'<section data-website-instance="88b0ae3e-c165-4cb2-8e15-c53ab07522fb"><p>'+amended);
+   site={...site,revision:'b'.repeat(64)};return open();
+  }
+  throw Error('Unexpected route '+route);
+ });
+ await mountFilesEditor(page);const canvas=page.frameLocator('#website-files-canvas'),sections=canvas.locator('main section'),first=sections.first().locator('p');
+ await first.click();await page.keyboard.press('End');await page.keyboard.insertText(' amended');
+ await page.getByRole('button',{name:'Save website',exact:true}).click();const undo=page.getByRole('button',{name:'Undo',exact:true});await expect(undo).toBeEnabled();
+ await page.getByRole('button',{name:'Reusable library',exact:true}).click();await sections.first().click({position:{x:2,y:2}});
+ const library=page.locator('[data-website-components]');await library.getByLabel('Component name',{exact:true}).fill('Shared observation');
+ await library.getByRole('button',{name:'Create from selected block'}).click();await expect.poll(()=>component).toBe(true);
+ await expect(undo).toBeDisabled();await expect(first).toHaveText(amended);await expect(sections.last()).toHaveText(amended);
+});
+
 test('publish update shows the configured SSH site and its reviewed files before enabling transfer',async({page})=>{
  const transfers=[],config={kind:'ssh',ssh:{host:'lab.example',directory:'/srv/atlas'}};
  await page.exposeFunction('filesAPI',(route,data)=>{

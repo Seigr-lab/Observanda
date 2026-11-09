@@ -355,6 +355,8 @@
   "folderPublish": "Publica en una carpeta",
   "undo": "Desfés",
   "redo": "Refés",
+  "historyMediaUnavailable": "L’acció «{operation}» necessita un fitxer multimèdia que ja no està disponible en aquesta sessió d’edició. La pàgina actual continua oberta.",
+  "historySharedChanged": "Alguns canvis anteriors de la pàgina se superposen al contingut compartit més recent i no es poden tornar a aplicar.",
   "duplicatePage": "Aquest fitxer ja existeix. Tria un altre nom de fitxer.",
   "title": "Editor del lloc web",
   "workspace": "Torna a l’espai de treball",

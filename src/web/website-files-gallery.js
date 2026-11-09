@@ -37,6 +37,20 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
  let index=0,offset=0,doc=null,drag=null;
  const pending=new Map();
  const reset=()=>{pending.clear();doc=null;index=offset=0;};
+ function acknowledged(document,ownerPath){
+  for(const image of document.querySelectorAll('img[src]'))pending.delete(publicName(image.getAttribute('src'),ownerPath));
+ }
+ function trimHistory(activeHTML,entries){
+  if(!pending.size)return;
+  const names=text=>text.matchAll(/pictures\/[a-f0-9-]{36}\.png/g);
+  const active=new Set(Array.from(names(activeHTML),match=>match[0])),kept=new Set();let bytes=0;
+  for(const {html} of entries)for(const [name] of names(html)){
+   const item=pending.get(name);if(!item||active.has(name)||kept.has(name))continue;
+   const size=item.blob.size+2*item.preview.length;
+   if(kept.size<256&&size<=128*1024*1024-bytes){kept.add(name);bytes+=size;}
+  }
+  for(const name of pending.keys())if(!active.has(name)&&!kept.has(name))pending.delete(name);
+ }
  const grid=()=>galleryList(doc)[index];
  const current=()=>figures(grid());
  const button=(key,op,attributes='')=>'<button type="button" class="button" data-action="website-files-gallery-'+op+'" '+attributes+'>'+esc(t(key))+'</button>';
@@ -116,5 +130,5 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
   const size=new DataView(new ArrayBuffer(4));size.setUint32(0,control.length);return new Blob([size,control,...pictures.map(p=>p.blob)]);
  }
  function paint(canvas){for(const image of canvas.querySelectorAll('img[src]')){const src=image.getAttribute('src'),picture=pending.get(publicName(src,path()));if(picture){image.dataset.observandaEditorImage=src;image.src=picture.preview;}}}
- return {open,view,bind,action,input,body,paint,reset};
+ return {open,view,bind,action,input,body,paint,reset,acknowledged,trimHistory,hasPending:name=>pending.has(name)};
 }

@@ -355,6 +355,8 @@
   "folderPublish": "Publiser til mappe",
   "undo": "Angre",
   "redo": "Gjør om",
+  "historyMediaUnavailable": "«{operation}» krever en mediefil som ikke lenger er tilgjengelig i denne redigeringsøkten. Den gjeldende siden er fortsatt åpen.",
+  "historySharedChanged": "Noen tidligere sideendringer overlapper de nyeste endringene i delt innhold og kan ikke gjentas.",
   "duplicatePage": "Filen finnes allerede. Velg et annet filnavn.",
   "title": "Nettstedsredigering",
   "workspace": "Tilbake til arbeidsområdet",
