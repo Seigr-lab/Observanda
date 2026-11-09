@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdir,mkdtemp,rm} from 'node:fs/promises';
+import {pathToFileURL} from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -10,14 +11,14 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 
 const documentHTML=(title,body,css='style.css')=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="'+css+'"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
-test('review the published site, repair a cross-page link and describe a figure with research offline',async({page})=>{
+test('repair an ambiguous scientific target, describe a figure and follow the published reference with research offline',async({page,browser})=>{
  test.setTimeout(150000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-review-')),database=process.env.OBSERVANDA_DATABASE_URL;
- let fixture,app;
+ let fixture,app,reader;
  try{
   const book=sampleNotebook();book.entries=[];fixture=await encryptedFixture(directory,book);
   const store=new WebsiteFileStore(fixture.workspace),siteId=randomUUID();
-  const home=documentHTML('Optics atlas','<p><a href="methods/assays.html#wrong">Instrument methods</a></p><p><a href="draft/protocol.html">Private protocol</a></p><p><a href="https://example.org/citations">Citations</a></p><figure><img src="spectrum.svg"><figcaption>Observed spectrum</figcaption></figure>');
+  const home=documentHTML('Optics atlas','<p><a href="methods/assays.html#calibration">Instrument methods</a></p><p><a href="draft/protocol.html">Private protocol</a></p><p><a href="https://example.org/citations">Citations</a></p><figure><img src="spectrum.svg"><figcaption>Observed spectrum</figcaption></figure>');
   const methods=documentHTML('Assay methods','<h2 id="calibration">Calibration</h2><table><tr><td>526 nm</td></tr></table>','../style.css');
   await store.importFiles(siteId,{name:'Optics atlas',files:new Map([['index.html',home],['methods/assays.html',methods],['spectrum.svg','<svg xmlns="http://www.w3.org/2000/svg"></svg>'],['style.css','body{background-image:url(absent.png)}']]),
    draftFiles:new Map([['draft/protocol.html',documentHTML('Unreleased canary','','../draft-styles.css')],['draft-styles.css','']])});
@@ -30,6 +31,14 @@ test('review the published site, repair a cross-page link and describe a figure 
   const guide=page.getByRole('dialog').filter({has:page.locator('[data-context-help-close]')});
   await expect(guide.locator('article section')).toHaveCount(5);await expect(guide).toContainText('Choose which entries, writing sections and figures');
   await guide.locator('[data-context-help-close]').click();await expect(guideButton).toBeFocused();
+  const selectPage=page.locator('[data-website-file-page]');
+  await selectPage.selectOption('methods/assays.html');await expect(canvas.getByRole('heading',{name:'Calibration'})).toBeVisible();
+  await page.getByRole('button',{name:'HTML',exact:true}).click();const source=page.getByLabel('HTML',{exact:true});
+  const targets=Array.from({length:90},(_,i)=>'<li id="run-'+i+'">Run '+i+'</li>').join('');
+  const moved='<h2 id="calibration">First instrument</h2><h2 id="calibration">Second instrument</h2><ul>'+targets+'</ul><figure id="μ-526"><figcaption>Optical response at 526 nm<span hidden>Hidden caption canary</span></figcaption></figure><div hidden id="hidden-canary">Hidden calibration</div>';
+  await source.fill((await source.inputValue()).replace('<h2 id="calibration">Calibration</h2>',moved));
+  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await selectPage.selectOption('index.html');await page.getByRole('button',{name:'Visual editor',exact:true}).click();
   await page.getByRole('button',{name:'Check page',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('draft/protocol.html');await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const routes=[],record=r=>routes.push(new URL(r.url()));page.on('request',record);
@@ -37,27 +46,35 @@ test('review the published site, repair a cross-page link and describe a figure 
   let d=await check();
   await expect(d.getByRole('status',{name:'Check website'})).toContainText('5 findings in 3 files');
   expect(routes.some(url=>/spectrum\.svg$|absent\.png$/.test(url.pathname))).toBe(false);
-  const indexFindings=d.getByRole('button',{name:'index.html (3)',exact:true});await indexFindings.press('Enter');await expect(indexFindings).toBeFocused();
-  const bad=d.locator('li').filter({hasText:'methods/assays.html#wrong'});
-  await bad.locator('summary').click();
+  const indexFindings=d.getByRole('button',{name:'index.html (2)',exact:true});await indexFindings.press('Enter');await expect(indexFindings).toBeFocused();
+  const bad=d.locator('li').filter({hasText:'More than one target has this identifier.'});
+  await bad.getByText('Repair this finding',{exact:true}).click();
   const address=bad.getByLabel('Destination URL or page');
   if(process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT){await address.focus();await address.scrollIntoViewIfNeeded();await d.screenshot({path:process.env.OBSERVANDA_SITE_REVIEW_SCREENSHOT});}
   await address.fill('methods/assays.html#still-wrong');await bad.getByRole('button',{name:'Apply in editor'}).click();
   await expect(address).toBeFocused();await expect(d).toBeVisible();
-  await address.fill('methods/assays.html#calibration');await bad.getByRole('button',{name:'Apply in editor'}).click();
-  await expect(canvas.getByRole('link',{name:'Instrument methods'})).toHaveAttribute('href','methods/assays.html#calibration');
+  await address.fill('methods/assays.html#calibration');await bad.getByRole('button',{name:'Apply in editor'}).click();await expect(d).toBeVisible();await expect(address).toBeFocused();
+  await bad.getByText('Choose a target on the saved website',{exact:true}).click();
+  const target=bad.getByRole('listbox',{name:'Page target'});await expect(target.locator('option')).toHaveCount(12);
+  expect(await bad.getByRole('listbox',{name:'Page',exact:true}).locator('option').allTextContents()).not.toContainEqual(expect.stringMatching(/Unreleased|draft\/protocol/));
+  const filter=bad.getByLabel('Filter targets');await filter.fill('canary');await expect(target.locator('option')).toHaveCount(0);
+  await filter.fill('Optical response');await expect(target.locator('option')).toHaveText(['Figure · Optical response at 526 nm · μ-526']);
+  await bad.getByRole('button',{name:'Use selected target'}).click();
+  const destination='methods/assays.html#%CE%BC-526';
+  await expect(address).toHaveValue(destination);await bad.getByRole('button',{name:'Apply in editor'}).click();
+  await expect(canvas.getByRole('link',{name:'Instrument methods'})).toHaveAttribute('href',destination);
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   d=await check();await expect(d.getByRole('status',{name:'Check website'})).toContainText('4 findings in 3 files');
-  await d.getByRole('button',{name:'index.html (2)',exact:true}).click();
+  await d.getByRole('button',{name:'index.html (1)',exact:true}).click();
   const figure=d.locator('li').filter({hasText:'alternative text'});
   await figure.locator('summary').click();
   await figure.getByLabel('Image description (alt text)').fill('Fluorescence peak at 526 nm');await figure.getByRole('button',{name:'Apply in editor'}).click();
   await expect(canvas.getByRole('img',{name:'Fluorescence peak at 526 nm'})).toBeVisible();
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect.poll(async()=>(await store.open(siteId)).html).toContain('alt="Fluorescence peak at 526 nm"');
-  d=await check();await expect(d.getByRole('status',{name:'Check website'})).toContainText('3 findings in 3 files');
+  d=await check();await expect(d.getByRole('status',{name:'Check website'})).toContainText('3 findings in 2 files');
   await d.getByRole('button',{name:'style.css (1)',exact:true}).click();await expect(d.locator('li')).toContainText('absent.png');
-  await d.getByRole('button',{name:'methods/assays.html (1)',exact:true}).click();await expect(d.locator('li')).toContainText('headers');
+  await d.getByRole('button',{name:'methods/assays.html (2)',exact:true}).click();await expect(d.locator('li').filter({hasText:'headers'})).toHaveCount(1);
   expect(routes.some(url=>url.pathname.includes('/research/')||url.pathname.includes('/draft/')||url.origin==='https://example.org')).toBe(false);
   const original=await store.open(siteId);
   await store.save(siteId,{expectedRevision:original.site.revision,path:original.path,html:original.html.replace('Private protocol','Renamed protocol'),css:original.css});
@@ -71,8 +88,14 @@ test('review the published site, repair a cross-page link and describe a figure 
   await citation.evaluate(node=>node.click());expect(await page.evaluate(()=>window.previewExternal)).toEqual([]);
   await citation.click();expect(await page.evaluate(()=>window.previewExternal)).toEqual([['https://example.org/citations','_blank','noopener,noreferrer']]);
   await page.locator('[data-action="website-files-visual"]').click();
+  const output=path.join(directory,'publication');await mkdir(output);
+  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);
+  await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files'}).click();
+  await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
+  reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(output,'index.html')).href);
+  await reader.getByRole('link',{name:'Instrument methods'}).click();await expect(reader.locator(':target figcaption')).toHaveText(/Optical response at 526 nm/);
  }finally{
   if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;
-  try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});}
+  try{await reader?.close();await app?.close();if(fixture)await clearVault(fixture.vault);}finally{await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});}
  }
 });

@@ -1,4 +1,5 @@
 import {componentChoices} from './website-component-controls.js';
+import {restoreCanvasImages} from './website-html-document.js';
 
 function append(node,tag,text){
  const e=node.ownerDocument.createElement(tag);if(text!==undefined)e.textContent=text;node.append(e);return e;
@@ -6,7 +7,7 @@ function append(node,tag,text){
 export function componentFragment(doc){
  const clone=doc.body.cloneNode(true);
  for(const n of clone.querySelectorAll('[data-observanda-editor]'))n.remove();
- for(const img of clone.querySelectorAll('img[data-observanda-editor-image]')){img.setAttribute('src',img.dataset.observandaEditorImage);delete img.dataset.observandaEditorImage;}
+ restoreCanvasImages(clone);
  for(const n of clone.querySelectorAll('[data-observanda-editor-editable]')){
   const was=n.dataset.observandaEditorEditable;if(was==='absent')n.removeAttribute('contenteditable');else n.setAttribute('contenteditable',was);delete n.dataset.observandaEditorEditable;
  }

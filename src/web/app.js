@@ -251,7 +251,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   try{
    const capacity=researchRequestCapacity(route,data);
    if(capacity)throw {...capacity,message:researchCapacityMessage(capacity)};
-   const pictures=['/api/website-files/save-pictures','/api/website-files/recovery/save-pictures','/api/website-files/recovery/save-inputs','/api/website-files/media/save'].includes(route)&&data instanceof Blob;
+   const pictures=['/api/website-files/save-pictures','/api/website-files/components/update-pictures','/api/website-files/recovery/save-pictures','/api/website-files/recovery/save-inputs','/api/website-files/media/save'].includes(route)&&data instanceof Blob;
    const body=pictures?data:data===undefined?undefined:JSON.stringify(data);
    const response=await fetch(projectApiRoute(route,owner),data===undefined?{headers,signal}:{signal,method:'POST',headers:{...headers,...(onProgress||structureStream||operationStream?{Accept:'application/x-ndjson'}:{}),'Content-Type':pictures?'application/octet-stream':'application/json'},body});
    if(!response.ok){const error=await response.json();const explicitProject=/^\/api\/projects\/([a-f0-9-]{36})\//.exec(route);if(explicitProject||projectApiRoute(route,owner)!==route)error.projectId??=explicitProject?.[1]??(typeof owner==='object'?owner?.projectId:owner);throw error;}

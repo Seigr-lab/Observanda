@@ -3,6 +3,8 @@ import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {outputName} from './local-export-files.js';
 import {safeEquationElement} from './web/website-equation-markup.js';
+import {imageCandidates,imageResourceURLs} from './web/website-image-candidates.js';
+import {websiteReferencePath} from './web/website-local-fragment.js';
 import {decodedWebsiteCSS,websiteCSSURLs,websiteCSSURLTokens,websiteCSSSourceRange,websiteCSSByteLimit} from './web/website-css-urls.js';
 
 const forbidden=new Set(['base','iframe','frame','frameset','object','embed','portal','fencedframe','foreignObject','animate','animateMotion','animateTransform','set']);
@@ -10,9 +12,8 @@ const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; 
 const resources=new Set(['src','poster','background','action','formaction','srcset']);
 export const websiteFileName=outputName;
 export function websiteLocalURL(value,file){
- const url=String(value).trim();if(url.startsWith('#'))return '';
- if(!url||/[\\\u0000-\u0020%:]/.test(url)||url.startsWith('/')||url.includes('?'))return null;
- const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),url.split('#')[0]));
+ const local=websiteReferencePath(String(value).trim());if(local===null||!local)return local;
+ const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),local));
  try{websiteFileName(resolved);return /^(?:api|\.observanda)(?:\/|$)/i.test(resolved)?null:resolved;}catch{return null;}
 }
 const localURL=websiteLocalURL;
@@ -28,7 +29,7 @@ export function draftWebsiteMediaReferences(html,css,page,style){
  while(pending.length){
   const node=pending.pop();
   for(const attr of node.attrs??[]){
-   if(resources.has(attr.name)||attr.name==='href')add(attr.value,page);
+   if(resources.has(attr.name)||attr.name==='href')for(const url of imageResourceURLs(attr.name,attr.value))add(url,page);
    if(attr.name==='style')stylesheet(attr.value,page);
   }
   if(node.tagName==='style')stylesheet((node.childNodes??[]).map(n=>n.value??'').join(''),page);
@@ -84,6 +85,16 @@ export function validateWebsiteHTML(html,{scripts=new Set(),file='index.html',pi
   }
   for(const {name,value} of node.attrs??[]){
    if(/^on/i.test(name)||['srcdoc','formaction','ping','is','action'].includes(name))reject('attribute',name);
+   if(name==='srcset'){
+    const candidates=imageCandidates(value);
+    if(!['img','source'].includes(node.tagName)||node.tagName==='source'&&node.parentNode?.tagName!=='picture'||!candidates)reject('localResource',name);
+    if(node.attrs.some(a=>a.name==='sizes')&&candidates.some(c=>!c.descriptor.endsWith('w')))reject('attribute','sizes');
+    for(const {url} of candidates){
+     const resource=localURL(url,file);if(!resource||!/\.(?:png|jpe?g|svg|webp|gif|avif)$/i.test(resource))reject('localResource',name);
+     if(resource.startsWith('pictures/'))pictures?.add(resource);
+    }
+    continue;
+   }
    if(name==='style'){try{validateWebsiteCSS(value,{file,pictures});}catch(e){if(e.code==='INVALID')reject('inlineStyle',name);throw e;}}
    if(pictures&&(resources.has(name)||name==='href')){const resource=localURL(value,file);if(resource?.startsWith('pictures/'))pictures.add(resource);}
    if(recordings&&(resources.has(name)||name==='href')){

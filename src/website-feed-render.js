@@ -8,6 +8,7 @@ import {compileWebsiteFeedTemplate,feedContentAtPage} from './website-feed-templ
 import {readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {websiteHTMLByteLimit} from './website-file-policy.js';
 import {retainedArticleCSS} from './website-entry-styles.js';
+import {mapImageCandidates} from './web/website-image-candidates.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
 import es from './web/locales/es/websiteFeeds.json' with {type:'json'};
@@ -41,12 +42,16 @@ const isolated=name=>'feed-assets/'+name;
 const canonicalAsset=/^assets\/[a-f0-9]{64}\.[a-z0-9]+$/;
 function memberAssets(markup,page,source){
  const root=parseFragment(markup),allowed=new Map(source.assets.map(a=>[a.name,a])),used=new Map();
- for(const node of descendants(root))for(const a of node.attrs??[]){
-  if(!['src','href','poster'].includes(a.name)||!a.value||a.value.startsWith('#')||/^[a-z][a-z\d+.-]*:/i.test(a.value))continue;
-  const name=path.posix.normalize(path.posix.join(path.posix.dirname(page),a.value));
-  if(!canonicalAsset.test(name))continue;
+ function rewrite(url){
+  if(!url||url.startsWith('#')||/^[a-z][a-z\d+.-]*:/i.test(url))return url;
+  const name=path.posix.normalize(path.posix.join(path.posix.dirname(page),url));
+  if(!canonicalAsset.test(name))return url;
   const asset=allowed.get(name);if(!asset)throw new AppError('CONFLICT');
-  const alias=isolated(name);a.value=relative(page,alias);used.set(alias,{...asset,name:alias,sourceId:source.id,feedAsset:true});
+  const alias=isolated(name);used.set(alias,{...asset,name:alias,sourceId:source.id,feedAsset:true});return relative(page,alias);
+ }
+ for(const node of descendants(root))for(const a of node.attrs??[]){
+  if(a.name==='srcset')a.value=mapImageCandidates(a.value,rewrite);
+  else if(['src','href','poster'].includes(a.name))a.value=rewrite(a.value);
  }
  return {markup:serialize(root),used};
 }
@@ -128,9 +133,12 @@ export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
   const assets=new Map(group.assets.filter(a=>a.sourceId===member.id).map(a=>[a.name,a]));
   if(path.posix.dirname(from)!==path.posix.dirname(page)){
    const root=parseFragment(html);
+   const rewrite=url=>{
+    const target=path.posix.normalize(path.posix.join(path.posix.dirname(from),url));return assets.has(target)?relative(page,target):url;
+   };
    for(const node of descendants(root))for(const a of node.attrs??[]){
-    if(!['src','href','poster'].includes(a.name)||!a.value||a.value.startsWith('#')||/^[a-z][a-z\d+.-]*:/i.test(a.value))continue;
-    const target=path.posix.normalize(path.posix.join(path.posix.dirname(from),a.value));if(assets.has(target))a.value=relative(page,target);
+    if(a.name==='srcset')a.value=mapImageCandidates(a.value,rewrite);
+    else if(['src','href','poster'].includes(a.name))a.value=rewrite(a.value);
    }
    html=serialize(root);
   }

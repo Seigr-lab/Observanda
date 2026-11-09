@@ -86,8 +86,8 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
    for(const radio of format.elements)radio.checked=radio.value===formatKey;
    choice.replaceChildren();if(formatKey==='card')choice.add(new Option(t('placementTitleOnly'),'title'));
    for(const item of items){
-    if(formatKey==='section'&&item.kind!=='section')continue;
-    const name=item.title||t(({body:'pickerBody',outcome:'pickerOutcome',results:'pickerResults',contributors:'pickerContributors',tags:'pickerTags'})[item.key]??'placementContent');
+    if(formatKey==='section'&&!['section','table'].includes(item.kind)||formatKey==='card'&&item.kind==='table')continue;
+    const name=item.kind==='table'?t('scienceTable')+' · '+(item.title||item.preview||t('tableViewport')):item.title||t(({body:'pickerBody',outcome:'pickerOutcome',results:'pickerResults',contributors:'pickerContributors',tags:'pickerTags'})[item.key]??'placementContent');
     choice.add(new Option(name,item.key));
    }
    if(desired&&![...choice.options].some(o=>o.value===desired))choice.add(new Option(t('placementCurrent'),desired),0);

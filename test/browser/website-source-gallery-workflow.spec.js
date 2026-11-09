@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../../src/sample.js';
 import {MediaStore} from '../../src/media.js';
+import {contentBuffer} from '../../src/file-content.js';
 import {createFigure} from '../../src/web/figure-model.js';
 import {defaultPublicationPrivacy} from '../../src/web/record-publication-privacy.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
@@ -16,7 +17,8 @@ import {testServer} from '../device-fixture.js';
 test.use({screenshot:'off',trace:'off',video:'off'});
 const action=(page,key)=>page.locator('[data-action="website-files-'+key+'"]');
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
-const sampleImage=color=>Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="32"><rect width="48" height="32" fill="'+color+'"/></svg>');
+const galleryPage='atlas/plates.html';
+const sampleImage=color=>Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="'+color+'"/><path d="M20 867h150" stroke="white" stroke-width="8"/></svg>');
 function makePlot(title){
  const plot=createFigure();plot.title=title;
  plot.series[0].points=[{x:1,y:2,error:null},{x:2,y:5,error:null}];return plot;
@@ -40,7 +42,7 @@ async function prepare(directory){
  await fixture.workspace.save(current.book,current.etag);
  const siteId=randomUUID(),files=new WebsiteFileStore(fixture.workspace);
  const page=title=>'<!doctype html><html><head><title>'+title+'</title></head><body><main><h1>'+title+'</h1></main></body></html>';
- await files.importFiles(siteId,{name:'Estuary atlas',files:new Map([['index.html',page('Estuary atlas')],['style.css','']]),
+ await files.importFiles(siteId,{name:'Estuary atlas',files:new Map([['index.html',page('Estuary atlas')],[galleryPage,page('Microscopy plates')],['style.css','']]),
   draftFiles:new Map([['draft/slides.html',page('Draft slides')],['draft-styles.css','']])});
  return {...fixture,first,second,photos,siteId};
 }
@@ -122,7 +124,8 @@ async function session(browser,fixture,directory,website,run){
   await page.goto(website?app.origin+'/?view=website#'+app.launchToken:app.url);
   if(website){
    await page.locator('[data-website-file-site]').selectOption(fixture.siteId);
-   await expect(page.frameLocator('#website-files-canvas').getByRole('heading',{name:'Estuary atlas'})).toBeVisible();
+   await page.locator('[data-website-file-page]').selectOption(galleryPage);
+   await expect(page.frameLocator('#website-files-canvas').getByRole('heading',{name:'Microscopy plates'})).toBeVisible();
   }
   else await expect(page.locator('.topbar .workspace-name')).toBeVisible();
   await run(page,app);expect(unexpected).toEqual([]);expect(errors).toEqual([]);
@@ -137,7 +140,7 @@ async function session(browser,fixture,directory,website,run){
 async function publicSite(directory){
  const server=createServer(async(request,response)=>{
   const file=new URL(request.url,'http://localhost').pathname.slice(1)||'index.html';
-  if(!/^(?:index\.html|[\w-]+\.(?:css|js)|(?:pictures|assets)\/[\w-]+\.(?:png|svg))$/.test(file)){response.writeHead(404).end();return;}
+  if(file!==galleryPage&&!/^(?:index\.html|[\w-]+\.(?:css|js)|(?:pictures|assets)\/[\w-]+\.(?:png|svg))$/.test(file)){response.writeHead(404).end();return;}
   try{const bytes=await readFile(path.join(directory,file));
    const mime={'.html':'text/html','.png':'image/png','.svg':'image/svg+xml','.css':'text/css','.js':'application/javascript'};
    response.writeHead(200,{'Content-Type':mime[path.extname(file)]}).end(bytes);
@@ -155,38 +158,67 @@ test('a published scientific gallery tracks selected lab figures, scoped photogr
   await mkdir(output);fixture=await prepare(directory);
   const {first,second,photos}=fixture,lab=run=>session(browser,fixture,directory,false,run),web=run=>session(browser,fixture,directory,true,run);
   const photo=photos[0],galleryName='Microscopy and salinity',alt='Engraved frustule in microscopy plate',caption='Atlas plate with local annotation';
+  const evidence=new MediaStore(fixture.workspace),originalBytes=sampleImage('blue');
+  const originalEvidence=async()=>contentBuffer(await evidence.originalContent(photo.id),{maxBytes:originalBytes.length});
+  expect(await originalEvidence()).toEqual(originalBytes);
   await lab(async(page,app)=>{await updateGrant(page,app,first);await updateGrant(page,app,second);});
-  let photoURL,assetName;
+  let photoURL,assetName,photoAssets;
   const imageNames=page=>page.locator('[data-website-source-gallery] img').evaluateAll(images=>images.map(image=>image.alt));
   await web(async page=>{
    await page.locator('[data-website-file-page]').selectOption('draft/slides.html');
    await gallery(page,'Draft reserve slides',[[first.title,['Reserve slide']]]);
-   await page.locator('[data-website-file-page]').selectOption('index.html');
+   await page.locator('[data-website-file-page]').selectOption(galleryPage);
    await action(page,'galleries').click();
    await page.locator('[data-gallery-files]').setInputFiles(path.resolve('src/preview-assets/image.png'));
    await page.locator('[data-gallery-field="alt"]').fill('Authored field map');await action(page,'save').click();
    await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
    await action(page,'gallery-close').click();
    [photoURL]=await gallery(page,galleryName,[[first.title,['Diatom frustule','Particle count by tide']],[second.title,['Salinity by depth']]]);
-   await page.reload();const canvas=page.frameLocator('#website-files-canvas');
+   await page.reload();await page.locator('[data-website-file-page]').selectOption(galleryPage);const canvas=page.frameLocator('#website-files-canvas');
    await expect(canvas.locator('[data-website-source-gallery] img')).toHaveCount(3);
    const firstSlot=(await reopenGallery(page,galleryName)).first();
-   await firstSlot.locator('details summary').click();await firstSlot.locator('[data-figure-text="alt"]').fill(alt);
+   await firstSlot.locator('details summary').first().click();await firstSlot.locator('[data-figure-text="alt"]').fill(alt);
+   await firstSlot.getByText('Frame image',{exact:true}).click();
+   const ratio=firstSlot.getByLabel('Aspect ratio'),thumbnail=firstSlot.locator('img').first();
+   await ratio.selectOption('square');await expect(thumbnail).toHaveCSS('aspect-ratio','1 / 1');
+   await ratio.selectOption('original');await expect(thumbnail).toHaveCSS('aspect-ratio','auto');
+   await ratio.selectOption('square');await firstSlot.getByLabel('Fit',{exact:true}).selectOption('cover');
+   const focus=firstSlot.getByLabel('Horizontal focus');await focus.press('End');for(let i=0;i<5;i++)await focus.press('ArrowLeft');
+   await firstSlot.getByRole('button',{name:'View full-resolution image'}).click();
+   const original=page.getByRole('dialog',{name:'View full-resolution image'}).locator('img');
+   expect(await original.evaluate(async img=>{await img.decode();return [img.naturalWidth,img.naturalHeight];})).toEqual([1600,900]);await page.keyboard.press('Escape');
    await firstSlot.locator('[data-figure-text="caption"]').fill(caption);await action(page,'figures-apply').click();
    await expect(canvas.getByRole('img',{name:alt,exact:true})).toBeVisible();await expect(canvas.getByText(caption,{exact:true})).toBeVisible();
    await action(page,'preview').click();const preview=page.frameLocator('#website-files-preview');
    await expect(preview.getByRole('heading',{name:galleryName})).toBeVisible();await expect(preview.getByRole('img',{name:'Authored field map'})).toBeVisible();
    await publish(page,output);
   });
-  staticSite=await publicSite(output);publicPage=await browser.newPage();await publicPage.goto(staticSite.url);
+  staticSite=await publicSite(output);publicPage=await browser.newPage();await publicPage.goto(staticSite.url+'/'+galleryPage);
   const publicFigures=publicPage.locator('[data-website-source-gallery] figure');
   await expect(publicFigures).toHaveCount(3);const names=await imageNames(publicPage);
   expect(names[0]).toBe(alt);expect(names[1]).toContain('Particle count by tide');expect(names[2]).toContain('Salinity by depth');
-  const links=await publicFigures.locator('img').evaluateAll(images=>images.map(img=>img.getAttribute('src')));
+  const links=await publicFigures.locator('img').evaluateAll(images=>images.map(img=>new URL(img.src).pathname.slice(1)));
   for(const name of links){const bytes=await readFile(path.join(output,name));expect(name).toContain(digest(bytes));}
-  assetName=links[0];expect((await readdir(path.join(output,'assets'))).sort()).toEqual(links.map(name=>path.basename(name)).sort());
+  assetName=links[0];
+  expect(await readFile(path.join(output,assetName))).toEqual((await evidence.get(photo.id)).bytes);
+  const publishedPhoto=publicFigures.first().locator('img');await expect(publishedPhoto).toHaveCSS('object-fit','cover');await expect(publishedPhoto).toHaveCSS('object-position','75% 50%');
+  const candidates=await publishedPhoto.evaluate(img=>img.srcset.split(',').map(token=>{const [url,width]=token.trim().split(/\s+/);return {name:new URL(url,document.baseURI).pathname.slice(1),width:Number.parseInt(width)};}));
+  photoAssets=candidates.map(c=>c.name);expect(candidates.map(c=>c.width)).toEqual([320,640,960,1440,1600]);expect(photoAssets.at(-1)).toBe(assetName);
+  expect((await readdir(path.join(output,'assets'))).sort()).toEqual([...new Set([...links,...photoAssets])].map(name=>path.basename(name)).sort());
+  const selections=[];
+  for(const width of [800,1540])for(const deviceScaleFactor of [1,2]){
+   const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor}),reader=await context.newPage(),requests=[];
+   try{
+    context.on('request',request=>requests.push(new URL(request.url())));
+    await reader.goto(staticSite.url+'/'+galleryPage);const image=reader.locator('[data-website-source-gallery] img').first();
+    const current=await image.evaluate(async img=>{await img.decode();return new URL(img.currentSrc).pathname.slice(1);});
+    expect(photoAssets).toContain(current);expect(requests.every(url=>url.origin===staticSite.url)).toBe(true);selections.push(current);
+   }finally{await context.close();}
+  }
+  expect(selections[0]).not.toBe(assetName);expect(new Set(selections).size).toBeGreaterThan(1);
+  expect((await readFile(path.join(output,selections[0]))).length).toBeLessThan((await readFile(path.join(output,assetName))).length);
   expect(await publicPage.locator('img').evaluateAll(images=>Promise.all(images.map(async img=>{await img.decode();return img.naturalWidth>0;})))).not.toContain(false);
-  expect(await readFile(path.join(output,'index.html'),'utf8')).not.toMatch(/Reserve slide|Private specimen|Withheld specimen location|(?:Unused|Private) calibration trace/);
+  expect(await readFile(path.join(output,galleryPage),'utf8')).not.toMatch(/Reserve slide|Private specimen|Withheld specimen location|(?:Unused|Private) calibration trace/);
   await expect(readFile(path.join(output,'draft','slides.html'))).rejects.toMatchObject({code:'ENOENT'});
   await lab((page,app)=>updateGrant(page,app,first,photo,false));
   await web(async page=>{
@@ -199,14 +231,15 @@ test('a published scientific gallery tracks selected lab figures, scoped photogr
    await publish(page,output);
   });
   await publicPage.reload();await expect(publicFigures).toHaveCount(2);expect(await imageNames(publicPage)).toEqual(names.slice(1));
-  await expect(readFile(path.join(output,assetName))).rejects.toMatchObject({code:'ENOENT'});
-  expect(await readFile(path.join(output,'index.html'),'utf8')).not.toMatch(/Diatom frustule|Atlas plate|Engraved frustule/);
+  for(const retired of photoAssets)await expect(readFile(path.join(output,retired))).rejects.toMatchObject({code:'ENOENT'});
+  expect(await readFile(path.join(output,galleryPage),'utf8')).not.toMatch(/Diatom frustule|Atlas plate|Engraved frustule/);
   await lab((page,app)=>updateGrant(page,app,first,photo,true));
   await web(async page=>{await expect(page.frameLocator('#website-files-canvas').locator('[data-website-source-gallery] figure')).toHaveCount(3);await publish(page,output);});
   await publicPage.reload();await expect(publicFigures).toHaveCount(3);expect(await imageNames(publicPage)).toEqual([photo.alt,...names.slice(1)]);
   expect(await publicFigures.first().locator('figcaption').innerText()).toContain(photo.caption);
-  expect(await readFile(path.join(output,'index.html'),'utf8')).not.toMatch(/Atlas plate|Engraved frustule/);
+  expect(await readFile(path.join(output,galleryPage),'utf8')).not.toMatch(/Atlas plate|Engraved frustule/);
   expect(assetName).toContain(digest(await readFile(path.join(output,assetName))));
+  expect(await originalEvidence()).toEqual(originalBytes);
  }finally{
   await publicPage?.close();await staticSite?.close();if(fixture)await clearVault(fixture.vault);
   if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-estuary-gallery-'))throw Error('Unexpected temporary gallery directory');

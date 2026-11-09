@@ -3,7 +3,8 @@ import {randomUUID} from 'node:crypto';
 import {parse} from 'parse5';
 import {AppError} from './errors.js';
 import {attr} from './website-migration-views.js';
-import {websiteFileName} from './website-file-policy.js';
+import {websiteFileName,websiteHTMLByteLimit} from './website-file-policy.js';
+import {attachGalleryViewer} from './website-gallery-support.js';
 import {escapeWebsiteText} from './website-file-html.js';
 import {starterPage} from './web/website-file-starter.js';
 import {componentContext} from './website-component-storage.js';
@@ -11,14 +12,16 @@ import {renderComponentInstance} from './website-file-component.js';
 import {publicPictureNames} from './website-picture-files.js';
 import {designStyleCopies} from './website-design-styles.js';
 import {publicRecordingNames,websiteRecordingKind} from './website-recordings.js';
+import {imageCandidates} from './web/website-image-candidates.js';
+import {readImageFrame,imageFrameClasses} from './web/website-image-frame.js';
 
 const invalid=()=>{throw new AppError('INVALID');};
 const named=value=>typeof value==='string'&&value.trim()&&value.length<=160?value.trim():invalid();
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const fold=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
 const windowSize=24,esc=escapeWebsiteText;
-const slots=new Set('section article aside div h2 h3 h4 h5 h6 p blockquote details summary ol ul li dl dt dd figure figcaption table caption thead tbody tfoot tr th td span strong em b i u sub sup mark code pre hr a img audio video'.split(' '));
-const layoutClasses=new Set('website-columns website-column container-content container-column site-section site-gallery gallery-columns-1 gallery-columns-2 gallery-columns-3 gallery-columns-4'.split(' '));
+const slots=new Set('section article aside div h2 h3 h4 h5 h6 p blockquote details summary ol ul li dl dt dd figure figcaption picture source table caption thead tbody tfoot tr th td span strong em b i u sub sup mark code pre hr a img audio video'.split(' '));
+const layoutClasses=new Set('website-columns website-column container-content container-column site-section site-gallery gallery-columns-1 gallery-columns-2 gallery-columns-3 gallery-columns-4 ow-access-target ow-access-focus ow-access-fit'.split(' '));
 const lengths=/^(?:(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?(?:px|rem|em|%|fr|vw|vh)|0|auto|max-content|min-content|1fr)$/;
 const passiveLayout={display:['block','grid','flex'],'flex-direction':['row','column','row-reverse','column-reverse'],'flex-wrap':['wrap','nowrap'],'align-items':['start','end','center','stretch','baseline'],'justify-content':['start','end','center','space-between','space-evenly','space-around'],'text-align':['start','end','center','justify'],'font-family':['serif','sans-serif','monospace','system-ui'],'font-style':['normal','italic'],'border-style':['solid','dashed','dotted','double','none']};
 function layoutStyle(raw=''){
@@ -96,6 +99,20 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
    return renderComponentInstance(definition,instance,{path:destination},context);
   }
   const tag=node.tagName;if(!slots.has(tag))return '';
+  if(tag==='picture'){
+   const fallback=node.childNodes.find(child=>child.tagName==='img'&&!skipped(child));
+   if(!fallback||!resource(attr(fallback,'src'),'img'))return '';
+  }
+  if(tag==='source'){
+   if(node.parentNode?.tagName!=='picture')return '';
+   const candidates=imageCandidates(attr(node,'srcset')??'')?.flatMap(({url,descriptor})=>{
+    const name=resource(url,'img');return name?[name+(descriptor?' '+descriptor:'')]:[];
+   })??[];
+   if(!candidates.length)return '';
+   const media=attr(node,'media')??'';
+   if(media&&!/^\(\s*(?:(?:min-|max-)?(?:width|height|resolution)\s*:\s*[\d.]+(?:px|em|rem|dpi|dppx)|orientation\s*:\s*(?:landscape|portrait))\s*\)(?:\s+and\s+\(\s*(?:min-|max-)?(?:width|height|resolution)\s*:\s*[\d.]+(?:px|em|rem|dpi|dppx)\s*\))*$/i.test(media))return '';
+   return '<source srcset="'+candidates.join(', ')+'"'+(candidates[0].endsWith('w')?' sizes="auto, 100vw"':'')+(media?' media="'+esc(media)+'"':'')+'>';
+  }
   let url;
   if(tag==='a'){
    url=resource(attr(node,'href'),'link');if(!url)return {open:'',close:'',sample:''};
@@ -111,7 +128,15 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   const anchor=anchors.get(attr(node,'id'));if(anchor)attrs+=' id="'+anchor+'"';
   if(theme&&context.themes.has(theme)&&file.usedThemes?.includes(theme))attrs+=' data-website-theme="'+esc(theme)+'"';
   if(tag==='hr')return '<hr'+attrs+'>';
-  if(tag==='img')return '<img'+attrs+' src="'+url+'" alt="'+esc(settings.image)+'">';
+  if(tag==='img'){
+   const responsive=imageCandidates(attr(node,'srcset')??'')?.flatMap(({url,descriptor})=>{
+    const name=resource(url,'img');return name?[name+(descriptor?' '+descriptor:'')]:[];
+   })??[];
+   const frame=(attr(node,'class')??'').includes('wi-ratio-')?imageFrameClasses(readImageFrame(attr(node,'class'))).join(' '):'';
+   if(frame)attrs=attrs.startsWith(' class="')?attrs.replace(' class="',' class="'+frame+' '):' class="'+frame+'"'+attrs;
+   const dimensions=['width','height'].map(key=>/^[1-9]\d{0,6}$/.test(attr(node,key))?' '+key+'="'+attr(node,key)+'"':'').join('');
+   return '<img'+attrs+' src="'+url+'" alt="'+esc(settings.image)+'"'+dimensions+(responsive.length?' loading="lazy" srcset="'+responsive.join(', ')+'"'+(responsive[0].endsWith('w')?' sizes="auto, 100vw"':''):'')+'>';
+  }
   if(tag==='audio'||tag==='video'){
    const tracks=node.childNodes.flatMap(track=>{
     if(track.tagName!=='track'||skipped(track))return [];
@@ -126,7 +151,7 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
  }
  let allowed=Boolean(root);for(let parent=root;parent;parent=parent.parentNode)if(skipped(parent))allowed=false;
  const chunks=[],stack=[];let bytes=0;
- const append=s=>{if(!s)return;bytes+=Buffer.byteLength(s);if(bytes>16*1024*1024)throw new AppError('LIMIT');chunks.push(s);};
+ const append=s=>{if(!s)return;bytes+=Buffer.byteLength(s);if(bytes>websiteHTMLByteLimit)throw new AppError('LIMIT');chunks.push(s);};
  const queue=nodes=>{for(let i=nodes.length-1;i>=0;i--)stack.push({node:nodes[i]});};
  if(allowed)queue(root.childNodes);
  while(stack.length){
@@ -140,7 +165,7 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   const heading=root.childNodes.find(n=>n.tagName==='h1'&&!skipped(n));
   starter=starter.replace('<body><main><h1>',()=>'<body'+designClass(body)+'><main'+(root===body?'':designClass(root))+'><h1'+(heading?designClass(heading):'')+'>');
  }
- return {html:starter.replace('</main>',()=>chunks.join('')+'</main>'),instances};
+ return {html:attachGalleryViewer(starter.replace('</main>',()=>chunks.join('')+'</main>'),destination),instances};
 }
 export function websitePageDesigns(store,siteId,options){
  const {action,expectedRevision,path:sourcePath,signal}=options;

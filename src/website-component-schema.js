@@ -117,7 +117,11 @@ export function shapeComponent(root,main,instance,context){
    nested.push({node,child:context.components.get(slot.component),id});
   }else if(value!==undefined){
    if(slot.type==='text')node.childNodes=[{nodeName:'#text',value,parentNode:node}];
-   else{put(node,'src',value.src);put(node,'alt',value.alt);}
+   else{
+    if(node.parentNode?.tagName==='picture')node.parentNode.childNodes=node.parentNode.childNodes.filter(child=>child.tagName!=='source');
+    node.attrs=node.attrs.filter(a=>!['srcset','sizes','width','height'].includes(a.name));
+    put(node,'src',value.src);put(node,'alt',value.alt);
+   }
   }
  }
  const variant=main.variants?.find(v=>v.id===instance.variant);

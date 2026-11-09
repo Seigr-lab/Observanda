@@ -1,5 +1,6 @@
 import {websiteHTML} from './website-html-document.js';
-import {checkAuthoredPage,pageAnchors} from './website-author-checks.js';
+import {checkAuthoredPage} from './website-author-checks.js';
+import {fragmentIssue,pageAnchors} from './website-reference-targets.js';
 import {websiteVisualSections} from './website-files-visual.js';
 import {savedFileReference} from './website-files-navigation.js';
 import {decodedWebsiteCSS,websiteCSSURLs} from './website-css-urls.js';
@@ -17,7 +18,7 @@ export function websiteReviewModel({catalogue,directory,read,signal,draftNames})
   const previous=cache.get(path);
   if(previous){cache.delete(path);cache.set(path,previous);return previous;}
   const html=await read(path,signal);signal.throwIfAborted();
-  const value={issues:[],links:[],anchors:new Set(),cost:0};
+  const value={issues:[],links:[],anchors:new Map(),cost:0};
   if(/\.css$/i.test(path)){
    for(const raw of websiteCSSURLs(decodedWebsiteCSS(html))){
     if(raw.startsWith('#'))continue;
@@ -25,7 +26,7 @@ export function websiteReviewModel({catalogue,directory,read,signal,draftNames})
     if(!file||!files.has(file.path))value.issues.push({key:'missingFile',detail:raw.slice(0,200)});
    }
   }else{
-   const doc=websiteHTML(html);value.anchors=pageAnchors(doc);
+   const doc=websiteHTML(html);value.anchors=pageAnchors(doc,{describe:true});
    let layers;
    function location(node){
     const feed=node.closest('[data-website-feed]');
@@ -36,7 +37,7 @@ export function websiteReviewModel({catalogue,directory,read,signal,draftNames})
     return target;
    }
    const issues=checkAuthoredPage(doc,path,directory,catalogue.pages,{files,pageNames:pages,draftNames,anchors:value.anchors,crossLink:({node,...link})=>value.links.push({...link,...location(node)})});
-   for(const {key,node,detail} of issues)value.issues.push({key,detail,...location(node),...(['brokenLink','draftLink'].includes(key)?{href:node.getAttribute('href')}:{})});
+   for(const {key,node,detail} of issues)value.issues.push({key,detail,...location(node),...(['brokenLink','ambiguousLink','draftLink'].includes(key)?{href:node.getAttribute('href')}:{})});
   }
   value.cost=html.length*2+(value.anchors.size+value.issues.length+value.links.length)*160+256;
   if(value.cost<=cacheBudget){
@@ -57,7 +58,10 @@ export function websiteReviewModel({catalogue,directory,read,signal,draftNames})
   }
   for(const [target,links] of targets){
    const {anchors}=await summary(target);
-   for(const {id,href,blockPath,feedId,elementPath} of links)if(!anchors.has(id))add({key:'brokenLink',detail:href.slice(0,200),href,blockPath,feedId,elementPath});
+   for(const {id,href,blockPath,feedId,elementPath} of links){
+    const key=fragmentIssue(anchors,id);
+    if(key)add({key,detail:href.slice(0,200),href,blockPath,feedId,elementPath});
+   }
   }
   return result;
  }
@@ -68,7 +72,13 @@ export function websiteReviewModel({catalogue,directory,read,signal,draftNames})
   if(!ref||!files.has(ref.path))return false;
   if(!ref.hash||!pages.has(ref.path))return true;
   let id;try{id=decodeURIComponent(ref.hash.slice(1));}catch{return false;}
-  return id.toLowerCase()==='top'||(await summary(ref.path)).anchors.has(id);
+  return !fragmentIssue((await summary(ref.path)).anchors,id);
  }
- return {subjects,pages,findings,linkExists};
+ async function targets(path){
+  if(!pages.has(path))return [];
+  const {anchors}=await summary(path),result=[];
+  for(const [id,description] of anchors)if(description&&typeof description==='object')result.push({id,...description});
+  return result;
+ }
+ return {subjects,pages,findings,linkExists,targets};
 }

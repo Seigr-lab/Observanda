@@ -1,19 +1,14 @@
 import {savedFileReference} from './website-files-navigation.js';
+import {imageResourceURLs} from './website-image-candidates.js';
 import {decodedWebsiteCSS,websiteCSSURLs} from './website-css-urls.js';
+import {fragmentIssue,pageAnchors} from './website-reference-targets.js';
+import {idTokens,referenceAttributes,referenceIssue,semanticIdIndex} from './website-semantic-model.js';
 
 function visibleText(node){
  if(node.nodeType===3)return node.textContent;
  if(node.nodeType!==1||node.matches('script,style,template,[hidden],[aria-hidden="true"]'))return '';
  if(node.localName==='img')return node.getAttribute('alt')??'';
  return Array.from(node.childNodes,visibleText).join('');
-}
-export function pageAnchors(doc){
- const anchors=new Set();
- for(const node of doc.querySelectorAll('[id],a[name]')){
-  if(node.id)anchors.add(node.id);
-  if(node.localName==='a'&&node.name)anchors.add(node.name);
- }
- return anchors;
 }
 export function checkAuthoredPage(doc,path,directory,pages,{files,crossLink,anchors=pageAnchors(doc),pageNames,draftNames}={}){
  const issues=[],pageURL=new URL(path,directory),ids=new Set();
@@ -31,21 +26,27 @@ export function checkAuthoredPage(doc,path,directory,pages,{files,crossLink,anch
   }
   if(!link||!ref.hash||!pageNames.has(ref.path))return;
   let id;try{id=decodeURIComponent(ref.hash.slice(1));}catch{add('brokenLink',node,raw);return;}
-  if(id.toLowerCase()==='top')return;
-  if(ref.path===path){if(!anchors.has(id))add('brokenLink',node,raw);}
+  if(ref.path===path){const issue=fragmentIssue(anchors,id);if(issue)add(issue,node,raw);}
   else crossLink?.({path:ref.path,id,node,href:raw});
  };
  let level=0;
- for(const node of doc.querySelectorAll('[id],img,h1,h2,h3,h4,h5,h6,a[href],video,table,[src],[poster],link[href],use[href],image[href],[style],style')){
+ let references;
+ for(const node of doc.querySelectorAll('[id],img,h1,h2,h3,h4,h5,h6,a[href],video,table,[src],[srcset],[poster],link[href],use[href],image[href],[style],style,[aria-labelledby],[aria-describedby],[headers],[role="region"]')){
   if(node.id){if(ids.has(node.id))add('dupId',node,node.id);ids.add(node.id);}
   const hidden=node.closest('[hidden],[aria-hidden="true"]');
   if(!hidden){
+   for(const attr of referenceAttributes)if(node.hasAttribute(attr)){
+    references??=semanticIdIndex(doc);
+    for(const id of new Set(idTokens(node.getAttribute(attr)))){const issue=referenceIssue(node,attr,id,references);if(issue)add(issue,node,attr+' · '+id);}
+   }
+   if(node.getAttribute('role')==='region'&&!node.getAttribute('aria-label')?.trim()&&!node.getAttribute('aria-labelledby')?.trim()&&!node.getAttribute('title')?.trim())add('semanticRegionName',node);
    if(node.localName==='img'&&!node.hasAttribute('alt'))add('missingAlt',node,node.getAttribute('src')??'');
+   else if(node.localName==='img'&&node.getAttribute('role')==='img'&&!node.alt.trim())add('accessImageText',node,node.getAttribute('src')??'');
    if(/^H[1-6]$/.test(node.tagName)){
     const next=Number(node.tagName[1]);if(next>level+1)add('badHeading',node,node.textContent);level=next;
    }
    if(node.localName==='video'&&!node.querySelector('track[kind="captions" i]'))add('reviewCaptions',node);
-   if(node.localName==='table'&&!['none','presentation'].includes(node.getAttribute('role'))&&!node.querySelector('th,[role="columnheader"],[role="rowheader"]'))add('reviewTableHeaders',node);
+   if(node.localName==='table'&&!['none','presentation'].includes(node.getAttribute('role'))&&![...node.querySelectorAll('th,[role="columnheader"],[role="rowheader"]')].some(cell=>cell.closest('table')===node))add('reviewTableHeaders',node);
   }
   if(node.localName==='a'&&node.hasAttribute('href')){
    const label=node.getAttribute('aria-label')?.trim()||visibleText(node).trim()||node.getAttribute('title')?.trim();
@@ -54,6 +55,7 @@ export function checkAuthoredPage(doc,path,directory,pages,{files,crossLink,anch
   }
   if(!files)continue;
   for(const key of ['src','poster'])if(node.hasAttribute(key))check(node.getAttribute(key),node,false);
+  if(node.hasAttribute('srcset'))for(const url of imageResourceURLs('srcset',node.getAttribute('srcset')))check(url,node,false);
   if(['link','image','use'].includes(node.localName)&&node.hasAttribute('href'))check(node.getAttribute('href'),node,false);
   if(node.hasAttribute('style')||node.localName==='style')for(const url of websiteCSSURLs(decodedWebsiteCSS(node.localName==='style'?node.textContent:node.getAttribute('style'))))check(url,node,false);
  }

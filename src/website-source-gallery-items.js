@@ -3,6 +3,8 @@ import {parse,parseFragment} from 'parse5';
 import {AppError} from './errors.js';
 import {attr,descendants,words} from './website-migration-views.js';
 import {researchId} from './web/research-reference.js';
+import {imageCandidates,mapImageCandidates} from './web/website-image-candidates.js';
+import {defaultImageFrame,imageFrameClasses} from './web/website-image-frame.js';
 
 export const itemKey='data-observanda-gallery-item',galleryKey='data-website-source-gallery';
 export const galleryAsset=name=>typeof name==='string'&&/^assets\/[a-f0-9]{64}\.(png|svg)$/.test(name);
@@ -42,7 +44,9 @@ export function sourceGalleryItems(html,assets){
   if(!galleryAsset(name)||!name.endsWith(suffix)||descriptor?.contentType!==type||descriptor.sha256!==name.slice(7,71))return;
   if(items.has(key))throw new AppError('FORMAT');
   const label=captionText(caption).replace(/\s+/gu,' ').trim();
-  items.set(key,{key,kind,asset:name,alt:attr(image,'alt')||label,caption:label});
+  const srcset=kind==='photo'&&image?attr(image,'srcset'):null,variants=srcset&&imageCandidates(srcset);
+  const responsive=variants&&variants.every(({url,descriptor})=>descriptor.endsWith('w')&&galleryAsset(url)&&available.get(url)?.contentType==='image/png'&&available.get(url)?.sha256===url.slice(7,71));
+  items.set(key,{key,kind,asset:name,alt:attr(image??{},'alt')||label,caption:label,...(responsive?{srcset,width:attr(image,'width'),height:attr(image,'height')}: {})});
  }
  visit(parseFragment(html));return items;
 }
@@ -51,17 +55,22 @@ export function galleryOverrides(node){
  return {altOverride:attr(node,'data-observanda-alt-override')===undefined?null:attr(image??{},'alt')??'',
   captionOverride:attr(node,'data-observanda-caption-override')===undefined?null:words(caption??{})};
 }
-export function renderGalleryItem(item,sourceId,sourceRevision,page,{slotId,altOverride,captionOverride}){
+export function renderGalleryItem(item,sourceId,sourceRevision,page,{slotId,altOverride,captionOverride,frame=defaultImageFrame()}){
  if(!researchId(slotId))throw new AppError('FORMAT');
  const href=escaped(path.posix.relative(path.posix.dirname(page),item.asset));
  const flags=(altOverride!=null?' data-observanda-alt-override=""':'')+(captionOverride!=null?' data-observanda-caption-override=""':''),caption=captionOverride??item.caption;
- return '<figure data-website-source-slot="'+slotId+'" data-observanda-source="'+sourceId+'" data-observanda-source-revision="'+sourceRevision+'" '+itemKey+'="'+item.key+'" data-observanda-gallery-asset="'+item.asset+'"'+flags+'><a href="'+href+'"><img loading="lazy" src="'+href+'" alt="'+escaped(altOverride??item.alt)+'"></a>'+(caption?'<figcaption>'+escaped(caption)+'</figcaption>':'')+'</figure>';
+ const responsive=item.srcset?' srcset="'+escaped(mapImageCandidates(item.srcset,url=>path.posix.relative(path.posix.dirname(page),url)))+'" sizes="auto, 100vw"':'';
+ const dimensions=/^[1-9]\d*$/.test(item.width)&&/^[1-9]\d*$/.test(item.height)?' width="'+item.width+'" height="'+item.height+'"':'';
+ return '<figure data-website-source-slot="'+slotId+'" data-observanda-source="'+sourceId+'" data-observanda-source-revision="'+sourceRevision+'" '+itemKey+'="'+item.key+'" data-observanda-gallery-asset="'+item.asset+'"'+flags+'><a href="'+href+'"><img loading="lazy" src="'+href+'"'+responsive+dimensions+' class="'+imageFrameClasses(frame).join(' ')+'" alt="'+escaped(altOverride??item.alt)+'"></a>'+(caption?'<figcaption>'+escaped(caption)+'</figcaption>':'')+'</figure>';
 }
 export function galleryItemPlacement(node){
  const key=attr(node,itemKey),asset=attr(node,'data-observanda-gallery-asset');
  if(key===undefined)return null;
  if(node.tagName!=='figure'||!galleryPart(key)||!galleryAsset(asset)||!researchId(attr(node.parentNode?.parentNode??{},galleryKey)))throw new AppError('INVALID');
- return {gallery:key,asset};
+ const image=[...descendants(node)].find(child=>child.tagName==='img'),candidates=imageCandidates(attr(image??{},'srcset')??'')??[];
+ const variants=candidates.map(({url})=>url.replace(/^(?:\.\.\/)+/,''));
+ if(variants.some(url=>!galleryAsset(url)))throw new AppError('INVALID');
+ return {gallery:key,asset,...(variants.length?{assets:variants}: {})};
 }
 
 // Unavailable slots exist only in the encrypted page manifest. The published
@@ -84,7 +93,7 @@ export function refreshSourceGalleries(html,page,id,revision,items){
     return slot;
    }
    const item=items?.get(slot.key);
-   if(item)markup.push(renderGalleryItem(item,id,revision,page.path,{slotId:slot.slotId,...(before?galleryOverrides(before):{})}));
+   if(item)markup.push(renderGalleryItem(item,id,revision,page.path,{slotId:slot.slotId,frame:slot.frame,...(before?galleryOverrides(before):{})}));
    return {...slot,revision,unavailable:!item};
   });
   patches.push({start:loc.startTag.endOffset,end:loc.endTag.startOffset,text:markup.join('')});

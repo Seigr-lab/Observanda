@@ -40,14 +40,18 @@ export function loadWebsiteCanvas(document,html,css,stylesheet,resource){
  if(current)current.after(style);else if(source.head.querySelector('link[data-website-appearance]'))source.head.querySelector('link[data-website-appearance]').before(style);else source.head.append(style);
  document.replaceChild(document.importNode(source.documentElement,true),document.documentElement);
 }
+export function restoreCanvasImages(copy){
+ for(const image of copy.querySelectorAll('img[data-observanda-editor-image]')){
+  image.setAttribute('src',image.dataset.observandaEditorImage);image.removeAttribute('data-observanda-editor-image');
+  if(image.hasAttribute('data-observanda-editor-srcset')){image.setAttribute('srcset',image.dataset.observandaEditorSrcset);image.removeAttribute('data-observanda-editor-srcset');}
+ }
+}
 export function websiteCanvasValue(document,original,normalized){
  const copy=document.cloneNode(true);
  for(const media of copy.querySelectorAll('[data-observanda-editor-media]')){
   media.setAttribute('src',media.dataset.observandaEditorMedia);media.removeAttribute('data-observanda-editor-media');
  }
- for(const image of copy.querySelectorAll('img[data-observanda-editor-image]')){
-  image.setAttribute('src',image.dataset.observandaEditorImage);image.removeAttribute('data-observanda-editor-image');
- }
+ restoreCanvasImages(copy);
  for(const meta of copy.querySelectorAll('meta[data-observanda-editor-http-equiv]')){
   meta.setAttribute('http-equiv',meta.dataset.observandaEditorHttpEquiv);meta.removeAttribute('data-observanda-editor-http-equiv');
  }

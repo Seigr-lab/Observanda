@@ -6,6 +6,7 @@ import {galleryKey} from './website-source-gallery-items.js';
 import {linkSource} from './website-entry-links.js';
 import {websiteLocalURL} from './website-file-policy.js';
 import {decodedWebsiteCSS,websiteCSSURLs} from './web/website-css-urls.js';
+import {imageResourceURLs} from './web/website-image-candidates.js';
 
 // Historical HTML holds the author's own bytes. Current grant-owned sections
 // are supplied only by the current, authorized page, including in comparison.
@@ -23,7 +24,7 @@ function protectedIdentity(node,path,governed){
   const check=url=>{const name=websiteLocalURL(url,path);if(name&&governed.has(name.toLowerCase()))references.push(name);};
   const style=text=>{for(const url of websiteCSSURLs(decodedWebsiteCSS(text)))check(url);};
   for(const a of node.attrs??[]){
-   if(['src','href','poster','srcset','background'].includes(a.name))check(a.value);
+   if(['src','href','poster','srcset','background'].includes(a.name))for(const url of imageResourceURLs(a.name,a.value))check(url);
    if(a.name==='style')style(a.value);
   }
   if(node.tagName==='style')style((node.childNodes??[]).map(c=>c.value??'').join(''));

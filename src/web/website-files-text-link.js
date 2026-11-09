@@ -1,3 +1,5 @@
+import {websiteReferencePath} from './website-local-fragment.js';
+
 const textBlock='p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,caption,td,th,summary,pre,dt,dd';
 const element=node=>node?.nodeType===1?node:node?.parentElement;
 const inline='em,strong,i,b,u,s,del,mark,small,code,sub,sup,span';
@@ -13,12 +15,12 @@ function includeCompleteMarks(range){
 
 export function validWebsiteLink(value,base){
  if(!value||/[\\\s\u0000-\u001f]/.test(value))return false;
- if(value.startsWith('#'))return true;
  let url;try{url=new URL(value,base);}catch{return false;}
  if(/^[a-z][a-z\d+.-]*:/i.test(value)){
   return url.protocol==='mailto:'||['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&!/^(?:localhost|127\.|\[::1\])/.test(url.hostname)&&!/^\/api(?:\/|$)/i.test(url.pathname);
  }
- if(value.startsWith('/')||/[?%:]/.test(value))return false;
+ const path=websiteReferencePath(value);if(path===null)return false;
+ if(!path)return true;
  const root=new URL('./',base),revision=root.pathname.match(/^.*\/preview\/[^/]+\/[a-f0-9]{64}\//);
  return url.origin===root.origin&&url.pathname.startsWith(revision?.[0]??root.pathname);
 }

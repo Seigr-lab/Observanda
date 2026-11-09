@@ -1,7 +1,6 @@
 import path from 'node:path';
 import {parse} from 'parse5';
 import {starterPage,starterStyles} from './web/website-file-starter.js';
-import {readFile} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -18,7 +17,7 @@ import {AppError} from './errors.js';
 import {recoveryAssets} from './website-recovery.js';
 import {assertPublicFiles} from './privacy.js';
 import {replaceSourceTags} from './website-source-tags.js';
-import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
+import {canonicalGalleryFile} from './website-gallery-support.js';
 import {publicPictureNames,saveWebsitePictures} from './website-picture-files.js';
 import {websiteFileName,websiteHTMLByteLimit,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
 import {websiteSourceLocation} from './website-source-location.js';
@@ -65,7 +64,7 @@ function assetSources(pages){
   if(row.link)continue;
   if(!uses.has(row.id))uses.set(row.id,{all:false,names:new Set()});
   const use=uses.get(row.id);
-  if(row.gallery)use.names.add(row.asset);
+  if(row.gallery){use.names.add(row.asset);for(const name of row.assets??[])use.names.add(name);}
   else if(row.display)for(const asset of row.assets)use.names.add(asset);
   else use.all=true;
  }
@@ -581,9 +580,9 @@ export class WebsiteFileStore{
   const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);
   for(const file of historyFiles)if(htmlPictures.has(file.name)||cssPictures.has(file.name)||recordingNames.has(file.name))files.push(file);
   files.push(await this.siteFile(id,page,html,{signal,draft}),await this.siteFile(id,cssPath,css,{signal,draft}));
-  if(addViewer)files.push(await this.siteFile(id,'public-gallery.js',PUBLIC_GALLERY_SCRIPT,{signal}));
+  if(addViewer)files.push(await canonicalGalleryFile(this,id,'public-gallery.js',signal));
   if(html.includes('public-gallery.css')&&!files.some(file=>file.name==='public-gallery.css')){
-   const viewerCSS=await readFile(new URL('./web/public-gallery.css',import.meta.url),'utf8');files.push(await this.siteFile(id,'public-gallery.css',viewerCSS,{signal}));
+   files.push(await canonicalGalleryFile(this,id,'public-gallery.css',signal));
   }
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
   if(creation?.stylePath||former?.stylePath)pages.at(-1).stylePath=creation?.stylePath??former.stylePath;

@@ -1,7 +1,7 @@
 import {websiteVisualSections} from './website-files-visual.js';
+import {protectedWebsiteContent as protectedContent,managedWebsiteContent} from './website-authored-nodes.js';
+export {managedWebsiteContent};
 
-const protectedContent='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-observanda-editor],[data-image-gallery],[data-website-recording],[data-website-feed]';
-export const managedWebsiteContent=protectedContent+',[data-website-menu],[data-website-source-gallery]';
 const fixed='header,footer,nav,[hidden],main,'+protectedContent;
 const flow='body,header,footer,main,article,section,aside,div,li,dd,blockquote,figure,details,td,th';
 const indivisible='nav,'+managedWebsiteContent;
@@ -77,12 +77,16 @@ function label(node){
  return value.trim()||attribute?.slice(0,90)||node.localName;
 }
 export function indexWebsiteLayers(doc){
- const rows=websiteVisualSections(doc,{includeContents:true}),byPath=new Map(),stack=[];
+ const rows=websiteVisualSections(doc,{includeContents:true}),byPath=new Map(),byNode=new WeakMap(),stack=[];
  for(const row of rows){
   stack.length=row.depth;row.parent=stack.at(-1)??null;row.branch=false;
   if(row.parent)row.parent.branch=true;
-  row.label=label(row.node);row.search=foldLayerText(row.label+' '+row.node.localName+' '+row.node.id);
-  byPath.set(row.path,row);stack.push(row);
+  refreshLayerLabel(row);byPath.set(row.path,row);byNode.set(row.node,row);stack.push(row);
  }
- return {rows,byPath};
+ return {rows,byPath,byNode};
+}
+export function refreshLayerLabel(row){
+ const next=label(row.node),search=foldLayerText(next+' '+row.node.localName+' '+row.node.id);
+ if(row.label===next&&row.search===search)return false;
+ row.label=next;row.search=search;return true;
 }

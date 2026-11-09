@@ -1,5 +1,6 @@
 // The library supplies permission-checked visual references. Website authors can
 // arrange those references without copying research files into upload storage.
+import {defaultImageFrame,imageFrameControls,changeImageFrame,previewImageFrame,showOriginalImage} from './website-image-frame.js';
 export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,leave,signal,notify}){
  let draft=null,base=null,entry=null,choices=[],offset=0,orderPage=0,next=null,modified=false,epoch=0,requestGeneration=null;
  const same=(a,b)=>a.sourceId===b.sourceId&&a.key===b.key;
@@ -49,7 +50,7 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
      const value=item[key+'Override']??item[key]??'';
      return '<label>'+esc(t(key==='alt'?'altText':'caption'))+'<textarea data-figure-text="'+key+'" maxlength="'+(key==='alt'?1500:4000)+'">'+esc(value)+'</textarea></label>'+
       button('gallerySourceText','inherit','data-field="'+key+'" data-index="'+i+'" '+(item[key+'Override']==null?'disabled':''));
-    }).join('')+'</details>')+'</li>';
+    }).join('')+'</details>'+imageFrameControls(item.frame??defaultImageFrame(),t,esc)+button('frameOpenOriginal','original','data-index="'+i+'"'))+'</li>';
   }).join('');
   return '<section class="website-source-gallery panel"><header><h2>'+esc(t('galleryChooseFigures'))+'</h2>'+button('cancel','close')+'</header>'+
    '<div class="website-gallery-panes"><section tabindex="0" aria-labelledby="gallery-source-list"><h3 id="gallery-source-list">'+esc(t('galleryFromEntries'))+'</h3>'+library+
@@ -65,6 +66,12 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
   if(!draft)return false;
   if(el.matches('[data-figure-heading]'))draft.heading=el.value;
   else if(el.matches('[data-figure-columns]'))draft.columns=Number(el.value);
+  else if(el.hasAttribute('data-image-frame')){
+   const row=el.closest('[data-figure-order]');if(!row)return false;
+   const item=draft.items[Number(row.dataset.figureOrder)];
+   const next=changeImageFrame(el,item.frame??defaultImageFrame());if(!next)return false;
+   item.frame=next;previewImageFrame(row.querySelector('img'),next);
+  }
   else if(el.matches('[data-figure-text]')){
    const row=el.closest('[data-figure-order]'),item=draft.items[Number(row.dataset.figureOrder)],key=el.dataset.figureText;
    if(!item||!['alt','caption'].includes(key))return false;
@@ -83,6 +90,9 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
  }
  function bind(){
   const list=document.querySelector('.website-figure-order');if(!list)return;
+  for(const row of list.querySelectorAll('[data-figure-order]')){
+   const item=draft.items[Number(row.dataset.figureOrder)];if(item?.frame&&!item.unavailable)previewImageFrame(row.querySelector('img'),item.frame);
+  }
   let from=null;
   list.ondragstart=e=>{const row=e.target.closest('[data-figure-order]');if(!row)return;from=Number(row.dataset.figureOrder);e.dataTransfer.setData('application/x-observanda-gallery-order',String(from));e.dataTransfer.effectAllowed='move';};
   list.ondragover=e=>{if(from!==null)e.preventDefault();};
@@ -92,9 +102,12 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
  async function action(op,el){
   if(!draft)return;
   const i=Number(el?.dataset.index);
+  if(op==='original'){
+   const item=draft.items[i];if(item&&!item.unavailable)showOriginalImage(el,item.originalUrl??item.previewUrl,item.altOverride??item.alt,t,'frameEvidenceNote');return;
+  }
   if(op==='apply'){
    const value=await request('gallery/source-save',{...pin(),galleryId:draft.galleryId,heading:draft.heading,columns:draft.columns,
-    items:draft.items.map(({slotId,unavailable,key,sourceId,sourceRevision,altOverride,captionOverride})=>unavailable?{slotId,unavailable:true}:{slotId,key,sourceId,sourceRevision,altOverride,captionOverride})},{signal:signal()});
+    items:draft.items.map(({slotId,unavailable,key,sourceId,sourceRevision,altOverride,captionOverride,frame})=>unavailable?{slotId,unavailable:true}:{slotId,key,sourceId,sourceRevision,altOverride,captionOverride,frame})},{signal:signal()});
    reset();adopt(value);return leave();
   }
   if(op==='close'){if(!modified||confirm(t('discardConfirm'))){reset();changed(false);leave();}return;}
@@ -170,9 +183,10 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
      const updated=current.get(local.slotId),prior=original.get(local.slotId);
      if(updated.unavailable||local.unavailable||local.sourceRevision!==updated.sourceRevision)return updated;
      const merged={...updated};
-     for(const field of ['altOverride','captionOverride']){
-      if(local[field]===prior[field])continue;
-      if(updated[field]!==prior[field]&&updated[field]!==local[field]){const reason=Error(t('galleryConcurrent'));reason.code='GALLERY_EDIT_CONFLICT';throw reason;}
+     for(const field of ['altOverride','captionOverride','frame']){
+      const value=row=>field==='frame'?JSON.stringify(row[field]):row[field];
+      if(value(local)===value(prior))continue;
+      if(value(updated)!==value(prior)&&value(updated)!==value(local)){const reason=Error(t('galleryConcurrent'));reason.code='GALLERY_EDIT_CONFLICT';throw reason;}
       merged[field]=local[field];
      }
      return merged;

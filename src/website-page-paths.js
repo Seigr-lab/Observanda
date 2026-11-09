@@ -5,6 +5,7 @@ import {AppError} from './errors.js';
 import {escapeWebsiteText} from './website-file-html.js';
 import {replaceWebsiteStyleURLs} from './website-page-dependencies.js';
 import {digest} from './storage-format.js';
+import {mapImageCandidates} from './web/website-image-candidates.js';
 
 const pathAttributes=new Set(['href','src','poster','background','srcset']);
 export const websitePageIdentity=(site,page)=>page.pageId??digest(JSON.stringify(['website-page',site,page.path]));
@@ -47,7 +48,7 @@ export function movedWebsiteText(text,from,to,moved,destination){
   for(const attr of node.attrs??[]){
    const location=loc?.attrs?.[attr.name];
    if(!location)continue;
-   const value=attr.name==='style'?style(attr.value):pathAttributes.has(attr.name)?rebase(attr.value):attr.value;
+   const value=attr.name==='style'?style(attr.value):attr.name==='srcset'?mapImageCandidates(attr.value,rebase):pathAttributes.has(attr.name)?rebase(attr.value):attr.value;
    if(value!==attr.value){
     const name=attr.prefix?attr.prefix+':'+attr.name:attr.name;
     edits.push({start:location.startOffset,end:location.endOffset,replacement:name+'="'+escapeWebsiteText(value)+'"'});

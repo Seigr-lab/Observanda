@@ -132,6 +132,10 @@
 .website-gallery-items { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(17rem,100%),1fr)); list-style:none; gap:1rem; padding:0 }
 .website-gallery-items li { padding:.75rem; border:1px solid var(--border,#cbd3df); min-width:0 }
 .website-gallery-items img { height:8rem; max-width:100%; object-fit:contain }
+.website-original-image { max-inline-size:90vw;max-block-size:90vh;overflow:auto }
+.website-original-image h2 { display:inline-block;margin-inline-end:1.5rem }
+.website-original-image img { display:block;height:auto;max-height:none;max-width:none;object-fit:contain }
+.website-image-frame label { display:grid;grid-template-columns:minmax(7em,1fr) minmax(6em,1.3fr);align-items:center;gap:.5rem }
 .website-file-pages li button { text-align:start; overflow-wrap:anywhere }
 .website-file-pages [data-pages-results] { max-height:40vh; overflow:auto }
 .website-menu-pages { margin-block:.5rem; padding:.7rem; border-inline-start:2px solid var(--ui-border,currentColor) }
@@ -362,3 +366,10 @@
 .component-design-fields{display:grid;gap:.4rem;margin-block:.65rem}
 .component-design-fields label,.component-main-editor>label{display:grid;gap:.2rem}
 .component-slot-photo{display:block;max-width:14rem;max-height:10rem;object-fit:contain}
+.website-access-dialog{width:min(50rem,90vw);max-height:85vh;overflow:auto}
+.website-access-tools,.website-access-repair{display:flex;align-items:end;flex-wrap:wrap;gap:.55rem}
+.website-access-tools label,.website-access-repair label{display:grid;gap:.25rem}
+.website-access-dialog ul{padding:0;list-style:none}
+.website-access-dialog li{padding:.6rem 0;border-block-end:1px solid var(--border)}
+.website-access-dialog li small{display:block}.website-access-dialog li p{overflow-wrap:anywhere}
+.website-access-dialog .website-access-measure{position:fixed;left:-20000px;top:0;height:800px;border:0;max-width:none;pointer-events:none}

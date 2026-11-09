@@ -36,7 +36,9 @@ test('table tools preserve marked content, merged grids and rich text cells',asy
  await expect(page.getByLabel('Cell text or number')).toBeDisabled();await expect(page.getByRole('button',{name:'Delete selected row'})).toBeDisabled();
  await page.getByLabel('Cell type').selectOption('col');await page.getByRole('button',{name:'Apply cell and caption changes'}).click();
  await expect(frame.locator('#simple th[scope="col"] em')).toHaveText('kept');
- await frame.locator('#merged td').first().click();await expect(page.getByRole('button',{name:'Insert column to the right'})).toBeDisabled();
+ await frame.locator('#merged td').first().click();await page.getByRole('button',{name:'Insert column to the right'}).click();
+ await expect(frame.locator('#merged tr').last().locator('td')).toHaveCount(3);
+ await expect(frame.locator('#merged td[colspan="2"]')).toHaveText('sum');
  await frame.locator('#linked td').click();await expect(page.getByRole('group',{name:'Edit table'})).toBeHidden();
  await expect(frame.locator('#linked td')).toHaveText('secret');
 });

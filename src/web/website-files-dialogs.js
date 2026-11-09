@@ -1,6 +1,4 @@
 import {savedPageLink} from './website-files-navigation.js';
-import {checkAuthoredPage} from './website-author-checks.js';
-import {websiteVisualSections} from './website-files-visual.js';
 
 function dialog(title,build){
  const modal=document.createElement('dialog');modal.className='website-author-dialog';
@@ -9,19 +7,6 @@ function dialog(title,build){
 }
 function control(parent,label,node){const field=document.createElement('label');field.append(label,node);parent.append(field);return node;}
 function action(parent,text,click){const button=document.createElement('button');button.className='button';button.type='button';button.textContent=text;button.onclick=click;parent.append(button);return button;}
-export function showPageChecks({doc,path,directory,pages,t,select}){
- const issues=checkAuthoredPage(doc,path,directory,pages),sections=websiteVisualSections(doc);
- dialog(t('checkPage'),modal=>{
-  const hint=document.createElement('p');hint.textContent=t(issues.length?'reviewDetails':'noIssues');modal.append(hint);
-  const list=document.createElement('ul');modal.append(list);
-  for(const {key,node,detail} of issues){
-   const item=document.createElement('li'),message=t(key)+(detail?' — '+detail:'');list.append(item);
-   const owner=sections.findLast(s=>s.node.contains(node));
-   if(owner)action(item,message,()=>{modal.close();select(owner.path);});else item.textContent=message;
-  }
-  action(modal,t('cancel'),()=>modal.close());
- });
-}
 export const buttonCSS='\n.website-button{display:inline-flex;align-items:center;justify-content:center;padding:.65em 1.15em;border:2px solid currentColor;border-radius:.35em;text-decoration:none;font-weight:600}.website-button:hover{text-decoration:underline}.website-button:focus-visible{outline:3px solid currentColor;outline-offset:3px}\n';
 export function editActionLink({doc,at,t,path,directory,pages,apply}){
  const scope=at&&!at.closest('[data-observanda-source],[data-observanda-link]')?at:null;

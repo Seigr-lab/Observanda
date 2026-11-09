@@ -152,7 +152,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const styleActions=make('div');styleActions.className='website-visual-actions';styleActions.append(apply,reset);
   const rich=websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange:range=>safeRange(range,body)});
   const tableHost=make('div');
-  const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change});
+  const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change,
+   addCSS:rule=>{if(!getCSS().includes(rule))persistStyle(getCSS()+'\n'+rule,savedStyle.textContent+'\n'+rule);}});
   form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,styleActions);
   const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,getWidth,previewWidth,getRanges,manageRanges,beforeChange,change,make,listen,signal,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});

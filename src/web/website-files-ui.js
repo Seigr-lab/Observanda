@@ -9,7 +9,9 @@ import {destinationPlanRows,destinationConflictCount} from './publication-review
 import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
-import {buttonCSS,editActionLink,showPageChecks} from './website-files-dialogs.js';
+import {buttonCSS,editActionLink} from './website-files-dialogs.js';
+import {showPageAccessibility} from './website-access-review.js';
+import {applyAccessRepair} from './website-access-repairs.js';
 import {editWebsiteEquation} from './website-files-equation.js';
 import {bindSavedLinks,openSavedPreview} from './website-files-navigation.js';
 import {enhanceSavedPreview} from './website-files-preview.js';
@@ -106,7 +108,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   repaint:onlyCSS=>{const frame=document.getElementById('website-files-canvas');if(!frame)return;
    const style=frame.contentDocument?.querySelector('style[data-observanda-editor="css"]');
    if(onlyCSS&&style){applyCanvasCSS(style,css,canvasURL(opened.site.cssPath),recoveredResource);return;}
-   visual?.destroy();visual=null;frame.inert=true;frame.src=canvasURL()+'?canvas=1';paintStructure();},
+   visual?.destroy();visual=null;frame.inert=true;frame.src=canvasURL()+'?canvas=1';},
   onAccess:()=>hideUnverifiedPage(true)});
  const previewPages=()=>[...opened.site.pages,...(opened.site.feedPages??[])];
  const recovery=websiteFilesRecovery({request,tr,esc,signal:()=>controller?.signal,
@@ -194,8 +196,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      documentChange(doc=>{
       const node=websiteLayerAt(doc,issue.elementPath);
       if(!node||node.closest(managedWebsiteContent))throw Error(tr('changed'));
-      if(issue.key==='missingAlt'&&node.localName==='img'&&!node.hasAttribute('alt'))node.alt=repair.value;
-      else if(['brokenLink','draftLink'].includes(issue.key)&&node.matches('a[href]'))node.setAttribute('href',repair.value);
+      if(['missingAlt','accessImageText'].includes(issue.key)&&node.localName==='img'&&!node.getAttribute('alt')?.trim()){
+       node.alt=repair.value;if(!repair.value)node.setAttribute('role','presentation');
+      }
+      else if(['brokenLink','ambiguousLink','draftLink'].includes(issue.key)&&node.matches('a[href]')&&node.getAttribute('href')===issue.href)node.setAttribute('href',repair.value);
       else if(issue.key==='emptyLink'&&node.matches('a[href]'))node.setAttribute('aria-label',repair.value);
       else throw Error(tr('changed'));
      });
@@ -679,9 +683,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
  function label(node){return (node.querySelector('h1,h2,h3')?.textContent||node.textContent).trim().slice(0,70)||node.localName;}
+ // The outline follows the loaded canvas document; a reloading canvas paints
+ // it again when the new document is ready.
  function paintStructure(doc){
-  const list=document.querySelector('[data-website-files-structure]');if(!list)return;
-  hierarchy.paint(list,doc??websiteHTML(html));
+  const list=document.querySelector('[data-website-files-structure]');if(!list||!doc)return;
+  hierarchy.paint(list,doc);
  }
  function bindStructure(list){
   hierarchy.bindList(list);
@@ -745,7 +751,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    inspector.insertAdjacentHTML('beforebegin',button('placementTitle','presentation','data-placement-context hidden'));
    inspector.parentElement.querySelector('[data-feed-context]')?.remove();
    inspector.insertAdjacentHTML('beforebegin',button('feedEdit','feeds','data-feed-context hidden'));
-   hierarchy.bindCanvas(doc);placementDrag.bindCanvas(doc,frame);
+   hierarchy.bindCanvas(doc);paintStructure(doc);placementDrag.bindCanvas(doc,frame);
    if(locatedPlacement!==null){
     const target=blockAt(doc,locatedPlacement);
     if(target&&!visual.select(locatedPlacement)){
@@ -771,7 +777,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(historyFocus&&(document.activeElement===document.body||document.activeElement===frame))restoreCanvasSelection(doc,historyFocus.selection);
   };frame.src=canvasURL()+'?canvas=1';}
   const list=document.querySelector('[data-website-files-structure]');if(list)bindStructure(list);
-  paintStructure();paintStatus();if(opened&&!timer)timer=setInterval(()=>void poll(),5000);
+  paintStatus();if(opened&&!timer)timer=setInterval(()=>void poll(),5000);
  }
  function publishUpdateView(){
   const title='<h2>'+esc(tr('publishUpdate'))+'</h2>';
@@ -901,8 +907,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='media'){await save();await recordings.open(selected);mode='media';render();}
    else if(operation==='feeds')await openFeed(element);
    else if(operation==='galleries'){
-    const node=blockAt(websiteHTML(html),selected),group=node?.closest('[data-website-source-gallery]');
-    if(group)await startFigures(group.dataset.websiteSourceGallery);else{gallery.open(selected);mode='gallery';render();}
+    const node=blockAt(websiteHTML(html),selected),group=node?.closest('[data-website-source-gallery]'),instance=node?.closest('[data-website-instance]');
+    if(instance)await components.openInstance(instance.dataset.websiteInstance);
+    else if(group)await startFigures(group.dataset.websiteSourceGallery);else{gallery.open(selected);mode='gallery';render();}
    }
    else if(operation==='figures-new'||operation==='figures-edit')await startFigures(element.dataset.gallery);
    else if(operation.startsWith('figures-'))await figures.action(operation.slice(8),element);
@@ -933,7 +940,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     const node=createBlock(doc,type,tr);const at=blockAt(doc,selected);if(movable(at)&&main(doc).contains(at))at.after(node);else main(doc).append(node);});
    }
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
-   else if(operation==='check-page')showPageChecks({doc:websiteHTML(html),path:opened.path,directory:directory(),pages:previewPages(),t:tr,select:path=>visual?.select(path,{edit:true})});
+   else if(operation==='check-page'){
+    const checked=opened,original=html,sheet=css;
+    showPageAccessibility({html,css,path:checked.path,directory:directory(),pages:previewPages(),t:tr,width:viewport.width(),signal:controller.signal,
+     frameURL:canvasURL(checked.path)+'?canvas=1',styleURL:canvasURL(checked.site.cssPath),resource:recoveredResource,
+     current:()=>opened===checked&&html===original&&css===sheet&&!stale,
+     select:path=>{locatedPlacement=path;mode='visual';render();},
+     apply:(issue,values)=>documentChange(doc=>{const next=applyAccessRepair(doc,issue,values,tr,css);if(next!==null){ensureStyle(doc);css=next;}})
+    });
+   }
    else if(operation==='check-website'){if(await beforeLeave(true))checkSavedSite(element);}
    else if(operation==='styles'){
     const text=visual?.textStyleSelection(),blockPath=selected;

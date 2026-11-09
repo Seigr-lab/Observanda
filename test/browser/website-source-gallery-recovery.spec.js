@@ -27,7 +27,7 @@ test('a transient access fence hides gallery edits and a later grant change pres
  await page.getByRole('button',{name:'Survey gallery',exact:true}).click();
  const heading=page.getByLabel('Gallery heading'),firstRow=page.locator('[data-figure-order="0"]');
  await heading.fill('Reviewed fieldwork');
- await firstRow.locator('summary').click();await firstRow.getByLabel('Caption',{exact:true}).fill('Authored caption');
+ await firstRow.locator('details summary').first().click();await firstRow.getByLabel('Caption',{exact:true}).fill('Authored caption');
  locked=true;await page.clock.fastForward(5100);
  await expect(heading).toHaveCount(0);await expect(page.getByRole('img',{name:'Private observation'})).toHaveCount(0);
  locked=false;await page.clock.fastForward(5100);await expect(heading).toHaveValue('Reviewed fieldwork');

@@ -1,6 +1,7 @@
 import {websiteHTML,serializeWebsiteHTML} from './website-html-document.js';
 import {decodedWebsiteCSS,websiteCSSURLs} from './website-css-urls.js';
 import {literal,mergeOrder} from './website-three-way.js';
+import {imageResourceURLs} from './website-image-candidates.js';
 
 const ownerNames=['data-observanda-source','data-observanda-link','data-website-source-gallery','data-website-feed','data-website-instance','data-website-menu-id','data-website-theme-sheet','data-website-appearance'];
 const htmlOf=node=>node?.outerHTML??(node?.nodeType===8?'<!--'+node.data+'-->':node?.data??null);
@@ -46,7 +47,7 @@ function secureDocument(html,context,latest){
   else if(el.matches('script,nav'))identity=[el.localName,el.id,el.getAttribute('src')];
   else if(context.governed){
    const protectedStyle=text=>{for(const url of websiteCSSURLs(decodedWebsiteCSS(text)))if(context.governed(url))return true;return false;};
-   const resource=attributes.find(a=>['href','src','poster','srcset','background'].includes(a.name)&&context.governed(a.value));
+   const resource=attributes.find(a=>['href','src','poster','srcset','background'].includes(a.name)&&imageResourceURLs(a.name,a.value).some(url=>context.governed(url)));
    if(resource||el.hasAttribute('style')&&protectedStyle(el.getAttribute('style'))||el.localName==='style'&&protectedStyle(el.textContent))identity=[el.localName,'resource',resource?.value];
   }
   if(identity){

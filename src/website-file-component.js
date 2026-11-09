@@ -7,15 +7,17 @@ import {websiteRecordingKind} from './website-recordings.js';
 import {mathNamespace,safeEquationElement} from './web/website-equation-markup.js';
 import {slotMarker,entryField,componentSlots,shapeComponent,checkInstanceOptions} from './website-component-schema.js';
 import {componentStyleId,componentPaint} from './website-component-styles.js';
+import {mapImageCandidates} from './web/website-image-candidates.js';
 
 const marker='data-website-instance';
-const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
+const blocks=new Set('section article aside div figure picture table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
 const children=new Set([...blocks,...'span strong em b i u s sup sub small mark code br a time figcaption caption colgroup col thead tbody tfoot tr th td li dt dd summary source track'.split(' ')]);
 const containers=new Set('body main section article aside div blockquote li dd'.split(' '));
 const common=new Set([...('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby data-section-id data-website-theme'.split(' ')),slotMarker]);
 const playerAttrs=['src','controls','loop','muted','preload'];
-const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
- audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording','data-website-equation']};
+const galleryAttrs=['data-image-gallery','data-viewer','data-previous','data-next','data-close','data-download','data-position','data-zoom'];
+const attributes={div:galleryAttrs,section:galleryAttrs,a:['href','rel','target','data-gallery-image','aria-haspopup'],img:['src','srcset','sizes','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
+ audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type','srcset','sizes','media','width','height'],figure:['data-website-recording','data-website-equation']};
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
@@ -70,7 +72,7 @@ function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=fal
   if(theme!==undefined&&!themes?.has(theme)){
    if(!instance)invalid();node.attrs=node.attrs.filter(a=>a.name!=='data-website-theme');
   }
-  if(['track','source'].includes(node.tagName)&&!['audio','video'].includes(node.parentNode?.tagName))invalid();
+  if(['track','source'].includes(node.tagName)&&!['audio','video'].includes(node.parentNode?.tagName)&&!(node.tagName==='source'&&node.parentNode?.tagName==='picture'&&attr(node,'src')===undefined))invalid();
   for(const attribute of node.attrs){
    const {name,value}=attribute;if(!common.has(name)&&!attributes[node.tagName]?.includes(name))invalid();
    if(name==='id')attribute.value=localId(value);
@@ -79,6 +81,7 @@ function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=fal
    if(name==='href')attribute.value=url(value,'link');
    if(name==='poster')attribute.value=url(value,'img');
    if(name==='src')attribute.value=url(value,node.tagName==='source'?node.parentNode.tagName:node.tagName);
+   if(name==='srcset')attribute.value=mapImageCandidates(value,candidate=>url(candidate,'img'));
   }
  }
  const result=serializeOuter(root);

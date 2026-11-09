@@ -8,11 +8,13 @@ import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {attr,descendants,words} from './website-migration-views.js';
 import {researchId} from './web/research-reference.js';
 import {sourceGalleryItems,galleryKey,itemKey,galleryPart,galleryOverrides,renderGalleryItem} from './website-source-gallery-items.js';
+import {imageFrameCSS,validImageFrame} from './web/website-image-frame.js';
+import {imageCandidates} from './web/website-image-candidates.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const stylesheet='.website-source-grid{display:grid;gap:1rem;align-items:start}.website-source-grid>figure{margin:0;min-width:0}.website-source-grid img{display:block;max-width:100%;height:auto}'+
  Array.from({length:6},(_,i)=>'.website-source-grid[data-columns="'+(i+1)+'"]{grid-template-columns:repeat('+(i+1)+',minmax(0,1fr))}').join('')+
- '@media(max-width:600px){.website-source-grid[data-columns]{grid-template-columns:1fr}}';
+ '@media(max-width:600px){.website-source-grid[data-columns]{grid-template-columns:1fr}}'+imageFrameCSS;
 const styleHash=createHash('sha256').update(stylesheet).digest('hex'),styleName='gallery-'+styleHash.slice(0,20)+'.css';
 const projections=new WeakMap(),cacheBytes=4*1024*1024,maxEntries=24;
 async function currentSource(store,id,revision){
@@ -32,7 +34,7 @@ async function readSource(store,id,revision,signal){
   entry.pending=(async()=>{
    const items=sourceGalleryItems(await store.readText(source.html),source.assets);
    const order=[...items.values()];
-   entry.size=order.reduce((size,item)=>size+256+2*(item.caption.length+item.alt.length+item.asset.length),0);
+   entry.size=order.reduce((size,item)=>size+256+2*(item.caption.length+item.alt.length+item.asset.length+(item.srcset?.length??0)),0);
    if(entry.size>cacheBytes&&cache.get(key)===entry)cache.delete(key);
    let total=0;for(const value of cache.values())total+=value.size;
    while(total>cacheBytes){const [oldest,value]=cache.entries().next().value;total-=value.size;cache.delete(oldest);}
@@ -47,7 +49,8 @@ async function readSource(store,id,revision,signal){
 function publicItem(source,item){
  const {id,revision,title:sourceTitle}=source;
  const {key,kind,alt,caption}=item;
- return {sourceId:id,sourceRevision:revision,sourceTitle,key,kind,alt,caption,previewUrl:'/api/website-files/gallery/image/'+id+'/'+revision+'/'+encodeURIComponent(key)};
+ const originalUrl='/api/website-files/gallery/image/'+id+'/'+revision+'/'+encodeURIComponent(key);
+ return {sourceId:id,sourceRevision:revision,sourceTitle,key,kind,alt,caption,originalUrl,previewUrl:item.srcset?originalUrl+'?display=thumbnail':originalUrl};
 }
 export function listGalleryItems(store,{sourceId,sourceRevision,offset=0,limit=12,signal}){
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>40)throw new AppError('INVALID');
@@ -68,12 +71,13 @@ class GalleryImage extends WebsiteFileContent{
   }
  }
 }
-export function openGalleryImage(store,sourceId,revision,key,signal){
+export function openGalleryImage(store,sourceId,revision,key,signal,thumbnail=false){
  if(!galleryPart(key))throw new AppError('INVALID');
  return store.scope(async()=>{
   const {source,items}=await readSource(store,sourceId,revision,signal),item=items.get(key);
   if(!item)throw new AppError('NOT_FOUND');
-  const descriptor=source.assets.find(f=>f.name===item.asset);
+  const target=thumbnail&&item.srcset?imageCandidates(item.srcset)[0].url:item.asset;
+  const descriptor=source.assets.find(f=>f.name===target);
   await currentSource(store,sourceId,revision);
   return {content:new GalleryImage(store,source,descriptor),contentType:descriptor.contentType};
  },{signal});
@@ -115,7 +119,7 @@ export function readSourceGallery(store,siteId,options){
    if(slot.key!==key||slot.sourceId!==id||slot.revision!==revision)throw new AppError('FORMAT');
    if(!sources.has(id))sources.set(id,await readSource(store,id,revision,options.signal));
    const current=sources.get(id),item=current.items.get(key);if(current.source.revision!==revision||!item)throw new AppError('CONFLICT');
-   items.push({slotId:slot.slotId,...publicItem(current.source,item),...galleryOverrides(figure)});
+   items.push({slotId:slot.slotId,...publicItem(current.source,item),...galleryOverrides(figure),...(slot.frame?{frame:slot.frame}:{})});
   }
   await store.current(siteId,manifest.revision);
   return {galleryId:options.galleryId,heading:words(gallery.head),columns:gallery.columns,items};
@@ -144,7 +148,8 @@ export function saveSourceGallery(store,siteId,options){
    if(current.source.revision!==row.sourceRevision)throw new AppError('CONFLICT');
    const item=current.items.get(row.key);if(!item)throw new AppError('NOT_FOUND');
    if(row.altOverride!=null&&(typeof row.altOverride!=='string'||row.altOverride.length>1500)||row.captionOverride!=null&&(typeof row.captionOverride!=='string'||row.captionOverride.length>4000))throw new AppError('INVALID');
-   const slotId=previous?.slotId??randomUUID();slots.push({slotId,sourceId:row.sourceId,revision:row.sourceRevision,key:row.key,unavailable:false});
+   if(row.frame!==undefined&&!validImageFrame(row.frame))throw new AppError('INVALID');
+   const slotId=previous?.slotId??randomUUID();slots.push({slotId,sourceId:row.sourceId,revision:row.sourceRevision,key:row.key,unavailable:false,...(row.frame?{frame:row.frame}:{})});
    const markup=renderGalleryItem(item,row.sourceId,row.sourceRevision,page.path,{...row,slotId});
    imageBytes+=Buffer.byteLength(markup);if(imageBytes>16*1024*1024)throw new AppError('LIMIT');rendered.push(markup);
   }

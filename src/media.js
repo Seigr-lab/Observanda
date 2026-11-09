@@ -203,15 +203,16 @@ export class MediaStore {
     await assertRegular(file);return new FileContent(this.workspace,file,metadata.originalBytes,metadata.originalSha256);
   }
 
-  async get(id,{streamed=false,signal,includeHeader=true}={}) {
+  async get(id,{streamed=false,signal,includeHeader=true,headerBytes=12}={}) {
     signal?.throwIfAborted();
+    if(!Number.isInteger(headerBytes)||headerBytes<1||headerBytes>256)throw new AppError('INVALID');
     const {directory,metadata}=await this.metadata(id),profile=profiles[metadata.kind];
     const file = path.join(directory,metadata.kind==='file'?metadata.storageId?metadata.storageId+'.original':'original':`${metadata.storageId?metadata.storageId+'.':''}public.${profile.extension}`);
     const relative=path.relative(this.root,file).split(path.sep).join('/');let content=await retiredMediaContent(this.workspace,relative,metadata.bytes,metadata.sha256);
     if(!content){await assertRegular(file);content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
     let bytes;
-    if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.read(0,11,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
-    else{bytes=await contentBuffer(content,{signal,maxBytes:metadata.bytes});if(includeHeader&&metadata.kind!=='file')content.header=Buffer.from(bytes.subarray(0,12));}
+    if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.readChunks(0,headerBytes-1,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
+    else{bytes=await contentBuffer(content,{signal,maxBytes:metadata.bytes});if(includeHeader&&metadata.kind!=='file')content.header=Buffer.from(bytes.subarray(0,headerBytes));}
     return { id, kind: metadata.kind, extension: metadata.extension, mime: metadata.mime, bytes,...(metadata.kind==='file'?downloadInfo(metadata):{}) };
   }
 

@@ -68,7 +68,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(req.method==='GET'&&operation.startsWith('gallery/image/')){
    const match=/^gallery\/image\/([a-f0-9]{64})\/([a-f0-9]{64})\/((?:media|figure)(?:%3A|:)[a-f0-9-]{36})$/i.exec(operation);
    if(!match)throw new AppError('INVALID');
-   const file=await openGalleryImage(store,match[1],match[2],decodeURIComponent(match[3]),signal);
+   const file=await openGalleryImage(store,match[1],match[2],decodeURIComponent(match[3]),signal,url.searchParams.get('display')==='thumbnail');
    await check();res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
    res.setHeader('Content-Security-Policy',"sandbox; default-src 'none'; style-src 'unsafe-inline'");
    await serveContent(req,res,file.content,file.contentType,{signal});return true;
@@ -106,7 +106,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
    await check();json(await writeRecordingDraft(store,req,{save:saveWebsiteRecovery,register:registerRecoveryWrite,finishDraft:finishRecoveryInputs},{signal}));return true;
   }
-  if(['save-pictures','recovery/save-pictures'].includes(operation)&&req.method==='POST'){
+  if(['save-pictures','components/update-pictures','recovery/save-pictures'].includes(operation)&&req.method==='POST'){
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
    onWrite();await check();
    const {data,pictures}=await websitePictureUpload(req,signal);

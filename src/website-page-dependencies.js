@@ -2,6 +2,7 @@ import {parse} from 'parse5';
 import {websiteLocalURL} from './website-file-policy.js';
 import {decodedWebsiteCSS,websiteCSSURLs,websiteCSSURLTokens} from './web/website-css-urls.js';
 import {digest} from './storage-format.js';
+import {imageResourceURLs} from './web/website-image-candidates.js';
 
 const resourceAttributes=new Set(['href','src','poster','background','srcset']);
 function styleReferences(css,file,add){
@@ -18,8 +19,10 @@ function visitHTML(html,file,visitor,locations=false){
   for(const attr of node.attrs??[]){
    if(attr.name==='style')styleReferences(attr.value,file,(kind,name)=>add(kind,name,'style'));
    if(!resourceAttributes.has(attr.name))continue;
-   const name=websiteLocalURL(attr.value,file);
-   if(name)add(node.tagName==='a'&&attr.name==='href'?(inMenu?'menu':'link'):'asset',name,attr.name);
+   for(const url of imageResourceURLs(attr.name,attr.value)){
+    const name=websiteLocalURL(url,file);
+    if(name)add(node.tagName==='a'&&attr.name==='href'?(inMenu?'menu':'link'):'asset',name,attr.name);
+   }
   }
   if(node.tagName==='style')styleReferences((node.childNodes??[]).map(child=>child.value??'').join(''),file,add);
   if(visitor(node,references)===false)continue;

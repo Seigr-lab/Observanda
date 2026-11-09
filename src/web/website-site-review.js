@@ -1,5 +1,6 @@
 import {websiteReviewModel} from './website-review-model.js';
 import {validWebsiteLink} from './website-files-text-link.js';
+import {referencePicker} from './website-reference-picker.js';
 
 const windowSize=12;
 const normalize=s=>s.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -37,14 +38,16 @@ export function reviewSavedWebsite({site,directory,request,signal,t,edit,trigger
   catch(reason){if(!stop.aborted)fail(reason);else if(reason.name!=='AbortError')onError(reason);}
  }
  function editor(item,path,issue){
-  const link=issue.key==='brokenLink'||issue.key==='draftLink';
-  if(issue.elementPath==null||!link&&!['missingAlt','emptyLink'].includes(issue.key))return;
+  const link=['brokenLink','ambiguousLink','draftLink'].includes(issue.key);
+  if(issue.elementPath==null||!link&&!['missingAlt','accessImageText','emptyLink'].includes(issue.key))return;
   const widget=el('details',item);el('summary',widget,t('websiteReviewRepair'));
   const form=el('form',widget),label=el('label',form,t(link?'linkTarget':issue.key==='emptyLink'?'websiteReviewLinkName':'altText')),input=el('input',label);
   if(link)input.value=issue.href;
   input.required=true;
+  if(link)referencePicker(form,{model,path,directory,href:issue.href,t,signal:stop,checkPin,onError:fail,
+   choose:value=>{input.value=value;input.setCustomValidity('');input.focus();}});
   let decorative;
-  if(issue.key==='missingAlt'){
+  if(['missingAlt','accessImageText'].includes(issue.key)){
    const choice=el('label',form);decorative=el('input',choice);decorative.type='checkbox';choice.append(' '+t('websiteReviewDecorative'));
    decorative.onchange=()=>{input.disabled=decorative.checked;input.required=!decorative.checked;};
   }

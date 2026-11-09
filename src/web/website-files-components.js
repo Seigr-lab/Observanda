@@ -3,11 +3,12 @@ import {componentMainControls} from './website-component-controls.js';
 import {componentFragment,componentReviewView,instanceForm} from './website-component-forms.js';
 import {defaultBreakpoints} from './website-breakpoint-model.js';
 import {layerPath,websiteLayerAt} from './website-layer-model.js';
+import {componentGallery} from './website-component-gallery.js';
 
 const marker='data-website-instance',dragType='application/x-observanda-component';
 const blocks='section,article,aside,div,figure,table,p,h1,h2,h3,h4,h5,h6,blockquote,ol,ul,dl,details,pre,hr,img,video,audio';
 const container='body,main,section,article,aside,div,blockquote,li,dd';
-const protectedArea='header,nav,footer,template,[hidden],[data-record-id],[data-public-record],[data-feed-item],[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-menu],[data-website-feed],[data-website-feed-source],[data-website-source-gallery],[data-image-gallery]';
+const protectedArea='header,nav,footer,template,[hidden],[data-record-id],[data-public-record],[data-feed-item],[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-menu],[data-website-feed],[data-website-feed-source],[data-website-source-gallery]';
 const caption=node=>(node?.querySelector('h1,h2,h3,h4,h5,h6,figcaption,caption')?.textContent||node?.textContent||node?.localName||'').trim().replace(/\s+/g,' ').slice(0,100);
 export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adopt,render,run,notify,showInstance}){
  let opened=false,items=[],query='',name='',position='end',offset=0,next=null,revision=null,total=0,drag=null,canvas=null,dialog=null,epoch=0,controller=null,debounce=null;
@@ -117,8 +118,8 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   if(field==='position'){position=el.value;selection();}
   return true;
  }
- async function write(op,options){
-  const pin=local(),result=await request('components/'+op,{...pin,...options});
+ async function write(op,options,gallery){
+  const pin=local(),data={...pin,...options},upload=gallery?.upload(data),result=await request(upload?'components/update-pictures':'components/'+op,upload??data);
   if(site()?.site.id!==pin.siteId||site()?.path!==pin.path||site().site.revision!==pin.expectedRevision)return;
   controller?.abort();controller=null;epoch++;
   closeDialog();adopt(result);if(op==='create'){name='';query='';}revision=null;render();
@@ -131,7 +132,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   if(value.editable===false){notify?.(t('errors','WEBSITE_PUBLIC_COMPONENT'));return;}
   closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog component-main-editor';host.setAttribute('aria-label',tr('componentEdit'));
   host.innerHTML='<h2>'+esc(tr('componentEdit'))+'</h2><p>'+esc(tr('componentApplyHelp'))+'</p><label>'+esc(tr('componentName'))+'<input data-main-name maxlength="100"></label>'+
-   '<div data-main-tools></div><iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+
+   '<div data-main-tools></div><iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details data-main-gallery><summary>'+esc(tr('gallery'))+'</summary><div data-main-gallery-tools></div></details><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+
    '<p role="alert" data-main-error></p><div class="inline-actions"><button type="button" data-main-apply>'+esc(tr('componentApply'))+'</button><button type="button" data-main-cancel>'+esc(tr('cancel'))+'</button></div>';
   const title=host.querySelector('[data-main-name]'),source=host.querySelector('textarea'),frame=host.querySelector('iframe'),apply=host.querySelector('[data-main-apply]');
   title.value=value.name;source.value=value.html;
@@ -140,11 +141,11 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   const tools=host.querySelector('[data-main-tools]');
   const controls=document.createElement('section'),review=document.createElement('section'),wrap=document.createElement('div');wrap.className='component-main-workspace';
   tools.before(wrap);wrap.append(frame,tools);wrap.after(controls);apply.parentElement.before(review);review.setAttribute('aria-live','polite');
-  const life=new AbortController();let code=false,visual,schema,plan=null,css=value.css??'';
+  const life=new AbortController();let code=false,gallery,visual,schema,plan=null,css=value.css??'';
   let editSequence=0;
   const revise=()=>{editSequence++;plan=null;review.replaceChildren();apply.textContent=tr('componentReviewTitle');};
-  const changed=()=>{if(code)return;source.value=componentFragment(frame.contentDocument);revise();};
-  revise();title.oninput=revise;source.oninput=()=>{code=true;frame.inert=tools.inert=controls.inert=true;revise();};
+  const changed=()=>{if(code)return;source.value=componentFragment(frame.contentDocument);gallery?.syncText(source.value);revise();};
+  revise();title.oninput=revise;source.oninput=()=>{code=true;frame.inert=tools.inert=controls.inert=true;host.querySelector('[data-main-gallery]').inert=true;revise();};
   frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!host.isConnected)return;
    const fragment=doc.createElement('template');fragment.innerHTML=value.html;
@@ -153,6 +154,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
    const own=doc.createElement('style');own.setAttribute('data-observanda-editor','css');own.textContent=css;doc.head.append(own);
    doc.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});
    doc.addEventListener('drop',e=>e.preventDefault());
+   gallery=componentGallery({doc,host,source,apply,pin,t:tr,esc,revise});
    doc.body.oninput=changed;
    visual=bindWebsiteVisual({document:doc,inspector:tools,t:tr,component:true,getCSS:()=>css,setCSS:updated=>{css=updated;changed();},
     getWidth:()=>doc.defaultView.innerWidth,getRanges:()=>site()?.site.breakpoints??defaultBreakpoints(),beforeChange:()=>{},change:changed});
@@ -171,10 +173,10 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
      const sequence=editSequence,impact=await request('components/review',{...pin,...data});if(!host.open||sequence!==editSequence)return;
      componentReviewView(review,impact,tr);plan=impact.reviewId;apply.textContent=tr('componentApply');return;
     }
-    await write('update',{...data,reviewId:plan});
+    await write('update',{...data,reviewId:plan},gallery);
    }catch(error){host.querySelector('[data-main-error]').textContent=error.message||tr('failed');throw error;}
   });};
-  host.addEventListener('close',()=>{life.abort();visual?.destroy();if(dialog===host)dialog=null;host.remove();},{once:true});
+  host.addEventListener('close',()=>{life.abort();visual?.destroy();gallery?.dispose();if(dialog===host)dialog=null;host.remove();},{once:true});
   document.body.append(host);host.showModal();title.focus();
  }
  async function action(operation,el){
@@ -249,5 +251,9 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
    void run(()=>place(held.id,node?dropAt(node,e):'end',node?layerPath(node):null));
   });
  }
- return {tabs,view,bind,bindCanvas,action,input,selection,pageChange,reset};
+ async function openInstance(instance){
+  await save();const pin=local(),value=await request('components/main',{...pin,instance});
+  if(site()?.site.revision===value.revision&&site().site.id===pin.siteId)editor(value,pin);
+ }
+ return {tabs,view,bind,bindCanvas,action,input,selection,pageChange,reset,openInstance};
 }

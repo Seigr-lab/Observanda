@@ -3,6 +3,7 @@ import {parseFragment,serializeOuter} from 'parse5';
 import {AppError} from './errors.js';
 import {attr,descendants} from './website-migration-views.js';
 import {researchId} from './web/research-reference.js';
+import {imageResourceURLs,mapImageCandidates} from './web/website-image-candidates.js';
 
 export const displayId='data-observanda-display-id',displayMode='data-observanda-display';
 const part=node=>attr(node,'data-observanda-part');
@@ -11,9 +12,22 @@ const paras=new Set('p div article section ul ol li dl dt dd blockquote pre br'.
 const skipText=new Set('figure figcaption img video audio source track svg math table button nav'.split(' '));
 const concealed=node=>['script','style','template','noscript'].includes(node.tagName)||node.attrs?.some(a=>a.name==='hidden'||a.name==='aria-hidden'&&a.value==='true'||a.name==='data-observanda-link'||a.name==='data-observanda-source');
 const sectionKey=key=>typeof key==='string'&&key.startsWith('section:')&&researchId(key.slice(8));
+const tableKey=key=>typeof key==='string'&&key.startsWith('table:')&&researchId(key.slice(6));
 const escaped=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sourceAsset=/^(?:\.\.\/)*(assets\/[a-f0-9]{64}\.[a-z0-9]{1,12})$/;
-export const sourceFragmentAtPage=(html,page)=>page.includes('/')?html.replace(/(\b(?:src|href|poster)\s*=\s*["'])(assets\/[a-f0-9]{64}\.[a-z0-9]+)/gi,(_,prefix,name)=>prefix+path.posix.relative(path.posix.dirname(page),name)):html;
+export function sourceFragmentAtPage(html,page){
+ if(!page.includes('/')||!html.includes('assets/'))return html;
+ const root=parseFragment(html,{sourceCodeLocationInfo:true}),patches=[];
+ const relative=url=>url.startsWith('assets/')&&sourceAsset.test(url)?path.posix.relative(path.posix.dirname(page),url):url;
+ for(const node of descendants(root))for(const attr of node.attrs??[]){
+  const next=attr.name==='srcset'?mapImageCandidates(attr.value,relative):['src','href','poster'].includes(attr.name)?relative(attr.value):attr.value;
+  if(next===attr.value)continue;
+  const loc=node.sourceCodeLocation?.attrs?.[attr.name];
+  if(loc)patches.push({start:loc.startOffset,end:loc.endOffset,value:attr.name+'="'+escaped(next)+'"'});
+ }
+ const parts=[];let at=0;for(const {start,end,value} of patches.sort((a,b)=>a.start-b.start)){parts.push(html.slice(at,start),value);at=end;}
+ return parts.join('')+html.slice(at);
+}
 
 function textOf(root,{paragraph=false,skipHeadings=false}={}){
  let line='',first='';
@@ -38,6 +52,21 @@ export function entryDisplayChoices(html){
  function walk(node){
   if(concealed(node))return;
   const key=part(node);
+  const result=attr(node,'data-result-table-id');
+  if(researchId(result)&&attr(node.parentNode,'id')==='result-'+result){
+   function findTable(root){
+    if(concealed(root))return;
+    if(root.tagName==='table')return root;
+    for(const child of root.childNodes??[]){const table=findTable(child);if(table)return table;}
+   }
+   const table=findTable(node);
+   if(table){
+    const key='table:'+result,title=titleOf(node.parentNode),caption=table.childNodes?.find(child=>child.tagName==='caption');
+    let contents=table;
+    for(let p=table.parentNode;p&&p!==node;p=p.parentNode)if((attr(p,'class')??'').split(/\s+/).includes('retained-result-table')){contents=p;break;}
+    entries.set(key,{key,kind:'table',title,text:caption?textOf(caption):'',node:contents});
+   }
+  }
   if((sectionKey(key)||fields.has(key))&&!entries.has(key)){
    const section=sectionKey(key),title=section?titleOf(node):'',text=textOf(node,{paragraph:true,skipHeadings:true});
    if(section||text)entries.set(key,{key,kind:section?'section':'field',title,text,node});
@@ -50,7 +79,7 @@ export function displayPlacement(node){
  const id=attr(node,displayId),presentation=attr(node,displayMode);if(id===undefined&&presentation===undefined)return null;
  if(node.tagName!=='section'||!researchId(id)||!['card','section'].includes(presentation))throw new AppError('INVALID');
  const assets=new Set();for(const child of descendants(node))for(const a of child.attrs??[]){
-  if(['src','href','poster'].includes(a.name)){const match=sourceAsset.exec(a.value);if(match)assets.add(match[1]);}
+  if(['src','href','poster','srcset'].includes(a.name))for(const url of imageResourceURLs(a.name,a.value)){const match=sourceAsset.exec(url);if(match)assets.add(match[1]);}
  }
  return {display:id,presentation,assets:[...assets]};
 }
@@ -66,7 +95,7 @@ function sectionHTML(entry,id){
  }
  trim(root);
  for(const node of descendants(root))for(const a of [...node.attrs??[]]){
-  if(['srcset','background'].includes(a.name)||a.name==='style'&&/url\s*\(|\\/i.test(a.value)){node.attrs=node.attrs.filter(item=>item!==a);continue;}
+  if(a.name==='background'||a.name==='srcset'&&!imageResourceURLs(a.name,a.value).every(url=>sourceAsset.test(url))||a.name==='style'&&/url\s*\(|\\/i.test(a.value)){node.attrs=node.attrs.filter(item=>item!==a);continue;}
   if(a.name==='id')a.value=ids.get(a.value);
   if(a.name==='href'&&a.value.startsWith('#')){
    const target=ids.get(a.value.slice(1));if(target)a.value='#'+target;else node.attrs=node.attrs.filter(item=>item!==a);
@@ -83,13 +112,16 @@ export function renderEntryPlacement(node,{id,revision,title,visible,html,choice
  const start='<section'+retained+' data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'"';
  if(!display)return start+'>'+sourceFragmentAtPage(visible?html:'',page)+'</section>';
  const {slot,presentation,choice}=display;
- if(!researchId(slot)||!['card','section'].includes(presentation)||!(presentation==='card'&&(choice==='title'||fields.has(choice))||sectionKey(choice)))throw new AppError('INVALID');
+ if(!researchId(slot)||!['card','section'].includes(presentation)||!(presentation==='card'&&(choice==='title'||fields.has(choice))||sectionKey(choice)||presentation==='section'&&tableKey(choice)))throw new AppError('INVALID');
  const item=choices?.get(choice);
  if(requireChoice&&choice!=='title'&&(!item||presentation==='card'&&!item.text))throw new AppError('NOT_FOUND');
  let body='';
  if(visible){
   body='<h2>'+escaped(title)+'</h2>';
-  if(item&&presentation==='section')body+=sourceFragmentAtPage(sectionHTML(item,slot),page);
+  if(item&&presentation==='section'){
+   if(item.kind==='table'&&item.title)body+='<h3>'+escaped(item.title)+'</h3>';
+   body+=sourceFragmentAtPage(sectionHTML(item,slot),page);
+  }
   else if(item?.text)body+=(item.title?'<h3>'+escaped(item.title)+'</h3>':'')+'<p>'+escaped(item.text)+'</p>';
   body='<article class="website-entry-'+presentation+'">'+body+'</article>';
  }

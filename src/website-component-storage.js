@@ -5,6 +5,7 @@ import {componentImpact} from './website-component-impact.js';
 import {componentCSS} from './website-component-styles.js';
 import {validateWebsiteHTML} from './website-file-policy.js';
 import {websiteRecordingKind} from './website-recordings.js';
+import {attachGalleryViewer,canonicalGalleryFile} from './website-gallery-support.js';
 import {checkComponentInstances,componentTemplate,insertComponent,makeFirstInstance,pageComponentDocument,prepareComponent,rewriteComponentInstances,selectComponentBlock,wrapComponentEntry} from './website-file-component.js';
 
 const fail=()=>{throw new AppError('INVALID');};
@@ -66,7 +67,7 @@ export function checkSavedComponents(manifest,page,html){
  if(page?.instances?.length||/data-website-instance/i.test(html))checkComponentInstances(html,page??{},componentContext(manifest));
 }
 export function componentOperation(store,operation,id,options={},requireReview=false){
- const {expectedRevision,path='index.html',name,instance,html,position,blockPath,query='',offset=0,signal}=options;let {component}=options;
+ const {expectedRevision,path='index.html',name,instance,html,receivePictures,position,blockPath,query='',offset=0,signal}=options;let {component}=options;
  if(!revision(expectedRevision))fail();
  const write=['create','insert','wrap','update','detach','remove','customize'].includes(operation);
  if(!write&&!['list','main','usage','review','instance','choices'].includes(operation))fail();
@@ -153,6 +154,17 @@ export function componentOperation(store,operation,id,options={},requireReview=f
   }
   if(operation==='customize'&&(!placed||placed.component!==component))throw new AppError('NOT_FOUND');
   const sourceFile=context.files.get(path),sourceHTML=await store.readText(sourceFile,{signal}),document=pageComponentDocument(sourceHTML);
+  const staged=new Set(),priorBlobs=new Set(manifest.files.map(file=>file.blob));
+  try{
+  if(receivePictures){
+   if(operation!=='update'||typeof html!=='string'||Buffer.byteLength(html)>64*1024)fail();
+   const wanted=new Set();validateWebsiteHTML(html,{file:'index.html',pictures:wanted});
+   for await(const {name:fileName,bytes} of receivePictures()){
+    if(!wanted.has(fileName)||context.files.has(fileName))fail();
+    const file={...await store.siteFile(id,fileName,bytes,{draft:current.draft,signal}),picture:true};
+    if(!priorBlobs.has(file.blob))staged.add(file.blob);context.files.set(fileName,file);
+   }
+  }
   let definition=current,first;
   if(operation==='create'||operation==='update'){
    const creating=operation==='create',label=componentName(name);
@@ -169,9 +181,7 @@ export function componentOperation(store,operation,id,options={},requireReview=f
    context.components.set(definition.id,definition);
   }
   if(['insert','create','wrap'].includes(operation))first={id:randomUUID(),component:definition.id,...(operation==='create'?{originalIds:true}:{})};
-  const scripts=await store.scripts(manifest.files),files=map(manifest.files,'name'),pages=[];
-  const priorBlobs=new Set(manifest.files.map(file=>file.blob)),staged=new Set();
-  try{
+  const scripts=await store.scripts(manifest.files),files=new Map(context.files),pages=[];
   for(const prior of manifest.pages){
    signal?.throwIfAborted();
    const applies=operation==='update'?prior.instances?.some(i=>impact.affected.has(i.component)):prior.path===path;
@@ -194,6 +204,15 @@ export function componentOperation(store,operation,id,options={},requireReview=f
     });
     next=rewriteComponentInstances(text,doc,definition,{...prior,instances},context,{affected:impact?.affected,only:operation==='customize'?instance:null,detach:operation==='detach'?instance:null});
     if(operation==='detach')instances=instances.filter(row=>row.id!==instance);
+   }
+   if(next.includes('data-image-gallery')){
+    next=attachGalleryViewer(next,prior.path);
+    for(const name of ['public-gallery.js','public-gallery.css']){
+     const existing=files.get(name);
+     if(existing){if(existing.sourceId||existing.draft&&!prior.draft)fail();continue;}
+     const file=await canonicalGalleryFile(store,id,name,signal);
+     files.set(name,file);if(!priorBlobs.has(file.blob))staged.add(file.blob);if(name==='public-gallery.js')scripts.add(name);
+    }
    }
    const pictures=new Set(),recordings=new Set();validateWebsiteHTML(next,{file:prior.path,scripts,pictures,recordings});
    const changed={...prior,instances,pictures:[...pictures],recordings:[...recordings]};

@@ -42,12 +42,12 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   await expect(copies.first()).toContainText('Sampling method');
   await page.locator('[data-website-file-page]').selectOption('methods.html');await expect(copies).toHaveCount(1);
   await copies.locator('h1,h2,h3').first().click();const contextual=page.locator('[data-placement-context]');await expect(contextual).toBeVisible();
-  await contextual.click();await formats.getByRole('radio',{name:'Selected section',exact:true}).check();
+  await contextual.click();await formats.getByRole('radio',{name:'Section or results table',exact:true}).check();
   await panel.getByLabel('Content to show').selectOption('section:'+source.sectionId);
   await expect(preview).toContainText('the observer compared');await expect(panel.getByRole('button',{name:/^(Previous|Next)$/})).toHaveCount(0);
   await expect(panel.locator('[role=status]')).toBeHidden();
   await panel.press('Escape');await expect(panel).not.toBeVisible();await expect(contextual).toBeFocused();
-  await contextual.press('Enter');await formats.getByRole('radio',{name:'Selected section',exact:true}).check();
+  await contextual.press('Enter');await formats.getByRole('radio',{name:'Section or results table',exact:true}).check();
   await panel.getByLabel('Content to show').selectOption('section:'+source.sectionId);await apply();
   await expect(copies.first()).toContainText('the observer compared');await expect(copies.first()).not.toContainText('Field measurements');
   await page.reload();await page.locator('[data-website-file-page]').selectOption('methods.html');

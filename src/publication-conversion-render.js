@@ -22,6 +22,7 @@ import {hasRetainedFigure} from './record-retained-figures.js';
 import {retainedFigureTargets} from './retained-figure-targets.js';
 import {ResearchMaterials} from './research-materials.js';
 import {retainedTableHTML} from './publication-retained-tables.js';
+import {addPhotoRenditions} from './website-image-renditions.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
 const classes=node=>(attr(node,'class')??'').split(/\s+/);
@@ -74,7 +75,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
  const target='entry:'+record.id,selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};
  const context=projectPublication(book,selection,{publicationTarget:target,entryDestinations:[record]}),plan=publicationPage(context,target),mediaFiles=new Map(),media=plan.media.size?new MediaStore(storage):null;
- for(const [id,kind] of plan.media){signal?.throwIfAborted();const asset=await media.get(id,{streamed:true,signal});if(asset.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,asset);}
+ for(const [id,kind] of plan.media){signal?.throwIfAborted();const asset=await media.get(id,{streamed:true,signal,headerBytes:kind==='image'&&channel==='website'?24:12});if(asset.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,asset);}
  const fontFiles=await new WorkspaceFonts(storage).files(plan.fonts,{signal}),fragments=new PublicationFragments(),retainedAssets=new Map(),tables=new Map(),figures=new Map();
  for(const figure of record.figures){
   if(!hasRetainedFigure(figure))continue;signal?.throwIfAborted();
@@ -109,6 +110,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  // page header, body typography and root variables must not restyle the website.
  let css=candidate.styles.fonts+'\n@scope ([data-observanda-source]) {\n'+[candidate.styles.common,candidate.styles.rich,...candidate.styles.blocks].join('\n')+'\n}';for(const [name,replacement] of assetPaths)css=css.split(name).join(replacement);
  const title='<section data-observanda-part="title"><h2>'+escapeHTML(record.title)+'</h2></section>';
+ if(channel==='website')await addPhotoRenditions(article,assets,signal);
  const fragment=title+serializeOuter(article);
  const output={visible:true,html:fragment,css:retainedArticleCSS(css,record.id,fragment),assets};
  if(channel==='pdf'){

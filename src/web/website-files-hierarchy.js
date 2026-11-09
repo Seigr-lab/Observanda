@@ -1,11 +1,11 @@
-import {websiteLayerAt,movableWebsiteLayer,reorderableWebsiteLayer,websiteLayerMove,layerPath,indexWebsiteLayers,foldLayerText} from './website-layer-model.js';
+import {websiteLayerAt,movableWebsiteLayer,reorderableWebsiteLayer,websiteLayerMove,layerPath,indexWebsiteLayers,refreshLayerLabel,foldLayerText} from './website-layer-model.js';
 import {finderGroups,openWebsiteFinder} from './website-files-finder.js';
 import {websiteFrameGeometry} from './website-file-viewport.js';
 export {websiteLayerAt,movableWebsiteLayer,websiteLayerMove} from './website-layer-model.js';
 
 const pageSize=48,dragType='application/x-observanda-website-layer';
 export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,button,escape,openPage,selectLayer,retainSelection,notify}){
- let root,list,controls,model,chosen=null,query='',offset=0,expanded=new Set(),drag=null,marker,line,closeDialog,hostEvents;
+ let root,list,controls,model,observer,chosen=null,query='',offset=0,expanded=new Set(),drag=null,marker,line,closeDialog,hostEvents;
  let scope='';
  const siteKey=()=>{const entry=site();return entry?[entry.site.id,entry.site.revision,entry.path].join('|'):'';};
  const ready=()=>root?.isConnected&&enabled()&&available();
@@ -71,7 +71,36 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
  }
  function paint(host,doc){
   if(host!==list)bindList(host);
+  observer?.disconnect();
   model=indexWebsiteLayers(doc);draw();paintTrail();
+  observer=new MutationObserver(records=>updateRows(doc,records));
+  observer.observe(doc.body,{subtree:true,characterData:true,childList:true,attributes:true,attributeFilter:['id','aria-label','alt','class','hidden','data-section-id','data-region-kind','data-observanda-source','data-observanda-link','data-observanda-part','data-observanda-editor','data-image-gallery','data-website-source-gallery','data-website-recording','data-website-feed','data-website-instance','data-website-menu','data-website-annotation']});
+ }
+ function updateRows(doc,records){
+  if(!model||!list?.isConnected)return;
+  const affected=new Set();
+  for(const record of records){
+   const el=record.target.nodeType===1?record.target:record.target.parentElement;
+   if(!el||el.closest('[data-observanda-editor]')&&record.attributeName!=='data-observanda-editor')continue;
+   if(record.type==='attributes'&&!['id','aria-label','alt'].includes(record.attributeName)||record.type==='childList'&&
+      [...record.addedNodes,...record.removedNodes].some(n=>n.nodeType===1&&!n.hasAttribute('data-observanda-editor'))){
+    const current=model.byPath.get(chosen)?.node,branches=[...expanded].map(path=>model.byPath.get(path)?.node);
+    model=indexWebsiteLayers(doc);expanded=new Set(branches.map(node=>model.byNode.get(node)?.path).filter(Boolean));
+    chosen=model.byNode.get(current)?.path??null;if(current)retainSelection(chosen);
+    draw();paintTrail();return;
+   }
+   for(let n=el;n&&n!==doc.body;n=n.parentElement){const row=model.byNode.get(n);if(row)affected.add(row);}
+  }
+  const tokens=query?foldLayerText(query).split(/\s+/):[],matches=row=>tokens.every(token=>row.search.includes(token));
+  let redraw=false,relabel=false;
+  for(const row of affected){
+   const wasVisible=matches(row);if(!refreshLayerLabel(row))continue;
+   relabel=true;if(wasVisible!==matches(row)){redraw=true;continue;}
+   const item=list.querySelector('li[data-path="'+row.path+'"]');if(!item)continue;
+   item.querySelector('[data-layer-select]').textContent=row.label;
+   const grip=item.querySelector('[data-layer-grip]');if(grip){grip.title=t('layerDragHint',{name:row.label});grip.setAttribute('aria-label',grip.title);}
+  }
+  if(redraw)draw();if(relabel)paintTrail();
  }
  function paintTrail(){
   const trail=root?.querySelector('[data-layer-trail]');if(!trail)return;
@@ -120,7 +149,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   const key=siteKey();if(key!==scope||!enabled()){reset();scope=key;}
   else{closeDialog?.();hostEvents?.abort();model=list=controls=null;drag=null;removeMark();}
   root=doc.querySelector('[data-website-file-controls]');if(!root||!enabled())return;
-  hostEvents=new AbortController();bindKeys(doc);
+  hostEvents=new AbortController();hostEvents.signal.addEventListener('abort',()=>{observer?.disconnect();observer=null;},{once:true});bindKeys(doc);
   const trail=root.querySelector('[data-layer-trail]');if(trail)trail.onclick=event=>{const at=event.target.closest('[data-layer-ancestor]');if(at)choose(at.dataset.layerAncestor,true);};
   const header=root.querySelector('.website-workspace-utilities')??root.querySelector('header');if(!header)return;
   let trigger=header.querySelector('[data-website-finder]');
