@@ -33,7 +33,7 @@ async function displayCopy(file,t){
  }finally{image.close();}
 }
 
-export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,render,run,notify,getCSS,setCSS}){
+export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,render,run,notify,getCSS,setCSS,recoveredPicture=()=>null}){
  let index=0,offset=0,doc=null,drag=null;
  const pending=new Map();
  const reset=()=>{pending.clear();doc=null;index=offset=0;};
@@ -80,7 +80,7 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
   const list=galleryList(doc),node=grid(),items=current();
   const choices=list.map((g,i)=>'<option value="'+i+'" '+(i===index?'selected':'')+'>'+esc((g.parentElement.querySelector('h1,h2,h3')?.textContent||t('gallery'))+' ('+(i+1)+')')+'</option>').join('');
   const rows=items.slice(offset,offset+pageSize).map((figure,j)=>{
-   const i=offset+j,image=figure.querySelector('img'),src=image.getAttribute('src'),thumb=pending.get(publicName(src,path()))?.preview??new URL(src,url(path())).href;
+   const i=offset+j,image=figure.querySelector('img'),src=image.getAttribute('src'),name=publicName(src,path()),thumb=pending.get(name)?.preview??recoveredPicture(name)??new URL(src,url(path())).href;
    const id='data-image-index="'+i+'"';
    return '<li '+id+' draggable="true"><img loading="lazy" alt="" src="'+esc(thumb)+'"><label>'+esc(t('altText'))+'<input data-gallery-field="alt" '+id+' value="'+esc(image.alt)+'"></label><label>'+esc(t('caption'))+'<input data-gallery-field="caption" '+id+' value="'+esc(figure.querySelector('figcaption')?.textContent??'')+'"></label><div>'+button('up','up',id+(i?'':' disabled'))+button('down','down',id+(i===items.length-1?' disabled':''))+button('remove','remove',id)+'</div></li>';
   }).join('');
@@ -122,13 +122,13 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
   }
   render();
  }
- function body(data){
+ function body(data,ownerPath=data.path,document=read(),held=new Set()){
   if(!pending.size)return null;
   const used=new Set(Array.from(read().querySelectorAll('img[src]'),image=>publicName(image.getAttribute('src'),data.path)));
-  const pictures=[...pending.values()].filter(item=>used.has(item.name));if(!pictures.length)return null;
+  const pictures=[...pending.values()].filter(item=>used.has(item.name)&&!held.has(item.name));if(!pictures.length)return null;
   const control=new TextEncoder().encode(JSON.stringify({...data,pictures:pictures.map(({name,blob})=>({name,size:blob.size}))}));
   const size=new DataView(new ArrayBuffer(4));size.setUint32(0,control.length);return new Blob([size,control,...pictures.map(p=>p.blob)]);
  }
- function paint(canvas){for(const image of canvas.querySelectorAll('img[src]')){const src=image.getAttribute('src'),picture=pending.get(publicName(src,path()));if(picture){image.dataset.observandaEditorImage=src;image.src=picture.preview;}}}
+ function paint(canvas){for(const image of canvas.querySelectorAll('img[src]')){const src=image.getAttribute('src'),name=publicName(src,path()),preview=pending.get(name)?.preview??recoveredPicture(name);if(preview){image.dataset.observandaEditorImage=src;image.src=preview;}}}
  return {open,view,bind,action,input,body,paint,reset,acknowledged,trimHistory,hasPending:name=>pending.has(name)};
 }

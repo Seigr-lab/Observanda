@@ -65,6 +65,7 @@ export async function readRecordingUpload(request,signal){
   seen.add(track.name);uploads.push({name:track.name,bytes:Buffer.from(plainWebVTT(track.text)),contentType:valueType.vtt});
  }
  const media=data.recording;
+ if(data.recoveredUpload&&(!media||!researchId(data.recoveredUpload.id)||!researchId(data.recoveredUpload.inputId)||!/^([a-f0-9]{64})$/.test(data.recoveredUpload.revision)))invalid();
  if(media){
   const extension=resource.exec(media.name)?.[1];
   if(!['wav','mp4'].includes(extension)||!Number.isSafeInteger(media.size)||media.size<=0||typeof media.label!=='string'||media.label.length>200)invalid();
@@ -72,15 +73,15 @@ export async function readRecordingUpload(request,signal){
  async function* bytes(){
   let size=0;
   while(true){
-   signal?.throwIfAborted();if(chunk.length){size+=chunk.length;if(size>(media?.size??0))invalid();yield chunk;chunk=Buffer.alloc(0);}
+   signal?.throwIfAborted();if(chunk.length){size+=chunk.length;if(size>(data.recoveredUpload?0:media?.size??0))invalid();yield chunk;chunk=Buffer.alloc(0);}
    const next=await iterator.next();if(next.done)break;chunk=next.value;
   }
-  if(size!==(media?.size??0))invalid();
+  if(size!==(data.recoveredUpload?0:media?.size??0))invalid();
  }
  return {data,uploads,bytes};
 }
 
-export async function saveRecordingUpload(store,upload,{signal,check}={}){
+export async function saveRecordingUpload(store,upload,{signal,check,recoverInput}={}){
  const {data,uploads,bytes}=upload;
  await store.checkRevision(data.siteId,data.expectedRevision);
  const save=async()=>{await check?.();return store.save(data.siteId,{expectedRevision:data.expectedRevision,path:data.path,html:data.html,css:data.css,historyKey:data.historyKey,recordings:uploads,signal});};
@@ -99,9 +100,15 @@ export async function saveRecordingUpload(store,upload,{signal,check}={}){
    try{
     await clean();
     const input=store.absolute(stage+'/original'),output=store.absolute(stage+'/prepared');
-    const original=await writeContent(workspace,input,bytes(),{exclusive:true,maxBytes:size,reserveBytes:policy.reserveBytes,signal});
-    if(original.size!==size)invalid();
-    const source=new FileContent(workspace,input,original.size,original.sha256);
+    let source;
+    if(data.recoveredUpload){
+     if(!recoverInput)invalid();for await(const _ of bytes())invalid();
+     source=await recoverInput(data.recoveredUpload);
+    }else{
+     const original=await writeContent(workspace,input,bytes(),{exclusive:true,maxBytes:size,reserveBytes:policy.reserveBytes,signal});
+     source=new FileContent(workspace,input,original.size,original.sha256);
+    }
+    if(source.size!==size)invalid();
     const result=await new MediaStore(workspace).prepare(source,kind,path.basename(name,'.'+ext),output,{policy,signal});
     uploads.push({name,bytes:new FileContent(workspace,output,result.bytes,result.sha256),contentType:result.mime,label});
     return await save();

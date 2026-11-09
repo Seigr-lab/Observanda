@@ -15,6 +15,27 @@ function localURL(value,file){
  const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),url.split('#')[0]));
  try{websiteFileName(resolved);return /^(?:api|\.observanda)(?:\/|$)/i.test(resolved)?null:resolved;}catch{return null;}
 }
+// An incomplete code edit is stored as private text and never rendered.
+// Identify its owned-media references separately from the admission that an
+// actual editable or published document must pass.
+export function draftWebsiteMediaReferences(html,css,page,style){
+ const pictures=new Set(),recordings=new Set();
+ const add=(value,base)=>{const name=localURL(value,base);if(name?.startsWith('pictures/'))pictures.add(name);else if(name?.startsWith('recordings/'))recordings.add(name);};
+ const stylesheet=(text,base)=>{for(const url of websiteCSSURLs(decodedWebsiteCSS(text)))add(url,base);};
+ stylesheet(css,style);
+ const pending=[parse(html)];
+ while(pending.length){
+  const node=pending.pop();
+  for(const attr of node.attrs??[]){
+   if(resources.has(attr.name)||attr.name==='href')add(attr.value,page);
+   if(attr.name==='style')stylesheet(attr.value,page);
+  }
+  if(node.tagName==='style')stylesheet((node.childNodes??[]).map(n=>n.value??'').join(''),page);
+  for(const child of node.childNodes??[])if(child.tagName)pending.push(child);
+  if(node.content)pending.push(node.content);
+ }
+ return {pictures,recordings};
+}
 export function validateWebsiteCSS(css,{file='style.css',pictures}={}){
  if(typeof css!=='string'||Buffer.byteLength(css)>websiteCSSByteLimit)throw new AppError('LIMIT');
  const decoded=decodedWebsiteCSS(css);

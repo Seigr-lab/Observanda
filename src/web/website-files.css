@@ -267,3 +267,10 @@
 .website-page-form .website-page-design-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.4rem; align-items:end }
 .website-page-form button { justify-self:start }
 .website-page-form .inline-actions { display:flex; justify-content:flex-end; gap:.4rem; border-top:1px solid var(--border,#cbd3df); padding-top:.85rem }
+
+[data-website-recovery]:empty { display:none }
+[data-website-recovery] > [data-draft-id] { display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;padding:.65rem .8rem;margin-block:.35rem;border:1px solid var(--border);border-radius:.4rem }
+[data-website-recovery] > [data-draft-id] > strong { margin-inline-end:auto }
+.website-recovery-dialog { width:min(62rem,92vw) }
+.website-recovery-compare { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem }
+.website-recovery-compare pre { white-space:pre-wrap;overflow-wrap:anywhere }

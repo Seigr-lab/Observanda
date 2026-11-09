@@ -5,8 +5,11 @@ const authored=doc=>[...doc.querySelectorAll('audio,video')].filter(node=>!node.
 const relative=(path,name)=>'../'.repeat(path.split('/').length-1)+name;
 const recordingPath=(page,name)=>new URL(name,new URL(page,'https://website.invalid/')).pathname.slice(1);
 
-export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,adopt,historyKey,render,run,notify,close}){
+export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,adopt,historyKey,render,run,notify,close,edited=()=>{},settle=async()=>{},forget=async()=>{},recoveryRef=()=>null}){
  let doc=null,revision=null,pagePath=null,index=-1,items=[],next=null,modified=false;
+ let recovered=null;
+ const fileIds=new WeakMap(),slots=['upload','vtt'];
+ const formFields=['kind','reuse','title','transcript','preload','language','trackLabel','trackKind'];
  const player=()=>authored(doc)[index];
  const figure=node=>node?.closest('figure[data-website-recording]');
  const caption=node=>figure(node)?.querySelector(':scope > figcaption');
@@ -14,7 +17,19 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
  const transcriptText=body=>body?[...body.childNodes].map(node=>node.textContent).join('\n'):'';
  const trackName=node=>node.label||node.srclang||t('recordingTrack');
  const id=()=>crypto.randomUUID();
- function reset(){doc=null;revision=pagePath=null;index=-1;items=[];next=null;modified=false;}
+ function reset(){doc=null;revision=pagePath=null;index=-1;items=[];next=null;modified=false;recovered=null;}
+ function draft(){
+  const form=document.querySelector('[data-recording-form]');if(!form||!modified)return null;
+  const fields=Object.fromEntries(formFields.map(key=>[key,form.elements[key].value])),files={},blobs={};
+  for(const slot of slots){
+   const file=form.elements[slot].files[0];
+   if(file){if(!fileIds.has(file))fileIds.set(file,crypto.randomUUID());files[slot]={id:fileIds.get(file),name:file.name,size:file.size};blobs[slot]=file;}
+   else if(recovered?.files[slot])files[slot]=recovered.files[slot];
+  }
+  const removed=[...form.querySelectorAll('[name="removeTrack"]:checked')].map(input=>Number(input.value));
+  return {form:{index,fields,files,removed,defaultTrack:form.elements.defaultTrack.checked},blobs};
+ }
+ async function restore(form){await open();index=form.index;recovered=form;modified=true;}
  async function loadLibrary(after=''){
   const value=await request('media/library',{siteId:site().id,expectedRevision:revision,path:pagePath,after});
   items=after?[...items,...value.items]:value.items;next=value.next;
@@ -36,16 +51,17 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
   const title=caption(node)?.textContent??node?.getAttribute('aria-label')??'';
   const words=transcriptText(transcript(node));
   const playback=currentSource?'<'+kind+' data-recording-preview controls preload="none" src="'+esc(url(recordingPath(pagePath,currentSource)))+'"></'+kind+'>':'';
+  const restoredName=slot=>recovered?.files[slot]?'<span>'+esc(t('recoverySelectedFile',{name:recovered.files[slot].name}))+'</span>':'';
   return '<section class="panel website-files-publish" data-recording-panel><h2>'+esc(t('recordings'))+'</h2>'+
    field('recordingBlock','<select data-recording-block>'+opt(-1,t('recordingNew'),index===-1)+authored(doc).map((el,i)=>opt(i,(caption(el)?.textContent||t(el.localName==='audio'?'recordingAudio':'recordingVideo'))+' ('+(i+1)+')',i===index)).join('')+'</select>')+
    '<form data-recording-form>'+playback+field('recordingKind','<select name="kind">'+opt('audio',t('recordingAudio'),kind==='audio')+opt('video',t('recordingVideo'),kind==='video')+'</select>')+
-   field('recordingUpload','<input name="upload" type="file" accept="audio/*,video/*">')+
+   field('recordingUpload','<input name="upload" type="file" accept="audio/*,video/*">'+restoredName('upload'))+
    field('recordingReuse','<select name="reuse">'+opt('',t('recordingKeep'))+items.map(item=>opt(item.name,item.label||item.name)).join('')+'</select>')+
    (next?button('recordingMore','more'):'')+field('recordingTitle','<input name="title" type="text" maxlength="200" value="'+esc(title)+'">')+
    field('recordingTranscript','<textarea name="transcript" rows="5">'+esc(words)+'</textarea>')+
    field('recordingPreload','<select name="preload">'+opt('none',t('recordingOnPlay'),node?.preload!=='metadata')+opt('metadata',t('recordingMetadata'),node?.preload==='metadata')+'</select>')+
    '<fieldset><legend>'+esc(t('recordingTracks'))+'</legend>'+tracks.map((track,i)=>'<label><input type="checkbox" name="removeTrack" value="'+i+'"> '+esc(t('recordingRemoveTrack')+' · '+trackName(track))+'</label>').join('')+
-   field('recordingTrack','<input name="vtt" type="file" accept=".vtt,text/vtt">')+
+   field('recordingTrack','<input name="vtt" type="file" accept=".vtt,text/vtt">'+restoredName('vtt'))+
    field('recordingLanguage','<input name="language" type="text" placeholder="en" maxlength="64">')+
    field('recordingTrackLabel','<input name="trackLabel" type="text" maxlength="120">')+
    field('recordingTrackKind','<select name="trackKind">'+['captions','subtitles','descriptions'].map(k=>opt(k,t('recording'+k))).join('')+'</select>')+
@@ -54,6 +70,14 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
  }
  async function apply(data,file,vtt){
   if(!doc||path()!==pagePath||site().revision!==revision)throw Error(t('changed'));
+  await settle();
+  let recoveredUpload;
+  if(!file&&recovered?.files.upload){
+   file=recovered.files.upload;recoveredUpload={...recoveryRef(),inputId:file.id};
+  }
+  if(!vtt&&recovered?.files.vtt){
+   const track=recovered.files.vtt;vtt={size:track.size,text:async()=>(await request('recovery/track',{siteId:site().id,path:pagePath,...recoveryRef(),inputId:track.id})).text};
+  }
   const kind=data.get('kind'),old=player();
   if(!['audio','video'].includes(kind))throw Error(t('failed'));
   const selected=data.get('reuse'),trackText=[];
@@ -94,17 +118,22 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    if(data.get('defaultTrack')){for(const other of media.querySelectorAll('track[default]'))other.removeAttribute('default');track.default=true;}
    media.append(track);trackText.push({name,text:await vtt.text()});
   }
-  const header=new TextEncoder().encode(JSON.stringify({siteId:site().id,path:pagePath,expectedRevision:revision,historyKey:historyKey?.(),html:serializeWebsiteHTML(copy),css:css(),recording:record,tracks:trackText}));
+  const header=new TextEncoder().encode(JSON.stringify({siteId:site().id,path:pagePath,expectedRevision:revision,historyKey:historyKey?.(),html:serializeWebsiteHTML(copy),css:css(),recording:record,recoveredUpload,tracks:trackText}));
   const size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,header.length);
-  const result=await request('media/save',new Blob(file?[size,header,file]:[size,header],{type:'application/octet-stream'}));
-  reset();adopt(result);close();
+  const result=await request('media/save',new Blob(file&&!recoveredUpload?[size,header,file]:[size,header],{type:'application/octet-stream'}));
+  await forget({saved:true});reset();adopt(result);close();
  }
  function bind(){
   const panel=document.querySelector('[data-recording-panel]');if(!panel)return;
   const f=panel.querySelector('form'),block=panel.querySelector('[data-recording-block]');
-  f.oninput=f.onchange=()=>{modified=true;};
-  block.onchange=()=>{if(modified&&!confirm(t('recordingDiscard'))){block.value=String(index);return;}index=Number(block.value);modified=false;render();};
-  panel.querySelector('[data-recording-action="close"]').onclick=()=>{if(modified&&!confirm(t('recordingDiscard')))return;reset();close();};
+  if(recovered){
+   for(const key of formFields)f.elements[key].value=recovered.fields[key];
+   for(const input of f.querySelectorAll('[name=removeTrack]'))input.checked=recovered.removed.includes(Number(input.value));
+   f.elements.defaultTrack.checked=recovered.defaultTrack;
+  }
+  f.oninput=f.onchange=()=>{modified=true;edited();};
+  block.onchange=()=>{if(modified&&!confirm(t('recordingDiscard'))){block.value=String(index);return;}const target=Number(block.value);void run(async()=>{if(modified)await forget();index=target;modified=false;recovered=null;render();}).catch(e=>notify(e.message,true));};
+  panel.querySelector('[data-recording-action="close"]').onclick=()=>{if(modified&&!confirm(t('recordingDiscard')))return;void run(async()=>{if(modified)await forget();reset();close();}).catch(e=>notify(e.message,true));};
   const more=panel.querySelector('[data-recording-action="more"]');
   if(more)more.onclick=()=>void run(async()=>{const count=items.length;await loadLibrary(next);for(const item of items.slice(count))f.elements.reuse.add(new Option(item.label||item.name,item.name));more.hidden=!next;}).catch(e=>notify(e.message,true));
   f.onsubmit=event=>{
@@ -114,7 +143,7 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    void run(()=>apply(data,file,vtt)).catch(e=>notify(e.message,true));
   };
  }
- return {open,reset,view,bind,dirty:()=>modified};
+ return {open,reset,view,bind,restore,draft,dirty:()=>modified};
 }
 
 function validLanguage(language){try{return Intl.getCanonicalLocales(language).length===1;}catch{return false;}}

@@ -14,6 +14,7 @@ import {unseal} from './encryption.js';
 import {FileContent} from './file-content.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {AppError} from './errors.js';
+import {recoveryAssets} from './website-recovery.js';
 import {assertPublicFiles} from './privacy.js';
 import {replaceSourceTags} from './website-source-tags.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
@@ -330,9 +331,12 @@ export class WebsiteFileStore{
  async present(manifest,page='index.html',{signal}={}){
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,selected),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||selected.feedPage||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
   const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash;
-  const feedStamps=manifest.feeds?.filter(f=>f.path===page).flatMap(f=>f.groups.map(g=>g.stamp))??[];
   const assetStamp=this.assetStamp(manifest);
-  return {site,path:page,assetStamp,surfaceStamp:this.surfaceStamp(manifest,page,assetStamp),sourceStamp:hash(plain(feedStamps.length?[manifest.sources,feedStamps]:manifest.sources)),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
+  return {site,path:page,assetStamp,surfaceStamp:this.surfaceStamp(manifest,page,assetStamp),sourceStamp:this.sourceStamp(manifest,page),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
+ }
+ sourceStamp(manifest,page){
+  const feeds=manifest.feeds?.filter(f=>f.path===page).flatMap(f=>f.groups.map(g=>g.stamp))??[];
+  return hash(plain(feeds.length?[manifest.sources,feeds]:manifest.sources));
  }
  assetStamp(manifest){
   // The mounted document can contain relative links to any saved resource.
@@ -367,11 +371,11 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  menu(id,options){return readSiteMenu(this,id,options);}
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
- save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,signal}={},designInstances){return this.scope(async()=>{
-  const manifest=await this.current(id,expectedRevision);if(!hex(expectedRevision))throw new AppError('INVALID');websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
+ async inspectPageSource(manifest,page,html,css,signal,designInstances){
+  websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
   if(manifest.files.some(file=>file.name===page&&file.feedPage))throw new AppError('CONFLICT');
-  const former=manifest.pages.find(item=>item.path===page);let placements=websiteSourcePlacements(html,former?.placements);
-  const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath,sources=new Map();
+  const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html,former?.placements);
+  const draft=former?.draft,cssPath=draft?draftStyle:manifest.cssPath;
   const scripts=await this.scripts(manifest.files),htmlPictures=new Set(),cssPictures=new Set(),recordingNames=new Set();
   const addViewer=!scripts.has('public-gallery.js')&&typeof html==='string'&&html.includes('public-gallery.js');
   if(addViewer)scripts.add('public-gallery.js');
@@ -382,6 +386,13 @@ export class WebsiteFileStore{
   }
   if(designInstances&&former)throw new AppError('CONFLICT');
   checkSavedComponents(manifest,designInstances?{path:page,instances:designInstances}:former,html);
+  return {former,placements,draft,cssPath,scripts,htmlPictures,cssPictures,recordingNames,addViewer};
+ }
+ save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,recovery,signal}={},designInstances){return this.scope(async()=>{
+  if(!hex(expectedRevision))throw new AppError('INVALID');
+  const manifest=await this.current(id,expectedRevision),inspected=await this.inspectPageSource(manifest,page,html,css,signal,designInstances);
+  const {former,draft,cssPath,scripts,htmlPictures,cssPictures,recordingNames,addViewer}=inspected,sources=new Map();
+  let {placements}=inspected;
   if(!former){
    ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
    validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
@@ -400,9 +411,15 @@ export class WebsiteFileStore{
   if(former?.entryDisplays)pages.at(-1).entryDisplays=former.entryDisplays;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
   const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
-  const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures,draft,signal});
+  const recovered=recovery?await recoveryAssets(this,manifest,page,recovery,new Set([...htmlPictures,...cssPictures]),recordingNames):null;
+  async function* savedPictures(){
+   yield* recovered.pictures;
+   if(receivePictures)yield* receivePictures();
+  }
+  const pictures=await saveWebsitePictures(this,manifest,{files,pages,page,style:cssPath,htmlPictures,cssPictures,receivePictures:recovery?savedPictures:receivePictures,draft,signal});
   let saved,media,retention;try{
-   media=await saveWebsiteRecordings(this,manifest,{files:pictures.files,pages,names:recordingNames,uploads:recordings,draft,signal});
+   const uploads=recovered?.recordings.length?[...recovered.recordings,...(recordings??[])]:recordings;
+   media=await saveWebsiteRecordings(this,manifest,{files:pictures.files,pages,names:recordingNames,uploads,draft,signal});
    retention=retainEditHistory(manifest,media.files,historyKey,page);
    saved=await this.commit({...candidate,files:media.files,pictureStyles:pictures.pictureStyles},{signal,history:retention.history});
   }catch(error){if((await this.raw(id)).revision===manifest.revision){await pictures.rollback();await media?.rollback();}throw error;}

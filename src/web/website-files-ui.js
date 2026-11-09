@@ -1,6 +1,7 @@
 import './i18n/catalogues/websiteFiles.js';
 import {t} from './i18n/index.js';
 import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,websiteCanvasValue,canvasSelection,restoreCanvasSelection,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
+import {websiteFilesRecovery} from './website-files-recovery.js';
 import {websiteFilesFolder} from './website-files-folder.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
@@ -54,6 +55,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let pendingCanvas=null,canvasTimer=null;
  let undo=[],redo=[],lastCheckpoint=0,historyBytes=0,historyKey;
  let pendingHistoryFocus=null;
+ let recoveringSource=false;
  const request=(operation,data,options={})=>api('/api/website-files/'+operation,data,{...options,owner:null,adopt:false});
  const siteId=()=>opened?.site.id;
  const remoteRequest=(operation,data,options={})=>remoteProgressRequest(request,operation,data,{signal:controller?.signal,t,tr,...options});
@@ -85,7 +87,22 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const baseURL=(path=opened.path)=>new URL(path,directory()).href;
  const canvasURL=(path=opened.path)=>new URL(path,directory(opened.historyAssetStamp??opened.assetStamp)).href;
  const previewPages=()=>[...opened.site.pages,...(opened.site.feedPages??[])];
- const gallery=websiteFilesGallery({t:tr,esc,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=serializeWebsiteHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
+ const recovery=websiteFilesRecovery({request,tr,esc,signal:()=>controller?.signal,
+  documentState:()=>{
+   if(!opened||stale)return null;const recording=mode==='media'?recordings.draft():null;
+   if(!dirty&&!recording)return null;flushCanvas();
+   return {workspaceId:session.workspaceId,siteId:siteId(),path:opened.path,baseRevision:opened.site.revision,historyKey,html,css,recording,sourceKind:['html','css'].includes(mode)?mode:document.querySelector('[data-split-code]')?.dataset.splitCode,bookmark:canvasSelection(document.getElementById('website-files-canvas')?.contentDocument)};
+  },
+  upload:(data,held)=>gallery.body(data,data.path,websiteHTML(data.html),held),
+  restore:async value=>{
+   checkpoint(true);html=value.html;css=value.css;recoveringSource=Boolean(value.sourceOnly);mode=value.sourceOnly??'visual';
+   if(value.recordingForm){await recordings.restore(value.recordingForm);mode='media';}else pendingHistoryFocus={selection:value.bookmark};
+   changed();if(mode==='media')onDirty(true);render();
+  }
+ });
+ const recoveredPicture=name=>opened?recovery.restoreURL(name,directory(opened.assetStamp)):null;
+ const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length)):null;};
+ const gallery=websiteFilesGallery({t:tr,esc,recoveredPicture,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=serializeWebsiteHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
  const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
@@ -97,7 +114,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(target.site.revision!==expectedRevision||!node)throw Error(tr('changed'));
    adopt(target);locatedPlacement=layerPath(node);mode='visual';render();
   }});
- const recordings=websiteFilesRecordings({t:tr,esc,request,read:()=>websiteHTML(html),css:()=>css,path:()=>opened.path,site:()=>opened.site,url:canvasURL,historyKey:()=>historyKey,
+ const recordings=websiteFilesRecordings({t:tr,esc,request,read:()=>websiteHTML(html),css:()=>css,path:()=>opened.path,site:()=>opened.site,url:name=>recoveredPicture(name)??canvasURL(name),historyKey:()=>historyKey,
+  edited:()=>{onDirty(true);recovery.edited();paintStatus();},settle:recovery.settled,forget:recovery.forget,recoveryRef:recovery.currentRef,
   adopt:value=>{checkpoint(true);adopt(value,{savedCheckpoint:true});},render,run,notify,close:()=>{mode='visual';render();}});
  const figures=websiteSourceGallery({request,site:()=>opened,t:tr,esc,render,adopt:adoptRelated,notify,signal:()=>controller.signal,
   changed:value=>{onDirty(value||dirty);paintStatus();},leave:()=>{mode='visual';render();}});
@@ -229,7 +247,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(stale)return tr('changed');
   if(busy)return tr(busy);
   if(!opened)return '';
-  return tr(dirty||figures.dirty()?'unsaved':'saved');
+  return tr(dirty||figures.dirty()||recordings.dirty()?'unsaved':'saved');
  }
  function button(key,action,extra=''){return '<button type="button" class="button" data-action="website-files-'+action+'" '+extra+'>'+esc(tr(key))+'</button>';}
  const field=(key,value,extra='')=>'<label>'+esc(tr(key))+'<input data-website-file-field="'+key+'" value="'+esc(value)+'" '+extra+'></label>';
@@ -237,8 +255,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   clearTimeout(canvasTimer);canvasTimer=null;if(!pendingCanvas)return;
   const document=pendingCanvas;pendingCanvas=null;html=websiteCanvasValue(document);changed();paintStructure(document);
  }
- function canvasInput(document){pendingCanvas=document;dirty=true;plan=null;onDirty(true);paintStatus();clearTimeout(canvasTimer);canvasTimer=setTimeout(flushCanvas,180);}
- function changed(){dirty=html!==opened?.html||css!==opened?.css;plan=null;onDirty(dirty||destinationDirty);paintStatus();for(const op of ['undo','redo']){const node=document.querySelector('[data-action="website-files-'+op+'"]');if(node)node.disabled=!(op==='undo'?undo:redo).length;}}
+ function canvasInput(document){pendingCanvas=document;dirty=true;recovery.edited();plan=null;onDirty(true);paintStatus();clearTimeout(canvasTimer);canvasTimer=setTimeout(flushCanvas,180);}
+ function changed(){dirty=html!==opened?.html||css!==opened?.css;if(dirty)recovery.edited();plan=null;onDirty(dirty||destinationDirty);paintStatus();for(const op of ['undo','redo']){const node=document.querySelector('[data-action="website-files-'+op+'"]');if(node)node.disabled=!(op==='undo'?undo:redo).length;}}
  function paintStatus(){
   const resume=document.querySelector('[data-website-files-reopen]');
   if(resume)resume.hidden=!stale||awaitingAccess||Boolean(conflictingPage);
@@ -264,12 +282,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function adopt(value,{savedCheckpoint=false}={}){
   if(!value?.site?.id||typeof value.site.revision!=='string'||!Array.isArray(value.site.pages)||typeof value.html!=='string'||typeof value.css!=='string'||typeof value.path!=='string')throw Error(tr('failed'));
-  if(value.path!==opened?.path||value.site.id!==siteId()){forgetSelection();picker.reset();components.pageChange(value.site.id===siteId());recordings.reset();gallery.reset();figures.reset();}
+  const switched=value.path!==opened?.path||value.site.id!==siteId();
+  if(switched){forgetSelection();picker.reset();components.pageChange(value.site.id===siteId());recordings.reset();gallery.reset();figures.reset();}
   if(!savedCheckpoint||value.path!==opened?.path||value.site.id!==siteId()||value.sourceStamp!==opened.sourceStamp){
    undo=[];redo=[];historyBytes=0;historyKey=crypto.randomUUID();
   }
-  lastCheckpoint=0;
+  lastCheckpoint=0;recoveringSource=false;
   opened=value;html=value.html;css=value.css;dirty=stale=awaitingAccess=false;conflictingPage=null;error='';plan=null;onDirty(menu.dirty());onSite(value.site);const at=sites.findIndex(site=>site.id===value.site.id);if(at<0)sites.push(value.site);else sites[at]=value.site;
+  if(switched)void recovery.select(value.site.id,value.path);
  }
  function adoptRelated(value){
   if(!opened||value.path!==opened.path||value.site.id!==siteId())return adopt(value);
@@ -370,6 +390,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   await initialPage();waitForPreparation();
  }
  function clear(){
+  recovery.reset();
   waitingView=null;openingAfterFence=false;
   presentation.close();
   feeds.clear();
@@ -391,10 +412,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function save(){
   flushCanvas();if(!opened||!dirty)return opened;if(stale)throw Error(tr('changed'));
-  const submitted={html,css},epoch=generation,data={siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,historyKey,...submitted};
-  const upload=gallery.body(data),value=await request(upload?'save-pictures':'save',upload??data,{signal:controller?.signal});
+  await recovery.settled();
+  const submitted={html,css},epoch=generation,data={siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,historyKey,recovery:recovery.ref(),...submitted};
+  const upload=gallery.body(data);let value;
+  try{value=await request(upload?'save-pictures':'save',upload??data,{signal:controller?.signal});}
+  catch(reason){if(epoch===generation&&dirty)recovery.edited();throw reason;}
   if(epoch!==generation||data.siteId!==siteId()||data.path!==opened?.path)return;
   if(upload)gallery.acknowledged(websiteHTML(submitted.html),data.path);
+  await recovery.forget({saved:true});
   flushCanvas();
   const newer=html!==submitted.html||css!==submitted.css;
   if(newer&&opened.sourceStamp!==value.sourceStamp)updateFromSaved(value);
@@ -410,7 +435,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function beforeLeave(fromAction=false){
   if(busy&&!fromAction)return false;
-  if(recordings.dirty()){if(!confirm(tr('recordingDiscard')))return false;recordings.reset();}
+  if(recordings.dirty()){if(!confirm(tr('recordingDiscard')))return false;await recovery.forget();recordings.reset();}
   if(figures.dirty()&&!figures.canSave()){if(!confirm(tr('discardConfirm')))return false;figures.reset();onDirty(dirty);}
   if(!dirty&&!destinationDirty&&!menu.dirty()&&!pagesPanel.dirty()&&!figures.dirty())return true;
   if(!confirm(tr('saveBeforeLeave')))return false;
@@ -423,6 +448,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(!opened)return true;
   // Read the replacement first. A failed read leaves the editable draft intact.
   const current=opened,replacement=await request('open',{siteId:siteId(),path:opened.path},{signal:controller?.signal});if(opened!==current)return false;
+  await recovery.forget();
   menu.reset();pagesPanel.reset();components.reset();picker.reset();gallery.reset();recordings.reset();forgetSelection();resetPreview();
   figures.reset();destinationDirty=false;destination=null;mode='visual';adopt(replacement);render();return true;
  }
@@ -549,6 +575,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const toolbar=authoring?siteToolbar():!opened&&!form?siteSelector():'';
   return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><div class="website-workspace-identity"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'<div class="website-workspace-utilities">'+guideButton+'</div></header>'+
    (toolbar?'<nav class="website-files-toolbar website-page-controls" aria-label="'+esc(tr('site'))+'">'+toolbar+'</nav>':'')+
+   (opened&&!stale&&!form?'<div data-website-recovery></div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    button('reopen','reopen','data-website-files-reopen '+(stale&&!awaitingAccess&&!conflictingPage?'':'hidden'))+body+'</fieldset>';
  }
@@ -616,6 +643,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function blockAt(doc,path){return websiteLayerAt(doc,path);}
  function movable(node){return movableWebsiteLayer(node);}
  function bind(){
+  recovery.paint();
   visual?.destroy();visual=null;
   const designFilter=document.querySelector('[data-website-file-field="designSearch"]');
   if(designFilter)designFilter.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();designFilter.form.querySelector('[data-action="website-files-design-search"]').click();}};
@@ -643,7 +671,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   const frame=document.getElementById('website-files-canvas'),historyFocus=pendingHistoryFocus;pendingHistoryFocus=null;if(frame){frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!frame.isConnected||!opened)return;
-   loadWebsiteCanvas(doc,html,css,canvasURL(opened.site.cssPath));gallery.paint(doc);editWebsiteCanvas(doc);
+   loadWebsiteCanvas(doc,html,css,canvasURL(opened.site.cssPath),recoveredResource);gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
    visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,
@@ -741,18 +769,23 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }finally{if(active()){plan=null;render();}}
  }
  async function action(element){const name=element.dataset.action;if(name?.startsWith('github-')&&mode==='destination'){await run(()=>github.action(element));return true;}if(!name?.startsWith('website-files-'))return false;const operation=name.slice('website-files-'.length);if(busy)return true;flushCanvas();
+  if(recoveringSource&&!['html','css','discard','reopen','undo','redo'].includes(operation)){
+   try{await request('recovery/validate',{siteId:siteId(),path:opened.path,expectedRevision:opened.site.revision,html,css},{signal:controller.signal});recoveringSource=false;}
+   catch(reason){if(['AUTH','ACCESS_LOCKED','CONFLICT'].includes(reason.code))hideUnverifiedPage(true);else notify(tr('recoverySourceCorrect'),true);return true;}
+  }
   if(operation==='check-access'){await poll();return true;}
   await run(async()=>{
-   if(mode==='media'&&recordings.dirty()&&!['save','reopen'].includes(operation)){if(!confirm(tr('recordingDiscard')))return;recordings.reset();mode='visual';}
+   if(mode==='media'&&recordings.dirty()&&!operation.startsWith('recovery-')&&!['save','reopen'].includes(operation)){if(!confirm(tr('recordingDiscard')))return;await recovery.forget();recordings.reset();mode='visual';}
    if(mode==='pages'&&pagesPanel.dirty()&&!operation.startsWith('pages-')&&operation!=='discard')await pagesPanel.save();
    if(mode==='menu'&&menu.dirty()&&!operation.startsWith('menu-')&&operation!=='discard')await menu.save();
 
-   if(operation==='save'){await saveAuthoring();render();}
+   if(operation.startsWith('recovery-'))await recovery.action(operation.slice(9),element.dataset.recoveryId);
+   else if(operation==='save'){await saveAuthoring();render();}
    else if(operation==='undo'||operation==='redo'){
     const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;
     if(from.length){
      const prior=from.at(-1),base=opened,beforeHTML=html,beforeCSS=css;
-     const media=websiteHistoryMedia(prior.html,prior.css,base.path,base.site.cssPath,gallery.hasPending);
+     const media=websiteHistoryMedia(prior.html,prior.css,base.path,base.site.cssPath,name=>gallery.hasPending(name)||recovery.held(name));
      let verified;
      try{verified=await request('version',{siteId:siteId(),path:base.path,expectedRevision:base.site.revision,...(media.length?{media,historyKey}:{})},{signal:controller.signal});}
      catch(reason){if(reason.code!=='CONFLICT')throw reason;hideUnverifiedPage(true);return;}
@@ -905,5 +938,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();
  });return true;}
- return {load,clear,view,bind,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
+ async function openRecovery(row){
+  if(!row||row.surface!=='website'||row.owner?.workspaceId!==session?.workspaceId)throw Error(tr('changed'));
+  if(!await beforeLeave())return;mode='visual';
+  if(siteId()!==row.owner.websiteId||opened?.path!==row.documentKey)await open(row.owner.websiteId,row.documentKey);
+  await recovery.select(row.owner.websiteId,row.documentKey,row.id);
+ }
+ return {load,clear,view,bind,openRecovery,checkVersion:poll,action,input,submit,save:()=>run(saveAuthoring,'saving'),discard:()=>run(discard),beforeLeave,isDirty:()=>dirty||destinationDirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||figures.dirty(),current:()=>opened,session:()=>session};
 }

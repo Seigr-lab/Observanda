@@ -6,11 +6,18 @@ export function websiteHTML(html){
 export function serializeWebsiteHTML(document){
  return '<!doctype html>\n'+document.documentElement.outerHTML;
 }
-export function loadWebsiteCanvas(document,html,css,stylesheet){
+export function applyCanvasCSS(style,css,stylesheet,resource){
+ style.textContent=css.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,(match,a,b,c)=>{const url=(a??b??c).trim();if(!url||url.startsWith('#'))return match;const absolute=new URL(url,stylesheet).href;return 'url('+JSON.stringify(resource?.(absolute)??absolute)+')';});
+}
+export function loadWebsiteCanvas(document,html,css,stylesheet,resource){
  // This frame has the saved page's URL, revision-specific resource policy and
  // no script execution. Relative links and images therefore resolve exactly as
  // they do in the saved website, including pages in nested directories.
  const source=websiteHTML(html),base=document.location.href;
+ if(resource)for(const media of source.querySelectorAll('audio[src],video[src],source[src],track[src]')){
+  const src=media.getAttribute('src'),privateURL=resource(new URL(src,base).href);
+  if(privateURL){media.dataset.observandaEditorMedia=src;media.setAttribute('src',privateURL);}
+ }
  // The host has already installed its stricter revision-scoped HTTP policy.
  // Keep the published policy inert only in the editable copy so the host can
  // paint unsaved CSS. Restore the original attribute when serializing.
@@ -18,14 +25,16 @@ export function loadWebsiteCanvas(document,html,css,stylesheet){
   meta.dataset.observandaEditorHttpEquiv=meta.getAttribute('http-equiv');meta.removeAttribute('http-equiv');
  }
  for(const link of source.querySelectorAll('link[rel="stylesheet"][href]'))if(new URL(link.getAttribute('href'),base).href===stylesheet){link.dataset.observandaEditorStylesheet=link.getAttribute('href');link.removeAttribute('href');}
- const style=source.createElement('style');style.dataset.observandaEditor='';
- style.textContent=css.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,(match,a,b,c)=>{const url=(a??b??c).trim();if(!url||url.startsWith('#'))return match;return 'url('+JSON.stringify(new URL(url,stylesheet).href)+')';});
+ const style=source.createElement('style');style.dataset.observandaEditor='css';applyCanvasCSS(style,css,stylesheet,resource);
  const current=[...source.querySelectorAll('link[data-observanda-editor-stylesheet]')].at(-1);
  if(current)current.after(style);else if(source.head.querySelector('link[data-website-appearance]'))source.head.querySelector('link[data-website-appearance]').before(style);else source.head.append(style);
  document.replaceChild(document.importNode(source.documentElement,true),document.documentElement);
 }
 export function websiteCanvasValue(document){
  const copy=document.cloneNode(true);
+ for(const media of copy.querySelectorAll('[data-observanda-editor-media]')){
+  media.setAttribute('src',media.dataset.observandaEditorMedia);media.removeAttribute('data-observanda-editor-media');
+ }
  for(const image of copy.querySelectorAll('img[data-observanda-editor-image]')){
   image.setAttribute('src',image.dataset.observandaEditorImage);image.removeAttribute('data-observanda-editor-image');
  }
