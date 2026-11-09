@@ -1,5 +1,6 @@
 import {websiteLayerAt,movableWebsiteLayer,reorderableWebsiteLayer,websiteLayerMove,layerPath,indexWebsiteLayers,foldLayerText} from './website-layer-model.js';
 import {finderGroups,openWebsiteFinder} from './website-files-finder.js';
+import {websiteFrameGeometry} from './website-file-viewport.js';
 export {websiteLayerAt,movableWebsiteLayer,websiteLayerMove} from './website-layer-model.js';
 
 const pageSize=48,dragType='application/x-observanda-website-layer';
@@ -159,9 +160,10 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   const frame=to.element.ownerDocument.defaultView.frameElement;
   if(!frame){line?.remove();line=null;return;}
   line??=node('div');line.className='website-layer-drop-guide';line.dataset.position=position;line.setAttribute('aria-hidden','true');
-  const canvas=frame.getBoundingClientRect(),rect=to.element.getBoundingClientRect(),x=Math.max(0,rect.left),y=Math.max(0,rect.top);
-  const bottom=Math.min(frame.clientHeight,rect.bottom),width=Math.max(0,Math.min(frame.clientWidth,rect.right)-x);
-  Object.assign(line.style,{left:canvas.left+frame.clientLeft+x+'px',top:canvas.top+frame.clientTop+(position==='after'?bottom:y)+'px',width:width+'px',height:(position==='inside'?Math.max(0,bottom-y):0)+'px'});
+  const canvas=websiteFrameGeometry(frame),rect=to.element.getBoundingClientRect();
+  const left=Math.max(canvas.clipLeft,canvas.left+rect.left*canvas.scale),right=Math.min(canvas.clipRight,canvas.left+rect.right*canvas.scale);
+  const top=Math.max(canvas.clipTop,canvas.top+rect.top*canvas.scale),bottom=Math.min(canvas.clipBottom,canvas.top+rect.bottom*canvas.scale);
+  Object.assign(line.style,{left:left+'px',top:(position==='after'?bottom:top)+'px',width:Math.max(0,right-left)+'px',height:(position==='inside'?Math.max(0,bottom-top):0)+'px'});
   line.dataset.hint=[model.byPath.get(from).label,t({before:'layerBefore',after:'layerAfter',inside:'layerInside'}[position]),model.byPath.get(to.path).label].join(' · ');
   if(!line.isConnected)root.ownerDocument.body.append(line);
  }
@@ -203,9 +205,10 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   let pointer=null,moved=false,tick=0;
   const listen=(type,handler)=>grip.addEventListener(type,handler,{signal});
   function target(){
-   const {x,y}=pointer,rect=frame.getBoundingClientRect(),hostX=rect.left+frame.clientLeft+x,hostY=rect.top+frame.clientTop+y;
-   if(x>=0&&y>=0&&x<frame.clientWidth&&y<frame.clientHeight)return {to:canvasTarget(doc.elementFromPoint(x,y)),y,scroller:doc.scrollingElement,top:0,bottom:frame.clientHeight};
-   const row=root.ownerDocument.elementFromPoint(hostX,hostY)?.closest('li[data-path]');
+   const {x,y}=pointer,rect=websiteFrameGeometry(frame),hostX=rect.left+x*rect.scale,hostY=rect.top+y*rect.scale;
+   const hit=root.ownerDocument.elementFromPoint(hostX,hostY);
+   if(hit===frame)return {to:canvasTarget(doc.elementFromPoint(x,y)),y,scroller:doc.scrollingElement,top:(rect.clipTop-rect.top)/rect.scale,bottom:(rect.clipBottom-rect.top)/rect.scale};
+   const row=hit?.closest('li[data-path]');
    if(row&&list.contains(row)){const scroller=list.closest('aside'),bounds=scroller.getBoundingClientRect();return {to:{path:row.dataset.path,element:row},y:hostY,scroller,top:bounds.top,bottom:bounds.bottom};}
    return {to:null};
   }

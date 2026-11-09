@@ -53,9 +53,12 @@ test('author a named figure grid and position a scientific annotation visually i
   expect(percentages[0]).toBeCloseTo(10,0);expect(percentages[1]).toBeCloseTo(20,0);
   await coords.getByRole('button',{name:'Return to normal flow'}).click();await expect(marker).toHaveCSS('position','static');
   await coords.getByLabel('Anchor corner').selectOption('tl');await coords.getByLabel('Coordinate units').selectOption('px');await coords.getByRole('button',{name:'Choose a point in the canvas'}).click();
-  const point=await canvas.locator('#plate0 img').evaluate(image=>{const box=image.getBoundingClientRect(),figure=image.parentElement.getBoundingClientRect();return {x:Math.round(box.left-figure.left+box.width*130/320+5),y:Math.round(box.top-figure.top+box.height*.2-24)};});
-  await canvas.locator('#plate0').click({position:point});
-  const offsets=await marker.evaluate(n=>[getComputedStyle(n).left,getComputedStyle(n).top]);expect(Math.abs(parseFloat(offsets[0])-point.x)).toBeLessThanOrEqual(1.1);expect(Math.abs(parseFloat(offsets[1])-point.y)).toBeLessThanOrEqual(1.1);
+  const spectrum=canvas.locator('#plate0 img');await spectrum.scrollIntoViewIfNeeded();const image=await spectrum.boundingBox();
+  const peak={x:image.x+image.width*130/320,y:image.y+image.height*32/160};
+  await page.mouse.click(peak.x,peak.y);
+  const placed=await marker.boundingBox();
+  expect(Math.abs(placed.x-peak.x)).toBeLessThan(2);expect(Math.abs(placed.y-peak.y)).toBeLessThan(2);
+  const offsets=await marker.evaluate(n=>[getComputedStyle(n).left,getComputedStyle(n).top]);
   if(process.env.OBSERVANDA_LAYOUT_EDITOR_SCREENSHOT){await coords.scrollIntoViewIfNeeded();await page.screenshot({path:process.env.OBSERVANDA_LAYOUT_EDITOR_SCREENSHOT});}
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await page.reload();await expect(canvas.locator('[data-website-annotation]')).toHaveCSS('top',offsets[1]);await canvas.getByText('Converted observation').click();await expect(page.locator('.website-layout-inspector')).toBeHidden();

@@ -1,3 +1,4 @@
+import {websiteFrameGeometry} from './website-file-viewport.js';
 const dragType='application/x-observanda-publication-entry';
 
 // Transfer only a one-use token between the library and the same editor's frame.
@@ -64,8 +65,8 @@ export function websitePlacementDrag({site,available,place,t}){
    e.dataTransfer.dropEffect='copy';
    if(!line){line=frame.ownerDocument.createElement('div');line.className='website-placement-line';line.setAttribute('aria-hidden','true');frame.ownerDocument.body.append(line);}
    line.dataset.hint=dest.position==='end'?t('pickerEnd'):t('pickerDropBefore',{number:dest.position.before+1});
-   const bounds=frame.getBoundingClientRect();
-   Object.assign(line.style,{left:bounds.left+'px',width:frame.clientWidth+'px',top:Math.min(bounds.bottom-3,Math.max(bounds.top,bounds.top+dest.y))+'px'});
+   const bounds=websiteFrameGeometry(frame);
+   Object.assign(line.style,{left:bounds.clipLeft+'px',width:Math.max(0,bounds.clipRight-bounds.clipLeft)+'px',top:Math.min(bounds.clipBottom-3,Math.max(bounds.clipTop,bounds.top+dest.y*bounds.scale))+'px'});
   });
   doc.addEventListener('dragleave',e=>{if(!e.relatedTarget)clearLine();});
   doc.addEventListener('drop',e=>{

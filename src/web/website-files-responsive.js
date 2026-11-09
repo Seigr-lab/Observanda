@@ -1,7 +1,7 @@
 import {websiteLayoutComposer,layoutProtected} from './website-layout-composer.js';
 import {websiteCSSByteLimit} from './website-css-urls.js';
 
-const widths={desktop:null,tablet:900,phone:600};
+import {websiteLayoutWidths as widths} from './website-file-viewport.js';
 const namePattern=/^ow-layout-[a-f0-9-]{36}$/;
 const valueLabels={block:'layoutBlock',flex:'layoutFlex',grid:'layoutGrid',row:'layoutRow',column:'layoutColumn','row-reverse':'layoutReverseRow','column-reverse':'layoutReverseColumn',nowrap:'layoutNoWrap',wrap:'layoutWrapLines','wrap-reverse':'layoutReverseWrap','row dense':'layoutDenseRows','column dense':'layoutDenseColumns',stretch:'layoutStretch',start:'sectionStart',center:'sectionCenter',end:'sectionEnd',baseline:'layoutBaseline','space-between':'layoutBetween','space-around':'layoutAround','space-evenly':'layoutEvenly',none:'layoutNone',solid:'layoutSolid',dashed:'layoutDashed',dotted:'layoutDotted',double:'layoutDouble'};
 const fields=[
