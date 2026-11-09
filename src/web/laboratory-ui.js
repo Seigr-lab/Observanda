@@ -1,4 +1,8 @@
 import './i18n/catalogues/sampleAnalysis.js';
+import {sampleNumericFields,readSampleResult,updateSampleNumericFields} from './sample-result-entry.js';
+import {displaySampleScalar} from './sample-result-format.js';
+import {sampleInterval} from './sample-result-numerics.js';
+import {sampleSourceFields,bindSampleSources} from './sample-result-sources-ui.js';
 import {researchContext,ownedAssetURL} from './project-context.js';
 import {t} from './i18n/index.js';
 import {sampleAnalysisPages} from './sample-analysis-pages.js';
@@ -8,7 +12,8 @@ const tr=(key,values)=>t('sampleAnalysis',key,values);
 export function laboratoryUI({state,api,esc,field,option,showDialog,render,notify}){
  const scope=()=>researchContext(state);let owner=scope(),selected=null,sampleChoice=null,opening=0,selectionController=null,timer=null,pending=null;
  const label=status=>tr({'draft':'statusDraft','in review':'statusReview','approved':'statusApproved','rejected':'statusRejected','archived':'statusArchived'}[status]);
- const flag=r=>r.kind!=='numeric'||r.lower===null&&r.upper===null?'':tr(r.lower!==null&&r.value<r.lower?'below':r.upper!==null&&r.value>r.upper?'above':'within');
+ const flag=result=>{const {flag}=sampleInterval(result);return flag&&flag!=='noInterval'?tr(flag):'';};
+ const reading=value=>displaySampleScalar(value,tr);
  const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
  const button=(key,action,attrs='')=>`<button type="button" class="button" data-action="${action}" ${attrs}>${esc(tr(key))}</button>`;
  const main=sampleAnalysisPages({api,context:scope,onChange:()=>{if(state.page==='laboratory'&&owner===scope())draw();}});
@@ -21,13 +26,14 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
  function view(){
   const page=main.page,tab=state.labTab??'samples',counts=page?.counts??{};
   const rows=page?.view===tab?page.items:[],columns=tab==='samples'?['sampleCode','material','source','collected','received','analyses']:['analysis','sample','analyteMethod','result','flag','status'];
-  return `<div class="page-heading"><div><p><button type="button" class="text-button" data-action="module-open" data-module-id="laboratory">${esc(tr('projects'))}</button></p><h1>${esc(tr('title'))}</h1><p class="subtitle">${esc(tr('subtitle'))}</p></div>${button('register','lab-new-sample')}</div><div class="workspace-tabs">${['samples','analyses','review','archive'].map(id=>`<button class="button ${id===tab?'primary':''}" data-action="lab-tab" data-tab="${id}">${esc(tr(id))} <span>${counts[id]??''}</span></button>`).join('')}</div><div class="section-bar"><input id="lab-search" class="search-input" type="search" aria-label="${esc(tr('search'))}" placeholder="${esc(tr('searchPlaceholder'))}" value="${esc(state.labSearch??'')}">${button('refresh','lab-refresh')}${button('recordAnalysis','lab-new-analysis',counts.samples?'':'disabled')}</div>${pager('main')}<div class="table-scroll"><table class="records-table"><thead><tr>${columns.map(key=>`<th>${esc(tr(key))}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>tab==='samples'?`<tr><td><button class="text-button" data-action="lab-sample" data-id="${r.id}">${esc(r.code)}</button></td><td>${esc(r.material)}</td><td>${esc(r.source)}</td><td>${r.collectedOn}</td><td>${r.receivedOn}</td><td>${r.analyses}</td></tr>`:`<tr><td><button class="text-button" data-action="lab-open" data-id="${r.id}">${esc(r.code)}</button></td><td>${esc(r.sampleCode)}</td><td>${esc(r.result.analyte)}<small>${esc(r.result.method)}</small></td><td>${esc(r.result.value)} ${esc(r.result.unit)}</td><td>${esc(flag(r.result))}</td><td>${esc(label(r.status))}</td></tr>`).join('')}</tbody></table></div>${page&&!rows.length?`<p class="empty-inline">${esc(tr('empty'))}</p>`:''}<p class="source-note">${esc(tr('private'))}</p>`;
+  return `<div class="page-heading"><div><p><button type="button" class="text-button" data-action="module-open" data-module-id="laboratory">${esc(tr('projects'))}</button></p><h1>${esc(tr('title'))}</h1><p class="subtitle">${esc(tr('subtitle'))}</p></div>${button('register','lab-new-sample',page?'':'disabled')}</div><div class="workspace-tabs">${['samples','analyses','review','archive'].map(id=>`<button class="button ${id===tab?'primary':''}" data-action="lab-tab" data-tab="${id}">${esc(tr(id))} <span>${counts[id]??''}</span></button>`).join('')}</div><div class="section-bar"><input id="lab-search" class="search-input" type="search" aria-label="${esc(tr('search'))}" placeholder="${esc(tr('searchPlaceholder'))}" value="${esc(state.labSearch??'')}">${button('refresh','lab-refresh')}${button('recordAnalysis','lab-new-analysis',counts.samples?'':'disabled')}</div>${pager('main')}<div class="table-scroll"><table class="records-table"><thead><tr>${columns.map(key=>`<th>${esc(tr(key))}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>tab==='samples'?`<tr><td><button class="text-button" data-action="lab-sample" data-id="${r.id}">${esc(r.code)}</button></td><td>${esc(r.material)}</td><td>${esc(r.source)}</td><td>${r.collectedOn}</td><td>${r.receivedOn}</td><td>${r.analyses}</td></tr>`:`<tr><td><button class="text-button" data-action="lab-open" data-id="${r.id}">${esc(r.code)}</button></td><td>${esc(r.sampleCode)}</td><td>${esc(r.result.analyte)}<small>${esc(r.result.method)}</small></td><td>${esc(reading(r.result.value))} ${esc(r.result.unit)}</td><td>${esc(flag(r.result))}</td><td>${esc(label(r.status))}</td></tr>`).join('')}</tbody></table></div>${page&&!rows.length?`<p class="empty-inline">${esc(tr('empty'))}</p>`:''}<p class="source-note">${esc(tr('private'))}</p>`;
  }
  function resultFields(r={}){
   const input=(key,attrs='')=>`<input name="${key}" ${attrs} value="${esc(r[key]??'')}">`;
-  return `<div class="form-grid">${field(esc(tr('method')),input('method','required maxlength="160"'))}${field(esc(tr('analyte')),input('analyte','required maxlength="160"'))}${field(esc(tr('resultType')),`<select name="kind">${option('numeric',tr('numeric'),r.kind??'numeric')}${option('text',tr('text'),r.kind??'numeric')}</select>`)}${field(esc(tr('resultValue')),input('value','required maxlength="500"'))}${field(esc(tr('unit')),input('unit','maxlength="80"'))}${field(esc(tr('lower')),input('lower','type="number" step="any"'))}${field(esc(tr('upper')),input('upper','type="number" step="any"'))}</div>${field(esc(tr('notes')),`<textarea name="notes" maxlength="2000" rows="3">${esc(r.notes??'')}</textarea>` )}`;
+  return `<div class="form-grid">${field(esc(tr('method')),input('method','required maxlength="160"'))}${field(esc(tr('analyte')),input('analyte','required maxlength="160"'))}${field(esc(tr('resultType')),`<select name="kind">${option('numeric',tr('numeric'),r.kind??'numeric')}${option('text',tr('text'),r.kind??'numeric')}</select>`)}${sampleNumericFields(r,{esc,field,option,tr})}${field(esc(tr('unit')),input('unit','maxlength="80"'))}</div>${field(esc(tr('notes')),`<textarea name="notes" maxlength="2000" rows="3">${esc(r.notes??'')}</textarea>` )}${sampleSourceFields(r.provenance,{esc,tr,editable:true})}`;
  }
- function form(title,id,body,save,attrs=''){showDialog(`<form id="${id}" ${attrs}><h2 id="dialog-title">${esc(title)}</h2>${body}<div class="dialog-actions">${button('cancel','close-dialog')}<button class="button primary">${esc(tr(save))}</button></div></form>`);}
+ function bindSources(){const form=document.querySelector('#dialog form');if(form?.querySelector('[data-lab-sources]'))bindSampleSources(form,{state,api,esc,field,tr,scope});}
+ function form(title,id,body,save,attrs=''){showDialog(`<form id="${id}" data-etag="${main.page?.etag??''}" ${attrs}><h2 id="dialog-title">${esc(title)}</h2>${body}<div class="dialog-actions">${button('cancel','close-dialog')}<button class="button primary">${esc(tr(save))}</button></div></form>`);bindSources();}
  async function readSelected(id,kind,etag=main.page?.etag??null){
   selectionController?.abort();selectionController=new AbortController();const n=++opening,context=scope();
   const value=await api('/api/laboratory/read/selected',{workspaceId:state.book.id,id,kind,etag},{adopt:false,signal:selectionController.signal});
@@ -47,15 +53,23 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
  }
  async function openAnalysis(id,etag){
   const value=await readSelected(id,'analysis',etag);if(!value)return;selected=value;history.clear();const a=value.record,s=value.sample,editable=a.status==='draft';
-  showDialog(`<form id="lab-result-form" data-id="${id}"><h2 id="dialog-title">${esc(a.code)}</h2><p>${esc(tr('sampleDetails',{code:s.code,material:s.material}))} <span class="status-badge">${esc(label(a.status))}</span></p>${editable?resultFields(a.result):`<dl class="result-details"><dt>${esc(tr('method'))}</dt><dd>${esc(a.result.method)}</dd><dt>${esc(tr('analyte'))}</dt><dd>${esc(a.result.analyte)}</dd><dt>${esc(tr('result'))}</dt><dd>${esc(a.result.value)} ${esc(a.result.unit)}</dd><dt>${esc(tr('interval'))}</dt><dd>${esc(tr('intervalValues',{lower:a.result.lower??'-',upper:a.result.upper??'-'}))} / ${esc(flag(a.result))}</dd></dl><p>${esc(a.result.notes)}</p>`}${a.review?`<p>${esc(tr('reviewed',{reviewer:a.review.reviewer,at:a.review.at}))}</p><p>${esc(a.review.comment)}</p>`:''}<div class="dialog-actions">${button('close','close-dialog')}${editable?`<button class="button" type="submit">${esc(tr('saveResult'))}</button>${button('submit','lab-submit',`data-id="${id}"`)}`:''}${a.status==='in review'?button('reviewResult','lab-review',`data-id="${id}"`):''}${['in review','approved','rejected'].includes(a.status)?button('amend','lab-amend',`data-id="${id}"`):''}${['approved','archived'].includes(a.status)?`<a class="button primary" href="${esc(ownedAssetURL(state,`/api/laboratory/issued/${id}`))}?revision=${value.etag}" target="_blank" rel="noopener">${esc(tr('print'))}</a>`:''}${a.status==='approved'?button('archiveResult','lab-archive',`data-id="${id}"`):''}</div><details class="lab-history"><summary>${esc(tr('history'))}</summary><div data-lab-surface="history">${button('loadHistory','lab-history',`data-id="${id}"`)}</div></details></form>`);
+  showDialog(`<form id="lab-result-form" data-id="${id}"><h2 id="dialog-title">${esc(a.code)}</h2><p>${esc(tr('sampleDetails',{code:s.code,material:s.material}))} <span class="status-badge">${esc(label(a.status))}</span></p>${editable?resultFields(a.result):`<dl class="result-details"><dt>${esc(tr('method'))}</dt><dd>${esc(a.result.method)}</dd><dt>${esc(tr('analyte'))}</dt><dd>${esc(a.result.analyte)}</dd><dt>${esc(tr('result'))}</dt><dd>${esc(reading(a.result.value))} ${esc(a.result.unit)}</dd><dt>${esc(tr('interval'))}</dt><dd>${esc(tr('intervalValues',{lower:reading(a.result.lower),upper:reading(a.result.upper)}))} / ${esc(flag(a.result))}</dd></dl><p>${esc(a.result.notes)}</p>${sampleSourceFields(a.result.provenance,{esc,tr,editable:false})}`}${a.review?`<p>${esc(tr('reviewed',{reviewer:a.review.reviewer,at:a.review.at}))}</p><p>${esc(a.review.comment)}</p>`:''}<div class="dialog-actions">${button('close','close-dialog')}${editable?`<button class="button" type="submit">${esc(tr('saveResult'))}</button>${button('submit','lab-submit',`data-id="${id}"`)}`:''}${a.status==='in review'?button('reviewResult','lab-review',`data-id="${id}"`):''}${['in review','approved','rejected'].includes(a.status)?button('amend','lab-amend',`data-id="${id}"`):''}${['approved','archived'].includes(a.status)?`<a class="button primary" href="${esc(ownedAssetURL(state,`/api/laboratory/issued/${id}`))}?revision=${value.etag}" target="_blank" rel="noopener">${esc(tr('print'))}</a>`:''}${a.status==='approved'?button('archiveResult','lab-archive',`data-id="${id}"`):''}</div><details class="lab-history"><summary>${esc(tr('history'))}</summary><div data-lab-surface="history">${button('loadHistory','lab-history',`data-id="${id}"`)}</div></details></form>`);bindSources();
  }
  async function change(data,{tab=state.labTab??'samples'}={}){
-  const signature=JSON.stringify([scope(),data]);
-  if(!pending||pending.signature!==signature)pending={signature,command:{...data,etag:data.id?selected.etag:main.page.etag,...(data.id?{expectedRecordRevision:selected.revision}:{}),...(state.storage?.researchStorage==='catalogue'?{commandId:crypto.randomUUID()}:{})}};
-  const saved=await api('/api/laboratory/change?compact=1',pending.command);pending=null;
+  const form=document.querySelector('#dialog[open] form[id^="lab-"]'),context=scope();
+  const current=()=>scope()===context&&form?.isConnected&&form.closest('dialog')?.open;
+  const signature=JSON.stringify([context,data]);
+  if(!pending||pending.signature!==signature)pending={signature,command:{...data,etag:data.id?selected.etag:form.dataset.etag,...(data.id?{expectedRecordRevision:selected.revision}:{}),...(state.storage?.researchStorage==='catalogue'?{commandId:crypto.randomUUID()}:{})}};
+  let saved;
+  try { saved=await api('/api/laboratory/change?compact=1',pending.command); }
+  catch(error) {
+   if(!current())return null;
+   throw error;
+  }
+  if(!current())return null;
+  pending=null;
   document.querySelector('#dialog').close();selected=null;history.clear();samples.clear();related.clear();state.labTab=tab;await load();notify(tr('saved'));return saved;
  }
- function result(data){const number=key=>data.get(key).trim()===''?null:Number(data.get(key)),kind=data.get('kind');return {method:data.get('method').trim(),analyte:data.get('analyte').trim(),kind,value:kind==='numeric'?number('value'):data.get('value').trim(),unit:data.get('unit').trim(),lower:number('lower'),upper:number('upper'),notes:data.get('notes').trim()};}
  async function action(node){
   const name=node.dataset.action,id=node.dataset.id;
   if(name==='laboratory-samples'){owner=scope();state.page='laboratory';selected=null;main.clear();await load();return true;}
@@ -74,7 +88,7 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
   }
   if(name==='lab-open')await openAnalysis(id,related.page?.items.some(a=>a.id===id)?related.page.etag:main.page?.etag);
   if(name==='lab-history')await history.load(request('events',{recordId:id,limit:20}));
-  if(name==='lab-submit'){const form=document.querySelector('#lab-result-form');if(form.reportValidity())await change({action:'save-and-submit',id,result:result(new FormData(form))},{tab:'review'});}
+  if(name==='lab-submit'){const form=document.querySelector('#lab-result-form');if(form.reportValidity()){const result=readSampleResult(form,selected.record.result,tr);if(result)await change({action:'save-and-submit',id,result},{tab:'review'});}}
   if(name==='lab-review')form(tr('reviewResult'),'lab-review-form',`${field(esc(tr('reviewer')),'<input name="reviewer" required maxlength="160">')}${field(esc(tr('decision')),`<select name="decision"><option value="approve">${esc(tr('approve'))}</option><option value="reject">${esc(tr('reject'))}</option></select>`)}${field(esc(tr('comment')),'<textarea name="comment" maxlength="2000" rows="3"></textarea>')}<label class="checkbox"><input name="checked" type="checkbox" required><span>${esc(tr('checked'))}</span></label><p class="source-note">${esc(tr('acknowledgment'))}</p>`,'recordReview',`data-id="${id}"`);
   if(name==='lab-amend')form(tr('amend'),'lab-amend-form',`<p>${esc(tr('amendHelp'))}</p>${field(esc(tr('reason')),'<textarea name="reason" required maxlength="2000" rows="3"></textarea>')}`,'startAmendment',`data-id="${id}"`);
   if(name==='lab-archive')await change({action:'archive',id});
@@ -83,13 +97,14 @@ export function laboratoryUI({state,api,esc,field,option,showDialog,render,notif
  async function submit(form,data){
   if(!form.id.startsWith('lab-'))return false;
   if(form.id==='lab-sample-form')await change({action:'create-sample',sample:Object.fromEntries(data)});
-  if(form.id==='lab-analysis-form')await change({action:'create-analysis',analysis:{code:data.get('code').trim(),sampleId:data.get('sampleId'),result:result(data)}},{tab:'analyses'});
-  if(form.id==='lab-result-form')await change({action:'save-result',id:form.dataset.id,result:result(data)});
+  if(form.id==='lab-analysis-form'){const result=readSampleResult(form,null,tr);if(result)await change({action:'create-analysis',analysis:{code:data.get('code').trim(),sampleId:data.get('sampleId'),result}},{tab:'analyses'});}
+  if(form.id==='lab-result-form'){const result=readSampleResult(form,selected.record.result,tr);if(result)await change({action:'save-result',id:form.dataset.id,result});}
   if(form.id==='lab-review-form')await change({action:'review',id:form.dataset.id,reviewer:data.get('reviewer').trim(),comment:data.get('comment').trim(),decision:data.get('decision'),checked:data.has('checked')});
-  if(form.id==='lab-amend-form'){const saved=await change({action:'amend',id:form.dataset.id,reason:data.get('reason').trim()});await openAnalysis(form.dataset.id,saved.etag);}
+  if(form.id==='lab-amend-form'){const saved=await change({action:'amend',id:form.dataset.id,reason:data.get('reason').trim()});if(saved)await openAnalysis(form.dataset.id,saved.etag);}
   return true;
  }
  function input(el){
+  if(el.form?.elements.kind)updateSampleNumericFields(el);
   if(el.name==='sampleId'&&el.closest('#lab-analysis-form')){sampleChoice=samples.page?.items.find(s=>s.id===el.value)??sampleChoice;return true;}
   if(!['lab-search','lab-sample-search'].includes(el.id))return false;clearTimeout(timer);
   if(el.id==='lab-search'){state.labSearch=el.value;timer=setTimeout(()=>{main.clear();void load();},180);}

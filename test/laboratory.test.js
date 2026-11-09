@@ -8,7 +8,8 @@ import { Workspace } from '../src/storage.js';
 import { createNotebook } from '../src/model.js';
 import { buildPublication } from '../src/publication.js';
 
-const result = () => ({ method: 'Optical method v1', analyte: 'Absorbance', kind: 'numeric', value: 0.3, unit: 'AU', lower: 0, upper: 1, notes: 'Synthetic result\nSecond line' });
+import {sampleDecimal} from './sample-analysis-fixture.js';
+const result = () => ({ method: 'Optical method v1', analyte: 'Absorbance', kind: 'numeric', numericVersion: 2, value: sampleDecimal('0.3'), unit: 'AU', lower: sampleDecimal('0'), upper: sampleDecimal('1'), notes: 'Synthetic result\nSecond line' });
 async function setup() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-lab-')), lab = new Laboratory(root);
   await new Workspace(root).create(createNotebook('Public research'));
@@ -31,11 +32,11 @@ test('sample to reviewed sheet, amendment, renewed review and archive preserves 
   assert.match(html, /0.3/); assert.match(html, /Reviewer One/); assert.match(html, /Within interval/);
   assert.ok(!html.includes(s.root));
   await assert.rejects(s.lab.change({ action: 'archive', id, etag: draftEtag }), { code: 'LAB_STALE' });
-  await assert.rejects(s.change({ action: 'save-result', id, result: { ...result(), value: 0.7 } }), { code: 'LAB_TRANSITION' });
+  await assert.rejects(s.change({ action: 'save-result', id, result: { ...result(), value: sampleDecimal('0.7') } }), { code: 'LAB_TRANSITION' });
   await s.change({ action: 'amend', id, reason: 'Correct transcription.' });
   await assert.rejects(s.lab.report(id, approved.etag), { code: 'LAB_STALE' });
   assert.equal(s.current().lab.analyses[0].review, null);
-  await s.change({ action: 'save-result', id, result: { ...result(), value: 1.5 } });
+  await s.change({ action: 'save-result', id, result: { ...result(), value: sampleDecimal('1.5') } });
   await s.change({ action: 'submit', id });
   await s.change({ action: 'review', id, reviewer: 'Reviewer Two', comment: 'Correction checked.', decision: 'approve', checked: true });
   await s.change({ action: 'archive', id });
@@ -43,12 +44,12 @@ test('sample to reviewed sheet, amendment, renewed review and archive preserves 
   await assert.rejects(s.change({ action: 'amend', id, reason: 'Attempt archive edit' }), { code: 'LAB_TRANSITION' });
   const histories = await readdir(path.join(s.root, '.observanda', 'laboratory-history'));
   const old = JSON.parse(await readFile(path.join(s.root, '.observanda', 'laboratory-history', approved.etag + '.json')));
-  assert.equal(old.analyses[0].result.value, 0.3); assert.ok(histories.length >= 8);
+  assert.deepEqual(old.analyses[0].result.value, sampleDecimal('0.3')); assert.ok(histories.length >= 8);
 });
 
 test('laboratory rejects duplicate identity, invalid units/intervals and incomplete review without mutation', async () => {
   const s = await setup(), original = s.current().etag;
-  for (const r of [{ ...result(), unit: '' }, { ...result(), value: null }, { ...result(), lower: 3, upper: 2 }]) await assert.rejects(s.change({ action: 'save-result', id: s.id, result: r }), { code: 'LAB_INVALID' });
+  for (const r of [{ ...result(), unit: '' }, { ...result(), value: null }, { ...result(), lower: sampleDecimal('3'), upper: sampleDecimal('2') }]) await assert.rejects(s.change({ action: 'save-result', id: s.id, result: r }), { code: 'LAB_INVALID' });
   const { id, ...sample } = s.current().lab.samples[0];
   await assert.rejects(s.change({ action: 'create-sample', sample }), { code: 'LAB_INVALID' });
   assert.equal((await s.lab.read()).etag, original);
@@ -71,12 +72,12 @@ test('save and submit is one revision; independent analysis edits do not invalid
  const s=await setup(),initial=s.current(),revision=initial.recordRevisions[s.id];
  await s.change({action:'create-analysis',analysis:{code:'A-002',sampleId:s.sampleId,result:result()}});
  const second=s.current().lab.analyses.find(a=>a.id!==s.id),before=s.current().lab.revision;
- const submitted=await s.lab.change({action:'save-and-submit',id:s.id,result:{...result(),value:0.6},etag:initial.etag,expectedRecordRevision:revision});
+ const submitted=await s.lab.change({action:'save-and-submit',id:s.id,result:{...result(),value:sampleDecimal('0.6')},etag:initial.etag,expectedRecordRevision:revision});
  assert.equal(submitted.lab.revision,before+1);
  assert.equal(submitted.lab.analyses.find(a=>a.id===s.id).status,'in review');
- assert.equal(submitted.lab.analyses.find(a=>a.id===s.id).result.value,0.6);
- const edited=await s.lab.change({action:'save-result',id:second.id,result:{...result(),value:0.9},etag:initial.etag,expectedRecordRevision:s.current().recordRevisions[second.id]});
- assert.equal(edited.lab.analyses.find(a=>a.id===second.id).result.value,0.9);
+ assert.equal(submitted.lab.analyses.find(a=>a.id===s.id).result.value.spelling,'0.6');
+ const edited=await s.lab.change({action:'save-result',id:second.id,result:{...result(),value:sampleDecimal('0.9')},etag:initial.etag,expectedRecordRevision:s.current().recordRevisions[second.id]});
+ assert.equal(edited.lab.analyses.find(a=>a.id===second.id).result.value.spelling,'0.9');
  await assert.rejects(s.lab.change({action:'save-result',id:s.id,result:result(),etag:edited.etag,expectedRecordRevision:revision}),{code:'LAB_STALE'});
 });
 test('retained issued sheets bind the approved revision through later amendments',async()=>{
@@ -84,7 +85,7 @@ test('retained issued sheets bind the approved revision through later amendments
  await s.change({action:'review',id:s.id,reviewer:'Local reviewer',comment:'Checked',decision:'approve',checked:true});
  const issued=s.current().etag,original=await s.lab.report(s.id,issued,[],{retained:true});
  await s.change({action:'amend',id:s.id,reason:'Recheck'});
- await s.change({action:'save-result',id:s.id,result:{...result(),value:0.9}});
+ await s.change({action:'save-result',id:s.id,result:{...result(),value:sampleDecimal('0.9')}});
  assert.equal(await s.lab.report(s.id,issued,[],{retained:true}),original);
  await assert.rejects(s.lab.report(s.id,s.current().etag,[],{retained:true}),{code:'LAB_TRANSITION'});
 });

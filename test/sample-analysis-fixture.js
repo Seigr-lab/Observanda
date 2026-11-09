@@ -5,6 +5,7 @@ import {projectDomainSchema} from '../src/project-domain-schema.js';
 import {SampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
 import {validateLab} from '../src/sample-analysis-model.js';
 import {buildIndex} from '../src/index-builder.js';
+export const sampleDecimal = spelling => ({spelling,representation:'decimal',radix:10,precision:'exact'});
 export async function seedSampleAnalysis(store,lab){
  validateLab(lab,{bounded:false});const owner=new SampleAnalysisCatalogue(store),head=(await owner.source('new')).head;
  head.revision=lab.revision;head.lastEventHash=lab.events.at(-1)?.hash??'';

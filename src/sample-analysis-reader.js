@@ -5,11 +5,26 @@ import {digest,serialize} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {SampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
+import {sampleResultSummary} from './web/sample-result-format.js';
+import {resolveSampleSource} from './sample-result-sources.js';
 const invalid=()=>{throw new AppError('INVALID');};
 const etagValid=value=>value===null||value==='new'||revisionId(value);
 const views=['samples','analyses','review','archive','all','events'];
 export class SampleAnalysisReader{
  constructor(laboratory){this.laboratory=laboratory;}
+ async resultSource(command,{signal}={}){
+  if(!command||Object.keys(command).length!==3||!researchId(command.workspaceId))invalid();
+  const workspace=this.laboratory.workspace;
+  const read=async()=>{
+   signal?.throwIfAborted();
+   const current=await workspace.storageKind()==='catalogue'
+    ?await workspace.catalogue(async store=>(await store.snapshot()).metadata.id)
+    :(await workspace.outline()).metadata.id;
+   if(current!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
+   return resolveSampleSource(workspace,command.role,command.source,{signal});
+  };
+  return workspace.withCatalogueConnections?workspace.withCatalogueConnections(read):read();
+ }
  async indexed(workspaceId,etag,operation,{signal}={}){
   if(!researchId(workspaceId)||!etagValid(etag))invalid();signal?.throwIfAborted();
   const workspace=this.laboratory.workspace;if(await workspace.storageKind()!=='catalogue')return null;
@@ -52,7 +67,7 @@ export class SampleAnalysisReader{
    const sample=samples.get(row.sampleId),haystack=view==='samples'?[row.code,row.material,row.source]:view==='events'?[row.action,row.actor,row.reason]:[row.code,row.result.analyte,sample?.code];
    if(needle&&!haystack.join(' ').toLocaleLowerCase('en').includes(needle))continue;
    const position=total++;if(!collect&&(position<offset||items.length===limit))continue;
-   const value=view==='samples'?{...row,analyses:perSample.get(row.id)??0}:view==='events'?{id:row.id,at:row.at,action:row.action,recordId:row.recordId,actor:row.actor,reason:row.reason}:{id:row.id,code:row.code,sampleId:row.sampleId,sampleCode:sample.code,status:row.status,updatedAt:row.updatedAt,result:{method:row.result.method,analyte:row.result.analyte,kind:row.result.kind,value:row.result.value,unit:row.result.unit,lower:row.result.lower,upper:row.result.upper}};
+   const value=view==='samples'?{...row,analyses:perSample.get(row.id)??0}:view==='events'?{id:row.id,at:row.at,action:row.action,recordId:row.recordId,actor:row.actor,reason:row.reason}:{id:row.id,code:row.code,sampleId:row.sampleId,sampleCode:sample.code,status:row.status,updatedAt:row.updatedAt,result:sampleResultSummary(row.result)};
    if(collect)await collect(value);else items.push(value);
   }
   return this.page({workspaceId,view,query,offset,limit,items,counts,total,etag:current.etag});

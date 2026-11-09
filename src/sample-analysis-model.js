@@ -1,10 +1,12 @@
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
+import {sampleInterval} from './web/sample-result-numerics.js';
+import {sampleScalarFields} from './web/sample-result-format.js';
+import {validSampleSources} from './web/sample-result-references.js';
 const text = (v, max = 500, required = true) => typeof v === 'string' && v.length <= max && (!required || v.trim()) && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(v);
 const keys = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(k => expected.includes(k)) && expected.every(k => Object.hasOwn(value, k));
 const id = v => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(v);
-const optionalNumber = v => v === null || (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e15);
 const date = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
 export const blank = () => ({ formatVersion: 1, revision: 0, samples: [], analyses: [], events: [] });
 const fail = () => { throw new AppError('LAB_INVALID'); };
@@ -13,13 +15,21 @@ function validateSample(s) {
   if (!keys(s, ['id', 'code', 'material', 'source', 'collectedOn', 'receivedOn']) || !id(s.id) || !text(s.code, 80) || !text(s.material, 160) || !text(s.source, 160, false) || !date(s.collectedOn) || !date(s.receivedOn) || s.receivedOn < s.collectedOn) fail();
 }
 function validateResult(r) {
-  if (!keys(r, ['method', 'analyte', 'kind', 'value', 'unit', 'lower', 'upper', 'notes']) || !text(r.method, 160) || !text(r.analyte, 160) || !['numeric', 'text'].includes(r.kind) || !text(r.unit, 80, false) || !text(r.notes, 2000, false)) fail();
-  if (r.kind === 'numeric' ? !(typeof r.value === 'number' && optionalNumber(r.value) && text(r.unit, 80)) : !text(r.value, 500)) fail();
-  if (!optionalNumber(r.lower) || !optionalNumber(r.upper) || (r.kind === 'text' && (r.lower !== null || r.upper !== null)) || (r.lower !== null && r.upper !== null && r.lower > r.upper)) fail();
+  const fields = ['method', 'analyte', 'kind', 'value', 'unit', 'lower', 'upper', 'notes'];
+  if (r?.numericVersion === 2 && r.kind === 'numeric') fields.push('numericVersion');
+  if (r?.provenance !== undefined) {
+    if (!validSampleSources(r.provenance) || (r.provenance.reading && r.numericVersion !== 2)) fail();
+    fields.push('provenance');
+  }
+  if (!keys(r, fields) || !text(r.method, 160) || !text(r.analyte, 160) || !['numeric', 'text'].includes(r.kind) || !text(r.unit, 80, false) || !text(r.notes, 2000, false)) fail();
+  if (r.kind === 'text') {
+    if (!text(r.value, 500) || r.lower !== null || r.upper !== null) fail();
+  } else if ((!r.provenance?.reading && !text(r.unit, 80)) || sampleInterval(r).issue) fail();
 }
 export function resultFlag(r) {
-  if (r.kind !== 'numeric' || (r.lower === null && r.upper === null)) return 'No interval specified';
-  return r.lower !== null && r.value < r.lower ? 'Below interval' : r.upper !== null && r.value > r.upper ? 'Above interval' : 'Within interval';
+  const {flag} = sampleInterval(r);
+  if (!flag) fail();
+  return {below: 'Below interval', above: 'Above interval', within: 'Within interval', noInterval: 'No interval specified'}[flag];
 }
 const resultHash = (a, sample) => digest(serialize({ code: a.code, sample, result: a.result }));
 export function validateSampleAnalysisEvent(event,previous){
@@ -89,6 +99,13 @@ export function applySampleAnalysisCommand(data,{existing=null,sourceSample=null
         record.updatedAt = now;
       }
 
+ const proposed=data.result??data.analysis?.result;
+ if(proposed?.kind==='numeric'){
+  const prior=existing?.result;
+  if(proposed.numericVersion===undefined && (prior?.kind!=='numeric' || prior.numericVersion!==undefined ||
+      sampleScalarFields.some(key=>proposed[key]!==prior[key])))fail();
+  if(sampleScalarFields.some(key=>typeof proposed[key]==='number' && proposed[key]!==prior?.[key]))fail();
+ }
  validateLab({formatVersion:1,revision:0,samples:data.action==='create-sample'?[record]:sourceSample?[sourceSample]:[],analyses:data.action==='create-sample'?[]:[record],events:[]});
  return {record,actor,reason};
 }

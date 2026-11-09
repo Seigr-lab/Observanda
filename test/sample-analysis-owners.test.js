@@ -1,3 +1,4 @@
+import {sampleDecimal} from './sample-analysis-fixture.js';
 import path from 'node:path';
 import {mkdir,rename} from 'node:fs/promises';
 import {LabBookCopies} from '../src/lab-book-copy.js';
@@ -24,11 +25,11 @@ test('nested sample owners have independent writers, reports and bounded combine
  let release,started;const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>started=resolve);
  const holding=o.storage.withLock(async()=>{started();await gate;});await ready;
  try{
-  const saved=await Promise.race([call('/change',{action:'save-result',etag:selected.etag,id,expectedRecordRevision:selected.revision,result:{...selected.record.result,value:9},commandId:randomUUID()},{query:{compact:'1'}}),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Sample command waited for research writer')),5000);timer.unref();})]);
+  const saved=await Promise.race([call('/change',{action:'save-result',etag:selected.etag,id,expectedRecordRevision:selected.revision,result:{...selected.record.result,numericVersion:2,value:sampleDecimal('9')},commandId:randomUUID()},{query:{compact:'1'}}),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Sample command waited for research writer')),5000);timer.unref();})]);
   assert.ok(saved.recordRevision);assert.equal(saved.lab,undefined);
  }finally{release();await holding;}
  await new ProjectDomains(o.storage,o.workspaceId).run(['samples'],()=>o.storage.update(book=>({...book,description:'Research remains independent'})),{write:['samples']});
- const current=await call('/read/selected',{workspaceId:b.namespaceId,kind:'analysis',id});assert.equal(current.record.result.value,9);assert.equal((await new SampleAnalysisReader(f.owners[0].service).selected({workspaceId:f.workspaceId,kind:'analysis',id})).record.result.value,0);
+ const current=await call('/read/selected',{workspaceId:b.namespaceId,kind:'analysis',id});assert.equal(current.record.result.value.spelling,'9');assert.equal((await new SampleAnalysisReader(f.owners[0].service).selected({workspaceId:f.workspaceId,kind:'analysis',id})).record.result.value,0);
  let approved=await call('/change',{action:'save-and-submit',etag:current.etag,id,expectedRecordRevision:current.revision,result:current.record.result},{query:{compact:'1'}});
  approved=await call('/change',{action:'review',etag:approved.etag,id,reviewer:'Fixture reviewer',comment:'Checked',decision:'approve',checked:true},{query:{compact:'1'}});
  let report;await app.run(client,request(b,'/issued/'+id,'GET'),{},{query:{revision:approved.etag},binary:async response=>{report=response;}});assert.equal(report.mime,'text/html; charset=utf-8');assert.match(report.content.toString(),/<td>9<\/td>/);
@@ -53,7 +54,7 @@ test('nested sample owners have independent writers, reports and bounded combine
  assert.equal((await copies.run(o.storage,{id:copyId,resume:true})).phase,'complete');
  await app.close();await f.provider.closeLabBook(o.storage.root);await rename(o.storage.root,o.storage.root+'.unavailable');
  const copied=new Laboratory(new LabBookStorage(path.join(parent,b.directory),b.labBookId,o.storage.vault)),reader=new SampleAnalysisReader(copied),opened=await reader.selected({workspaceId:b.namespaceId,kind:'analysis',id});
- assert.equal(opened.record.result.value,9);assert.equal(opened.record.status,'approved');assert.match(await copied.report(id,approved.etag,[],{retained:true}),/<td>9<\/td>/);
+ assert.equal(opened.record.result.value.spelling,'9');assert.equal(opened.record.status,'approved');assert.match(await copied.report(id,approved.etag,[],{retained:true}),/<td>9<\/td>/);
  await copied.change({action:'amend',id,etag:opened.etag,reason:'Independent copied result'},{compact:true});assert.equal((await reader.selected({workspaceId:b.namespaceId,kind:'analysis',id})).record.status,'draft');
 
 });

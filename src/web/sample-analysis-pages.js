@@ -2,6 +2,7 @@ import './i18n/catalogues/sampleAnalysis.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';
+import {historicalSampleNumber,validSampleScalar} from './sample-result-format.js';
 const text=value=>typeof value==='string';
 const time=value=>text(value)&&Number.isFinite(Date.parse(value));
 export function validSampleRow(row,view,{summary=false}={}){
@@ -9,7 +10,10 @@ export function validSampleRow(row,view,{summary=false}={}){
  if(view==='samples')return ['code','material','source','collectedOn','receivedOn'].every(k=>text(row[k]))&&(summary||Number.isSafeInteger(row.analyses)&&row.analyses>=0);
  if(view==='events')return ['action','actor','reason'].every(k=>text(row[k]))&&time(row.at)&&researchId(row.recordId);
  const r=row.result;
- return text(row.code)&&researchId(row.sampleId)&&text(row.sampleCode)&&['draft','in review','approved','rejected','archived'].includes(row.status)&&time(row.updatedAt)&&r&&['method','analyte','unit'].every(k=>text(r[k]))&&['numeric','text'].includes(r.kind)&&(r.kind==='numeric'?typeof r.value==='number'&&Number.isFinite(r.value):text(r.value))&&[r.lower,r.upper].every(v=>v===null||typeof v==='number'&&Number.isFinite(v));
+ if(!text(row.code)||!researchId(row.sampleId)||!text(row.sampleCode)||!['draft','in review','approved','rejected','archived'].includes(row.status)||!time(row.updatedAt)||!r||!['method','analyte','unit'].every(k=>text(r[k])))return false;
+ if(r.kind==='text')return r.numericVersion===undefined&&text(r.value)&&r.lower===null&&r.upper===null;
+ const scalar=value=>historicalSampleNumber(value)||r.numericVersion===2&&validSampleScalar(value);
+ return r.kind==='numeric'&&(r.numericVersion===undefined||r.numericVersion===2)&&scalar(r.value)&&[r.lower,r.upper].every(v=>v===null||scalar(v));
 }
 export function validateSamplePage(page,{workspaceId,view,limit}){
  if(!page||page.workspaceId!==workspaceId||page.view!==view||!(page.etag==='new'||revisionId(page.etag))||!Array.isArray(page.items)||page.items.length>limit||page.items.some(item=>!validSampleRow(item,view))||new Set(page.items.map(item=>item.id)).size!==page.items.length||

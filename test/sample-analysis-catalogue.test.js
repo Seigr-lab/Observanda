@@ -12,7 +12,7 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {digest,serialize} from '../src/storage-format.js';
-import {seedSampleAnalysis} from './sample-analysis-fixture.js';
+import {seedSampleAnalysis,sampleDecimal} from './sample-analysis-fixture.js';
 const sample={code:'S-01',material:'Synthetic solution',source:'Test',collectedOn:'2026-10-01',receivedOn:'2026-10-01'};
 const result={method:'Method 1',analyte:'Absorbance',kind:'numeric',value:0.3,unit:'AU',lower:0,upper:1,notes:'Private original notes'};
 async function fixture(t,count=0){
@@ -29,10 +29,11 @@ test('new installations retain separate originals; commands, reviews, reports an
  const f=await fixture(t),save=(command,options={})=>f.service.change(command,{compact:true,commandId:randomUUID(),...options});
  const first=await save({action:'create-sample',etag:'new',sample});
  const head=await f.service.catalogue(s=>s.object('laboratory'));assert.equal(head.formatVersion,3);assert.ok(Buffer.byteLength(serialize(head))<1000);
- const idempotency=randomUUID(),create={action:'create-analysis',etag:'new',analysis:{code:'A-01',sampleId:first.selectedId,result}};
+ const authored={...result,numericVersion:2,value:sampleDecimal('0.3'),lower:sampleDecimal('0'),upper:sampleDecimal('1')};
+ const idempotency=randomUUID(),create={action:'create-analysis',etag:'new',analysis:{code:'A-01',sampleId:first.selectedId,result:authored}};
  const a=await save(create,{commandId:idempotency});assert.deepEqual(await save(create,{commandId:idempotency}),a);
  const selected=await f.reader.selected({workspaceId:f.book.id,kind:'analysis',id:a.selectedId});
- const submit=await save({action:'save-and-submit',etag:first.etag,id:a.selectedId,expectedRecordRevision:selected.revision,result:{...result,value:0.4}});
+ const submit=await save({action:'save-and-submit',etag:first.etag,id:a.selectedId,expectedRecordRevision:selected.revision,result:{...authored,value:sampleDecimal('0.4')}});
  const reviewed=await save({action:'review',etag:submit.etag,id:a.selectedId,reviewer:'Fixture reviewer',comment:'Checked',decision:'approve',checked:true});
  const approved=await f.reader.query({workspaceId:f.book.id,view:'analyses'});assert.equal(approved.counts.approved,1);
  const read=Laboratory.prototype.read,assemble=SampleAnalysisCatalogue.prototype.assemble;
@@ -45,7 +46,7 @@ test('new installations retain separate originals; commands, reviews, reports an
   assert.equal((await f.reader.query({workspaceId:f.book.id,view:'analyses'})).counts.approved,0);
   assert.deepEqual((await f.reader.query({workspaceId:f.book.id,view:'analyses',cursor:approved.cursor})).items,approved.items);
   const other=await save({action:'create-sample',etag:amended.etag,sample:{...sample,code:'S-02'}});
-  await save({action:'save-result',etag:amended.etag,id:a.selectedId,expectedRecordRevision:amended.recordRevision,result:{...result,value:0.5}});
+  await save({action:'save-result',etag:amended.etag,id:a.selectedId,expectedRecordRevision:amended.recordRevision,result:{...authored,value:sampleDecimal('0.5')}});
   await assert.rejects(save({action:'save-result',etag:other.etag,id:a.selectedId,expectedRecordRevision:amended.recordRevision,result}),{code:'LAB_STALE'});
   assert.equal((await f.reader.query({workspaceId:f.book.id,view:'events',recordId:a.selectedId,limit:2})).total,5);
  }finally{Laboratory.prototype.read=read;SampleAnalysisCatalogue.prototype.assemble=assemble;}
@@ -64,7 +65,7 @@ test('65 and 650 samples have bounded original reads and SQL for pages, late his
   try{
    const begin=performance.now(),page=await f.reader.query({workspaceId:f.book.id,view:'analyses',limit:25}),pageMs=performance.now()-begin,pageQueries=queries;assert.equal(originals,0);assert.equal(page.items.length,25);assert.equal(page.total,count*2);assert.ok(pageMs<1500);assert.ok(pageQueries<250);
    const selected=await f.reader.selected({workspaceId:f.book.id,kind:'analysis',id:f.lab.analyses.at(-1).id});assert.equal(originals,1);originals=0;
-   queries=0;const edit=performance.now(),saved=await f.service.change({action:'save-result',etag:page.etag,expectedRecordRevision:selected.revision,id:selected.record.id,result:{...selected.record.result,value:0.7}},{compact:true,commandId:randomUUID()}),editMs=performance.now()-edit,editQueries=queries;
+   queries=0;const edit=performance.now(),saved=await f.service.change({action:'save-result',etag:page.etag,expectedRecordRevision:selected.revision,id:selected.record.id,result:{...selected.record.result,numericVersion:2,value:sampleDecimal('0.7')}},{compact:true,commandId:randomUUID()}),editMs=performance.now()-edit,editQueries=queries;
    assert.equal(originals,1);assert.ok(editMs<2000);assert.ok(editQueries<900);assert.ok(Buffer.byteLength(JSON.stringify(saved))<250);assert.ok(peak<256*1024*1024);
    const history=await f.reader.query({workspaceId:f.book.id,view:'events',recordId:selected.record.id,limit:20});assert.equal(history.total,1);assert.equal(originals,1);
    t.diagnostic(JSON.stringify({samples:count,analyses:count*2,pageMs:Math.round(pageMs),editMs:Math.round(editMs),pageQueries,editQueries,editOriginals:originals,pageBytes:Buffer.byteLength(JSON.stringify(page)),sampledHeapMiB:Math.round(peak/1024**2)}));

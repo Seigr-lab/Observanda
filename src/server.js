@@ -1223,9 +1223,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return await operationResponse(req,res,execute,json);
       }
       if (req.method === 'GET' && url.pathname === '/api/laboratory') return json(await laboratory.read());
-      if(req.method==='POST'&&['/api/laboratory/read/query','/api/laboratory/read/selected'].includes(url.pathname)){
+      if(req.method==='POST'&&['/api/laboratory/read/query','/api/laboratory/read/selected','/api/laboratory/read/result-source'].includes(url.pathname)){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const reader=new SampleAnalysisReader(laboratory),data=await body(req);return json(await reader[url.pathname.endsWith('/query')?'query':'selected'](data,{signal:controller.signal}));}finally{res.removeListener('close',abort);}
+        try{const reader=new SampleAnalysisReader(laboratory),data=await body(req);return json(await reader[url.pathname.endsWith('/result-source')?'resultSource':url.pathname.endsWith('/query')?'query':'selected'](data,{signal:controller.signal}));}finally{res.removeListener('close',abort);}
       }
       if (req.method === 'POST' && url.pathname === '/api/laboratory/change') { await workspace.outline(); const {commandId,...command}=await body(req);return json(await laboratory.change(command,{compact:url.searchParams.get('compact')==='1',commandId:commandId??null,check:req.checkWriter})); }
       const resultSheet = /^\/api\/laboratory\/report\/([a-f0-9-]{36})$/.exec(url.pathname);

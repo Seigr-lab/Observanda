@@ -14,7 +14,7 @@ import {clearVault} from '../src/encryption.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
-import {seedSampleAnalysis} from './sample-analysis-fixture.js';
+import {seedSampleAnalysis,sampleDecimal} from './sample-analysis-fixture.js';
 async function fixture(t,count=65){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sample-pages-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),lab={formatVersion:1,revision:0,samples:[],analyses:[],events:[]};
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
@@ -31,8 +31,8 @@ test('65 and 650 sample pages exclude unrelated result bodies; cursors retain th
   assert.equal(first.total,count*2);assert.equal(first.items.length,25);assert.ok(!JSON.stringify(first).includes('PRIVATE_RESULT_NOTES'));assert.ok(bytes<16000);assert.ok(ms<5000);
   const next=await f.reader.query({...command,cursor:first.nextCursor});assert.equal(next.offset,25);assert.deepEqual((await f.reader.query({...command,cursor:next.previousCursor})).items,first.items);
   const id=f.lab.analyses[0].id,selected=await f.reader.selected({workspaceId:f.book.id,kind:'analysis',id,etag:first.etag});assert.deepEqual(selected.record,f.lab.analyses[0]);assert.equal(selected.sample.id,selected.record.sampleId);assert.equal(selected.lab,undefined);
-  const changed=await f.laboratory.change({action:'save-result',id,etag:first.etag,expectedRecordRevision:selected.revision,result:{...selected.record.result,value:9}},{compact:true,commandId:randomUUID()});assert.ok(Buffer.byteLength(JSON.stringify(changed))<250);assert.equal(changed.lab,undefined);
-  assert.deepEqual((await f.reader.query({...command,cursor:first.cursor})).items,first.items);assert.equal((await f.reader.query(command)).items[0].result.value,9);
+  const changed=await f.laboratory.change({action:'save-result',id,etag:first.etag,expectedRecordRevision:selected.revision,result:{...selected.record.result,numericVersion:2,value:sampleDecimal('9')}},{compact:true,commandId:randomUUID()});assert.ok(Buffer.byteLength(JSON.stringify(changed))<250);assert.equal(changed.lab,undefined);
+  assert.deepEqual((await f.reader.query({...command,cursor:first.cursor})).items,first.items);assert.equal((await f.reader.query(command)).items[0].result.value.spelling,'9');
   const history=await f.reader.query({workspaceId:f.book.id,view:'events',recordId:id,limit:20});assert.equal(history.items.length,20);assert.equal(history.total,count+1);assert.ok(history.items.every(e=>e.recordId===id&&!e.previous&&!e.hash));
   const search=await f.reader.query({workspaceId:f.book.id,view:'samples',search:'S-0060',limit:25});assert.equal(search.total,1);assert.equal(search.items[0].analyses,2);
   for(const bad of [{workspaceId:randomUUID()},{view:'samples'},{limit:10},{search:'x'},{sampleId:f.lab.samples[0].id}])await assert.rejects(f.reader.query({...command,cursor:first.nextCursor,...bad}),{code:'INVALID'});

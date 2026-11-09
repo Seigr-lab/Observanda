@@ -8,6 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {operationAdvance} from './operation-progress.js';
 import {sampleAnalysisOrder} from './sample-analysis-order.js';
 import {contentBufferAdmission} from './content-buffer-admission.js';
+import {sampleResultSummary} from './web/sample-result-format.js';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('LAB_INVALID');};
 const countKeys=['samples','analyses','review','archive','approved','events'];
@@ -81,7 +82,7 @@ export class SampleAnalysisCatalogue{
  }
  describe(kind,record,position,sample=null){
   let summary=record;
-  if(kind==='analysis'){const {notes,...result}=record.result;void notes;summary={id:record.id,code:record.code,sampleId:record.sampleId,sampleCode:sample.code,status:record.status,updatedAt:record.updatedAt,result};}
+  if(kind==='analysis'){summary={id:record.id,code:record.code,sampleId:record.sampleId,sampleCode:sample.code,status:record.status,updatedAt:record.updatedAt,result:sampleResultSummary(record.result)};}
   if(kind==='event'){const {hash,previous,...rest}=record;void hash;void previous;summary=rest;}
   return {kind,id:record.id,position,revision:hash(record),summary};
  }
@@ -91,7 +92,7 @@ export class SampleAnalysisCatalogue{
   if(record.status==='in review')head.counts.review+=delta;
   if(record.status==='approved')head.counts.approved+=delta;
  }
- async change(source,command){
+ async change(source,command,{verifyResult}={}){
   const {expectedRecordRevision,...data}=command,head=structuredClone(source.head),kind=data.action==='create-sample'?'sample':'analysis',create=['create-sample','create-analysis'].includes(data.action);
   const before=create?null:await this.member(head,kind,data.id);
   if(expectedRecordRevision!==undefined){if(!before||before.revision!==expectedRecordRevision)throw new AppError('LAB_STALE');}
@@ -102,6 +103,10 @@ export class SampleAnalysisCatalogue{
   const existing=before?await this.value(before.revision):null,sampleId=data.analysis?.sampleId??existing?.sampleId;
   const sourceSample=sampleId?await this.selected(source,'sample',sampleId):null;
   const now=new Date().toISOString(),{record,actor,reason}=applySampleAnalysisCommand(data,{existing,sourceSample:sourceSample?.record,now});
+  if(record.result?.provenance && !['amend','archive'].includes(data.action)){
+   if(!verifyResult)throw new AppError('LAB_INVALID');
+   await verifyResult(record.result);
+  }
   if(create&&await this.index.find(head,'code:'+kind+':'+digest(record.code.toLowerCase())))fail();
   const event={id:randomUUID(),at:now,action:data.action,recordId:record.id,actor,reason,previous:head.lastEventHash};event.hash=hash(event);
   const group=kind==='sample'?'samples':'analyses',position=before?.position??(kind==='sample'?head.counts.samples:head.counts.analyses+head.counts.archive);
