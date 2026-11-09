@@ -113,13 +113,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(!researchId(data.siteId))throw new AppError('INVALID');
    if(operation==='recovery/save-pictures'){json(await saveWebsiteRecovery(store,data.siteId,{...data,uploadedInputs:undefined,receivePictures:pictures,signal}));return true;}
    if(operation==='components/update-pictures'){
-    json(await componentOperation(store,'update',data.siteId,{path:data.path,component:data.component,name:data.name,html:data.html,expectedRevision:data.expectedRevision,receivePictures:pictures,signal}));return true;
+    json(await componentOperation(store,'update',data.siteId,{...data,receivePictures:pictures,signal},true));return true;
    }
    json(await store.save(data.siteId,{html:data.html,css:data.css,path:data.path,expectedRevision:data.expectedRevision,historyKey:data.historyKey,recovery:data.recovery,receivePictures:pictures,signal}));return true;
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
-  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|update|detach|remove)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
+  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|wrap|update|detach|remove|customize)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
   if(operation==='session'){
    const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
@@ -261,7 +261,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='library/presentation-options'){json(await placementPresentationOptions(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/present-placement'){json(await setPlacementPresentation(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/move-placement'||operation==='library/remove-placement'){json(await changeWebsitePlacement(store,siteId,operation==='library/move-placement'?'move':'remove',{...options,expectedRevision,signal}));return true;}
-  if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal},true));return true;}
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
   if(operation==='media/library'){json(await websiteRecordingLibrary(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,menuId:options.menuId,signal}));return true;}

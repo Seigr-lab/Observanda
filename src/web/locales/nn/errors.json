@@ -1,6 +1,7 @@
 {
   "WEBSITE_HOME_REQUIRED": "Startsida må vere med. Vel ei anna side for å gjere henne privat.",
   "WEBSITE_PUBLIC_COMPONENT": "Opne ei side som er med i publiseringa for å redigere denne delte komponenten. Du kan kople frå førekomsten her og redigere han privat.",
+  "WEBSITE_COMPONENT_ENTRY_FIELD": "Dette feltet inneheld tilknytte oppføringar. Kople frå førekomstane før du fjernar eller endrar feltet. Oppføringane held på publiseringsløyva sine.",
   "PDF_PLACEMENT_REVIEW": "Teksten er endra ved ei plassering for sideoppsett, bilete eller note. Gå gjennom plasseringane i den aktuelle delen før eksport.",
   "WEBSITE_FEED_CAPACITY": "Ein oppføringsstraum går over grensa for éi HTML-side. Opne oppføringsstraumane på den aktuelle sida, og vel ei mindre utforming før publisering.",
   "WEBSITE_CHANGED": "Innhaldet på nettstaden eller tilgangane er endra. Last inn visinga på nytt før du held fram.",

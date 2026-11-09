@@ -329,3 +329,11 @@
 .website-fluid-dimension{display:flex;align-items:end;gap:.25rem}
 .website-fluid-dimension label,.website-fluid-dimension input{min-width:0;width:100%}
 .website-fluid-dimension select{width:auto}
+.component-main-editor{width:min(82rem,96vw);max-height:90vh;overflow:auto}
+.component-main-workspace{display:grid;grid-template-columns:minmax(24rem,2fr) minmax(16rem,1fr);gap:.8rem;align-items:start}
+.website-files-components [data-component-drag]>strong{cursor:grab;user-select:none}
+.component-main-workspace>iframe{width:100%;height:min(55vh,38rem)}
+.component-main-workspace>[data-main-tools]{max-height:min(55vh,38rem);overflow:auto}
+.component-design-fields{display:grid;gap:.4rem;margin-block:.65rem}
+.component-design-fields label,.component-main-editor>label{display:grid;gap:.2rem}
+.component-slot-photo{display:block;max-width:14rem;max-height:10rem;object-fit:contain}

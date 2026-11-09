@@ -1,4 +1,7 @@
-import {websiteRichText} from './website-files-visual-rich.js';
+import {bindWebsiteVisual} from './website-files-visual.js';
+import {componentMainControls} from './website-component-controls.js';
+import {componentFragment,componentReviewView,instanceForm} from './website-component-forms.js';
+import {defaultBreakpoints} from './website-breakpoint-model.js';
 import {layerPath,websiteLayerAt} from './website-layer-model.js';
 
 const marker='data-website-instance',dragType='application/x-observanda-component';
@@ -24,7 +27,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
  function body(){
   if(!opened)return '';
   return '<h2>'+esc(tr('componentLibrary'))+'</h2><p class="hint">'+esc(tr('componentLibraryHint'))+'</p>'+
-   '<div class="component-source"><strong>'+esc(tr('componentSelection'))+'</strong><p data-component-selection></p><div data-component-create><label>'+esc(tr('componentName'))+'<input maxlength="100" data-component-field="name" value="'+esc(name)+'"></label>'+button('componentCreate','create')+'</div>'+button('componentDetach','detach','hidden')+'</div>'+
+   '<div class="component-source"><strong>'+esc(tr('componentSelection'))+'</strong><p data-component-selection></p><div data-component-create><label>'+esc(tr('componentName'))+'<input maxlength="100" data-component-field="name" value="'+esc(name)+'"></label>'+button('componentCreate','create')+'</div>'+button('componentCustomize','customize','hidden')+button('componentDetach','detach','hidden')+'</div>'+
    '<form data-component-search><label>'+esc(tr('componentSearch'))+'<input type="search" maxlength="100" data-component-field="query" value="'+esc(query)+'"></label><button class="button" type="submit">'+esc(tr('pickerFind'))+'</button></form>'+
    '<label>'+esc(tr('pickerPosition'))+'<select data-component-field="position">'+[['before','componentBefore'],['after','componentAfter'],['end','pickerEnd']].map(([v,k])=>'<option value="'+v+'" '+(v===position?'selected':'')+'>'+esc(tr(k))+'</option>').join('')+'</select></label>'+
    '<div data-component-results aria-live="polite"></div>';
@@ -32,17 +35,20 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
  function context(){
   const selectedNode=canvas?.isConnected?websiteLayerAt(canvas,selected()):null;
   const instance=selectedNode?.closest('['+marker+']');
+  const entry=!instance&&selectedNode?.closest('section[data-observanda-source]');
   const reusable=Boolean(selectedNode?.matches(blocks)&&!selectedNode.closest(protectedArea)&&!selectedNode.querySelector(protectedArea));
-  return {selectedNode,instance,reusable};
+  return {selectedNode,instance,reusable,entry:entry&&!entry.closest('[data-website-feed],[data-website-source-gallery]')?entry:null};
  }
  function selection(){
   const host=panel();if(!opened||!host)return;
-  const {selectedNode,instance,reusable}=context(),selectedText=host.querySelector('[data-component-selection]');
+  const {selectedNode,instance,reusable,entry}=context(),selectedText=host.querySelector('[data-component-selection]');
   if(!selectedText)return;
   selectedText.textContent=selectedNode?caption(selectedNode)+(reusable||instance?'':' · '+tr('componentProtected')):tr('componentChooseSection');
   host.querySelector('[data-component-create]').hidden=!reusable;
   host.querySelector('[data-action$="component-create"]').disabled=!name.trim()||!reusable;
   host.querySelector('[data-action$="component-detach"]').hidden=!instance;
+  host.querySelector('[data-action$="component-customize"]').hidden=!instance;
+  for(const field of host.querySelectorAll('[data-component-wrap]'))field.hidden=!entry;
   for(const b of host.querySelectorAll('[data-action$="component-insert"]'))b.disabled=position!=='end'&&!canPlace(selectedNode);
  }
  function canPlace(node){return Boolean(node?.parentElement?.matches(container)&&!node.parentElement.closest(protectedArea)&&!node.matches('main,nav,header,footer'));}
@@ -55,7 +61,8 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
    const edit=item.editable===false?'':button('componentEdit','edit',data);
    const actions=button('componentInsert','insert',data)+edit+button('componentUses','uses',data+' aria-expanded="'+(usage?.id===item.id)+'"');
    const remove=!item.removable?'':item.id===removeId?'<p>'+esc(tr('componentConfirmRemove',{name:item.name}))+'</p>'+button('remove','remove',data)+button('cancel','keep',data):button('remove','ask-remove',data);
-   return '<li draggable="true" data-component-drag="'+esc(item.id)+'"><strong>'+esc(item.name)+'</strong><small>'+uses+'</small><div>'+actions+remove+'</div>'+usageView(item.id)+'</li>';
+   const fields=item.entryFields??[],wrap=fields.length?'<div data-component-wrap hidden><label>'+esc(tr('componentEntryField'))+'<select>'+fields.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></label>'+button('componentWrap','wrap',data)+'</div>':'';
+   return '<li draggable="true" data-component-drag="'+esc(item.id)+'"><strong>'+esc(item.name)+'</strong><small>'+uses+'</small><div>'+actions+remove+'</div>'+wrap+usageView(item.id)+'</li>';
   };
   target.innerHTML=range+(items.length?'<ul>'+items.map(row).join('')+'</ul>':'<p>'+esc(tr(query?'componentEmpty':'componentLibraryEmpty'))+'</p>')+
    '<div class="inline-actions">'+(offset?button('pickerPrevious','previous'):'')+(next!==null?button('pickerNext','next'):'')+'</div>';
@@ -122,7 +129,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
  }
  function editor(value,pin){
   if(value.editable===false){notify?.(t('errors','WEBSITE_PUBLIC_COMPONENT'));return;}
-  closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog';host.setAttribute('aria-label',tr('componentEdit'));
+  closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog component-main-editor';host.setAttribute('aria-label',tr('componentEdit'));
   host.innerHTML='<h2>'+esc(tr('componentEdit'))+'</h2><p>'+esc(tr('componentApplyHelp'))+'</p><label>'+esc(tr('componentName'))+'<input data-main-name maxlength="100"></label>'+
    '<div data-main-tools></div><iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+
    '<p role="alert" data-main-error></p><div class="inline-actions"><button type="button" data-main-apply>'+esc(tr('componentApply'))+'</button><button type="button" data-main-cancel>'+esc(tr('cancel'))+'</button></div>';
@@ -131,20 +138,26 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   // Only admitted server markup is loaded into the interactive frame.
   // User-entered HTML stays inert until the server validates the new main.
   const tools=host.querySelector('[data-main-tools]');
-  let code=false;source.oninput=()=>{code=true;frame.inert=true;tools.inert=true;};
+  const controls=document.createElement('section'),review=document.createElement('section'),wrap=document.createElement('div');wrap.className='component-main-workspace';
+  tools.before(wrap);wrap.append(frame,tools);wrap.after(controls);apply.parentElement.before(review);review.setAttribute('aria-live','polite');
+  const life=new AbortController();let code=false,visual,schema,plan=null,css=value.css??'';
+  let editSequence=0;
+  const revise=()=>{editSequence++;plan=null;review.replaceChildren();apply.textContent=tr('componentReviewTitle');};
+  const changed=()=>{if(code)return;source.value=componentFragment(frame.contentDocument);revise();};
+  revise();title.oninput=revise;source.oninput=()=>{code=true;frame.inert=tools.inert=controls.inert=true;revise();};
   frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!host.isConnected)return;
    const fragment=doc.createElement('template');fragment.innerHTML=value.html;
    doc.body.replaceChildren(fragment.content);doc.body.contentEditable='true';
    const style=doc.createElement('style');style.textContent=site()?.css??'';doc.head.append(style);
+   const own=doc.createElement('style');own.setAttribute('data-observanda-editor','css');own.textContent=css;doc.head.append(own);
    doc.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});
    doc.addEventListener('drop',e=>e.preventDefault());
-   doc.body.oninput=()=>{if(!code)source.value=doc.body.innerHTML;};
-   const make=(tag,text)=>{const el=host.ownerDocument.createElement(tag);if(text!==undefined)el.textContent=text;return el;};
-   const rich=websiteRichText({document:doc,host:host.ownerDocument,t:tr,make,listen:(node,type,cb,options)=>node.addEventListener(type,cb,options),
-    safeRange:range=>!code&&host.open&&frame.contentDocument===doc&&doc.body.contains(range.commonAncestorContainer),
-    beforeChange:()=>{},change:()=>{source.value=doc.body.innerHTML;}});
-   tools.replaceChildren(rich.toolbar);
+   doc.body.oninput=changed;
+   visual=bindWebsiteVisual({document:doc,inspector:tools,t:tr,component:true,getCSS:()=>css,setCSS:updated=>{css=updated;changed();},
+    getWidth:()=>doc.defaultView.innerWidth,getRanges:()=>site()?.site.breakpoints??defaultBreakpoints(),beforeChange:()=>{},change:changed});
+   visual.select('0');
+   schema=componentMainControls({host:controls,doc,main:value,t:tr,request,pin,signal:life.signal,changed});
   };
   const url='/api/website-files/preview/'+encodeURIComponent(pin.siteId)+'/'+encodeURIComponent(pin.expectedRevision)+'/index.html?canvas=1';
   frame.src=url;
@@ -152,10 +165,16 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   apply.onclick=()=>{void run(async()=>{
    try{
     if(site()?.site.revision!==pin.expectedRevision||site().site.id!==pin.siteId)throw Error(tr('changed'));
-    await write('update',{component:value.id,name:title.value,html:source.value});
+    if(!schema)return;
+    const data={component:value.id,name:title.value,html:source.value,css,slots:schema.slots,variants:schema.variants};
+    if(!plan){
+     const sequence=editSequence,impact=await request('components/review',{...pin,...data});if(!host.open||sequence!==editSequence)return;
+     componentReviewView(review,impact,tr);plan=impact.reviewId;apply.textContent=tr('componentApply');return;
+    }
+    await write('update',{...data,reviewId:plan});
    }catch(error){host.querySelector('[data-main-error]').textContent=error.message||tr('failed');throw error;}
   });};
-  host.addEventListener('close',()=>{if(dialog===host)dialog=null;host.remove();},{once:true});
+  host.addEventListener('close',()=>{life.abort();visual?.destroy();if(dialog===host)dialog=null;host.remove();},{once:true});
   document.body.append(host);host.showModal();title.focus();
  }
  async function action(operation,el){
@@ -165,6 +184,11 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   if(op==='search'){clearTimeout(debounce);await list();return true;}
   if(op==='next'||op==='previous'){await list(op==='next'?next:Math.max(0,offset-12));return true;}
   const id=el.dataset.component,path=selected(),instance=context().instance?.getAttribute(marker);
+  if(op==='wrap'){
+   const entry=context().entry,field=el.parentElement.querySelector('select').value;if(!entry||!field)return true;
+   const blockPath=layerPath(entry),{observandaSource:sourceId,observandaSourceRevision:sourceRevision}=entry.dataset;
+   await save();await write('wrap',{component:id,blockPath,field,sourceId,sourceRevision});return true;
+  }
   if(op==='ask-remove'||op==='keep'){removeId=op==='keep'?null:id;results();panel()?.querySelector('[data-component="'+CSS.escape(id)+'"][data-action$="'+(removeId?'component-remove':'component-ask-remove')+'"]')?.focus();return true;}
   if(op==='remove'){if(id!==removeId)return true;await save();await write('remove',{component:id});return true;}
   if(op==='uses'){if(usage?.id===id){usage=null;results();panel()?.querySelector('[data-component="'+CSS.escape(id)+'"][data-action$="component-uses"]')?.focus();}else await usagePage(id,0);return true;}
@@ -174,7 +198,14 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
   }
   if(op==='insert')await place(id,position,path);
   if(op==='create'){if(!context().reusable||!name.trim())throw Error(tr('componentSelect'));await save();await write(op,{name,blockPath:path});}
-  if(op==='detach'){if(!instance)throw Error(tr('componentSelectInstance'));await save();await write(op,{instance});}
+  if(op==='customize'){
+   if(!instance)throw Error(tr('componentSelectInstance'));await save();
+   const pin=local(),result=await request('components/instance',{...pin,instance});if(site()?.site.revision!==pin.expectedRevision)return true;
+   closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog';host.setAttribute('aria-label',tr('componentCustomize'));
+   instanceForm({host,value:result,request,pin,t:tr,close:()=>host.close(),apply:async values=>{if(site()?.site.revision!==pin.expectedRevision)throw Error(tr('changed'));await write('customize',{instance,...values});}});
+   host.addEventListener('close',()=>{if(dialog===host)dialog=null;host.remove();},{once:true});document.body.append(host);host.showModal();
+  }
+  if(op==='detach'){if(!instance)throw Error(tr('componentSelectInstance'));if(!confirm(tr('componentDetachEffect')))return true;await save();await write(op,{instance});}
   if(op==='edit'){await save();const pin=local(),value=await request('components/main',{...pin,component:id});if(site()?.site.revision===value.revision&&site().site.id===pin.siteId)editor(value,pin);}
   return true;
  }

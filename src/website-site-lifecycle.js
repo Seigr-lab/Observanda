@@ -54,7 +54,8 @@ async function duplicateSite(store,source,options){
    const owned=await store.siteFile(id,file.name,value,{draft:file.draft,signal});staged.add(owned.blob);
    assets.set(file.name,{...file,...owned});
   }
-  if(source.components)candidate.components=source.components.map(main=>({...main,id:ids.components.get(main.id),html:copiedComponentHTML(main.html,ids),pictures:main.pictures.map(f=>assets.get(f.name)),...(main.recordings?{recordings:main.recordings.map(f=>assets.get(f.name))}:{})}));
+  if(source.components)candidate.components=source.components.map(main=>({...main,id:ids.components.get(main.id),html:copiedComponentHTML(main.html,ids),pictures:main.pictures.map(f=>assets.get(f.name)),...(main.recordings?{recordings:main.recordings.map(f=>assets.get(f.name))}:{}),
+   ...(main.slots?{slots:main.slots.map(slot=>slot.type==='component'?{...slot,component:ids.components.get(slot.component)}:slot)}:{})}));
   const scripts=await store.scripts(source.files);
   const context=componentContext({...candidate,pages:source.pages,files:[...assets.values()]});
   for(const p of source.pages)context.files.set(p.path,{name:p.path,draft:p.draft});

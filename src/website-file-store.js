@@ -25,6 +25,7 @@ import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMa
 import {assertPageDestination,websitePageIdentity} from './website-page-paths.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
 import {checkComponentManifest,checkSavedComponents,retainComponentAssets} from './website-component-storage.js';
+import {syncComponentStyles} from './website-component-styles.js';
 import {publicRecordingNames,saveWebsiteRecordings} from './website-recordings.js';
 import {editHistory,editHistoryStamp,retainEditHistory,validateEditHistory} from './website-edit-history.js';
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
@@ -248,7 +249,7 @@ export class WebsiteFileStore{
   const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});
   const references=typeof value==='string'&&/\.(?:html|css)$/.test(name)?websiteFileReferences(value,name):undefined;
   const markup=name.endsWith('.html')&&typeof value==='string',sheet=name.endsWith('.css')&&typeof value==='string';
-  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(markup&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{}),...(markup&&(value.includes('ow-token-')||value.includes('data-website-token-sheet'))?{hasStyles:true}:{}),...(sheet?{hasResponsiveLayout:value.includes('/* Observanda layout ')}:{})};
+  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(markup&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{}),...(markup&&(value.includes('ow-token-')||value.includes('data-website-token-sheet'))?{hasStyles:true}:{}),...(markup&&value.includes('data-website-component-')?{hasComponentStyles:true}:{}),...(sheet?{hasResponsiveLayout:value.includes('/* Observanda layout ')}:{})};
  }
  async ownFile(id,file,draft,signal){
   if(file.sourceId||file.feedAsset)throw new AppError('INVALID');
@@ -376,6 +377,7 @@ export class WebsiteFileStore{
   manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
   manifest=await syncSavedAppearance(this,manifest,signal);
   manifest=await syncWebsiteThemes(this,manifest,signal);
+  manifest=await syncComponentStyles(this,manifest,signal);
   manifest=await syncStyleResources(this,manifest,signal);
   manifest=retainWebsiteFeedAssets(manifest);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));

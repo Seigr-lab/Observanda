@@ -11,7 +11,7 @@ import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {mountFilesEditor} from './mount-files-editor.js';
 
 test('drag a reusable section onto the canvas, edit scientific notation in the main and detach only one copy',async({page})=>{
- test.setTimeout(90000);
+ test.setTimeout(35000);page.setDefaultTimeout(6500);
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-component-drag-'));
  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace),id=randomUUID();
  workspace.openCatalogue=workspace.catalogue=()=>{throw Error('Reusable library opened research storage');};
@@ -34,7 +34,9 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await library.getByRole('button',{name:'Create from selected block'}).click();
   await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
   const row=library.locator('[data-component-drag]'),target=canvas.locator('#target');
-  const grab=await row.locator('strong').boundingBox(),drop=await target.boundingBox();
+  const grip=row.locator('strong');await grip.scrollIntoViewIfNeeded();
+  const grab=await grip.boundingBox(),drop=await target.boundingBox();
+  expect(await grip.evaluate(node=>{const r=node.getBoundingClientRect();return node.contains(document.elementFromPoint(r.x+4,r.y+5));})).toBe(true);
   await page.mouse.move(grab.x+4,grab.y+5);await page.mouse.down();
   await page.mouse.move(grab.x+18,grab.y+6,{steps:6});await page.mouse.move(drop.x+12,drop.y+4,{steps:15});await page.mouse.move(drop.x+14,drop.y+4);await page.mouse.up();
   await expect(library.getByText('Placements 2 · Pages 1')).toBeVisible();
@@ -44,9 +46,10 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   const dialog=page.getByRole('dialog',{name:'Edit main component'}),main=dialog.frameLocator('[data-main-canvas]').locator('p');
   await main.click();await page.keyboard.press('End');await page.keyboard.type(' in m2');
   await page.keyboard.press('Shift+ArrowLeft');await dialog.locator('[data-visual-command=superscript]').click();await expect(main.locator('sup')).toHaveText('2');
+  await dialog.getByRole('button',{name:'Review component changes'}).click();
   await dialog.getByRole('button',{name:'Update all instances'}).click();await expect(dialog).not.toBeVisible();
   await expect(copies.locator('sup')).toHaveCount(2);
-  await copies.last().click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).press('Enter');
+  await copies.last().click({position:{x:4,y:4}});page.once('dialog',message=>message.accept());await library.getByRole('button',{name:'Detach selected instance'}).press('Enter');
   await expect(copies).toHaveCount(1);await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
   const saved=await store.open(id);expect(saved.html.match(/<sup>2<\/sup>/g)).toHaveLength(2);expect(saved.html.match(/data-website-instance=/g)).toHaveLength(1);
   const detached=canvas.locator('main > section:not([data-website-instance]) p');
@@ -54,7 +57,7 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await expect(detached).toContainText('Detached observation.');await expect(copies).not.toContainText('Detached observation.');
-  await copies.click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).click();
+  await copies.click({position:{x:4,y:4}});page.once('dialog',message=>message.accept());await library.getByRole('button',{name:'Detach selected instance'}).click();
   await expect(library.getByText('Placements 0 · Pages 0')).toBeVisible();
   await library.getByRole('button',{name:'Remove',exact:true}).click();await library.getByRole('button',{name:'Cancel',exact:true}).click();
   await library.getByRole('button',{name:'Remove',exact:true}).click();await library.getByRole('button',{name:'Remove',exact:true}).click();

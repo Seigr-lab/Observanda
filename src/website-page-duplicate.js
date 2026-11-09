@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {parse} from 'parse5';
+import {parse,parseFragment,serializeOuter} from 'parse5';
 import {AppError} from './errors.js';
 import {websiteDocumentTitle,websiteSourcePlacements,escapeWebsiteText} from './website-file-html.js';
 import {validateWebsiteHTML,validateWebsiteCSS,websiteLocalURL} from './website-file-policy.js';
@@ -9,7 +9,7 @@ import {governedResources} from './website-version-snapshots.js';
 import {authoredPageVersion} from './website-version-document.js';
 import {omitPrivateStyleURLs} from './website-page-dependencies.js';
 import {componentContext} from './website-component-storage.js';
-import {renderComponentInstance} from './website-file-component.js';
+import {componentEntries,renderComponentInstance} from './website-file-component.js';
 import {duplicateWebsiteFeed} from './website-dynamic-feeds.js';
 
 const attributes=node=>new Map(node.attrs?.map(a=>[a.name,a.value]));
@@ -32,6 +32,7 @@ export function duplicatedFeedIds(feeds){
 // permission revisions remain the responsibility of the source publisher.
 function independentHTML(html,page,former,model,feeds,siteIds){
  const instanceById=new Map((former.instances??[]).map((row,i)=>[row.id,page.instances[i]]));
+ const priorInstances=new Map((former.instances??[]).map(row=>[row.id,row]));
  const ids=new Map(siteIds?siteIds.pageAnchors?.get(page.path):feeds),edits=[],pending=[parse(html,{sourceCodeLocationInfo:true})];
  for(const [prior,copy] of instanceById)ids.set(prior,copy.id);
  for(const id of Object.keys(former.entryDisplays??{}))if(page.entryDisplays)ids.set(id,page.entryDisplays.get(id).slot);
@@ -47,7 +48,15 @@ function independentHTML(html,page,former,model,feeds,siteIds){
   const feed=feeds.get(attrs.get('data-website-feed'));
   if(instance||feed){
    if(!loc||!loc.endTag&&feed)throw new AppError('FORMAT');
-   const value=feed?'<section data-website-feed="'+feed+'"></section>':renderComponentInstance(model.components.get(instance.component),instance,page,model);
+   let entries;
+   if(instance?.entries){
+    entries=componentEntries(node,priorInstances.get(attrs.get('data-website-instance')));
+    for(const [field,root] of entries){
+     const content=independentHTML(serializeOuter(root),page,former,model,feeds,siteIds);
+     entries.set(field,parseFragment(content).childNodes[0]);
+    }
+   }
+   const value=feed?'<section data-website-feed="'+feed+'"></section>':renderComponentInstance(model.components.get(instance.component),instance,page,model,entries);
    edits.push({from:loc.startOffset,to:loc.endOffset,value});continue;
   }
   for(const a of node.attrs??[]){
@@ -79,7 +88,10 @@ function independentHTML(html,page,former,model,feeds,siteIds){
  parts.push(html.slice(at));return parts.join('');
 }
 function independentInstances(page,owner,includeEntries,components){
- if(owner.instances?.length)page.instances=owner.instances.map(row=>({...row,id:randomUUID(),component:components?.get(row.component)??row.component}));
+ if(owner.instances?.length)page.instances=owner.instances.map(row=>{
+  const copy={...row,id:randomUUID(),component:components?.get(row.component)??row.component};
+  if(!includeEntries)delete copy.entries;return copy;
+ });
  if(includeEntries&&owner.sourceGalleries)page.sourceGalleries=owner.sourceGalleries.map(g=>({...g,id:randomUUID(),slots:g.slots.map(s=>({...s,slotId:randomUUID()}))}));
  if(includeEntries&&owner.entryDisplays)page.entryDisplays=new Map(Object.entries(owner.entryDisplays).map(([id,row])=>[id,{...row,slot:randomUUID()}]));
 }

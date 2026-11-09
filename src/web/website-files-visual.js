@@ -76,7 +76,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -123,6 +123,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const labelled=(text,control)=>{const label=make('label');label.append(make('span',text),control);return label;};
   const option=(value,text)=>{const el=make('option',text);el.value=value;return el;};
   for(const [value,key] of [['section','sectionScopeSection'],['selection','sectionScopeSelection'],['page','sectionScopePage'],['site','sectionScopeSite']])scope.append(option(value,t(key)));
+  if(component)for(const o of scope.options)if(['site','page'].includes(o.value))o.hidden=true;
   const grid=make('div');grid.className='website-visual-fields';
   for (const field of fields) {
     let control;
@@ -187,10 +188,11 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     const text=styleRange(range,body);
     scope.querySelector('[value="selection"]').disabled=!text;
     scope.querySelector('[value="section"]').disabled=!selected;
-    scope.querySelector('[value="site"]').disabled=!getCSS||!setCSS;
-    if(scope.selectedOptions[0]?.disabled)scope.value=selected?'section':'page';
+    scope.querySelector('[value="site"]').disabled=component||!getCSS||!setCSS;
+    scope.querySelector('[value="page"]').disabled=component;
+    if(scope.selectedOptions[0]?.disabled)scope.value=selected||component?'section':'page';
     const selectionScope=scope.value==='selection', site=scope.value==='site';
-    const target=selectionScope?element(range.startContainer):scope.value==='section'?selected:body;
+    const target=(selectionScope?element(range.startContainer):scope.value==='section'?selected:body)??body;
     const inline=readVisualStyle(document,getCSS(),site?'site':visualClass(target));
     const computed=win.getComputedStyle(target);
     for(const field of fields){

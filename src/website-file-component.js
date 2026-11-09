@@ -5,12 +5,14 @@ import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {attr,put,descendants} from './website-migration-views.js';
 import {websiteRecordingKind} from './website-recordings.js';
 import {mathNamespace,safeEquationElement} from './web/website-equation-markup.js';
+import {slotMarker,entryField,componentSlots,shapeComponent,checkInstanceOptions} from './website-component-schema.js';
+import {componentStyleId,componentPaint} from './website-component-styles.js';
 
 const marker='data-website-instance';
 const blocks=new Set('section article aside div figure table p h1 h2 h3 h4 h5 h6 blockquote ol ul dl details pre hr img video audio'.split(' '));
 const children=new Set([...blocks,...'span strong em b i u s sup sub small mark code br a time figcaption caption colgroup col thead tbody tfoot tr th td li dt dd summary source track'.split(' ')]);
 const containers=new Set('body main section article aside div blockquote li dd'.split(' '));
-const common=new Set('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby data-section-id data-website-theme'.split(' '));
+const common=new Set([...('id class style title lang dir role aria-label aria-hidden aria-describedby aria-labelledby data-section-id data-website-theme'.split(' ')),slotMarker]);
 const playerAttrs=['src','controls','loop','muted','preload'];
 const attributes={a:['href','rel','target'],img:['src','alt','width','height','loading','decoding'],th:['scope','colspan','rowspan','headers'],td:['colspan','rowspan','headers'],ol:['start','reversed','type'],li:['value'],time:['datetime'],details:['open','data-website-transcript'],col:['span'],
  audio:playerAttrs,video:[...playerAttrs,'playsinline','poster','width','height'],track:['src','kind','srclang','label','default'],source:['src','type'],figure:['data-website-recording','data-website-equation']};
@@ -51,7 +53,7 @@ function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=fal
   if(!value||/[\\\s%:?\u0000-\u001f]/.test(value)||value.startsWith('/')||value.includes('#'))invalid();
   const name=path.posix.normalize(path.posix.join(path.posix.dirname(from),value));websiteFileName(name);
   const file=files.get(name),page=pages.get(name);
-  if(file?.sourceId||!file||file.draft&&!draft)invalid();
+  if(file?.sourceId||file?.feedAsset||file?.feedPage||!file||file.draft&&!draft)invalid();
   if(file.picture===true&&/^pictures\/[\da-f-]{36}\.png$/.test(name)&&['link','img'].includes(kind))pictures.set(name,file);
   else if(file.recording===true&&websiteRecordingKind(file)&&(kind==='link'||websiteRecordingKind(file)===kind))recordings.set(name,file);
   else if(kind!=='link'||!page||!verifyOnly&&page.placements.length)invalid();
@@ -83,12 +85,53 @@ function rewrite(root,{from,to,pages,files,themes,draft,instance,originalIds=fal
  validateWebsiteHTML(result,{file:to});
  return {html:result,pictures:[...pictures.values()],recordings:[...recordings.values()]};
 }
-export function prepareComponent(html,from,context){
- return rewrite(oneRoot(html),{...context,from,to:'index.html'});
+export function componentTemplate(html,main={}){
+ const root=oneRoot(html);
+ for(const node of nodes(root))if(protectedNode(node))invalid();
+ if(main.slots?.length||html.includes(slotMarker))componentSlots(root,main);
+ return root;
 }
-export function renderComponentInstance(main,instance,page,context){
+export function prepareComponent(html,from,context,main={}){
+ return rewrite(componentTemplate(html,main),{...context,from,to:'index.html'});
+}
+function componentTree(main,instance,page,context,entries){
  const root=oneRoot(main.html);
+ let nested=[];
+ if(main.slots?.length||main.variants?.length||instance.values||instance.variant){
+  checkInstanceOptions(main,instance,context.files,page.draft);
+  nested=shapeComponent(root,main,instance,context);
+ }
  rewrite(root,{...context,from:'index.html',to:page.path,instance:instance.id,originalIds:instance.originalIds,draft:page.draft});
+ if(main.css)put(root,componentPaint,componentStyleId(main));
+ for(const {node,child,id,field} of nested){
+  if(field){
+   put(node,entryField,instance.id+'-'+field);
+   if(instance.entries?.[field]){
+    const source=entries?.get(field);if(!source||attr(source,'data-observanda-source')!==instance.entries[field])conflict();
+    const copy=parseFragment(serializeOuter(source)).childNodes[0];node.childNodes=[copy];copy.parentNode=node;
+   }
+   continue;
+  }
+  if(!child||child.draft&&!page.draft)invalid();
+  const subtree=componentTree(child,{id},page,context);
+  node.childNodes=[subtree];subtree.parentNode=node;
+ }
+ return root;
+}
+export function componentEntries(node,instance){
+ if(!instance.entries)return;
+ const saved=new Map();
+ for(const target of nodes(node)){
+  const marker=attr(target,entryField);if(!marker?.startsWith(instance.id+'-'))continue;
+  const field=marker.slice(instance.id.length+1),source=Object.hasOwn(instance.entries,field)&&instance.entries[field];if(!source)continue;
+  const content=target.childNodes.filter(n=>n.tagName||n.nodeName!=='#text'||n.value.trim());
+  if(saved.has(field)||content.length!==1||attr(content[0],'data-observanda-source')!==source)conflict();
+  saved.set(field,content[0]);
+ }
+ if(saved.size!==Object.keys(instance.entries).length)conflict();return saved;
+}
+export function renderComponentInstance(main,instance,page,context,entries){
+ const root=componentTree(main,instance,page,context,entries);
  put(root,marker,instance.id);return serializeOuter(root);
 }
 export function pageComponentDocument(html){return parse(html,{sourceCodeLocationInfo:true});}
@@ -102,11 +145,23 @@ export function selectComponentBlock(document,blockPath){
  const node=atPath(document,blockPath);ancestry(node);location(node);return serializeOuter(node);
 }
 function changesFor(html,edits){
- return edits.sort((a,b)=>b.start-a.start).reduce((s,e)=>s.slice(0,e.start)+e.html+s.slice(e.end),html);
+ const parts=[];let at=0;
+ for(const e of edits.sort((a,b)=>a.start-b.start)){
+  if(e.start<at)conflict();
+  parts.push(html.slice(at,e.start),e.html);at=e.end;
+ }
+ return parts.join('')+html.slice(at);
 }
 function rewriteAt(html,node,replacement){const loc=location(node);return changesFor(html,[{start:loc.startOffset,end:loc.endOffset,html:replacement}]);}
 export function makeFirstInstance(html,doc,blockPath,main,instance,page,context){
  const node=atPath(doc,blockPath);return rewriteAt(html,node,renderComponentInstance(main,instance,page,context));
+}
+export function wrapComponentEntry(html,doc,blockPath,main,instance,page,context,{field,sourceId,sourceRevision}){
+ const node=atPath(doc,blockPath),id=attr(node,'data-observanda-source'),revision=attr(node,'data-observanda-source-revision');
+ if(node.tagName!=='section'||!main.slots?.some(s=>s.type==='entry'&&s.id===field)||!page.placements.some(p=>p.id===id&&p.revision===revision))invalid();
+ if(sourceId!==id||sourceRevision!==revision)conflict();
+ ancestry(node.parentNode);instance.entries={[field]:id};
+ return rewriteAt(html,node,renderComponentInstance(main,instance,page,context,new Map([[field,node]])));
 }
 export function insertComponent(html,doc,position,blockPath,main,instance,page,context){
  let offset;
@@ -121,12 +176,13 @@ export function insertComponent(html,doc,position,blockPath,main,instance,page,c
  if(!Number.isInteger(offset))invalid();
  return html.slice(0,offset)+renderComponentInstance(main,instance,page,context)+html.slice(offset);
 }
-export function rewriteComponentInstances(html,doc,main,page,context,{detach}={}){
- const matches=new Map((page.instances??[]).filter(i=>i.component===main.id&&(!detach||i.id===detach)).map(i=>[i.id,i])),changes=[];
+export function rewriteComponentInstances(html,doc,main,page,context,{detach,affected,only}={}){
+ const matches=new Map((page.instances??[]).filter(i=>(affected?.has(i.component)??(i.component===main.id))&&(!only||i.id===only)&&(!detach||i.id===detach)).map(i=>[i.id,i])),changes=[];
  for(const node of nodes(doc)){
   const id=attr(node,marker),instance=matches.get(id);if(!instance)continue;
   matches.delete(id);const loc=location(node);node.attrs=node.attrs.filter(a=>a.name!==marker);
-  changes.push({start:loc.startOffset,end:loc.endOffset,html:detach?serializeOuter(node):renderComponentInstance(main,instance,page,context)});
+  if(detach)for(const child of nodes(node))child.attrs=child.attrs.filter(a=>a.name!==entryField);
+  changes.push({start:loc.startOffset,end:loc.endOffset,html:detach?serializeOuter(node):renderComponentInstance(context.components.get(instance.component),instance,page,context,componentEntries(node,instance))});
  }
  if(matches.size||detach&&!changes.length)conflict();return changesFor(html,changes);
 }
@@ -138,8 +194,13 @@ export function checkComponentInstances(html,page,context){
   const id=attr(node,marker);if(id===undefined)continue;
   const instance=instances.get(id),main=context.components.get(instance?.component);if(!main)conflict();
   ancestry(node.parentNode);instances.delete(id);
-  if(renderComponentInstance(main,instance,page,{...context,verifyOnly:true})!==serializeOuter(node))conflict();
-  for(const child of nodes(node)){const id=attr(child,'id');if(id&&ids.get(id)!==1)conflict();}
+  if(renderComponentInstance(main,instance,page,{...context,verifyOnly:true},componentEntries(node,instance))!==serializeOuter(node))conflict();
+  const authored=[node];
+  while(authored.length){
+   const child=authored.pop();if(attr(child,'data-observanda-source')!==undefined)continue;
+   const anchor=attr(child,'id');if(anchor&&ids.get(anchor)!==1)conflict();
+   for(const element of child.childNodes??[])if(element.tagName)authored.push(element);
+  }
  }
  if(instances.size)conflict();
 }

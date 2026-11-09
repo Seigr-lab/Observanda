@@ -121,6 +121,7 @@ test('an authored component is placed, edited once and published on two independ
   await page.keyboard.press('End');
   await page.keyboard.type(' protocol');
   await expect(main.getByRole('heading', {name:revisedHeading})).toBeVisible();
+  await dialog.getByRole('button', {name:'Review component changes'}).click();
   await dialog.getByRole('button', {name:'Update all instances'}).click();
   await expect(dialog).toHaveCount(0);
   await expect(instance.getByRole('heading', {name:revisedHeading})).toBeVisible();

@@ -58,6 +58,15 @@ export function designStyleCopies(css,ranges=defaultBreakpoints()){
   rules.set(name,rules.has(name)||stop===null?null:{text:css.slice(match.index,stop),start:match.index,stop,copies:[]});
  }
  return {
+  admittedRules(classes){
+   const included=[];let at=0;
+   for(const [name,rule] of rules){
+    if(!rule||css.slice(at,rule.start).trim())return null;
+    if(classes.has(name))included.push(rule.text);
+    at=rule.stop;
+   }
+   return css.slice(at).trim()?null:included;
+  },
   copy(name){
    const rule=rules.get(name);if(!rule)return null;
    const next=name.slice(0,-36)+randomUUID();

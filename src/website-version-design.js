@@ -8,6 +8,8 @@ import {websitePageIdentity} from './website-page-paths.js';
 import {newStyleBook} from './website-style-resources.js';
 import {defaultBreakpoints} from './web/website-breakpoint-model.js';
 import {projectWebsiteBreakpoints} from './website-breakpoints.js';
+import {affectedComponents,componentDependencies,checkComponentSchema,migrateInstance} from './website-component-schema.js';
+import {componentCSS} from './website-component-styles.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function value(manifest,kind){
@@ -61,18 +63,30 @@ async function componentReview(store,ctx,id,signal){
   if(!f||!ctx.held.has(f.blob)||f.draft&&!draft||now&&(now.draft&&!draft||now.sourceId||now.feedAsset||now.sha256!==f.sha256)){status='resources';missing.push(name);continue;}
   if(!now)files.set(name,f);
  }
- const uses=ctx.current.pages.filter(p=>p.instances?.some(i=>i.component===id));
- const rows=[{name:former.name,before:current?.html??'',after:former.html},...uses.map(p=>({name:p.path,reason:'instance'})),...missing.map(name=>({name,reason:'unavailable'}))];
  const model={...componentContext(ctx.current),files};
- let main;
+ let main,affected=new Set([id]);
  if(status==='ready'){
   try{
-   const prepared=prepareComponent(former.html,'index.html',{...model,draft});
+   checkComponentSchema(former);
+   const prepared=prepareComponent(former.html,'index.html',{...model,draft},former);
    main={id,name:former.name,...prepared,...(draft?{draft:true}:{}),...(current?.inclusionOwned?{inclusionOwned:true}:{})};
+   if(former.slots?.length)main.slots=former.slots;
+   if(former.variants?.length)main.variants=former.variants;
+   if(former.css)main.css=componentCSS(former.css,former.html,ctx.current.breakpoints);
+   const candidates=new Map(model.components);candidates.set(id,main);
+   affected=affectedComponents(componentDependencies(candidates),id);
    if([...model.components.values()].some(item=>item.id!==id&&item.name.toLowerCase()===main.name.toLowerCase()))status='occupied';
-  }catch(error){if(error.code==='INVALID'||error.code==='CONFLICT')status='resources';else throw error;}
+  }catch(error){if(['INVALID','CONFLICT','LIMIT'].includes(error.code))status='resources';else throw error;}
  }
- return {status,rows,main,uses,model,former,current,draft};
+ const uses=ctx.current.pages.filter(p=>p.instances?.some(i=>affected.has(i.component)));
+ if(status==='ready'&&current){
+  try{
+   for(const page of uses)for(const row of page.instances)if(row.component===id&&row.entries)migrateInstance(row,current,main);
+  }catch(error){if(error.code==='WEBSITE_COMPONENT_ENTRY_FIELD')status='newSources';else throw error;}
+ }
+ const rows=[{name:former.name,before:current?.html??'',after:former.html},...uses.map(p=>({name:p.path,reason:'instance'})),...missing.map(name=>({name,reason:'unavailable'}))];
+ for(const key of ['slots','variants','css'])if(!same(current?.[key],former[key]))rows.push({name:key,before:JSON.stringify(current?.[key]??''),after:JSON.stringify(former[key]??'')});
+ return {status,rows,main,uses,model,former,current,draft,affected};
 }
 async function restoreComponent(store,ctx,review,signal){
  const {main,uses,model,former,draft}=review,id=ctx.current.id;
@@ -87,9 +101,10 @@ async function restoreComponent(store,ctx,review,signal){
  for(const page of uses){
   const original=await store.readText(files.get(page.path),{signal});
   checkSavedComponents(ctx.current,page,original);
-  const html=rewriteComponentInstances(original,pageComponentDocument(original),main,page,model);
+  const instances=page.instances.map(row=>row.component===main.id?migrateInstance(row,review.current??{},main):row);
+  const html=rewriteComponentInstances(original,pageComponentDocument(original),main,{...page,instances},model,{affected:review.affected});
   const pictures=new Set(),recordings=new Set();validateWebsiteHTML(html,{file:page.path,scripts,pictures,recordings});
-  pages.set(page.path,{...page,pictures:[...pictures],recordings:[...recordings]});
+  pages.set(page.path,{...page,instances,pictures:[...pictures],recordings:[...recordings]});
   files.set(page.path,await store.siteFile(id,page.path,html,{draft:page.draft,signal}));
  }
  return {...ctx.current,pages:[...pages.values()],files:[...files.values()],components:[...model.components.values()]};
@@ -130,8 +145,8 @@ export function websiteVersionDesign(store,id,options,apply=false){
   let next;
   if(kind==='component')next=await restoreComponent(store,ctx,definition,signal);
   else if(kind==='breakpoints'){
-   const {files}=await projectWebsiteBreakpoints(store,ctx.current,desired,{apply:true,signal});
-   next={...ctx.current,breakpoints:desired,files};
+   const {files,components}=await projectWebsiteBreakpoints(store,ctx.current,desired,{apply:true,signal});
+   next={...ctx.current,breakpoints:desired,files,...(components?{components}:{})};
   }
   else{
    next={...ctx.current,[kind]:desired};

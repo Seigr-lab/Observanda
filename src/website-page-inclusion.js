@@ -3,12 +3,13 @@ import {digest} from './storage-format.js';
 import {websiteFileName} from './website-file-policy.js';
 import {fileReferences,publicText,websiteFileReferences} from './website-page-dependencies.js';
 import {addPageStyle,newPageStylesheet,pageStylesheet,sharedDraftStyle,switchBaseStyle} from './website-page-style.js';
+import {componentUseCounts} from './website-component-schema.js';
 
 const pageSize=40;
 // One open review per unlocked workspace. Retain only its impact rows and
 // membership sets. Source documents and media bytes stay in their owners.
 const openReviews=new WeakMap();
-const managedAsset=file=>Boolean(file.sourceId||file.feedAsset||file.themeSheet||file.appearanceSheet||file.entryDisplaySheet);
+const managedAsset=file=>Boolean(file.sourceId||file.feedAsset||file.themeSheet||file.appearanceSheet||file.entryDisplaySheet||file.componentSheet);
 const byName=files=>new Map(files.map(f=>[f.name,f]));
 const mediaOf=component=>[...component.pictures,...(component.recordings??[])];
 function dependencies(roots,refs,files){
@@ -56,11 +57,11 @@ async function inclusionPlan(store,manifest,page,included,signal){
  const otherAssets=dependencies(otherRoots,included?eligible:await visibleReferences(publicAfter,eligible),files);
  const affected=dependencies([...ownPages,pageStylesheet(manifest,page)],eligible,files);
  const components=new Map((manifest.components??[]).map(c=>[c.id,c]));
- const ownComponents=new Set((page.instances??[]).map(i=>i.component));
- const otherUses=new Set(otherPublicPages.flatMap(p=>(p.instances??[]).map(i=>i.component)));
+ const ownComponents=componentUseCounts(components,page.instances??[]);
+ const otherUses=componentUseCounts(components,otherPublicPages.flatMap(p=>p.instances??[]));
  for(const c of components.values()){
   if(ownComponents.has(c.id)){
-   rows.push({kind:'component',name:c.name,count:page.instances.filter(i=>i.component===c.id).length,shared:otherUses.has(c.id)});
+   rows.push({kind:'component',name:c.name,count:ownComponents.get(c.id),shared:otherUses.has(c.id)});
    for(const f of mediaOf(c))affected.add(f.name);
   }
   if(otherUses.has(c.id)||!c.draft&&!c.inclusionOwned)for(const f of mediaOf(c))otherAssets.add(f.name);
