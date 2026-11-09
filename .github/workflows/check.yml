@@ -23,8 +23,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           cache: npm
+      - run: node scripts/node-version.js
       - run: npm ci
       - run: npm run check:dependencies
       - run: npm run check
@@ -47,8 +48,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           cache: npm
+      - run: node scripts/node-version.js
       - run: npm ci
       - name: Media tools (Linux)
         if: runner.os == 'Linux'

@@ -8,12 +8,15 @@
     "node": ">=24.22.1 <25"
   },
   "scripts": {
+    "precheck": "node scripts/node-version.js",
+    "preprepare:desktop": "node scripts/node-version.js",
+    "prepackage:desktop": "node scripts/node-version.js",
     "start": "node src/cli.js open",
-    "predesktop": "node node_modules/electron/install.js",
+    "predesktop": "node scripts/node-version.js && node node_modules/electron/install.js",
     "desktop": "electron desktop",
     "prepare:desktop": "node scripts/prepare-desktop.js",
     "package:desktop": "electron-builder --config electron-builder.config.js --publish never",
-    "pretest:desktop": "node node_modules/electron/install.js",
+    "pretest:desktop": "node scripts/node-version.js && node node_modules/electron/install.js",
     "test:desktop": "playwright test --config playwright.desktop.config.js",
     "test": "node scripts/test.js",
     "check": "node scripts/check.js",

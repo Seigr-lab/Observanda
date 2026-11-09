@@ -1,4 +1,5 @@
 // Isolated PostgreSQL; never inherit a running application's database URL.
+import {checkNodeVersion} from './node-version.js';
 import {mkdtemp,rm,realpath} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -9,6 +10,7 @@ import {prepareFilesystem} from './prepare-filesystem.js';
 const controller=new AbortController();let child,service,directory,temporaryRuntime;
 const stop=()=>{controller.abort();child?.kill('SIGTERM');};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 try{
+ checkNodeVersion();
  await prepareFilesystem();
  const args=process.argv.slice(2),browser=args[0]==='--browser';if(browser)args.shift();
  const commandArgs=browser?['node_modules/@playwright/test/cli.js','test',...args]:['--test','--test-reporter=tap','--test-concurrency=4',...await nativeTestArguments(args)];

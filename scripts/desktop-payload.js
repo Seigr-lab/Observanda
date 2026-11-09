@@ -6,12 +6,13 @@ import {createHash} from 'node:crypto';
 import {githubRuntimeFiles} from './github-runtime.js';
 import {pdfValidationRuntimeFiles} from './pdf-validation-runtime.js';
 import {buildBrowser} from './browser-build.js';
+import {pinnedNodeVersion} from './node-version.js';
 import languages from '../src/web/locales/languages.json' with {type:'json'};
 // Native UI uses the same source catalogues and interpolation rules as the web
 // app; these files are copied by prepare-desktop's complete src payload step.
 export const desktopLocalizationFiles=()=>['service/src/desktop-localization.js','service/src/web/i18n/runtime.js','service/src/web/locales/languages.json',...languages.flatMap(({id})=>['desktopShell','errors'].map(name=>'service/src/web/locales/'+id+'/'+name+'.json'))];
 // Node's official SHASUMS256.txt pins each complete target archive/executable.
-export const desktopNodeVersion='24.22.1';
+export const desktopNodeVersion=pinnedNodeVersion;
 export const desktopNodeHashes=Object.freeze({
  'win32-x64':'d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5',
  'darwin-x64':'d132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035',

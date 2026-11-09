@@ -200,6 +200,10 @@ Configure recovery before it is needed. Resetting application preferences cannot
 
 Adjust interface language, text size and spacing independently of your published designs. Translations are incomplete; untranslated interface and Help text falls back to English.
 
+## Development from source
+
+For a source checkout, select the Node.js version in `.nvmrc` with your version manager. For example, in PowerShell with nvm-windows, use `nvm install (Get-Content .nvmrc)` and `nvm use (Get-Content .nvmrc)`. With nvm in a POSIX shell, run `nvm install` and `nvm use` from the checkout. Run `node scripts/node-version.js` to check your selection, then `npm ci` to install the locked dependencies. Source CI and the bundled desktop service use the same version pin.
+
 ## Support Observanda's development
 
 You can help further Observanda's development by [becoming a sponsor on GitHub](https://github.com/sponsors/Seigr-lab). Contributions support development time, testing and documentation, including improvements to authoring, project portability, and PDF and website publishing.
