@@ -3,7 +3,7 @@ import {revisionText} from './revision-model.js';
 
 export function hasPdfPlacements(section) {
   return Boolean(section?.composition || section?.pagination?.rules.length ||
-    section?.images?.length || section?.notes?.length);
+    section?.images?.length || section?.notes?.some(note=>note.anchor!=='inline'));
 }
 
 // Boxes and paragraph rules address blocks. Pictures and note calls address
@@ -45,7 +45,7 @@ function placementChanged(previous, next) {
       return left !== right || different(right - 1) || different(right);
     });
   }
-  return changedGap(previous.notes, next.notes, note => note.block) ||
+  return changedGap(previous.notes?.filter(note=>note.anchor!=='inline'), next.notes?.filter(note=>note.anchor!=='inline'), note => note.block) ||
     changedGap(previous.images, next.images, image => image.position.block);
 }
 

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {validPdfNote,validPdfNotes} from '../src/web/pdf-notes-model.js';
+import {pdfNoteCall,pdfNoteLocations,validPdfNote,validPdfNotes} from '../src/web/pdf-notes-model.js';
 import {pdfNotesUI} from '../src/web/pdf-notes-ui.js';
 import {renderPdfNotes,renderPdfEndnotes} from '../src/pdf-note-renderer.js';
 import {scopePdfIds} from '../src/pdf-figure-renderer.js';
@@ -9,6 +9,27 @@ import {renderProse,proseText} from '../src/web/prose-model.js';
 import {safeRichLink} from '../src/web/rich-text-model.js';
 const note=(content='Synthetic observation',kind='footnote',block=1)=>({id:randomUUID(),content,kind,block});
 const rich=()=>({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Linked note Ω',marks:[{type:'link',attrs:{href:'https://example.invalid/method',title:'Method',target:'_self',nofollow:false}},{type:'font_family',attrs:{font:'dm-sans'}}]}]}]});
+
+test('inline footnotes keep their exact place and identity in edited text, with explicit findings for detached or repeated markers',async()=>{
+ const {compilePdfDocument}=await import('../src/pdf-document-renderer.js'),{pdfLayoutPreset}=await import('../src/web/pdf-layout-model.js');
+ const header={version:1,id:randomUUID(),name:'Observations',language:'en',direction:'ltr',layout:pdfLayoutPreset()};
+ const note={id:randomUUID(),content:'Calibrated reading.',kind:'page-footnote',anchor:'inline'},later={id:randomUUID(),content:'Adjusted reading.',kind:'endnote',anchor:'inline'};
+ const text=value=>({type:'text',text:value}),call=note=>({...text('†'),marks:[{type:'link',attrs:{href:pdfNoteCall(note.id),title:'',target:'_self',nofollow:false}}]});
+ const paragraph={type:'paragraph',content:[text('Immediately before'),call(note),text(' after; then'),call(later),text(' here.')]};
+ const section={id:randomUUID(),title:'Methods',layout:null,start:null,notes:[later,note],content:{type:'doc',content:[paragraph]}};
+ const result=await compilePdfDocument(header,[section]);
+ assert.match(result.html,/Immediately before<sup[^>]* data-pdf-footnote-call="[^"]+"[^>]*><a [^>]+>1<\/a><\/sup> after; then<sup[^>]*><a [^>]+>2<\/a><\/sup> here\./);
+ assert.doesNotMatch(result.html,/pdf-note-v1:|†/);
+ paragraph.content.unshift(text('Corrected. '));section.content.content.unshift({type:'paragraph',content:[text('Earlier paragraph')]});
+ assert.deepEqual(pdfNoteLocations(section.content).get(note.id),{block:1,ordinal:0,ambiguous:false});
+ const updated=await compilePdfDocument(header,[section]);assert.match(updated.html,/Corrected\. Immediately before<sup/);
+ const duplicate=structuredClone(section);duplicate.content.content[1].content.push(call(note));
+ await assert.rejects(compilePdfDocument(header,[duplicate]),error=>error.code==='PDF_NOTE_ANCHOR'&&error.details[1]===note.id);
+ const orphan=structuredClone(section);orphan.notes=[later];
+ await assert.rejects(compilePdfDocument(header,[orphan]),error=>error.code==='PDF_NOTE_ANCHOR'&&error.details[2]===pdfNoteCall(note.id));
+ paragraph.content=paragraph.content.filter(node=>!node.marks);
+ await assert.rejects(compilePdfDocument(header,[section]),error=>error.code==='PDF_NOTE_ANCHOR'&&error.details[1]===later.id);
+});
 
 test('PDF notes admit explicit nonblank prose and placement, with stable unique IDs',()=>{
  const value=note();assert.equal(validPdfNote(value),true);assert.equal(validPdfNotes([value,note(rich(),'endnote',12000)]),true);assert.equal(validPdfNotes([]),true);
@@ -33,20 +54,20 @@ test('PDF notes render ordered semantic references and exact backlinks across se
 test('PDF note rendering requires the safe content callback and stops after cancellation',async()=>{
  const section={id:randomUUID(),notes:[note(),note('Second')]};await assert.rejects(renderPdfNotes(section),{code:'PDF_LAYOUT'});
  const controller=new AbortController();let reads=0;await assert.rejects(renderPdfNotes(section,{signal:controller.signal,renderContent:async()=>{reads++;controller.abort();return '<p>first</p>';}}),{name:'AbortError'});assert.equal(reads,1);
- const empty=await renderPdfNotes({id:randomUUID()});assert.deepEqual(empty,{references:[],pageFootnotes:[],sectionNotes:'',endnotes:[],nextNumber:1});assert.equal(renderPdfEndnotes([]),'');
+ const empty=await renderPdfNotes({id:randomUUID()});assert.deepEqual(empty,{references:[],inlineReferences:new Map(),pageFootnotes:[],sectionNotes:'',endnotes:[],nextNumber:1});assert.equal(renderPdfEndnotes([]),'');
  await assert.rejects(renderPdfNotes(section,{renderContent:()=>null}),{code:'PDF_LAYOUT'});
 });
 
 test('PDF note authoring adds, edits and removes stable notes without accepting blank new notes or stale editor callbacks',()=>{
- let document={header:{id:randomUUID()}},section={id:randomUUID()},changes=0,draws=0;const fields=new Map();
- const ui=pdfNotesUI({esc:value=>String(value),getDocument:()=>document,getSection:()=>section,changed:()=>changes++,draw:()=>draws++,field:value=>{fields.set(value.key,value);return '<div data-field="'+value.key+'"></div>';}});
+ let document={header:{id:randomUUID()}},section={id:randomUUID()},changes=0,draws=0;const fields=new Map(),markers=[];
+ const ui=pdfNotesUI({esc:value=>String(value),getDocument:()=>document,getSection:()=>section,insertLink:(link,action)=>{markers.push({link,action});return true;},changed:()=>changes++,draw:()=>draws++,field:value=>{fields.set(value.key,value);return '<div data-field="'+value.key+'"></div>';}});
  assert.match(ui.view(),/data-pdf-notes/);assert.throws(()=>ui.action('note-add',{}));assert.equal(changes,0);
- const pending=[...fields.values()].find(field=>field.key.startsWith('pdf-note-new-'));const authored=rich();pending.set(authored);ui.input({dataset:{pdfNoteField:'kind'},value:'endnote'});ui.input({dataset:{pdfNoteField:'block'},value:'2'});assert.equal(ui.action('note-add',{}),true);assert.equal(changes,1);assert.equal(validPdfNotes(section.notes),true);
- const id=section.notes[0].id;assert.equal(section.notes[0].kind,'endnote');assert.equal(section.notes[0].block,2);assert.notEqual(section.notes[0].content,authored);authored.content[0].content[0].text='Changed caller value';assert.equal(section.notes[0].content.content[0].content[0].text,'Linked note Ω');
+ const pending=[...fields.values()].find(field=>field.key.startsWith('pdf-note-new-'));const authored=rich();pending.set(authored);ui.input({dataset:{pdfNoteField:'kind'},value:'endnote'});assert.equal(ui.action('note-add',{}),true);assert.equal(changes,1);assert.equal(validPdfNotes(section.notes),true);
+ const id=section.notes[0].id;assert.equal(section.notes[0].kind,'endnote');assert.equal(section.notes[0].anchor,'inline');assert.deepEqual(markers,[{link:{href:pdfNoteCall(id),label:'†'},action:'insert'}]);assert.notEqual(section.notes[0].content,authored);authored.content[0].content[0].text='Changed caller value';assert.equal(section.notes[0].content.content[0].content[0].text,'Linked note Ω');
  fields.clear();ui.view();assert.ok(!fields.has(pending.key),'New composition gets a fresh rich-editor undo identity after Add');const selected=fields.get('pdf-note-'+id);selected.set('Updated content');assert.equal(section.notes[0].id,id);assert.equal(section.notes[0].content,'Updated content');
- ui.input({dataset:{pdfNoteField:'block',pdfNoteId:id},value:'12000'});assert.equal(section.notes[0].block,12000);ui.input({dataset:{pdfNoteField:'block',pdfNoteId:id},value:'12001'});assert.equal(section.notes[0].block,12000);
+ assert.equal(ui.action('note-move',{dataset:{id}}),true);assert.equal(markers.at(-1).action,'move');assert.equal(markers.at(-1).link.href,pdfNoteCall(id));
  const oldSection=section;section={id:randomUUID()};ui.view();selected.set('Stale update');pending.set('Stale composition');assert.equal(oldSection.notes[0].content,'Updated content');assert.throws(()=>ui.action('note-add',{}));
- section=oldSection;ui.view();ui.action('note-remove',{dataset:{id}});assert.equal(section.notes,undefined);assert.equal(changes,4);assert.equal(draws,2);assert.equal(ui.action('other',{}),false);
+ section=oldSection;ui.view();ui.action('note-remove',{dataset:{id}});assert.equal(section.notes,undefined);assert.equal(markers.at(-1).action,'remove');assert.equal(changes,4);assert.equal(draws,3);assert.equal(ui.action('other',{}),false);
 });
 
 test('PDF note links follow disabled policy while endnote typography retains the authored section settings',async()=>{
@@ -56,7 +77,7 @@ test('PDF note links follow disabled policy while endnote typography retains the
 
 test('PDF note pending content flushes once before navigation or export and refuses malformed nonblank drafts',()=>{
  const document={header:{id:randomUUID()}},section={id:randomUUID()},fields=new Map();let changes=0;
- const ui=pdfNotesUI({esc:String,getDocument:()=>document,getSection:()=>section,changed:()=>changes++,draw:()=>{},field:value=>{fields.set(value.key,value);return '';}});
+ const ui=pdfNotesUI({esc:String,getDocument:()=>document,getSection:()=>section,insertLink:()=>true,changed:()=>changes++,draw:()=>{},field:value=>{fields.set(value.key,value);return '';}});
  ui.view();const field=[...fields.values()][0];assert.equal(ui.hasPending(),false);field.set('Not yet explicitly added');assert.equal(ui.hasPending(),true);assert.equal(ui.flush(),true);assert.equal(ui.hasPending(),false);assert.equal(ui.flush(),false);assert.equal(section.notes.length,1);assert.equal(changes,1);
  fields.clear();ui.view();const next=[...fields.values()].find(field=>field.key.startsWith('pdf-note-new-'));next.set('bad\0content');assert.equal(ui.hasPending(),true);assert.throws(()=>ui.flush());assert.equal(section.notes.length,1);next.set('  \n');assert.equal(ui.hasPending(),false);assert.equal(ui.flush(),false);
 });

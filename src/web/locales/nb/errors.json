@@ -2,6 +2,7 @@
   "WEBSITE_HOME_REQUIRED": "Startsiden må være med. Velg en annen side for å gjøre den privat.",
   "WEBSITE_PUBLIC_COMPONENT": "Åpne en side som er med i publiseringen for å redigere denne delte komponenten. Du kan koble fra forekomsten her og redigere den privat.",
   "WEBSITE_COMPONENT_ENTRY_FIELD": "Dette feltet inneholder tilknyttede oppføringer. Koble fra forekomstene før du fjerner eller endrer feltet. Oppføringene beholder publiseringstillatelsene sine.",
+  "PDF_NOTE_ANCHOR": "Et notetegn mangler eller er duplisert. Åpne Noter i den aktuelle seksjonen og plasser notetegnet på nytt.",
   "PDF_PLACEMENT_REVIEW": "Teksten er endret ved en plassering for sideoppsett, bilde eller note. Gjennomgå plasseringene i den berørte delen før eksport.",
   "WEBSITE_FEED_CAPACITY": "En oppføringsstrøm overskrider grensen for én HTML-side. Åpne oppføringsstrømmene på den aktuelle siden, og velg en mindre utforming før publisering.",
   "WEBSITE_CHANGED": "Innholdet på nettstedet eller tilgangene er endret. Last inn visningen på nytt før du fortsetter.",

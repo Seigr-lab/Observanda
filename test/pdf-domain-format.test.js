@@ -5,7 +5,9 @@ import {PdfDocumentStore} from '../src/pdf-document-store.js';
 import {checkProjectDomainOwner} from '../src/project-domain-registry.js';
 import {requiresPdfDomainFormat,requirePdfDomainFormat} from '../src/pdf-domain-format.js';
 import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
-import {pdfStructureDefaults} from '../src/web/pdf-structure-model.js';
+import {pdfStructureDefaults,pdfCaptionDefaults} from '../src/web/pdf-structure-model.js';
+import {pdfNoteCall} from '../src/web/pdf-notes-model.js';
+import {pdfCrossReference} from '../src/web/pdf-cross-reference-model.js';
 import {pdfPressDefaults} from '../src/web/pdf-press-model.js';
 
 // This adapter includes the real authenticated domain identity and transaction
@@ -19,6 +21,30 @@ function fixture({domain='pdf',projectId=randomUUID()}={}){
  return {owner,values,writes,run,change:command=>run(store=>new PdfDocumentStore(store).change(command),{write:true})};
 }
 function creation(){const id=randomUUID();return {id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{version:1,id,name:'Compatibility report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section:{id:randomUUID(),title:'Evidence',content:'Retained observations',layout:null,start:null}}};}
+
+test('inline markers, equation citations and equation captions acquire authenticated format six before saving',async()=>{
+ for(const edit of ['note','equation','captions']){
+  const f=fixture(),create=creation(),initial=await f.change(create);
+  let {header,section}=create.operation,operation;
+  if(edit==='captions'){
+   header={...header,structure:{...pdfStructureDefaults(),caption:pdfCaptionDefaults({equations:true})}};
+   operation={type:'header',header};
+  }else{
+   const id=randomUUID(),href=edit==='note'?pdfNoteCall(id):pdfCrossReference({documentId:header.id,sectionId:section.id,kind:'equation',blockId:id});
+   section={...section,content:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:edit==='note'?'†':'Formula',marks:[{type:'link',attrs:{href,title:'',target:'_self',nofollow:false}}]}]}]}};
+   if(edit==='note')section.notes=[{id,anchor:'inline',kind:'footnote',content:'Cited note.'}];
+   operation={type:'section',section};
+  }
+  const command={id:header.id,commandId:randomUUID(),expectedRevision:initial.revision,operation};
+  f.writes.length=0;const saved=await f.change(command);
+  assert.equal(f.writes[0],'owner');assert.equal(f.values.get('owner').pdfFormat,6);
+  assert.equal((await f.change(command)).revision,saved.revision);
+  const open=store=>new PdfDocumentStore(store).verify();
+  await f.run(open);
+  f.values.set('owner',{...f.owner,pdfFormat:5});await assert.rejects(f.run(open),{code:'CATALOGUE_DAMAGED'});
+  f.values.set('owner',{...f.owner,pdfFormat:7});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
+ }
+});
 
 test('a normal section save detects changed note placements, survives retry and requires explicit revision-bound review',async()=>{
  const f=fixture(),create=creation(),original=create.operation.section;

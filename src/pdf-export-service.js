@@ -9,6 +9,7 @@ import {compilePdfDocument} from './pdf-document-renderer.js';
 import {embedPdfFonts} from './pdf-font-assets.js';
 import {renderSavedPdf} from './pdf-render-service.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
+import {researchId} from './web/research-reference.js';
 import {PdfExportJobs} from './pdf-export-jobs.js';
 import {withoutWriterWait} from './writer-wait.js';
 import {withDatabaseRequest} from './database-request-context.js';
@@ -28,7 +29,14 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
   await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);return {...result,sourceProof};
- }catch(error){if(preflightOnly&&error instanceof PdfLayoutError&&['PDF_LINK_CODE_LAYOUT','PDF_PLACEMENT_REVIEW'].includes(error.code)&&typeof error.details?.[0]==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(error.details[0])){await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();return {preflight:{version:1,status:'fatal',truncated:false,findings:[{code:error.code,severity:'fatal',sectionId:error.details[0],blockId:null,blockIndex:null,details:{}}]}};}if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
+ }catch(error){
+  if(!(error instanceof PdfLayoutError))throw error;
+  const [sectionId,blockId,target]=error.details;
+  if(!preflightOnly||!researchId(sectionId)||!['PDF_LINK_CODE_LAYOUT','PDF_PLACEMENT_REVIEW','PDF_NOTE_ANCHOR','PDF_UNRESOLVED_REFERENCE'].includes(error.code))throw new AppError(error.code,error.details);
+  await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();
+  const finding={code:error.code,severity:'fatal',sectionId,blockId:typeof blockId==='string'?blockId:null,blockIndex:null,details:typeof target==='string'?{target}:{}};
+  return {preflight:{version:1,status:'fatal',truncated:false,findings:[finding]}};
+ }
 }
 // The desktop renderer is intentionally single-owner. Queued exports compile
 // only when their turn begins instead of retaining many whole documents in RAM.

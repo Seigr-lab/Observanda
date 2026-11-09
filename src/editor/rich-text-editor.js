@@ -1,5 +1,5 @@
 import {DOMParser,Fragment,Slice} from 'prosemirror-model';
-import {EditorState,TextSelection} from 'prosemirror-state';
+import {EditorState,TextSelection,NodeSelection} from 'prosemirror-state';
 import {BOOK_BLOCKS,validBookBlock} from '../web/book-blocks.js';
 import {bookContentEditor,bookNodeView} from './book-content.js';
 import {bookText} from '../web/book-messages.js';
@@ -9,6 +9,7 @@ import {history,undo,redo,closeHistory} from 'prosemirror-history';
 import {keymap} from 'prosemirror-keymap';
 import {wrapInList,splitListItem,sinkListItem,liftListItem} from 'prosemirror-schema-list';
 import {schema} from './schema.js';
+import {inlineLinkTransaction} from './inline-link-transaction.js';
 import {collab,getVersion,sendableSteps,receiveTransaction} from 'prosemirror-collab';
 import {Step} from 'prosemirror-transform';
 import {safeRichLink,richTextAdmission,RICH_TEXT_LIMITS,plainRichText} from '../web/rich-text-model.js';
@@ -30,10 +31,10 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  function syncCaret(v,event){
   if(event.isComposing||v.composing)return false;
   const selection=v.dom.ownerDocument.getSelection();
-  if(!selection?.isCollapsed||!selection.anchorNode||!v.dom.contains(selection.anchorNode))return false;
-  const position=v.posAtDOM(selection.anchorNode,selection.anchorOffset);
-  if(v.state.doc.resolve(position).parent.inlineContent){
-   const next=TextSelection.create(v.state.doc,position);
+  if(!selection?.anchorNode||!selection.focusNode||!v.dom.contains(selection.anchorNode)||!v.dom.contains(selection.focusNode))return false;
+  const anchor=v.posAtDOM(selection.anchorNode,selection.anchorOffset),head=v.posAtDOM(selection.focusNode,selection.focusOffset);
+  if(v.state.doc.resolve(anchor).parent.inlineContent&&v.state.doc.resolve(head).parent.inlineContent){
+   const next=TextSelection.create(v.state.doc,anchor,head);
    if(!next.eq(v.state.selection))v.dispatch(v.state.tr.setSelection(next));
   }
   return false;
@@ -46,7 +47,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  const identity=tr=>{const ids=new Set();tr.doc.descendants((n,pos)=>{if(n.type===schema.nodes.heading||BOOK_BLOCKS.includes(n.type.name)){if(!n.attrs.id||ids.has(n.attrs.id))tr.setNodeMarkup(pos,null,{...n.attrs,id:crypto.randomUUID()});ids.add(tr.doc.nodeAt(pos).attrs.id);}});return tr;};
  const plugins=[history(),keymap(keys),keymap(baseKeymap),...(collaboration?[collab({version:collaboration.version,clientID:collaboration.clientId})]:[])];
  const state=initialState?.doc.eq(doc)?initialState.reconfigure({plugins}):EditorState.create({schema,doc,plugins});
- view=new EditorView({mount},{state,attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
+ view=new EditorView({mount},{state,attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,keyup:syncCaret,pointerup:syncCaret,blur:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
    if(!tr.docChanged){view.updateState(view.state.apply(tr));update();return;}
    identity(tr);
    const json=tr.doc.toJSON(),usage=measure(json),pasted=tr.getMeta('paste')&&clipboard;
@@ -187,5 +188,35 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  get pendingPaste(){return capacity.pending;},reviewPaste:()=>capacity.focus(),
  get collaboration(){if(!collaboration)return null;const pending=sendableSteps(view.state);return {version:getVersion(view.state),steps:pending?.steps.map(s=>s.toJSON())??[],clientId:collaboration.clientId};},
  receive(steps,clients){if(!collaboration)return;const tr=receiveTransaction(view.state,steps.map(s=>Step.fromJSON(schema,s)),clients);view.updateState(view.state.apply(tr));if(tr.docChanged){accepted=measure(view.state.doc.toJSON());capacity.update(accepted);}update();},
+ insertInlineLink(link,markerAction){
+  const tr=inlineLinkTransaction(view.state,link,markerAction);
+  if(!tr)return false;
+  view.dispatch(tr.scrollIntoView());return view.state.doc.eq(tr.doc);
+ },
+ selectedLink(){
+  const {from,$from}=view.state.selection;
+  const link=schema.marks.link.isInSet($from.nodeAfter?.marks??[])??schema.marks.link.isInSet($from.marks());
+  return link?{href:link.attrs.href,position:from}:null;
+ },
+ focusLink(href,position){
+  const matches=[];
+  view.state.doc.descendants((node,pos)=>{
+   if(!node.isText||schema.marks.link.isInSet(node.marks)?.attrs.href!==href)return;
+   const previous=matches.at(-1);
+   if(previous?.to===pos)previous.to=pos+node.nodeSize;
+   else matches.push({from:pos,to:pos+node.nodeSize});
+  });
+  const chosen=matches.find(range=>position>=range.from&&position<=range.to)??(position===undefined||matches.length===1?matches[0]:null);
+  if(!chosen)return false;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc,chosen.from,chosen.to)).scrollIntoView());
+  view.focus();return true;
+ },
+ focusBlock(id){
+  let at=null;
+  view.state.doc.descendants((node,pos)=>{if(node.attrs.id===id&&NodeSelection.isSelectable(node))at=pos;});
+  if(at===null)return false;
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc,at)).scrollIntoView());
+  view.focus();return true;
+ },
  replaceDocument(document){const doc=schema.nodeFromJSON(document);view.dispatch(view.state.tr.replaceWith(0,view.state.doc.content.size,doc.content));}};
 }

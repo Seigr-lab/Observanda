@@ -11,7 +11,7 @@ export function pdfCrossReferences(header,{textGlyphs=()=>{},maxBytes=16*1024*10
  if(!researchId(header?.id)||!Number.isSafeInteger(maxBytes)||maxBytes<1)throw new PdfLayoutError('PDF_LAYOUT');
  const targets=new Map(),uses=new Map();let serial=0,registeredBytes=0;
  const prefix='\uE000pdf-reference-'+randomUUID()+'-';
- function fail(sectionId,blockId=null){throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId,...(blockId?[blockId]:[])]);}
+ function fail(sectionId,ownerId,href){throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId,ownerId,href]);}
  function add(sectionId,kind,blockId,value){
   const id=key(sectionId,kind,blockId),existing=targets.get(id);registeredBytes+=Buffer.byteLength(JSON.stringify(value));if(registeredBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');
   if(existing)existing.ambiguous=true;else targets.set(id,value);
@@ -22,19 +22,19 @@ export function pdfCrossReferences(header,{textGlyphs=()=>{},maxBytes=16*1024*10
   add(sectionId,'section',null,{anchor:'pdf-section-'+sectionId,text:heading.title,numbered:!!header.structure?.numberSections&&!!value.title,links:layout.links!=='disabled'});
   for(const target of captionTargets){
    signal?.throwIfAborted();if(!researchId(target.blockId))continue;
-   if(target.sectionId!==sectionId||!['figure','table'].includes(target.kind)||!Number.isSafeInteger(target.number)||target.number<1||typeof target.anchor!=='string'||!target.anchor)throw new PdfLayoutError('PDF_SECTION',[sectionId]);
-   const figure=target.kind==='figure',caption=header.structure?.caption;
-   add(sectionId,target.kind,target.blockId,{anchor:target.anchor,text:(figure?caption?.figureLabel:caption?.tableLabel)+' '+target.number,numbered:!!caption?.[figure?'numberFigures':'numberTables'],links:layout.links!=='disabled'});
+   if(target.sectionId!==sectionId||!['figure','table','equation'].includes(target.kind)||!Number.isSafeInteger(target.number)||target.number<1||typeof target.anchor!=='string'||!target.anchor)throw new PdfLayoutError('PDF_SECTION',[sectionId]);
+   const numbered={figure:'numberFigures',table:'numberTables',equation:'numberEquations'}[target.kind],caption=header.structure?.caption;
+   add(sectionId,target.kind,target.blockId,{anchor:target.anchor,text:caption?.[target.kind+'Label']+' '+target.number,numbered:!!caption?.[numbered],links:layout.links!=='disabled'});
   }
  }
- function project(value,{sectionId,layout=header.layout}={}){
+ function project(value,{sectionId,noteId=null,layout=header.layout}={}){
   signal?.throwIfAborted();if(!researchId(sectionId))throw new PdfLayoutError('PDF_SECTION');
   function visit(node){
    signal?.throwIfAborted();const mark=reference(node);
    if(mark){
-    const target=parsePdfCrossReference(mark.attrs.href);if(!target||target.documentId!==header.id)fail(sectionId,target?.blockId);
+    const target=parsePdfCrossReference(mark.attrs.href);if(!target||target.documentId!==header.id)fail(sectionId,noteId,target?mark.attrs.href:null);
     const token=prefix+serial+++'\uE001',font=node.marks?.find(item=>item.type==='font_family')?.attrs.font??layout.font;
-    uses.set(token,{target,sectionId,font,links:layout.links!=='disabled'});
+    uses.set(token,{target,href:mark.attrs.href,sectionId,noteId,font,links:layout.links!=='disabled'});
     const result={...node,text:token,marks:node.marks.filter(item=>item.type!=='link')};if(!result.marks.length)delete result.marks;return result;
    }
    if(!node.content)return node;
@@ -54,7 +54,7 @@ export function pdfCrossReferences(header,{textGlyphs=()=>{},maxBytes=16*1024*10
   const expression=new RegExp(prefix+'[0-9]+\uE001','g');
   return html.replace(expression,token=>{
    signal?.throwIfAborted();const use=uses.get(token);if(!use)throw new PdfLayoutError('PDF_INPUT');const target=targets.get(key(use.target.sectionId,use.target.kind,use.target.blockId));
-   if(!target||target.ambiguous||!target.numbered)fail(use.sectionId,use.target.blockId);
+   if(!target||target.ambiguous||!target.numbered)fail(use.sectionId,use.noteId,use.href);
    textGlyphs(use.font,target.text);const label=esc(target.text),linked=header.structure?.internalLinks!==false&&header.layout.links!=='disabled'&&use.links&&target.links;
    const result=linked?'<a class="pdf-cross-reference" href="#'+esc(target.anchor)+'">'+label+'</a>':label;bytes+=Buffer.byteLength(result)-Buffer.byteLength(token);if(bytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');return result;
   });

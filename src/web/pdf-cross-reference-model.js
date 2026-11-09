@@ -3,7 +3,7 @@ import {proseDocument,validProse} from './prose-model.js';
 export const PDF_CROSS_REFERENCE_PREFIX='#pdf-reference-v1:';
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys;
 export function validPdfCrossReference(value){
- return !!(exact(value,'blockId,documentId,kind,sectionId')&&researchId(value.documentId)&&researchId(value.sectionId)&&['section','figure','table'].includes(value.kind)&&(value.kind==='section'?value.blockId===null:researchId(value.blockId)));
+ return !!(exact(value,'blockId,documentId,kind,sectionId')&&researchId(value.documentId)&&researchId(value.sectionId)&&['section','figure','table','equation'].includes(value.kind)&&(value.kind==='section'?value.blockId===null:researchId(value.blockId)));
 }
 export function pdfCrossReference(target){
  if(!validPdfCrossReference(target))throw new TypeError('Invalid PDF reference');
@@ -23,8 +23,8 @@ export function pdfCrossReferenceTargets(section,{documentId}={}){
  function add(kind,blockId,label){const target={documentId,sectionId:section.id,kind,blockId},key=pdfCrossReference(target);counts.set(key,(counts.get(key)??0)+1);rows.push({target,label:String(label??'')});}
  add('section',null,section.title);
  function visit(node){
-  const kind={book_table:'table',book_sketch:'figure',book_figure:'figure'}[node.type];
-  if(kind)add(kind,node.attrs.id,node.type==='book_figure'?figures.get(node.attrs.figureId)??node.attrs.alternative:node.attrs.title);
+  const kind={book_table:'table',book_sketch:'figure',book_figure:'figure',book_equation:'equation'}[node.type];
+  if(kind)add(kind,node.attrs.id,node.type==='book_figure'?figures.get(node.attrs.figureId)??node.attrs.alternative:node.type==='book_equation'?node.attrs.label:node.attrs.title);
   for(const child of node.content??[])visit(child);
  }
  visit(proseDocument(section.content));for(const note of section.notes??[])visit(proseDocument(note.content));for(const image of section.images??[])add('figure',image.id,image.caption||image.alt);

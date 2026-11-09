@@ -1,10 +1,9 @@
 import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
-import {pdfCrossReferenceTargets,appendPdfCrossReference} from './pdf-cross-reference-model.js';
+import {pdfCrossReferenceTargets,pdfCrossReference} from './pdf-cross-reference-model.js';
 const defaultText=(key,args)=>t('pdfEditor',key,args);
-// One pinned outline page and one selected section. The parent owns autosave
-// and replacing the active rich editor after an appended reference paragraph.
-export function pdfCrossReferencesUI({getDocument,getSection,post,esc,draw,insertContent,text=defaultText}){
+// One pinned outline page, one selected section and the author's rich-text selection.
+export function pdfCrossReferencesUI({getDocument,getSection,post,esc,draw,insertLink,text=defaultText}){
  let context='',query='',page=null,previous=[],targets=null,targetOffset=0,request=null,epoch=0,disposed=false;
  const identity=()=>[getDocument()?.header.id,getDocument()?.revision,getSection()?.id].join(':'),button=(label,command,attrs='')=>'<button type="button" class="button" data-action="module-command" data-module-id="pdf-editor" data-command="cross-reference-'+command+'" '+attrs+'>'+esc(text(label))+'</button>';
  function reset(){request?.abort();request=null;context=identity();page=null;previous=[];targets=null;targetOffset=0;epoch++;}
@@ -44,7 +43,7 @@ export function pdfCrossReferencesUI({getDocument,getSection,post,esc,draw,inser
   if(name==='cross-reference-insert'){
    const item=targets?.[Number(node.dataset.index)];if(!item||item.ambiguous)return true;
    const label=text('crossReference'+item.target.kind[0].toUpperCase()+item.target.kind.slice(1))+': '+(item.label||text('untitled'));
-   await insertContent(appendPdfCrossReference(getSection().content,item.target,label));return true;
+   if(!insertLink({href:pdfCrossReference(item.target),label}))throw Error(text('referenceChooseCaret'));return true;
   }
   return true;
  }

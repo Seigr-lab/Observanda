@@ -19,6 +19,24 @@ const section=(title,content='')=>({id:randomUUID(),title,content,layout:null,st
 const table=(title='Readings')=>({type:'book_table',attrs:{version:1,id:randomUUID(),title,headers:['Value'],rows:[['3']]}});
 const image=(id=randomUUID())=>({id,asset:'a'.repeat(64),alt:'Synthetic observation',caption:'Retained image',widthMm:20,heightMm:20,fit:'contain',crop:{x:50,y:50},position:{block:0,align:'center'}});
 const readImage=async asset=>({asset,mime:'image/png',content:Buffer.from('synthetic-image'),width:1,height:1});
+
+test('equation references follow their authored target through reordering and report an excluded target at its source',async()=>{
+ const h=header();Object.assign(h.structure.caption,{numberEquations:true,equationLabel:'Relation'});
+ const equation=label=>({type:'book_equation',attrs:{version:1,id:randomUUID(),source:'x=y',label}});
+ const a=equation('Reference relation'),b=equation('Other relation'),formulae=section('Equations',{type:'doc',content:[a,b]}),intro=section('Discussion');
+ const row=pdfCrossReferenceTargets(formulae,{documentId:h.id}).find(row=>row.target.blockId===a.attrs.id);
+ assert.equal(row.target.kind,'equation');assert.equal(row.label,'Reference relation');
+ const href=pdfCrossReference(row.target),ref={type:'text',text:'Old label',marks:[{type:'link',attrs:{href,title:'',target:'_self',nofollow:false}}]};
+ intro.content={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Compare '},ref,{type:'text',text:' with the original.'}]}]};
+ const first=await compilePdfDocument(h,[intro,formulae]);formulae.content.content.reverse();
+ const second=await compilePdfDocument(h,[intro,formulae]);
+ assert.deepEqual(links(first.html).map(row=>row.text),['Relation 1']);
+ assert.deepEqual(links(second.html),[{text:'Relation 2',href:links(first.html)[0].href}]);
+ assert.match(second.html,/Compare <a[^>]+>Relation 2<\/a> with the original\./);
+ h.audience='public';intro.publication={version:1,include:true,review:pdfSectionReviewFingerprint(h,intro)};
+ formulae.publication={version:1,include:false,review:null};
+ await assert.rejects(compilePdfDocument(h,[intro,formulae]),error=>error.code==='PDF_UNRESOLVED_REFERENCE'&&error.details[0]===intro.id&&error.details[2]===href);
+});
 const target=(h,s,kind,blockId=null)=>({documentId:h.id,sectionId:s.id,kind,blockId});
 function links(html){const rows=[],pending=[parseFragment(html)];while(pending.length){const node=pending.pop();if(node.tagName==='a'&&node.attrs.some(attr=>attr.name==='class'&&attr.value==='pdf-cross-reference'))rows.push({href:node.attrs.find(attr=>attr.name==='href').value,text:node.childNodes.map(child=>child.value??'').join('')});for(let i=(node.childNodes?.length??0)-1;i>=0;i--)pending.push(node.childNodes[i]);}return rows;}
 function memory(source=new Map()){
@@ -83,17 +101,17 @@ const esc=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
 test('reference picker pages pinned destinations and appends a valid selected reference without changing its target',async()=>{
  const h=header(),selected=section('Author'),destination=section('Late target',{type:'doc',content:Array.from({length:25},(_,i)=>table('Table '+i))}),revision='a'.repeat(64),calls=[],content=[],initial=structuredClone(destination);let document={header:h,revision},draws=0;
- const ui=pdfCrossReferencesUI({getDocument:()=>document,getSection:()=>selected,esc,text:key=>key,draw:()=>draws++,insertContent:async value=>content.push(value),post:async(name,data,{signal})=>{
+ const ui=pdfCrossReferencesUI({getDocument:()=>document,getSection:()=>selected,esc,text:key=>key,draw:()=>draws++,insertLink:value=>content.push(value),post:async(name,data,{signal})=>{
   calls.push({name,data,signal});if(name==='section')return {section:destination};return {revision,query:data.query,offset:data.offset,items:[{id:destination.id,title:destination.title}],next:data.offset===0?20:null};
  }});
  await ui.action('cross-reference-search');await ui.action('cross-reference-next');assert.deepEqual(calls.map(call=>call.data.offset),[0,20]);assert.ok(calls.every(call=>call.data.revision===revision&&call.data.limit===20));
  await ui.action('cross-reference-section',{dataset:{index:'0'}});assert.match(ui.view(),/Late target/);assert.equal((ui.view().match(/data-command="cross-reference-insert"/g)??[]).length,20);await ui.action('cross-reference-targets-next');assert.equal((ui.view().match(/data-command="cross-reference-insert"/g)??[]).length,6);
- await ui.action('cross-reference-insert',{dataset:{index:'25'}});assert.equal(content.length,1);assert.equal(validProse(content[0]),true);assert.deepEqual(parsePdfCrossReference(content[0].content.at(-1).content[0].marks[0].attrs.href),target(h,destination,'table',destination.content.content[24].attrs.id));assert.deepEqual(destination,initial);
+ await ui.action('cross-reference-insert',{dataset:{index:'25'}});assert.equal(content.length,1);assert.deepEqual(parsePdfCrossReference(content[0].href),target(h,destination,'table',destination.content.content[24].attrs.id));assert.deepEqual(destination,initial);
  document={...document,revision:'b'.repeat(64)};assert.doesNotMatch(ui.view(),/cross-reference-insert/);ui.dispose();assert.equal(ui.view(),'');assert.ok(draws>=3);
 });
 
 test('reference picker aborts superseded pins and never inserts an obsolete selected section',async()=>{
  const h=header(),s=section('Current'),pending=deferred();let selected={header:h,revision:'a'.repeat(64)},readSignal,draws=0;
- const ui=pdfCrossReferencesUI({getDocument:()=>selected,getSection:()=>s,esc,text:key=>key,draw:()=>draws++,insertContent:()=>assert.fail('obsolete insertion'),post:async(name,data,{signal})=>{readSignal=signal;return pending.promise;}});
+ const ui=pdfCrossReferencesUI({getDocument:()=>selected,getSection:()=>s,esc,text:key=>key,draw:()=>draws++,insertLink:()=>assert.fail('obsolete insertion'),post:async(name,data,{signal})=>{readSignal=signal;return pending.promise;}});
  const work=ui.action('cross-reference-search');selected={...selected,revision:'b'.repeat(64)};ui.view();assert.equal(readSignal.aborted,true);pending.resolve({revision:'a'.repeat(64),items:[],next:null});await work;assert.equal(draws,0);ui.dispose();
 });

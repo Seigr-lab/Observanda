@@ -19,7 +19,7 @@ export function pdfPlacementReviewUI({getSection, esc, tr, button}) {
       [section.composition?.boxes ?? [], box => tr('compositionTitle')+' · '+boxLabel(box)],
       [section.pagination?.rules ?? [], rule => tr('paginationTitle')+' · '+label(rule.block)],
       [section.images ?? [], image => image.alt+' · '+gap(image.position.block)],
-      [section.notes ?? [], note => proseText(note.content).slice(0,100)+' · '+gap(note.block)]
+      [section.notes?.filter(note=>note.anchor!=='inline') ?? [], note => proseText(note.content).slice(0,100)+' · '+gap(note.block)]
     ];
     const total = groups.reduce((count,[items])=>count+items.length,0), labels = [];
     offset = Math.max(0,Math.min(offset,Math.floor(Math.max(0,total-1)/pageSize)*pageSize));

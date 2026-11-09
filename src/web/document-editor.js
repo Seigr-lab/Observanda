@@ -47,5 +47,8 @@ export function documentEditors({context,destinations,onOpenLink,onError,figures
   });
  }
  return {field,bind,release,state:key=>mounted.get(key)?.state,pendingPaste:()=>[...mounted.values()].some(editor=>editor.pendingPaste),
-  reviewPaste:()=>[...mounted.values()].some(editor=>editor.reviewPaste?.())};
+  reviewPaste:()=>[...mounted.values()].some(editor=>editor.reviewPaste?.()),
+  insertInlineLink:(key,link,markerAction)=>mounted.get(key)?.insertInlineLink(link,markerAction)??false,
+  selectedLink:key=>mounted.get(key)?.selectedLink()??null,focusBlock:(key,id)=>mounted.get(key)?.focusBlock(id)??false,
+  focusLink:(key,href,position)=>mounted.get(key)?.focusLink(href,position)??false,focus:key=>mounted.get(key)?.focus()};
 }
