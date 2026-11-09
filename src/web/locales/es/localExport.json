@@ -1,4 +1,10 @@
 {
+  "releaseDetails": "Detalles de publicación",
+  "savedWebsiteRevision": "Revisión guardada del sitio web",
+  "reviewedRelease": "Publicación en revisión",
+  "recordedFolderRelease": "Última publicación registrada en la carpeta",
+  "noFolderReceipt": "No se ha registrado ninguna publicación completada",
+  "discardEarlierFolder": "Esta preparación corresponde a una versión anterior del sitio. Descártala para revisar la versión actual para esta carpeta.",
   "inspectConflict": "Inspeccionar el conflicto de {name}",
   "folderIntro": "Revisa las páginas guardadas del sitio y sus archivos antes de escribirlos en una carpeta local.",
   "fileManifest": "Manifiesto de archivos del sitio",

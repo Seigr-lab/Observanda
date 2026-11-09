@@ -267,5 +267,7 @@
   "repositoryReviewStop": "Stopp gjennomgang",
   "repositoryReviewResume": "Hald fram med gjennomgang",
   "selectionResponseInvalid": "Ugyldig svar for val av publiseringsinnhald.",
-  "selectionChoiceSize": "Dette enkeltvalet av innhald overstig storleiksgrensa."
+  "selectionChoiceSize": "Dette enkeltvalet av innhald overstig storleiksgrensa.",
+  "withdrawnTitle": "Nettstaden er trekt tilbake",
+  "withdrawnText": "Denne nettstaden blir ikkje lenger publisert her. Kopiar som vart laga andre stader før tilbaketrekkinga, blir ikkje påverka."
 }

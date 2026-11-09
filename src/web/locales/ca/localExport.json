@@ -1,4 +1,10 @@
 {
+  "releaseDetails": "Detalls de la publicació",
+  "savedWebsiteRevision": "Revisió desada del lloc web",
+  "reviewedRelease": "Publicació en revisió",
+  "recordedFolderRelease": "Darrera publicació registrada a la carpeta",
+  "noFolderReceipt": "Cap publicació completada registrada",
+  "discardEarlierFolder": "Aquesta preparació correspon a una versió anterior del lloc web. Descarta-la per revisar la versió actual per a aquesta carpeta.",
   "inspectConflict": "Inspecciona el conflicte de {name}",
   "folderIntro": "Revisa les pàgines desades del lloc i els seus fitxers abans d’escriure’ls en una carpeta local.",
   "fileManifest": "Manifest de fitxers del lloc",

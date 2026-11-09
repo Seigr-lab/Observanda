@@ -78,7 +78,10 @@ export class LocalExport {
    const owner=await this.read(ownerFile(directory))??{version:2,directory,files:{version:1,type:'files',root:null},pending:null};
    this.validateOwner(owner,directory);
    if(owner.directoryIdentity!==undefined&&owner.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
-   if(owner.pending){const prior=await this.get(owner.pending);if(prior.state!=='planned')return this.summary(prior);}
+   if(owner.pending){
+    const prior=await this.get(owner.pending);
+    if(prior.state!=='planned')return {...this.summary(prior),lastRecordedRelease:owner.releaseId??null};
+   }
    let before=owner.files;
    if(owner.version===1){const builder=this.manifest.builder('files');for(const item of owner.files)await builder.append(item);before=await builder.finish();}
    const changes=this.manifest.builder('changes'),counts=emptyExportCounts();
@@ -95,7 +98,8 @@ export class LocalExport {
    }
    for await(const previous of this.manifest.entries(before))if(!await candidate.files.has(previous.path))await add(previous.path,{bytes:previous.bytes,sha256:previous.sha256},null);
    const plan={version:2,id:randomUUID(),reviewId,releaseId:candidate.id,defaultPage:candidate.defaultPage,directory,directoryIdentity:root.identity,state:'planned',createdAt:new Date().toISOString(),changes:await changes.finish(),counts,cleaned:false,applied:0};
-   await this.save(plan,{...owner,version:2,directoryIdentity:root.identity,files:before,pending:plan.id});return this.summary(plan);
+   await this.save(plan,{...owner,version:2,directoryIdentity:root.identity,files:before,pending:plan.id});
+   return {...this.summary(plan),lastRecordedRelease:owner.releaseId??null};
   }));
  }
  async *fileWindow(files){
@@ -142,6 +146,17 @@ export class LocalExport {
   if(!owner.releaseId||owner.pending)return {state:'unconfirmed'};
   const member=owner.version===1?owner.files.find(f=>f.path===name):await this.manifest.find(owner.files,name);
   return {state:'confirmed',releaseId:owner.releaseId,sha256:member?.sha256??null};
+ }
+ // The last completed edition this workspace wrote to a folder, and whether a
+ // later preparation is still unfinished there. Files are read from disk only
+ // when a plan compares them; this summary reports the recorded receipt.
+ async delivered(directory){
+  const owner=await this.read(ownerFile(directory));
+  if(!owner)return null;
+  this.validateOwner(owner,directory);
+  const pending=owner.pending?await this.get(owner.pending):null;
+  const files=owner.version===1?null:owner.files;
+  return {releaseId:owner.releaseId??null,files,legacyFiles:owner.version===1?owner.files:null,pending:pending&&pending.state!=='completed'&&pending.state!=='discarded'?this.summary(pending):null};
  }
  async page({id,offset=0}){
   if(!Number.isSafeInteger(offset)||offset<0)throw new AppError('INVALID');const plan=await this.get(id);

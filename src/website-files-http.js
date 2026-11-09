@@ -34,6 +34,10 @@ import {onResponseClose} from './response-close.js';
 import {websiteVersions} from './website-versions.js';
 import {restoreWebsitePageVersion} from './website-version-restore.js';
 import {websiteVersionDesign} from './website-version-design.js';
+import {websiteEdition,isWithdrawalRelease} from './website-withdrawal-edition.js';
+import {recordRelease} from './website-release-ledger.js';
+import {websiteReleaseOverview} from './website-release-overview.js';
+import {readVersionIndex} from './website-version-retention.js';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
@@ -63,6 +67,14 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(!(candidate instanceof WebsiteFilesCandidate)||candidate.store!==store||candidate.siteId!==siteId)throw new AppError('STALE');
    await check();await store.checkRevision(siteId,candidate.revision);
   }},workspace.vault);
+ };
+ // The history version that holds this saved revision, recorded with each
+ // completed delivery so the edition can later be reopened from history.
+ const savedVersion=(siteId,expectedRevision)=>store.scope(async()=>(await readVersionIndex(store,await store.current(siteId,expectedRevision))).entries[0]?.id??null,{signal});
+ const recordRemoteRelease=async(target,transfer,version,expectedRevision)=>{
+  if(!transfer?.receipt||!['completed','settled'].includes(transfer.state))return;
+  const saved=await target.read();if(!saved.destinationKey)return;
+  await recordRelease(target.workspace,{releaseId:transfer.releaseId,revision:transfer.revision,version:transfer.revision===expectedRevision?version:null,edition:isWithdrawalRelease(transfer.releaseId)?'withdrawal':'website',destination:{kind:saved.config.kind,key:saved.destinationKey},completedAt:transfer.receipt.at??transfer.updatedAt});
  };
  try{
   if(req.method==='GET'&&operation.startsWith('gallery/image/')){
@@ -237,6 +249,11 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    const inventory=await store.publicationInventory(siteId,{expectedRevision,signal});await check();
    json({...inventory,files:[...inventory.files,'publication.json']});return true;
   }
+  if(operation==='release/overview'){
+   if(!revision(expectedRevision))throw new AppError('INVALID');
+   const target=await publisher(siteId),candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});
+   json(await websiteReleaseOverview({store,siteId,expectedRevision,target,candidate,signal}));return true;
+  }
   if(operation==='publish-target'){
    await store.siteVersion(siteId,{signal});
    const target=await publisher(siteId);
@@ -301,21 +318,31 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
      const offset=options.offset,rows=await new LocalExportManifest(target.workspace).page(review.inventory,{offset,limit:32});
      return {items:rows.map(row=>row.path),offset,next:offset+rows.length<review.files?offset+rows.length:null};
     }
-    const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision);return target.destinationPlanPage(options,candidate.id);
+    const candidate=await websiteEdition(store,siteId,expectedRevision,options.edition);return target.destinationPlanPage(options,candidate.id);
    }));return true;
   }
   if(operation.startsWith('folder/')){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const metadata=websitePublicationMetadata(await store.publicationWorkspace(siteId));
-   let candidate;
-   const savedCandidate=async()=>candidate??=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});
+   const editions=new Map(),edition=name=>{if(!editions.has(name))editions.set(name,websiteEdition(store,siteId,expectedRevision,name,{blockedValues}));return editions.get(name);};
+   // A plan records only the reviewed release. Resolve the withdrawal notice
+   // first: it needs no export and is never mistaken for saved website bytes.
+   const reviewedEdition=async reviewId=>{
+    const withdrawal=await edition('withdrawal');if(withdrawal.reviewId===reviewId)return withdrawal;
+    const website=await edition('website');if(website.reviewId===reviewId)return website;
+    throw new AppError('STALE');
+   };
+   const version=operation==='folder/apply'?await savedVersion(siteId,expectedRevision):null;
    const local=new LocalExport(metadata,{fileOwner:{locked:(_directory,task)=>store.withSite(siteId,expectedRevision,task),
-    completed:plan=>rememberPublishTarget(metadata,'folder',plan.directory,plan.completedAt),candidate:async reviewId=>{
-    const value=await savedCandidate();if(value.reviewId!==reviewId)throw new AppError('STALE');
+    completed:async plan=>{
+     await rememberPublishTarget(metadata,'folder',plan.directory,plan.completedAt);
+     await recordRelease(metadata,{releaseId:plan.releaseId,revision:expectedRevision,version,edition:isWithdrawalRelease(plan.releaseId)?'withdrawal':'website',destination:{kind:'folder',directory:plan.directory},completedAt:plan.completedAt});
+    },candidate:async reviewId=>{
+    const value=await reviewedEdition(reviewId);
     await operationStage('folderVerify',{unit:'files',total:value.files.size},()=>value.verify({signal,onFile:()=>operationAdvance()}));return value;
    }}});
    if(operation==='folder/plan')await observed(()=>operationStage('folderCompare',{unit:'files'},async()=>{
-    const value=await savedCandidate();return {...await local.plan({reviewId:value.reviewId,directory:options.directory}),currentReviewId:value.reviewId};
+    const value=await edition(options.edition??'website');return {...await local.plan({reviewId:value.reviewId,directory:options.directory}),currentReviewId:value.reviewId,edition:value.edition};
    }));
    else if(operation==='folder/page')json(await local.page({id:options.id,offset:options.offset}));
    else if(operation==='folder/discard')json(await local.discard({id:options.id}));
@@ -324,7 +351,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   }
   if(operation==='publish/settle'){
    if(!revision(expectedRevision)||!researchId(options.id))throw new AppError('INVALID');
-   const target=await publisher(siteId);await observed(()=>operationStage('remoteSettleProgress',{},()=>withPublication(()=>store.withSite(siteId,expectedRevision,()=>settleWebsiteTransfer(target,{...options,signal})))));return true;
+   const target=await publisher(siteId),version=await savedVersion(siteId,expectedRevision);
+   await observed(()=>operationStage('remoteSettleProgress',{},()=>withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
+    const transfer=await settleWebsiteTransfer(target,{...options,signal});await recordRemoteRelease(target,transfer,version,expectedRevision);return transfer;
+   }))));return true;
   }
   if(operation==='publish/verify'){
    if(!revision(expectedRevision)||typeof options.configEtag!=='string'||typeof options.commit!=='string')throw new AppError('INVALID');
@@ -337,9 +367,12 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='plan'||operation==='publish'){
    if(!revision(expectedRevision))throw new AppError('INVALID');
    if(operation==='publish'&&(options.destinationReviewed!==true||!researchId(options.destinationReview)))throw new AppError('PUBLISH_STALE');
-   const target=await publisher(siteId);
+   const target=await publisher(siteId),version=operation==='publish'?await savedVersion(siteId,expectedRevision):null;
    await observed(()=>operationStage(operation==='plan'?'remoteReview':'remotePublish',{},async()=>{
-    const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});await check();
+    // Resuming a transfer continues the edition it started with.
+    let edition=options.edition,prior=null;
+    if(operation==='publish'){prior=await remoteTransferStatus(target,await target.read());if(edition===undefined&&prior?.id===options.destinationReview&&isWithdrawalRelease(prior.releaseId))edition='withdrawal';}
+    const candidate=await websiteEdition(store,siteId,expectedRevision,edition,{blockedValues});await check();
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
     if(operation==='plan'&&saved.config.kind==='ssh'){
      await operationStage('remoteCheckFiles',{unit:'files',total:candidate.files.size},()=>candidate.verify({signal,onFile:bytes=>{operationAdvance();operationWork({bytes});}}));
@@ -354,7 +387,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
     if(operation==='plan')return target.reviewDestination(candidate,options.configEtag,{signal,replaceExisting:options.replaceExisting===true,archiveBranch:options.archiveBranch??null,beforeCommit:()=>store.checkRevision(siteId,expectedRevision)});
     return withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
      await rememberPublishTarget(target.workspace,'remote');
-     return publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,retryPages:options.retryPages===true,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
+     const result=await publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,retryPages:options.retryPages===true,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
+     await recordRemoteRelease(target,result.transfer,version,expectedRevision);return result;
     }));
    }));
    return true;

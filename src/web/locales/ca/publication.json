@@ -267,5 +267,7 @@
   "repositoryReviewStop": "Atura la revisió",
   "repositoryReviewResume": "Reprèn la revisió",
   "selectionResponseInvalid": "La resposta de selecció de contingut per publicar no és vàlida.",
-  "selectionChoiceSize": "Aquesta selecció individual de contingut supera la mida admesa."
+  "selectionChoiceSize": "Aquesta selecció individual de contingut supera la mida admesa.",
+  "withdrawnTitle": "Lloc web retirat",
+  "withdrawnText": "Aquest lloc web ja no es publica aquí. Les còpies fetes en altres llocs abans de la retirada no es veuen afectades."
 }

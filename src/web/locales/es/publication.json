@@ -267,5 +267,7 @@
   "repositoryReviewStop": "Detener revisión",
   "repositoryReviewResume": "Reanudar revisión",
   "selectionResponseInvalid": "La respuesta de selección de contenido para publicar no es válida.",
-  "selectionChoiceSize": "Esta selección individual de contenido supera el tamaño admitido."
+  "selectionChoiceSize": "Esta selección individual de contenido supera el tamaño admitido.",
+  "withdrawnTitle": "Sitio web retirado",
+  "withdrawnText": "Este sitio web ya no se publica aquí. Las copias realizadas en otros lugares antes de su retirada no se ven afectadas."
 }

@@ -267,5 +267,7 @@
   "repositoryReviewStop": "Stop review",
   "repositoryReviewResume": "Resume review",
   "selectionResponseInvalid": "Invalid publication selection response",
-  "selectionChoiceSize": "This individual content choice exceeds the supported size."
+  "selectionChoiceSize": "This individual content choice exceeds the supported size.",
+  "withdrawnTitle": "Website withdrawn",
+  "withdrawnText": "This website is no longer published here. Copies made elsewhere before its withdrawal are not affected."
 }

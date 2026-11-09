@@ -1,4 +1,10 @@
 {
+  "releaseDetails": "Publiseringsdetaljer",
+  "savedWebsiteRevision": "Lagret nettstedsversjon",
+  "reviewedRelease": "Utgave til gjennomgang",
+  "recordedFolderRelease": "Sist registrerte utgave i mappen",
+  "noFolderReceipt": "Ingen fullført publisering registrert",
+  "discardEarlierFolder": "Denne klargjøringen gjelder en tidligere versjon av nettstedet. Forkast den for å gjennomgå den gjeldende versjonen for denne mappen.",
   "inspectConflict": "Undersøk konflikten for {name}",
   "folderIntro": "Se gjennom de lagrede nettsidene og tilhørende filer før du skriver dem til en lokal mappe.",
   "fileManifest": "Filoversikt for nettstedet",

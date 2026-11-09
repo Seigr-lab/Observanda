@@ -14,10 +14,12 @@ export function websiteFilesVersions({site,request,signal,tr,esc,adopt,close,ren
    (result.site?result.site.id!==siteId:result.revision!==expectedRevision))throw Error(tr('changed'));
   return result;
  }
- async function list(){
-  history=await call('list');version=history.items.find(row=>row.id===version)?.id??history.items[0]?.id??'';
+ async function list(preferred=version){
+  history=await call('list');version=history.items.find(row=>row.id===preferred)?.id??history.items[0]?.id??'';
  }
- async function open(){reset();openSite=site().site.id;path=site().path;await list();render();}
+ // A release names the history version that produced it. Opening that
+ // version selects it for the ordinary page and design restoration reviews.
+ async function open(preferred){reset();openSite=site().site.id;path=site().path;await list(preferred);render();}
  async function loadItems(){
   if(!['component','page'].includes(kind)){items=null;return;}
   items=await call('contents',{query,offset});

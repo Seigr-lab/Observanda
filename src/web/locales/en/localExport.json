@@ -1,4 +1,10 @@
 {
+  "releaseDetails": "Release details",
+  "savedWebsiteRevision": "Saved website revision",
+  "reviewedRelease": "Release being reviewed",
+  "recordedFolderRelease": "Last recorded folder release",
+  "noFolderReceipt": "No completed publication recorded",
+  "discardEarlierFolder": "This preparation belongs to an earlier version of the website. Discard it to review the current version for this folder.",
   "inspectConflict": "Inspect conflict for {name}",
   "folderIntro": "Review the saved website pages and assets before writing them to a local folder.",
   "fileManifest": "Website file manifest",

@@ -1,4 +1,10 @@
 {
+  "releaseDetails": "Publiseringsdetaljar",
+  "savedWebsiteRevision": "Lagra nettstadversjon",
+  "reviewedRelease": "Utgåve til gjennomgang",
+  "recordedFolderRelease": "Sist registrerte utgåve i mappa",
+  "noFolderReceipt": "Inga fullført publisering registrert",
+  "discardEarlierFolder": "Denne klargjeringa gjeld ein tidlegare versjon av nettstaden. Forkast henne for å gå gjennom den gjeldande versjonen for denne mappa.",
   "inspectConflict": "Undersøk konflikten for {name}",
   "folderIntro": "Sjå gjennom dei lagra nettsidene og tilhøyrande filer før du skriv dei til ei lokal mappe.",
   "fileManifest": "Filoversikt for nettstaden",
