@@ -3,12 +3,13 @@ import {pipeline} from 'node:stream/promises';
 import {zipStream} from './zip-stream.js';
 import {publicationText} from './web/publication-messages.js';
 import {AppError} from './errors.js';
+import {onResponseClose} from './response-close.js';
 
 // Authorization stays with the owner. Checking an immutable edition can take
 // longer than the socket idle limit; disconnecting cancels only this download.
 export async function publicationExportHttp(req,res,prepare){
  const socket=req.socket,timeout=socket.timeout,controller=new AbortController();
- const abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);res.setTimeout(0);
+ const abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);res.setTimeout(0);
  const activity=req.operationActivity?.(),onProgress=value=>activity?.progress(value);
  try{
   onProgress({stage:publicationText('exportPreparing'),completed:0,unit:'items'});
@@ -19,5 +20,5 @@ export async function publicationExportHttp(req,res,prepare){
   await pipeline(Readable.from(output()),res,{signal:controller.signal});
   onProgress({stage:publicationText('exportDownloading'),completed,unit:'bytes'});activity?.finish();
  }catch(error){activity?.finish(controller.signal.aborted?new AppError('WRITE_CANCELLED'):error);throw error;}
- finally{res.off('close',abort);if(!socket.destroyed)socket.setTimeout(timeout??60000);}
+ finally{releaseClose();if(!socket.destroyed)socket.setTimeout(timeout??60000);}
 }

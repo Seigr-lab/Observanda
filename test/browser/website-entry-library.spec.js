@@ -19,7 +19,7 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   vault.storageKind=vault.catalogue=()=>{throw Error('Unexpected research read');};
   const store=new WebsiteFileStore(vault),corpus=await seedWebsitePickerCorpus(store,{count:24});
   const first=await store.create({name:'Survey atlas'}),id=first.site.id;
-  await store.save(id,{path:'notes.html',title:'Field notes',expectedRevision:first.site.revision,html:'<!doctype html><html><head><title>Field notes</title></head><body><main><h1>Field notes</h1></main></body></html>',css:first.css});
+  await store.createPage(id,{path:'notes.html',title:'Field notes',expectedRevision:first.site.revision,inclusion:'included'});
   const otherSite=await store.create({name:'Regional archive'}),source=corpus.examples.find(e=>e.notebookId===corpus.books[0].id);
   let otherPage=otherSite;for(let n=0;n<2;n++)otherPage=await store.insertSource(otherSite.site.id,{sourceId:source.id,sourceRevision:source.revision,expectedRevision:otherPage.site.revision});
   let siteScans=0;

@@ -10,6 +10,7 @@ import {rememberPublishTarget,websitePublishTarget} from './website-publish-targ
 import {savedAppearance} from './website-saved-appearance.js';
 import {websiteThemes} from './website-scoped-themes.js';
 import {websitePageDesigns} from './website-page-designs.js';
+import {pageInclusion} from './website-page-inclusion.js';
 import {publishWebsiteTransfer,remoteTransferStatus,settleWebsiteTransfer} from './website-remote-transfer.js';
 import {operationResponse} from './operation-response.js';
 import {operationStage,operationAdvance,operationTotal,operationWork} from './operation-progress.js';
@@ -25,6 +26,7 @@ import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementP
 import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
+import {onResponseClose} from './response-close.js';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
@@ -45,7 +47,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
  if(!workspace)throw new AppError('MISSING');
  await check();
  const store=new WebsiteFileStore(workspace),operation=url.pathname.slice(prefix.length);
- const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+ const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);
  const signal=controller.signal;
  const observed=task=>req.headers?.accept==='application/x-ndjson'?operationResponse(req,res,task,json):task().then(json);
  const publisher=async siteId=>{
@@ -64,16 +66,17 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    res.setHeader('Content-Security-Policy',"sandbox; default-src 'none'; style-src 'unsafe-inline'");
    await serveContent(req,res,file.content,file.contentType,{signal});return true;
   }
-  if(req.method==='GET'&&operation.startsWith('preview/')){
-   const match=/^preview\/([^/]+)\/([a-f0-9]{64})\/(.+)$/.exec(operation);
+  if(req.method==='GET'&&(operation.startsWith('preview/')||operation.startsWith('edition/'))){
+   const editor=operation.startsWith('preview/');
+   const match=/^(?:preview|edition)\/([^/]+)\/([a-f0-9]{64})\/(.+)$/.exec(operation);
    if(!match||!researchId(match[1]))throw new AppError('INVALID');
-   const policy=previewPolicy(url.origin+prefix+'preview/'+match[1]+'/'+match[2]+'/');
-   if(url.searchParams.get('canvas')==='1'){
+   const policy=previewPolicy(url.origin+prefix+(editor?'preview/':'edition/')+match[1]+'/'+match[2]+'/');
+   if(editor&&url.searchParams.get('canvas')==='1'){
     await store.canvasDocument(match[1],decodeURIComponent(match[3]),match[2],{signal});
     res.setHeader('Content-Security-Policy',policy);res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head></head><body></body></html>');return true;
    }
-   const privateResource=/^_recovery\/([a-f0-9-]{36})\/([a-f0-9]{64})\/((?:pictures\/[a-f0-9-]{36}\.png|recordings\/[a-f0-9-]{36}\.(?:mp4|wav|vtt)))$/.exec(match[3]);
-   const file=privateResource?await websiteRecoveryResource(store,match[1],{path:url.searchParams.get('page'),id:privateResource[1],revision:privateResource[2],name:privateResource[3],assetStamp:match[2],signal}):await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal,editor:true});
+   const privateResource=editor&&/^_recovery\/([a-f0-9-]{36})\/([a-f0-9]{64})\/((?:pictures\/[a-f0-9-]{36}\.png|recordings\/[a-f0-9-]{36}\.(?:mp4|wav|vtt)))$/.exec(match[3]);
+   const file=privateResource?await websiteRecoveryResource(store,match[1],{path:url.searchParams.get('page'),id:privateResource[1],revision:privateResource[2],name:privateResource[3],assetStamp:match[2],signal}):await store.file(match[1],decodeURIComponent(match[3]),{revision:match[2],signal,editor});
    if(privateResource)res.setHeader('Cache-Control','no-store');
    await check();res.setHeader('Content-Security-Policy',policy);
    await serveContent(req,res,file.content??file.bytes,file.contentType,{signal});return true;
@@ -102,6 +105,9 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    const {data,pictures}=await websitePictureUpload(req,signal);
    if(!researchId(data.siteId))throw new AppError('INVALID');
    if(operation==='recovery/save-pictures'){json(await saveWebsiteRecovery(store,data.siteId,{...data,uploadedInputs:undefined,receivePictures:pictures,signal}));return true;}
+   if(operation==='components/update-pictures'){
+    json(await componentOperation(store,'update',data.siteId,{path:data.path,component:data.component,name:data.name,html:data.html,expectedRevision:data.expectedRevision,receivePictures:pictures,signal}));return true;
+   }
    json(await store.save(data.siteId,{html:data.html,css:data.css,path:data.path,expectedRevision:data.expectedRevision,historyKey:data.historyKey,recovery:data.recovery,receivePictures:pictures,signal}));return true;
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
@@ -126,6 +132,46 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');
+  if(operation==='page/create'){
+   onWrite();await check();const {path,title,language,inclusion}=options;
+   json(await store.createPage(siteId,{expectedRevision,path,title,language,inclusion,signal}));return true;
+  }
+  if(operation==='page/review-inclusion'||operation==='page/apply-inclusion'){
+   const write=operation==='page/apply-inclusion';if(write){onWrite();await check();}
+   json(await pageInclusion(store,siteId,{...options,expectedRevision,signal},write));return true;
+  }
+  if(operation==='page/delivery'){
+   if(!revision(expectedRevision))throw new AppError('INVALID');
+   const path=options.path;
+   const current=await store.scope(async()=>{
+    const manifest=await store.current(siteId,expectedRevision),page=manifest.pages.find(p=>p.path===path);
+    if(!page)throw new AppError('NOT_FOUND');
+    const file=manifest.publicPageFiles?.find(p=>p.file.name===path)?.file??manifest.files.find(f=>f.name===path);
+    return {included:!page.draft,sha256:file.sha256};
+   },{signal});
+   const target=await publisher(siteId),metadata=target.workspace;
+   const selected=await websitePublishTarget(metadata,async()=>{const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};});
+   let delivery=null;
+   if(selected.kind==='folder')delivery=await new LocalExport(metadata).deliveredMember(selected.directory,path);
+   if(selected.kind==='remote'){
+    const {receipt,transfer}=selected.destination;
+    if(transfer?.uncertain)delivery={state:'unconfirmed'};
+    else if(receipt?.fileInventory){
+     const member=await new LocalExportManifest(metadata).find(receipt.fileInventory,path);
+     delivery={state:'confirmed',releaseId:receipt.releaseId,sha256:member?.sha256??null};
+    }else if(receipt)delivery={state:'unconfirmed'};
+   }
+   await store.checkRevision(siteId,expectedRevision);
+   let state='unknown';
+   if(delivery?.state==='confirmed'){
+    if(delivery.sha256&&current.included){
+     const matches=current.sha256===delivery.sha256&&(await WebsiteFilesCandidate.open(store,siteId,expectedRevision)).id===delivery.releaseId;
+     state=matches?'delivered':'changed';
+    }else if(delivery.sha256)state='withdrawal';
+    else state=current.included?'pending':'excluded';
+   }
+   json({revision:expectedRevision,path,destination:selected.kind,state});return true;
+  }
   if(operation==='recovery/page'){json(await inspectWebsiteRecovery(store,siteId,{...options,signal}));return true;}
   if(operation==='recovery/validate'){
    if(!revision(expectedRevision))throw new AppError('INVALID');
@@ -281,5 +327,5 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,bo
    return true;
   }
   throw new AppError('NOT_FOUND');
- }finally{res.off('close',abort);}
+ }finally{releaseClose();}
 }

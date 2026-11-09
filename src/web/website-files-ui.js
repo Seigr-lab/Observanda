@@ -27,7 +27,6 @@ import {websitePlacementDrag} from './website-files-placement-drag.js';
 import {websiteSourceGallery} from './website-files-source-gallery.js';
 import {presentationBlock,websitePlacementPresentation} from './website-placement-presentation.js';
 import {websiteFileFeeds} from './website-file-feeds.js';
-import {starterPage} from './website-file-starter.js';
 import {reviewSavedWebsite} from './website-site-review.js';
 import {editWebsiteAppearance} from './website-files-appearance.js';
 import {layerPath,managedWebsiteContent} from './website-layer-model.js';
@@ -83,7 +82,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  
  const folder=websiteFilesFolder({request,site:()=>opened,esc,render,current:()=>!stale&&!dirty});
- const directory=(stamp=opened.site.revision)=>new URL('/api/website-files/preview/'+siteId()+'/'+stamp+'/',location.origin);
+ const directory=(stamp=opened.site.revision,route='preview')=>new URL('/api/website-files/'+route+'/'+siteId()+'/'+stamp+'/',location.origin);
  const baseURL=(path=opened.path)=>new URL(path,directory()).href;
  const canvasURL=(path=opened.path)=>new URL(path,directory(opened.historyAssetStamp??opened.assetStamp)).href;
  const previewPages=()=>[...opened.site.pages,...(opened.site.feedPages??[])];
@@ -103,10 +102,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const recoveredPicture=name=>opened?recovery.restoreURL(name,directory(opened.assetStamp)):null;
  const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length)):null;};
  const gallery=websiteFilesGallery({t:tr,esc,recoveredPicture,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=serializeWebsiteHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
- const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
+ const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,request,adopt:adoptRelated,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const components=websiteFilesComponents({request,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
+ const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
    const target=opened.path===path?opened:await request('open',{siteId:siteId(),path},{signal:controller.signal});
@@ -150,7 +149,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function checkSavedSite(trigger){
   const site=opened.site;
-  reviewSavedWebsite({site,directory:directory(),request,signal:controller.signal,t:tr,trigger,
+  reviewSavedWebsite({site,directory:directory(site.revision,'edition'),request,signal:controller.signal,t:tr,trigger,
    onError:reason=>{if(['ACCESS_LOCKED','AUTH','WEBSITE_CHANGED','CONFLICT','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);},
    edit:(path,issue,repair)=>run(async()=>{
     if(siteId()!==site.id||stale||opened.site.revision!==site.revision)throw Object.assign(Error(tr('changed')),{code:'CONFLICT'});
@@ -230,8 +229,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   render();
  }
  function scrollToAnchor(doc,hash){if(!hash)return;let id;try{id=decodeURIComponent(hash.slice(1));}catch{return;}doc.getElementById(id)?.scrollIntoView();}
- function bindNavigation(doc,path,preview){
-  bindSavedLinks(doc,{url:baseURL(path),directory:directory(),pages:previewPages(),unavailable:()=>notify(tr('outsidePreview')),
+ function bindNavigation(doc,path,preview,base=directory(),pages=previewPages()){
+  bindSavedLinks(doc,{url:new URL(path,base).href,directory:base,pages,unavailable:()=>notify(tr('outsidePreview')),
    external:preview?href=>window.open(href,'_blank','noopener,noreferrer'):null,download:preview?(url,name)=>void downloadResource(url,name).catch(e=>notify(e.message,true)):null,navigate:page=>{
    if(busy||stale)return;
    if(preview){navigatePreview(page);return;}
@@ -604,7 +603,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const isPage=form.type==='page',label=isPage?'addPage':'create';
   const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
   const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
-  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+'</div>'+(isPage?pageDesignChoice():'')+
+  const inclusion=isPage?'<label>'+esc(tr('pageInclusion'))+'<select data-website-file-field="inclusion"><option value="private">'+esc(tr('pagePrivate'))+'</option><option value="included"'+(form.inclusion==='included'?' selected':'')+'>'+esc(tr('pageIncludeNext'))+'</option></select></label>':'';
+  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+inclusion+'</div>'+(isPage?pageDesignChoice():'')+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
  }
  function pageDesignChoice(){
@@ -655,9 +655,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const preview=document.getElementById('website-files-preview');
   if(preview){
    const entry=trail[step]??{path:opened.path,hash:''};
-   openSavedPreview(preview,baseURL(entry.path)+(entry.search??'')+entry.hash,doc=>{
-    hierarchy.bindKeys(doc);enhanceSavedPreview(doc,{directory:directory(),pages:previewPages(),memory:previewMemory,navigate:navigatePreview,failed:()=>notify(tr('failed'),true)});
-    bindNavigation(doc,entry.path,true);
+   const all=previewPages(),privatePage=all.find(p=>p.path===entry.path)?.draft;
+   const base=directory(opened.site.revision,privatePage?'preview':'edition'),members=privatePage?all:all.filter(p=>!p.draft);
+   openSavedPreview(preview,new URL(entry.path,base).href+(entry.search??'')+entry.hash,doc=>{
+    hierarchy.bindKeys(doc);enhanceSavedPreview(doc,{directory:base,pages:members,memory:previewMemory,navigate:navigatePreview,failed:()=>notify(tr('failed'),true)});
+    bindNavigation(doc,entry.path,true,base,members);
     if(entry.feedId&&entry.sourceId){
      const item=doc.querySelector('section[data-website-feed="'+CSS.escape(entry.feedId)+'"] [data-website-feed-source="'+CSS.escape(entry.sourceId)+'"]');
      if(!item){notify(tr('changed'),true);return;}
@@ -902,6 +904,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     }
    }else if(element.dataset.websiteFileField==='pagePath'){form.path=element.value;form.customPath=Boolean(form.path);}
    else if(element.dataset.websiteFileField==='designId')form.designId=element.value;
+   else if(element.dataset.websiteFileField==='inclusion')form.inclusion=element.value;
    else if(element.dataset.websiteFileField==='designSearch')form.designQuery=element.value;
    return true;
   }
@@ -925,15 +928,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(form.type==='page'){
    const title=value('pageTitle'),path=value('pagePath');
    if(form.taken.has(path.toLowerCase()))throw Error(tr('duplicatePage'));
-   // A newly added page uses the public site's stylesheet even when the
-   // current page has private CSS dedicated to its unpublished draft.
-   if(form.designId)result=await designs('use',{expectedRevision:form.designs.revision,design:form.designId,destination:path,title,language:document.documentElement.lang||'en',labels:{heading:tr('heading'),text:tr('paragraph'),image:tr('altText')}});
-   else{
-    const publicPage=draftPage()?await request('open',{siteId:siteId(),path:'index.html'}):opened;
-    const style='../'.repeat(path.split('/').length-1)+publicPage.site.cssPath;
-    const language=websiteHTML(publicPage.html).documentElement.lang||document.documentElement.lang||'en';
-    result=await request('save',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,html:starterPage({title,stylesheet:style,language},esc),css:publicPage.css});
-   }
+   const inclusion=value('inclusion'),language=websiteHTML(opened.html).documentElement.lang||document.documentElement.lang||'en';
+   if(form.designId)result=await designs('use',{expectedRevision:form.designs.revision,design:form.designId,destination:path,title,language,inclusion,labels:{heading:tr('heading'),text:tr('paragraph'),image:tr('altText')}});
+   else result=await request('page/create',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,language,inclusion});
   }
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();

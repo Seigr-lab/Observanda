@@ -49,6 +49,13 @@ test('name a live website page design, use its scientific layout in a nested fol
   const donorClasses=await donor.getAttribute('class');
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await page.getByRole('button',{name:'CSS',exact:true}).click();
+  const sourceCSS=page.getByRole('textbox',{name:'CSS',exact:true});
+  await sourceCSS.fill(await sourceCSS.inputValue()+'\n.website-columns {letter-spacing: 3px;}');
+  await page.getByRole('button',{name:'Save website',exact:true}).click();
+  await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await page.getByRole('button',{name:'Visual editor',exact:true}).click();
+  await expect(donor).toHaveCSS('letter-spacing','3px');
   await page.getByRole('button',{name:'Website pages',exact:true}).click();
   await page.getByRole('button',{name:'Page design',exact:true}).click();
   const form=page.locator('[data-website-files-form]');
@@ -58,6 +65,7 @@ test('name a live website page design, use its scientific layout in a nested fol
   await page.getByRole('button',{name:'Add page',exact:true}).click();
   await form.getByLabel('Page title',{exact:true}).fill('Sampling sequence');
   await form.getByLabel('Page file name').fill('studies/new/sequence.html');
+  await form.locator('[data-website-file-field=inclusion]').selectOption('included');
   await form.getByRole('button',{name:'Use a page design'}).click();
   await form.getByLabel('Page design to use').selectOption({label:'Instrument method'});
   if(process.env.OBSERVANDA_PAGE_DESIGN_SCREENSHOT)await form.screenshot({path:process.env.OBSERVANDA_PAGE_DESIGN_SCREENSHOT});
@@ -70,7 +78,7 @@ test('name a live website page design, use its scientific layout in a nested fol
    expect(copyClasses).toMatch(pattern);
    expect(copyClasses.match(pattern)[0]).not.toBe(donorClasses.match(pattern)[0]);
   }
-  await page.reload();await pages.selectOption('studies/new/sequence.html');await expect(generated).toHaveCSS('letter-spacing','2px');
+  await page.reload();await pages.selectOption('studies/new/sequence.html');await expect(generated).toHaveCSS('letter-spacing','3px');
   await expect(canvas.locator('.website-columns')).toHaveCount(1);await expect(canvas.getByRole('table')).toBeVisible();
   await expect(canvas.getByRole('link')).toHaveAttribute('href','../../index.html');
   await expect(canvas.locator('body')).not.toContainText('PRIVATE COMPOSITION VALUE');
@@ -82,7 +90,7 @@ test('name a live website page design, use its scientific layout in a nested fol
   for(const [width,gap] of [[1440,'27px'],[768,'19px'],[375,'7px']]){
    await reader.setViewportSize({width,height:900});
    await expect(reader.locator('main section')).toHaveCSS('gap',gap);
-   await expect(reader.locator('main section')).toHaveCSS('letter-spacing','2px');
+   await expect(reader.locator('main section')).toHaveCSS('letter-spacing','3px');
    expect(await reader.locator('main section').evaluate(el=>getComputedStyle(el).fontFamily)).toContain(family);
    expect(await reader.locator('main section').evaluate(s=>getComputedStyle(s).gridTemplateColumns.split(' ').length)).toBe(2);
   }

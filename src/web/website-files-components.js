@@ -6,7 +6,7 @@ const blocks='section,article,aside,div,figure,table,p,h1,h2,h3,h4,h5,h6,blockqu
 const container='body,main,section,article,aside,div,blockquote,li,dd';
 const protectedArea='header,nav,footer,template,[hidden],[data-record-id],[data-public-record],[data-feed-item],[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-menu],[data-website-feed],[data-website-feed-source],[data-website-source-gallery],[data-image-gallery]';
 const caption=node=>(node?.querySelector('h1,h2,h3,h4,h5,h6,figcaption,caption')?.textContent||node?.textContent||node?.localName||'').trim().replace(/\s+/g,' ').slice(0,100);
-export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,render,run,notify,showInstance}){
+export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adopt,render,run,notify,showInstance}){
  let opened=false,items=[],query='',name='',position='end',offset=0,next=null,revision=null,total=0,drag=null,canvas=null,dialog=null,epoch=0,controller=null,debounce=null;
  let usage=null,removeId=null;
  const button=(key,op,extra='')=>'<button type="button" class="button" data-action="website-files-component-'+op+'" '+extra+'>'+esc(tr(key))+'</button>';
@@ -52,7 +52,8 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
   const range=items.length?'<p class="hint">'+esc(tr('componentResults',{first:offset+1,last:offset+items.length,total}))+'</p>':'';
   const row=item=>{
    const data='data-component="'+esc(item.id)+'"',uses=esc(tr('componentUsage',{instances:item.instances,pages:item.pages}))+(item.draft?' · '+esc(tr('componentDraft')):'');
-   const actions=button('componentInsert','insert',data)+button('componentEdit','edit',data)+button('componentUses','uses',data+' aria-expanded="'+(usage?.id===item.id)+'"');
+   const edit=item.editable===false?'':button('componentEdit','edit',data);
+   const actions=button('componentInsert','insert',data)+edit+button('componentUses','uses',data+' aria-expanded="'+(usage?.id===item.id)+'"');
    const remove=!item.removable?'':item.id===removeId?'<p>'+esc(tr('componentConfirmRemove',{name:item.name}))+'</p>'+button('remove','remove',data)+button('cancel','keep',data):button('remove','ask-remove',data);
    return '<li draggable="true" data-component-drag="'+esc(item.id)+'"><strong>'+esc(item.name)+'</strong><small>'+uses+'</small><div>'+actions+remove+'</div>'+usageView(item.id)+'</li>';
   };
@@ -120,6 +121,7 @@ export function websiteFilesComponents({request,tr,esc,site,selected,save,adopt,
   await save();await write('insert',{component:id,position:where,blockPath});
  }
  function editor(value,pin){
+  if(value.editable===false){notify?.(t('errors','WEBSITE_PUBLIC_COMPONENT'));return;}
   closeDialog();const host=document.createElement('dialog');dialog=host;host.className='website-author-dialog';host.setAttribute('aria-label',tr('componentEdit'));
   host.innerHTML='<h2>'+esc(tr('componentEdit'))+'</h2><p>'+esc(tr('componentApplyHelp'))+'</p><label>'+esc(tr('componentName'))+'<input data-main-name maxlength="100"></label>'+
    '<div data-main-tools></div><iframe data-main-canvas sandbox="allow-same-origin" title="'+esc(tr('componentEdit'))+'"></iframe><details><summary>'+esc(tr('html'))+'</summary><label>'+esc(tr('componentMarkup'))+'<textarea data-main-source rows="7"></textarea></label></details>'+

@@ -17,7 +17,8 @@ export function websiteRecordingKind(file){
  return {wav:'audio',mp4:'video',vtt:'track'}[extension];
 }
 export function publicRecordingNames(manifest){
- return new Set(manifest.pages.filter(page=>!page.draft).flatMap(page=>page.recordings??[]));
+ const projection=new Map((manifest.publicPageFiles??[]).map(({file})=>[file.name,file.references.map(r=>r.name).filter(name=>name.startsWith('recordings/'))]));
+ return new Set(manifest.pages.filter(page=>!page.draft).flatMap(page=>projection.get(page.path)??page.recordings??[]));
 }
 const timestamp=/^(?:(\d{2,}):)?([0-5]\d):([0-5]\d)\.(\d{3})$/;
 function time(text){

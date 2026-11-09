@@ -35,7 +35,7 @@ test('named navigation is created, moved, inherited and removed independently of
  assert.match(first.html,/<footer><small>Laboratory<\/small><nav[^>]+aria-label="Research protocols"/);
  assert.match(first.html,/href="index.html" aria-current="page">Methods/);assert.deepEqual(readWebsiteMenu(first.html,nested).items.map(i=>i.label),['Overview']);
  await assert.rejects(store.saveMenu(id,{...edit,create:true,expectedRevision:first.site.revision}),{code:'CONFLICT'});
- const fresh=await store.save(id,{path:'protocols/new.html',html:'<html><body><main>New study</main></body></html>',css:'',expectedRevision:first.site.revision});
+ const fresh=await store.createPage(id,{path:'protocols/new.html',title:'New study',inclusion:'included',expectedRevision:first.site.revision});
  assert.equal(readWebsiteMenu(fresh.html,fresh.path,[],menuId).items[0].href,nested);
  const {menus,items}=await store.menu(id,{expectedRevision:fresh.site.revision,menuId});assert.deepEqual(menus,[{id:menuId,name:edit.name,position:'footer'}]);
  const updated=await store.saveMenu(id,{...edit,name:'Lab navigation',position:'header',items,expectedRevision:fresh.site.revision});
@@ -60,7 +60,7 @@ test('shared saved navigation preserves custom markup, nesting, page-relative li
  assert.match(saved.html,/<\/ul><a data-book-index="" href="\.\.\/browse.html">Browse<\/a><\/nav>/);
  const normalized=readWebsiteMenu(saved.html,sub).items;assert.deepEqual(normalized.map(i=>i.label),['Researchers','Home page','Browse']);assert.equal(normalized[1].children[0].href,'#methods');
  await assert.rejects(store.saveMenu(id,{expectedRevision:before,items:[]}),{code:'CONFLICT'});
- const created=await store.save(id,{expectedRevision:saved.site.revision,path:'more/new.html',html:'<html><body><main><h1>New</h1></main></body></html>',css:'.author{color:red}'});
+ const created=await store.createPage(id,{expectedRevision:saved.site.revision,path:'more/new.html',title:'New',inclusion:'included'});
  assert.match(created.html,/href="\.\.\/pages\/team.html"/);assert.equal(readWebsiteMenu(created.html,'more/new.html').items[0].label,'Researchers');
  const exported=await store.export(id,{expectedRevision:created.site.revision});
  for(const filename of ['index.html',sub,'browse.html','more/new.html']){
@@ -89,7 +89,7 @@ test('shared menu links to converted entry pages follow withdrawal and regrant w
  const blocked=await store.menu(id,{expectedRevision:denied.site.revision});assert.equal(blocked.items[0].blocked,true);assert.equal(blocked.items[0].href,'');
  await assert.rejects(store.saveMenu(id,{expectedRevision:shared.site.revision,items:[]}),{code:'CONFLICT'});
  await assert.rejects(store.saveMenu(id,{expectedRevision:denied.site.revision,items:[{...item('Injected',target),blocked:true}]}),{code:'CONFLICT'});
- const newPage=await store.save(id,{expectedRevision:denied.site.revision,path:'another.html',css:'',html:'<html><body><main>New</main></body></html>'});
+ const newPage=await store.createPage(id,{expectedRevision:denied.site.revision,path:'another.html',title:'New',inclusion:'included'});
  assert.doesNotMatch(newPage.html,/Permitted observation|href="entries\//);
  await source('Newly public');
  const restored=await store.open(id,{path:'another.html'});assert.match(restored.html,/Newly public/);assert.ok(restored.html.includes('href="'+target+'"'));
@@ -101,7 +101,7 @@ test('public menu pictures are inherited on nested pages, retained in drafts and
  const start=await store.importFiles(id,{name:'Images',files:new Map([['index.html',doc],['style.css','']]),draftFiles:new Map([['draft.html',doc],['draft-styles.css','']])});
  const image='<nav aria-label="Website"><a href="index.html"><img alt="Logo" src="'+picture+'">Home</a></nav>';
  const withPhoto=await store.save(id,{...start,html:doc.replace('<main>',image+'<main>'),expectedRevision:start.site.revision,receivePictures:async function*(){yield {name:picture,bytes:Buffer.from('menu picture')};}});
- const added=await store.save(id,{path:'other/place.html',html:doc,css:'',expectedRevision:withPhoto.site.revision});
+ const added=await store.createPage(id,{path:'other/place.html',title:'Page',inclusion:'included',expectedRevision:withPhoto.site.revision});
  const {items}=await store.menu(id,{expectedRevision:added.site.revision});items[0].label='Welcome';
  const shared=await store.saveMenu(id,{items,expectedRevision:added.site.revision});
  assert.match((await store.open(id,{path:'other/place.html'})).html,/src="\.\.\/pictures\//);

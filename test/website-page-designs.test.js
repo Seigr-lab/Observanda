@@ -23,6 +23,7 @@ test('designs copy only the selected generated declarations and keep their casca
  assert.notEqual(first,second);assert.notEqual(first,title);assert.ok(first&&second);
  assert.equal(design.copy(unrelated),null);assert.equal(design.copy(duplicate),null);assert.equal(design.copy('free-form'),null);
  assert.equal(design.stylesheet(),valid+valid.replaceAll(title,first)+valid.replaceAll(title,second)+css.slice(valid.length));
+ assert.equal(design.copiedRules(new Set()),valid.replaceAll(title,first)+valid.replaceAll(title,second)+'main section{color: navy;}');
 });
 
 const wrap=(title,body)=>'<html lang="en"><head><title>'+title+'</title></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
@@ -52,12 +53,13 @@ test('a public page design uses the latest structure, new linked instances and p
  await assert.rejects(act('name',{path:'private/notes.html',name:'Private'}),{code:'INVALID'});
  page=await act('name',{name:'Field report'});revision=page.site.revision;assert.equal(page.html,original);
  const {items}=await act('list',{query:'field'});assert.equal(items.length,1);
- const options={design:items[0].id,destination:out,title:'Plate calibration',language:'en',labels:{heading:'Heading',text:'New writing',image:'Site picture'}};
+ const options={design:items[0].id,destination:out,title:'Plate calibration',language:'en',inclusion:'included',labels:{heading:'Heading',text:'New writing',image:'Site picture'}};
  const old=revision;
  page=await store.save(siteId,{path:source,expectedRevision:revision,html:original.replace('</main>','<blockquote>RECENT SOURCE WRITING</blockquote></main>'),css:page.css});revision=page.site.revision;
  await assert.rejects(act('use',{...options,expectedRevision:old}),{code:'CONFLICT'});
  page=await act('use',options);revision=page.site.revision;
- assert.equal(page.css.split('padding: 71px;').length-1,1,'only the original rule for the omitted asset can remain');
+ assert.doesNotMatch(page.css,/padding: 71px;/,'the new page stylesheet excludes the omitted asset');
+ assert.equal((await store.open(siteId)).css.split('padding: 71px;').length-1,1,'only the original rule remains in the site stylesheet');
  assert.match(page.html,/<title>Plate calibration<\/title>/);assert.match(page.html,/<blockquote>New writing<\/blockquote>/);
  assert.match(page.html,/class="website-columns" style="display:grid;gap:2rem"/);assert.match(page.html,/<td>New writing<\/td>/);
  const anchor=/<h2 id="(section-[a-f\d-]+)">/.exec(page.html)[1];assert.ok(page.html.includes('href="#'+anchor+'"'));assert.doesNotMatch(page.html,/old-instrument-label/);

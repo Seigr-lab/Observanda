@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {mkdtemp,mkdir,readFile,rm,writeFile} from 'node:fs/promises';
-import {randomUUID,randomBytes} from 'node:crypto';
+import {createHash,randomUUID,randomBytes} from 'node:crypto';
+import {createServer} from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import {Workspace} from '../src/storage.js';
@@ -25,6 +26,63 @@ async function fixture(t,options){
  return {page,call:(operation,data)=>request(operation,{siteId,...data})};
 }
 const confirmation=(plan,site,config)=>({expectedRevision:site.revision,configEtag:config.etag,destinationReview:plan.id,destinationReviewed:true});
+test('the remote destination receives only included pages and removes a withdrawn page on the next reviewed delivery',async t=>{
+ const remote=githubFixture({branch:'main',initialFiles:{'README.md':'Independent document'}});
+ const receiver=createServer(async(req,res)=>{
+  try{
+   if(req.url.startsWith('/git-api/')){
+    const body=Buffer.concat(await Array.fromAsync(req)).toString();
+    const reply=await remote.request('https://api.github.com'+req.url.slice(8),{method:req.method,body});
+    res.writeHead(reply.status);res.end(Buffer.from(await reply.arrayBuffer()));return;
+   }
+   const entries=remote.trees.get(remote.commits.get(remote.head).tree);
+   const file=entries.find(entry=>entry.path===req.url.slice(1));
+   res.writeHead(file?200:404);res.end(file?remote.blobs.get(file.sha):undefined);
+  }catch{res.writeHead(500);res.end();}
+ });
+ await new Promise((resolve,reject)=>receiver.once('error',reject).listen(0,'127.0.0.1',resolve));
+ t.after(()=>new Promise(resolve=>receiver.close(resolve)));
+ const origin='http://127.0.0.1:'+receiver.address().port;
+ const request=(url,options)=>fetch(origin+'/git-api'+new URL(url).pathname,options);
+ const {page,call}=await fixture(t,{request,connection:{summary:()=>({connected:true}),token:()=> 'synthetic-token'}});
+ const cfg=defaultPublishing();Object.assign(cfg.github,{owner:'example',repository:'notebook',branch:'main',directory:'atlas',pages:false});
+ const config=await call('destination/save',{config:cfg,etag:'new'}),path='reports/findings.html';
+ let current=await call('page/create',{expectedRevision:page.site.revision,path,title:'Internal draft canary'});
+ const pin=()=>({expectedRevision:current.site.revision,path});
+ const publish=async(included=false)=>{
+  const plan=await call('plan',{...pin(),configEtag:config.etag});
+  const reviewed=await call('review/catalogue',pin());
+  const {receipt}=await call('publish',confirmation(plan,current.site,config));
+  const files=remote.trees.get(remote.commits.get(remote.head).tree);
+  assert.deepEqual(files.map(f=>f.path).sort(),['README.md',...reviewed.files.map(name=>'atlas/'+name)].sort());
+  assert.equal(await (await fetch(origin+'/README.md')).text(),'Independent document');
+  const manifest=await (await fetch(origin+'/atlas/publication.json')).json();
+  assert.equal(manifest.releaseId,receipt.releaseId);
+  assert.deepEqual(manifest.files.map(f=>f.path).sort(),reviewed.files.filter(name=>name!=='publication.json').sort());
+  for(const file of manifest.files){
+   const response=await fetch(origin+'/atlas/'+file.path);assert.equal(response.status,200);
+   const bytes=Buffer.from(await response.arrayBuffer());assert.equal(bytes.length,file.bytes);
+   assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
+   if(!included)assert.ok(!bytes.includes('Internal draft canary'));
+  }
+  const visible=await fetch(origin+'/atlas/'+path);assert.equal(visible.status,included?200:404);
+  if(included)assert.match(await visible.text(),/Internal draft canary/);
+  return files;
+ };
+ const visibility=async inclusion=>{
+  const options={...pin(),inclusion},review=await call('page/review-inclusion',options);
+  current=await call('page/apply-inclusion',{...options,reviewId:review.reviewId});
+ };
+ let files=await publish();
+ assert.ok(!files.some(f=>f.path==='atlas/'+path));
+ assert.ok(![...remote.blobs.values()].some(b=>b.toString().includes('Internal draft canary')));
+ assert.equal((await call('page/delivery',pin())).state,'excluded');
+ await visibility('included');assert.equal((await call('page/delivery',pin())).state,'pending');
+ files=await publish(true);assert.ok(files.some(f=>f.path==='atlas/'+path));assert.equal((await call('page/delivery',pin())).state,'delivered');
+ await visibility('private');assert.equal((await call('page/delivery',pin())).state,'withdrawal');
+ files=await publish();assert.ok(!files.some(f=>f.path==='atlas/'+path));assert.ok(files.some(f=>f.path==='README.md'));
+ assert.equal((await call('page/delivery',pin())).state,'excluded');
+});
 test('saved HTML GitHub publication recovers a lost ref reply without a second branch update and keeps a verifiable durable receipt',async t=>{
  const remote=githubFixture({branch:'main',initialFiles:{'README.md':'Preserve this file'}});
  const {page,call}=await fixture(t,{request:remote.request,liveRequest:remote.request,connection:{summary:()=>({connected:true}),token:()=> 'synthetic-token'}});

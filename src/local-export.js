@@ -134,6 +134,15 @@ export class LocalExport {
   return {id:plan.id,reviewId:plan.reviewId,releaseId:plan.releaseId,previewUrl:'/preview/'+plan.reviewId+'/'+plan.defaultPage,directory:plan.directory,state:plan.state,createdAt:plan.createdAt,completedAt:plan.completedAt??null,cleaned:plan.cleaned,counts:this.counts(plan),total:this.total(plan),applied:plan.applied};
  }
  async current({reviewId}){const pointer=await this.read(reviewFile(reviewId));return {plan:pointer?this.summary(await this.get(pointer.id)):null};}
+ async deliveredMember(directory,name){
+  outputName(name);
+  const owner=await this.read(ownerFile(directory));
+  if(!owner)return null;
+  this.validateOwner(owner,directory);
+  if(!owner.releaseId||owner.pending)return {state:'unconfirmed'};
+  const member=owner.version===1?owner.files.find(f=>f.path===name):await this.manifest.find(owner.files,name);
+  return {state:'confirmed',releaseId:owner.releaseId,sha256:member?.sha256??null};
+ }
  async page({id,offset=0}){
   if(!Number.isSafeInteger(offset)||offset<0)throw new AppError('INVALID');const plan=await this.get(id);
   const files=plan.version===1?plan.changes.slice(offset,offset+50):await this.manifest.page(plan.changes,{offset});

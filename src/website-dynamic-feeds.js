@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {parse} from 'parse5';
 import {AppError} from './errors.js';
+import {pageStylesheet} from './website-page-style.js';
 import {researchId} from './web/research-reference.js';
 import {attr,descendants} from './website-migration-views.js';
 import {websiteInsertionOffset} from './website-file-html.js';
@@ -179,7 +180,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
  if(feed){
   const {render}=renderer??makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared);
   const byId=new Map(feed.members.map(m=>[m.id,m])),priorRow=priorFeedRows(store,manifest,compatible,feed,original,signal);
-  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,manifest.cssPath,page.draft,feed.unavailable]));
+  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,pageStylesheet(manifest,page),page.draft,feed.unavailable]));
   let shell;
   for(let i=0;i<groups.length;i++){
    signal?.throwIfAborted();
@@ -202,7 +203,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
    }
    let {markup,assets}=feedSection(feed,rows,file,prev,next,slot.language);
    if(feed.unavailable&&Buffer.byteLength(slot.insert(markup))>maxPageBytes)markup=markup.replace(/<h2>[^<]*<\/h2>/,'');
-   if(i>0)shell??=continuationShell(slot.insert('<section '+feedMarker+'="'+feed.id+'"></section>'),feed,page.draft?'draft-styles.css':manifest.cssPath);
+   if(i>0)shell??=continuationShell(slot.insert('<section '+feedMarker+'="'+feed.id+'"></section>'),feed,pageStylesheet(manifest,page));
    const html=styledPageHTML(i===0?slot.insert(markup):shell.render(markup),file).html;
    if(Buffer.byteLength(html)>maxPageBytes){
     if(!group.ids.length||i>0&&group.ids.length<2)throw new AppError('WEBSITE_FEED_CAPACITY');

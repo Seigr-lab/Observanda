@@ -2,6 +2,7 @@ import path from 'node:path';
 import {parse,parseFragment,serialize} from 'parse5';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
+import {pageStylesheet} from './website-page-style.js';
 import {attr,descendants} from './website-migration-views.js';
 import {escapeWebsiteText as esc} from './website-file-html.js';
 import {validateWebsiteHTML,websiteHTMLByteLimit} from './website-file-policy.js';
@@ -66,11 +67,11 @@ export function continuationShell(hostHTML,feed,cssPath){
 }
 export async function syncFeedShells(store,manifest,signal,reflow){
  if(!manifest.feeds?.some(feed=>feed.groups.length>1))return manifest;
- const files=new Map(manifest.files.map(f=>[f.name,f])),hosts=new Map(),feeds=[];
+ const files=new Map(manifest.files.map(f=>[f.name,f])),pages=new Map(manifest.pages.map(p=>[p.path,p])),hosts=new Map(),feeds=[];
  for(const feed of manifest.feeds){
   const host=files.get(feed.path);if(feed.groups.length<2||host.sha256===feed.shellHost){feeds.push(feed);continue;}
   if(!hosts.has(feed.path))hosts.set(feed.path,await store.readText(host,{signal}));
-  const shell=continuationShell(hosts.get(feed.path),feed,host.draft?'draft-styles.css':manifest.cssPath);
+  const shell=continuationShell(hosts.get(feed.path),feed,pageStylesheet(manifest,pages.get(feed.path)));
   for(const g of feed.groups.slice(1)){
    const name='feeds/'+feed.id+'/'+g.key+'.html',file=files.get(name);if(!file||file.feedPage!==feed.id)throw new AppError('FORMAT');
    if(file.feedShell===shell.stamp)continue;

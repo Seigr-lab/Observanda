@@ -1,10 +1,13 @@
 import {AppError} from './errors.js';
+import {pageStylesheet} from './website-page-style.js';
 
 // Authored pictures are tracked separately from revocable research assets.
 // Edits to one page read only reference lists from the manifest, including
 // references in the saved stylesheets. Removing the last use retires the blob.
 export function publicPictureNames(manifest){
- return new Set([...manifest.pages.filter(p=>!p.draft).flatMap(p=>p.pictures??[]),...(manifest.pictureStyles?.[manifest.cssPath]??[])]);
+ const pages=manifest.pages.filter(p=>!p.draft),sheets=new Set([manifest.cssPath,...pages.map(p=>pageStylesheet(manifest,p))]);
+ const projection=new Map((manifest.publicPageFiles??[]).map(({file})=>[file.name,file.references.map(r=>r.name).filter(name=>name.startsWith('pictures/'))]));
+ return new Set([...pages.flatMap(p=>projection.get(p.path)??p.pictures??[]),...[...sheets].flatMap(s=>projection.get(s)??manifest.pictureStyles?.[s]??[])]);
 }
 export async function saveWebsitePictures(store,manifest,{files,pages,style,htmlPictures,cssPictures,receivePictures,draft,signal}){
  const styles={...manifest.pictureStyles,[style]:[...cssPictures]};

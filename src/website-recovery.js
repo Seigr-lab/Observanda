@@ -274,7 +274,7 @@ export function websiteRecoveryResource(store,site,{path,id,revision:pin,name,as
  return store.scope(async()=>{
   const manifest=await store.current(site),r=await record(store,site,path,id);checkPin(r,pin);
   const file=r.pictures.find(f=>f.name===name)??r.recordings.find(f=>f.name===name);
-  if(!file||!summary(store,manifest,r).capabilities.recover||store.assetStamp(manifest)!==assetStamp)fail('NOT_FOUND');
+  if(!file||!summary(store,manifest,r).capabilities.recover||store.assetStamp(manifest,path)!==assetStamp)fail('NOT_FOUND');
   return {contentType:file.contentType,content:new WebsiteFileContent(store,site,manifest.revision,file)};
  },{signal});
 }

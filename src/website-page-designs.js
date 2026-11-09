@@ -173,8 +173,11 @@ export function websitePageDesigns(store,siteId,options){
   const file=manifest.files.find(f=>f.name===owner.path),css=manifest.files.find(f=>f.name===manifest.cssPath);
   if(!file||file.draft||!css||css.draft||css.sourceId)invalid();
   const title=named(options.title),language=typeof options.language==='string'&&options.language.length<=80?options.language:'en';
-  const styles=designStyleCopies(await store.readText(css,{signal}));
+  const ownStyle=owner.stylePath?files.get(owner.stylePath):null;
+  const published=new Map((manifest.publicPageFiles??[]).map(row=>[row.file.name,row.file]));
+  const sourceCSS=await store.readText(published.get(css.name)??css,{signal})+(ownStyle?'\n'+await store.readText(published.get(ownStyle.name)??ownStyle,{signal}):'');
+  const styles=designStyleCopies(sourceCSS);
   const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels,styles);
-  return store.save(siteId,{expectedRevision,path:out,html:generated.html,css:styles.stylesheet(),title,signal},generated.instances);
+  return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{...generated,css:styles.copiedRules(layoutClasses)});
  },{write:action!=='list',signal});
 }

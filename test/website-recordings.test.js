@@ -32,6 +32,8 @@ test('streamed website recordings and captions survive publication, reuse, repla
  const fixtures=await mediaFixtures(root),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
  workspace.catalogue=workspace.storageKind=()=>assert.fail('Opened research');const store=new WebsiteFileStore(workspace);
  let opened=await store.create({name:'Acoustic observations'});
+ opened=await store.createPage(opened.site.id,{expectedRevision:opened.site.revision,path:'notes.html',title:'Notes',inclusion:'included'});
+ opened=await store.open(opened.site.id);
  for(const kind of ['audio','video']){
   const {bytes}=fixtures[kind],name='recordings/'+randomUUID()+(kind==='audio'?'.wav':'.mp4'),track='recordings/'+randomUUID()+'.vtt';
   const segment='<figure><'+kind+' controls preload="none" src="'+name+'"><track kind="captions" srclang="en" label="English" src="'+track+'"></'+kind+'></figure>';

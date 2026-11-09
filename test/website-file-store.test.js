@@ -175,7 +175,7 @@ test('version polling uses compact files and observes PDF fences, cancellation, 
   await assert.rejects(contentBuffer(content),{code:'CONFLICT'});
   await writer.cancelSourceUpdate({sourceId:websiteId,token:edit});
   assert.equal(await reader.siteVersion(id),placed.site.revision);assert.equal(await reader.pdfVersion(),settled);
-  const unchanged=await writer.save(id,{expectedRevision:placed.site.revision,path:'methods.html',html:'<html><head><title>Methods</title></head><body><main>Methods</main></body></html>',css:placed.css});
+  const unchanged=await writer.createPage(id,{expectedRevision:placed.site.revision,path:'methods.html',title:'Methods',inclusion:'included'});
   const version=await reader.versionStatus(id,{expectedRevision:placed.site.revision,path:'index.html'});
   assert.equal(version.revision,unchanged.site.revision);assert.equal(version.surfaceStamp,placed.surfaceStamp);
   const mounted=await reader.file(id,placed.site.cssPath,{revision:placed.assetStamp,editor:true});

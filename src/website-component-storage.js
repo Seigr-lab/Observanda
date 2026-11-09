@@ -63,7 +63,7 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
    const term=query.trim().toLowerCase(),items=[];let total=0;
    for(const item of list(manifest)){
     if(item.draft&&!page.draft||!item.name.toLowerCase().includes(term))continue;
-    if(total>=offset&&items.length<12)items.push({id:item.id,name:item.name,instances:0,pages:0,draft:Boolean(item.draft),removable:true});total++;
+    if(total>=offset&&items.length<12)items.push({id:item.id,name:item.name,instances:0,pages:0,draft:Boolean(item.draft),editable:!page.draft||Boolean(item.draft),removable:!page.draft||Boolean(item.draft)});total++;
    }
    const shown=map(items,'id');
    for(const owner of manifest.pages){
@@ -91,10 +91,11 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
   }
   if(operation==='main'){
    if(!visible)throw new AppError('NOT_FOUND');
-   return {revision:expectedRevision,id:main.id,name:main.name,html:main.html};
+   return {revision:expectedRevision,id:main.id,name:main.name,html:main.html,editable:!page.draft||Boolean(main.draft)};
   }
   if(operation==='remove'){
    if(!visible)throw new AppError('NOT_FOUND');
+   if(page.draft&&!main.draft)throw new AppError('WEBSITE_PUBLIC_COMPONENT');
    if(manifest.pages.some(owner=>owner.instances?.some(row=>row.component===component)))fail();
    const components=list(manifest).filter(row=>row.id!==component),kept=new Set([...manifest.pages.flatMap(p=>[...(p.pictures??[]),...(p.recordings??[])]),...Object.values(manifest.pictureStyles??{}).flat()]);
    const files=manifest.files.filter(file=>!file.picture&&!file.recording||kept.has(file.name));
@@ -104,6 +105,7 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
   if(operation==='detach'&&!page.instances?.some(i=>i.id===instance))fail();
   const current=operation==='detach'?context.components.get(page.instances.find(i=>i.id===instance).component):operation==='create'?null:main;
   if(operation!=='create'&&(!current||current.draft&&!page.draft))throw new AppError('NOT_FOUND');
+  if(operation==='update'&&page.draft&&!current.draft)throw new AppError('WEBSITE_PUBLIC_COMPONENT');
   const sourceFile=context.files.get(path),sourceHTML=await store.readText(sourceFile,{signal}),document=pageComponentDocument(sourceHTML);
   let definition=current,first;
   if(operation==='create'||operation==='update'){
@@ -114,6 +116,7 @@ export function componentOperation(store,operation,id,{expectedRevision,path='in
    const content=creating?selectComponentBlock(document,blockPath):html;
    const prepared=prepareComponent(content,creating?path:'index.html',{...context,draft:creating?page.draft:current.draft});
    definition={id:creating?randomUUID():current.id,name:label,...prepared,...((creating?page.draft:current.draft)?{draft:true}:{})};
+   if(current?.inclusionOwned)definition.inclusionOwned=true;
    context.components.set(definition.id,definition);
   }
   if(operation==='insert'||operation==='create')first={id:randomUUID(),component:definition.id,...(operation==='create'?{originalIds:true}:{})};

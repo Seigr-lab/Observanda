@@ -1,4 +1,6 @@
 {
+  "WEBSITE_HOME_REQUIRED": "La página de inicio debe seguir incluida. Elige otra página para marcarla como privada.",
+  "WEBSITE_PUBLIC_COMPONENT": "Abre una página incluida para editar este componente compartido. Puedes desvincular esta instancia para editarla aquí en privado.",
   "PDF_PLACEMENT_REVIEW": "El texto ha cambiado en una posición de composición, de imagen o de nota. Revisa las posiciones en la sección afectada antes de exportar.",
   "WEBSITE_FEED_CAPACITY": "Una colección supera el límite de una página HTML. Abre las colecciones de entradas de la página afectada y elige un diseño más pequeño antes de publicar.",
   "WEBSITE_CHANGED": "El contenido del sitio web o sus permisos han cambiado. Vuelve a cargar la vista actual antes de continuar.",

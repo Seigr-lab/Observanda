@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {websiteRecordingKind} from './website-recordings.js';
+import {pageStylesheet} from './website-page-style.js';
 
 // Only the current editing session may retain retired site-owned assets. The
 // files stay encrypted in their original owner and never enter a publication.
@@ -30,7 +31,7 @@ export function retainEditHistory(manifest,files,key,page){
  if(!key)return {};
  const live=new Set(files.map(f=>f.name)),kept=[];let bytes=0;
  const former=manifest.pages.find(p=>p.path===page);
- const names=new Set([...(former?.pictures??[]),...(former?.recordings??[]),...(manifest.pictureStyles?.[former?.draft?'draft-styles.css':manifest.cssPath]??[])]);
+ const names=new Set([...(former?.pictures??[]),...(former?.recordings??[]),...(manifest.pictureStyles?.[pageStylesheet(manifest,former)]??[])]);
  // Newest last-use removals take priority over earlier undo transactions.
  for(const file of [...manifest.files.filter(f=>names.has(f.name)&&owned(f)),...previous]){
   if(live.has(file.name))continue;

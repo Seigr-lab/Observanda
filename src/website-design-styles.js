@@ -56,7 +56,7 @@ export function designStyleCopies(css){
     if(body&&admittedDeclarations(body[1],generatedAppearanceProperties))stop=at+prefix.length+body[0].length;
    }
   }
-  rules.set(name,rules.has(name)||stop===null?null:{text:css.slice(match.index,stop),stop,copies:[]});
+  rules.set(name,rules.has(name)||stop===null?null:{text:css.slice(match.index,stop),start:match.index,stop,copies:[]});
  }
  return {
   copy(name){
@@ -77,6 +77,50 @@ export function designStyleCopies(css){
     output.push(css.slice(offset,rule.stop),rule.copies.join(''));offset=rule.stop;
    }
    return output.join('')+css.slice(offset);
+  },
+  copiedRules(structuralClasses){
+   const selected=[...rules.values()].filter(rule=>rule?.copies.length);
+   return selected.map((rule,i)=>rule.copies.join('')+
+    designCascade(css.slice(rule.stop,selected[i+1]?.start),structuralClasses)).join('');
   }
  };
+}
+
+// The copied stylesheet follows the common stylesheet. Replay later ordinary
+// typography/layout declarations on admitted structural selectors at their
+// original positions among cloned rules. Source-specific IDs, generated classes,
+// copy text and URL-bearing declarations never enter the new page stylesheet.
+const sharedProperties=new Set([...generatedAppearanceProperties,...layoutProperties]);
+const structuralTags=new Set('html body main section article aside div h1 h2 h3 h4 h5 h6 p blockquote details summary ol ul li dl dt dd figure figcaption table caption thead tbody tfoot tr th td span strong em b i u sub sup mark code pre hr a img audio video'.split(' '));
+const cssTokens=/(?:\/\*[\s\S]*?(?:\*\/|$)|"(?:[^"\\]|\\[\s\S])*(?:"|$)|'(?:[^'\\]|\\[\s\S])*(?:'|$)|\\[\s\S]|[{};])/g;
+function structuralSelector(selector,classes){
+ if(!selector||!/^[a-z\d_.*,+>~\s-]+$/i.test(selector))return false;
+ return [...selector.matchAll(/\.?[-\w]+/g)].every(([name])=>name.startsWith('.')?classes.has(name.slice(1)):structuralTags.has(name.toLowerCase()));
+}
+function designCascade(text,classes){
+ const output=[],frames=[{kind:'group',open:'',emitted:false}],tokens=new RegExp(cssTokens.source,'g');
+ let start=0;
+ function declaration(parent,stop){
+  const value=text.slice(start,stop).trim();
+  if(!value||!admittedDeclarations(value,sharedProperties))return;
+  if(!parent.emitted){
+   for(const frame of frames)if(frame.open&&!frame.emitted){output.push(frame.open,'{');frame.emitted=true;}
+  }
+  output.push(value,';');
+ }
+ for(const {0:token,index} of text.matchAll(tokens)){
+  const parent=frames.at(-1);
+  if(token==='{'){
+   const prelude=text.slice(start,index).replace(/\/\*[\s\S]*?\*\//g,'').trim();
+   const group=parent?.kind==='group';
+   const kind=group&&/^@media\s+[\s\w():.,%-]+$/i.test(prelude)?'group':
+    group&&structuralSelector(prelude,classes)?'rule':'skip';
+   frames.push({kind,open:prelude,emitted:false});start=index+1;
+  }else if(token===';'||token==='}'){
+   if(parent?.kind==='rule')declaration(parent,index);
+   if(token==='}'&&frames.length>1){if(parent.emitted)output.push('}');frames.pop();}
+   start=index+1;
+  }
+ }
+ return output.join('');
 }

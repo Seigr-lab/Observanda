@@ -9,12 +9,13 @@ const forbidden=new Set(['base','iframe','frame','frameset','object','embed','po
 const generatedPolicy="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'self'";
 const resources=new Set(['src','poster','background','action','formaction','srcset']);
 export const websiteFileName=outputName;
-function localURL(value,file){
+export function websiteLocalURL(value,file){
  const url=String(value).trim();if(url.startsWith('#'))return '';
  if(!url||/[\\\u0000-\u0020%:]/.test(url)||url.startsWith('/')||url.includes('?'))return null;
  const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),url.split('#')[0]));
  try{websiteFileName(resolved);return /^(?:api|\.observanda)(?:\/|$)/i.test(resolved)?null:resolved;}catch{return null;}
 }
+const localURL=websiteLocalURL;
 // An incomplete code edit is stored as private text and never rendered.
 // Identify its owned-media references separately from the admission that an
 // actual editable or published document must pass.
