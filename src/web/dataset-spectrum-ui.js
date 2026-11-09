@@ -1,3 +1,4 @@
+import {scientificCommandIdentity} from './scientific-command-identity.js';
 import {t} from './i18n/index.js';
 import {spectrumText as text,spectrumContextText} from './dataset-spectrum-context.js';
 import {SPECTRUM_METHOD,DIRECT_SPECTRUM_METHOD,SPECTRUM_METHODS,SPECTRUM_WINDOWS,directSpectrum,SPECTRUM_CONVENTIONS,validSpectrumRecipe,validSpectrumExecutionPolicy,spectrumColumnDescriptor,publicSpectrumContext} from './dataset-spectrum-model.js';
@@ -43,7 +44,7 @@ export function spectrumPreviewView(data,{esc}){
  const shortened=value=>value?.format==='scalar-preview'&&!value.complete,clipped=data.rows.some(row=>row.cells.some(value=>shortened(value)||value?.format==='spectrum-complex-preview'&&(shortened(value.real)||shortened(value.imaginary))))||data.contexts?.some(value=>['scale','offset'].some(key=>shortened(value.unitDefinition?.[key]?.spelling)));
  return '<p>'+esc(text('previewNote'))+'</p>'+contributions+'<p>'+esc(text(data.spectrum?.version===3?'magnitudeHelpV3':'magnitudeHelp'))+'</p><div class="material-table" data-spectrum-preview-table><table><thead><tr>'+data.columns.map((label,index)=>'<th>'+esc(label)+context(data.contexts?.[index])+'</th>').join('')+'</tr></thead><tbody>'+data.rows.map(row=>'<tr>'+row.cells.map((value,index)=>'<td>'+cell(value)+(index>=2?'<small data-spectrum-computation>'+esc(text(row.approximate?'approximate':row.approximateInputs?'approximateInputs':'exact'))+'</small>':'')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+(clipped?'<p>'+esc(text('previewTruncated'))+'</p>':'');
 }
-export function datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify,readOnly=()=>false}){
+export function datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify,readOnly=()=>false,recovery}){
  let draft=null,title='',origin=null,parameterRef=null,page=null,root=null,identity=null,generation=0,busy=false,dispose=null,review=null,columnSource=null,methodDraft=null;
  const button=(key,action,extra='')=>'<button type="button" class="button" data-action="material-spectrum-'+action+'" '+extra+'>'+esc(text(key))+'</button>';
  const input=(key,value,type='text')=>field(esc(text(key)),'<input data-spectrum="'+key+'" type="'+type+'" value="'+esc(value??'')+'"'+(type==='text'?' maxlength="300"':' step="1"')+'>');
@@ -75,6 +76,7 @@ export function datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner,in
   const units=wireMeasurementUnits(root,{esc,field}),scalars=wireScalarFields(root,{call,esc,guard,available:()=>!busy,reference:()=>({ref:parameterRef})}),analysis=wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId:owner(),onReference:async()=>{if(busy)return;await scalars.ready();capture();const token=generation;working(true);try{await columns();check(token,element);render();}finally{if(active(token,element))working(false);}}});
   for(const control of root.querySelectorAll('[data-column-window]'))control.onclick=async()=>{if(busy)return;const token=generation;try{await scalars.ready();check(token,element);capture();working(true);await columns(datasetColumnPageOffset(control));check(token,element);render();}catch(error){if(error.name!=='AbortError'&&active(token,element))notify(error.message,true);}finally{if(active(token,element))working(false);}};
   dispose=()=>{controller.abort();units();scalars();analysis();};dispose.ready=()=>scalars.ready();
+  recovery?.mount(root.closest('form'),()=>{capture();return {origin,parameterRef,title,recipe:draft,offset:page.offset,identity,methodDraft:structuredClone(methodDraft)};});
  }
  function sourceButton(source){return '<button type="button" class="button" data-action="material-measurement-inspect" data-source="'+esc(JSON.stringify(source))+'">'+esc(text('inspect'))+'</button>';}
  function reading(item){return '<p>'+esc(text('location',{page:item.source.selector.page+1,row:item.source.selector.row+1,column:item.source.selector.column+1,revision:item.source.ref.revision.slice(0,12)}))+'</p><p>'+esc(['null','absent'].includes(item.kind)?t('measurements',item.kind):item.column.representation==='domain'?domainDescription(item.column.domain):scalarPreview(item.value))+'</p><small>'+esc(item.column.representation==='domain'?text('coefficientHelp'):text('scalarContext',item.column))+'</small>'+(computationLabel({computation:item.computation})?'<p>'+esc(computationLabel({computation:item.computation}))+'</p>':'')+sourceButton(item.source);}
@@ -89,6 +91,7 @@ export function datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner,in
   if(key==='review'){clean();origin=JSON.parse(control.dataset.ref);await reviewPage();return true;}
   if(key==='page'){await reviewPage(Number(control.dataset.offset));return true;}
   if(key==='open'||key==='repeat'){
+   recovery?.begin('spectrum',JSON.parse(control.dataset.ref));
    clean();origin=JSON.parse(control.dataset.ref);if(key==='repeat'&&origin.kind!=='dataset')throw Error(text('repeatFromDataset'));const token=generation,doc=await call('read',{ref:origin});guard();if(token!==generation)return true;
    if(key==='repeat'){const data=await call('spectrum-inputs',{ref:origin,offset:0,limit:1},{adopt:false,adoptOwner:false});guard();if(token!==generation)return true;draft=structuredClone(data.spectrum);parameterRef=data.ref;title=doc.kind==='dataset'?doc.title:text('open');}
    else{draft=defaultSpectrumRecipe(origin);parameterRef=null;title=text('open');}
@@ -96,9 +99,18 @@ export function datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner,in
   }
   if(!root?.isConnected||review)return true;const token=generation,element=root;await dispose?.ready?.();check(token,element);assertAnalysisFieldsReady(root);if(key==='method-upgrade'&&draft.version<3){capture();draft.version=3;draft.executionPolicy??=defaultSpectrumExecutionPolicy(draft.calculationPolicy);render();return true;}if(key==='upgrade'&&draft.version===1){capture();draft.version=2;draft.executionPolicy=defaultSpectrumExecutionPolicy(draft.calculationPolicy);render();root.querySelector('[data-spectrum-execution-policy]').setAttribute('open','');return true;}capture({validate:true});
   if(key==='preview'||key==='retain'){
-   const command={recordId:owner(),title,id:identity.id,expectedRevision:identity.expectedRevision,spectrum:draft};working(true);try{const result=await call(key==='preview'?'dataset-preview':'dataset',{...command,...(key==='retain'?{jobId:identity.jobId}:{})});check(token,element);if(key==='retain'){clean();await watchJob(result.job);}else root.querySelector('[data-spectrum-preview]').innerHTML=spectrumPreviewView(result,{esc});}finally{if(active(token,element))working(false);}return true;
+   working(true);try{
+   const input={recordId:owner(),title,spectrum:draft};
+   if(key==='retain')identity=await scientificCommandIdentity(identity,input);
+   const checkpoint=key==='retain'?await recovery?.checkpoint():null;
+   const command={...input,id:identity.id,expectedRevision:identity.expectedRevision};
+   const result=await call(key==='preview'?'dataset-preview':'dataset',{...command,...(key==='retain'?{jobId:identity.jobId,...(checkpoint?{checkpoint}:{})}:{})});
+   check(token,element);if(key==='retain'){await recovery?.discard(root.closest('form'));clean();await watchJob(result.job);}else root.querySelector('[data-spectrum-preview]').innerHTML=spectrumPreviewView(result,{esc});}finally{if(active(token,element))working(false);}return true;
   }
   return true;
  }
- return {action,clean,isBusy:()=>busy};
+ async function restore(base){
+  clean();const restored=recovery.begin('spectrum',base);origin=restored.origin;parameterRef=restored.parameterRef;title=restored.title;draft=restored.recipe;identity=restored.identity;methodDraft=restored.methodDraft;columnSource=null;await columns(restored.offset);guard();render();
+ }
+ return {action,clean,restore,isBusy:()=>busy};
 }

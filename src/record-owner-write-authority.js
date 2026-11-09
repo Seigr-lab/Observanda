@@ -6,6 +6,7 @@ import {AppError} from './errors.js';
 const parse=value=>{if(value===null||value===undefined)return null;if(typeof value.text!=='string')return value;try{return JSON.parse(value.text);}catch{throw new AppError('CATALOGUE_DAMAGED');}};
 async function owners(store,id,stored){
  const value=parse(stored);if(!value)return [];
+ if(/^metadata:\.observanda\/scientific-edit-(?:drafts|draft-list(?:-by-owner)?|receipts)\//.test(id))return [value.recordId].filter(researchId);
  if(/^record-draft-(?:review|edit|recovery)/.test(id)||/^metadata:\.observanda\/(?:drafts|draft-list|record-draft-transfers|record-draft-blocks)(?:[/.])/.test(id)){
   const {recordOwnerDraftMetadataRecords}=await import('./record-owner-drafts.js');return await recordOwnerDraftMetadataRecords(store,id,stored)??[];
  }
@@ -30,8 +31,8 @@ async function owners(store,id,stored){
 }
 export async function assertRecordOwnerObjectWritable(store,id,previous,value){
  if(/^record-owner-(?:resource|resource-claim|reclaim):/.test(id)){const {assertRecordOwnerResourceMutation}=await import('./record-owner-resources.js');assertRecordOwnerResourceMutation(store);return;}
- if(/^record-owner-(?:draft-origin|draft-original|draft-review|draft-edit|draft-head|drafts|revision-prior|revision-copy):/.test(id)){assertRecordOwnerTransferAuthority(store);return;}
- if(!/^(?:record-draft-|record-history-restore:|metadata:\.observanda\/(?:materials|drafts|draft-list|record-draft-|run-readiness|jobs|intake))/.test(id))return;
+ if(/^record-owner-(?:scientific-edits|scientific-origin|draft-origin|draft-original|draft-review|draft-edit|draft-head|drafts|revision-prior|revision-copy):/.test(id)){assertRecordOwnerTransferAuthority(store);return;}
+ if(!/^(?:record-draft-|record-history-restore:|metadata:\.observanda\/(?:materials|drafts|draft-list|record-draft-|scientific-edit-|run-readiness|jobs|intake))/.test(id))return;
  for(const recordId of new Set([...await owners(store,id,previous),...await owners(store,id,value)]))await assertRecordOwnerWritable(store,recordId);
 }
 export async function assertRecordOwnerRowsWritable(store,before,after){

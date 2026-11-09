@@ -1,7 +1,7 @@
 import './i18n/catalogues/editorControls.js';
 import {t} from './i18n/index.js';
 // One decision before leaving an editing context. The original screen/form stays mounted.
-export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepare,defaultScope='all'}) {
+export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepare,keep,defaultScope='all'}) {
   const text=(key,args)=>esc(t('editorControls',key,args));
   const dialog=document.createElement('dialog');dialog.id='leave-dialog';dialog.setAttribute('aria-labelledby','leave-title');document.body.append(dialog);
   let active=false,work=null,generation=0,preparing=null;
@@ -33,7 +33,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepa
     if(!pending.labels.length){await next();return true;}
     active=true;
     const decision=await new Promise(resolve=>{
-      dialog.innerHTML=`<h2 id="leave-title">${text('unsaved')}</h2><p>${text('beforeLeaving')}</p><ul>${pending.labels.map(label=>`<li>${esc(label)}</li>`).join('')}</ul>${pending.canSave?'':`<p>${text('completeForm')}</p>`}<p class="guard-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-choice="stay">${text('stay')}</button><button class="button danger" data-choice="discard">${text('discard')}</button>${pending.canSave?`<button class="button primary" data-choice="save">${text('saveContinue')}</button>`:''}</div>`;
+      dialog.innerHTML=`<h2 id="leave-title">${text('unsaved')}</h2><p>${text('beforeLeaving')}</p><ul>${pending.labels.map(label=>`<li>${esc(label)}</li>`).join('')}</ul>${pending.canSave||pending.canKeep?'':`<p>${text('completeForm')}</p>`}<p class="guard-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-choice="stay">${text('stay')}</button><button class="button danger" data-choice="discard">${text('discard')}</button>${pending.canKeep?`<button class="button primary" data-choice="keep">${esc(t('scientificEditors','recoveryKeepContinue'))}</button>`:''}${pending.canSave?`<button class="button primary" data-choice="save">${text('saveContinue')}</button>`:''}</div>`;
       let settled=false;
       const refresh=()=>{for(const button of dialog.querySelectorAll('[data-choice]'))button.disabled=button.dataset.choice!=='stay'&&!!work;};
       const finish=value=>{if(settled)return;settled=true;dialog.close();dialog.onclick=null;dialog.oncancel=null;resolve(value);};
@@ -45,7 +45,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepa
         const button=event.target.closest('[data-choice]');if(!button)return;
         if(button.dataset.choice==='stay'){finish(false);return;}
         if(work)return;
-        const operation=Promise.resolve().then(()=>button.dataset.choice==='save'?save(scope,pending.forms):discard(scope,pending.forms));
+        const operation=Promise.resolve().then(()=>button.dataset.choice==='keep'?keep(pending.forms):button.dataset.choice==='save'?save(scope,pending.forms):discard(scope,pending.forms));
         work=operation.then(()=>{},()=>{});refresh();
         try{
           await operation;

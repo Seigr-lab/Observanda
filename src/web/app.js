@@ -632,7 +632,9 @@ const saveableForms=new Set(['starter-edit-form','starter-details-form','starter
 function pendingChanges(scope='all'){
   if(state.filesMode)return {forms:[],labels:websiteFiles?.isDirty()?[appText('saveWebsite')]:[],canSave:true};
   const websiteEditing=scope==='website-editor',navigation=scope==='navigation'||websiteEditing;if(navigation)scope='all';
-  const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
+  const forms=drafts.changed(scope),scientificForm=materials.recoveryForm();
+  if(scientificForm&&!forms.includes(scientificForm))forms.push(scientificForm);
+  const labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?appText('labBookTemplate'):appText('projectBookSettings'));
   if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(state.page==='editor'?appText('recordEdits',{title:entry()?.title??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
   if(scope==='all'&&state.publishing?.dirty)labels.push(appText('publishingDestination'));
@@ -641,7 +643,7 @@ function pendingChanges(scope='all'){
   if(scope==='all'&&userProfile.isDirty())labels.push(t('userProfile','title'));
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))labels.push(appText('appSettings'));
   if(attempts.isDirty())labels.push(t('attempts','title'));
-  return {forms,labels:[...new Set(labels)],canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
+  return {forms,labels:[...new Set(labels)],canKeep:labels.length===1&&forms.length===1&&materials.canKeepRecovery(forms[0]),canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
 }
 async function savePending(scope='all',forms=drafts.changed(scope),{requireClean=true}={}){
  if(state.filesMode){await websiteFiles?.save();return !websiteFiles?.isDirty();}
@@ -674,6 +676,8 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
   if(savePromise)await savePromise;
   if(initialRecordSave?.pending&&recordDrafts.saveUncertain())await saveInitialRecord();
   if(configurationRecord?.active())await configurationRecord.discard();
+  const scientificDialog=navigation?forms.find(form=>materials.canKeepRecovery(form))?.closest('dialog'):null;
+  for(const form of forms)await materials.discardRecovery(form);
   drafts.reset(forms);
   attempts.stop();
   await structureUI.notebooks.discard();
@@ -685,10 +689,11 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
     if(userProfile.isDirty())await userProfile.discard();
   }
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))await textControls.discard();
+  if(scientificDialog?.open)scientificDialog.close();
   updateSaveStatus();
   if(scope==='all'){const previous=restoringRoute;restoringRoute=true;try{render();}finally{restoringRoute=previous;}}
 }
-const leave=unsavedChanges({esc,defaultScope:'navigation',flush:scope=>scope!=='dialog'?modules.flushAutosave():undefined,prepare:scope=>scope==='navigation'&&state.page==='module'?modules.captureReturn():undefined,changes:pendingChanges,save:savePending,discard:discardPending,busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
+const leave=unsavedChanges({esc,defaultScope:'navigation',flush:scope=>scope!=='dialog'?modules.flushAutosave():undefined,prepare:scope=>scope==='navigation'&&state.page==='module'?modules.captureReturn():undefined,changes:pendingChanges,save:savePending,discard:discardPending,keep:()=>materials.keepRecovery(),busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
 const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  blocked:({completedDialog=null,manual=false}={})=>Boolean(!manual&&recordList.hasPinnedReading()||workspaceOpening||completingWorkspace||savePromise||restoringRoute||uploading||removingRecord||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||pendingChanges().labels.length||[...document.querySelectorAll('dialog[open],form[data-busy]')].some(element=>element!==completedDialog&&!completedDialog?.contains(element))||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')&&!completedDialog?.contains(document.activeElement)),
  version:({workspaceId,signal})=>activeWebsite(state)?api('/api/websites/version',{id:state.websiteId,websitePin:state.websitePin},{adopt:false,signal}):api('/api/workspace/read/version',{workspaceId},{adopt:false,signal}),

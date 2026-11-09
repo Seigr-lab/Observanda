@@ -2,6 +2,7 @@ import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {FILE_CHUNK} from './web/evidence-fingerprint.js';
 import {UPLOAD_BATCH_FRAMES,UPLOAD_HEADER_BYTES} from './web/evidence-upload-batch.js';
+import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 
 // Shared by workspace/project dispatch and service admission. Input schemas
 // name the owning validators in executeMaterialRequest, rather than replacing
@@ -20,6 +21,9 @@ function define(operation,{write,method='POST',input='json',schema='material-com
 }
 for(const operation of reads)if(operation!=='retained-figure-export')define(operation,{write:false,download:operation==='download'});
 for(const operation of writes)define(operation,{write:true});
+for(const operation of ['scientific-draft-browse','scientific-draft-list','scientific-draft-read'])define(operation,{write:false,limit:8192});
+define('scientific-draft-write',{write:true,limit:MAX_RECORD_COMMAND_BYTES});
+define('scientific-draft-discard',{write:true,limit:8192});
 define('retained-figure-export',{write:false,method:'GET',input:'query',schema:'retained-figure-selection',limit:4096,download:true});
 define('dependency-review',{write:false,progress:true});
 define('original',{write:false,method:'GET',input:'path',schema:'artifact-id-and-revision',limit:0,download:true});

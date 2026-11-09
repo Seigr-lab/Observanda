@@ -173,6 +173,10 @@ export class RecordOwnerTransfer{
    const {prepareRecordOwnerDrafts}=await import('./record-owner-drafts.js');
    const drafts=await prepareRecordOwnerDrafts(this.source,this.target,value,{write,signal,checkpoint});await save({progress:{...value.progress,drafts}});
    const prepared=await this.prepareCurrent(value,{write,signal});await save({progress:{...value.progress,prepared}});
+   value=await read();
+   const {prepareScientificEdits}=await import('./record-owner-scientific-edits.js');
+   const scientific=await prepareScientificEdits(this.source,this.target,value,{write,signal,checkpoint});
+   await save({progress:{...value.progress,scientific}});
    await this.target.catalogue(store=>store.verifyRecordHistory(value.command.recordId));
    const {verifyRecordOwnerEvidence}=await import('./record-owner-evidence.js');await verifyRecordOwnerEvidence(this.target,value,evidence,{signal,check:checked});
    await checked();await save({phase:'verified'});await checkpoint('verified',recordOwnerTransferStatus(value));
@@ -279,6 +283,7 @@ export class RecordOwnerTransfer{
   await writeRecordOwnerTransfer(store,{...value,phase:'activating'});
   const {activateRecordOwnerEvidence}=await import('./record-owner-evidence.js');await activateRecordOwnerEvidence(this.target,value,value.progress.evidence,{store,signal});
   const {activateRecordOwnerDrafts}=await import('./record-owner-drafts.js');await activateRecordOwnerDrafts(this.target,value,value.progress.drafts,{store});
+  const {activateScientificTransfer}=await import('./record-owner-scientific-edits.js');await activateScientificTransfer(store,value);
   await store.finishRecordChanges(currentId,current,metadata,[],[member],{etag,ordinal,nextPosition:current.nextPosition+1});
   const result={recordId:member.id,notebookId:member.notebookId,workspaceId:value.targetOwner.workspaceId,projectId:value.targetOwner.projectId,labBookId:value.targetOwner.labBookId,storageRevision:member.revision};
   await writeRecordOwnerTransfer(store,{...value,phase:'complete',progress:{...value.progress,activatedSnapshotId:etag},result,updatedAt:now()});

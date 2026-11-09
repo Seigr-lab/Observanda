@@ -10,8 +10,8 @@ import {CONSTANT_REPRESENTATIONS} from './calculation-operands.js';
 import {resultFormatControls,readResultFormat,wireResultFormats} from './measurement-output-ui.js';
 import {analysisReferenceField,wireAnalysisFields,assertAnalysisFieldsReady} from './analysis-fields-ui.js';
 export const calculationText=(key,args)=>t('datasetCalculations',key,args);
-export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify}){
- const graph=datasetCalculationGraphUI({call,frame,esc,field,guard,owner,inspect,watchJob});
+export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify,recovery}){
+ const graph=datasetCalculationGraphUI({call,frame,esc,field,guard,owner,inspect,watchJob,recovery});
  const text=calculationText;
  let draft=null,title='',identity=null,source=null,columns=[],joinColumns=[],sourcePage=null,joinPages=[],dispose=null,generation=0,saving=false;
  const button=(key,action,data='')=>`<button type="button" class="button" data-action="material-calculation-${action}" ${data}>${esc(text(key))}</button>`;
@@ -114,5 +114,5 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
   }
   form();return true;
  }
- return {action,clean:()=>{clean();graph.clean();},isBusy:()=>saving||graph.isBusy()};
+ return {action,restoreGraph:graph.restore,clean:()=>{clean();graph.clean();},isBusy:()=>saving||graph.isBusy()};
 }

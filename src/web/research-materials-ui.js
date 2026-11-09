@@ -1,4 +1,6 @@
 import {downloadResource} from './session-download.js';
+import {browserHash} from './evidence-fingerprint.js';
+import {revisionText as commandText} from './revision-model.js';
 import './i18n/catalogues/materialEditors.js';
 import {figureTypeOptions,figureOperationOptions} from './scientific-editor-text.js';
 import {ux} from './experience-ui.js';
@@ -52,6 +54,7 @@ import {createRun} from './record-workflow.js';
 import {materialSourcePicker} from './material-source-picker.js';
 import {selectionSize,selectionBatch} from './material-selection-pages.js';
 import {evidenceIntakeUI} from './evidence-intake-ui.js';
+import {scientificEditRecovery} from './scientific-edit-recovery.js';
 import {analysisFormView,analysisMethodPicker,analysisText} from './material-analysis-form.js';
 import {t} from './i18n/index.js';
 import {measurementUI} from './measurement-ui.js';
@@ -102,9 +105,12 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  let columnOffset=0,schemaOffset=0,schemaTotal=0,schemaOriginal=[],schemaDraft=new Map(),schemaExclusions=[],schemaInitialExclusions='[]';
  let referenceIntent=null,referenceDraft=null,draftCursor=null,draftPage={items:[],next:null};
  let sourcePickers={},materialCursor=null,materialPage={next:null},importCursor=null,importsNext=null,homeGeneration=0,homeExtrasController=null;
+ const recovery=scientificEditRecovery({esc,scope:()=>({workspaceId:state.book.id,recordId:owner,context:state.storage?.contextId}),request:(name,data)=>api(route(endpoint+name),data,{adopt:false,owner:projectOwner})});
+ document.getElementById('dialog')?.addEventListener('close',()=>recovery.reset());
  const stopWatching=()=>{dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  const frame=(title,body,actions=null)=>{
+  recovery.detach();
   stopWatching();previews.release();
   actions??=referenceContext?(referenceTrail.length?button(esc(t('figureProvenance','back')),'reference-back'):readingOverview?button(esc(t("evidenceIntake","back")),'home'):'')+'<button type="button" class="button" data-action="close-dialog">'+esc(t('attempts','close'))+'</button>':button(esc(t("evidenceIntake","back")),'home');
   let n=0;body=body.replace(/<(input|select|textarea)\b(?![^>]*\bname=)/g,(_,tag)=>'<'+tag+' name="material-'+(++n)+'" ');
@@ -130,26 +136,26 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();return downloadResource(originalRoute(r)+'?context='+encodeURIComponent(workspaceContext));}});
  const coordinateFrames=coordinateFrameUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>coordinateFrames.clean());
- const uncertainty=statisticalUncertaintyUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,watchJob});
+ const uncertainty=statisticalUncertaintyUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,watchJob,recovery});
  document.getElementById('dialog')?.addEventListener('close',()=>uncertainty.clean());
  const segmentedSynchronization=segmentedClockSynchronizationUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>segmentedSynchronization.clean());
  const synchronization=clockSynchronizationUI({call,frame,esc,field,guard,owner:()=>owner,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>synchronization.clean());
  const comparisons=analysisComparisonUI({state,api,call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect:r=>r?inspect(r):referenceContext?document.getElementById('dialog').close():home(),watchJob,measurements,notify,access});
- const calculations=datasetCalculationUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify});
+ const calculations=datasetCalculationUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify,recovery});
  const aggregations=datasetAggregationUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify});
- const cusums=datasetCusumUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify,readOnly:()=>referenceContext});
+ const cusums=datasetCusumUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify,readOnly:()=>referenceContext,recovery});
  document.getElementById('dialog')?.addEventListener('close',()=>cusums.clean());
- const spectra=datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify,readOnly:()=>referenceContext});
+ const spectra=datasetSpectrumUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify,readOnly:()=>referenceContext,recovery});
  document.getElementById('dialog')?.addEventListener('close',()=>spectra.clean());
  document.getElementById('dialog')?.addEventListener('close',()=>aggregations.clean());
  document.getElementById('dialog')?.addEventListener('close',()=>calculations.clean());
  document.getElementById('dialog')?.addEventListener('close',()=>comparisons.clean());
  document.getElementById('dialog')?.addEventListener('close',()=>measurements.clean());
- const intake=evidenceIntakeUI({route,call,frame,esc,field,guard,context:()=>workspaceContext,owner:()=>owner});
+ const intake=evidenceIntakeUI({route,call,frame,esc,field,guard,context:()=>workspaceContext,owner:()=>owner,recovery});
  const readiness=runReadinessUI({call:(action,data={})=>api(route('/api/v1/intake/'+action),{version:1,workspaceId:state.book.id,recordId:owner,...data},{adopt:false}),frame,esc,field,guard,notify,back:()=>home()});
- const continuing=localIntakeUI({api:(path,data,options)=>api(route(path),data,{...options,owner:projectOwner}),frame,esc,field,guard,owner:()=>owner,workspace:()=>state.book.id,readinessUI:readiness,refreshRecord:async()=>{guard();if(state.page==='record-reader'){readerRefreshPending=true;return;}const latest=await api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope?.ids??[owner]});guard();state.book=latest.book;state.etag=latest.etag;render();}});
+ const continuing=localIntakeUI({api:(path,data,options)=>api(route(path),data,{...options,owner:projectOwner}),frame,esc,field,guard,owner:()=>owner,workspace:()=>state.book.id,readinessUI:readiness,recovery,refreshRecord:async()=>{guard();if(state.page==='record-reader'){readerRefreshPending=true;return;}const latest=await api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope?.ids??[owner]});guard();state.book=latest.book;state.etag=latest.etag;render();}});
  document.getElementById('dialog')?.addEventListener('close',()=>readiness.stop());
  document.getElementById('dialog')?.addEventListener('close',()=>{continuing.stop();if(readerRefreshPending){readerRefreshPending=false;void refreshReader?.();}});
  const uploader=evidenceUploadUI({route,call,frame,esc,field,button,guard,context:()=>workspaceContext,owner:()=>owner,sourceMount,sources:()=>sourcePickers.parent.values(),watchJob});
@@ -172,10 +178,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(!host){homeExtrasController=null;return;}
   const active=()=>!request.signal.aborted&&generation===jobView&&host.isConnected;
   try{
-   const [jobs,drafts,pending]=await Promise.all([call('dataset-jobs',{recordId:owner,cursor:datasetJobCursor},{adopt:false,signal:request.signal}),call('drafts',{recordId:owner,cursor:draftCursor},{adopt:false,signal:request.signal}),reuse.pending({signal:request.signal})]);
+   const [jobs,drafts,pending,scientific]=await Promise.all([call('dataset-jobs',{recordId:owner,cursor:datasetJobCursor},{adopt:false,signal:request.signal}),call('drafts',{recordId:owner,cursor:draftCursor},{adopt:false,signal:request.signal}),reuse.pending({signal:request.signal}),recovery.list()]);
    if(!active())return;guard();datasetJobPage=jobs;draftPage=drafts;
-   host.innerHTML=pending+
-    (draftPage.items.length?`<details class="material-more" open><summary>${esc(mt("unfinishedHeading"))}</summary><ul>${draftPage.items.map(d=>`<li>${esc(d.title)} · ${esc(mt("receivedInputs",{received:d.received.inputs,total:d.totals.inputs}))} ${button(esc(t("evidenceIntake","continue")),'draft-open',`data-id="${esc(d.id)}" aria-label="${esc(mt("continueDraft",{title:d.title}))}"`)}</li>`).join('')}</ul></details>`:'')+`<div class="inline-actions">${draftCursor?button(esc(mt("recentDrafts")),'drafts-first'):''}${draftPage.next?button(esc(mt("olderDrafts")),'drafts-next'):''}</div>`+
+   host.innerHTML='<div data-scientific-drafts>'+scientific+'</div>'+pending+
+    (draftPage.items.length?`<details class="material-more" open><summary>${esc(mt("unfinishedHeading"))}</summary><ul>${draftPage.items.map(d=>`<li>${esc(d.title)} Â· ${esc(mt("receivedInputs",{received:d.received.inputs,total:d.totals.inputs}))} ${button(esc(t("evidenceIntake","continue")),'draft-open',`data-id="${esc(d.id)}" aria-label="${esc(mt("continueDraft",{title:d.title}))}"`)}</li>`).join('')}</ul></details>`:'')+`<div class="inline-actions">${draftCursor?button(esc(mt("recentDrafts")),'drafts-first'):''}${draftPage.next?button(esc(mt("olderDrafts")),'drafts-next'):''}</div>`+
     (datasetJobPage.items.length?`<details class="material-more"><summary>${esc(atext('jobs'))}</summary><ul>${datasetJobPage.items.map(j=>`<li>${esc(j.title)} &middot; ${esc(materialJobState(j.state))} ${button(j.type==='analysis.compare'?atext(j.state==='completed'?'open':'check'):j.state==='completed'?(j.type==='figure.calculate'?esc(mt("openFigure")):esc(mt("openDataset"))):(j.type==='figure.calculate'?esc(mt("checkCalculation")):esc(mt("checkPreparation"))),'dataset-job',`data-job="${esc(j.id)}"`)}</li>`).join('')}</ul><div class="inline-actions">${datasetJobCursor?button(esc(mt("latestPreparations")),'dataset-jobs-first'):''}${datasetJobPage.next?button(esc(mt("olderPreparations")),'dataset-jobs-next'):''}</div></details>`:'');
   }catch(error){if(active())host.innerHTML='<p role="alert">'+esc(t('retainedSources','overviewExtrasFailed'))+'</p>'+button(esc(t('retainedSources','retry')),'home-extras-retry');}
   finally{if(homeExtrasController===request)homeExtrasController=null;}
@@ -199,7 +205,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  async function watchComparisonJob(job){
   guard();frame(atext('working'),`<p>${esc(atext('jobHelp'))}</p><p data-comparison-progress role="status"></p><div class="inline-actions">${button(esc(atext('cancel')),'job-cancel',`data-job="${job.id}"`)}${button(esc(atext('retry')),'job-retry',`data-job="${job.id}" hidden`)}</div>`);
   const generation=jobView,active=()=>generation===jobView&&document.getElementById('dialog')?.open&&workspaceContext===state.storage?.contextId&&sameResearchOwner(projectOwner,researchOwner(state))&&owner===record()?.id;
-  const update=async j=>{if(!active())return;if(j.state==='completed'){await inspect(j.result);return;}document.querySelector('[data-comparison-progress]').textContent=j.message??atext(j.state)+' · '+j.progress.done+' / '+j.progress.total;
+  const update=async j=>{if(!active())return;if(j.state==='completed'){await inspect(j.result);return;}document.querySelector('[data-comparison-progress]').textContent=j.message??atext(j.state)+' Â· '+j.progress.done+' / '+j.progress.total;
    document.querySelector('[data-action="material-job-cancel"]').hidden=['failed','cancelled'].includes(j.state);document.querySelector('[data-action="material-job-retry"]').hidden=!['failed','cancelled'].includes(j.state);
    if(['queued','running'].includes(j.state))jobTimer=setTimeout(()=>{void call('job',{id:j.id},{adopt:false}).then(r=>update(r.job)).catch(e=>{if(active())notify(e.message,true);});},500);
   };await update(job);
@@ -250,12 +256,14 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   try{await sourceMount('source',mt("originalFile"),{kind:'artifact'});await sourceMount('native',measurementText('nativeArtifact'),{kind:'artifact',optional:true});}finally{controls.forEach(el=>el.disabled=false);}
  }
  async function queueDataset(command){
-  const key=JSON.stringify(command);if(datasetIntent?.key!==key)datasetIntent={key,id:crypto.randomUUID()};
-  return call('dataset',{...command,jobId:datasetIntent.id});
+  const key=await browserHash(commandText(command));if(datasetIntent?.key!==key)datasetIntent={key,id:crypto.randomUUID()};
+  const checkpoint=recovery.isKind('schema')?await recovery.checkpoint():null;
+  return call('dataset',{...command,jobId:datasetIntent.id,...(checkpoint?{checkpoint}:{})});
  }
  async function queuePlot(command){
-  const key=JSON.stringify(command);if(plotIntent?.key!==key)plotIntent={key,id:crypto.randomUUID()};
-  return call('plot',{...command,jobId:plotIntent.id});
+  const key=await browserHash(commandText(command));if(plotIntent?.key!==key)plotIntent={key,id:crypto.randomUUID()};
+  const checkpoint=recovery.isKind('plot')?await recovery.checkpoint():null;
+  return call('plot',{...command,jobId:plotIntent.id,...(checkpoint?{checkpoint}:{})});
  }
  async function submitPlot(command){
   const form=document.getElementById('material-form'),generation=jobView;
@@ -265,6 +273,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   try{
    const value=await command();guard();if(generation!==jobView||!form.isConnected)return;
    const result=await queuePlot(value);guard();if(generation!==jobView||!form.isConnected)return;
+   await recovery.discard(form);
    await watchJob(result.job);
   }finally{
    delete form.dataset.busy;form.removeAttribute('aria-busy');
@@ -289,7 +298,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    try{
     const data=await call(id?'draft-references':'references',{...(id?{id}:{ref:reference}),slot,offset,limit:20});guard();
     if(current!==request||generation!==jobView||!root.isConnected)return;next=data.next;
-    root.innerHTML='<p>'+esc(mt("referencePage",{total:data.total,slot:referenceSlot(slot),first:data.items.length?offset+1:0,last:offset+data.items.length}))+'</p><ul>'+data.items.map(item=>'<li>'+button(esc(item.title),'reference','data-ref="'+esc(JSON.stringify(inheritMaterialNamespace(ref(item),reference?.workspaceId??state.book?.id)))+'"')+' · '+esc(materialKind(item.kind))+' · '+item.revision.slice(0,12)+'</li>').join('')+'</ul><div class="inline-actions"><button type="button" class="button" data-ref-prev>'+esc(mt("previousReferences",{slot:referenceSlot(slot)}))+'</button><button type="button" class="button" data-ref-next>'+esc(mt("nextReferences",{slot:referenceSlot(slot)}))+'</button></div>';
+    root.innerHTML='<p>'+esc(mt("referencePage",{total:data.total,slot:referenceSlot(slot),first:data.items.length?offset+1:0,last:offset+data.items.length}))+'</p><ul>'+data.items.map(item=>'<li>'+button(esc(item.title),'reference','data-ref="'+esc(JSON.stringify(inheritMaterialNamespace(ref(item),reference?.workspaceId??state.book?.id)))+'"')+' Â· '+esc(materialKind(item.kind))+' Â· '+item.revision.slice(0,12)+'</li>').join('')+'</ul><div class="inline-actions"><button type="button" class="button" data-ref-prev>'+esc(mt("previousReferences",{slot:referenceSlot(slot)}))+'</button><button type="button" class="button" data-ref-next>'+esc(mt("nextReferences",{slot:referenceSlot(slot)}))+'</button></div>';
     root.querySelector('[data-ref-prev]').disabled=offset===0;root.querySelector('[data-ref-next]').disabled=next===null;
     root.querySelector('[data-ref-prev]').onclick=()=>{offset=Math.max(0,offset-20);void load();};
     root.querySelector('[data-ref-next]').onclick=()=>{offset=next;void load();};
@@ -304,7 +313,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   referenceDraft=draft;
   const complete=['inputs','outputs'].every(slot=>draft.received[slot]===draft.totals[slot]);
   frame(mt("unfinishedKind",{kind:draftKind(draft.kind)}),'<p>'+esc(draft.title)+'</p><p>'+esc(mt("completeSelection"))+'</p><p id="material-draft-status" role="status"></p>'+
-   (draft.method?'<details class="material-more"><summary>'+esc(mt("analysisMethod"))+'</summary><dl><dt>'+esc(mt("tool"))+'</dt><dd>'+esc(draft.method.tool)+' · '+esc(draft.method.version)+'</dd><dt>'+esc(mt("parameters"))+'</dt><dd><pre>'+esc(draft.method.parameters)+'</pre></dd></dl></details>':'')+
+   (draft.method?'<details class="material-more"><summary>'+esc(mt("analysisMethod"))+'</summary><dl><dt>'+esc(mt("tool"))+'</dt><dd>'+esc(draft.method.tool)+' Â· '+esc(draft.method.version)+'</dd><dt>'+esc(mt("parameters"))+'</dt><dd><pre>'+esc(draft.method.parameters)+'</pre></dd></dl></details>':'')+
    ['inputs','outputs'].filter(slot=>draft.totals[slot]||slot==='inputs').map(slot=>'<section><h3>'+esc(referenceSlot(slot))+'</h3><p>'+esc(mt("receivedReferences",{received:draft.received[slot],total:draft.totals[slot]}))+ '</p><div id="material-draft-'+slot+'"></div>'+(draft.received[slot]<draft.totals[slot]?button(esc(mt("chooseRemaining",{slot:referenceSlot(slot)})),'draft-select','data-slot="'+slot+'"'):'')+'</section>').join('')+button(esc(mt("discardUnfinished",{kind:draftKind(draft.kind)})),'draft-cancel'),
    (!complete&&referenceIntent?.id===id?button(esc(mt("retrySavingSelection")),'draft-retry'):'')+button(esc(mt("completeKind",{kind:draftKind(draft.kind)})),'draft-finish',complete?'':'disabled')+button(esc(t("evidenceIntake","back")),'home'));
   for(const slot of ['inputs','outputs']){const root=document.getElementById('material-draft-'+slot);if(root)await mountReferences(root,{id,slot});}
@@ -367,7 +376,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(opened.kind==='dataset')return datasetView();
   if(opened.content.comparison)return comparisons.open(selectedRef,{restore:comparisonView});
   const correctionControls=await corrections.controls(opened,selectedRef);
-  const status=opened.kind==='analysis'?await call('analysis-status',{ref:selectedRef}):null;guard();if(generation!==jobView)return;const c=opened.content;frame(opened.title,`<p>${esc(materialKind(opened.kind))} · ${selectedRef.revision} · ${esc(opened.createdAt)}</p>${opened.previous?button(esc(mt("previousRevision")),'previous'):''}${correctionControls}
+  const status=opened.kind==='analysis'?await call('analysis-status',{ref:selectedRef}):null;guard();if(generation!==jobView)return;const c=opened.content;frame(opened.title,`<p>${esc(materialKind(opened.kind))} Â· ${selectedRef.revision} Â· ${esc(opened.createdAt)}</p>${opened.previous?button(esc(mt("previousRevision")),'previous'):''}${correctionControls}
    ${opened.kind==='artifact'?`<dl>${materialSourceLocation(c,esc)}<dt>${esc(mt("originalBytes"))}</dt><dd>${c.size.toLocaleString()}</dd><dt>SHA-256</dt><dd class="material-hash">${c.sha256}</dd><dt>${esc(mt("provenance"))}</dt><dd>${esc(c.provenance)||esc(mt("notSupplied"))}</dd></dl>${button(esc(t("measurements","download")),'download')}`:''}
    ${opened.kind==='artifact'&&!referenceContext?button(esc(measurementText('heading')),'measurement-from-artifact',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}
    ${calculatorRecipeView(c,esc,{button,readOnly:referenceContext})}${analysisChangesView(status,esc)}${c.method&&!['Observanda clock synchronization','Observanda coordinate frame transform'].includes(c.tool)?comparisons.methodView(c.method):''}
@@ -375,9 +384,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.tool==='Observanda clock synchronization'?clockSynchronizationView(c,{esc,button})+(c.version===2?button(esc(segmentedClockText('review')),'clock-segments-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):referenceContext?'':button(esc(synchronizationText('revise')),'clock-sync-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
    ${c.tool==='Observanda coordinate frame'?'<p>'+esc(coordinateFrameContextText({namespace:c.namespace,dimension:c.dimension,unit:c.unit}))+'</p>'+button(esc(coordinateFrameText('reviewFrame')),'coordinate-frames-open-frame',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):c.tool==='Observanda coordinate frame transform'?'<p>'+esc(coordinateFrameText('transformHelp'))+'</p>'+button(esc(coordinateFrameText('reviewTransform')),'coordinate-frames-open-transform',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
    ${c.measurement?measurements.view(c.measurement)+(referenceContext?'':button(esc(measurementText('edit')),'measurement-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
-   ${c.tool&&!c.mapping&&!c.measurement&&!['Observanda clock synchronization','Observanda uncertainty definition','Observanda statistical uncertainty','Observanda coordinate frame','Observanda coordinate frame transform'].includes(c.tool)?`<dl><dt>${esc(mt("tool"))}</dt><dd>${esc(c.tool)} · ${esc(c.version)}</dd><dt>${esc(mt("parameters"))}</dt><dd><pre>${esc(c.parameters)}</pre></dd></dl>`:''}
+   ${c.tool&&!c.mapping&&!c.measurement&&!['Observanda clock synchronization','Observanda uncertainty definition','Observanda statistical uncertainty','Observanda coordinate frame','Observanda coordinate frame transform'].includes(c.tool)?`<dl><dt>${esc(mt("tool"))}</dt><dd>${esc(c.tool)} Â· ${esc(c.version)}</dd><dt>${esc(mt("parameters"))}</dt><dd><pre>${esc(c.parameters)}</pre></dd></dl>`:''}
    ${c.figure?`<div class="material-figure" id="material-figure"></div>${denominatorView(c)}${c.warnings?.length?`<ul>${c.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}${referenceContext?'':button(esc(mt("attachFigure")),'attach')+(c.mapping?button(esc(mt("recalculateLatest")),'recalculate'):'')}`:''}
-   ${c.mapping?`<details class="material-more"><summary>${esc(t("analyses","algorithm"))}</summary><p>${esc(c.tool)} · ${esc(c.version)}</p><pre>${esc(c.parameters)}</pre></details>`:''}
+   ${c.mapping?`<details class="material-more"><summary>${esc(t("analyses","algorithm"))}</summary><p>${esc(c.tool)} Â· ${esc(c.version)}</p><pre>${esc(c.parameters)}</pre></details>`:''}
    ${c.numericTransform?'<p>'+esc(measurementText('plotPolicy',{policy:measurementText(c.numericTransform.policy==='approximate'?'approximatePolicy':'safe')}))+'</p>':''}
    ${c.plotPointsIndex||c.tool==='Observanda table mapping'&&['9','10'].includes(c.version)&&c.figure?.kind==='retained'?button(esc(transformText('points')),'plot-points'):''}
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
@@ -419,19 +428,25 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const fraction=value=>value.numerator+' / '+value.denominator,coordinateLabel=field=>field==='error'?transformText('uncertaintyWidth'):['x','y'].includes(field)?transformText(field):t('figureIntervals',field);
   frame(transformText('point'),'<h3>'+esc(data.seriesName)+' - '+(data.point+1)+'</h3>'+measurementTransformDescription(data.projection,{esc,text:transformText,numberText})+datasetResourcePolicyDescription(data.resourcePolicy,{esc,title:transformText('resourcesSaved')})+'<div class="material-fields measurement-details">'+Object.entries(data.coordinates).map(([field,item])=>'<section><h4>'+esc(coordinateLabel(field))+'</h4><dl><dt>'+esc(transformText('projected'))+'</dt><dd>'+esc(data.coordinate[field])+'</dd><dt>'+esc(transformText('exactValue'))+'</dt><dd><code class="material-hash">'+esc(item.exact)+'</code></dd><dt>'+esc(transformText('error'))+'</dt><dd><code class="material-hash">'+esc(fraction(item.error))+'</code></dd></dl></section>').join('')+'</div><h3>'+esc(transformText(data.operation==='raw'?'sources':'members'))+'</h3><p>'+data.total.toLocaleString()+'</p>'+data.members.map(member=>'<div><p>'+esc(mt("pageRow",{page:member.position.page+1,row:member.position.row+1}))+'</p>'+member.cells.map(cell=>button(esc(mt("fieldColumn",{field:cell.field==='count'?t('figureMarkerArea','count'):INTERVAL_FIELDS.includes(cell.field)||['x','y','error'].includes(cell.field)?coordinateLabel(cell.field):cell.field,column:cell.source.selector.column+1})),'measurement-inspect','data-source="'+esc(JSON.stringify(cell.source))+'"')).join('')+'</div>').join('')+(data.previous!==null?button(esc(transformText('previous')),'plot-point',pointAttributes+' data-offset="'+data.previous+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-point',pointAttributes+' data-offset="'+data.next+'"'):''),button(esc(transformText('points')),'plot-points')+button(esc(transformText('back')),'plot-back'));
  }
- const referenceList=refs=>`<ul>${refs.map(r=>`<li>${button(esc(catalog.find(m=>m.id===r.id&&m.revision===r.revision)?.title??analysisText(r.kind==='record'?'retainedRecord':'retainedInput')),'reference',`data-ref="${esc(JSON.stringify(r))}"`)} · ${esc(materialKind(r.kind))} · ${r.revision.slice(0,12)}</li>`).join('')}</ul>`;
+ const referenceList=refs=>`<ul>${refs.map(r=>`<li>${button(esc(catalog.find(m=>m.id===r.id&&m.revision===r.revision)?.title??analysisText(r.kind==='record'?'retainedRecord':'retainedInput')),'reference',`data-ref="${esc(JSON.stringify(r))}"`)} Â· ${esc(materialKind(r.kind))} Â· ${r.revision.slice(0,12)}</li>`).join('')}</ul>`;
  async function datasetView(){
   frame(mt("loadingDataset"),'<p role="status">'+esc(mt("openingRows"))+'</p>');
   const generation=jobView,data=await call('rows',{ref:selectedRef,page,columnOffset});guard();const c=opened.content;
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
   frame(opened.title,`<p>${esc(mt("datasetRows",{rows:data.rowCount.toLocaleString(),page:data.pages?page+1:0,pages:data.pages}))}</p>
-   <div class="material-table" tabindex="0" role="region" aria-label="${esc(mt("datasetValues"))}"><table><thead><tr><th>${esc(t("measurements","surroundingRow"))}</th>${data.columns.map(col=>`<th>${esc(col.name)}<small>${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}${col.representation==='radix'?' · '+esc(mt("numeralBase",{base:col.radix})):''} · ${esc(col.unit)}</small>${computationLabel(col)?'<small>'+esc(computationLabel(col))+'</small>':''}</th>`).join('')}<th>${esc(t("measurements","exclusion"))}</th></tr></thead><tbody>${data.rows.map(r=>`<tr><th scope="row"><details class="material-row-identity"><summary>${esc(r.order??r.line)}</summary><span>${esc(r.id)}${r.locator?.pointer?'<br>'+esc(r.locator.pointer):''}</span></details></th>${r.cells.map((v,i)=>`<td><button type="button" class="link" data-action="material-measurement-inspect" data-source="${esc(JSON.stringify({ref:selectedRef,selector:{kind:'cell',page,row:data.rows.indexOf(r),column:columnOffset+i}}))}" aria-label="${esc(measurementText('inspect'))}: ${esc(data.columns[i].name)} · ${r.order}">${esc(['null','absent'].includes(r.valueKinds?.[i])?'['+r.valueKinds[i]+']':typeof v==='object'?(v.format==='domain-value'?(clockSynchronizationStatusDisplay(v)??clockStatusDisplay(v)??mt("inspectDomain",{domain:domainDescription(v.definition)})):mt("openCompleteValue",{characters:v.characters.toLocaleString()})):v||'∅')}</button>${cellComputationView(data.columns[i],r,i,{esc})}</td>`).join('')}<td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>
-   ${c.sourceMapping?`<details class="material-more"><summary>${esc(mt("sourceMapping"))}</summary><p>${esc(({delimited:mt('delimitedFormat'),json:mt('jsonArray'),jsonl:'JSON Lines','json-nested':preparationText('format')})[c.sourceMapping.format]??c.sourceMapping.format)}${c.sourceMapping.rowsPath?' · '+esc(mt("rowsAt",{path:c.sourceMapping.rowsPath})):''}</p>${preparation.summary(c.sourceMapping)}${(c.sourceMapping.fieldsInSchema||Array.isArray(c.sourceMapping.fields))?`<ul>${(c.sourceMapping.fieldsInSchema?data.columns.map(col=>col.sourceField).filter(Boolean):c.sourceMapping.fields).map(f=>`<li>${esc(f.name)}: ${esc(f.path)||esc(mt("rowValue"))}</li>`).join('')}</ul><p>${esc(mt("presenceHelp"))}</p>`:''}</details>`:''}
+   <div class="material-table" tabindex="0" role="region" aria-label="${esc(mt("datasetValues"))}"><table><thead><tr><th>${esc(t("measurements","surroundingRow"))}</th>${data.columns.map(col=>`<th>${esc(col.name)}<small>${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}${col.representation==='radix'?' Â· '+esc(mt("numeralBase",{base:col.radix})):''} Â· ${esc(col.unit)}</small>${computationLabel(col)?'<small>'+esc(computationLabel(col))+'</small>':''}</th>`).join('')}<th>${esc(t("measurements","exclusion"))}</th></tr></thead><tbody>${data.rows.map(r=>`<tr><th scope="row"><details class="material-row-identity"><summary>${esc(r.order??r.line)}</summary><span>${esc(r.id)}${r.locator?.pointer?'<br>'+esc(r.locator.pointer):''}</span></details></th>${r.cells.map((v,i)=>`<td><button type="button" class="link" data-action="material-measurement-inspect" data-source="${esc(JSON.stringify({ref:selectedRef,selector:{kind:'cell',page,row:data.rows.indexOf(r),column:columnOffset+i}}))}" aria-label="${esc(measurementText('inspect'))}: ${esc(data.columns[i].name)} Â· ${r.order}">${esc(['null','absent'].includes(r.valueKinds?.[i])?'['+r.valueKinds[i]+']':typeof v==='object'?(v.format==='domain-value'?(clockSynchronizationStatusDisplay(v)??clockStatusDisplay(v)??mt("inspectDomain",{domain:domainDescription(v.definition)})):mt("openCompleteValue",{characters:v.characters.toLocaleString()})):v||'âˆ…')}</button>${cellComputationView(data.columns[i],r,i,{esc})}</td>`).join('')}<td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>
+   ${c.sourceMapping?`<details class="material-more"><summary>${esc(mt("sourceMapping"))}</summary><p>${esc(({delimited:mt('delimitedFormat'),json:mt('jsonArray'),jsonl:'JSON Lines','json-nested':preparationText('format')})[c.sourceMapping.format]??c.sourceMapping.format)}${c.sourceMapping.rowsPath?' Â· '+esc(mt("rowsAt",{path:c.sourceMapping.rowsPath})):''}</p>${preparation.summary(c.sourceMapping)}${(c.sourceMapping.fieldsInSchema||Array.isArray(c.sourceMapping.fields))?`<ul>${(c.sourceMapping.fieldsInSchema?data.columns.map(col=>col.sourceField).filter(Boolean):c.sourceMapping.fields).map(f=>`<li>${esc(f.name)}: ${esc(f.path)||esc(mt("rowValue"))}</li>`).join('')}</ul><p>${esc(mt("presenceHelp"))}</p>`:''}</details>`:''}
    <div class="inline-actions">${button(esc(t("measurements","sync-previousColumns")),'columns-prev',columnOffset?'':'disabled')}<span>${esc(mt("columnPage",{first:columnOffset+1,last:columnOffset+data.columns.length,total:data.columnCount}))}</span>${button(esc(t("measurements","sync-nextColumns")),'columns-next',columnOffset+data.columns.length<data.columnCount?'':'disabled')}</div>
    <div class="inline-actions">${button(esc(t("measurements","sync-previousRows")),'rows-prev',page?'':'disabled')}${button(esc(t("measurements","sync-nextRows")),'rows-next',page+1<data.pages?'':'disabled')}${calculatorResultActions(c,{esc,button,readOnly:referenceContext})}${c.spectrum?button(esc(spectrumText('review')),'spectrum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.cusum?button(esc(cusumText('review')),'cusum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.uncertainty?button(esc(uncertaintyText('review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-result="true"`):''}${referenceContext?'':(c.calculatorResult||c.spectrum||c.cusum?'':button(esc(mt("editSchema")),'schema'))+button(esc(uncertaintyText('open')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createFrame')),'coordinate-frames-open-frame',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createTransform')),'coordinate-frames-open-transform',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(synchronizationText('title')),'clock-sync-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(mt("createFigure")),'plot-form')+button(esc(spectrumText('open')),'spectrum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(cusumText('open')),'cusum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.spectrum?button(esc(spectrumText('repeat')),'spectrum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+(c.cusum?button(esc(cusumText('repeat')),'cusum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(aggregationText('open')),'aggregation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.aggregation?button(esc(aggregationText('repeat')),'aggregation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(calculationText('open')),'calculation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.calculation?button(esc(calculationText('repeat')),'calculation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')}${opened.previous?button(esc(mt("previousRevision")),'previous'):''}</div>`);
  }
  const missingRow=m=>`<div class="material-missing"><div class="material-fields">${field(esc(mt("missingValue")),`<input data-missing="value" name="missing-${crypto.randomUUID()}" value="${esc(m.value)}">`)}${field(esc(mt("meaning")),`<input data-missing="meaning" name="meaning-${crypto.randomUUID()}" value="${esc(m.meaning)}">`)}</div>${button(esc(mt("removeMissing")),'missing-remove')}</div>`;
  const exclusionRow=(row=1,reason='')=>`<div class="material-exclusion"><div class="material-fields">${field(esc(mt("acquisitionRow")),`<input data-exclusion="row" name="row-${crypto.randomUUID()}" type="number" min="1" max="${schemaRows.length}" value="${esc(row)}">`)}${field(esc(mt("exclusionReason")),`<input data-exclusion="reason" name="reason-${crypto.randomUUID()}" value="${esc(reason)}">`)}</div>${button(esc(mt("keepObservation")),'exclusion-remove')}</div>`;
+ async function openSchema(restored=null){
+  const generation=jobView,data=await call('rows',{ref:selectedRef,page:restored?.rowPage??page,columnOffset});guard();if(generation!==jobView)return;
+  schemaRows=data.rows;schemaOffset=restored?.offset??columnOffset;schemaDraft=new Map(restored?.columns);
+  const exclusions=schemaRows.flatMap((r,i)=>r.excluded?[{row:String(i+1),reason:r.excluded}]:[]);
+  schemaExclusions=restored?.exclusions??exclusions;schemaInitialExclusions=JSON.stringify(exclusions);datasetIntent=restored?.intent??null;await schemaForm();
+ }
  async function schemaForm(targetOffset=schemaOffset){
   const form=document.getElementById('material-form'),controls=[...document.querySelectorAll('#dialog input,#dialog select,#dialog textarea,#dialog button')].map(el=>({el,disabled:el.disabled}));
   form.dataset.busy='true';form.setAttribute('aria-busy','true');for(const {el} of controls)el.disabled=true;
@@ -444,7 +459,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
     ${field(esc(t("retainedFigureEditor","name")),`<input data-schema="name" value="${esc(col.name)}">`)}
     ${field(esc(measurementText('representation')),`<select data-schema="representation">${REPRESENTATIONS.map(v=>option(v,measurementText(v==='radix'?'radixLabel':v),col.representation)).join('')}</select>`)}
     ${measurementDomainControls(col.domain,{esc,field,active:col.representation==='domain'})}
-    ${field(esc(t("measurements","radix")),`<input data-schema="radix" type="number" min="2" max="36" value="${col.radix}">`)}
+    ${field(esc(t("measurements","radix")),`<input data-schema="radix" type="number" min="2" max="36" value="${esc(col.radix??'')}">`)}
     ${field(esc(t("measurements","unit")),`<input data-schema="unit" value="${esc(col.unit)}">`)}
     <div data-column-policy${isScalarRepresentation(col)?'':' hidden'}>${scalarPolicyControls(col.resourcePolicy,{esc,field,kind:'column'})}</div>
     <div class="material-missing-group"><strong>${esc(mt("missingMeanings"))}</strong><div data-missing-list>${col.missing.map(m=>missingRow(m)).join('')}</div>${button(esc(mt("addMissing")),'missing-add')}</div>
@@ -455,13 +470,18 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    <input type="hidden" id="material-schema-structure" value="0"><fieldset><legend>${esc(mt("excludedObservations"))}</legend><p>${esc(mt("exclusionsHelp"))}</p><div id="material-exclusions">${schemaExclusions.map(r=>exclusionRow(r.row,r.reason)).join('')}</div>${button(esc(mt("excludeObservation")),'exclusion-add')}</fieldset>`,`<div class="material-schema-pagination">${button(esc(t("measurementTransform","previous")),'schema-prev','aria-label="'+esc(mt("previousSchema"))+'" '+(schemaOffset?'':'disabled'))}<span>${esc(mt("schemaPage",{first:schemaOffset+1,last:schemaOffset+columns.length,total:schemaTotal}))}</span>${button(esc(t("measurementTransform","next")),'schema-next','aria-label="'+esc(mt("nextSchema"))+'" '+(schemaOffset+columns.length<schemaTotal?'':'disabled'))}</div>`+button(esc(mt("saveDatasetRevision")),'schema-save')+button(esc(t("evidenceIntake","back")),'home'));
   if(schemaDraft.size||JSON.stringify(schemaExclusions)!==schemaInitialExclusions)document.getElementById('material-schema-structure').value='1';
   {const element=document.getElementById('material-form'),reference=structuredClone(selectedRef),provenance=wireProvenance(element,{call,esc,field,recordId:owner,guard,available:()=>element.dataset.busy!=='true',reference:node=>({ref:reference,column:Number(node.closest('[data-material-column]').dataset.materialColumn)})}),domains=wireMeasurementDomains(element),frameColumns=wireCoordinateFrameColumns(element,{call,esc,field,guard,recordId:owner,available:()=>element.dataset.busy!=='true'}),policies=wireScalarPolicies(element,'column'),refresh=event=>{if(event.target.matches('[data-schema=representation]'))event.target.closest('[data-material-column]').querySelector('[data-column-policy]').hidden=!isScalarRepresentation(event.target.value);};element.addEventListener('change',refresh);schemaDispose=()=>{provenance();domains();frameColumns();policies();element.removeEventListener('change',refresh);};schemaDispose.action=frameColumns.action;schemaDispose.ready=async()=>{await frameColumns.ready();await provenance.ready();};}
+  recovery.mount(document.getElementById('material-form'),()=>{captureSchema();return {offset:schemaOffset,rowPage:page,columns:[...schemaDraft],exclusions:schemaExclusions,intent:datasetIntent};});
   }finally{delete form.dataset.busy;form.removeAttribute('aria-busy');for(const {el,disabled} of controls)if(el.isConnected)el.disabled=disabled;}
  }
  function captureSchema({validate=false}={}){
   for(const node of document.querySelectorAll('[data-material-column]')){
    const index=Number(node.dataset.materialColumn),get=k=>node.querySelector('[data-schema="'+k+'"]').value;
+   const radix=get('radix'),number=Number(radix);
+   // Keep partial and noncanonical spellings in the pending edit. The native
+   // dataset accepts canonical integer bases only when explicitly submitted.
+   const pendingRadix=radix!==''&&String(number)===radix?number:radix;
    const resourcePolicy=isScalarRepresentation(get('representation'))?readScalarPolicy(node,'column',{validate}):undefined;
-   const coordinateFrame=readColumnCoordinateFrame(node,{validate}),column=preserveCoordinateFrameResult(schemaOriginal[index-schemaOffset],{...(coordinateFrame?{coordinateFrame}:{}),...(schemaOriginal[index-schemaOffset].weightedFit?{weightedFit:schemaOriginal[index-schemaOffset].weightedFit}:{}),...(schemaOriginal[index-schemaOffset].cusum?{cusum:schemaOriginal[index-schemaOffset].cusum}:{}),...(schemaOriginal[index-schemaOffset].spectrum?{spectrum:schemaOriginal[index-schemaOffset].spectrum}:{}),...(schemaOriginal[index-schemaOffset].statisticalUncertainty?{statisticalUncertainty:schemaOriginal[index-schemaOffset].statisticalUncertainty}:{}),...(schemaOriginal[index-schemaOffset].synchronization?{synchronization:schemaOriginal[index-schemaOffset].synchronization}:{}),...(schemaOriginal[index-schemaOffset].computation?{computation:schemaOriginal[index-schemaOffset].computation}:{}),...(resourcePolicy?{resourcePolicy}:{}),name:get('name'),representation:get('representation'),...(get('representation')==='domain'?{domain:readMeasurementDomain(node,{validate})}:{}),radix:Number(get('radix')),unit:get('unit'),missing:[...node.querySelectorAll('.material-missing')].map(row=>({value:row.querySelector('[data-missing="value"]').value,meaning:row.querySelector('[data-missing="meaning"]').value})),...readProvenance(node,schemaOriginal[index-schemaOffset],{validate})});
+   const coordinateFrame=readColumnCoordinateFrame(node,{validate}),column=preserveCoordinateFrameResult(schemaOriginal[index-schemaOffset],{...(coordinateFrame?{coordinateFrame}:{}),...(schemaOriginal[index-schemaOffset].weightedFit?{weightedFit:schemaOriginal[index-schemaOffset].weightedFit}:{}),...(schemaOriginal[index-schemaOffset].cusum?{cusum:schemaOriginal[index-schemaOffset].cusum}:{}),...(schemaOriginal[index-schemaOffset].spectrum?{spectrum:schemaOriginal[index-schemaOffset].spectrum}:{}),...(schemaOriginal[index-schemaOffset].statisticalUncertainty?{statisticalUncertainty:schemaOriginal[index-schemaOffset].statisticalUncertainty}:{}),...(schemaOriginal[index-schemaOffset].synchronization?{synchronization:schemaOriginal[index-schemaOffset].synchronization}:{}),...(schemaOriginal[index-schemaOffset].computation?{computation:schemaOriginal[index-schemaOffset].computation}:{}),...(resourcePolicy?{resourcePolicy}:{}),name:get('name'),representation:get('representation'),...(get('representation')==='domain'?{domain:readMeasurementDomain(node,{validate})}:{}),radix:pendingRadix,unit:get('unit'),missing:[...node.querySelectorAll('.material-missing')].map(row=>({value:row.querySelector('[data-missing="value"]').value,meaning:row.querySelector('[data-missing="meaning"]').value})),...readProvenance(node,schemaOriginal[index-schemaOffset],{validate})});
    if(JSON.stringify(column)===JSON.stringify(schemaOriginal[index-schemaOffset]))schemaDraft.delete(index);else schemaDraft.set(index,column);
   }
   schemaExclusions=[...document.querySelectorAll('.material-exclusion')].map(node=>({row:node.querySelector('[data-exclusion="row"]').value,reason:node.querySelector('[data-exclusion="reason"]').value}));
@@ -474,7 +494,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   plotDraft={title:value('title'),mapping,revised:plotDraft?.revised===true};return {recordId:owner,title:plotDraft.title,dataset:selectedRef,mapping,base};
  }
  async function plotForm({offset=0,restore=false}={}){
-  if(!restore){plotIntent=null;plotBase=createFigure();plotDraft={title:opened.title,mapping:{resourcePolicy:defaultDatasetResourcePolicy(),numericPolicy:'safe',x:0,xKind:'category',group:null,values:[],operation:'raw',kind:'line',order:'source',decimal:'.',mode:'replace'}};}
+  if(!restore){
+   const checkpoint=recovery.begin('plot',selectedRef);
+   plotIntent=checkpoint?.intent??null;plotBase=checkpoint?.base??createFigure();plotDraft=checkpoint?.plot??{title:opened.title,mapping:{resourcePolicy:defaultDatasetResourcePolicy(),numericPolicy:'safe',x:0,xKind:'category',group:null,values:[],operation:'raw',kind:'line',order:'source',decimal:'.',mode:'replace'}};offset=checkpoint?.offset??offset;
+  }
   const selected=[...new Set([plotDraft.mapping.x,plotDraft.mapping.group,...plotDraft.mapping.values.flatMap(v=>[v.column,v.error,...INTERVAL_FIELDS.map(k=>v[k]),v.count])].filter(i=>i!==null&&i!==undefined))];
   frame(mt("loadingSchema"),'<p role="status">'+esc(mt("openingColumns"))+'</p>');
   const generation=jobView,data=await loadDatasetColumnWindow(call,selectedRef,{offset,selected});guard();
@@ -482,7 +505,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const c={...opened.content,columns:data.items.map(({column,index})=>({...column,index}))},mapping=plotDraft.mapping;frame(mt("createFigure"),`${titleField(plotDraft.title)}${plotDraft.revised?'<p>'+esc(transformText('revisedSettings'))+'</p>':''}
    <p>${esc(mt("plotSource",{revision:selectedRef.revision.slice(0,12)}))}</p>
    ${datasetColumnPager(data,{esc})}<div class="material-fields">${choose(esc(mt("horizontalColumn")),'x',c.columns.map(col=>[col.index,col.name]),mapping.x)}${choose(esc(mt("horizontalRepresentation")),'x-kind',[['category',mt("preserveLabels")],['number',t("retainedFigureEditor","option_number")],['date',mt("isoDates")]],mapping.xKind)}${choose(esc(mt("chartType")),'chart',figureTypeOptions(FIGURE_TYPES),mapping.kind)}${choose(esc(mt("transformation")),'operation',figureOperationOptions(FIGURE_OPERATIONS),mapping.operation)}${choose(esc(t("scientificEditors","splitSeries")),'group',[['',t("scientificEditors","noGrouping")],...c.columns.map(col=>[col.index,col.name])],mapping.group??'')}</div>
-   <fieldset><legend>${esc(mt("numericColumns"))}</legend>${c.columns.map(col=>{const i=col.index,v=mapping.values.find(v=>v.column===i);return `<label class="material-choice"><input type="checkbox" data-material-value="${i}"${v?' checked':''}${['integer','decimal','radix','radix-fraction','rational'].includes(col.representation)?'':' disabled'}>${esc(col.name)} · ${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}</label><div data-material-intervals="${i}"${v?'':' hidden'}>${intervalMappingControls(c.columns,{esc,values:v??{}})}${markerMapping(c.columns,esc,v?.count??null)}</div>`;}).join('')}</fieldset>
+   <fieldset><legend>${esc(mt("numericColumns"))}</legend>${c.columns.map(col=>{const i=col.index,v=mapping.values.find(v=>v.column===i);return `<label class="material-choice"><input type="checkbox" data-material-value="${i}"${v?' checked':''}${['integer','decimal','radix','radix-fraction','rational'].includes(col.representation)?'':' disabled'}>${esc(col.name)} Â· ${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}</label><div data-material-intervals="${i}"${v?'':' hidden'}>${intervalMappingControls(c.columns,{esc,values:v??{}})}${markerMapping(c.columns,esc,v?.count??null)}</div>`;}).join('')}</fieldset>
    <p>${esc(mt("figureHelp"))}</p><details data-plot-resources><summary>${esc(transformText('resourcesTitle'))}</summary>${datasetResourcePolicyControls(mapping.resourcePolicy,{esc,field,help:transformText('resourcesHelp'),legacy:'',footer:transformText('resourcesNotes')})}</details>${field(esc(measurementText('approximate')),'<input id="material-approximate" type="checkbox"'+(mapping.numericPolicy==='approximate'?' checked':'')+'>')}<p>${esc(measurementText('approximateHelp'))}</p>${measurementTransformControls(mapping.projection,{esc,field,xKind:mapping.xKind,resourcePolicy:mapping.resourcePolicy,text:transformText,numberText})}<div data-retained-marker>${markerControls(plotBase,esc)}</div><div data-retained-heatmap hidden></div>${button(esc(mt("calculateRetain")),'plot')}`);
   for(const control of document.querySelectorAll('[data-column-window]'))control.onclick=async()=>{control.disabled=true;try{const next=datasetColumnPageOffset(control);capturePlot();await plotForm({offset:next,restore:true});}catch(error){notify(error.message,true);}finally{if(control.isConnected)control.disabled=false;}};
   const form=document.getElementById('material-form'),transformView=jobView,transforms=wireMeasurementTransforms(form,{xKind:()=>value('x-kind'),resourcePolicy:root=>readDatasetResourcePolicy(root.querySelector('[data-plot-resources]')),guard:()=>currentView(transformView),available:()=>document.getElementById('material-form')===form&&!form.dataset.busy});
@@ -490,6 +513,32 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   document.querySelector('[data-retained-marker] [data-marker-area="enabled"]').closest('label').remove();
   for(const el of document.querySelectorAll('[data-material-value]'))el.addEventListener('change',()=>document.querySelector('[data-material-intervals="'+el.dataset.materialValue+'"]').hidden=!el.checked);
   const heatmapHost=document.querySelector('[data-retained-heatmap]');heatmapSettings=mountHeatmap(heatmapHost,{esc,notify,...(plotBase.heatmap?{initial:plotBase.heatmap}:{})});heatmapHost.hidden=mapping.kind!=='heatmap';document.getElementById('material-chart').addEventListener('change',event=>{heatmapHost.hidden=event.target.value!=='heatmap';if(!heatmapHost.hidden)document.getElementById('material-x-kind').value='category';transforms.refresh();});
+  recovery.mount(form,()=>{capturePlot();return {offset,plot:plotDraft,base:plotBase,intent:plotIntent};});
+ }
+ async function openRecovery(summary){
+  const requested=summary?.owner,current=researchOwner(state);
+  if(summary?.surface!=='science'||!requested||requested.workspaceId!==state.book?.id||requested.recordId!==record()?.id||!sameResearchOwner(requested,current)||!saved())throw Error(t('scientificEditors','recoveryChanged'));
+  recovery.reset();owner=requested.recordId;projectOwner=current;workspaceContext=state.storage.contextId;referenceOrigin=false;referenceContext=false;readingOverview=false;readNamespace=state.book.id;referenceTrail=[];
+  frame(t('scientificEditors','recoveryHeading'),'<p role="status">'+esc(mt('openingRevision'))+'</p>');
+  await recovery.restore(summary,restoreScientific,result=>{
+    if(result.archived&&result.job.state!=='completed')return frame(materialJobState(result.job.state),'<p role="status">'+esc(result.job.message??materialJobState(result.job.state))+'</p>');
+    if(result.job)return watchJob(result.job);
+   if(result.batch)return intake.open(result.batch);
+   if(result.proposal)return continuing.show(result.proposal);
+   return inspect(result.result);
+  });guard();
+ }
+ async function restoreScientific(kind,base,value){
+  if(kind==='local-intake')return continuing.home({resume:true});
+  if(kind==='evidence-intake')return intake.newForm();
+  if(kind==='cusum')return cusums.restore(base);
+  if(kind==='spectrum')return spectra.restore(base);
+  if(kind==='graph-node')return calculations.restoreGraph(base,value);
+  if(kind==='uncertainty-input'||kind==='uncertainty-covariance')return uncertainty.restore(base,value,kind);
+  if(kind==='schema'||kind==='plot'){
+   await inspect(base,{atPage:value.rowPage??0});guard();if(referenceContext)throw Error(t('scientificEditors','recoveryChanged'));
+   if(kind==='schema')await openSchema(recovery.begin(kind,base));else await plotForm();
+  }
  }
  async function addFigure(figure){
   if(state.page==='record-reader'&&editRetainedFigure){guard();document.getElementById('dialog').close();await editRetainedFigure({recordId:owner,figure});return;}
@@ -509,6 +558,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  }
  async function action(control){
   const name=control.dataset.action;if(!name?.startsWith('material-'))return false;const act=name.slice(9);
+  if(act==='recovery-keep'){await recovery.keep();return true;}
+  if(act==='recovery-more'){const node=document.querySelector('[data-scientific-drafts]');const markup=await recovery.list({more:true});if(node?.isConnected)node.innerHTML=markup;return true;}
+  if(act==='recovery-open'){const summary=recovery.find(control.dataset.id);if(summary)await openRecovery(summary);return true;}
   if(act==='home-extras-retry'){void loadHomeExtras();return true;}
   if(act==='dependencies-cancel'||act==='dependencies-retry'){dependencies.action(act);return true;}
   if(act==='dependencies-refresh'){guard();await home({fresh:true});return true;}
@@ -577,7 +629,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    try{const {command}=await call('plot-job-settings',{id:control.dataset.job,recordId:owner},{adopt:false});currentView(generation);
     if(command.recordId!==owner)throw Error(mt("recordChanged"));
     const doc=await call('read',{ref:command.dataset},{adopt:false});currentView(generation);
-    selectedRef=command.dataset;opened=doc;plotIntent=null;plotBase={...structuredClone(command.base),id:crypto.randomUUID(),series:[]};
+    selectedRef=command.dataset;opened=doc;recovery.begin('plot',selectedRef);plotIntent=null;plotBase={...structuredClone(command.base),id:crypto.randomUUID(),series:[]};
     plotDraft={title:command.title,mapping:{...structuredClone(command.mapping),resourcePolicy:command.mapping.resourcePolicy??defaultDatasetResourcePolicy()},revised:true};await plotForm({restore:true});
    }finally{if(control.isConnected)control.disabled=false;}return true;
   }
@@ -655,8 +707,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act==='rows-prev'){page--;await datasetView();}
   if(act==='rows-next'){page++;await datasetView();}
   if(act==='schema'){
-   const generation=jobView,data=await call('rows',{ref:selectedRef,page,columnOffset});guard();if(generation!==jobView)return true;
-   schemaRows=data.rows;schemaOffset=columnOffset;schemaDraft=new Map();schemaExclusions=schemaRows.flatMap((r,i)=>r.excluded?[{row:String(i+1),reason:r.excluded}]:[]);schemaInitialExclusions=JSON.stringify(schemaExclusions);await schemaForm();
+   await openSchema(recovery.begin('schema',selectedRef));
   }
   if(['missing-add','missing-remove','exclusion-add','exclusion-remove'].includes(act)){
    const structure=document.getElementById('material-schema-structure');structure.value=String(Number(structure.value)+1);
@@ -666,10 +717,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    if(act==='exclusion-remove')control.closest('.material-exclusion').remove();
   }
   if(act==='schema-save'){
-   const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema({validate:true});const columnChanges=[...schemaDraft].map(([index,column])=>({index,column}));
+   const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema({validate:true});const columnChanges=[...schemaDraft].map(([index,column])=>({index,column:{...column,radix:column.radix===''?null:Number(column.radix)}}));
    const exclusions={...Object.fromEntries(schemaRows.map(r=>[r.id,null]))};
    const seen=new Set();for(const item of schemaExclusions){const row=Number(item.row);if(!Number.isInteger(row)||!schemaRows[row-1]||!item.reason.trim()||seen.has(row))throw Error(mt("distinctExclusion"));seen.add(row);exclusions[schemaRows[row-1].id]=item.reason;}
-   await watchJob((await queueDataset({recordId:owner,title:opened.title,id:opened.id,expectedRevision:selectedRef.revision,artifact:opened.content.inputs[0],baseDataset:selectedRef,sourceMapping:opened.content.sourceMapping,columnChanges,exclusions})).job);
+   const result=await queueDataset({recordId:owner,title:opened.title,id:opened.id,expectedRevision:selectedRef.revision,artifact:opened.content.inputs[0],baseDataset:selectedRef,sourceMapping:opened.content.sourceMapping,columnChanges,exclusions});await recovery.discard(current);await watchJob(result.job);
   }
   if(act==='columns-prev'||act==='columns-next'){columnOffset+=act==='columns-next'?16:-16;await datasetView();}
   if(act==='schema-prev'||act==='schema-next'){const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema();await schemaForm(schemaOffset+(act==='schema-next'?16:-16));}
@@ -701,5 +752,5 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(record()?.id!==recordId||state.storage?.contextId!==context||!sameResearchOwner(project,researchOwner(state))||JSON.stringify(figures)!==before)throw Error(t('figureProvenance','changed'));
   const byId=new Map(result.sources.map(s=>[s.figureId,s.ref]));for(const figure of allFigurePlots(figures))if(byId.has(figure.id))figure.source=byId.get(figure.id);
  }
- return {view,action,openRevision,openReference,pinFigureSources,isReadingReference:()=>referenceContext,isBusy:()=>uploading||repeating||corrections.isBusy()||reuse.isBusy()||intake.isBusy()||measurements.isBusy()||comparisons.isBusy()||calculations.isBusy()||aggregations.isBusy()||synchronization.isBusy()};
+ return {view,action,openRevision,openReference,openRecovery,pinFigureSources,discardRecovery:form=>recovery.discard(form),recoveryForm:()=>recovery.pendingForm(),canKeepRecovery:form=>recovery.owns(form),keepRecovery:()=>recovery.keep(),isReadingReference:()=>referenceContext,isBusy:()=>uploading||repeating||corrections.isBusy()||reuse.isBusy()||intake.isBusy()||measurements.isBusy()||comparisons.isBusy()||calculations.isBusy()||aggregations.isBusy()||synchronization.isBusy()};
 }

@@ -11,6 +11,8 @@ export function researchMaterialsUI(options,{load=()=>import('./research-materia
  const ready=()=>instance?Promise.resolve(instance):pending??=(async()=>{try{const module=await load();return instance=module.researchMaterialsUI(options);}finally{pending=null;}})();
  const invoke=async(method,args)=>{const before=context(),ui=await ready();if(before!==context())throw Error(t('figureProvenance','changed'));return ui[method](...args);};
  return {
+  openRecovery:summary=>invoke('openRecovery',[summary]),
+  discardRecovery:form=>instance?.discardRecovery?.(form),recoveryForm:()=>instance?.recoveryForm?.(),canKeepRecovery:form=>instance?.canKeepRecovery?.(form),keepRecovery:()=>instance?.keepRecovery?.(),
   view:(subject=record(),settings={})=>instance?instance.view(subject,settings):researchMaterialsLaunch(subject,settings),
   action:control=>control.dataset.action?.startsWith('material-')?invoke('action',[control]):Promise.resolve(false),
   openRevision:(...args)=>invoke('openRevision',args),openReference:(...args)=>invoke('openReference',args),pinFigureSources:(...args)=>invoke('pinFigureSources',args),

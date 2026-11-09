@@ -57,8 +57,8 @@ export class StatisticalUncertaintyDefinitions{
  async create({recordId,title,definition},{signal}={}){
   if(!validStatisticalUncertaintyDefinition(definition))uncertaintyFailure();return this.materials.workspace.withLock(async()=>{await this.materials.assertOwner(recordId,{write:true});if(definition.nominal)await uncertaintySource(this.materials,definition.nominal,{signal,policy:definition.resourcePolicy});const content={tool:UNCERTAINTY_DEFINITION_TOOL,version:1,definition:structuredClone(definition),uncertaintyInputsIndex:await this.empty('inputs'),uncertaintyCovarianceIndex:await this.empty('covariance')};content.inputsIndex=await this.inputs(content,{signal});return this.materials.commit({kind:'analysis',recordId,title,content});});
  }
- async change(command,{signal}={}){
-  const {ref,collection,offset,item,remove=false}=command;return this.materials.workspace.withLock(async()=>{const doc=await this.read(ref);await this.materials.assertOwner(doc.recordId,{write:true});if((await this.materials.current(doc.id))?.revision!==ref.revision)uncertaintyFailure('MATERIAL_CHANGED');const content=structuredClone(doc.content);
+ async change(command,{signal,transaction=apply=>this.materials.workspace.withLock(apply)}={}){
+  const {ref,collection,offset,item,remove=false}=command;return transaction(async()=>{const doc=await this.read(ref);await this.materials.assertOwner(doc.recordId,{write:true});if((await this.materials.current(doc.id))?.revision!==ref.revision)uncertaintyFailure('MATERIAL_CHANGED');const content=structuredClone(doc.content);
    if(collection==='settings'){if(!validStatisticalUncertaintyDefinition(command.definition))uncertaintyFailure();content.definition=structuredClone(command.definition);if(content.definition.nominal)await uncertaintySource(this.materials,content.definition.nominal,{signal,policy:content.definition.resourcePolicy});}
    else{
     const descriptor=this.descriptor(content,collection);if(!natural(offset)||offset>descriptor.count||remove&&offset!==descriptor.count-1)uncertaintyFailure();

@@ -76,6 +76,10 @@ export async function verifyRecordOwnerTransfers(store,{signal,verified}={}){
   if(['retiring','complete'].includes(receipt.phase)){
    if(!exact(result,['recordId','notebookId','workspaceId','projectId','labBookId','storageRevision'])||result.recordId!==command.recordId||result.notebookId!==command.targetNotebookId||result.workspaceId!==command.targetWorkspaceId||result.projectId!==receipt.targetOwner.projectId||result.labBookId!==receipt.targetOwner.labBookId||result.storageRevision!==progress.prepared?.member?.revision||!revisionId(progress.activatedSnapshotId))fail();
   }else if(result!==null)fail();
+  if(target&&progress.scientific&&!reclaiming){
+   const {verifyScientificTransfer}=await import('./record-owner-scientific-edits.js');
+   await verifyScientificTransfer(store,receipt,progress.scientific,{signal,current:!terminal(receipt)});
+  }
   if(target&&progress.prepared&&!reclaiming){
    const {descriptor,member,view}=progress.prepared;
    if(!descriptor||descriptor.notebookId!==command.targetNotebookId||!Number.isSafeInteger(descriptor.generation)||descriptor.generation<1||!revisionId(descriptor.root)||!validMember(member)||member.id!==command.recordId||member.notebookId!==command.targetNotebookId||!view||view.revision!==descriptor.encoding?.contentRevision)fail();

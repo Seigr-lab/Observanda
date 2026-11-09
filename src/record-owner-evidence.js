@@ -176,6 +176,13 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
     if(draft.document&&draft.base?.recordId===recordId)await source.catalogue(store=>withDraftDocument(store,draft,document=>visitTree(document,document.root,value=>inspect(value,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)),{signal})));
     else for(const change of draft.changes??[])if(change.record?.id===recordId)await visitValue(change.record,value=>inspect(value,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)));
    }
+   const {ScientificEditDrafts}=await import('./scientific-edit-drafts.js'),{scientificEditReferences}=await import('./scientific-edit-state.js');
+   const scientific=new ScientificEditDrafts(materials);
+   for await(const {draft,revision} of scientific.forTransfer(receipt.sourceOwner.workspaceId,recordId,{signal})){
+    for(const ref of scientificEditReferences(draft.base,draft.value))yield ref;
+    const command=await scientific.receipt({id:draft.id,recordId,workspaceId:draft.workspaceId,expectedRevision:revision});
+    if(command?.ref)yield command.ref;
+   }
    for await(const value of inspected.items())if(validMaterialReference(value))yield value;
    for await(const name of source.metadataNames('.observanda/materials/records/'+recordId,{signal}))if(/^[a-f0-9]{64}\.json$/.test(name))yield {kind:'record',id:recordId,revision:name.slice(0,-5)};
    let cursor=null;do{const page=await materials.index.page({recordId,cursor,limit:32,signal});for(const head of page.items)yield head;cursor=page.next;}while(cursor);

@@ -2,20 +2,38 @@ import './i18n/catalogues/evidenceIntake.js';
 import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {evidenceIntakeProgress} from './evidence-intake-progress.js';
 import {updateText,updateProperty} from './progress-dom.js';
-import {FILE_CHUNK} from './evidence-fingerprint.js';
+import {FILE_CHUNK,browserHash} from './evidence-fingerprint.js';
 import {createFileSelection,registerFileManifest,selectedFiles} from './evidence-file-selection.js';
 import {compareEvidenceFiles,evidencePurposes} from './evidence-files.js';
 import {t} from './i18n/index.js';
 const tr=(key,parameters)=>t('evidenceIntake',key,parameters);
-export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,context,owner}){
+// Page file-choice metadata without opening file contents. The intake's own
+// verified content fingerprints are obtained only when the user starts it.
+async function fileChoice(files){
+ if(!files?.length)return null;let fingerprint='';
+ const ordered=Array.from(files).sort((a,b)=>{
+  const left=a.webkitRelativePath||a.name,right=b.webkitRelativePath||b.name;
+  if(left!==right)return left<right?-1:1;
+  return a.size-b.size||a.lastModified-b.lastModified;
+ });
+ for(let offset=0;offset<files.length;offset+=128){
+  const page=[];
+  for(let i=offset;i<Math.min(offset+128,ordered.length);i++){const file=ordered[i];page.push([file.webkitRelativePath||file.name,file.size,file.lastModified]);}
+  fingerprint=await browserHash(JSON.stringify([fingerprint,page]));
+ }
+ return {count:files.length,fingerprint};
+}
+export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,context,owner,recovery}){
  let batch=null,offset=0,page=null,cursor=null,listPage=null,controller=null,busy=false,timer=null,generation=0,intent=null;
  const button=(key,action,extra='')=>'<button type="button" class="button" data-action="material-intake-'+action+'" '+extra+'>'+esc(tr(key))+'</button>';
  const status=message=>{const node=document.getElementById('intake-status');if(node)updateText(node,message);};
  const stop=()=>{clearTimeout(timer);timer=null;generation++;};
  const meter=(done,total)=>{const node=document.getElementById('intake-progress');if(node)updateProperty(node,'value',total?done/total:1);};
  const progress=(completed=false)=>'<p id="intake-status" role="status" aria-live="polite"></p><progress id="intake-progress" max="1" value="'+(completed?'1':'0')+'" aria-label="'+esc(tr('progress'))+'"'+(completed?' hidden':'')+'></progress>';
+ let originalChoice=null,currentChoice=null;
  function newForm(){
-  batch=null;intent=null;offset=0;frame(tr('heading'),
+  const restored=recovery?.begin('evidence-intake');
+  batch=null;intent=restored?.intent??null;originalChoice=restored?.selection??null;currentChoice=null;offset=0;frame(tr('heading'),
    '<p>'+esc(tr('introduction'))+'</p>'+
    field(tr('title'),'<input id="intake-title" maxlength="300">')+
    field(tr('sourceMode'),'<select id="intake-mode"><option value="files">'+esc(tr('selectIndividual'))+'</option><option value="folder">'+esc(tr('selectFolder'))+'</option></select>')+
@@ -25,9 +43,16 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
    field(tr('provenance'),'<textarea id="intake-provenance" rows="3"></textarea>')+
    '<p class="muted">'+esc(tr('selectionHelp'))+'</p>'+progress()+
    '<div class="inline-actions">'+button('upload','upload')+button('pause','pause','disabled')+'</div>');
+  const form=document.getElementById('material-form'),files=document.getElementById('intake-files');
+  if(restored){for(const key of ['title','mode','purpose','provenance'])document.getElementById('intake-'+key).value=restored[key];files.toggleAttribute('webkitdirectory',restored.mode==='folder');if(originalChoice)status(t('scientificEditors','recoveryReselect'));}
   document.getElementById('intake-mode').addEventListener('change',event=>{
-   const input=document.getElementById('intake-files');input.value='';input.toggleAttribute('webkitdirectory',event.target.value==='folder');
+   files.value='';originalChoice=null;currentChoice=null;intent=null;files.toggleAttribute('webkitdirectory',event.target.value==='folder');
   });
+  form.addEventListener('input',event=>{
+   if(['intake-title','intake-purpose','intake-provenance'].includes(event.target.id))intent=null;
+  });
+  files.addEventListener('change',()=>{currentChoice=fileChoice(files.files);if(!originalChoice)intent=null;});
+  recovery?.mount(form,async()=>({title:form.querySelector('#intake-title').value,mode:form.querySelector('#intake-mode').value,purpose:form.querySelector('#intake-purpose').value,provenance:form.querySelector('#intake-provenance').value,selection:originalChoice??await currentChoice,intent}));
  }
  async function list({fresh=false}={}){
   if(fresh)cursor=null;const version=generation,result=await call('intakes',{recordId:owner(),cursor});guard();if(version!==generation)return;listPage=result;
@@ -67,17 +92,21 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
  async function upload(){
   // Keep the browser's FileList; hash and match only one metadata page at a time.
   const selected=document.getElementById('intake-files')?.files;if(!selected?.length)throw Error(tr('selectFiles'));
+  if(!batch&&originalChoice&&(await (currentChoice??fileChoice(selected)))?.fingerprint!==originalChoice.fingerprint)throw Error(tr('differentManifest'));
   const title=batch?.title??document.getElementById('intake-title').value.trim();
   if(!title)throw Error(tr('enterTitle'));
   busy=true;controller=new AbortController();const signal=controller.signal;
+  const controls=[...document.querySelectorAll('#material-form input,#material-form select,#material-form textarea')].map(control=>[control,control.disabled]);
+  for(const [control] of controls)control.disabled=true;
   for(const node of document.querySelectorAll('[data-action^="material-intake-"]'))node.disabled=node.dataset.action!=='material-intake-pause';
   let failure=null,id=batch?.id??intent?.id;
   const scopedCall=async(...args)=>{signal.throwIfAborted();guard();const result=await call(...args);guard();return result;};
   try{
    const source=await createFileSelection(scopedCall,owner(),selected,{signal,checking:(file,i)=>status(tr('checking',{name:file.name,number:i+1,count:selected.length})),progress:meter});
    if(!batch){
-    intent??={id:crypto.randomUUID(),recordId:owner(),title,provenance:document.getElementById('intake-provenance').value,purpose:document.getElementById('intake-purpose').value,sourceMode:document.getElementById('intake-mode').value,count:source.count,bytes:source.bytes};
-    id=intent.id;batch=await scopedCall('intake-start',intent,{signal});
+    const command={recordId:owner(),title,provenance:document.getElementById('intake-provenance').value,purpose:document.getElementById('intake-purpose').value,sourceMode:document.getElementById('intake-mode').value,count:source.count,bytes:source.bytes};
+    if(!intent||Object.entries(command).some(([key,value])=>intent[key]!==value))intent={id:crypto.randomUUID(),...command};
+    id=intent.id;await recovery?.flush();batch=await scopedCall('intake-start',intent,{signal});await recovery?.discard(document.getElementById('material-form'));
     document.getElementById('material-form')?.setAttribute('data-no-draft','');
    }
    if(batch.registered<batch.count)batch=await registerFileManifest(scopedCall,batch,source,{signal,checking:()=>status(tr('saving'))});
@@ -107,6 +136,7 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
   finally{
    controller=null;
    if(id){try{await open(id,{at:offset});}catch{status(failure??tr('confirmFailed'));}}
+   for(const [control,disabled] of controls)if(control.isConnected)control.disabled=disabled;
    busy=false;
    if(!id||!batch)for(const node of document.querySelectorAll('[data-action^="material-intake-"]'))node.disabled=node.dataset.action==='material-intake-pause';
    status(failure??tr('receivedHelp'));
@@ -135,5 +165,5 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
   }
   return true;
  }
- return {action,stop,isBusy:()=>busy};
+ return {action,stop,newForm,open,isBusy:()=>busy};
 }

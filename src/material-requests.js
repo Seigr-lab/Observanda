@@ -18,6 +18,7 @@ import {retryComparison} from './comparison-job-admission.js';
 // Evidence commands are shared by workspace and selected-project HTTP adapters.
 // The caller supplies the authorized storage owner and its own durable job service.
 import {ResearchMaterials} from './research-materials.js';
+import {ScientificEditDrafts} from './scientific-edit-drafts.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 import {DatasetCalculations} from './dataset-calculations.js';
@@ -34,6 +35,10 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
  switch(operation){
+ case 'scientific-draft-browse':case 'scientific-draft-list':case 'scientific-draft-read':case 'scientific-draft-write':case 'scientific-draft-discard':{
+  const drafts=new ScientificEditDrafts(materials,{check,signal,sourceAccess});
+  return drafts[operation.slice('scientific-draft-'.length)](data);
+ }
  case 'cusum-inputs':if(!data||Object.keys(data).some(key=>!['ref','offset','limit'].includes(key)))throw new AppError('INVALID');return new DatasetCusumResults(materials).inputs(data,{signal});
  case 'spectrum-inputs':if(!data||Object.keys(data).some(key=>!['ref','offset','limit'].includes(key)))throw new AppError('INVALID');return new DatasetSpectrumResults(materials).inputs(data,{signal});
  case 'coordinate-frame-create':case 'coordinate-frame-change':case 'coordinate-frame-page':case 'coordinate-frame-scalar':case 'coordinate-frame-transform-save':case 'coordinate-frame-transform-read':return coordinateFrameRequest(materials,operation,data,{signal,check});
@@ -101,16 +106,26 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);
  case 'uncertainty-create':return {ref:await new StatisticalUncertaintyDefinitions(materials).create(data,{signal})};
- case 'uncertainty-change':return {ref:await new StatisticalUncertaintyDefinitions(materials).change(data,{signal})};
+ case 'uncertainty-change':case 'calculation-graph-change':{
+  const {checkpoint,...command}=data;
+  const transaction=checkpoint?apply=>new ScientificEditDrafts(materials,{check,signal,sourceAccess}).retain(checkpoint,operation,command,apply):undefined;
+  return {ref:operation==='uncertainty-change'?await new StatisticalUncertaintyDefinitions(materials).change(command,{signal,transaction}):await new CalculationGraphs(materials).change(command,{transaction})};
+ }
  case 'uncertainty-page':return new StatisticalUncertaintyDefinitions(materials).page(data,{signal});
  case 'uncertainty-scalar':return new StatisticalUncertaintyDefinitions(materials).scalar(data,{signal});
  case 'uncertainty-result':return new StatisticalUncertaintyResults(materials).page(data,{signal});
  case 'calculation-graph-create':return {ref:await new CalculationGraphs(materials).create(data)};
- case 'calculation-graph-change':return {ref:await new CalculationGraphs(materials).change(data)};
  case 'calculation-graph-page':return new CalculationGraphs(materials).page(data);
  case 'calculation-schema':{const calculations=new DatasetCalculations(materials);if(data.columns!==undefined)return {columns:await calculations.schema(data.ref,data.view,{columns:data.columns}),columnIndices:data.columns};if(data.offset!==undefined||data.limit!==undefined)return calculations.schemaPage(data.ref,data.view,{offset:data.offset,limit:data.limit});return {columns:await calculations.schema(data.ref,data.view)};}
  case 'dataset-preview':return materials.previewDataset(data,{signal});
- case 'dataset':case 'comparison':case 'plot':{const {queue,worker,comparisonAccess}=await jobService(),{jobId,...command}=data,enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot,job=await enqueue(materials,queue,command,jobId,{sourceAccess,comparisonAccess,signal});worker.wake();return {job};}
+ case 'dataset':case 'comparison':case 'plot':{
+  const {queue,worker,comparisonAccess}=await jobService(),{jobId,checkpoint,...command}=data;
+  const enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot;
+  if(checkpoint&&operation==='comparison')throw new AppError('INVALID');
+  const recordAdmission=checkpoint?job=>new ScientificEditDrafts(materials,{check,signal,sourceAccess}).recordAdmission(checkpoint,operation,command,job):undefined;
+  const job=await enqueue(materials,queue,command,jobId,{sourceAccess,comparisonAccess,signal,recordAdmission});
+  worker.wake();return {job};
+ }
  case 'dataset-jobs':{const {queue}=await jobService();return datasetJobs(materials,queue,data.recordId,{cursor:data.cursor??null});}
  case 'rows':return materials.datasetPage(data.ref,data.page??0,{columnOffset:data.columnOffset??0});
  case 'collection':return materials.collection(data);

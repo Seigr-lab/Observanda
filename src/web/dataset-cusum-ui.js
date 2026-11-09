@@ -1,3 +1,4 @@
+import {scientificCommandIdentity} from './scientific-command-identity.js';
 import {t} from './i18n/index.js';
 import {cusumText,cusumContextText} from './dataset-cusum-context.js';
 import {CUSUM_METHOD,CUSUM_CONVENTIONS,CUSUM_GAP_POLICIES,CUSUM_SIGNAL_POLICIES,validCusumRecipe,validCusumExecutionPolicy,cusumColumnDescriptor,publicCusumContext} from './dataset-cusum-model.js';
@@ -33,7 +34,7 @@ export function cusumPreviewView(data,{esc,text=cusumText}){
  const clipped=data.rows.some(row=>row.cells.some(shortened))||data.contexts?.some(value=>['scale','offset'].some(key=>shortened(value.unitDefinition?.[key]?.spelling)));
  return '<p>'+esc(text('previewNote'))+'</p><p>'+esc(text('noInference'))+'</p><div class="material-table" data-cusum-preview-table><table><thead><tr>'+data.columns.map((label,index)=>'<th>'+esc(label)+scalarFormatView(data.contexts?.[index],{esc})+unit(data.contexts?.[index]?.unitDefinition)+'</th>').join('')+'</tr></thead><tbody>'+data.rows.map(row=>'<tr>'+row.cells.map((value,index)=>'<td>'+scalar(value)+cellComputationView(data.contexts?.[index]??{},{cellComputations:row.computations,valueKinds:row.valueKinds},index,{esc})+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+(clipped?'<p>'+esc(text('previewTruncated'))+'</p>':'');
 }
-export function datasetCusumUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify,readOnly=()=>false,text=cusumText}){
+export function datasetCusumUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify,readOnly=()=>false,recovery,text=cusumText}){
  let draft=null,title='',origin=null,parameterRef=null,page=null,root=null,identity=null,generation=0,busy=false,dispose=null,review=null,columnSource=null;
  const button=(key,action,extra='')=>'<button type="button" class="button" data-action="material-cusum-'+action+'" '+extra+'>'+esc(text(key))+'</button>',input=(key,value,type='text')=>field(esc(text(key)),'<input data-cusum="'+key+'" type="'+type+'" value="'+esc(value??'')+'"'+(type==='text'?' maxlength="300"':' step="1"')+'>'),select=(key,value,items)=>field(esc(text(key)),'<select data-cusum="'+key+'">'+items.map(([id,label])=>'<option value="'+esc(id)+'"'+(String(id)===String(value)?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select>');
  function clean(){generation++;dispose?.();dispose=null;root=null;busy=false;}
@@ -53,6 +54,7 @@ export function datasetCusumUI({state,api,call,frame,esc,field,guard,owner,inspe
   const units=wireMeasurementUnits(root,{esc,field}),scalars=wireScalarFields(root,{call,esc,guard,available:()=>!busy,reference:()=>({ref:parameterRef})}),analysis=wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId:owner(),onReference:async()=>{if(busy)return;await scalars.ready();capture();const token=generation;working(true);try{await columns();check(token,element);render();}finally{if(active(token,element))working(false);}}});
   for(const control of root.querySelectorAll('[data-column-window]'))control.onclick=async()=>{if(busy)return;const token=generation;try{await scalars.ready();check(token,element);capture();working(true);await columns(datasetColumnPageOffset(control));check(token,element);render();}catch(error){if(error.name!=='AbortError'&&active(token,element))notify(error.message,true);}finally{if(active(token,element))working(false);}};
   dispose=()=>{controller.abort();units();scalars();analysis();};dispose.ready=()=>scalars.ready();
+  recovery?.mount(root.closest('form'),()=>{capture();return {origin,parameterRef,title,recipe:draft,offset:page.offset,identity};});
  }
  const sourceButton=source=>'<button type="button" class="button" data-action="material-measurement-inspect" data-source="'+esc(JSON.stringify(source))+'">'+esc(text('inspect'))+'</button>';
  async function reviewPage(at=0){
@@ -64,12 +66,22 @@ export function datasetCusumUI({state,api,call,frame,esc,field,guard,owner,inspe
   if(!act.startsWith('cusum-'))return false;guard();const key=act.slice(6);if(busy)return true;if(readOnly()&&!['review','page','back'].includes(key))return true;
   if(key==='back'){const target=origin;clean();await inspect(target);return true;}if(key==='review'){clean();origin=JSON.parse(control.dataset.ref);await reviewPage();return true;}if(key==='page'){await reviewPage(Number(control.dataset.offset));return true;}
   if(key==='open'||key==='repeat'){
+   recovery?.begin('cusum',JSON.parse(control.dataset.ref));
    clean();origin=JSON.parse(control.dataset.ref);if(key==='repeat'&&origin.kind!=='dataset')throw Error(text('repeatFromDataset'));const token=generation,doc=await call('read',{ref:origin});guard();if(token!==generation)return true;
    if(key==='repeat'){const data=await call('cusum-inputs',{ref:origin,offset:0,limit:1},{adopt:false,adoptOwner:false});guard();if(token!==generation)return true;draft=structuredClone(data.cusum);parameterRef=data.ref;title=doc.title;}else{draft=defaultCusumRecipe(origin);parameterRef=null;title=text('open');}
    identity={id:key==='repeat'?origin.id:crypto.randomUUID(),expectedRevision:key==='repeat'?origin.revision:null,jobId:crypto.randomUUID()};await columns();if(token!==generation)return true;render();return true;
   }
   if(!root?.isConnected||review)return true;const token=generation,element=root;await dispose?.ready?.();check(token,element);assertAnalysisFieldsReady(root);capture({validate:true});
-  if(key==='preview'||key==='retain'){const command={recordId:owner(),title,id:identity.id,expectedRevision:identity.expectedRevision,cusum:draft};working(true);try{const result=await call(key==='preview'?'dataset-preview':'dataset',{...command,...(key==='retain'?{jobId:identity.jobId}:{})});check(token,element);if(key==='retain'){clean();await watchJob(result.job);}else root.querySelector('[data-cusum-preview]').innerHTML=cusumPreviewView(result,{esc,text});}finally{if(active(token,element))working(false);}return true;}return true;
+  if(key==='preview'||key==='retain'){working(true);try{
+   const input={recordId:owner(),title,cusum:draft};
+   if(key==='retain')identity=await scientificCommandIdentity(identity,input);
+   const checkpoint=key==='retain'?await recovery?.checkpoint():null;
+   const command={...input,id:identity.id,expectedRevision:identity.expectedRevision};
+   const result=await call(key==='preview'?'dataset-preview':'dataset',{...command,...(key==='retain'?{jobId:identity.jobId,...(checkpoint?{checkpoint}:{})}:{})});
+   check(token,element);if(key==='retain'){await recovery?.discard(root.closest('form'));clean();await watchJob(result.job);}else root.querySelector('[data-cusum-preview]').innerHTML=cusumPreviewView(result,{esc,text});}finally{if(active(token,element))working(false);}return true;}return true;
  }
- return {action,clean,isBusy:()=>busy};
+ async function restore(base){
+  clean();const restored=recovery.begin('cusum',base);origin=restored.origin;parameterRef=restored.parameterRef;title=restored.title;draft=restored.recipe;identity=restored.identity;columnSource=null;await columns(restored.offset);guard();render();
+ }
+ return {action,clean,restore,isBusy:()=>busy};
 }
