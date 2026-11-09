@@ -141,6 +141,13 @@ Each website has its own HTML pages, CSS, assets and publishing destination. Ope
 
 Permission changes affect the saved composition. To update an already published website, publish the changed files to its destination. Previously downloaded PDFs and independent copies of public files cannot be withdrawn.
 
+Use the **Publication** tools to manage an edition after it is published:
+
+- **Releases** compares the saved website with the edition the destination last acknowledged. It lists the files an update would add, change or remove, including material whose permission was withdrawn, and records earlier releases so you can reopen their version and publish it again under current permissions.
+- **Withdraw publication** replaces a folder, GitHub or SSH publication with a withdrawal notice after the same review as any update. Observanda removes only files it wrote and leaves other files at the destination unchanged.
+- **Search and sharing** sets the public address, search indexing, the sitemap and a preview image, and links pages that present the same content in different languages. These settings are written into the published pages; Observanda does not contact the address.
+- **Review** lets a team request review of the exact saved edition, comment on elements of a page, and optionally require an approved edition before anything is published. Any later change makes an earlier approval out of date.
+
 Website design is separate from the app's appearance. Publishing selected work does not publish the whole workspace, and website visitors do not need Observanda installed.
 
 ## Share work and request reviews
