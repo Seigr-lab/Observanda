@@ -1,0 +1,70 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,mkdir,readFile,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {createNotebook} from '../../src/model.js';
+import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+
+test('author scientific source, locate and repair a refused edit, undo a saved CSS value and independently open the published page',async({page,browser})=>{
+ test.setTimeout(80000);page.setDefaultTimeout(8500);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-source-')),out=path.join(root,'edition'),database=process.env.OBSERVANDA_DATABASE_URL;
+ const b=name=>page.getByRole('button',{name,exact:true}),canvas=page.frameLocator('#website-files-canvas');
+ const htmlField=page.getByRole('textbox',{name:'HTML',exact:true}),note=page.locator('[data-source-note]'),status=page.locator('[data-source-status]');
+ let fixture,app,reader;
+ try{
+  await mkdir(out);fixture=await encryptedFixture(root,createNotebook('Seismic lab'));
+  const store=new WebsiteFileStore(fixture.workspace),id=randomUUID(),title='Seismic survey';
+  const html="<!DOCTYPE html>\n<!-- Instrument note -->\n<html lang='en'><head><title>Seismic survey</title><link rel='stylesheet' href='style.css'></head><body>\n<main>\n<H1>Seismic survey</H1>\n<P id='depth' data-unit='m'>Depth at station 1.</P>\n<pre>  3.0\n  4.0</pre></main></body></html>".replaceAll('\n','\r\n');
+  const css='#depth{color:rgb(24,92,81)}';
+  const saved=await store.importFiles(id,{name:title,files:new Map([['index.html',html],['style.css',css]])});
+  const sourceId=websiteSourceId({workspaceId:fixture.workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()});
+  const token=await store.beginSourceUpdate({sourceId});await store.putSource({sourceId,visible:true,title:'Reading',html:'<p data-observanda-part="value">Permitted result</p>'},{token});
+  const granted=await store.insertSource(id,{expectedRevision:saved.site.revision,sourceId,position:'end'});
+  process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/offline';
+  app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'prefs.json'),port:0});
+  await page.goto(app.origin+'/?view=website#'+app.launchToken);
+  await b('HTML').click();await expect(htmlField).toHaveValue(granted.html.replace(/\r\n?/g,'\n'));
+  await expect(page.locator('pre[data-source-highlight] .source-markup').first()).toBeVisible();
+  const invalid=granted.html.replace("data-unit='m'","data-unit='m' formaction='draft'");
+  await htmlField.fill(invalid);await expect(note).toContainText("formaction='draft'");await expect(note).toContainText('Line ');
+  await b('Select issue').click();expect(await htmlField.evaluate(el=>el.value.slice(el.selectionStart,el.selectionEnd))).toBe("formaction='draft'");
+  await b('Save website').click();await expect(htmlField).toHaveValue(invalid.replace(/\r\n?/g,'\n'));expect((await store.open(id)).site.revision).toBe(granted.site.revision);
+  await htmlField.fill(granted.html);await expect(status).toContainText('same draft');
+  await b('Find').click();await page.getByRole('textbox',{name:'Find',exact:true}).fill('station 1');
+  await page.getByRole('textbox',{name:'Replace with',exact:true}).fill('station 3');await b('Next match').click();await b('Replace').click();
+  await expect(htmlField).toHaveValue(/station 3/);await expect(status).toContainText('same draft');
+  await htmlField.evaluate(el=>el.setSelectionRange(el.value.indexOf('station 3'),el.value.indexOf('station 3')));
+  await b('Locate on canvas').click();await expect(canvas.locator('#depth')).toHaveText('Depth at station 3.');
+  await canvas.locator('#depth').click();await page.keyboard.press('End');await page.keyboard.type(' Verified.');
+  await expect(htmlField).toHaveValue(/Verified\./);
+  expect(await htmlField.inputValue()).toContain("<P id='depth' data-unit='m'>Depth at station 3. Verified.</P>");
+  const position=(await htmlField.inputValue()).indexOf('Permitted result');await htmlField.evaluate((el,at)=>el.setSelectionRange(at,at),position);
+  await b('Locate on canvas').click();await expect(note).toContainText('Managed content.');
+  await canvas.locator('h1').click();await expect.poll(()=>htmlField.evaluate(el=>el.value.slice(el.selectionStart,el.selectionEnd))).toBe('<H1>');
+  await b('Format source').click();await expect(htmlField).toHaveValue(/<P\n  id='depth'\n  data-unit='m'>/);
+  await expect(status).toContainText('same draft');await b('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await b('CSS').click();const source=page.getByRole('textbox',{name:'CSS',exact:true});await source.fill('#depth{color:rgb(83,41,73)}');
+  await expect(note).toContainText('#depth matches 1 · p#depth');await b('Save website').click();
+  await b('Visual editor').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(83, 41, 73)');
+  await b('Undo').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(24, 92, 81)');
+  await b('Redo').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(83, 41, 73)');
+  await page.reload();await expect(canvas.locator('#depth')).toHaveText('Depth at station 3. Verified.');
+  await b('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await b('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b('Write reviewed files').click();
+  await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
+  reader=await browser.newPage();await reader.goto(pathToFileURL(path.join(out,'index.html')).href);
+  await expect(reader.locator('#depth')).toHaveCSS('color','rgb(83, 41, 73)');await expect(reader.locator('pre')).toHaveText('  3.0\n  4.0',{useInnerText:false});
+  await expect(reader.getByText('Permitted result',{exact:true})).toBeVisible();await expect(reader.locator('[data-observanda-editor]')).toHaveCount(0);
+  const published=await readFile(path.join(out,'index.html'),'utf8');
+  expect(published).toContain('<!DOCTYPE html>\r\n<!-- Instrument note -->\r\n');
+  expect(published).toContain('<pre>  3.0\r\n  4.0</pre>');
+ }finally{
+  if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;
+  await reader?.close();try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{await rm(root,{recursive:true,force:true,maxRetries:8});}
+ }
+});

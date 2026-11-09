@@ -226,6 +226,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    const write=operation==='themes/change';if(write){onWrite();await check();}
    json(await websiteThemes(store,siteId,{...options,expectedRevision,signal},write));return true;
   }
+  if(operation==='source/check'){json(await store.checkDraft(siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='source/locate'){json(await store.locateSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='appearance/read'||operation==='appearance/save'){
    const write=operation==='appearance/save';if(write){onWrite();await check();}
    json(await savedAppearance(store,siteId,{...options,expectedRevision,signal},write));return true;

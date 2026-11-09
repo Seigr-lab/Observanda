@@ -163,6 +163,31 @@
    the space left by the real toolbar, including translated or wrapped text. */
 .website-files-editor .website-files-structure { max-height:none;overflow:visible }
 .website-files-editor>aside:focus-visible { outline:2px solid var(--accent,#3454ac);outline-offset:-2px }
+.website-files-editor[data-source-open] { grid-template-columns:minmax(10rem,15rem) minmax(0,1fr) minmax(17rem,.8fr) }
+.website-files-editor[data-source-open] > .website-files-inspection { display:none }
+.website-source-pane { box-sizing:border-box; min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; background:var(--ui-surface,#fff); border:1px solid var(--ui-border,#cbd3df); border-radius:.35rem }
+.website-source-pane > header { display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.4rem .55rem; margin:0; border-block-end:1px solid var(--ui-border,#cbd3df) }
+.website-source-pane textarea { resize:none; border:0; box-sizing:border-box; width:100%; height:100%; padding:.65rem; white-space:pre; tab-size:2; font:normal .83rem/1.5 ui-monospace,monospace; color:var(--ui-text,#1f2937); background:var(--ui-surface,#fff) }
+.website-source-pane > p { margin:0; padding:.35rem .55rem; font-size:.8rem; border-block-start:1px solid var(--ui-border,#cbd3df) }
+.website-source-pane { grid-template-rows:auto minmax(0,1fr) auto auto auto }
+.website-source-pane[data-source-only] { height:clamp(20rem,68vh,65rem);margin-block:.4rem }
+.website-source-pane>header,.website-source-actions,.website-source-search,.website-source-note { display:flex;align-items:center;gap:.35rem;flex-wrap:wrap }
+.website-source-search { flex-basis:100%;align-items:end }
+.website-source-search label { flex:1 1 6rem;min-width:0 }.website-source-search input { display:block;width:100%;box-sizing:border-box }
+.website-source-search[hidden],.website-source-note [hidden] { display:none }
+.website-source-edit { position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--ui-surface,#fff) }
+.website-source-edit>pre,.website-source-edit>textarea { position:absolute;inset:0;padding:.65rem;margin:0;box-sizing:border-box;font:normal .83rem/1.5 ui-monospace,monospace;white-space:pre;tab-size:2;letter-spacing:normal;text-transform:none }
+.website-source-edit>pre { pointer-events:none;overflow:visible;border:0;background:transparent;color:var(--ui-text,#18222a) }
+.website-source-edit>textarea { background:transparent;color:transparent;caret-color:var(--ui-text,#18222a);overflow:auto }
+.website-source-edit>textarea::selection { color:HighlightText;background:Highlight }
+.website-source-pane[data-native-source] textarea { color:var(--ui-text,#18222a) }
+.website-source-note,.website-source-pane>details { font-size:.8rem;padding:.3rem .55rem;overflow-wrap:anywhere }
+.website-source-actions .button,.website-source-search .button,.website-source-note .button { padding:.2rem .45rem;min-height:1.8rem }
+.source-markup { color:light-dark(#234c96,#abc8ff) }.source-string { color:light-dark(#7f331f,#ffb89f) }
+.source-name { color:light-dark(#693c75,#e2b7f0) }.source-value { color:light-dark(#225e48,#9ee2c8) }
+.source-comment { color:light-dark(#54616b,#c1cad0);font-style:italic }
+.source-managed { color:light-dark(#733966,#e4b0db);text-decoration:underline dotted }
+@media(forced-colors:active){.website-source-edit>pre { visibility:hidden }.website-source-edit>textarea { color:CanvasText;background:Canvas }}
 .website-placement-line { position:fixed;z-index:1000;height:3px;background:Highlight;pointer-events:none }
 .website-placement-line::before {content:attr(data-hint);position:absolute;inset-inline-start:.5rem;bottom:2px;background:Highlight;color:HighlightText;border-radius:.22rem .22rem 0 0;padding:.18rem .55rem;font-size:.82rem;font-weight:600}
 .website-source-gallery { box-sizing:border-box;display:flex;flex-direction:column;gap:.8rem;min-height:0 }

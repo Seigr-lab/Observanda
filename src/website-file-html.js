@@ -15,10 +15,16 @@ const partId=node=>attr(node,'data-observanda-part');
 const sourceId=node=>attr(node,'data-observanda-source');
 const patches=(html,changes)=>changes.sort((a,b)=>b.start-a.start).reduce((text,change)=>text.slice(0,change.start)+change.text+text.slice(change.end),html);
 export const escapeWebsiteText=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function markerIssue(node,error){
+ const loc=node.sourceCodeLocation?.startTag;
+ if(loc&&['INVALID','CONFLICT'].includes(error.code))error.sourceDiagnostic={kind:'html',reason:'protectedStructure',start:loc.startOffset,end:loc.endOffset};
+ return error;
+}
 
-export function websiteSourcePlacements(html,previous=[]){
+export function websiteSourcePlacements(html,previous=[],root=parse(html,{sourceCodeLocationInfo:true})){
  const result=[],keys=new Set(),prior=new Map(previous.filter(item=>item.link).map(item=>[item.link,item]));
- for(const node of ordinaryNodes(parse(html,{sourceCodeLocationInfo:true}))){
+ for(const node of ordinaryNodes(root)){
+  try{
   if(linkSource(node)!==undefined){
    const placement=linkPlacement(node,prior);
    if(keys.has(placement.link)||sourceId(node)!==undefined)throw new AppError('INVALID');
@@ -29,6 +35,7 @@ export function websiteSourcePlacements(html,previous=[]){
   for(let parent=node.parentNode;parent;parent=parent.parentNode)if(sourceId(parent)!==undefined)throw new AppError('INVALID');
   const revision=attr(node,'data-observanda-source-revision');if(!/^[a-f0-9]{64}$/.test(revision??''))throw new AppError('INVALID');
   result.push({id,revision,...galleryItemPlacement(node),...displayPlacement(node)});
+  }catch(error){throw markerIssue(node,error);}
  }
  return result;
 }
@@ -71,18 +78,22 @@ function mergeParts(current,previous,next,{root=false}={}){
  if(root&&!incoming.size&&!old.size)return next.html;
  return patches(current.html,changes);
 }
-export function websiteMarkerShape(html){
+export function websiteMarkerShape(html,locations,tree){
  const scopes=[];
- for(const node of ordinaryNodes(parse(html,{sourceCodeLocationInfo:true}))){
-  if(attr(node,galleryKey)!==undefined||attr(node,displayId)!==undefined||attr(node,'data-website-feed')!==undefined)scopes.push('managed:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
+ const remember=(node,value)=>{
+  scopes.push(value);
+  if(locations){const loc=node.sourceCodeLocation?.startTag;if(loc)locations.push({value,start:loc.startOffset,end:loc.endOffset});}
+ };
+ for(const node of ordinaryNodes(tree??parse(html,{sourceCodeLocationInfo:true}))){
+  if(attr(node,galleryKey)!==undefined||attr(node,displayId)!==undefined||attr(node,'data-website-feed')!==undefined)remember(node,'managed:'+createHash('sha256').update(serializeOuter(node)).digest('hex'));
   if(linkSource(node)!==undefined){
    let owner,part;for(let parent=node.parentNode;parent;parent=parent.parentNode){part??=partId(parent);owner??=sourceId(parent);}
-   scopes.push(JSON.stringify(['link',owner,part,linkShape(node)]));continue;
+   remember(node,JSON.stringify(['link',owner,part,linkShape(node)]));continue;
   }
   const id=sourceId(node);if(id===undefined)continue;const bounds=range(node),keys=[];
   for(const child of descendants(node)){const part=partId(child);if(part!==undefined)keys.push(part);}
   if(!Number.isInteger(bounds.start)||!Number.isInteger(bounds.end))throw new AppError('INVALID');
-  scopes.push(id+':'+attr(node,'data-observanda-source-revision')+':'+JSON.stringify(keys.sort())+':'+JSON.stringify((node.attrs??[]).filter(item=>item.name.startsWith('data-observanda-')).map(item=>[item.name,item.value]).sort()));
+  remember(node,id+':'+attr(node,'data-observanda-source-revision')+':'+JSON.stringify(keys.sort())+':'+JSON.stringify((node.attrs??[]).filter(item=>item.name.startsWith('data-observanda-')).map(item=>[item.name,item.value]).sort()));
  }return scopes.sort();
 }
 // Only explicit source permission writes call this. Ordinary opening, preview

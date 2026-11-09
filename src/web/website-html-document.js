@@ -1,10 +1,20 @@
-// These helpers edit HTML documents directly. No research model is reconstructed.
+import {applyChange} from './website-text-splice.js';
+
+// Keep a lexical source alongside the parsed tree. A splice is admitted only
+// if parsing the result yields the exact edited structure.
 export function websiteHTML(html){
  if(typeof html!=='string')throw new TypeError('Expected an HTML document');
  return new DOMParser().parseFromString(html,'text/html');
 }
-export function serializeWebsiteHTML(document){
- return '<!doctype html>\n'+document.documentElement.outerHTML;
+const canonical=document=>'<!doctype html>\n'+document.documentElement.outerHTML;
+export function serializeWebsiteHTML(document,original,normalized){
+ const result=canonical(document);if(typeof original!=='string'||original===result)return result;
+ const source=websiteHTML(original),before=canonical(source);if(before===result)return original;
+ const spliced=applyChange(before,result,original,{verifyLexical:true});
+ if(spliced!==null&&canonical(websiteHTML(spliced))===result)return spliced;
+ normalized?.();
+ const serializer=new XMLSerializer();
+ return Array.from(source.childNodes,node=>node===source.documentElement?document.documentElement.outerHTML:serializer.serializeToString(node)).join('');
 }
 export function applyCanvasCSS(style,css,stylesheet,resource){
  style.textContent=css.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi,(match,a,b,c)=>{const url=(a??b??c).trim();if(!url||url.startsWith('#'))return match;const absolute=new URL(url,stylesheet).href;return 'url('+JSON.stringify(resource?.(absolute)??absolute)+')';});
@@ -30,7 +40,7 @@ export function loadWebsiteCanvas(document,html,css,stylesheet,resource){
  if(current)current.after(style);else if(source.head.querySelector('link[data-website-appearance]'))source.head.querySelector('link[data-website-appearance]').before(style);else source.head.append(style);
  document.replaceChild(document.importNode(source.documentElement,true),document.documentElement);
 }
-export function websiteCanvasValue(document){
+export function websiteCanvasValue(document,original,normalized){
  const copy=document.cloneNode(true);
  for(const media of copy.querySelectorAll('[data-observanda-editor-media]')){
   media.setAttribute('src',media.dataset.observandaEditorMedia);media.removeAttribute('data-observanda-editor-media');
@@ -46,7 +56,7 @@ export function websiteCanvasValue(document){
  for(const node of copy.querySelectorAll('[data-observanda-editor-editable]')){
   const value=node.dataset.observandaEditorEditable;if(value==='absent')node.removeAttribute('contenteditable');else node.setAttribute('contenteditable',value);node.removeAttribute('data-observanda-editor-editable');
  }
- return serializeWebsiteHTML(copy);
+ return serializeWebsiteHTML(copy,original,normalized);
 }
 export function editWebsiteCanvas(document){
  const body=document.body;body.dataset.observandaEditorEditable=body.getAttribute('contenteditable')??'absent';body.contentEditable='true';

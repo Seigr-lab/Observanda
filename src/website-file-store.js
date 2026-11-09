@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {parse} from 'parse5';
 import {starterPage,starterStyles} from './web/website-file-starter.js';
 import {readFile} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
@@ -19,7 +20,9 @@ import {assertPublicFiles} from './privacy.js';
 import {replaceSourceTags} from './website-source-tags.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
 import {publicPictureNames,saveWebsitePictures} from './website-picture-files.js';
-import {websiteFileName,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
+import {websiteFileName,websiteHTMLByteLimit,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
+import {websiteSourceLocation} from './website-source-location.js';
+import {cssStructureIssue} from './web/website-source-text.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSources,updateWebsiteSource} from './website-file-html.js';
 import {assertPageDestination,websitePageIdentity} from './website-page-paths.js';
@@ -498,24 +501,55 @@ export class WebsiteFileStore{
  open(id,{path:page='index.html',signal}={}){return this.scope(async()=>this.present(await this.current(id),page,{signal}),{signal});}
  menu(id,options){return readSiteMenu(this,id,options);}
  saveMenu(id,options){return saveSiteMenu(this,id,options);}
- async inspectPageSource(manifest,page,html,css,signal,designInstances,creation){
+ async inspectPageSource(manifest,page,html,css,signal,designInstances,creation,diagnose=false){
   if(manifest.pages.some(p=>p.path===page&&p.archived))throw new AppError('NOT_FOUND');
   websiteFileName(page);if(!page.endsWith('.html'))throw new AppError('INVALID');
   if(manifest.files.some(file=>file.name===page&&file.feedPage))throw new AppError('CONFLICT');
-  const former=manifest.pages.find(item=>item.path===page),placements=websiteSourcePlacements(html,former?.placements);
+  if(typeof html!=='string'||Buffer.byteLength(html)>websiteHTMLByteLimit)throw new AppError('LIMIT');
+  const former=manifest.pages.find(item=>item.path===page),tree=parse(html,{sourceCodeLocationInfo:true});
   const draft=former?.draft||creation?.draft,cssPath=creation?.stylePath??pageStylesheet(manifest,former);
   const scripts=await this.scripts(manifest.files),htmlPictures=new Set(),cssPictures=new Set(),recordingNames=new Set();
   const addViewer=!scripts.has('public-gallery.js')&&typeof html==='string'&&html.includes('public-gallery.js');
   if(addViewer)scripts.add('public-gallery.js');
-  validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});validateWebsiteCSS(css,{file:cssPath,pictures:cssPictures});
+  validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames,diagnose,tree});validateWebsiteCSS(css,{file:cssPath,pictures:cssPictures,diagnose});
+  const placements=websiteSourcePlacements(html,former?.placements,tree);
   if(former?.placements.length||placements.length||former?.sourceGalleries?.length||manifest.feeds?.some(f=>f.path===page)||html.includes('data-website-feed')){
    const old=manifest.files.find(file=>file.name===page);const previous=old?await this.readText(old,{signal}):'';
-   if(plain(websiteMarkerShape(previous))!==plain(websiteMarkerShape(html)))throw new AppError('CONFLICT');
+   const allowed=websiteMarkerShape(previous),locations=diagnose?[]:null;
+   if(plain(allowed)!==plain(websiteMarkerShape(html,locations,tree))){
+    const error=new AppError('CONFLICT');
+    if(locations){
+     const remaining=new Map();for(const token of allowed)remaining.set(token,(remaining.get(token)??0)+1);
+     const issue=locations.find(({value})=>{const count=remaining.get(value)??0;if(!count)return true;remaining.set(value,count-1);return false;});
+     if(issue)error.sourceDiagnostic={kind:'html',reason:'protectedStructure',start:issue.start,end:issue.end};
+    }
+    throw error;
+   }
   }
   if(designInstances&&former)throw new AppError('CONFLICT');
   checkSavedComponents(manifest,designInstances?{path:page,instances:designInstances}:former,html);
   return {former,placements,draft,cssPath,scripts,htmlPictures,cssPictures,recordingNames,addViewer};
  }
+ checkDraft(id,{expectedRevision,path:page,html,css,signal}){return this.scope(async()=>{
+  if(!hex(expectedRevision))throw new AppError('INVALID');
+  const manifest=await this.current(id,expectedRevision);
+  let former;
+  try{({former}=await this.inspectPageSource(manifest,page,html,css,signal,undefined,undefined,true));}
+  catch(error){
+   if(error.sourceDiagnostic)return {revision:expectedRevision,diagnostic:error.sourceDiagnostic};
+   if(error.code==='CONFLICT'||error.code==='INVALID')return {revision:expectedRevision,diagnostic:{kind:'html',reason:'protectedStructure'}};
+   throw error;
+  }
+  if(!former)throw new AppError('NOT_FOUND');
+  const issue=cssStructureIssue(css);if(issue)return {revision:expectedRevision,diagnostic:{kind:'css',...issue}};
+  return {revision:expectedRevision};
+ },{signal});}
+ locateSource(id,{expectedRevision,path:page,html,query,signal}){return this.scope(async()=>{
+  if(!hex(expectedRevision))throw new AppError('INVALID');
+  const manifest=await this.current(id,expectedRevision);
+  if(!manifest.pages.some(item=>item.path===page&&!item.archived))throw new AppError('NOT_FOUND');
+  return {revision:expectedRevision,location:websiteSourceLocation(html,query)};
+ },{signal});}
  createPage(id,{expectedRevision,path:page,title:pageTitle,language,inclusion='private',signal},design){return this.scope(async()=>{
   if(!hex(expectedRevision)||!['private','included'].includes(inclusion))throw new AppError('INVALID');
   websiteFileName(page);pageTitle=title(pageTitle);
