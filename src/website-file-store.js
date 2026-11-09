@@ -21,6 +21,8 @@ import {canonicalGalleryFile} from './website-gallery-support.js';
 import {publicPictureNames,saveWebsitePictures} from './website-picture-files.js';
 import {websiteFileName,websiteHTMLByteLimit,validateWebsiteHTML,validateWebsiteCSS} from './website-file-policy.js';
 import {websiteSourceLocation} from './website-source-location.js';
+import {validateDiscovery} from './website-discovery-settings.js';
+import {applyDiscovery,discoveryNames} from './website-discovery-output.js';
 import {cssStructureIssue} from './web/website-source-text.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSources,updateWebsiteSource} from './website-file-html.js';
@@ -294,6 +296,7 @@ export class WebsiteFileStore{
   validateWebsiteThemes(value);
   validateStyleResources(value);
   if(value.breakpoints!==undefined&&!validBreakpoints(value.breakpoints))throw new AppError('FORMAT');
+  validateDiscovery(value.discovery);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -672,11 +675,13 @@ export class WebsiteFileStore{
    const blocked=privateWebsiteNames(manifest);
    if(blocked.size)for(const [name,file] of descriptors)if(/\.(?:html|css)$/.test(name))files.set(name,await RenderedWebsiteFile.open(this,manifest,file,signal,blocked));
   }
+  await applyDiscovery(manifest,files,{site,signal});
   return {revision:manifest.revision,site,files};
  },{signal});}
  publicationInventory(id,{expectedRevision,signal}={}){return this.scope(async()=>{
   const manifest=await this.current(id,expectedRevision),{site,descriptors,styles}=await this.publicationFiles(manifest,signal,false);
   const names=[...descriptors.keys()];if(styles.length&&!descriptors.has(entryStyleName))names.push(entryStyleName);
+  names.push(...discoveryNames(manifest,descriptors));
   return {revision:manifest.revision,pages:[...site.pages,...(site.feedPages??[])],files:names};
  },{signal});}
  async publicationFiles(manifest,signal,renderPages){

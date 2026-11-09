@@ -37,6 +37,7 @@ import {websiteVersionDesign} from './website-version-design.js';
 import {websiteEdition,isWithdrawalRelease} from './website-withdrawal-edition.js';
 import {recordRelease} from './website-release-ledger.js';
 import {websiteReleaseOverview} from './website-release-overview.js';
+import {websiteDiscovery} from './website-discovery-settings.js';
 import {readVersionIndex} from './website-version-retention.js';
 
 const prefix='/api/website-files/';
@@ -199,7 +200,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    let state='unknown';
    if(delivery?.state==='confirmed'){
     if(delivery.sha256&&current.included){
-     const matches=current.sha256===delivery.sha256&&(await WebsiteFilesCandidate.open(store,siteId,expectedRevision)).id===delivery.releaseId;
+     // Published pages can carry generated discovery declarations, so compare
+     // the delivered bytes with the edition that would be published now.
+     const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision),published=candidate.files.get(path);
+     const matches=!!published&&contentHash(published)===delivery.sha256&&candidate.id===delivery.releaseId;
      state=matches?'delivered':'changed';
     }else if(delivery.sha256)state='withdrawal';
     else state=current.included?'pending':'excluded';
@@ -248,6 +252,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(!revision(expectedRevision))throw new AppError('INVALID');
    const inventory=await store.publicationInventory(siteId,{expectedRevision,signal});await check();
    json({...inventory,files:[...inventory.files,'publication.json']});return true;
+  }
+  if(operation==='discovery/read'||operation==='discovery/save'){
+   const write=operation==='discovery/save';if(write){onWrite();await check();}
+   json(await websiteDiscovery(store,siteId,{...options,expectedRevision,signal},write));return true;
   }
   if(operation==='release/overview'){
    if(!revision(expectedRevision))throw new AppError('INVALID');

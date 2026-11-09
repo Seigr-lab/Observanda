@@ -378,3 +378,8 @@
 .website-release-paths ul{margin:.4rem 0;padding-inline-start:1.2rem}.website-release-paths code{overflow-wrap:anywhere}
 .website-release-history ol{padding-inline-start:1.2rem}.website-release-history li{padding:.3rem 0}
 @media (max-width:640px){.website-release-facts{grid-template-columns:minmax(0,1fr)}}
+.website-discovery form fieldset{display:grid;gap:.6rem;border:1px solid var(--border,#b9c4d0);border-radius:.4rem;padding:.8rem 1rem}
+.website-discovery form label{display:grid;gap:.25rem}
+.website-discovery-link{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end}.website-discovery-link label{display:grid;gap:.25rem}
+.website-discovery-group{padding-inline-start:1.2rem}.website-discovery-group [aria-current]{font-weight:600}
+.website-files-publish label.website-inline-check{display:flex;gap:.5rem;align-items:center}
