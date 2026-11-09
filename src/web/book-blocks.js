@@ -5,12 +5,13 @@ import {validSketch,sketchTextContent} from './sketch-model.js';
 import {renderSketch} from './sketch-renderer.js';
 import {figureReadingView} from './figure-reading-view.js';
 export const BOOK_BLOCKS=['book_table','book_equation','book_citation','book_figure','book_sketch','book_preserved'];
+export const BOOK_TABLE_LIMITS=Object.freeze({columns:20,rows:500,headerCharacters:500,cellCharacters:10000});
 const text=(v,max,required=false)=>typeof v==='string'&&v.length<=max&&(!required||v.trim())&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(v);
 const keys=(v,names)=>v&&Object.keys(v).sort().join()===names.sort().join();
 export const externalCitationURL=url=>{if(typeof url!=='string')return false;if(!url)return true;try{const u=new URL(url);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&url.length<=2000;}catch{return false;}};
 export function validBookBlock(n){
  const a=n.attrs;if(!BOOK_BLOCKS.includes(n.type)||n.content?.length||n.marks?.length||!a||a.version!==1||!researchId(a.id))return false;
- if(n.type==='book_table')return keys(a,['version','id','title','headers','rows'])&&text(a.title,300,true)&&Array.isArray(a.headers)&&a.headers.length>0&&a.headers.length<=20&&a.headers.every(h=>text(h,500,true))&&Array.isArray(a.rows)&&a.rows.length>0&&a.rows.length<=500&&a.rows.every(r=>Array.isArray(r)&&r.length===a.headers.length&&r.every(v=>text(v,10000)));
+ if(n.type==='book_table')return keys(a,['version','id','title','headers','rows'])&&text(a.title,300,true)&&Array.isArray(a.headers)&&a.headers.length>0&&a.headers.length<=BOOK_TABLE_LIMITS.columns&&a.headers.every(h=>text(h,BOOK_TABLE_LIMITS.headerCharacters,true))&&Array.isArray(a.rows)&&a.rows.length>0&&a.rows.length<=BOOK_TABLE_LIMITS.rows&&a.rows.every(r=>Array.isArray(r)&&r.length===a.headers.length&&r.every(v=>text(v,BOOK_TABLE_LIMITS.cellCharacters)));
  if(n.type==='book_equation')return keys(a,['version','id','source','label'])&&text(a.source,4000,true)&&text(a.label,1000,true);
  if(n.type==='book_citation')return keys(a,['version','id','title','authors','issued','locator','url'])&&text(a.title,1000,true)&&text(a.authors,2000)&&text(a.issued,200)&&text(a.locator,1000)&&externalCitationURL(a.url);
  if(n.type==='book_figure')return keys(a,['version','id','figureId','alternative'])&&researchId(a.figureId)&&text(a.alternative,20000,true);

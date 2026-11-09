@@ -16,6 +16,10 @@ export async function fileFingerprint(size,chunks,hash){
 }
 const hex=buffer=>[...new Uint8Array(buffer)].map(v=>v.toString(16).padStart(2,'0')).join('');
 export const browserHash=async value=>hex(await crypto.subtle.digest('SHA-256',typeof value==='string'?new TextEncoder().encode(value):value));
+export async function singleFileIntakeId(recordId,requestId,hash=browserHash){
+ const key=await hash('Observanda/single-file-intake/v1/'+recordId+'/'+requestId);
+ return [key.slice(0,8),key.slice(8,12),'4'+key.slice(13,16),'8'+key.slice(17,20),key.slice(20,32)].join('-');
+}
 export async function* fingerprintChunks(file,{signal,progress=()=>{},count=Math.ceil(file.size/FILE_CHUNK)}={}){
  for(let index=0;index<count;index++){
   signal?.throwIfAborted();const bytes=await file.slice(index*FILE_CHUNK,(index+1)*FILE_CHUNK).arrayBuffer();

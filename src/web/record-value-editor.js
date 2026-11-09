@@ -120,7 +120,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   requestFocusRestore(focusBefore);resolveClose?.();resolveClose=null;void onClosed?.();
  }
  async function save(){
-  if(view.busy?.())return;
+  if(view.busy?.()||view.reviewPaste?.())return;
   if(!validContext())throw Error(text('changedWorkspace'));
   if([...dialog.querySelectorAll('input,select,textarea')].some(input=>!input.reportValidity()))return;
   const savingOwner=owner;
@@ -151,6 +151,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
  });
  dialog.addEventListener('cancel',event=>{event.preventDefault();if(!busy&&!loading)void close();});
  async function close(){
+  if(view.reviewPaste?.())return;
   const closingOwner=owner;
   if(dirty){busy=true;paint();try{await flush();}catch{if(owner===closingOwner){busy=false;paint();}return;}}
   if(owner===closingOwner)finish();
@@ -159,6 +160,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
  dialog.addEventListener('click',async event=>{
   const control=event.target.closest('[data-writing]');if(!control||busy||loading)return;
   const actionOwner=owner;
+  if(['discard','retry','use-saved','keep-mine'].includes(control.dataset.writing)&&view.reviewPaste?.())return;
   try{
    const action=control.dataset.writing;
    if(action==='save')await save();
@@ -190,7 +192,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   }catch(failure){if(owner!==loadingOwner)return;loading=false;error=failure.message||text('failed');status='';paint();}
   return new Promise(resolve=>{resolveClose=resolve;});
  }
- window.addEventListener('beforeunload',event=>{if(dirty||pending||draftMutation){event.preventDefault();event.returnValue='';}});
+ window.addEventListener('beforeunload',event=>{if(dirty||pending||draftMutation||view.pendingPaste?.()){event.preventDefault();event.returnValue='';}});
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty)void flush().catch(()=>{});});
  return {open,recover:header=>open({},header),locked(){if(dialog.open){owner=null;finish();}}};
 }

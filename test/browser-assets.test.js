@@ -50,7 +50,8 @@ test('production browser chunks are content addressed and reject corrupt or unsa
  assert.ok(result.initialJavaScriptFiles<result.sourceStaticFiles,'Bundling must reduce the actual source-module request graph');assert.ok(result.javascriptFiles>result.initialJavaScriptFiles,'Feature entry chunks must stay deferred');
  for(const feature of ['research-materials-ui.js','website-ui.js','publishing-ui.js','laboratory-ui.js','reviews-ui.js','publication-jobs-ui.js','publication-selection-ui.js','record-values-ui.js','record-writing-ui.js','record-draft-edit-ui.js','retained-figure-editor.js','figure-editor.js'])assert.ok(!result.initialSources.includes('src/web/'+feature),feature+' must remain outside the startup graph');
  for(const namespace of Object.keys(deferredCatalogues))assert.equal(result.initialSources.includes('src/web/locales/en/'+namespace+'.json'),shellCatalogues.has(namespace),namespace+' must retain its shell or deferred owner boundary');
- assert.ok(!result.initialSources.includes('src/web/vendor/equations.js'),'Equation rendering must load with displayed equations, not the shell');
+ assert.deepEqual(result.editorSources,['src/editor/equations.js','src/editor/rich-text-editor.js']);
+ for(const entry of result.editorSources)assert.ok(!result.initialSources.includes(entry),'Authoring engines load on demand');
  const styles=result.manifest.files.find(file=>file.path.endsWith('.css'));assert.ok(!(await assets.read(styles.path)).toString().includes('@import'),'The packaged stylesheet must not preserve a source CSS waterfall');
  assert.equal((index.match(/data-document-styles/g)??[]).length,1);assert.ok(index.includes('href="/'+styles.path+'" data-document-styles'));assert.ok((await assets.read(styles.path)).toString().includes('.ProseMirror'),'Compiled assets retain document editor styling');
  const file=path.join(out,result.manifest.entry),original=await readFile(file);await writeFile(file,Buffer.alloc(original.length,32));

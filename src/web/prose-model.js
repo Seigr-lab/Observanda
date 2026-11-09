@@ -1,12 +1,12 @@
 
-import {validRichText,plainRichText,richTextPlain,renderRichText} from './rich-text-model.js';
+import {validRichText,plainRichText,richTextPlain,renderRichText,RICH_TEXT_LIMITS} from './rich-text-model.js';
 import {parseResearchReference} from './research-reference.js';
 
 // Strings are legacy plain prose, never HTML or implicit Markdown. A rich
 // document is the only persisted source once edited; plain text is a projection.
 export const proseText=value=>typeof value==='string'?value:value?richTextPlain(value):'';
 export const proseDocument=value=>typeof value==='string'?plainRichText(value):value??plainRichText();
-export const validProse=(value,{maxCharacters=60000}={})=>typeof value==='string'?value.length<=maxCharacters&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value):validRichText(value,{maxCharacters});
+export const validProse=(value,{maxCharacters=RICH_TEXT_LIMITS.characters}={})=>typeof value==='string'?value.length<=maxCharacters&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value):validRichText(value,{maxCharacters});
 export const renderProse=(value,options)=>renderRichText(proseDocument(value),options);
 export function proseReferences(value){
  const found=new Map();

@@ -1,7 +1,8 @@
 import './i18n/catalogues/editorControls.js';
 
 import {fontSelect} from './font-picker.js';
-import {t} from './i18n/index.js';
+import {localizedText,t} from './i18n/index.js';
+export const editorBookText=localizedText('book');
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function textTools({destinations=[],compact=false,fonts}={}){
  const text=(key,args)=>esc(t('editorControls',key,args));

@@ -1,7 +1,7 @@
 import {parseResearchReference} from './research-reference.js';
 import {safeWebsiteLink} from './website-links.js';
 import {researchId} from './research-reference.js';
-import {BOOK_BLOCKS,validBookBlock,bookBlockText,renderBookBlock} from './book-blocks.js';
+import {BOOK_BLOCKS,BOOK_TABLE_LIMITS,validBookBlock,bookBlockText,renderBookBlock} from './book-blocks.js';
 import {validFont,fontStack} from './font-catalogue.js';
 // Portable structured text. No raw HTML, scripts or arbitrary attributes are stored.
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -12,8 +12,11 @@ export function safeRichLink(href){
  if(safeWebsiteLink(href))return true;
  try{const u=new URL(href);return ['https:','http:','mailto:','tel:'].includes(u.protocol)&&!u.username&&!u.password;}catch{return false;}
 }
-export function validRichText(doc,{extended=true,maxCharacters=60000}={}){
- let count=0,characters=0;
+export const RICH_TEXT_LIMITS=Object.freeze({characters:60000,nodes:12000,depth:24});
+
+function checkDocument(doc,{extended=true,maxCharacters=RICH_TEXT_LIMITS.characters}={},usage){
+ let count=0,characters=0,deepest=0;
+ function exceeded(dimension,limit){if(usage)usage.issue={dimension,limit};return false;}
  const ids=new Set(),inline=n=>['text','hard_break'].includes(n?.type),block=n=>['paragraph','heading','blockquote','bullet_list','ordered_list','code_block','horizontal_rule',...BOOK_BLOCKS].includes(n?.type);
  function mark(m){if(!own(m,['type','attrs']))return false;if(['strong','em','underline','strike','code'].includes(m.type))return !m.attrs||!Object.keys(m.attrs).length;
   if(extended&&['subscript','superscript'].includes(m.type))return !m.attrs||!Object.keys(m.attrs).length;
@@ -22,11 +25,49 @@ export function validRichText(doc,{extended=true,maxCharacters=60000}={}){
   if(m.type==='text_size')return own(m.attrs,['size'])&&Number.isInteger(m.attrs.size)&&m.attrs.size>=8&&m.attrs.size<=96;
   return m.type==='link'&&own(m.attrs,['href','title','target','nofollow'])&&safeRichLink(m.attrs.href)&&typeof m.attrs.title==='string'&&m.attrs.title.length<=200&&['_self','_blank'].includes(m.attrs.target)&&typeof m.attrs.nofollow==='boolean';}
  function node(n,depth){
-  if(++count>12000||depth>24||!own(n,['type','attrs','content','text','marks']))return false;
+  if(++count>RICH_TEXT_LIMITS.nodes)return exceeded('nodes',RICH_TEXT_LIMITS.nodes);
+  if(depth>RICH_TEXT_LIMITS.depth)return exceeded('depth',RICH_TEXT_LIMITS.depth);
+  if(usage)deepest=Math.max(deepest,depth);
+  if(!own(n,['type','attrs','content','text','marks']))return false;
   if(n.attrs?.id){if(!researchId(n.attrs.id)||ids.has(n.attrs.id))return false;ids.add(n.attrs.id);}
-  if(BOOK_BLOCKS.includes(n.type)){characters+=bookBlockText(n).length;return !n.text&&characters<=maxCharacters&&validBookBlock(n);}
+  if(BOOK_BLOCKS.includes(n.type)){
+   if(n.text)return false;
+   if(n.type==='book_table'){
+    // Count the public text representation without allocating a joined
+    // string proportional to the entire table. Keep its newline accounting.
+    const {title,headers,rows}=n.attrs??{};
+    if(!Array.isArray(rows)||!Array.isArray(headers)||typeof title!=='string')return false;
+    if(rows.length>BOOK_TABLE_LIMITS.rows)return exceeded('tableRows',BOOK_TABLE_LIMITS.rows);
+    if(headers.length>BOOK_TABLE_LIMITS.columns)return exceeded('tableColumns',BOOK_TABLE_LIMITS.columns);
+    characters+=title.length+headers.length;
+    for(const value of headers){
+     if(typeof value!=='string')return false;
+     if(value.length>BOOK_TABLE_LIMITS.headerCharacters)return exceeded('tableHeader',BOOK_TABLE_LIMITS.headerCharacters);
+     characters+=value.length;
+    }
+    for(const row of rows){
+     if(!Array.isArray(row)||row.length!==headers.length)return false;
+     characters+=row.length;
+     for(const value of row){
+      if(typeof value!=='string')return false;
+      if(value.length>BOOK_TABLE_LIMITS.cellCharacters)return exceeded('tableCell',BOOK_TABLE_LIMITS.cellCharacters);
+      characters+=value.length;
+     }
+     if(characters>maxCharacters)return exceeded('characters',maxCharacters);
+    }
+    if(!validBookBlock(n))return false;
+   }else{
+    if(!validBookBlock(n))return false;
+    characters+=bookBlockText(n).length;
+   }
+   return characters<=maxCharacters||exceeded('characters',maxCharacters);
+  }
   if(n.marks&&(!inline(n)||!Array.isArray(n.marks)||!n.marks.every(mark)||new Set(n.marks.map(m=>m.type)).size!==n.marks.length))return false;
-  if(n.type==='text'){characters+=n.text?.length??0;return typeof n.text==='string'&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(n.text)&&n.text.length>0&&characters<=maxCharacters&&!n.content&&!n.attrs;}
+  if(n.type==='text'){
+   if(typeof n.text!=='string'||!n.text.length||n.content||n.attrs)return false;
+   characters+=n.text.length;if(characters>maxCharacters)return exceeded('characters',maxCharacters);
+   return !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(n.text);
+  }
   if(n.text!==undefined)return false;
   const content=n.content??[];if(!Array.isArray(content)||!content.every(c=>node(c,depth+1)))return false;
   const attrs=n.attrs??{};
@@ -39,6 +80,13 @@ export function validRichText(doc,{extended=true,maxCharacters=60000}={}){
   return ['horizontal_rule','hard_break'].includes(n.type)&&!Object.keys(attrs).length&&!content.length;
  }
  try{return doc?.type==='doc'&&node(doc,0);}catch{return false;}
+ finally{if(usage)Object.assign(usage,{characters,nodes:count,depth:deepest});}
+}
+export function validRichText(doc,options){return checkDocument(doc,options);}
+export function richTextAdmission(doc,options){
+ const usage={issue:null};const valid=Boolean(checkDocument(doc,options,usage));
+ if(!valid&&!usage.issue)usage.issue={dimension:'structure'};
+ return {...usage,valid};
 }
 export function richTextPlain(doc){if(BOOK_BLOCKS.includes(doc.type))return bookBlockText(doc);return (doc.content??[]).map(n=>n.type==='text'?n.text:n.type==='hard_break'?'\n':richTextPlain(n)).join(doc.type==='paragraph'||doc.type==='heading'?'':'\n');}
 export function plainRichText(text=''){return {type:'doc',content:text.split(/\n\n+/).map(p=>({type:'paragraph',content:p?p.split('\n').flatMap((line,i)=>[...(i?[{type:'hard_break'}]:[]),...(line?[{type:'text',text:line}]:[])]):[]}))};}

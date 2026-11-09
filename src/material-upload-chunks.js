@@ -55,6 +55,6 @@ export class MaterialUploadChunks{
   this.validate(session);
   const {id,recordId,name,size,chunkSize,createdAt,completed,batchId,reuse}=session;
   return {id,recordId,name,size,chunkSize,createdAt,completed,receivedBytes:this.bytes(session),receivedChunks:this.count(session),receivedChain:await this.chain(session),
-   ...(batchId?{batchId,reuse}: {})};
+   ...(session.requestId?{requestId:session.requestId,fingerprint:session.fingerprint}:{}),...(batchId?{batchId,reuse}: {})};
  }
 }

@@ -1,5 +1,5 @@
 import {t} from '../web/i18n/index.js';
-import {BOOK_BLOCKS,validBookBlock,renderBookBlock} from '../web/book-blocks.js';
+import {BOOK_BLOCKS,BOOK_TABLE_LIMITS,validBookBlock,renderBookBlock} from '../web/book-blocks.js';
 import {bookText} from '../web/book-messages.js';
 import {closeHistory} from 'prosemirror-history';
 import {NodeSelection} from 'prosemirror-state';
@@ -7,7 +7,7 @@ import {recordFigure} from '../web/book-reading.js';
 import {newSketch} from '../web/sketch-model.js';
 import {sketchEditor} from './sketch-editor.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export function bookContentEditor({view,schema,toolbar,figures=()=>[],validate=()=>true,message=bookText}){
+export function bookContentEditor({view,schema,toolbar,figures=()=>[],validationMessage=()=>'',message=bookText}){
  let panel=null,position=null,selection=null,type='book_table',attrs=null,sketch=null;
  const label=(key,control)=>'<label>'+esc(message(key))+control+'</label>';
  const input=(key,max=1000)=>label(key,`<input name="${key}" maxlength="${max}" value="${esc(attrs[key]??'')}">`);
@@ -17,29 +17,52 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validate=(
  function collect(){for(const el of panel.querySelectorAll('[name]'))if(Object.hasOwn(attrs,el.name))attrs[el.name]=el.value;for(const el of panel.querySelectorAll('[data-cell]')){const [r,c]=el.dataset.cell.split(':').map(Number);if(r===-1)attrs.headers[c]=el.value;else attrs.rows[r][c]=el.value;}}
  function paint(){
   sketch?.destroy();sketch=null;
-  const fields=type==='book_table'?input('title',300)+'<p>'+esc(message('tableHint'))+'</p><div class="book-table-scroll"><table><thead><tr>'+attrs.headers.map((v,c)=>`<th><input data-cell="-1:${c}" aria-label="${esc(message('headers'))} ${c+1}" maxlength="500" value="${esc(v)}"></th>`).join('')+'</tr></thead><tbody>'+attrs.rows.map((r,i)=>'<tr>'+r.map((v,c)=>`<td><textarea data-cell="${i}:${c}" aria-label="${esc(message('row'))} ${i+1}, ${c+1}" maxlength="10000">${esc(v)}</textarea></td>`).join('')+'</tr>').join('')+'</tbody></table></div><div class="inline-actions">'+['addRow','removeRow','addColumn','removeColumn'].map(button).join('')+'</div>':
+  const fields=type==='book_table'?input('title',300)+'<p>'+esc(message('tableHint'))+'</p><div class="book-table-scroll"><table><thead><tr>'+attrs.headers.map((v,c)=>`<th><input data-cell="-1:${c}" aria-label="${esc(message('headers'))} ${c+1}" value="${esc(v)}"></th>`).join('')+'</tr></thead><tbody>'+attrs.rows.map((r,i)=>'<tr>'+r.map((v,c)=>`<td><textarea data-cell="${i}:${c}" aria-label="${esc(message('row'))} ${i+1}, ${c+1}">${esc(v)}</textarea></td>`).join('')+'</tr>').join('')+'</tbody></table></div><p role="status" data-cell-capacity></p><div class="inline-actions">'+['addRow','removeRow','addColumn','removeColumn'].map(button).join('')+'</div>':
    type==='book_sketch'?input('title',300)+area('description',20000)+'<div data-sketch-editor></div>':
    type==='book_equation'?'<p>'+esc(message('equationHint'))+'</p>'+area('source',4000)+input('label'):
    type==='book_citation'?input('title')+input('authors',2000)+input('issued',200)+input('locator')+input('url',2000):
    type==='book_figure'?label('figureId','<select name="figureId">'+figures().map(f=>`<option value="${esc(f.id)}"${attrs.figureId===f.id?' selected':''}>${esc(f.title||f.caption||f.alt||f.id)}</option>`).join('')+'</select>')+area('alternative',20000):'<p>'+esc(message('preservedHint'))+'</p>'+input('format',200)+area('source')+area('reason',2000);
   panel.innerHTML='<h3>'+esc(message(position===null?'insert':'edit'))+'</h3>'+label('kind','<select data-book-kind>'+BOOK_BLOCKS.map(v=>'<option value="'+v+'"'+(type===v?' selected':'')+'>'+esc(message(v.slice(5)==='preserved'?'preserved':v.slice(5)))+'</option>').join('')+'</select>')+fields+'<p role="alert" data-book-error></p><footer class="inline-actions">'+button('cancel')+button('apply')+'</footer>';
   if(type==='book_sketch')sketch=sketchEditor(panel.querySelector('[data-sketch-editor]'),attrs);
+  if(type==='book_table'){
+   const feedback=[];
+   for(const [size,limit,button,key] of [[attrs.rows.length,BOOK_TABLE_LIMITS.rows,'addRow','capacityRows'],[attrs.headers.length,BOOK_TABLE_LIMITS.columns,'addColumn','capacityColumns']]){
+    panel.querySelector('[data-book-action="'+button+'"]').disabled=size>=limit;
+    if(size>=limit*0.9)feedback.push(message(key,{limit}));
+   }
+   if(feedback.length)feedback.push(message('capacityTableRoom',{rows:BOOK_TABLE_LIMITS.rows-attrs.rows.length,columns:BOOK_TABLE_LIMITS.columns-attrs.headers.length}));
+   panel.querySelector('[data-book-error]').textContent=feedback.join(' ');
+  }
  }
  function close(){sketch?.destroy();sketch=null;panel?.close();panel?.remove();panel=null;view.focus();}
  function open({edit=false}={}){
   if(panel)return;selection=view.state.selection;const n=selection.node;position=edit&&BOOK_BLOCKS.includes(n?.type.name)?selection.from:null;type=position===null?'book_table':n.type.name;attrs=position===null?fresh(type):structuredClone(n.attrs);
   panel=toolbar.ownerDocument.createElement('dialog');panel.className='book-content-panel';panel.setAttribute('aria-label',message('content'));toolbar.append(panel);paint();
   panel.addEventListener('cancel',e=>{e.preventDefault();close();});panel.addEventListener('change',e=>{if(e.target.matches('[data-book-kind]')){type=e.target.value;attrs=fresh(type);paint();}});
-  panel.addEventListener('input',()=>{if(type==='book_sketch')collect();});
+  panel.addEventListener('input',event=>{
+   if(type==='book_sketch')collect();
+   const cell=event.target;
+   if(type==='book_table'&&cell.hasAttribute('data-cell')){
+    const limit=cell.dataset.cell.startsWith('-1:')?BOOK_TABLE_LIMITS.headerCharacters:BOOK_TABLE_LIMITS.cellCharacters;
+    const note=cell.value.length>=limit*0.9?message('capacityCharacters',{limit,remaining:Math.max(0,limit-cell.value.length)}):'';
+    const feedback=panel.querySelector('[data-cell-capacity]');if(feedback.textContent!==note)feedback.textContent=note;
+   }
+  });
   panel.addEventListener('click',e=>{const action=e.target.closest('[data-book-action]')?.dataset.bookAction;if(!action)return;if(action==='cancel'){close();return;}collect();
-   if(action==='addRow'&&attrs.rows.length<500)attrs.rows.push(attrs.headers.map(()=>''));if(action==='removeRow'&&attrs.rows.length>1)attrs.rows.pop();
-   if(action==='addColumn'&&attrs.headers.length<20){attrs.headers.push('');attrs.rows.forEach(r=>r.push(''));}if(action==='removeColumn'&&attrs.headers.length>1){attrs.headers.pop();attrs.rows.forEach(r=>r.pop());}
+   if(action==='addRow'&&attrs.rows.length<BOOK_TABLE_LIMITS.rows)attrs.rows.push(attrs.headers.map(()=>''));if(action==='removeRow'&&attrs.rows.length>1)attrs.rows.pop();
+   if(action==='addColumn'&&attrs.headers.length<BOOK_TABLE_LIMITS.columns){attrs.headers.push('');attrs.rows.forEach(r=>r.push(''));}if(action==='removeColumn'&&attrs.headers.length>1){attrs.headers.pop();attrs.rows.forEach(r=>r.pop());}
    if(action==='apply'){
     if(sketch&&!sketch.ready())return;
+    if(type==='book_table'&&attrs.headers.some(header=>header.length>BOOK_TABLE_LIMITS.headerCharacters)){
+     panel.querySelector('[data-book-error]').textContent=message('capacityHeader',{limit:BOOK_TABLE_LIMITS.headerCharacters});return;
+    }
+    if(type==='book_table'&&attrs.rows.some(row=>row.some(cell=>cell.length>BOOK_TABLE_LIMITS.cellCharacters))){
+     panel.querySelector('[data-book-error]').textContent=message('capacityCell',{limit:BOOK_TABLE_LIMITS.cellCharacters});return;
+    }
     if(!validBookBlock({type,attrs})){panel.querySelector('[data-book-error]').textContent=message('invalid');return;}
     const node=schema.nodes[type].create(attrs),tr=closeHistory(view.state.tr);
     if(position!==null)tr.replaceWith(position,position+view.state.doc.nodeAt(position).nodeSize,node);else if(selection.node)tr.insert(selection.to,node);else tr.setSelection(selection).replaceSelectionWith(node);
-    if(!validate(tr.doc.toJSON())){panel.querySelector('[data-book-error]').textContent=message('documentLimit');return;}
+    const problem=validationMessage(tr.doc.toJSON());if(problem){panel.querySelector('[data-book-error]').textContent=problem;return;}
     view.dispatch(tr.scrollIntoView());close();return;
    }paint();
   });panel.showModal();panel.querySelector('input,textarea,select')?.focus();

@@ -14,6 +14,7 @@ export const writingValueRevision=section=>digest(serialize(writingSectionValue(
 export class RecordSectionCommands{
  constructor(workspace){this.workspace=workspace;}
  async run(command){
+  if(command?.action==='append-private')return this.appendPrivate(command);
   const fields=['workspaceId','recordId','action','sectionId','expectedStructureRevision'];
   const extra={insert:['beforeId','value'],remove:['expectedValueRevision'],move:['position']}[command?.action];
   if(!extra||!exact(command,[...fields,...extra])||![command.workspaceId,command.recordId,command.sectionId].every(researchId)||!revisionId(command.expectedStructureRevision)||command.action==='insert'&&(command.beforeId!==null&&!researchId(command.beforeId)||!validWritingValue(command.value,command.sectionId))||command.action==='remove'&&!revisionId(command.expectedValueRevision)||command.action==='move'&&(!Number.isSafeInteger(command.position)||command.position<0))throw new AppError('INVALID');
@@ -50,6 +51,47 @@ export class RecordSectionCommands{
      if(command.action==='move'){if(index<before)before--;document=await document.splice(['sections'],before,0,[section]);}
     }
     const member=await items.changed(row,'sections',document),saved=await commitRecordDocument(store,{etag,snapshot,row,document,member,summaries});
+    return receipt(saved.etag,saved.member);
+   },{mutable:true});
+  }));
+ }
+ // An oversized paste becomes new private sections in one record revision. The
+ // caller retains their IDs across retries after an uncertain network response.
+ async appendPrivate(command){
+  const {workspaceId,recordId,expectedRevision,sections}=command;
+  if(!exact(command,['action','workspaceId','recordId','expectedRevision','sections'])||
+     !researchId(workspaceId)||!researchId(recordId)||!revisionId(expectedRevision)||
+     !Array.isArray(sections)||!sections.length)throw new AppError('INVALID');
+  const ids=new Set(),values=[];
+  for(const section of sections){
+   if(!exact(section,['id','title','body'])||!researchId(section.id)||ids.has(section.id)||
+      typeof section.title!=='string'||!section.title.trim()||
+      !validWritingValue({title:section.title,body:section.body},section.id))throw new AppError('INVALID');
+   ids.add(section.id);values.push({...section,share:false,sharePdf:false});
+  }
+  return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
+   const etag=await store.head(),snapshot=await store.snapshot(etag);
+   if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+   if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   const row=await store.member(snapshot,recordId);if(!row)throw new AppError('MISSING');
+   const items=new RecordMemberCollections(store);
+   const receipt=(etag,member)=>({etag,saved:true,sectionIds:[...ids],storageRevision:member.revision});
+   return withRecordDocument(store,row.id,row.revision,async original=>{
+    if(row.revision!==expectedRevision){
+     // Only an exact, contiguous replay may acknowledge an earlier commit.
+     const start=await items.position(row,'sections',values[0].id);
+     if(start<0||start+values.length>memberCollectionCount(row,'sections'))throw new AppError('RECORD_CHANGED');
+     for(const [offset,value] of values.entries()){
+      const saved=await original.field(['sections',String(start+offset)]);
+      if(!sameJSONData(saved.value,value))throw new AppError('RECORD_CHANGED');
+     }
+     return receipt(etag,row);
+    }
+    const summaries=await new SnapshotIndex(store).validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:values,relations:[]}]);
+    if(summaries.some(other=>ids.has(other.id)||other.sections.some(id=>ids.has(id))))throw new AppError('INVALID');
+    const document=await original.splice(['sections'],memberCollectionCount(row,'sections'),0,values);
+    const member=await items.changed(row,'sections',document);
+    const saved=await commitRecordDocument(store,{etag,snapshot,row,document,member,summaries});
     return receipt(saved.etag,saved.member);
    },{mutable:true});
   }));

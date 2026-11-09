@@ -93,7 +93,7 @@ import {MaterialChoices} from './material-choices.js';
 import {EvidenceIntake} from './evidence-intake.js';
 import {EvidenceAssociationBatches} from './evidence-association-batches.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
-import {fileFingerprint} from './web/evidence-fingerprint.js';
+import {fileFingerprint,validFingerprint,singleFileIntakeId} from './web/evidence-fingerprint.js';
 import {REPRESENTATIONS,validQuantity,validTime,schemaReferences,validColumnDomain} from './web/measurement-model.js';
 import {Measurements} from './measurements.js';
 import {AnalysisComparisons} from './analysis-comparisons.js';
@@ -263,14 +263,30 @@ export class ResearchMaterials {
   await this.put(headFile,head);await this.index.changed(head,doc,{stagedBatch});
   return ref;
  }
- async startImport(command){return this.workspace.withLock(()=>this.startImportLocked(command));}
- async startImportLocked({recordId,name,size,provenance='',derivesFrom=[]},batch={}){
+ async startImport(command){
+  if(command.requestId===undefined&&command.fingerprint===undefined)return this.workspace.withLock(()=>this.startImportLocked(command));
+  const {requestId,fingerprint,recordId,name,size,provenance='',derivesFrom=[]}=command;
+  if(!researchId(requestId)||!researchId(recordId)||!validFingerprint(fingerprint))fail();
+  // A client chooses a retry token, never the identity of an existing material.
+  const id=await singleFileIntakeId(recordId,requestId,digest);
+  return this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
+   await this.assertOwner(recordId,{write:true});
+   const prior=await this.json(this.metadataFile('imports/'+id+'/session.json'),{missing:true});
+   if(prior){
+    if(prior.requestId!==requestId||prior.recordId!==recordId||prior.fingerprint!==fingerprint||prior.name!==name||prior.size!==size||
+       prior.provenance!==provenance||JSON.stringify(prior.derivesFrom)!==JSON.stringify(derivesFrom))fail('MATERIAL_CHANGED');
+    return this.uploads.validate(prior);
+   }
+   if(await this.current(id,{includeStaged:true}))fail('MATERIAL_CHANGED');
+   return this.startImportLocked(command,{requestId,fingerprint},id);
+  }));
+ }
+ async startImportLocked({recordId,name,size,provenance='',derivesFrom=[]},batch={},id=randomUUID()){
   if(!required(name,255)||/[\\/:]/.test(name)||!Number.isSafeInteger(size)||size<0||!text(provenance,10000)||!Array.isArray(derivesFrom)||derivesFrom.length>50||!derivesFrom.every(materialRef))fail();
    await this.assertOwner(recordId,{write:true});let acquisition=batch.acquisition;
    if(acquisition)await this.assertOwner(recordId);
    else acquisition=await this.retainCurrentRecordLocked(recordId);
    await this.index.ensureLocked();for(const ref of derivesFrom)await this.checkReference(ref);
-   const id=randomUUID();
    const session={id,recordId,name,size,provenance,derivesFrom,acquisition,chunkSize:EVIDENCE_CHUNK,...this.uploads.initial(),createdAt:new Date().toISOString(),completed:null,...batch};
    await this.put(this.metadataFile('imports/'+id+'/session.json'),session);await this.index.addImport(session);return session;
  }

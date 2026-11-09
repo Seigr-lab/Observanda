@@ -11,10 +11,11 @@ import {wrapInList,splitListItem,sinkListItem,liftListItem} from 'prosemirror-sc
 import {schema} from './schema.js';
 import {collab,getVersion,sendableSteps,receiveTransaction} from 'prosemirror-collab';
 import {Step} from 'prosemirror-transform';
-import {safeRichLink,validRichText,plainRichText} from '../web/rich-text-model.js';
+import {safeRichLink,richTextAdmission,RICH_TEXT_LIMITS,plainRichText} from '../web/rich-text-model.js';
+import {writingCapacity} from './writing-capacity.js';
 import {formattedText} from '../web/formatted-text.js';
 
-export function mountRichText({mount,toolbar,section,onChange,onError,initialState,revealSelection,label="Section text",onOpenLink,getDestinations,getFigures,maxCharacters=60000,collaboration=null}) {
+export function mountRichText({mount,toolbar,section,onChange,onError,initialState,revealSelection,message=bookText,label=message('editorSectionText'),onOpenLink,getDestinations,getFigures,maxCharacters=RICH_TEXT_LIMITS.characters,collaboration=null,recovery=null}) {
  const controller=new AbortController(),opts={signal:controller.signal};let view;
  let doc;
  if(section.richText)doc=schema.nodeFromJSON(section.richText);
@@ -38,23 +39,65 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   return false;
  }
  mount.replaceChildren();
+ const capacity=writingCapacity({toolbar,message,maxCharacters,recovery,signal:controller.signal,restoreFocus:()=>view.focus()});
+ const measure=json=>richTextAdmission(json,{maxCharacters});
+ let accepted=measure(doc.toJSON()),clipboard=null;
+ capacity.update(accepted);
  const identity=tr=>{const ids=new Set();tr.doc.descendants((n,pos)=>{if(n.type===schema.nodes.heading||BOOK_BLOCKS.includes(n.type.name)){if(!n.attrs.id||ids.has(n.attrs.id))tr.setNodeMarkup(pos,null,{...n.attrs,id:crypto.randomUUID()});ids.add(tr.doc.nodeAt(pos).attrs.id);}});return tr;};
  view=new EditorView({mount},{state:initialState?.doc.eq(doc)?initialState:EditorState.create({schema,doc,plugins:[history(),keymap(keys),keymap(baseKeymap),...(collaboration?[collab({version:collaboration.version,clientID:collaboration.clientId})]:[])]}),attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
-   if(tr.docChanged)identity(tr);const next=view.state.apply(tr);if(tr.docChanged&&!validRichText(next.doc.toJSON(),{maxCharacters})){onError('This text exceeds the supported document structure or size.');return;}
-   view.updateState(next);if(tr.docChanged)onChange(next.doc.toJSON());update();
+   if(!tr.docChanged){view.updateState(view.state.apply(tr));update();return;}
+   identity(tr);
+   const json=tr.doc.toJSON(),usage=measure(json),pasted=tr.getMeta('paste')&&clipboard;
+   if(!usage.valid){
+    const notice=capacity.reason(usage.issue,accepted);
+    if(pasted)capacity.offer({notice,clipboard:pasted});
+    onError(notice);return;
+   }
+   if(pasted&&!tr.getMeta('capacityReviewed')&&
+      (pasted.size>=maxCharacters/10||usage.characters-accepted.characters>=maxCharacters/10||
+       usage.nodes-accepted.nodes>=RICH_TEXT_LIMITS.nodes/10||usage.depth-accepted.depth>=2&&capacity.near(usage).length)){
+    const before=view.state.doc,selection=view.state.selection;
+    const dimensions=new Map([['characters',maxCharacters],...capacity.near(usage)]);
+    capacity.offer({notice:message('capacityReview')+' '+Array.from(dimensions,([dimension,limit])=>capacity.reason({dimension,limit},usage)).join(' '),
+     clipboard:pasted,apply:()=>{
+      if(view.state.doc!==before||!view.state.selection.eq(selection))return false;
+      view.dispatch(tr.setMeta('capacityReviewed',true));return true;
+     }});return;
+   }
+   view.updateState(view.state.apply(tr));accepted=usage;capacity.update(accepted);onChange(json);update();
  }});
  // A paste creates a copy even between independent section editors.
  const copied=fragment=>Fragment.fromArray(fragment.content.map(n=>n.isText?n:n.type.create({...n.attrs,...(n.attrs.id?{id:crypto.randomUUID()}:{})},copied(n.content),n.marks)));
- const contentEditor=bookContentEditor({view,schema,toolbar,figures:getFigures,validate:doc=>validRichText(doc,{maxCharacters})});
+ const contentEditor=bookContentEditor({view,schema,toolbar,message,figures:getFigures,validationMessage:doc=>{
+  const usage=measure(doc);return usage.valid?'':capacity.reason(usage.issue,accepted);
+ }});
  const dragCopies=event=>event.ctrlKey||event.metaKey||event.altKey;let movingContent=false;
- view.setProps({dragCopies,handleDOMEvents:{...view.props.handleDOMEvents,drop:(v,event)=>{movingContent=!!v.dragging&&!dragCopies(event);queueMicrotask(()=>{movingContent=false;});return false;}},transformPasted:slice=>movingContent?slice:new Slice(copied(slice.content),slice.openStart,slice.openEnd),nodeViews:Object.fromEntries(BOOK_BLOCKS.map(type=>[type,bookNodeView({figures:getFigures,edit:()=>contentEditor.open({edit:true})})])),handlePaste:(v,event)=>{
+ view.setProps({dragCopies,handleDOMEvents:{...view.props.handleDOMEvents,drop:(v,event)=>{movingContent=!!v.dragging&&!dragCopies(event);queueMicrotask(()=>{movingContent=false;});return false;}},transformPasted:slice=>movingContent?slice:new Slice(copied(slice.content),slice.openStart,slice.openEnd),nodeViews:Object.fromEntries(BOOK_BLOCKS.map(type=>[type,bookNodeView({figures:getFigures,edit:()=>contentEditor.open({edit:true})})])),handlePaste:(v,event,slice)=>{
+  if(capacity.pending){onError(message('capacityPending'));return true;}
   const html=event.clipboardData?.getData('text/html')??'';
+  const text=event.clipboardData?.getData('text/plain')??'';
+  clipboard={html,text,size:slice.size,blocks:()=>{
+   const nodes=slice.content.toJSON()??[];
+   return slice.content.firstChild?.isInline?[{type:'paragraph',content:nodes}]:nodes;
+  }};
+  queueMicrotask(()=>{clipboard=null;});
   // A serialized Observanda block is admitted by its validated data, not by a
   // marker elsewhere in the pasted document. Mixed unsupported HTML stays out.
-  if(/<(?:table|math|svg|iframe|script|object)\b/i.test(html)){
+  if(/data-book-node|<(?:table|math|svg|iframe|script|object)\b/i.test(html)){
    const holder=mount.ownerDocument.createElement('template');holder.innerHTML=html;
-   const unsupported=[...holder.content.querySelectorAll('table,math,svg,iframe,script,object')].some(el=>{try{return !validBookBlock(JSON.parse(el.closest('[data-book-node]')?.getAttribute('data-book-node')??'null'));}catch{return true;}});
-   if(unsupported){onError(bookText('unsupportedPaste'));return true;}
+   let issue;
+   const validated=new Set();
+   for(const wrapper of holder.content.querySelectorAll('[data-book-node]')){
+    let block;
+    try{block=JSON.parse(wrapper.getAttribute('data-book-node'));}catch{}
+    if(wrapper.matches('div')&&block&&validBookBlock(block)){validated.add(wrapper);continue;}
+    issue=measure({type:'doc',content:[block]}).issue??{dimension:'structure'};break;
+   }
+   const unsupported=[...holder.content.querySelectorAll('table,math,svg,iframe,script,object')].some(el=>!validated.has(el.closest('[data-book-node]')));
+   if(unsupported||issue){
+    const notice=issue?capacity.reason(issue,accepted):message('unsupportedPaste');
+    capacity.offer({notice,clipboard:{html,text}});onError(notice);return true;
+   }
   }
   return false;
  }});
@@ -139,7 +182,8 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   const words=event.target.value.toLowerCase().trim().split(/\s+/);for(const button of toolbar.querySelectorAll('[data-rich-destination]'))button.hidden=!words.every(word=>button.dataset.richMatch.includes(word));
  },opts);
  update();return {focus:()=>{view.focus();view.dispatch(view.state.tr.scrollIntoView());},get state(){return view.state;},destroy(){controller.abort();contentEditor.destroy();view.destroy();},get doc(){return view.state.doc.toJSON();},
+ get pendingPaste(){return capacity.pending;},reviewPaste:()=>capacity.focus(),
  get collaboration(){if(!collaboration)return null;const pending=sendableSteps(view.state);return {version:getVersion(view.state),steps:pending?.steps.map(s=>s.toJSON())??[],clientId:collaboration.clientId};},
- receive(steps,clients){if(!collaboration)return;const tr=receiveTransaction(view.state,steps.map(s=>Step.fromJSON(schema,s)),clients);view.updateState(view.state.apply(tr));update();},
+ receive(steps,clients){if(!collaboration)return;const tr=receiveTransaction(view.state,steps.map(s=>Step.fromJSON(schema,s)),clients);view.updateState(view.state.apply(tr));if(tr.docChanged){accepted=measure(view.state.doc.toJSON());capacity.update(accepted);}update();},
  replaceDocument(document){const doc=schema.nodeFromJSON(document);view.dispatch(view.state.tr.replaceWith(0,view.state.doc.content.size,doc.content));}};
 }

@@ -11,7 +11,19 @@ export async function buildBrowser({root=fileURLToPath(new URL('..',import.meta.
  await mkdir(out,{recursive:true});if((await readdir(out)).length)throw Error('Browser output directory must be empty.');
  const web=path.join(root,'src/web'),html=await readFile(path.join(web,'index.html'),'utf8'),styleLinks=/<link rel="stylesheet" href="\/([^"]+)"(?: data-document-styles)?>/g,styles=[...html.matchAll(styleLinks)].map(match=>match[1]).filter(name=>name!=='bundled-fonts.css');
  const common={absWorkingDir:root,bundle:true,minify:true,format:'esm',target:['chrome130','firefox128'],write:false,metafile:true,logLevel:'silent',outdir:path.join(out,'assets'),entryNames:'[name]-[hash]',chunkNames:'chunk-[hash]',assetNames:'resource-[hash]',legalComments:'inline'};
- const javascript=await build({...common,entryPoints:[path.join(web,'app.js')],splitting:true,platform:'browser'});
+ // Unbundled source pages use the standalone editor distributions. A packaged
+ // application must compile those entries from the same source as its shell.
+ const editorSources={
+  name:'observanda-editor-sources',
+  setup(builder){
+   builder.onResolve({filter:/\/vendor\/(?:rich-text-editor|equations)\.js$/},args=>{
+    const requested=path.resolve(args.resolveDir,args.path);
+    if(path.dirname(requested)!==path.join(web,'vendor'))return;
+    return {path:path.join(root,'src','editor',path.basename(requested))};
+   });
+  }
+ };
+ const javascript=await build({...common,entryPoints:[path.join(web,'app.js')],splitting:true,platform:'browser',plugins:[editorSources]});
  const css=await build({...common,stdin:{contents:styles.map(name=>'@import "./'+name+'";').join('\n'),resolveDir:web,sourcefile:'styles.css',loader:'css'},entryNames:'styles-[hash]',external:['/fonts/*']});
  const files=[];for(const output of [...javascript.outputFiles,...css.outputFiles]){
   const relative=path.relative(out,output.path).split(path.sep).join('/');if(!/^assets\/[A-Za-z0-9_-]+-[A-Z0-9]+\.(?:js|css)$/.test(relative))throw Error('Unexpected browser output.');
@@ -26,5 +38,5 @@ export async function buildBrowser({root=fileURLToPath(new URL('..',import.meta.
  let replaced=false;const index=html.replace(styleLinks,(match,name)=>{if(name==='bundled-fonts.css')return match;if(replaced)return '';replaced=true;return '<link rel="stylesheet" href="/'+style+'" data-document-styles>';}).replace('src="/app.js"','src="/'+entry+'"').replace('</head>',preload+'\n</head>');
  const bytes=Buffer.from(index);await writeFile(path.join(out,'index.html'),bytes);files.push({path:'index.html',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
  const manifest={version:1,entry,files:files.sort((a,b)=>a.path.localeCompare(b.path))};await writeFile(path.join(out,'manifest.json'),JSON.stringify(manifest));
- return {manifest,initialJavaScriptBytes:initialBytes,initialJavaScriptFiles:visited.size,sourceStaticFiles:sourceVisited.size,initialSources:[...sourceVisited].sort(),javascriptFiles:javascript.outputFiles.length,stylesheetBytes:files.find(file=>file.path===style).size};
+ return {manifest,initialJavaScriptBytes:initialBytes,initialJavaScriptFiles:visited.size,sourceStaticFiles:sourceVisited.size,initialSources:[...sourceVisited].sort(),editorSources:Object.keys(javascript.metafile.inputs).filter(name=>name==='src/editor/rich-text-editor.js'||name==='src/editor/equations.js').sort(),javascriptFiles:javascript.outputFiles.length,stylesheetBytes:files.find(file=>file.path===style).size};
 }
