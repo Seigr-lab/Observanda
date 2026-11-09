@@ -12,6 +12,7 @@ import {RecordValueTree} from './record-value-tree.js';
 import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
+import {reconcilePdfPlacements} from './web/pdf-placement-review.js';
 import {validPdfDocumentHeader,validPdfSection} from './web/pdf-layout-model.js';
 const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const invalid=()=>{throw new AppError('INVALID');};
@@ -30,7 +31,7 @@ export function validatePdfCommand(command){
   else if(['append','section'].includes(o.type)){if(!exact(o,'type,section')||!validPdfSection(o.section))invalid();}
   else if(o.type==='move'){if(!exact(o,'type,sectionId,direction')||!researchId(o.sectionId)||![-1,1].includes(o.direction))invalid();}
   else if(o.type==='move-to'){if(!exact(o,'type,sectionId,position')||!researchId(o.sectionId)||!natural(o.position))invalid();}
-  else if(o.type==='remove-section'){if(!exact(o,'type,sectionId')||!researchId(o.sectionId))invalid();}
+  else if(['remove-section','confirm-placements'].includes(o.type)){if(!exact(o,'type,sectionId')||!researchId(o.sectionId))invalid();}
   else if(o.type==='restore'){if(!exact(o,'type,revision')||!revisionId(o.revision))invalid();}
   else if(['remove','restore-document'].includes(o.type)){if(!exact(o,'type'))invalid();}
   else invalid();
@@ -106,7 +107,7 @@ export class PdfDocumentStore{
  }
  async sectionRow(id,revision,sectionId=null){
   const value=await new RecordValueTree(new PdfBlocks(this.store,id)).read(revision);
-  if(!exact(value,'position,section')||!natural(value.position)||!validPdfSection(value.section)||sectionId!==null&&value.section.id!==sectionId)bad();if(requiresPdfDomainFormat({section:value.section}))await assertPdfDomainFormat(this.store);return value;
+  if(!exact(value,'position,section')||!natural(value.position)||!validPdfSection(value.section)||sectionId!==null&&value.section.id!==sectionId)bad();if(requiresPdfDomainFormat({section:value.section}))await assertPdfDomainFormat(this.store,requiredPdfDomainFormat({section:value.section}));return value;
  }
  async sectionHeader(id,revision){
   const tree=new RecordValueTree(new PdfBlocks(this.store,id)),fields={};
@@ -153,7 +154,15 @@ export class PdfDocumentStore{
   }else if(operation.type==='append'){
    if(!exact(operation,'type,section')||!validPdfSection(operation.section)||current.nextPosition>=Number.MAX_SAFE_INTEGER)invalid();if(await index.find({root:current.sections},operation.section.id))throw new AppError('EXISTS');await put(operation.section,current.nextPosition++);
   }else if(operation.type==='section'){
-   if(!exact(operation,'type,section')||!validPdfSection(operation.section))invalid();const before=await selected(operation.section.id);await put(operation.section,before.position);
+   if(!exact(operation,'type,section')||!validPdfSection(operation.section))invalid();
+   const before=await selected(operation.section.id),next=reconcilePdfPlacements(before.section,operation.section);
+   if(next.placementReview&&!operation.section.placementReview)await requirePdfDomainFormat(this.store,5);
+   await put(next,before.position);
+  }else if(operation.type==='confirm-placements'){
+   const before=await selected(operation.sectionId);
+   if(!before.section.placementReview)invalid();
+   const {placementReview,...confirmed}=before.section;
+   await put(confirmed,before.position);
   }else if(operation.type==='move'){
    if(!exact(operation,'type,sectionId,direction')||![-1,1].includes(operation.direction))invalid();const before=await selected(operation.sectionId),at=await index.rank({root:current.order},ordinal(before.position)),otherAt=at+operation.direction;
    if(otherAt<0||otherAt>=(current.order?.count??0))invalid();const other=await this.sectionRow(id,(await index.entryAt({root:current.order},otherAt)).revision);await put(before.section,other.position);await put(other.section,before.position);

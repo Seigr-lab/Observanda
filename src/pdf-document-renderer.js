@@ -47,6 +47,7 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
  styles.add(layoutCSS(header.layout,'').split('\n .')[0]+pdfPageMasterCSS(header.layout,'')+pdfBleedBackgroundCSS(header.press,'',header.layout.background));
  for await(const section of audience.sections(sections,{signal})){
   signal?.throwIfAborted();if(!validPdfSection(section)||ids.has(section.id))throw new PdfLayoutError('PDF_SECTION');ids.add(section.id);count++;
+  if(section.placementReview)throw new PdfLayoutError('PDF_PLACEMENT_REVIEW',[section.id]);
   const heading=outline.section(section),content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout||pdfPageMasterHasSection(settings)?layout(settings,heading.title):defaultLayout,contentBox=pdfPageContentBox(settings),linksEnabled=header.layout.links!=='disabled'&&settings.links!=='disabled';
   const linkCodes=pdfLinkCodes({enabled:header.structure?.printQrCodes===true,sectionId:section.id,columnWidthMm:contentBox.columnWidthMm,heightMm:contentBox.heightMm,maxBytes:maxBytes-size,signal,textGlyphs,font:settings.font});
   function project(node){

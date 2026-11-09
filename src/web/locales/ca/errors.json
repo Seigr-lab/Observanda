@@ -1,4 +1,5 @@
 {
+  "PDF_PLACEMENT_REVIEW": "Ha canviat el text en una posició de la composició, d’una imatge o d’una nota. Revisa les posicions a la secció afectada abans d’exportar.",
   "WEBSITE_FEED_CAPACITY": "Un canal supera el límit d’una pàgina HTML. Obriu els canals d’entrades de la pàgina afectada i trieu un disseny més petit abans de publicar.",
   "WEBSITE_CHANGED": "El contingut del lloc web o els seus permisos han canviat. Torna a carregar la vista actual abans de continuar.",
   "INSTALL_FILE_MISSING": "Falta un fitxer de la instal·lació de l’Observanda. Repareu o torneu a instal·lar l’Observanda.",

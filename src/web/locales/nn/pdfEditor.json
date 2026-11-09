@@ -1,4 +1,10 @@
 {
+  "placementReviewTitle": "Gå gjennom plasseringane i delen",
+  "placementReviewHelp": "Oppsettsboksar, avsnittsreglar, bilete og notar brukar posisjonar i teksten. Kontroller plasseringane nedanfor etter redigering. Du kan justere dei før du stadfestar delen for førehandsvising og eksport.",
+  "placementBefore": "Før {block}",
+  "placementAtEnd": "På slutten av delen",
+  "placementAdjust": "Juster plasseringane",
+  "placementConfirm": "Stadfest desse plasseringane",
   "convertedLibrary": "Vel blant oppføringar som allereie er konverterte for PDF. Endra synlegheit oppdaterer innhaldet på same plass.",
   "wholeEntry": "Heile oppføringa",
   "title": "PDF-dokument",

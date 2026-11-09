@@ -1,4 +1,10 @@
 {
+  "placementReviewTitle": "Review section placements",
+  "placementReviewHelp": "Layout boxes, paragraph rules, images and notes use positions in the text. Check the positions below after editing. You can adjust them before confirming this section for preview and export.",
+  "placementBefore": "Before {block}",
+  "placementAtEnd": "At the end of the section",
+  "placementAdjust": "Adjust placements",
+  "placementConfirm": "Confirm these positions",
   "convertedLibrary": "Choose from the entries already converted for PDF. Visibility changes update retained content without removing its placement.",
   "wholeEntry": "Whole entry",
   "title": "PDF documents",

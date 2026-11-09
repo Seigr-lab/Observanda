@@ -1,4 +1,10 @@
 {
+  "placementReviewTitle": "Revisa les posicions de la secció",
+  "placementReviewHelp": "Els quadres de composició, les regles de paràgraf, les imatges i les notes fan servir posicions del text. Comprova les posicions següents després d’editar-lo. Pots ajustar-les abans de confirmar la secció per a la previsualització i l’exportació.",
+  "placementBefore": "Abans de {block}",
+  "placementAtEnd": "Al final de la secció",
+  "placementAdjust": "Ajusta les posicions",
+  "placementConfirm": "Confirma aquestes posicions",
   "convertedLibrary": "Tria entre les entrades ja convertides per a PDF. Els canvis de visibilitat actualitzen el contingut conservat sense moure’l de lloc.",
   "wholeEntry": "Entrada sencera",
   "title": "Documents PDF",

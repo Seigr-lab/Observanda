@@ -1,4 +1,10 @@
 {
+  "placementReviewTitle": "Revisar las posiciones de la sección",
+  "placementReviewHelp": "Los cuadros de composición, las reglas de párrafo, las imágenes y las notas utilizan posiciones del texto. Comprueba las posiciones siguientes después de editarlo. Puedes ajustarlas antes de confirmar la sección para la vista previa y la exportación.",
+  "placementBefore": "Antes de {block}",
+  "placementAtEnd": "Al final de la sección",
+  "placementAdjust": "Ajustar las posiciones",
+  "placementConfirm": "Confirmar estas posiciones",
   "convertedLibrary": "Elige entre las entradas ya convertidas para PDF. Los cambios de visibilidad actualizan el contenido conservado sin quitarlo de su posición.",
   "wholeEntry": "Entrada completa",
   "title": "Documentos PDF",

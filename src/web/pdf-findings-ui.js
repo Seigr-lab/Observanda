@@ -11,6 +11,7 @@ export function focusPdfFinding(host,section,finding){
  if(!host||!section||finding?.sectionId!==section.id)return false;
  for(const node of host.querySelectorAll('[data-pdf-finding-target]'))node.removeAttribute('data-pdf-finding-target');
  const blockId=finding.blockId??'',by=(selector,value,attribute)=>[...host.querySelectorAll(selector)].find(node=>node.getAttribute(attribute)===value),field=key=>by('[data-document-key]',key,'data-document-key'),editable=node=>node?.querySelector('[contenteditable="true"]');let target;
+ if(finding.code==='PDF_PLACEMENT_REVIEW')target=host.querySelector('[data-pdf-placement-review] [data-command="placement-adjust"]');
  if(blockId.startsWith('composition-'))target=by('[data-pdf-composition-handle]',blockId.slice(12),'data-pdf-composition-handle');
  const note=(section.notes??[]).find(note=>blockId.includes(note.id));if(!target&&note)target=editable(field('pdf-note-'+note.id));
  const image=(section.images??[]).find(image=>blockId.includes(image.id));if(!target&&image)target=by('[data-pdf-image]',image.id,'data-pdf-image')?.querySelector('input');

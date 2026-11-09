@@ -20,6 +20,32 @@ function fixture({domain='pdf',projectId=randomUUID()}={}){
 }
 function creation(){const id=randomUUID();return {id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{version:1,id,name:'Compatibility report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section:{id:randomUUID(),title:'Evidence',content:'Retained observations',layout:null,start:null}}};}
 
+test('a normal section save detects changed note placements, survives retry and requires explicit revision-bound review',async()=>{
+ const f=fixture(),create=creation(),original=create.operation.section;
+ original.content='Alpha\n\nBravo';
+ original.notes=[{id:randomUUID(),kind:'footnote',content:'About the first passage',block:1}];
+ const initial=await f.change(create);
+ const next=(expectedRevision,operation)=>({id:create.id,commandId:randomUUID(),expectedRevision,operation});
+ const read=async revision=>(await f.run(store=>new PdfDocumentStore(store).section(create.id,original.id,{revision}))).section;
+ const swapped={...original,content:'Bravo\n\nAlpha'};
+ const edit=next(initial.revision,{type:'section',section:swapped}),pending=await f.change(edit);
+ assert.deepEqual(await read(initial.revision),original);
+ assert.deepEqual(await read(pending.revision),{...swapped,placementReview:true});
+ assert.deepEqual(await f.change(edit),{...pending,replayed:true});
+ assert.equal(f.values.get('owner').pdfFormat,5);
+ assert.equal((await f.change(next(pending.revision,{type:'section',section:swapped}))).revision,pending.revision);
+ const confirm=next(pending.revision,{type:'confirm-placements',sectionId:original.id});
+ await assert.rejects(f.change({...confirm,expectedRevision:initial.revision}),{code:'CONFLICT'});
+ const accepted=await f.change(confirm);
+ assert.deepEqual(await read(accepted.revision),swapped);
+ assert.deepEqual(await f.change(confirm),{...accepted,replayed:true});
+ const restored=await f.change(next(accepted.revision,{type:'restore',revision:pending.revision}));
+ assert.equal((await read(restored.revision)).placementReview,true);
+ assert.equal((await f.run(store=>new PdfDocumentStore(store).verify())).documents,1);
+ f.values.set('owner',{...f.owner,pdfFormat:4});
+ await assert.rejects(read(pending.revision),{code:'CATALOGUE_DAMAGED'});
+});
+
 test('ordinary PDF editions retain their exact legacy owner and both ownership scopes remain readable',async()=>{
  for(const projectId of [randomUUID(),null]){
   const f=fixture({projectId}),command=creation(),saved=await f.change(command);

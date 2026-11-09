@@ -15,9 +15,10 @@ import {withDatabaseRequest} from './database-request-context.js';
 import {AppError} from './errors.js';
 
 export async function prepareSavedPdf(documents,{documentId,revision},{signal,check=async()=>{},progress=async()=>{},preflightOnly=false}={}){
+ const proof=new Map();
  try{
   await check();await progress('compiling');
-  const proof=new Map(),compiled=await documents.domains.run(['pdf'],async get=>{
+  const compiled=await documents.domains.run(['pdf'],async get=>{
    const store=get('pdf'),owner=new PdfDocumentStore(store),selected=await owner.open(documentId,{revision});
    const readImage=async asset=>{if(!await allowPdfImage(store,documents.publicationFiles,documentId,{asset},{signal,proof}))throw new AppError('PDF_SOURCE_CONTENT');return new PdfDocumentImages(store,documentId).read(asset,{signal});};
    const compiled=await compilePdfDocument(selected.header,pdfFileSections(store,documents.publicationFiles,documentId,owner.content(documentId,revision,{signal}),{signal,proof}),{signal,readImage}),customFonts=new Map();
@@ -27,7 +28,7 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
   await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);return {...result,sourceProof};
- }catch(error){if(preflightOnly&&error instanceof PdfLayoutError&&error.code==='PDF_LINK_CODE_LAYOUT'&&typeof error.details?.[0]==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(error.details[0])){await check();signal?.throwIfAborted();return {preflight:{version:1,status:'fatal',truncated:false,findings:[{code:error.code,severity:'fatal',sectionId:error.details[0],blockId:null,blockIndex:null,details:{}}]}};}if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
+ }catch(error){if(preflightOnly&&error instanceof PdfLayoutError&&['PDF_LINK_CODE_LAYOUT','PDF_PLACEMENT_REVIEW'].includes(error.code)&&typeof error.details?.[0]==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(error.details[0])){await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();return {preflight:{version:1,status:'fatal',truncated:false,findings:[{code:error.code,severity:'fatal',sectionId:error.details[0],blockId:null,blockIndex:null,details:{}}]}};}if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
 }
 // The desktop renderer is intentionally single-owner. Queued exports compile
 // only when their turn begins instead of retaining many whole documents in RAM.

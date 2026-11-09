@@ -22,9 +22,29 @@ test('PDF composition uses only PDF-granted files, updates existing placements a
  const id=randomUUID(),sectionId=randomUUID(),first={id:randomUUID(),title:'Author text',content:'Independent text',layout:null,start:null};let head=await d.change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{version:1,id,name:'Report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section:first}});
  const command={id,commandId:randomUUID(),expectedRevision:head.revision,sectionId,replace:false,source};head=await retainPdfResearch(d,files,command);assert.equal((await retainPdfResearch(d,files,command)).revision,head.revision);
  const selected=(await d.read('section',{id,sectionId})).section;const html=await compilePdfDocument((await d.read('open',{id})).header,[selected]);assert.match(html.html,/Permitted measurement/);
+ head=await d.change({id,commandId:randomUUID(),expectedRevision:head.revision,operation:{type:'section',section:{...selected,notes:[{id:randomUUID(),kind:'footnote',content:'Statement about the permitted measurement',block:1}]}}});
  const bytes=Buffer.from('%PDF-1.7 test'),jobId=randomUUID(),jobs=new PdfExportJobs(d,{prepare:async()=>({bytes,sha256:digest(bytes),renderer:{engine:'chromium',electron:'test',chromium:'test',recipeVersion:1},preflight:{version:1,status:'ok',findings:[],truncated:false},sourceProof:[{workspaceId:sourceOwner,recordId,revision:initial.revision}]})});
  await jobs.start({jobId,documentId:id,revision:head.revision});assert.equal((await jobs.work(jobId)).state,'completed');assert.deepEqual((await jobs.download(jobId)).bytes,bytes);
- await update('Newly permitted section content');assert.equal((await d.read('section',{id,sectionId})).section.content,'Newly permitted section content');await assert.rejects(jobs.download(jobId),{code:'PDF_SOURCE_CONTENT'});
+ await update('Newly permitted section content');const changed=(await d.read('section',{id,sectionId})).section;assert.equal(changed.content,'Newly permitted section content');
+ assert.equal(changed.placementReview,true);await assert.rejects(compilePdfDocument((await d.read('open',{id})).header,[changed]),{code:'PDF_PLACEMENT_REVIEW'});await assert.rejects(jobs.download(jobId),{code:'PDF_SOURCE_CONTENT'});
+ const writeShown=section=>d.change({id,commandId:randomUUID(),expectedRevision:head.revision,operation:{type:'section',section}});
+ const confirm=()=>d.change({id,commandId:randomUUID(),expectedRevision:head.revision,operation:{type:'confirm-placements',sectionId}});
+ const readSection=async()=>(await d.read('section',{id,sectionId})).section;
+ const compileCurrent=async()=>compilePdfDocument((await d.read('open',{id})).header,[await readSection()]);
+ // If the source changes before the reviewed section is saved, the stale
+ // source pin fails. A change between saving and confirming must also leave
+ // the unseen projection behind its own review gate.
+ await update('Second permitted revision');
+ await assert.rejects(writeShown(changed),{code:'CONFLICT'});
+ const shown=await readSection();assert.equal(shown.content,'Second permitted revision');
+ head=await writeShown(shown);
+ await update('Third permitted revision');
+ head=await confirm();
+ const unseen=await readSection();assert.equal(unseen.content,'Third permitted revision');assert.equal(unseen.placementReview,true);
+ await assert.rejects(compileCurrent(),{code:'PDF_PLACEMENT_REVIEW'});
+ head=await writeShown(unseen);head=await confirm();
+ assert.equal((await readSection()).placementReview,undefined);
+ assert.match((await compileCurrent()).html,/Third permitted revision/);
  await update('',false);const withdrawn=await d.read('section',{id,sectionId,revision:head.revision});assert.equal(withdrawn.section.content,'');assert.equal(withdrawn.section.research.content,'');assert.ok(!(await d.read('sections',{id})).items.some(item=>item.title==='Measurements'));await assert.rejects(readPdfResearch(files,{operation:'selection',...source,snapshotId:null}),{code:'PDF_SOURCE_CONTENT'});
  await update('Restored section');assert.equal((await d.read('section',{id,sectionId})).section.content,'Restored section');
  const summaries=(await d.read('sections',{id})).items;

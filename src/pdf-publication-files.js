@@ -6,6 +6,7 @@ import {selectPdfResearchTable} from './web/pdf-research-table.js';
 import {pdfReferencedFigures,validPdfResearch} from './web/pdf-research-model.js';
 import {PDF_IMAGE_MAX_BYTES} from './web/pdf-image-model.js';
 import {proseDocument} from './web/prose-model.js';
+import {reconcilePdfPlacements} from './web/pdf-placement-review.js';
 
 const invalid=()=>{throw new AppError('INVALID');};
 const denied=()=>{throw new AppError('PDF_SOURCE_CONTENT');};
@@ -108,7 +109,7 @@ export async function projectPdfSection(store,files,documentId,original,{signal,
   else section={...section,title:prior.title===approved.title?section.title:approved.title,content:currentWriting(section.content,prior.content,approved.content),figures:same(prior.figures,approved.figures)?section.figures??[]:approved.figures,research:approved};
  }
  if(section.images?.length){const images=[];for(const image of section.images)if(await allowPdfImage(store,files,documentId,{asset:image.asset,imageId:image.id},{signal,proof}))images.push(image);section={...section,images};}
- return {section,withdrawn};
+ return {section:reconcilePdfPlacements(original,section),withdrawn};
 }
 export async function* pdfFileSections(store,files,documentId,source,options={}){
  for await(const value of source){const result=await projectPdfSection(store,files,documentId,value,options);if(!result.withdrawn)yield result.section;}

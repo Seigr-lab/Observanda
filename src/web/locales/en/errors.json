@@ -1,4 +1,5 @@
 {
+  "PDF_PLACEMENT_REVIEW": "Text changed at a layout, image or note position. Review the placements in the affected section before exporting.",
   "WEBSITE_FEED_CAPACITY": "A website feed exceeds the HTML page limit. Open Entry feeds on the affected page and choose a smaller item layout before publishing.",
   "WEBSITE_CHANGED": "The website content or its permissions changed. Reload the current view before continuing.",
   "INSTALL_FILE_MISSING": "An Observanda installation file is missing. Repair or reinstall Observanda.",
