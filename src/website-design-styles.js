@@ -7,15 +7,16 @@ import {defaultBreakpoints,parseLayoutLine} from './web/website-breakpoint-model
 const identity = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const marker = new RegExp('\\n/\\* Observanda (appearance|layout) (ow-(?:visual|layout)-'+identity+') \\*/\\n', 'g');
 const area = new RegExp('\\bowarea-'+identity+'\\b', 'g');
-const layoutProperties = new Set(('display visibility order flex-direction flex-wrap grid-template-columns grid-template-areas grid-area grid-column grid-row grid-auto-flow align-items justify-content gap padding width min-width max-width flex-basis flex-grow justify-self border-width border-style border-color border-radius position top right bottom left z-index margin background-color color').split(' '));
+const layoutProperties = new Set(('display visibility order flex-direction flex-wrap grid-template-columns grid-template-areas grid-area grid-column grid-row grid-auto-flow align-items align-content justify-content align-self justify-self text-align gap padding width height box-sizing min-width max-width flex-basis flex-grow border-width border-style border-color border-radius position top right bottom left z-index margin background-color color').split(' '));
 
-function admittedDeclarations(body,properties){
+function admittedDeclarations(body,properties,layoutPriority=false){
  // CSSOM quotes family names and grid-area rows. Delimiters inside those
  // strings are data, including parentheses, braces and semicolons in a font.
  const masked=body.replace(/"(?:[^"\\\n\r]|\\[^\n\r])*"|'(?:[^'\\\n\r]|\\[^\n\r])*'/g,'""');
  return masked.split(';').every(declaration=>{
   if(!declaration.trim())return true;
-  const match=/^\s*([\w-]+)\s*:\s*([^:;{}@\\!\n]+?)\s*$/.exec(declaration);
+  const value=layoutPriority?declaration.replace(/\s*!important\s*$/i,''):declaration;
+  const match=/^\s*([\w-]+)\s*:\s*([^:;{}@\\!\n]+?)\s*$/.exec(value);
   if(!match||!properties.has(match[1])||/[<>']|\/\*|\*\//.test(match[2]))return false;
   if(match[2].includes('"')&&(!['font-family','--heading-font','--reading-font','grid-template-areas'].includes(match[1])||match[2].replaceAll('""','').includes('"')))return false;
   return [...match[2].matchAll(/([\w-]+)\s*\(/g)].every(([,fn])=>['rgb','rgba','repeat','minmax','min','max','clamp','calc'].includes(fn));
@@ -29,7 +30,7 @@ function layoutRule(css,at,name,ranges){
   const stop=css.indexOf('\n',at);if(stop<0)return null;
   const line=css.slice(at,stop);
   const rule=parseLayoutLine(line,name,ranges);
-  if(!rule||seen.has(rule.id)||!admittedDeclarations(rule.body,layoutProperties))return null;
+  if(!rule||seen.has(rule.id)||!admittedDeclarations(rule.body,layoutProperties,true))return null;
   seen.add(rule.id);
   if(css.startsWith(end,stop))return stop+end.length;
   at=stop+1;

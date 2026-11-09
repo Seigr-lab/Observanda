@@ -1,0 +1,84 @@
+import {test,expect} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,mkdir,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js';
+import {createNotebook} from '../../src/model.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+
+test('arrange six scientific panels by keyboard and mouse, keep narrow overrides and read the published geometry with research offline',async({page,browser})=>{
+ test.setTimeout(75000);page.setDefaultTimeout(6500);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-precision-')),out=path.join(root,'public'),database=process.env.OBSERVANDA_DATABASE_URL;
+ let fixture,app,reader;
+ try{
+  await mkdir(out);fixture=await encryptedFixture(root,createNotebook('Calibration'));
+  const store=new WebsiteFileStore(fixture.workspace),id=randomUUID();
+  const title='Six-site calibration',panels=Array.from({length:6},(_,i)=>'<figure id="panel'+(i+1)+'"><div></div><figcaption>Station '+(i+1)+'</figcaption></figure>').join('');
+  const html='<html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="style.css"></head><body><main><section id="board" aria-label="Plate board">'+panels+'</section><section id="diagram" aria-label="Detector"><p data-website-annotation id="calibration">A</p><p id="peak">B</p><p id="limit">C</p></section><section id="rotated"><figure id="inset">Inset</figure></section></main></body></html>';
+  const css='*{box-sizing:border-box}body{margin:0}#board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:18px;gap:6px}figure{margin:0;padding:12px}figure div{height:36px;background:#234d61}#diagram{position:relative;height:90px;width:360px;border:1px solid}#diagram p{position:absolute;top:20px;width:18px;margin:0}#calibration{left:8px}#peak{left:100px}#limit{left:320px}#rotated{transform:rotate(5deg);width:100px}';
+  const saved=await store.importFiles(id,{name:title,files:new Map([['index.html',html],['style.css',css]])});
+  const sourceId=websiteSourceId({workspaceId:fixture.workspace.vault.id,notebookId:randomUUID(),recordId:randomUUID()});
+  const token=await store.beginSourceUpdate({sourceId});
+  await store.putSource({sourceId,visible:true,title:'Observation',html:'<p data-observanda-part="text">Granted measurement</p>'},{token});
+  await store.insertSource(id,{expectedRevision:saved.site.revision,sourceId,position:'end'});
+  process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/offline';
+  app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'prefs.json'),port:0});
+  await page.goto(app.origin+'/?view=website#'+app.launchToken);
+  const canvas=page.frameLocator('#website-files-canvas'),board=canvas.locator('#board'),layout=page.locator('.website-layout-inspector');
+  const inspector=layout.locator('details').filter({has:page.locator(':scope > summary',{hasText:'Precision layout'})});
+  const size=inspector.getByRole('group',{name:'Size and position'}),arrange=inspector.getByRole('group',{name:'Alignment and distribution'});
+  const b=(host,name)=>host.getByRole('button',{name,exact:true});
+  const open=async()=>{
+   if(!await layout.evaluate(el=>el.open))await layout.locator(':scope > summary').click();
+   if(!await inspector.evaluate(el=>el.open))await inspector.locator(':scope > summary').click();
+  };
+  await board.click({position:{x:3,y:3}});await open();
+  await size.getByRole('combobox').selectOption('gap');await size.getByLabel('Measurement (px)').fill('18');await b(size,'Apply measurement').press('Enter');
+  await expect(inspector.locator('p[role="status"]')).toContainText('#board');
+  await inspector.getByLabel('Override competing page styles').check();
+  await size.getByLabel('Measurement (px)').fill('18');await b(size,'Apply measurement').press('Enter');
+  await expect(board).toHaveCSS('gap','18px');
+  await b(inspector,'Select child panels').press('Enter');
+  await expect(inspector.getByRole('group',{name:'Selected panels'}).getByRole('checkbox',{checked:true})).toHaveCount(6);
+  await arrange.getByRole('combobox',{name:'Action',exact:true}).selectOption('caption');
+  await arrange.getByRole('combobox',{name:'Align',exact:false}).selectOption('center');await b(arrange,'Arrange selection').press('Enter');
+  await expect(board.locator('figcaption').last()).toHaveCSS('text-align','center');
+  await b(page,'Undo').click();await expect(board.locator('figcaption').first()).not.toHaveCSS('text-align','center');
+  await b(page,'Redo').click();await expect(board.locator('figcaption').last()).toHaveCSS('text-align','center');
+  await board.click({position:{x:3,y:3}});await open();
+  await inspector.getByLabel('Override competing page styles').check();
+  const grip=canvas.locator('[data-precision-handle="padding"]');
+  await expect(grip).toBeVisible();const box=await grip.boundingBox(),scale=await page.locator('#website-files-canvas').evaluate(el=>el.getBoundingClientRect().width/el.offsetWidth);
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+  await page.mouse.move(box.x+box.width/2+14*scale,box.y+box.height/2,{steps:8});await page.mouse.up();await expect(board).toHaveCSS('padding-left','32px');
+  await layout.getByLabel('Edit layout at').selectOption('tablet');await size.getByRole('combobox').selectOption('gap');
+  await size.getByLabel('Measurement (px)').fill('10');await b(size,'Apply measurement').click();
+  await layout.getByLabel('Edit layout at').selectOption('desktop');
+  const marker=canvas.locator('#calibration');await marker.click();await open();
+  await size.getByRole('combobox').selectOption('move');await size.getByLabel('Measurement (px)').fill('24');await size.getByLabel('Vertical offset (Y)').fill('20');await b(size,'Apply measurement').click();
+  await expect(marker).toHaveCSS('left','24px');const move=canvas.locator('[data-precision-handle="move"]');await move.focus();await move.press('ArrowRight');await expect(marker).toHaveCSS('left','25px');
+  await size.getByLabel('Measurement (px)').fill('101');await b(size,'Apply measurement').click();
+  await expect(inspector.locator('p[role="status"]')).toContainText('cover another positioned item');await expect(marker).toHaveCSS('left','25px');
+  await b(inspector,'Select sibling panels').press('Enter');await arrange.getByRole('combobox',{name:'Action',exact:true}).selectOption('spreadX');await b(arrange,'Arrange selection').press('Enter');
+  await expect(canvas.locator('#peak')).toHaveCSS('left','172.5px');
+  await canvas.locator('#inset').click();await open();await expect(inspector).toContainText('untransformed horizontal container');await expect(b(size,'Apply measurement')).toBeDisabled();
+  await canvas.getByText('Granted measurement',{exact:true}).click();await expect(inspector).toBeHidden();await expect(canvas.locator('[data-observanda-editor="precision"]')).toHaveCount(0);
+  await b(page,'Save website').click();await b(page,'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await b(page,'Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b(page,'Write reviewed files').click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
+  reader=await browser.newPage({viewport:{width:1350,height:900}});await reader.goto(pathToFileURL(path.join(out,'index.html')).href);
+  const published=reader.locator('#board');
+  await expect(published).toHaveCSS('gap','18px');await expect(published.locator('figcaption').last()).toHaveCSS('text-align','center');
+  await expect(reader.locator('#calibration')).toHaveCSS('left','25px');await expect(reader.locator('#peak')).toHaveCSS('left','172.5px');await expect(reader.locator('[data-precision-handle]')).toHaveCount(0);
+  await reader.setViewportSize({width:760,height:800});await expect(published).toHaveCSS('gap','10px');
+  const rects=await published.locator('figure').evaluateAll(elements=>elements.map(el=>{const b=el.getBoundingClientRect();return [b.left,b.top,b.right,b.bottom];}));
+  for(const [i,a] of rects.entries())for(const b of rects.slice(i+1))expect(a[2]<=b[0]||b[2]<=a[0]||a[3]<=b[1]||b[3]<=a[1]).toBe(true);
+  await expect(reader.getByText('Granted measurement',{exact:true})).toBeVisible();
+ }finally{
+  if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;
+  await reader?.close();try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{await rm(root,{recursive:true,force:true,maxRetries:8});}
+ }
+});

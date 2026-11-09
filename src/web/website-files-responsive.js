@@ -84,14 +84,14 @@ export function responsiveLayout({document,host,before,t,scope,selected,selectNo
  const breakpoint=()=>mode||(!getWidth&&getViewport?getViewport():getRanges().findLast(r=>matchesWidth(r,width()))?.id??'desktop');
  const nodeClass=node=>[...node.classList].find(x=>namePattern.test(x));
  const styles=()=>{const blocks=managedLayoutBlocks(getCSS()),view=breakpoint(),ranges=getRanges();return node=>styleAt(document,blocks.get(nodeClass(node))?.body??'',view,ranges,nodeClass(node));};
- function applyNodes(changes,mutate){
+ function applyNodes(changes,mutate,priority=''){
   const view=breakpoint(),current=getCSS(),read=styles(),rules=new Map();
   const counts=new Map();
   for(const el of document.querySelectorAll('[class*="ow-layout-"]')){const name=nodeClass(el);if(name)counts.set(name,(counts.get(name)??0)+1);}
   for(const {node,properties} of changes){
    if(node.closest(layoutProtected))return false;
    const prior=nodeClass(node),name=prior&&counts.get(prior)===1?prior:'ow-layout-'+crypto.randomUUID(),style=read(node);
-   for(const [property,value] of Object.entries(properties))if(value===null)style.removeProperty(property);else style.setProperty(property,value);
+   for(const [property,value] of Object.entries(properties))if(value===null)style.removeProperty(property);else style.setProperty(property,value,priority||style.getPropertyPriority(property));
    rules.set(name,{node,prior,name,style});
   }
   const transform=css=>{
@@ -118,7 +118,8 @@ export function responsiveLayout({document,host,before,t,scope,selected,selectNo
   }
   change();write(next,transform);refresh();return true;
  }
- const composer=websiteLayoutComposer({panel,before:hint,document,make,listen,t,selected:()=>scope.value==='section'?selected():null,selectNode,styles,applyNodes,breakpoint,signal});
+ const matchesPreview=()=>breakpoint()==='desktop'||getRanges().some(r=>r.id===breakpoint()&&matchesWidth(r,width()));
+ const composer=websiteLayoutComposer({panel,before:hint,document,make,listen,t,selected:()=>scope.value==='section'?selected():null,selectNode,styles,applyNodes,breakpoint,matchesPreview,signal});
  function inspect(){
   const node=target();if(!node||!trace.open)return;
   const property=propertyChoice.value,actual=inspectWebsiteStyle(node,property),ranges=getRanges();
@@ -136,7 +137,7 @@ export function responsiveLayout({document,host,before,t,scope,selected,selectNo
   const ranges=getRanges();showRanges(ranges);
   const node=target(),view=breakpoint();panel.hidden=!node||!!node.closest(layoutProtected);
   touched.clear();apply.disabled=true;
-  if(panel.hidden||!panel.open)return;
+  if(panel.hidden||!panel.open){composer.refresh();return;}
   const name=identifier(node);let style=document.createElement('div').style;
   try{if(name)style=styleAt(document,boundaries(getCSS(),name).text,view,ranges,name);customRule=false;composer.refresh();}
   catch{customRule=true;}

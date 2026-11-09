@@ -1,5 +1,7 @@
 import {websiteCSSByteLimit} from './website-css-urls.js';
-export const layoutProtected='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-instance],[data-website-feed],[data-website-menu],[data-website-source-gallery],[data-image-gallery],[data-website-recording]';
+import {websitePrecisionLayout} from './website-precision-layout.js';
+import {managedWebsiteContent as layoutProtected} from './website-authored-nodes.js';
+export {layoutProtected};
 const container='main,section,article,aside,header,footer,div,figure';
 const areaPattern=/^owarea-[a-f0-9-]{36}$/;
 function childName(node){
@@ -10,7 +12,7 @@ function childName(node){
  return text.trim().replace(/\s+/g,' ')||node.localName;
 }
 
-export function websiteLayoutComposer({panel,before,document,make,listen,t,selected,selectNode,styles,applyNodes,breakpoint,signal}){
+export function websiteLayoutComposer({panel,before,document,make,listen,t,selected,selectNode,styles,applyNodes,breakpoint,matchesPreview,signal}){
  const root=make('section');root.className='website-layout-composer';panel.insertBefore(root,before);
  const label=(parent,key,control)=>{const node=make('label');node.append(make('span',t(key)),control);parent.append(node);return control;};
  const number=(parent,key,value,{min,step='1'}={})=>{const n=make('input');n.type='number';n.step=step;n.required=true;if(min!==undefined)n.min=String(min);n.value=String(value);return label(parent,key,n);};
@@ -153,10 +155,12 @@ export function websiteLayoutComposer({panel,before,document,make,listen,t,selec
  }
  listen(corner,'change',reflectOffsets);listen(units,'change',reflectOffsets);
  listen(coords,'toggle',readPosition);
+ const precision=websitePrecisionLayout({root,document,make,listen,t,selected,selectNode,applyNodes,breakpoint,matchesPreview,childName,signal});
  function refresh(){
   const node=selected(),view=breakpoint();root.hidden=!node||Boolean(node.closest(layoutProtected));
   grid.hidden=annotation.hidden=!node?.matches(container);coords.hidden=!node?.parentElement?.matches(container)||['header','footer','main','nav'].includes(node?.localName);
   if(node!==lastNode||view!==lastView){stopPoint();lastNode=node;lastView=view;report.textContent='';if(areas.open)readAreas();if(coords.open)readPosition();}
+  precision.refresh();
  }
  return {refresh};
 }
