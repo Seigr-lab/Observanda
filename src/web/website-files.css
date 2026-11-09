@@ -316,3 +316,16 @@
 .website-token-number input,.website-token-color input[type=text]{width:0;flex:1}
 .website-token-dialog fieldset button,.website-token-columns>section>button{justify-self:start}
 .website-token-dialog>p[role=status]{margin-block:.4rem}
+.website-range-dialog{width:min(46rem,90vw);max-height:86vh;overflow:auto}
+.website-range-dialog>header,.website-range-dialog>footer,.website-breakpoint-tools{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}
+.website-range-dialog>header h2{margin:0}
+.website-range-columns{display:grid;grid-template-columns:minmax(12rem,1fr) minmax(16rem,1.4fr);gap:1rem;margin-block:1rem}
+.website-range-columns form,.website-range-columns label,.website-range-list,.website-breakpoint-tools label{display:grid;align-content:start;gap:.3rem}
+.website-range-list{margin-block-end:.5rem}
+.website-range-list button{text-align:start}
+.website-range-list button[aria-pressed=true]{border-inline-start:3px solid var(--accent)}
+.website-range-dialog output,.website-layout-inspector output{display:block;overflow-wrap:anywhere}
+.website-fluid-sizing{margin-block:.5rem}
+.website-fluid-dimension{display:flex;align-items:end;gap:.25rem}
+.website-fluid-dimension label,.website-fluid-dimension input{min-width:0;width:100%}
+.website-fluid-dimension select{width:auto}

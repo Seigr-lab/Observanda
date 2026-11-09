@@ -10,6 +10,7 @@ import {rememberPublishTarget,websitePublishTarget} from './website-publish-targ
 import {savedAppearance} from './website-saved-appearance.js';
 import {websiteThemes} from './website-scoped-themes.js';
 import {websiteStyleBook} from './website-style-book.js';
+import {websiteBreakpoints} from './website-breakpoints.js';
 import {websitePageDesigns} from './website-page-designs.js';
 import {pageInclusion} from './website-page-inclusion.js';
 import {archivedWebsitePages,websitePageLifecycle} from './website-page-lifecycle.js';
@@ -216,6 +217,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    const action=operation==='styles/read'?'list':options.action;
    if(operation==='styles/change'){if(!action||action==='list')throw new AppError('INVALID');onWrite();await check();}
    json(await websiteStyleBook(store,siteId,{...options,action,expectedRevision,blockedValues,signal}));return true;
+  }
+  if(operation==='breakpoints/review'||operation==='breakpoints/apply'){
+   const apply=operation==='breakpoints/apply';if(apply){onWrite();await check();}
+   json(await websiteBreakpoints(store,siteId,{...options,expectedRevision,signal},apply));return true;
   }
   if(operation==='themes/read'||operation==='themes/change'){
    const write=operation==='themes/change';if(write){onWrite();await check();}

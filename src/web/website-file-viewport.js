@@ -1,4 +1,5 @@
-export const websiteLayoutWidths=Object.freeze({desktop:null,tablet:900,phone:600});
+import {websiteLayoutWidths,breakpointLabel,breakpointCondition,defaultBreakpoints,matchesWidth} from './website-breakpoint-model.js';
+export {websiteLayoutWidths} from './website-breakpoint-model.js';
 const presets={desktop:1440,tablet:768,phone:375};
 const breakpoint=width=>width<=websiteLayoutWidths.phone?'phone':width<=websiteLayoutWidths.tablet?'tablet':'desktop';
 
@@ -14,11 +15,13 @@ export function websiteFrameGeometry(frame){
  return {scale,left,top,clipLeft,clipRight,clipTop,clipBottom};
 }
 
-export function websiteFileViewport({esc,t,changed}){
+export function websiteFileViewport({esc,t,changed,getRanges=defaultBreakpoints}){
  let preset='desktop',width=presets.desktop,zoom='fit',custom=1024,observer=null;
  function controls(){
   const option=(key,text,current)=>'<option value="'+key+'"'+(key===current?' selected':'')+'>'+esc(text)+'</option>';
-  const choices=Object.entries(presets).map(([key,px])=>option(key,t(key)+' · '+px+' px',preset)).join('');
+  const named=getRanges().filter(r=>!Object.hasOwn(presets,r.id));
+  if(preset!=='custom'&&!Object.hasOwn(presets,preset)&&!named.some(r=>r.id===preset)){preset='custom';custom=width;}
+  const choices=Object.entries(presets).map(([key,px])=>option(key,t(key)+' · '+px+' px',preset)).join('')+named.map(r=>option(r.id,r.name+' · '+breakpointCondition(r),preset)).join('');
   return '<label>'+esc(t('viewport'))+' <select data-website-file-viewport>'+choices+option('custom',t('viewportCustom'),preset)+'</select></label>'+
    '<label data-viewport-custom'+(preset==='custom'?'':' hidden')+'><input type="number" required min="1" max="16384" step="1" value="'+custom+'" aria-label="'+esc(t('viewportPixels'))+'" data-viewport-width> px</label>'+
    '<label>'+esc(t('viewportZoom'))+' <select data-viewport-zoom>'+option('fit',t('viewportFit'),zoom)+option('actual','100%',zoom)+'</select></label>'+
@@ -35,14 +38,15 @@ export function websiteFileViewport({esc,t,changed}){
   frame.parentElement.style.width=width*scale+'px';
   Object.assign(frame.style,{width:width+'px',height:height+'px',transform:'scale('+scale+')'});
   const range=breakpoint(width);
-  const label=range==='desktop'?'> '+websiteLayoutWidths.tablet+' px':range==='phone'?'≤ '+websiteLayoutWidths.phone+' px':(websiteLayoutWidths.phone+1)+'–'+websiteLayoutWidths.tablet+' px';
+  const applicable=getRanges().filter(r=>matchesWidth(r,width)),customRanges=applicable.some(r=>!Object.hasOwn(presets,r.id));
+  const label=customRanges?applicable.map(r=>breakpointLabel(r,t)+' '+breakpointCondition(r)).join(', '):range==='desktop'?'> '+websiteLayoutWidths.tablet+' px':range==='phone'?'≤ '+websiteLayoutWidths.phone+' px':(websiteLayoutWidths.phone+1)+'–'+websiteLayoutWidths.tablet+' px';
   const text=t('viewportMeasured',{width,height,percent:Math.round(scale*100),range:label});
   const readout=document.querySelector('[data-viewport-readout]');
   if(readout&&readout.textContent!==text)readout.textContent=text;
  }
  function change(input){
   if(input.matches('[data-website-file-viewport]')){
-   preset=input.value;width=presets[preset]??custom;
+   preset=input.value;const range=getRanges().find(r=>r.id===preset);width=presets[preset]??range?.max??range?.min??custom;
    const label=document.querySelector('[data-viewport-custom]');label.hidden=preset!=='custom';
    if(!label.hidden){const field=label.querySelector('input');field.focus();field.select();}
   }else if(input.matches('[data-viewport-width]')){
@@ -52,10 +56,18 @@ export function websiteFileViewport({esc,t,changed}){
   else return false;
   measure();changed();return true;
  }
+ function previewWidth(px){
+  if(!Number.isInteger(px)||px<1||px>16384)return;
+  preset='custom';width=custom=px;
+  const select=document.querySelector('[data-website-file-viewport]'),label=document.querySelector('[data-viewport-custom]');
+  if(select)select.value='custom';
+  if(label){label.hidden=false;label.querySelector('input').value=String(px);}
+  measure();changed();
+ }
  function reset(){observer?.disconnect();observer=null;}
  function bind(){
   reset();const host=document.querySelector('[data-viewport-host]');if(!host)return;
   observer=new ResizeObserver(measure);observer.observe(host);measure();
  }
- return {controls,frame,bind,reset,change,breakpoint:()=>breakpoint(width)};
+ return {controls,frame,bind,reset,change,previewWidth,width:()=>width,breakpoint:()=>breakpoint(width)};
 }

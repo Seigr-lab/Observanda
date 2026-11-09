@@ -88,6 +88,7 @@ export async function versionSnapshot(store,manifest,prior,available,signal){
  }
  const components=(manifest.components??[]).map(main=>({...main,pictures:main.pictures.map(file=>file.name),...(main.recordings?{recordings:main.recordings.map(file=>file.name)}:{})}));
  const settings={name:manifest.name,cssPath:manifest.cssPath,components,pageDesigns:manifest.pageDesigns??[],themeBook:manifest.themeBook??null,appearance:manifest.appearance??null};
+ if(manifest.breakpoints)settings.breakpoints=manifest.breakpoints;
  if(manifest.styleBook){
   // Current redistribution rights always govern restoration. Historical
   // authoring snapshots carry the named styles and scope assignments only.

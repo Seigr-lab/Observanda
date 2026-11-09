@@ -6,16 +6,28 @@ import {validateWebsiteHTML} from './website-file-policy.js';
 import {versionContext} from './website-versions.js';
 import {websitePageIdentity} from './website-page-paths.js';
 import {newStyleBook} from './website-style-resources.js';
+import {defaultBreakpoints} from './web/website-breakpoint-model.js';
+import {projectWebsiteBreakpoints} from './website-breakpoints.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function value(manifest,kind){
  if(kind==='themeBook')return manifest.themeBook??{items:[],pages:{},folders:{}};
  if(kind==='styleBook'){const {fonts,...styles}=manifest.styleBook??newStyleBook();return styles;}
  if(kind==='pageDesigns')return manifest.pageDesigns??[];
+ if(kind==='breakpoints')return manifest.breakpoints??defaultBreakpoints();
  if(kind==='appearance')return manifest.appearance??null;
  throw new AppError('INVALID');
 }
 function changeRows(kind,from,to){
+ if(kind==='breakpoints'){
+  const indexed=list=>new Map(list.map((range,i)=>[range.id,{name:range.name,value:JSON.stringify({position:i+1,...range})}]));
+  const before=indexed(from),after=indexed(to),rows=[];
+  for(const id of new Set([...before.keys(),...after.keys()])){
+   const a=before.get(id),b=after.get(id);
+   if(a?.value!==b?.value)rows.push({name:b?.name||a?.name||id,before:a?.value??'',after:b?.value??''});
+  }
+  return rows;
+ }
  if(kind==='styleBook'){
   const rows=[];
   for(const section of ['tokens','site','pages','folders']){
@@ -84,7 +96,7 @@ async function restoreComponent(store,ctx,review,signal){
 }
 export function websiteVersionDesign(store,id,options,apply=false){
  const {path='index.html',version,expectedRevision,kind,component,reviewId,offset=0,signal}=options;
- if(!Number.isSafeInteger(offset)||offset<0||!['appearance','themeBook','styleBook','pageDesigns','component'].includes(kind))throw new AppError('INVALID');
+ if(!Number.isSafeInteger(offset)||offset<0||!['appearance','themeBook','styleBook','breakpoints','pageDesigns','component'].includes(kind))throw new AppError('INVALID');
  return store.scope(async()=>{
   const ctx=await versionContext(store,id,expectedRevision,version);
   if(!ctx.current.pages.some(p=>p.path===path))throw new AppError('NOT_FOUND');
@@ -117,6 +129,10 @@ export function websiteVersionDesign(store,id,options,apply=false){
   if(status!=='ready'||reviewId!==token)throw new AppError('CONFLICT');
   let next;
   if(kind==='component')next=await restoreComponent(store,ctx,definition,signal);
+  else if(kind==='breakpoints'){
+   const {files}=await projectWebsiteBreakpoints(store,ctx.current,desired,{apply:true,signal});
+   next={...ctx.current,breakpoints:desired,files};
+  }
   else{
    next={...ctx.current,[kind]:desired};
    if(kind==='appearance'&&desired===null)delete next.appearance;

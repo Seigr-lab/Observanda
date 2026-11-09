@@ -42,6 +42,7 @@ import {addPageStyle,newPageStylesheet,pageStylesheet,sharedDraftStyle,validateP
 import {preparePublicPageFiles,privateWebsiteNames,publicText,websiteFileReferences} from './website-page-dependencies.js';
 import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
 import {syncStyleResources,validateStyleResources} from './website-style-resources.js';
+import {validBreakpoints} from './web/website-breakpoint-model.js';
 import {beginVersionWrite,prepareVersionRetention} from './website-version-retention.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
@@ -246,8 +247,8 @@ export class WebsiteFileStore{
   }
   const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});
   const references=typeof value==='string'&&/\.(?:html|css)$/.test(name)?websiteFileReferences(value,name):undefined;
-  const markup=name.endsWith('.html')&&typeof value==='string';
-  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(markup&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{}),...(markup&&(value.includes('ow-token-')||value.includes('data-website-token-sheet'))?{hasStyles:true}:{})};
+  const markup=name.endsWith('.html')&&typeof value==='string',sheet=name.endsWith('.css')&&typeof value==='string';
+  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(markup&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{}),...(markup&&(value.includes('ow-token-')||value.includes('data-website-token-sheet'))?{hasStyles:true}:{}),...(sheet?{hasResponsiveLayout:value.includes('/* Observanda layout ')}:{})};
  }
  async ownFile(id,file,draft,signal){
   if(file.sourceId||file.feedAsset)throw new AppError('INVALID');
@@ -289,6 +290,7 @@ export class WebsiteFileStore{
   validateEditHistory(this,value,names);
   validateWebsiteThemes(value);
   validateStyleResources(value);
+  if(value.breakpoints!==undefined&&!validBreakpoints(value.breakpoints))throw new AppError('FORMAT');
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -361,7 +363,7 @@ export class WebsiteFileStore{
   const active=manifest.pages.filter(p=>!p.archived),archivedPages=manifest.pages.length-active.length;
   const archived=archivedPages?new Set(manifest.pages.filter(p=>p.archived).map(p=>p.path)):null;
   const feeds=manifest.feeds?.length?websiteFeedPages(manifest).filter(p=>!archived?.has(p.ownerPage)):null;
-  return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:active.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(feeds?.length?{feedPages:feeds}:{}),...(archivedPages?{archivedPages}:{}),cssPath:pageStylesheet(manifest,page)};
+  return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:active.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(feeds?.length?{feedPages:feeds}:{}),...(archivedPages?{archivedPages}:{}),...(manifest.breakpoints?{breakpoints:manifest.breakpoints}:{}),cssPath:pageStylesheet(manifest,page)};
  }
  async commit(manifest,options={}){
   const {signal}=options;

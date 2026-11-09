@@ -2,11 +2,12 @@ import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {websiteCSSByteLimit} from './web/website-css-urls.js';
 import {generatedAppearanceProperties} from './web/website-files-visual-style.js';
+import {defaultBreakpoints,parseLayoutLine} from './web/website-breakpoint-model.js';
 
 const identity = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const marker = new RegExp('\\n/\\* Observanda (appearance|layout) (ow-(?:visual|layout)-'+identity+') \\*/\\n', 'g');
 const area = new RegExp('\\bowarea-'+identity+'\\b', 'g');
-const layoutProperties = new Set(('display flex-direction flex-wrap grid-template-columns grid-template-areas grid-area grid-column grid-row grid-auto-flow align-items justify-content gap padding width min-width max-width flex-basis flex-grow justify-self border-width border-style border-color border-radius position top right bottom left z-index margin background-color color').split(' '));
+const layoutProperties = new Set(('display visibility order flex-direction flex-wrap grid-template-columns grid-template-areas grid-area grid-column grid-row grid-auto-flow align-items justify-content gap padding width min-width max-width flex-basis flex-grow justify-self border-width border-style border-color border-radius position top right bottom left z-index margin background-color color').split(' '));
 
 function admittedDeclarations(body,properties){
  // CSSOM quotes family names and grid-area rows. Delimiters inside those
@@ -21,18 +22,15 @@ function admittedDeclarations(body,properties){
  });
 }
 
-function layoutRule(css,at,name){
+function layoutRule(css,at,name,ranges){
  const end='\n/* End Observanda layout '+name+' */\n';
- const selector='.'+name+'.'+name+' {', widths={desktop:null,tablet:900,phone:600};
  const seen=new Set();
- while(seen.size<3){
+ while(seen.size<=ranges.length){
   const stop=css.indexOf('\n',at);if(stop<0)return null;
   const line=css.slice(at,stop);
-  const view=/^\/\* (desktop|tablet|phone) \*\//.exec(line)?.[1];
-  if(!view||seen.has(view))return null;
-  seen.add(view);
-  const width=widths[view],prefix='/* '+view+' */'+(width?'@media (max-width: '+width+'px) {':'')+selector,suffix=width?'}}':'}';
-  if(!line.startsWith(prefix)||!line.endsWith(suffix)||!admittedDeclarations(line.slice(prefix.length,-suffix.length),layoutProperties))return null;
+  const rule=parseLayoutLine(line,name,ranges);
+  if(!rule||seen.has(rule.id)||!admittedDeclarations(rule.body,layoutProperties))return null;
+  seen.add(rule.id);
   if(css.startsWith(end,stop))return stop+end.length;
   at=stop+1;
  }
@@ -41,13 +39,13 @@ function layoutRule(css,at,name){
 
 // Only exact, editor-owned rule blocks attached to an eligible element are
 // copied. Other selectors or resources in the public stylesheet stay untouched.
-export function designStyleCopies(css){
+export function designStyleCopies(css,ranges=defaultBreakpoints()){
  const rules=new Map(),areas=new Map();
  let size=Buffer.byteLength(css);
  for(const match of css.matchAll(marker)){
   const [,kind,name]=match,at=match.index+match[0].length;
   let stop=null;
-  if(kind==='layout'&&name.startsWith('ow-layout-'))stop=layoutRule(css,at,name);
+  if(kind==='layout'&&name.startsWith('ow-layout-'))stop=layoutRule(css,at,name,ranges);
   if(kind==='appearance'&&name.startsWith('ow-visual-')){
    const prefix='.'+name+' {',nextLine=css.indexOf('\n',at);
    const line=css.slice(at,nextLine<0?undefined:nextLine);

@@ -60,6 +60,13 @@ export function inspectWebsiteStyle(element,key){
    const {owner,rule}=matched;let target;
    try{target=element.closest(rule.selectorText);}catch{/* Nested selectors are resolved by the browser's cascade. */}
    source=sourceName(owner,target,rule.selectorText,owner?.getAttribute('data-website-token-sheet'));
+   const conditions=[];
+   for(let group=rule.parentRule;group;group=group.parentRule){
+    if(group.type===window.CSSRule.MEDIA_RULE)conditions.unshift('@media '+group.conditionText);
+    else if(window.CSSContainerRule&&group instanceof window.CSSContainerRule)conditions.unshift('@container '+group.conditionText);
+    else if(group.conditionText)conditions.unshift(group.conditionText);
+   }
+   source.conditions=conditions;
   }else if(matched){const at=matched.owner;source={kind:'inline',scope:at===element?'element':'ancestor',selector:at.localName};}
   return {value,...source};
  }finally{for(const style of changes)style.removeProperty(marker);for(const [node,text] of inline)node.setAttribute('style',text);}

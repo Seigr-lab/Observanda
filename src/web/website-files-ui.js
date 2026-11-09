@@ -34,6 +34,7 @@ import {websiteFileFeeds} from './website-file-feeds.js';
 import {reviewSavedWebsite} from './website-site-review.js';
 import {editWebsiteAppearance} from './website-files-appearance.js';
 import {assignStyleText} from './website-text-style.js';
+import {defaultBreakpoints} from './website-breakpoint-model.js';
 import {layerPath,managedWebsiteContent} from './website-layer-model.js';
 
 const tr=(key,args)=>t('websiteFiles',key,args);
@@ -53,7 +54,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let visual=null,selected=null,anchor='',trail=[],step=-1;
- const viewport=websiteFileViewport({esc,t:tr,changed:()=>visual?.viewportChanged()});
+ const viewport=websiteFileViewport({esc,t:tr,getRanges:()=>opened?.site.breakpoints??defaultBreakpoints(),changed:()=>visual?.viewportChanged()});
  let awaitingAccess=false,conflictingPage=null;
  const conflicts=websiteConflictPanel(tr,esc);
  let waitingView=null,openingAfterFence=false;
@@ -317,6 +318,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function hideUnverifiedPage(retry,saved=null,message='changed'){
   document.querySelector('dialog[data-style-library]')?.close();
+  document.querySelector('dialog[data-website-ranges]')?.close();
   if(stale&&awaitingAccess&&retry&&!saved&&!conflictingPage)return;
   if(mode==='versions'){versions.reset();mode='visual';}
   if(!stale&&retry&&mode==='visual'){
@@ -453,6 +455,18 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(menu.dirty())await menu.save();
   if(pagesPanel.dirty())await pagesPanel.save();
   await save();
+ }
+ async function manageBreakpoints(){
+  if(!await beforeLeave(true))return;
+  const base=opened,trigger=document.activeElement,{editWebsiteBreakpoints}=await import('./website-breakpoint-editor.js');
+  const current=()=>opened===base&&!stale;
+  const command=async(operation,ranges,reviewId)=>{
+   if(!current())throw Error(tr('changed'));
+   const result=await request('breakpoints/'+operation,{siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,ranges,reviewId},{signal:controller.signal});
+   if(!current())throw Error(tr('changed'));return result;
+  };
+  editWebsiteBreakpoints({site:base.site,t:tr,current,trigger,signal:controller.signal,review:ranges=>command('review',ranges),
+   apply:async(ranges,reviewId)=>{const result=await command('apply',ranges,reviewId);adoptRelated(result);render();}});
  }
  async function beforeLeave(fromAction=false){
   if(busy&&!fromAction)return false;
@@ -636,7 +650,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function editorView(){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key)+'"')).join('')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
-  const sizes=viewport.controls();
+  const sizes=viewport.controls()+button('breakpointManage','breakpoints');
   const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'?sizes:'')+'</div></div>';
   if(mode!=='visual')return toolbar+'<label>'+esc(tr(mode))+'<textarea class="website-files-code" aria-label="'+esc(tr(mode))+'" data-website-file-code="'+mode+'" spellcheck="false">'+esc(mode==='html'?html:css)+'</textarea></label>';
   const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option></select></label>'+button('addBlock','add-block');
@@ -691,6 +705,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const inspector=document.querySelector('[data-website-visual-inspector]');
    visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,
     menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
+   getWidth:viewport.width,previewWidth:viewport.previewWidth,getRanges:()=>opened.site.breakpoints??defaultBreakpoints(),manageRanges:()=>void run(manageBreakpoints).catch(()=>{}),
    beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:canvasURL(opened.site.cssPath),getViewport:viewport.breakpoint,onSelect:item=>{
     selected=item?.path??null;hierarchy.selection(selected);components.selection();
     const control=inspector.parentElement.querySelector('[data-placement-context]');
@@ -911,6 +926,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
       checkpoint(true);html=serializeWebsiteHTML(doc);changed();render();await save();base=opened;return true;
      }});
    }
+   else if(operation==='breakpoints')await manageBreakpoints();
    else if(['appearance','themes'].includes(operation)&&await beforeLeave(true)){
     const base=opened,current=()=>opened===base&&!stale;
     const themes=operation==='themes',node=themes&&selected!=null?blockAt(websiteHTML(base.html),selected):null;

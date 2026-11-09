@@ -28,6 +28,7 @@ async function duplicateSite(store,source,options){
  const candidate={id,name:title,cssPath:source.cssPath,pages:[],sources:[],files:[],copyReceipt:reviewId};
  if(source.pictureStyles)candidate.pictureStyles=structuredClone(source.pictureStyles);
  if(source.appearance)candidate.appearance=structuredClone(source.appearance);
+ if(source.breakpoints)candidate.breakpoints=structuredClone(source.breakpoints);
  if(source.themeBook){
   const book=source.themeBook;
   candidate.themeBook={items:book.items.map(item=>({...item,id:ids.themes.get(item.id)})),pages:assignments(book.pages,ids.themes),folders:assignments(book.folders,ids.themes)};

@@ -177,7 +177,7 @@ export function websitePageDesigns(store,siteId,options){
   const ownStyle=owner.stylePath?files.get(owner.stylePath):null;
   const published=new Map((manifest.publicPageFiles??[]).map(row=>[row.file.name,row.file]));
   const sourceCSS=await store.readText(published.get(css.name)??css,{signal})+(ownStyle?'\n'+await store.readText(published.get(ownStyle.name)??ownStyle,{signal}):'');
-  const styles=designStyleCopies(sourceCSS);
+  const styles=designStyleCopies(sourceCSS,manifest.breakpoints);
   const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels,styles);
   return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{...generated,css:styles.copiedRules(layoutClasses),styleTokens:manifest.styleBook?.pages[owner.path]});
  },{write:action!=='list',signal});

@@ -76,7 +76,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,layerDrag,menuTarget,openMenu}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -153,7 +153,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change});
   form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,styleActions);
-  const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,beforeChange,change,make,listen,signal,
+  const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,getWidth,previewWidth,getRanges,manageRanges,beforeChange,change,make,listen,signal,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
   websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});
   inspector.replaceChildren(form);
