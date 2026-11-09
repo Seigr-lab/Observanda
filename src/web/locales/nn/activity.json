@@ -1,4 +1,6 @@
 {
+  "uncertain": "Ustadfesta resultat",
+  "workerWait": "Ventar på ein bakgrunnsprosess.",
   "title": "Aktivitet",
   "runningCount": "Aktivitet ({count} i gang)",
   "close": "Lukk aktivitet",

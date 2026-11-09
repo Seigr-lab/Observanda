@@ -1,4 +1,6 @@
 {
+  "uncertain": "Resultat pendent de confirmar",
+  "workerWait": "S’està esperant un procés en segon pla.",
   "title": "Activitat",
   "runningCount": "Activitat ({count} en curs)",
   "close": "Tanca l'activitat",

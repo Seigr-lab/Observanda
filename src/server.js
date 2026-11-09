@@ -454,10 +454,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        const health=await serviceHealth({root:context.root,workspace:context.workspace,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),authorize:async()=>!(await status(client)).locked,closing:shuttingDown,provider:databaseProvider()});
        return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats(),nativeResources:nativeResources.stats()},health.ready?200:503);
       }
-      if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
+      if(req.method==='GET'&&(url.pathname==='/api/diagnostics'||url.pathname==='/api/diagnostics/status')){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
-       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats(),nativeResources:nativeResources.stats(),disk:diskCapacity.stats()});
+       const report=url.pathname.endsWith('/status')?{status:diagnostics.status()}:await diagnostics.snapshot();
+       return json({...report,workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats(),nativeResources:nativeResources.stats(),disk:diskCapacity.stats()});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);

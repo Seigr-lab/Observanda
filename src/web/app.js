@@ -982,7 +982,7 @@ async function rawAction(button) {
    const module=discoverableTools().find(value=>value.id===button.dataset.moduleId);if(!module)return;
    rememberToolOrigin();button.disabled=true;try{if(!enabledModule(state.dashboardSettings,module.id)){state.page='tools';render();return;}const entry=module.navigation?.[0];return await rawAction({dataset:module.createUI?{action:'module-open',moduleId:module.id,modulePath:''}:{...entry},closest:()=>null});}finally{if(button.isConnected)button.disabled=false;}return;
   }
-  if(name==='operational-diagnostics')return (await import('./diagnostics-ui.js')).openDiagnostics({api,esc,showDialog});
+  if(name==='operational-diagnostics')return (await import('./diagnostics-ui.js')).openDiagnostics({api,esc,showDialog,activity,currentContext:()=>state.storage?.contextId});
   if(name==='website'&&button.closest?.('#main-navigation')){await sites.manager();return;}
   if(state.page==='entries'&&state.bookReading&&name?.startsWith('material-')){await materials.action(button);return;}
   if(name==='laboratory-open-owned'){

@@ -1,4 +1,6 @@
 {
+  "uncertain": "Ubekreftet resultat",
+  "workerWait": "Venter på en bakgrunnsprosess.",
   "title": "Aktivitet",
   "runningCount": "Aktivitet ({count} pågår)",
   "close": "Lukk aktivitet",

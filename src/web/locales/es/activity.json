@@ -1,4 +1,6 @@
 {
+  "uncertain": "Resultado sin confirmar",
+  "workerWait": "En espera de un proceso en segundo plano.",
   "title": "Actividad",
   "runningCount": "Actividad ({count} en curso)",
   "close": "Cerrar la actividad",

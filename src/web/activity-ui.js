@@ -33,6 +33,17 @@ function title(kind,view){
  if(kind.endsWith('/pin'))return text('pin');
  return optional('activity',kind.split('/').at(-1))||text(kind.startsWith('/api/research/records/')?'record':'operation');
 }
+export {title as activityTitle};
+export function activityState(entry){
+ if(entry.state!=='failed')return entry.state;
+ if(entry.resolvedAt)return 'recovered';
+ return ['DURABILITY_UNCERTAIN','ACCESS_SAVE_UNCERTAIN'].includes(entry.error?.code)?'uncertain':'failed';
+}
+export function activityWait(entry,blocker){
+ if(entry.state!=='queued')return '';
+ if(entry.kind.startsWith('job:'))return text('workerWait');
+ return blocker?text('waitingFor',{operation:title(blocker.kind)}):text('waiting-writer');
+}
 function stageName(kind,stage){
  if(kind==='job:inventory.reconcile'){const label=optional('activity','inventoryStage:'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('lab-book:')||activityCommand(kind).startsWith('/api/lab-books/import')){const label=optional('storageProgress','book-'+stage);if(label)return label;}
@@ -70,11 +81,11 @@ export function activityUI({onChange=()=>{}}={}){
  }
  function update(card,entry,detailed){
   const {node}=card;updateText(node.querySelector('[data-title]'),title(entry.kind,owner(entry)));
-  updateText(node.querySelector('[data-status]'),text(entry.state==='failed'&&entry.resolvedAt?'recovered':entry.state));
+  updateText(node.querySelector('[data-status]'),text(activityState(entry)));
   const error=node.querySelector('[data-error]');updateText(error,entry.state==='failed'&&!entry.resolvedAt?(entry.error?.message??''):'');updateProperty(error,'hidden',!error.textContent);
   if(!detailed){const link=node.querySelector('[data-owner]'),view=owner(entry);updateProperty(link,'hidden',!view);updateText(link,text('showProgress'));updateAttribute(link,'href',view);return;}
   const waiting=node.querySelector('[data-waiting]'),blocker=snapshot.operations.find(value=>value.state==='running'&&activityResource(value.kind)===activityResource(entry.kind));
-  updateText(waiting,entry.state==='queued'?(blocker?text('waitingFor',{operation:title(blocker.kind)}):text('waiting-writer')):'');updateProperty(waiting,'hidden',!waiting.textContent);
+  updateText(waiting,activityWait(entry,blocker));updateProperty(waiting,'hidden',!waiting.textContent);
   if(entry.state==='running'){
    if(!card.progress){card.progress=operationProgress({host:node.querySelector('[data-progress]'),title:()=>title(entry.kind),stageText:s=>stageName(entry.kind,s),presentation:value=>presentation(entry.kind,value),disableControls:false,scroll:false,compact:true});card.progress.element.dataset.ownedProgress='';}
    card.progress.update(entry.progress);

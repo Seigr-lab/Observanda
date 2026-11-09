@@ -1,4 +1,6 @@
 {
+  "uncertain": "Outcome unconfirmed",
+  "workerWait": "Waiting for a background worker.",
   "title": "Activity",
   "runningCount": "Activity ({count} running)",
   "close": "Close activity",
