@@ -17,13 +17,17 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
  workspace.openCatalogue=workspace.catalogue=()=>{throw Error('Reusable library opened research storage');};
  try{
   await mkdir(path.join(root,'.observanda'));
-  await store.importFiles(id,{name:'Field protocols',files:new Map([['style.css','body{font:18px sans-serif;padding:1rem} section,p{padding:1rem}'],['index.html','<html lang="en"><head><title>Methods</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Methods</h1><section data-section-id="chemistry"><p>Measurement</p></section><p id="target">Next experiment</p></main></body></html>']])});
+  await store.importFiles(id,{name:'Field protocols',files:new Map([['style.css','body{font:18px sans-serif;padding:1rem} section,p{padding:1rem}'],['index.html','<html lang="en"><head><title>Methods</title><link rel="stylesheet" href="style.css"></head><body><main><h1>Methods</h1><p id="target">Next experiment</p></main></body></html>']])});
   await page.exposeFunction('filesAPI',async(route,data)=>{
    let value;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL(route,'https://website.test'),body:async()=>data??{},json:r=>{value=r;},check:async()=>{},title:'Field protocols',preparation:async()=>({state:'ready',defaultSiteId:id})});return value;
   });
   await page.setViewportSize({width:1360,height:850});await mountFilesEditor(page);
   const canvas=page.frameLocator('#website-files-canvas'),library=page.locator('[data-website-components]');
   await expect(canvas.getByRole('heading',{name:'Methods'})).toBeVisible();
+  await page.locator('[data-website-file-block]').selectOption('section');await page.locator('[data-action="website-files-add-block"]').click();
+  const section=canvas.locator('main > section');await expect(section).toHaveAttribute('data-section-id',/^ow-section-[\da-f-]{36}$/);
+  const identity=await section.getAttribute('data-section-id');
+  await page.getByRole('button',{name:'Save website',exact:true}).click();
   await page.getByRole('button',{name:'Reusable library',exact:true}).click();
   await canvas.locator('section').click({position:{x:4,y:4}});
   await library.getByLabel('Component name',{exact:true}).fill('Sample card');
@@ -34,7 +38,7 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await page.mouse.move(grab.x+4,grab.y+5);await page.mouse.down();
   await page.mouse.move(grab.x+18,grab.y+6,{steps:6});await page.mouse.move(drop.x+12,drop.y+4,{steps:15});await page.mouse.move(drop.x+14,drop.y+4);await page.mouse.up();
   await expect(library.getByText('Placements 2 · Pages 1')).toBeVisible();
-  await expect(target.locator('xpath=preceding-sibling::*[1]')).toHaveAttribute('data-section-id','chemistry');
+  await expect(target.locator('xpath=preceding-sibling::*[1]')).toHaveAttribute('data-section-id',identity);
   const copies=canvas.locator('[data-website-instance]');await expect(copies).toHaveCount(2);
   await library.getByRole('button',{name:'Edit main component'}).click();
   const dialog=page.getByRole('dialog',{name:'Edit main component'}),main=dialog.frameLocator('[data-main-canvas]').locator('p');
@@ -45,6 +49,11 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await copies.last().click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).press('Enter');
   await expect(copies).toHaveCount(1);await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
   const saved=await store.open(id);expect(saved.html.match(/<sup>2<\/sup>/g)).toHaveLength(2);expect(saved.html.match(/data-website-instance=/g)).toHaveLength(1);
+  const detached=canvas.locator('main > section:not([data-website-instance]) p');
+  await detached.click();await page.keyboard.press('Home');await page.keyboard.type('Detached observation. ');
+  await page.getByRole('button',{name:'Save website',exact:true}).click();
+  await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await expect(detached).toContainText('Detached observation.');await expect(copies).not.toContainText('Detached observation.');
   await copies.click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).click();
   await expect(library.getByText('Placements 0 · Pages 0')).toBeVisible();
   await library.getByRole('button',{name:'Remove',exact:true}).click();await library.getByRole('button',{name:'Cancel',exact:true}).click();

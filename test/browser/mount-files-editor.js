@@ -14,7 +14,7 @@ export async function mountFilesEditor(page,{resource=()=>'',hash='',httpOrigin}
    ${httpOrigin?"import {readProgressStream} from '/progress-stream.js';":''}
    const files=websiteFilesUI({api:${api},esc,render(){root.innerHTML=files.view();files.bind();}});root.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)files.action(b);});root.addEventListener('input',e=>files.input(e.target));root.addEventListener('submit',e=>{e.preventDefault();files.submit(e.target);});await files.load();</script>`});
   if(httpOrigin&&url.pathname.startsWith('/api/'))return route.continue();
-  if(url.pathname.startsWith('/api/website-files/preview/'))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
+  if(/^\/api\/website-files\/(?:preview|edition)\//.test(url.pathname))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"},body:url.searchParams.has('canvas')?'<!doctype html><body></body>':resource(url)});
   const file=path.resolve(web,'.'+url.pathname);if(!file.startsWith(web+path.sep))return route.abort();try{return await route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'text/css',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
  });
  await page.goto(origin+'/'+hash);

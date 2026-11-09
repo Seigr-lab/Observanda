@@ -19,7 +19,8 @@ import {websiteHierarchy,websiteLayerAt,movableWebsiteLayer,websiteLayerMove} fr
 import {websiteFilesComponents} from './website-files-components.js';
 import {websiteFilesRecordings} from './website-files-recordings.js';
 import {websiteHistoryMedia} from './website-history-media.js';
-import {rebaseAuthoredPage,rebasePageHistory} from './website-history-rebase.js';
+import {rebasePageHistory} from './website-history-rebase.js';
+import {websiteConflictPanel,websiteConflictReview} from './website-files-conflicts.js';
 import {suggestedPagePath,websiteFilesPages} from './website-files-pages.js';
 import {websiteFilesLifecycle} from './website-files-lifecycle.js';
 import {websiteFilesVersions} from './website-files-versions.js';
@@ -53,6 +54,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let visual=null,selected=null,anchor='',trail=[],step=-1;
  const viewport=websiteFileViewport({esc,t:tr,changed:()=>visual?.viewportChanged()});
  let awaitingAccess=false,conflictingPage=null;
+ const conflicts=websiteConflictPanel(tr,esc);
  let waitingView=null,openingAfterFence=false;
  let locatedPlacement=null;
  let pendingCanvas=null,canvasTimer=null;
@@ -294,6 +296,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function adopt(value,{savedCheckpoint=false}={}){
   if(!value?.site?.id||typeof value.site.revision!=='string'||!Array.isArray(value.site.pages)||typeof value.html!=='string'||typeof value.css!=='string'||typeof value.path!=='string')throw Error(tr('failed'));
+  conflicts.select(null);
   const switched=value.path!==opened?.path||value.site.id!==siteId();
   if(switched){forgetSelection();picker.reset();components.pageChange(value.site.id===siteId());recordings.reset();gallery.reset();figures.reset();}
   if(!savedCheckpoint||value.path!==opened?.path||value.site.id!==siteId()||value.sourceStamp!==opened.sourceStamp){
@@ -320,7 +323,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   feeds.suspend();
   if(mode==='source-gallery')figures.suspend();
-  conflictingPage=saved;
+  conflictingPage=saved;if(!saved)conflicts.select(null);
   awaitingAccess=retry;
   stale=true;plan=null;error=tr(awaitingAccess?'checkingPageAccess':message);
   components.reset();picker.reset();
@@ -411,7 +414,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   viewport.reset();
   feeds.clear();
   figures.reset();
-  conflictingPage=null;awaitingAccess=false;
+  conflictingPage=null;awaitingAccess=false;conflicts.select(null);
   compactViewport.removeEventListener('change',resizeTools);clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
  }
  function historyEntry(){return {html,css,sourceStamp:opened?.sourceStamp,selection:canvasSelection(document.getElementById('website-files-canvas')?.contentDocument)};}
@@ -475,18 +478,22 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const dialog of document.querySelectorAll('dialog.website-author-dialog'))dialog.close();
   if(mode==='media'){recordings.reset();mode='visual';}
   if(!dirty){adopt(value);if(mode==='gallery')gallery.open(selected);render();return;}
-  let merged=rebaseWebsitePlacements(opened.html,html,value.html);
-  let authoredCSS=css===opened.css?value.css:css;
-  if(merged==null||opened.css!==value.css&&css!==opened.css&&css!==value.css){
-   const recovered=rebaseAuthoredPage(opened,{html,css},value);merged=recovered?.html;authoredCSS=recovered?.css;
+  if(opened.pageId&&opened.pageId!==value.pageId){hideUnverifiedPage(false,null,'changedPageAccess');return;}
+  const protectedMedia=Boolean(opened.protectedFiles?.length||value.protectedFiles?.length);
+  const simple=protectedMedia&&opened.sourceStamp!==value.sourceStamp?null:rebaseWebsitePlacements(opened.html,html,value.html);
+  const style=css===opened.css?value.css:value.css===opened.css||css===value.css?css:null;
+  let result=simple===null||style===null?null:{html:simple,css:style};
+  if(!result){
+   const review=websiteConflictReview(opened,{html,css},value);
+   if(!review){hideUnverifiedPage(false,null,'changedPageAccess');return;}
+   if(review.rows.length){conflicts.select(review);hideUnverifiedPage(false,value);return;}
+   result=review.result();if(!result){hideUnverifiedPage(false,null,'changedPageAccess');return;}
   }
-  if(merged==null){
-   // A concurrent author may have changed the page while the draft was open.
-   // Only offer that draft when every placed source still has the same revision.
-   const sameSources=typeof opened.sourceStamp==='string'&&opened.sourceStamp===value.sourceStamp;
-   hideUnverifiedPage(false,sameSources?value:null,sameSources?'changed':'changedPageAccess');return;
-  }
-  adopt(value);html=merged;css=authoredCSS;if(mode==='gallery')gallery.open(selected);changed();render();
+  adoptMerge(value,result);if(mode==='gallery')gallery.open(selected);render();
+ }
+ function adoptMerge(value,result){
+  adopt(value);
+  if(value.html!==result.html||value.css!==result.css){checkpoint(true);html=result.html;css=result.css;changed();}
  }
  async function poll(){
   if(checkBusy||busy||!opened||document.hidden)return;const epoch=generation,id=siteId(),revision=opened.site.revision;checkBusy=true;
@@ -571,7 +578,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
-  if(stale)body=conflictingPage?conflictView():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
+  if(stale)body=conflictingPage?conflicts.view():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
   else if(form)body=formView();
   else if(mode==='lifecycle')body=lifecycle.view();
   else if(!opened)body=unopenedView()+button('lifeArchivedSites','archived-sites');
@@ -596,22 +603,6 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    (opened&&!stale&&!form?'<div data-website-recovery></div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    button('reopen','reopen','data-website-files-reopen '+(stale&&!awaitingAccess&&!conflictingPage?'':'hidden'))+body+'</fieldset>';
- }
- function conflictView(){
-  const readable=markup=>{
-   const doc=websiteHTML(markup);
-   for(const node of doc.querySelectorAll('script,style,template'))node.remove();
-   for(const node of doc.body.querySelectorAll('p,div,section,li,br,h1,h2,h3,h4,h5,h6,tr,blockquote,figcaption'))node.append('\n');
-   return doc.body.textContent.trim();
-  };
-  const column=(label,markup,styles,isDraft)=>{
-   const content=mode==='css'?styles:mode==='html'?markup:readable(markup);
-   return '<label>'+esc(tr(label))+'<textarea readonly rows="8" '+(isDraft&&['html','css'].includes(mode)?'aria-label="'+esc(tr(mode))+'"':'')+'>'+esc(content)+'</textarea></label>';
-  };
-  return '<section class="panel website-file-conflict"><h2>'+esc(tr('compareDraft'))+'</h2><p>'+esc(tr('compareDraftHelp'))+'</p><div>'+
-   column('localPageDraft',html,css,true)+column('latestSavedPage',conflictingPage.html,conflictingPage.css,false)+'</div>'+
-   (mode!=='css'&&css!==conflictingPage.css?'<details><summary>'+esc(tr('css'))+'</summary><div class="website-compare-styles"><pre>'+esc(css)+'</pre><pre>'+esc(conflictingPage.css)+'</pre></div></details>':'')+
-   button('continueDraft','continue-draft')+button('reopen','reopen')+'</section>';
  }
  function formView(){
   if(form.type==='design'){
@@ -828,10 +819,14 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      if(element.fromCanvas)pendingHistoryFocus={selection:prior.selection};
      historyBytes=undo.reduce((n,item)=>n+item.html.length+item.css.length,0);lastCheckpoint=0;changed();render();}
    }
-   else if(operation==='continue-draft'&&conflictingPage){
-    const reviewed=conflictingPage,value=await request('open',{siteId:siteId(),path:opened.path});
+   else if(operation.startsWith('merge-')&&conflictingPage){
+    const op=operation.slice(6);
+    if(op!=='apply'){if(conflicts.action(op)){render();document.querySelector('[data-action="website-files-merge-'+op+'"]:not([disabled])')?.focus({preventScroll:true});}return;}
+    const reviewed=conflictingPage,base=opened,value=await request('open',{siteId:siteId(),path:base.path},{signal:controller.signal});
+    if(opened!==base||conflictingPage!==reviewed)return;
     if(value.site.revision!==reviewed.site.revision||value.sourceStamp!==reviewed.sourceStamp){updateFromSaved(value);return;}
-    const writing=html===opened.html?value.html:html,styles=css===opened.css?value.css:css;adopt(value);html=writing;css=styles;changed();render();
+    const result=conflicts.result();if(!result){hideUnverifiedPage(false,null,'changedPageAccess');return;}
+    adoptMerge(value,result);await save();render();
    }
    else if(operation==='discard'||operation==='reopen')await discard();
    else if(operation==='new'){if(await beforeLeave(true)){form={type:'new'};render();}}

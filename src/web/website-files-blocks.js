@@ -1,7 +1,11 @@
 export const blockTypes=['paragraph','heading','section','columns','quote','table','equationEdit','details','divider','actionLink','gallery'];
+const sectionIdentity=()=>'ow-section-'+crypto.randomUUID();
 
 export function duplicateBlock(node){
  const copy=node.cloneNode(true),ids=new Map();
+ for(const el of [copy,...copy.querySelectorAll('[data-section-id]')]){
+  if(!el.dataset.sectionId||/^ow-section-[a-f0-9-]{36}$/.test(el.dataset.sectionId))el.dataset.sectionId=sectionIdentity();
+ }
  for(const el of [copy,...copy.querySelectorAll('[id]')]){
   if(!el.id)continue;const id='section-'+crypto.randomUUID();ids.set(el.id,id);el.id=id;
  }
@@ -15,7 +19,7 @@ export function duplicateBlock(node){
 }
 
 export function createBlock(doc,type,t) {
-  const el=(tag,text)=>{const node=doc.createElement(tag);if(text)node.textContent=text;return node;};
+  const el=(tag,text)=>{const node=doc.createElement(tag);node.dataset.sectionId=sectionIdentity();if(text)node.textContent=text;return node;};
   if(type==='paragraph')return el('p',t('paragraph'));
   if(type==='heading')return el('h2',t('heading'));
   if(type==='divider')return el('hr');

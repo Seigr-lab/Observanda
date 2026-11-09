@@ -366,7 +366,7 @@ export class WebsiteFileStore{
   manifest=retainComponentAssets(manifest);
   manifest=await preparePublicPageFiles(this,manifest,signal);
   if(manifest.feeds?.length)manifest={...manifest,feedPlacementsIndexed:2};
-  const value={...manifest,...canvasStyles(manifest),version:1,updatedAt:new Date().toISOString()};
+  const value={...manifest,...canvasStyles(manifest),version:1,updatedAt:new Date().toISOString(),updatedBy:this.versionActor};
   const history=Object.hasOwn(options,'history')?options.history:manifest.editHistory;
   delete value.editHistory;
   if(history?.expires>Date.now()){
@@ -412,7 +412,14 @@ export class WebsiteFileStore{
   websiteFileName(page);const selected=manifest.files.find(file=>file.name===page),site=this.site(manifest,manifest.pages.find(p=>p.path===page)),css=manifest.files.find(file=>file.name===site.cssPath);if(!selected||selected.feedPage||!page.endsWith('.html'))throw new AppError('NOT_FOUND');
   const html=await this.readText(selected,{signal}),legacy=selected.entryStyle!==entryStyleHash;
   const assetStamp=this.assetStamp(manifest,page);
-  return {site,path:page,assetStamp,surfaceStamp:this.surfaceStamp(manifest,page,assetStamp),sourceStamp:this.sourceStamp(manifest,page),html:legacy?styledPageHTML(html,page).html:html,css:css?await this.readText(css,{signal}):''};
+  const styles=css?await this.readText(css,{signal}):'';
+  let protectedFiles;
+  if(manifest.sources.length||manifest.feeds?.length){
+   const names=new Set([...(selected.references??websiteFileReferences(html,page)),...(css?.references??(css?websiteFileReferences(styles,css.name):[]))].map(r=>r.name.toLowerCase()));
+   protectedFiles=manifest.files.filter(f=>(f.sourceId||f.feedAsset||f.feedPage)&&names.has(f.name.toLowerCase())).map(f=>f.name);
+  }
+  const owner=manifest.pages.find(p=>p.path===page);
+  return {site,path:page,pageId:owner&&websitePageIdentity(manifest.id,owner),updatedBy:manifest.updatedBy,protectedFiles,assetStamp,surfaceStamp:this.surfaceStamp(manifest,page,assetStamp),sourceStamp:this.sourceStamp(manifest,page),html:legacy?styledPageHTML(html,page).html:html,css:styles};
  }
  sourceStamp(manifest,page){
   const feeds=manifest.feeds?.filter(f=>f.path===page).flatMap(f=>f.groups.map(g=>g.stamp))??[];
