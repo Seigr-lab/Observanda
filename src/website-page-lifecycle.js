@@ -100,6 +100,10 @@ async function moveOrRename(store,manifest,owner,plan,{action,destination,title,
    const assignments={...manifest.themeBook.pages,[target]:manifest.themeBook.pages[path]};delete assignments[path];
    candidate.themeBook={...manifest.themeBook,pages:assignments};
   }
+  if(manifest.styleBook?.pages[path]){
+   const assignments={...manifest.styleBook.pages,[target]:manifest.styleBook.pages[path]};delete assignments[path];
+   candidate.styleBook={...manifest.styleBook,pages:assignments};
+  }
   if(manifest.editHistory?.page===path)candidate.editHistory={...manifest.editHistory,page:target};
  }
  if(!move){

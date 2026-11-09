@@ -6,7 +6,7 @@ import {omitPrivateStyleURLs} from './website-page-dependencies.js';
 const root='.observanda/website-files/sites';
 const maxDocumentBytes=64*1024*1024;
 const managed=file=>file.sourceId||file.feedAsset||file.feedPage;
-const derived=file=>file.themeSheet||file.appearanceSheet||file.entryDisplaySheet;
+const derived=file=>file.themeSheet||file.appearanceSheet||file.tokenSheet||file.tokenFont||file.entryDisplaySheet;
 export const versionOwner=id=>root+'/'+(id??'default')+'/versions';
 export const governedResources=manifest=>new Set(manifest.files.filter(managed).map(file=>file.name.toLowerCase()));
 const sorted=(items,key)=>items.sort((a,b)=>a[key]<b[key]?-1:a[key]>b[key]?1:0);
@@ -88,6 +88,11 @@ export async function versionSnapshot(store,manifest,prior,available,signal){
  }
  const components=(manifest.components??[]).map(main=>({...main,pictures:main.pictures.map(file=>file.name),...(main.recordings?{recordings:main.recordings.map(file=>file.name)}:{})}));
  const settings={name:manifest.name,cssPath:manifest.cssPath,components,pageDesigns:manifest.pageDesigns??[],themeBook:manifest.themeBook??null,appearance:manifest.appearance??null};
+ if(manifest.styleBook){
+  // Current redistribution rights always govern restoration. Historical
+  // authoring snapshots carry the named styles and scope assignments only.
+  const {fonts,...styles}=manifest.styleBook;settings.styleBook=styles;
+ }
  return {format:1,pages:sorted(pages,'path'),assets:sorted(assets,'name'),settings};
 }
 export function snapshotIdentity(snapshot){

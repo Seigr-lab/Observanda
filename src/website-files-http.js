@@ -9,6 +9,7 @@ import {websitePublicationMetadata} from './website-publication-metadata.js';
 import {rememberPublishTarget,websitePublishTarget} from './website-publish-target.js';
 import {savedAppearance} from './website-saved-appearance.js';
 import {websiteThemes} from './website-scoped-themes.js';
+import {websiteStyleBook} from './website-style-book.js';
 import {websitePageDesigns} from './website-page-designs.js';
 import {pageInclusion} from './website-page-inclusion.js';
 import {archivedWebsitePages,websitePageLifecycle} from './website-page-lifecycle.js';
@@ -210,6 +211,11 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='page-designs'){
    if(options.action!=='list'){onWrite();await check();}
    json(await websitePageDesigns(store,siteId,{...options,expectedRevision,signal}));return true;
+  }
+  if(operation==='styles/read'||operation==='styles/change'){
+   const action=operation==='styles/read'?'list':options.action;
+   if(operation==='styles/change'){if(!action||action==='list')throw new AppError('INVALID');onWrite();await check();}
+   json(await websiteStyleBook(store,siteId,{...options,action,expectedRevision,blockedValues,signal}));return true;
   }
   if(operation==='themes/read'||operation==='themes/change'){
    const write=operation==='themes/change';if(write){onWrite();await check();}

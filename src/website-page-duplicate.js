@@ -41,6 +41,9 @@ function independentHTML(html,page,former,model,feeds,siteIds){
  }
  while(pending.length){
   const node=pending.pop(),loc=node.sourceCodeLocation,attrs=attributes(node),instance=instanceById.get(attrs.get('data-website-instance'));
+  if(siteIds&&node.tagName==='link'&&attrs.has('data-website-token-sheet')){
+   edits.push({from:loc.startOffset,to:loc.endOffset,value:''});continue;
+  }
   const feed=feeds.get(attrs.get('data-website-feed'));
   if(instance||feed){
    if(!loc||!loc.endTag&&feed)throw new AppError('FORMAT');
@@ -145,6 +148,7 @@ export async function duplicateWebsitePage(store,manifest,owner,{destination,tit
  if(cssPictures.size)candidate.pictureStyles={...manifest.pictureStyles,[stylePath]:[...cssPictures]};
  const theme=manifest.themeBook?.pages[owner.path]??files.get(owner.path)?.pageTheme;
  if(theme)candidate.themeBook={...manifest.themeBook,pages:{...manifest.themeBook.pages,[destination]:theme}};
+ if(manifest.styleBook?.pages[owner.path])candidate.styleBook={...manifest.styleBook,pages:{...manifest.styleBook.pages,[destination]:manifest.styleBook.pages[owner.path]}};
  for(const feed of feeds)candidate=await duplicateWebsiteFeed(store,candidate,feed,feedCopies.ids.get(feed.id),destination,feedCopies.groups.get(feed.id),signal);
  await store.assertSources(candidate);
  return store.present(await store.commit(candidate,{signal}),destination,{signal});

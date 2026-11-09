@@ -32,11 +32,11 @@ export function websiteFilesVersions({site,request,signal,tr,esc,adopt,close,ren
  function details(){
   const row=history.items.find(e=>e.id===version);if(!row)return '';
   const counts=row.changes.pages,summary=tr('versionSummary',{added:counts.added,edited:counts.edited,removed:counts.removed,files:row.changes.files.added+row.changes.files.edited+row.changes.files.removed});
-  const labels={name:'site',cssPath:'css',appearance:'siteAppearance',components:'pageImpact_component',themeBook:'designThemes',pageDesigns:'designManage'};
+  const labels={name:'site',cssPath:'css',appearance:'siteAppearance',components:'pageImpact_component',themeBook:'designThemes',pageDesigns:'designManage',styleBook:'styleLibrary'};
   const settings=row.changes.settings.filter(k=>Object.hasOwn(labels,k)).map(k=>tr(labels[k]));
   const origin=row.restoredFrom&&history.items.find(e=>e.id===row.restoredFrom);
   const restored=row.restoredFrom?'<p>'+esc(tr('versionRestoredFrom',{version:origin?title(origin):row.restoredFrom.slice(0,8)}))+'</p>':'';
-  const parts=[field('versionTarget',select('kind',[['page',tr('page')],['appearance',tr('siteAppearance')],['themeBook',tr('designThemes')],['pageDesigns',tr('designManage')],['component',tr('pageImpact_component')]],kind))];
+  const parts=[field('versionTarget',select('kind',[['page',tr('page')],['appearance',tr('siteAppearance')],['themeBook',tr('designThemes')],['styleBook',tr('styleLibrary')],['pageDesigns',tr('designManage')],['component',tr('pageImpact_component')]],kind))];
   if(['page','component'].includes(kind)){
    parts.push(field(kind==='page'?'pageSearch':'componentSearch','<input type="search" data-versions="query" maxlength="160" value="'+esc(query)+'">'),button('versionFind','find'));
    if(items){

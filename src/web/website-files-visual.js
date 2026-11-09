@@ -2,6 +2,7 @@ import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, write
 import {websiteRichText} from './website-files-visual-rich.js';
 import {websiteTableTools} from './website-files-table.js';
 import {responsiveLayout} from './website-files-responsive.js';
+import {pinStyleText,websiteTextRuns} from './website-text-style.js';
 import {websiteScientificReferences} from './website-files-science.js';
 
 const chrome = '[data-observanda-editor]';
@@ -12,7 +13,8 @@ const editable = 'h1,h2,h3,h4,h5,h6,p,li,figcaption,blockquote,summary,dt,dd,td,
 const blocks = 'section,article,header,footer,aside,nav,figure,table,[data-section-id],[data-region-kind],[data-website-annotation],'+part+
   ',:is(body,main) > :is(h1,h2,h3,h4,h5,h6,p,ul,ol,blockquote,table,hr,img,video,audio,details,pre),:is(body,main) > div:not(.page-composition,.container-content)';
 const protectedNodes = source+','+part+','+linked+',[data-website-feed]';
-const outlineContents='h1,h2,h3,h4,h5,h6,p,ul,ol,li,dl,dt,dd,blockquote,details,summary,figcaption,pre,hr,img,video,audio,.website-columns>div,[data-website-instance]';
+const interactiveSelector='button,input,select,textarea,a[href]';
+const outlineContents='h1,h2,h3,h4,h5,h6,p,ul,ol,li,dl,dt,dd,blockquote,details,summary,figcaption,pre,hr,img,video,audio,.website-columns>div,[data-website-instance],'+interactiveSelector;
 
 /** Paths are relative to body and use element-child indices in the saved HTML. */
 export function websiteVisualSections(document,{includeContents=false}={}) {
@@ -242,7 +244,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   listen(document,'click',event=>{
     if(frame.contains(event.target))return;
     table.select(event.target);
-    const node=element(event.target)?.closest(blocks);if(node)setSelected(node);
+    const target=element(event.target),control=target?.closest(interactiveSelector);
+    if(control&&!control.closest('nav,'+chrome+','+protectedNodes))setSelected(control,false,true);
+    else{const node=target?.closest(blocks);if(node)setSelected(node);}
   });
   listen(document,'selectionchange',()=>{
     const selection=win.getSelection();if(!selection.rangeCount)return;
@@ -287,10 +291,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     if(selectionScope){
       // Style individual text runs, in place. Emphasis, links and the DOM
       // ancestry of each word survive selections spanning multiple inline tags.
-      const walker=document.createTreeWalker(range.commonAncestorContainer,4);
-      const texts=range.commonAncestorContainer.nodeType===3?[range.commonAncestorContainer]:[];
-      for(let node=walker.nextNode();node;node=walker.nextNode())if(range.intersectsNode(node))texts.push(node);
-      const runs=texts.map(node=>({node,start:node===range.startContainer?range.startOffset:0,end:node===range.endContainer?range.endOffset:node.length})).filter(run=>run.end>run.start);
+      const runs=websiteTextRuns(document,range);
       if(!runs.length)return;
       beforeChange();
       const name='ow-visual-'+crypto.randomUUID();
@@ -342,6 +343,8 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   listen(reset,'click',()=>commit(true));
   refresh();
   return {
+    styleTarget(){return (styleRange(range,body)?element(range.startContainer):selected)??body;},
+    textStyleSelection(){return styleRange(range,body)?pinStyleText(document,range):null;},
     viewportChanged(){responsive.refresh();schedule();},
     select(path,{edit:focus=false}={}){
       if(typeof path!=='string'||!/^\d+(?:\/\d+)*$/.test(path))return false;

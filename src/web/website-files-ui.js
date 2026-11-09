@@ -33,6 +33,7 @@ import {presentationBlock,websitePlacementPresentation} from './website-placemen
 import {websiteFileFeeds} from './website-file-feeds.js';
 import {reviewSavedWebsite} from './website-site-review.js';
 import {editWebsiteAppearance} from './website-files-appearance.js';
+import {assignStyleText} from './website-text-style.js';
 import {layerPath,managedWebsiteContent} from './website-layer-model.js';
 
 const tr=(key,args)=>t('websiteFiles',key,args);
@@ -315,6 +316,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(past.skipped||future.skipped)notify(tr('historySharedChanged'));
  }
  function hideUnverifiedPage(retry,saved=null,message='changed'){
+  document.querySelector('dialog[data-style-library]')?.close();
   if(stale&&awaitingAccess&&retry&&!saved&&!conflictingPage)return;
   if(mode==='versions'){versions.reset();mode='visual';}
   if(!stale&&retry&&mode==='visual'){
@@ -555,7 +557,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
   return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site')+button('versionsTitle','versions'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
-   extraTools('siteDesignTools',button('menu','menu')+button('siteAppearance','appearance')+button('designThemes','themes'))+
+   extraTools('siteDesignTools',button('menu','menu')+button('siteAppearance','appearance')+button('designThemes','themes')+button('styleLibrary','styles'))+
    extraTools('siteReleaseTools',button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
  function unopenedView(){
@@ -887,6 +889,28 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page')showPageChecks({doc:websiteHTML(html),path:opened.path,directory:directory(),pages:previewPages(),t:tr,select:path=>visual?.select(path,{edit:true})});
    else if(operation==='check-website'){if(await beforeLeave(true))checkSavedSite(element);}
+   else if(operation==='styles'){
+    const text=visual?.textStyleSelection(),blockPath=selected;
+    if(!await beforeLeave(true))return;
+    const {editWebsiteStyles}=await import('./website-files-styles.js');
+    let base=opened;
+    const current=()=>opened===base&&!stale,options=values=>({siteId:base.site.id,path:base.path,expectedRevision:base.site.revision,...values});
+    const read=async values=>{
+     if(!current())throw Error(tr('changed'));const result=await request('styles/read',options(values),{signal:controller.signal});
+     if(!current()||result.revision!==base.site.revision)throw Error(tr('changed'));return result;
+    };
+    const write=async values=>{
+     if(!current())throw Error(tr('changed'));const result=await request('styles/change',options(values),{signal:controller.signal});
+     if(!current())throw Error(tr('changed'));adoptRelated(result);base=opened;render();return result;
+    };
+    await editWebsiteStyles({t:tr,opened:base,blockPath,selection:text,target:()=>visual?.styleTarget()??document.getElementById('website-files-canvas')?.contentDocument?.body,
+     instance:blockPath&&blockAt(websiteHTML(base.html),blockPath)?.closest('[data-website-instance]')?.dataset.websiteInstance,read,write,current,trigger:element,signal:controller.signal,
+     assignText:async(pin,id,group,ids)=>{
+      if(!current())return false;
+      const doc=websiteHTML(html);if(!assignStyleText(doc,pin,id,group,ids))return false;
+      checkpoint(true);html=serializeWebsiteHTML(doc);changed();render();await save();base=opened;return true;
+     }});
+   }
    else if(['appearance','themes'].includes(operation)&&await beforeLeave(true)){
     const base=opened,current=()=>opened===base&&!stale;
     const themes=operation==='themes',node=themes&&selected!=null?blockAt(websiteHTML(base.html),selected):null;

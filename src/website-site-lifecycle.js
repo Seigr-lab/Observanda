@@ -12,7 +12,7 @@ import {duplicateWebsiteFeed} from './website-dynamic-feeds.js';
 
 const idsFor=rows=>new Map((rows??[]).map(row=>[row.id,randomUUID()]));
 const assignments=(table,ids)=>Object.fromEntries(Object.entries(table).map(([name,id])=>[name,ids.get(id)]));
-const derived=file=>file.themeSheet||file.appearanceSheet||file.entryDisplaySheet||file.feedStyle;
+const derived=file=>file.themeSheet||file.appearanceSheet||file.tokenSheet||file.entryDisplaySheet||file.feedStyle;
 const invalid=()=>{throw new AppError('INVALID');};
 
 async function duplicateSite(store,source,options){
@@ -23,7 +23,7 @@ async function duplicateSite(store,source,options){
   return store.present(await store.current(id),'index.html',{signal});
  }
  const feedCopies=duplicatedFeedIds(includeEntries?source.feeds:[]);
- const ids={components:idsFor(source.components),themes:idsFor(source.themeBook?.items),menus:new Map(),feeds:feedCopies.ids,feedPaths:feedCopies.paths,pageAnchors:new Map()};
+ const ids={components:idsFor(source.components),themes:idsFor(source.themeBook?.items),tokens:idsFor(source.styleBook?.tokens),menus:new Map(),feeds:feedCopies.ids,feedPaths:feedCopies.paths,pageAnchors:new Map()};
  const assets=new Map(),original=new Map(source.files.map(file=>[file.name,file])),governed=governedResources(source);
  const candidate={id,name:title,cssPath:source.cssPath,pages:[],sources:[],files:[],copyReceipt:reviewId};
  if(source.pictureStyles)candidate.pictureStyles=structuredClone(source.pictureStyles);
@@ -33,6 +33,11 @@ async function duplicateSite(store,source,options){
   candidate.themeBook={items:book.items.map(item=>({...item,id:ids.themes.get(item.id)})),pages:assignments(book.pages,ids.themes),folders:assignments(book.folders,ids.themes)};
  }
  if(source.pageDesigns)candidate.pageDesigns=source.pageDesigns.map(d=>({...d,id:randomUUID()}));
+ if(source.styleBook){
+  const book=source.styleBook,remap=values=>values.map(id=>ids.tokens.get(id));
+  const scopes=table=>Object.fromEntries(Object.entries(table).map(([name,list])=>[name,remap(list)]));
+  candidate.styleBook={tokens:book.tokens.map(t=>({...t,id:ids.tokens.get(t.id)})),fonts:structuredClone(book.fonts),site:remap(book.site),folders:scopes(book.folders),pages:scopes(book.pages)};
+ }
  const staged=new Set();
  try{
   for(const file of source.files){

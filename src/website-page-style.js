@@ -24,7 +24,7 @@ export function validatePageStyles(pages,files){
  }
  for(const page of pages)if(page.canvasStyles!==undefined){
   const pin=page.canvasStyles;
-  if(!pin||!/^[a-f0-9]{64}$/.test(pin.stamp)||!(pin.all===true&&pin.members===undefined||Array.isArray(pin.members)&&pin.members.length&&pin.members.every(name=>named.has(name))))throw new AppError('FORMAT');
+  if(!pin||!/^[a-f0-9]{64}$/.test(pin.stamp)||!(pin.all===true&&pin.members===undefined||Array.isArray(pin.members)&&pin.members.length&&pin.members.every(name=>named.has(name)||files.get(name)?.tokenSheet===true||files.get(name)?.tokenFont===true)))throw new AppError('FORMAT');
  }
 }
 // Only change the selected document's main stylesheet link. Saved website

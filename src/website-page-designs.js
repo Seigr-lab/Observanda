@@ -48,6 +48,7 @@ function usable(files,page){
 }
 function pageDesignHTML(manifest,owner,file,html,destination,title,language,labels,styles){
  const context=componentContext(manifest),instances=[],sourceInstances=new Map((owner.instances??[]).map(i=>[i.id,i]));
+ const availableTokens=new Set((file.tokenUsage??[]).map(id=>'ow-token-'+id));
  const pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
  const feedHosts=new Set(manifest.feeds?.map(feed=>feed.path));
  const settings={heading:named(labels?.heading),text:named(labels?.text),image:named(labels?.image)};
@@ -82,7 +83,7 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   return esc(path.posix.relative(outDir,name)+(hash?'#'+hash:''));
  }
  function designClass(node){
-  const classes=(attr(node,'class')??'').split(/\s+/).map(c=>layoutClasses.has(c)?c:styles.copy(c)).filter(Boolean);
+  const classes=(attr(node,'class')??'').split(/\s+/).map(c=>layoutClasses.has(c)||availableTokens.has(c)?c:styles.copy(c)).filter(Boolean);
   return classes.length?' class="'+esc(classes.join(' '))+'"':'';
  }
  function designNode(node){
@@ -178,6 +179,6 @@ export function websitePageDesigns(store,siteId,options){
   const sourceCSS=await store.readText(published.get(css.name)??css,{signal})+(ownStyle?'\n'+await store.readText(published.get(ownStyle.name)??ownStyle,{signal}):'');
   const styles=designStyleCopies(sourceCSS);
   const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels,styles);
-  return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{...generated,css:styles.copiedRules(layoutClasses)});
+  return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{...generated,css:styles.copiedRules(layoutClasses),styleTokens:manifest.styleBook?.pages[owner.path]});
  },{write:action!=='list',signal});
 }

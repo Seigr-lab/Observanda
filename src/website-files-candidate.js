@@ -4,6 +4,8 @@ import {FileContent,contentSize,contentHash,contentStream} from './file-content.
 import {outputName} from './local-export-files.js';
 import {hasPrivateTextStream} from './privacy-text-stream.js';
 import {digest,serialize} from './storage-format.js';
+import {assertPublicFiles} from './privacy.js';
+import {MAX_FONT_BYTES} from './font-inspector.js';
 
 // This candidate owns saved website bytes. It has no research snapshot, reader,
 // catalogue or renderer; its authority is the file store's current revision.
@@ -31,7 +33,11 @@ export class WebsiteFilesCandidate {
     for await(const bytes of stream){signal?.throwIfAborted();hash.update(bytes);size+=bytes.length;yield bytes;}
     if(size!==contentSize(content)||hash.digest('hex')!==contentHash(content))throw new AppError('STALE');
    }
-   if(/\.(?:html|css|json|svg|csv|js|vtt)$/i.test(name)){
+   if(/^fonts\/custom-[a-f0-9]{64}\.(?:woff2?|[ot]tf)$/.test(name)){
+    if(contentSize(content)>MAX_FONT_BYTES)throw new AppError('FONT_INVALID');
+    const chunks=[];for await(const chunk of checked())chunks.push(chunk);
+    assertPublicFiles(new Map([[name,Buffer.concat(chunks,contentSize(content))]]),this.blockedValues);
+   }else if(/\.(?:html|css|json|svg|csv|js|vtt|txt)$/i.test(name)){
     if(await hasPrivateTextStream(checked,this.blockedValues,{signal}))throw new AppError('PRIVACY',[{field:'website file'}]);
    }else for await(const _ of checked()){ /* Validate binary assets in one pass. */ }
    await onFile?.(contentSize(content));

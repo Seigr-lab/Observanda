@@ -5,15 +5,26 @@ import {pageComponentDocument,prepareComponent,rewriteComponentInstances} from '
 import {validateWebsiteHTML} from './website-file-policy.js';
 import {versionContext} from './website-versions.js';
 import {websitePageIdentity} from './website-page-paths.js';
+import {newStyleBook} from './website-style-resources.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function value(manifest,kind){
  if(kind==='themeBook')return manifest.themeBook??{items:[],pages:{},folders:{}};
+ if(kind==='styleBook'){const {fonts,...styles}=manifest.styleBook??newStyleBook();return styles;}
  if(kind==='pageDesigns')return manifest.pageDesigns??[];
  if(kind==='appearance')return manifest.appearance??null;
  throw new AppError('INVALID');
 }
 function changeRows(kind,from,to){
+ if(kind==='styleBook'){
+  const rows=[];
+  for(const section of ['tokens','site','pages','folders']){
+   const entries=config=>section==='tokens'?Object.fromEntries(config.tokens.map(t=>[t.id,t])):section==='site'?{site:config.site}:config[section];
+   const a=entries(from),b=entries(to);
+   for(const key of new Set([...Object.keys(a),...Object.keys(b)]))if(!same(a[key],b[key]))rows.push({name:b[key]?.name??a[key]?.name??key,before:JSON.stringify(a[key]??''),after:JSON.stringify(b[key]??'')});
+  }
+  return rows;
+ }
  if(kind==='appearance'){
   const before=from?.values??{},after=to?.values??{};
   return [...new Set([...Object.keys(before),...Object.keys(after)])].flatMap(name=>same(before[name],after[name])?[]:[{name,before:before[name]??'',after:after[name]??''}]);
@@ -73,7 +84,7 @@ async function restoreComponent(store,ctx,review,signal){
 }
 export function websiteVersionDesign(store,id,options,apply=false){
  const {path='index.html',version,expectedRevision,kind,component,reviewId,offset=0,signal}=options;
- if(!Number.isSafeInteger(offset)||offset<0||!['appearance','themeBook','pageDesigns','component'].includes(kind))throw new AppError('INVALID');
+ if(!Number.isSafeInteger(offset)||offset<0||!['appearance','themeBook','styleBook','pageDesigns','component'].includes(kind))throw new AppError('INVALID');
  return store.scope(async()=>{
   const ctx=await versionContext(store,id,expectedRevision,version);
   if(!ctx.current.pages.some(p=>p.path===path))throw new AppError('NOT_FOUND');
@@ -82,7 +93,7 @@ export function websiteVersionDesign(store,id,options,apply=false){
    definition=await componentReview(store,ctx,component,signal);({rows,status}=definition);
   }else{
    desired=value(ctx.saved.settings,kind);
-   if(kind==='themeBook'||kind==='pageDesigns'){
+   if(kind==='themeBook'||kind==='styleBook'||kind==='pageDesigns'){
     const currentOwners=new Map(ctx.current.pages.map(p=>[websitePageIdentity(id,p),p]));
     const savedOwners=new Map(ctx.saved.pages.map(p=>[p.path,p]));
     const address=original=>{
@@ -90,10 +101,15 @@ export function websiteVersionDesign(store,id,options,apply=false){
      if(!current){status='unavailable';return original;}
      return current.path;
     };
-    if(kind==='themeBook')desired={...desired,pages:Object.fromEntries(Object.entries(desired.pages).map(([key,theme])=>[address(key),theme]))};
+    if(kind==='themeBook'||kind==='styleBook')desired={...desired,pages:Object.fromEntries(Object.entries(desired.pages).map(([key,theme])=>[address(key),theme]))};
     else desired=desired.map(d=>({...d,source:address(d.source)}));
    }
    rows=changeRows(kind,value(ctx.current,kind),desired);
+   if(kind==='styleBook'){
+    desired.fonts=ctx.current.styleBook?.fonts??[];
+    const fonts=new Set(desired.fonts.map(f=>f.id));
+    if(desired.tokens.some(t=>Object.values(t.rules).some(r=>r['font-family']?.startsWith('custom-')&&!fonts.has(r['font-family']))))status='resources';
+   }
   }
   const token=digest(JSON.stringify([expectedRevision,version,path,kind,component,status,rows]));
   await store.current(id,expectedRevision);

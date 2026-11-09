@@ -33,7 +33,7 @@ function tag(html,node,key,value){
  const old=loc.attrs?.[key],at=old?.startOffset??loc.startTag.endOffset-1;
  return html.slice(0,at)+(value?(old?'':' ')+key+'="'+value+'"':'')+html.slice(old?.endOffset??at);
 }
-function sectionNode(doc,address){
+export function sectionNode(doc,address){
  if(typeof address!=='string'||address.length>255||!/^\d{1,5}(?:\/\d{1,5})*$/.test(address))invalid();
  let node=[...descendants(doc)].find(n=>n.tagName==='body');
  for(const index of address.split('/'))node=node?.childNodes?.filter(n=>n.tagName)[Number(index)];

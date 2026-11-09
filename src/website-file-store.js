@@ -41,6 +41,7 @@ import {validatePageDesigns} from './website-page-designs.js';
 import {addPageStyle,newPageStylesheet,pageStylesheet,sharedDraftStyle,validatePageStyles} from './website-page-style.js';
 import {preparePublicPageFiles,privateWebsiteNames,publicText,websiteFileReferences} from './website-page-dependencies.js';
 import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
+import {syncStyleResources,validateStyleResources} from './website-style-resources.js';
 import {beginVersionWrite,prepareVersionRetention} from './website-version-retention.js';
 
 const ROOT='.observanda/website-files',CONTROL_LIMIT=32*1024*1024,TEXT_LIMIT=16*1024*1024,active=new AsyncLocalStorage();
@@ -73,7 +74,17 @@ function canvasAssetStamp(manifest,owned=new Set()){
 }
 function canvasStyles(manifest){
  const files=new Map(manifest.files.map(file=>[file.name,file]));
- const owned=new Set(manifest.pages.flatMap(p=>p.stylePath?[p.stylePath]:[])),canvasAssets=canvasAssetStamp(manifest,owned);
+ const owned=new Set(manifest.pages.flatMap(p=>p.stylePath?[p.stylePath]:[]));
+ for(const file of manifest.files)if(file.tokenSheet||file.tokenFont)owned.add(file.name);
+ const canvasAssets=canvasAssetStamp(manifest,owned);
+ const styleMembers=new Map();
+ function dependencies(sheet){
+  if(!styleMembers.has(sheet)){
+   const file=files.get(sheet),resources=file?.references?.filter(r=>owned.has(r.name)).map(r=>r.name);
+   styleMembers.set(sheet,file&&!resources?null:resources??[]);
+  }
+  return styleMembers.get(sheet);
+ }
  let allStamp;
  const pages=manifest.pages.map(page=>{
   const refs=files.get(page.path)?.references;
@@ -83,6 +94,14 @@ function canvasStyles(manifest){
   if(!refs&&owned.size){next.canvasStyles={all:true,stamp:allStamp??=canvasAssetStamp(manifest)};return next;}
   const names=new Set((refs??[]).filter(r=>owned.has(r.name)).map(r=>r.name));
   if(page.stylePath)names.add(page.stylePath);
+  if(manifest.styleBook?.tokens.length){
+   const styles=new Set([page.stylePath??manifest.cssPath,manifest.cssPath,...(refs??[]).map(r=>r.name).filter(name=>name.endsWith('.css'))]);
+   for(const sheet of styles){
+    const resources=dependencies(sheet);
+    if(!resources){next.canvasStyles={all:true,stamp:allStamp??=canvasAssetStamp(manifest)};return next;}
+    for(const name of resources)names.add(name);
+   }
+  }
   if(names.size){
    const members=[...names].sort();
    next.canvasStyles={members,stamp:hash(plain([canvasAssets,members.map(name=>fileIdentity(files.get(name)))]))};
@@ -227,7 +246,8 @@ export class WebsiteFileStore{
   }
   const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});
   const references=typeof value==='string'&&/\.(?:html|css)$/.test(name)?websiteFileReferences(value,name):undefined;
-  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(name.endsWith('.html')&&typeof value==='string'&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{})};
+  const markup=name.endsWith('.html')&&typeof value==='string';
+  return {...file,...(references?{references}:{}),...(draft?{draft:true}:{}),...(used?{entryStyle:entryStyleHash}:{}),...(editorMenu===undefined?{}:{editorMenu}),...(markup&&value.includes('data-website-theme')?{hasWebsiteThemes:true}:{}),...(markup&&(value.includes('ow-token-')||value.includes('data-website-token-sheet'))?{hasStyles:true}:{})};
  }
  async ownFile(id,file,draft,signal){
   if(file.sourceId||file.feedAsset)throw new AppError('INVALID');
@@ -268,6 +288,7 @@ export class WebsiteFileStore{
   validatePageDesigns(value);
   validateEditHistory(this,value,names);
   validateWebsiteThemes(value);
+  validateStyleResources(value);
   checkComponentManifest(value,names);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
@@ -353,6 +374,7 @@ export class WebsiteFileStore{
   manifest=await syncFeedShells(this,manifest,signal,reflowFeedShell);
   manifest=await syncSavedAppearance(this,manifest,signal);
   manifest=await syncWebsiteThemes(this,manifest,signal);
+  manifest=await syncStyleResources(this,manifest,signal);
   manifest=retainWebsiteFeedAssets(manifest);
   const intents=manifest.pages.flatMap(p=>(p.sourceGalleries??[]).flatMap(g=>g.slots));
   if(intents.length){
@@ -498,7 +520,7 @@ export class WebsiteFileStore{
   assertPageDestination(manifest,page,'CONFLICT');
   const stylePath=newPageStylesheet(manifest),baseStyle=sourceURL(page,manifest.cssPath);
   const html=addPageStyle(design?.html??starterPage({title:pageTitle,stylesheet:baseStyle,language},escapeWebsiteText),page,stylePath);
-  return this.save(id,{expectedRevision,path:page,html,css:design?.css??'',title:pageTitle,signal},design?.instances,{stylePath,draft:inclusion==='private'||undefined});
+  return this.save(id,{expectedRevision,path:page,html,css:design?.css??'',title:pageTitle,signal},design?.instances,{stylePath,styleTokens:design?.styleTokens,draft:inclusion==='private'||undefined});
  },{write:true,signal});}
  save(id,{expectedRevision,path:page='index.html',html,css,title:pageTitle,receivePictures,recordings,historyKey,recovery,signal}={},designInstances,creation,restoration){return this.scope(async()=>{
   if(!hex(expectedRevision))throw new AppError('INVALID');
@@ -532,7 +554,9 @@ export class WebsiteFileStore{
   if(former?.sourceGalleries?.length)pages.at(-1).sourceGalleries=former.sourceGalleries;
   if(former?.entryDisplays)pages.at(-1).entryDisplays=former.entryDisplays;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
-  const candidate={...manifest,files,pages,sources:[...sources.values()]};await this.assertSources(candidate);
+  const candidate={...manifest,files,pages,sources:[...sources.values()]};
+  if(creation?.styleTokens?.length)candidate.styleBook={...manifest.styleBook,pages:{...manifest.styleBook.pages,[page]:creation.styleTokens}};
+  await this.assertSources(candidate);
   const recovered=recovery?await recoveryAssets(this,manifest,page,recovery,new Set([...htmlPictures,...cssPictures]),recordingNames):null;
   async function* savedPictures(){
    yield* recovered.pictures;
@@ -586,7 +610,7 @@ export class WebsiteFileStore{
    if(manifest.pages.some(p=>p.path===host&&p.archived))throw new AppError('NOT_FOUND');
   }
   if(follow&&manifest.revision!==revision&&!historyAccess){
-   const owned=manifest.pages.some(page=>page.stylePath===name);
+   const owned=original?.tokenSheet||original?.tokenFont||manifest.pages.some(page=>page.stylePath===name);
    const allowed=!owned&&this.assetStamp(manifest)===revision||manifest.pages.some(page=>page.canvasStyles?.stamp===revision&&(!owned||page.canvasStyles.all||page.canvasStyles.members.includes(name)));
    if(!allowed)throw new AppError('CONFLICT');
   }
