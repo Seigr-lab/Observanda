@@ -1021,6 +1021,7 @@ async function rawAction(button) {
   if(button.dataset.action==='record-value-add-figure')return recordValues.open({recordId:state.selected,field:'figure:'+crypto.randomUUID(),create:button.dataset.kind==='panels'?'panels':'plot'});
   if(button.dataset.action==='record-value-add-attempt')return recordValues.open({recordId:state.selected,field:'attempt:'+button.dataset.kind+':'+crypto.randomUUID(),prior:button.dataset.prior});
   if(button.dataset.action==='record-value-add-result')return recordValues.open({recordId:state.selected,field:'result:'+crypto.randomUUID()});
+  if(button.dataset.action==='writing-focus')return recordWriting.open({recordId:state.selected,focused:true,focusTarget:button});
   if(button.dataset.action==='writing-edit')return recordWriting.open({recordId:state.selected,sectionId:button.dataset.section??null,focusTarget:button});
   if(state.page==='record-reader'){
    if(name==='record-location-open'){recordLocation.open();return;}

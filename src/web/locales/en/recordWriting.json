@@ -1,4 +1,13 @@
 {
+ "focusWriting":"Focused writing",
+ "focusOutline":"Writing outline",
+ "focusSummary":"Summary",
+ "focusUntitled":"Untitled section",
+ "focusPrevious":"Previous sections",
+ "focusNext":"Next sections",
+ "focusLoading":"Loading section headings…",
+ "focusReload":"Reload outline",
+ "focusRevision":"Saved revision {revision}",
  "section":"Edit writing section",
  "summary":"Edit summary / context",
  "title":"Section heading",

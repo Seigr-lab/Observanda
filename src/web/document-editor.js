@@ -19,8 +19,8 @@ export function documentEditors({context,destinations,onOpenLink,onError,figures
   mounted.clear();fields.clear();
   const next=context();if(next!==owner){states.clear();owner=next;}
  }
- function field({key,label,value,set,maxCharacters,recovery}){
-  fields.set(key,{label,value,set,maxCharacters,recovery});
+ function field({key,label,value,set,maxCharacters,recovery,initialState}){
+  fields.set(key,{label,value,set,maxCharacters,recovery,initialState});
   return `<div class="document-field" data-document-key="${esc(key)}"><div class="document-label">${esc(label)}</div><div class="document-tools"></div><div class="document-content"></div></div>`;
  }
  function bind(root=document){
@@ -35,7 +35,7 @@ export function documentEditors({context,destinations,onOpenLink,onError,figures
    mount.replaceChildren();mount.removeAttribute('role');
    toolbar.innerHTML=textTools({compact:true,fonts:typeof fonts==='function'?fonts():fonts});
    applyRichTextStyles(document,proseDocument(field.value));
-   const editor=mountRichText({message:editorBookText,mount,toolbar,label:field.label,section:{richText:proseDocument(field.value)},initialState:states.get(key),
+   const editor=mountRichText({message:editorBookText,mount,toolbar,label:field.label,section:{richText:proseDocument(field.value)},initialState:states.get(key)??field.initialState,
     onChange:value=>{field.value=value;applyRichTextStyles(document,value);field.set(value);},onOpenLink,onError,getFigures:figures,getDestinations:destinations,maxCharacters:field.maxCharacters,recovery:field.recovery});
    mounted.set(key,editor);
    if(onOpenLink)inspectors.set(key,editorLinkInspector({host,book,open:onOpenLink}));
@@ -46,6 +46,6 @@ export function documentEditors({context,destinations,onOpenLink,onError,figures
    for(const item of pending)if(current(item)){item.host.removeAttribute('aria-busy');const message=item.host.querySelector('.document-content');message.setAttribute('role','alert');message.textContent=t('recordAuthoring','editorUnavailable');}
   });
  }
- return {field,bind,release,pendingPaste:()=>[...mounted.values()].some(editor=>editor.pendingPaste),
+ return {field,bind,release,state:key=>mounted.get(key)?.state,pendingPaste:()=>[...mounted.values()].some(editor=>editor.pendingPaste),
   reviewPaste:()=>[...mounted.values()].some(editor=>editor.reviewPaste?.())};
 }

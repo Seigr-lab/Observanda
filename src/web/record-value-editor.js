@@ -16,6 +16,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
  const selection=base=>({...adapter.target(base),revision:base.revision,storageRevision:base.storageRevision});
  const button=(label,action,primary=false)=>'<button type="button" class="button'+(primary?' primary':'')+'" data-writing="'+action+'">'+esc(text(label))+'</button>';
  const validContext=()=>owner?.context===context();
+ const navigation=adapter.navigation;
  function draftCurrent(captured){
   if(captured!==owner||!validContext())throw new DOMException('Selected draft changed','AbortError');
  }
@@ -61,7 +62,8 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
  function paint(){
   dialog.querySelector('[data-writing-error]')?.replaceChildren(document.createTextNode(error));
   dialog.querySelector('[data-writing-status]')?.replaceChildren(document.createTextNode(status));
-  const form=dialog.querySelector('[data-writing-fields]');if(form)form.inert=busy;
+  const form=dialog.querySelector('[data-writing-fields]');if(form){form.inert=busy;form.setAttribute('aria-busy',String(busy||loading));}
+  navigation?.busy(busy||loading||Boolean(conflict));
   for(const control of dialog.querySelectorAll('[data-writing]'))control.disabled=busy||loading;
   const save=dialog.querySelector('[data-writing="save"]');if(save)save.disabled=busy||loading||!dirty||Boolean(conflict)||Boolean(view.busy?.());
   const close=dialog.querySelector('[data-writing="close"]');if(close)close.textContent=text(dirty?'keepDraft':'close');
@@ -73,7 +75,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    (base?'<p>'+esc(base.recordTitle)+'</p>':'')+'<div data-writing-fields>'+(value?view.fields(base,value,changed):'')+'</div>'+
    (conflict?'<section class="record-writing-conflict"><h3>'+esc(text('savedVersion'))+'</h3>'+view.preview(conflict)+'<div class="inline-actions">'+button('useSaved','use-saved')+button('keepMine','keep-mine')+'</div></section>':'')+
    '<p role="alert" data-writing-error></p><p role="status" data-writing-status></p><p class="save-explanation">'+esc(ux('draftHelp'))+'</p><div class="dialog-actions">'+button('close','close')+button('discard','discard')+button('retry','retry')+button('save','save',true)+'</div>';
-  view.bind?.(dialog);paint();
+  navigation?.show(dialog,base,switchField);view.bind?.(dialog);paint();
  }
  function changed(){dirty=true;error='';status=text('checkpointing');clearTimeout(timer);timer=setTimeout(()=>void flush().catch(()=>{}),800);paint();}
  async function flush(){
@@ -115,7 +117,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   if(writer?.revision)await api('/api/research/drafts/remove',{id:writer.id,workspaceId:base.workspaceId,expectedRevision:writer.revision},{adopt:false});
  }
  function finish(){
-  clearTimeout(timer);timer=null;dialog.close();owner=null;view.release?.();dialog.innerHTML='';
+  clearTimeout(timer);timer=null;navigation?.stop();dialog.classList.remove('record-writing-focused');dialog.close();owner=null;view.release?.();dialog.innerHTML='';
   base=value=writer=pending=conflict=draftMutation=openingInput=lastDraftMutation=null;dirty=busy=loading=checkpointError=false;last=error=status='';
   requestFocusRestore(focusBefore);resolveClose?.();resolveClose=null;void onClosed?.();
  }
@@ -131,13 +133,22 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    await flush();if(owner!==savingOwner||!validContext())return;status=text('saving');paint();
    const savedTarget=target(base),result=await api('/api/research/records/'+adapter.route+'/save',{...savedTarget,expectedRevision:base.revision,value},{adopt:false});
    if(owner!==savingOwner||!validContext())return;
-   if(result?.saved!==true||!revisionId(result.revision)||!revisionId(result.etag))throw Error(text('invalidSave'));
+   if(result?.saved!==true||!revisionId(result.revision)||!revisionId(result.etag)||navigation?.active&&!revisionId(result.storageRevision))throw Error(text('invalidSave'));
    dirty=false;status=text('finishingSave');paint();let retained=false;try{await removeCheckpoint();}catch{retained=true;}
    if(owner!==savingOwner)return;
    // Keep the acknowledged editor busy until its reader has adopted the save.
    // A failed refresh must still close this editor and report the durable save.
    try{await onSaved(result,savedTarget,{completedDialog:dialog});}
-   finally{if(owner===savingOwner){finish();notify(text(retained?'savedDraftRemains':'saved'));}}
+   finally{if(owner===savingOwner){
+    if(navigation?.active){
+     navigation.forget(base.sectionId);
+     // Keep the immutable field revision the author just saved, even if a
+     // subsequent refresh fails or another author immediately edits it.
+     Object.assign(base,{value:structuredClone(value),revision:result.revision,etag:result.etag,storageRevision:result.storageRevision});
+     writer={id:crypto.randomUUID(),revision:null};last='';status=text(retained?'savedDraftRemains':'saved');navigation.show(dialog,base,switchField);
+    }else finish();
+    notify(text(retained?'savedDraftRemains':'saved'));
+   }}
   }catch(failure){
    if(owner!==savingOwner)return;
    if(failure.code==='RECORD_CHANGED'||adapter.conflictCodes?.includes(failure.code)){
@@ -154,7 +165,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
   if(view.reviewPaste?.())return;
   const closingOwner=owner;
   if(dirty){busy=true;paint();try{await flush();}catch{if(owner===closingOwner){busy=false;paint();}return;}}
-  if(owner===closingOwner)finish();
+  if(owner===closingOwner){navigation?.remember(base,writer,view.editorState?.());finish();}
  }
  dialog.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();event.stopPropagation();if(!busy&&!loading&&dirty&&!conflict)void save().catch(failure=>notify(failure.message,true));}});
  dialog.addEventListener('click',async event=>{
@@ -168,7 +179,7 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    else if(action==='close')await close();
    else if(action==='discard'){
     if(control.dataset.confirm!=='true'){control.dataset.confirm='true';control.textContent=text('confirmDiscard');return;}
-    busy=true;paint();await removeCheckpoint();if(owner===actionOwner)finish();
+    busy=true;paint();await removeCheckpoint();if(owner===actionOwner){if(navigation?.active)navigation.forget(base.sectionId);finish();}
    }else if(['use-saved','keep-mine'].includes(action)&&conflict){
     busy=true;paint();await flush();if(owner!==actionOwner)return;base=conflict;conflict=null;error='';
     if(action==='use-saved'){value=structuredClone(base.value);dirty=false;await removeCheckpoint();if(owner!==actionOwner)return;writer={id:crypto.randomUUID(),revision:null};last='';editorEpoch++;}
@@ -176,23 +187,45 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    }
   }catch(failure){if(owner===actionOwner){error=failure.message||text('failed');busy=false;paint();}}
  });
- async function open(input,retained=null){
-  if(dialog.open)return;onOpen?.();openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=captureFocus(input.focusTarget instanceof Element?input.focusTarget:document.activeElement);loading=true;status=text('loading');draw();dialog.showModal();
+ async function loadField(expected,receipt){
+  if(!receipt){
+   const selected=readReply(await api('/api/research/records/'+adapter.route+'/read',expected,{adopt:false}),expected);
+   return {base:selected,value:structuredClone(selected.value),writer:{id:crypto.randomUUID(),revision:null}};
+  }
+  const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:expected.workspaceId,id:receipt.id,expectedRevision:receipt.revision},{adopt:false});
+  const draft=result?.draft,selected=draft?.[adapter.baseName];
+  if(draft?.id!==receipt.id||result.revision!==receipt.revision||draft.workspaceId!==expected.workspaceId||draft.base?.recordId!==expected.recordId||
+     !revisionId(selected?.revision)||!revisionId(selected.storageRevision)||!Object.entries(adapter.target(expected)).every(([key,v])=>v===selected[key])||!result.value)throw Error(text('invalidCheckpoint'));
+  return {base:{...expected,...selected,definition:result.definition,recordTitle:draft.titles[0]},value:result.value,writer:{id:draft.id,revision:result.revision}};
+ }
+ function adoptField(field){
+  ({base,value,writer}=field);dirty=Boolean(writer.revision);last=dirty?JSON.stringify({selected:selection(base),value}):'';
+  pending=conflict=draftMutation=lastDraftMutation=null;checkpointError=false;error='';status=dirty?text('checkpointed'):'';
+ }
+ async function switchField(sectionId){
+  if(!navigation?.active||busy||loading||conflict||sectionId===base?.sectionId||view.reviewPaste?.())return;
+  const captured=owner;busy=true;paint();
   try{
-   if(retained){
-    const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:retained.draft.workspaceId,id:retained.draft.id,expectedRevision:retained.revision},{adopt:false});
-    if(owner!==loadingOwner)return;
-    base={workspaceId:result.draft.workspaceId,recordId:result.draft.base.recordId,...result.draft[adapter.baseName],definition:result.definition,recordTitle:result.draft.titles[0]};
-    value=result.value;writer={id:result.draft.id,revision:result.revision};dirty=true;last=JSON.stringify({selected:result.draft[adapter.baseName],value});status=text('checkpointed');
-   }else{
-    const expected={workspaceId:state.book.id,recordId:input.recordId,...adapter.target(input)},result=await api('/api/research/records/'+adapter.route+'/read',expected,{adopt:false});if(owner!==loadingOwner)return;readReply(result,expected);
-    base=result;value=structuredClone(base.value);writer={id:crypto.randomUUID(),revision:null};status='';
-   }
-   if(!validContext())throw Error(text('changedWorkspace'));await view.prepare?.(base,value,input);if(owner!==loadingOwner||!validContext())return;loading=false;if(!retained)view.initialize?.(base,value,input,changed);openingInput=null;draw();dialog.querySelector(view.focus)?.focus();
+   await flush();if(owner!==captured||!validContext())return;
+   status=text('loading');paint();
+   const next=await loadField({workspaceId:base.workspaceId,recordId:base.recordId,sectionId},navigation.draft(sectionId));
+   if(owner!==captured||!validContext())return;
+   navigation.remember(base,writer,view.editorState?.());editorEpoch++;adoptField(next);draw();
+  }catch(failure){if(owner===captured){error=failure.message||text('failed');status='';}}
+  finally{if(owner===captured){busy=false;paint();}}
+  if(owner===captured&&base?.sectionId===sectionId)dialog.querySelector('.ProseMirror')?.focus();
+ }
+ async function open(input,retained=null){
+  if(dialog.open)return;input=navigation?.begin(input)??input;onOpen?.();openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=captureFocus(input.focusTarget instanceof Element?input.focusTarget:document.activeElement);loading=true;status=text('loading');dialog.classList.toggle('record-writing-focused',Boolean(navigation?.active));draw();dialog.showModal();
+  try{
+   const expected=retained?{workspaceId:retained.draft.workspaceId,recordId:retained.draft.base.recordId,...adapter.target(retained.draft[adapter.baseName])}:{workspaceId:state.book.id,recordId:input.recordId,...adapter.target(input)};
+   const receipt=retained?{id:retained.draft.id,revision:retained.revision}:navigation?.draft(input.sectionId);
+   const field=await loadField(expected,receipt);if(owner!==loadingOwner)return;
+   if(!validContext())throw Error(text('changedWorkspace'));adoptField(field);await view.prepare?.(base,value,input);if(owner!==loadingOwner||!validContext())return;loading=false;if(!receipt)view.initialize?.(base,value,input,changed);openingInput=null;draw();dialog.querySelector(view.focus)?.focus();
   }catch(failure){if(owner!==loadingOwner)return;loading=false;error=failure.message||text('failed');status='';paint();}
   return new Promise(resolve=>{resolveClose=resolve;});
  }
  window.addEventListener('beforeunload',event=>{if(dirty||pending||draftMutation||view.pendingPaste?.()){event.preventDefault();event.returnValue='';}});
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty)void flush().catch(()=>{});});
- return {open,recover:header=>open({},header),locked(){if(dialog.open){owner=null;finish();}}};
+ return {open,recover:header=>open({},header),locked(){navigation?.clear();if(dialog.open){owner=null;finish();}}};
 }

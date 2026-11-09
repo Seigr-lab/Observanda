@@ -6,7 +6,7 @@ import {revisionId} from './web/revision-model.js';
 import {sameJSONData} from './web/json-data-equality.js';
 import {digest,serialize} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
-import {RecordMemberCollections} from './record-member-collections.js';
+import {RecordMemberCollections,memberCollectionCount,memberStructureRevision} from './record-member-collections.js';
 import {writingSectionValue,validWritingValue} from './web/record-writing-model.js';
 import {commitRecordDocument} from './record-document-commit.js';
 
@@ -16,6 +16,33 @@ const fields=['workspaceId','recordId','sectionId'];
 const content=(sectionId,value)=>sectionId===null?{body:value}:writingSectionValue(value);
 export class RecordWriting{
  constructor(workspace){this.workspace=workspace;}
+ async outline(command,{signal}={}){
+  const {workspaceId,recordId,offset,anchor,expectedStructureRevision}=command??{};
+  if(!exact(command,['workspaceId','recordId','offset','anchor','expectedStructureRevision'])||
+     !researchId(workspaceId)||!researchId(recordId)||!Number.isSafeInteger(offset)||offset<0||
+     (anchor!==null&&(!researchId(anchor)||offset!==0))||
+     (expectedStructureRevision!==null&&!revisionId(expectedStructureRevision)))throw new AppError('INVALID');
+  signal?.throwIfAborted();
+  return this.workspace.catalogue(async store=>{
+   const {row}=await this.select(store,{workspaceId,recordId,sectionId:null});
+   const structureRevision=memberStructureRevision(row),total=memberCollectionCount(row,'sections');
+   if(expectedStructureRevision!==null&&expectedStructureRevision!==structureRevision)throw new AppError('RECORD_CHANGED');
+   const pageSize=16,position=anchor===null?offset:await new RecordMemberCollections(store).position(row,'sections',anchor);
+   if(position<0)throw new AppError('MISSING');
+   const start=anchor===null?offset:Math.floor(position/pageSize)*pageSize;
+   const sections=await withRecordDocument(store,row.id,row.revision,async doc=>{
+    const items=[];
+    for await(const {index,value} of doc.items(['sections'],{offset:start,limit:pageSize,signal})){
+     const id=(await doc.tree.selected(value,['id'])).value,title=(await doc.tree.selected(value,['title'])).value;
+     if(!researchId(id)||typeof title!=='string'||title.length>160)throw new AppError('CATALOGUE_DAMAGED');
+     items.push({id,title,position:index});
+    }
+    return items;
+   });
+   return {workspaceId,recordId,structureRevision,total,offset:start,sections,
+    previous:start?Math.max(0,start-pageSize):null,next:start+pageSize<total?start+pageSize:null};
+  });
+ }
  async select(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);
   if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -48,11 +75,11 @@ export class RecordWriting{
     const previous=content(command.sectionId,selected),next=command.sectionId===null?command.value:writingSectionValue({...selected,...command.value});
     // Exact retries are safe after an unknown response. A competing change to
     // this value is never overwritten; edits to other sections can coexist.
-    if(sameJSONData(previous,next))return {etag,revision:digest(serialize(previous)),saved:true};
+    if(sameJSONData(previous,next))return {etag,storageRevision:row.revision,revision:digest(serialize(previous)),saved:true};
     if(digest(serialize(previous))!==command.expectedRevision)throw new AppError('RECORD_CHANGED');
     const document=await original.replace(path,command.sectionId===null?next.body:{...selected,...next});
     const saved=await commitRecordDocument(store,{etag,snapshot,row,document});
-    return {etag:saved.etag,revision:digest(serialize(next)),saved:true};
+    return {etag:saved.etag,storageRevision:saved.member.revision,revision:digest(serialize(next)),saved:true};
    },{mutable:true});
   });
  }

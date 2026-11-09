@@ -44,7 +44,9 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  let accepted=measure(doc.toJSON()),clipboard=null;
  capacity.update(accepted);
  const identity=tr=>{const ids=new Set();tr.doc.descendants((n,pos)=>{if(n.type===schema.nodes.heading||BOOK_BLOCKS.includes(n.type.name)){if(!n.attrs.id||ids.has(n.attrs.id))tr.setNodeMarkup(pos,null,{...n.attrs,id:crypto.randomUUID()});ids.add(tr.doc.nodeAt(pos).attrs.id);}});return tr;};
- view=new EditorView({mount},{state:initialState?.doc.eq(doc)?initialState:EditorState.create({schema,doc,plugins:[history(),keymap(keys),keymap(baseKeymap),...(collaboration?[collab({version:collaboration.version,clientID:collaboration.clientId})]:[])]}),attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
+ const plugins=[history(),keymap(keys),keymap(baseKeymap),...(collaboration?[collab({version:collaboration.version,clientID:collaboration.clientId})]:[])];
+ const state=initialState?.doc.eq(doc)?initialState.reconfigure({plugins}):EditorState.create({schema,doc,plugins});
+ view=new EditorView({mount},{state,attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
    if(!tr.docChanged){view.updateState(view.state.apply(tr));update();return;}
    identity(tr);
    const json=tr.doc.toJSON(),usage=measure(json),pasted=tr.getMeta('paste')&&clipboard;

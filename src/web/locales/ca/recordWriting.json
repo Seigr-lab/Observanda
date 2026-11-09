@@ -1,4 +1,13 @@
 {
+ "focusWriting":"Escriptura concentrada",
+ "focusOutline":"Esquema del text",
+ "focusSummary":"Resum",
+ "focusUntitled":"Secció sense títol",
+ "focusPrevious":"Seccions anteriors",
+ "focusNext":"Seccions següents",
+ "focusLoading":"S’estan carregant els títols de les seccions…",
+ "focusReload":"Torna a carregar l’esquema",
+ "focusRevision":"Revisió desada {revision}",
   "section": "Edita la secció d'escriptura",
   "summary": "Edita el resum / context",
   "title": "Encapçalament de la secció",

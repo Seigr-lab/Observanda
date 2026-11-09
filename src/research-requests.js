@@ -40,7 +40,7 @@ for(const [name,Owner,method] of [['dashboard',DashboardRecords,'read'],['dashbo
 for(const name of ['version','start','page','changes','change-page','selection','labels'])define('workspace/read/'+name,WorkspaceReader,name==='change-page'?'changePage':name,{run:name==='start'?(storage,data,options)=>new WorkspaceReader(storage).start({...data,...options}):undefined});
 for(const [name,Owner,method] of [
  ['query',RecordQuery,'list'],['open',RecordQuery,'open'],['history/list',RecordHistory,'list'],['history/read',RecordHistory,'read'],
- ['writing/read',RecordWriting,'read'],['values/read',RecordValues,'read'],['values/figures',RecordValues,'figureChoices'],['values/attempt-context',RecordValues,'attemptContext'],
+ ['writing/read',RecordWriting,'read'],['writing/outline',RecordWriting,'outline'],['values/read',RecordValues,'read'],['values/figures',RecordValues,'figureChoices'],['values/attempt-context',RecordValues,'attemptContext'],
  ['runs',RecordRuns,'list'],['runs/comparison',RecordRuns,'comparison'],['runs/prepare',RecordRunCreation,'prepare']
 ])define('research/records/'+name,Owner,method,{media:Owner===RecordHistory});
 for(const method of ['open','window','change','save'])define('research/records/preparation/'+method,RecordPreparationDrafts,method,{write:['change','save'].includes(method)});

@@ -1,4 +1,13 @@
 {
+ "focusWriting":"Escritura sin distracciones",
+ "focusOutline":"Esquema del texto",
+ "focusSummary":"Resumen",
+ "focusUntitled":"Sección sin título",
+ "focusPrevious":"Secciones anteriores",
+ "focusNext":"Secciones siguientes",
+ "focusLoading":"Cargando los títulos de las secciones…",
+ "focusReload":"Volver a cargar el esquema",
+ "focusRevision":"Revisión guardada {revision}",
   "section": "Editar la sección de texto",
   "summary": "Editar resumen / contexto",
   "title": "Encabezado de sección",

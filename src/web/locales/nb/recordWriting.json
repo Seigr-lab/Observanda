@@ -1,4 +1,13 @@
 {
+ "focusWriting":"Fokusert skriving",
+ "focusOutline":"Disposisjon",
+ "focusSummary":"Sammendrag",
+ "focusUntitled":"Del uten tittel",
+ "focusPrevious":"Forrige deler",
+ "focusNext":"Neste deler",
+ "focusLoading":"Laster inn overskrifter…",
+ "focusReload":"Last disposisjonen på nytt",
+ "focusRevision":"Lagret revisjon {revision}",
   "section": "Rediger tekstdel",
   "summary": "Rediger sammendrag / kontekst",
   "title": "Deloverskrift",

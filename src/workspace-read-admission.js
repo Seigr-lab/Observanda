@@ -11,7 +11,7 @@ const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/mo
 const post=new Set([
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),
- ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),
+ ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','writing/outline','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),
  ...['owners','query','labels','resolve','incoming'].map(name=>'/api/modules/references/'+name),
  '/api/calendars/page','/api/calendars/event','/api/sharing/configuration','/api/sharing/figure',
  '/api/modules/drafts/read',
