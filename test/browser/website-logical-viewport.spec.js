@@ -87,7 +87,7 @@ test('fitted canvas, saved preview and a published website agree with an indepen
   await canvas.locator('#second').click();
   const layout=page.locator('.website-layout-inspector');
   await layout.locator(':scope > summary').click();
-  const coordinates=layout.locator('.website-layout-composer > details').last();
+  const coordinates=layout.locator('.website-layout-composer > details').filter({hasText:'Anchor corner'});
   await coordinates.locator(':scope > summary').click();
   await coordinates.getByLabel('Coordinate units').selectOption('px');
   await coordinates.getByRole('button',{name:'Choose a point in the canvas'}).click();

@@ -16,6 +16,7 @@ import {websiteFilesHttp} from '../src/website-files-http.js';
 import {readRecordingUpload,saveRecordingUpload} from '../src/website-recordings.js';
 import {mediaCapabilities} from '../src/media.js';
 import {mediaFixtures} from './media-fixtures.js';
+import {archivedBlobs,readVersionIndex} from '../src/website-version-retention.js';
 
 const page=body=>'<!doctype html><html><head><title>Site</title></head><body><main>'+body+'</main></body></html>';
 async function fixture(t,start){
@@ -139,7 +140,10 @@ test('typed audio, video and VTT retain private main ownership and leave the pub
  for(const name of names){assert.equal((await published()).files.has(name),false);assert.ok(await store.file(id,name,{revision:state.site.revision,editor:true}));}
  state=await op('update',state.site.revision,{component:main.id,name:main.name,html:'<p>Recordings removed</p>'});
  for(const name of names)assert.equal((await published()).files.has(name),false);
- for(const blob of blobs)await assert.rejects(stat(store.absolute(blob)),{code:'ENOENT'});
+ // Released bytes leave the disk unless version history still retains them
+ // for a reviewed restoration; history never makes them public.
+ const held=await store.scope(async()=>archivedBlobs(await readVersionIndex(store,await store.current(id,state.site.revision))));
+ for(const blob of blobs)if(!held.has(blob))await assert.rejects(stat(store.absolute(blob)),{code:'ENOENT'});
 });
 test('feed and source-gallery captions cannot be detached from their permission owner into reusable definitions',()=>{
  for(const marker of ['data-website-feed','data-website-feed-source','data-website-source-gallery']){

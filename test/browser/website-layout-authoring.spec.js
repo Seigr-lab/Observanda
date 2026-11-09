@@ -40,13 +40,13 @@ test('author a named figure grid and position a scientific annotation visually i
   await areaRows.nth(2).getByLabel('New row').check();await grid.getByRole('button',{name:'Apply grid areas'}).click();
   await expect(canvas.locator('#plates')).toHaveCSS('grid-template-areas',/owarea-/);
   await canvas.locator('#plate1 figcaption').click();
-  await layout.getByLabel('Share of available row space').fill('2');await layout.getByLabel('Align in grid cell').selectOption('start');await layout.getByRole('button',{name:'Apply layout',exact:true}).click();
+  await layout.locator('[data-layout-property="flex-grow"]').fill('2');await layout.locator('[data-layout-property="justify-self"]').selectOption('start');await layout.getByRole('button',{name:'Apply layout',exact:true}).click();
   await expect(canvas.locator('#plate1')).toHaveCSS('flex-grow','2');await expect(canvas.locator('#plate1')).toHaveCSS('justify-self','start');
   await canvas.locator('#plate0 figcaption').click();
   await open('Add an annotation');await layout.getByLabel('Annotation text').fill('Emission peak');
   await layout.getByRole('button',{name:'Add an annotation',exact:true}).click();
   const marker=canvas.locator('[data-website-annotation]');await expect(marker).toHaveText('Emission peak');await expect(marker).toHaveCSS('position','absolute');
-  const coords=layout.locator('.website-layout-composer > details').last();
+  const coords=layout.locator('.website-layout-composer > details').filter({hasText:'Anchor corner'});
   await coords.getByLabel('Anchor corner').selectOption('br');await coords.getByLabel('Horizontal offset (X)').fill('10');await coords.getByLabel('Vertical offset (Y)').fill('20');await coords.getByLabel('Stacking level (Z)').fill('3');
   await coords.getByRole('button',{name:'Apply position'}).click();await expect(marker).toHaveCSS('z-index','3');
   const percentages=await marker.evaluate(n=>{const s=getComputedStyle(n),p=n.parentElement;return [parseFloat(s.right)*100/p.clientWidth,parseFloat(s.bottom)*100/p.clientHeight];});

@@ -27,7 +27,7 @@ test('upload, play and replace an authored recording and captions using portable
     if(p==='/open')return json(opened);
     if(p==='/media/library'){const chunks=[];for await(const c of req)chunks.push(c);const data=JSON.parse(Buffer.concat(chunks));return json(await websiteRecordingLibrary(store,data.siteId,data));}
     if(p==='/media/save'){opened=await saveRecordingUpload(store,await readRecordingUpload(req));publication=await WebsiteFilesCandidate.open(store,opened.site.id,opened.site.revision);await publication.verify();return json(opened);}
-    if(/^\/(website-files-recordings|website-html-document)\.js$/.test(p)){res.setHeader('content-type','text/javascript');res.end(await readFile(new URL('../../src/web'+p,import.meta.url)));return;}
+    if(/^\/website-[a-z-]+\.js$/.test(p)){res.setHeader('content-type','text/javascript');res.end(await readFile(new URL('../../src/web'+p,import.meta.url)));return;}
     if(p.startsWith('/site/')){const name=p.slice(6);const mime=name.endsWith('.html')?'text/html':name.endsWith('.vtt')?'text/vtt':name.endsWith('.wav')?'audio/wav':name.endsWith('.mp4')?'video/mp4':'text/css';
       if(publication?.files.has(name))return serveContent(req,res,publication.files.get(name),mime);}
     res.writeHead(404).end();

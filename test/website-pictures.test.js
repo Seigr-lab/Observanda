@@ -55,7 +55,9 @@ test('only the editing page can restore its retired image and published files ex
  assert.equal((await status(randomUUID(),'index.html')).mediaAvailable,false);
  assert.equal((await status(historyKey,'other.html')).mediaAvailable,false);
  for(const [key,path] of [[randomUUID(),'index.html'],[historyKey,'other.html']]){
-  await assert.rejects(store.save(id,{path,historyKey:key,expectedRevision:revision,html,css:''}),{code:'INVALID'});
+  // A foreign history key cannot claim the image; a page that does not exist
+  // cannot be saved at all. Neither attempt changes the saved revision.
+  await assert.rejects(store.save(id,{path,historyKey:key,expectedRevision:revision,html,css:''}),{code:path==='index.html'?'INVALID':'NOT_FOUND'});
   assert.equal((await store.open(id)).site.revision,revision);
  }
  const restored=await store.save(id,{expectedRevision:revision,historyKey,html,css:''});

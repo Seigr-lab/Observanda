@@ -1,8 +1,10 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {readdirSync} from 'node:fs';
 
 test('large saved sites search by folder, title and publication state and edit literal page metadata',async({page})=>{
- const files=new Map(await Promise.all(['website-files-pages','website-html-document'].map(async name=>[name+'.js',await readFile(new URL('../../src/web/'+name+'.js',import.meta.url),'utf8')])));
+ // Serve only website editor modules; anything else aborts.
+ const files=new Map(await Promise.all(readdirSync(new URL('../../src/web/',import.meta.url)).filter(name=>/^website-[a-z-]+\.js$/.test(name)).map(async name=>[name,await readFile(new URL('../../src/web/'+name,import.meta.url),'utf8')])));
  await page.route('http://page-panel.test/**',route=>{
   const name=new URL(route.request().url()).pathname.slice(1);
   if(name==='')return route.fulfill({contentType:'text/html',body:'<main></main>'});

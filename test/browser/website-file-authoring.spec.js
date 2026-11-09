@@ -183,7 +183,8 @@ test('a prepared website opens from saved files without another user action',asy
  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
  await expect(page.getByRole('status')).toHaveText('Copying website files (8 of 15)');
  await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
- expect(calls).toEqual(['session','preparation','preparation','list','open'].map(op=>'/api/website-files/'+op));
+ // Opening also checks for a recoverable draft of the opened page.
+ expect(calls).toEqual(['session','preparation','preparation','list','open','recovery/page'].map(op=>'/api/website-files/'+op));
 });
 
 test('private draft remains identifiable and new pages use the public stylesheet',async({page})=>{
