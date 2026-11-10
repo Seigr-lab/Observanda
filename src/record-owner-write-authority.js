@@ -29,15 +29,16 @@ async function owners(store,id,stored){
   if(researchId(value.id)){const head=parse(await store.object('metadata:.observanda/materials/objects/'+value.id+'/head.json'));if(head?.recordId)return [head.recordId];}
   if((match=/^metadata:\.observanda\/materials\/index\/(?:heads|pending|segments)\/([a-f0-9-]{36})\//.exec(id)))return [match[1]];
  }
- if(/^metadata:\.observanda\/jobs\/[a-f0-9-]{36}\.json$/.test(id)&&researchId(value.scope)&&['evidence.finalize','evidence.batch','dataset.prepare','analysis.compare','figure.calculate','intake.stage','intake.apply'].includes(value.type))return [value.scope];
+ if(/^metadata:\.observanda\/dataset-exchange-candidates\/[a-f0-9-]{36}\.json$/.test(id)&&researchId(value.recordId))return [value.recordId];
+ if(/^metadata:\.observanda\/jobs\/[a-f0-9-]{36}\.json$/.test(id)&&researchId(value.scope)&&['evidence.finalize','evidence.batch','dataset.prepare','dataset.exchange','analysis.compare','figure.calculate','intake.stage','intake.apply'].includes(value.type))return [value.scope];
  if(id.startsWith('metadata:.observanda/intake/')&&researchId(value.manifest?.recordId))return [value.manifest.recordId];
  if(id.startsWith('record-history-restore:')&&researchId(value.recordId))return [value.recordId];
  return [];
 }
 export async function assertRecordOwnerObjectWritable(store,id,previous,value){
  if(/^record-owner-(?:resource|resource-claim|reclaim):/.test(id)){const {assertRecordOwnerResourceMutation}=await import('./record-owner-resources.js');assertRecordOwnerResourceMutation(store);return;}
- if(/^record-owner-(?:scientific-edits|scientific-origin|table-view|draft-origin|draft-original|draft-review|draft-edit|draft-head|drafts|revision-prior|revision-copy):/.test(id)){assertRecordOwnerTransferAuthority(store);return;}
- if(!/^(?:record-draft-|record-history-restore:|metadata:\.observanda\/(?:materials|drafts|draft-list|record-draft-|scientific-edit-|run-readiness|jobs|intake))/.test(id))return;
+ if(/^record-owner-(?:scientific-edits|scientific-origin|prepared-exchange|table-view|draft-origin|draft-original|draft-review|draft-edit|draft-head|drafts|revision-prior|revision-copy):/.test(id)){assertRecordOwnerTransferAuthority(store);return;}
+ if(!/^(?:record-draft-|record-history-restore:|metadata:\.observanda\/(?:materials|drafts|draft-list|record-draft-|scientific-edit-|dataset-exchange-candidates|run-readiness|jobs|intake))/.test(id))return;
  for(const recordId of new Set([...await owners(store,id,previous),...await owners(store,id,value)]))await assertRecordOwnerWritable(store,recordId);
 }
 export async function assertRecordOwnerRowsWritable(store,before,after){

@@ -411,6 +411,7 @@ export class ResearchMaterials {
   return {columns,columnOffset,columnCount,nextColumn:columnOffset+columns.length<columnCount?columnOffset+columns.length:null,rows};
  }
  async validateDataset(command){
+  if(Object.hasOwn(command,'exchangeImport')){const {validateExchangeImport}=await import('./dataset-exchange-import.js');return validateExchangeImport(this,command);}
   if(command.cusum)return new DatasetCusumResults(this).validate(command);
   if(command.spectrum)return new DatasetSpectrumResults(this).validate(command);
   if(command.uncertainty)return new StatisticalUncertaintyResults(this).validate(command);
@@ -426,7 +427,7 @@ export class ResearchMaterials {
    const base=await this.read(command.baseDataset);if(base.content.calculatorResult)fail('CALCULATOR_RESULT_INVALID');if(base.content.uncertainty)fail('STATISTICAL_UNCERTAINTY_INVALID');if(base.content.spectrum)fail('DATASET_SPECTRUM_INVALID');if(base.content.cusum)fail('DATASET_CUSUM_INVALID');
    if(revisionText(base.content.inputs[0])!==revisionText(artifact)||base.recordId!==recordId)fail();
    if(command.sourceMapping){
-    let mapping=base.content.calculation||base.content.aggregation||base.content.datasetFormat===3&&command.sourceMapping.fieldsInSchema?command.sourceMapping:datasetMapping(command.sourceMapping);
+    let mapping=base.content.exchangeOrigin||base.content.calculation||base.content.aggregation||base.content.datasetFormat===3&&command.sourceMapping.fieldsInSchema?command.sourceMapping:datasetMapping(command.sourceMapping);
     if(base.content.datasetFormat===3&&mapping.fields){const {fields,...rest}=mapping;mapping={...rest,fieldsInSchema:true};if(Array.isArray(fields)){let index=0;for await(const column of this.iterateDatasetColumns(base)){if(revisionText(column.sourceField)!==revisionText(fields[index++]))fail();}if(index!==fields.length)fail();}}
     if(revisionText(mapping)!==revisionText(base.content.sourceMapping??{format:'delimited',delimiter:base.content.delimiter,header:true}))fail();
    }
@@ -440,6 +441,7 @@ export class ResearchMaterials {
   if(!command.baseDataset)for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])if(column.coordinateFrame)await validateCoordinateFrameColumn(this,column);
  }
  async prepareDataset(command,{signal,progress=async()=>{},writePage,jobId=null}={}){
+  if(Object.hasOwn(command,'exchangeImport')){const {prepareExchangeImport}=await import('./dataset-exchange-import.js');return prepareExchangeImport(this,command,{signal,progress,writePage});}
   if(command.cusum)return new DatasetCusumResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.spectrum)return new DatasetSpectrumResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.uncertainty)return new StatisticalUncertaintyResults(this).prepare(command,{signal,progress,writePage,jobId});
@@ -457,7 +459,9 @@ export class ResearchMaterials {
     try{yield* content.read(...args);}catch(error){if(error.code==='MEDIA_INVALID')fail('MATERIAL_MISSING');throw error;}
    }}};
   }
-  return this.prepareDatasetRows(command,{source,base,signal,progress,writePage});
+  const prepared=await this.prepareDatasetRows(command,{source,base,signal,progress,writePage});
+  if(base?.content.exchangeOrigin)prepared.content.exchangeOrigin=base.content.exchangeOrigin;
+  return prepared;
  }
  // Shared bounded builder. Callers validate their ownership contract first:
  // ordinary evidence uses an existing owner; staged imports have not created

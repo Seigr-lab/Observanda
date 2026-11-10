@@ -1,5 +1,6 @@
 import {AnalysisComparisons} from './analysis-comparisons.js';
 import {createComparisonInputReader} from './comparison-input-reader.js';
+import {datasetExchangeJob} from './dataset-exchange-jobs.js';
 // Research owns import semantics; the worker owns durable execution and leases.
 import {ResearchMaterials} from './research-materials.js';
 import {AppError} from './errors.js';
@@ -8,7 +9,7 @@ import {auditLive} from './collaboration/live-audit.js';
 export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
  const materials=new ResearchMaterials(workspace),attempts=new Map();
  const checkpoint=(job,options)=>options.write??(fn=>queue().checkpoint(job.id,job.lease.token,fn));
- return {'analysis.compare':{
+ return {'dataset.exchange':datasetExchangeJob(materials,queue,comparisonAccess),'analysis.compare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
   prepare:async(job,options)=>{
    const workspaceId=(await workspace.outline()).metadata.id,command=job.input.command,refs=materials.comparisons.references(command.method,command.comparison);

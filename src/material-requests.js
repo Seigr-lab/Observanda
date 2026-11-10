@@ -1,5 +1,6 @@
 export {materialRequest} from './material-route-policy.js';
 import {DatasetCusumResults} from './dataset-cusum-results.js';
+import {queueDatasetExchange,datasetExchangeDelivery} from './dataset-exchange-jobs.js';
 import {DatasetSpectrumResults} from './dataset-spectrum-results.js';
 import {coordinateFrameRequest} from './coordinate-frame-requests.js';
 import {StatisticalUncertaintyDefinitions} from './statistical-uncertainty-definitions.js';
@@ -35,6 +36,12 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
  switch(operation){
+ case 'dataset-exchange-start':{
+  const {jobId,...command}=data,service=await jobService();
+  const job=await queueDatasetExchange(materials,service,command,jobId,{signal,sourceAccess,check});
+  service.worker.wake();return {job};
+ }
+ case 'dataset-exchange-download':case 'dataset-exchange-discard':case 'dataset-exchange-status':return datasetExchangeDelivery(materials,await jobService(),operation,data,{signal,check,sourceAccess,download});
  case 'scientific-draft-browse':case 'scientific-draft-list':case 'scientific-draft-read':case 'scientific-draft-write':case 'scientific-draft-discard':{
   const drafts=new ScientificEditDrafts(materials,{check,signal,sourceAccess});
   return drafts[operation.slice('scientific-draft-'.length)](data);
@@ -103,7 +110,11 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'start':return materials.uploads.summary(await materials.startImport(data));
  case 'finish':{if(!storage.vault.key)throw new AppError('ACCESS_LOCKED');const session=await materials.importState(data.id);if(session.batchId)throw new AppError('MATERIAL_CHANGED');await materials.assertOwner(session.recordId);if(materials.uploads.bytes(session)!==session.size)throw new AppError('MATERIAL_INCOMPLETE');const {queue,worker}=await jobService(),job=await queue.enqueue({id:session.id,type:'evidence.finalize',scope:session.recordId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
  case 'plot-job-settings':{const {queue}=await jobService();return plotJobSettings(materials,queue,data,{signal,check});}
- case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
+ case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};
+  if(operation==='retry-job'&&job.type==='dataset.exchange'){
+   const result=await queueDatasetExchange(materials,service,job.input.command,job.id,{sourceAccess,check,signal,retry:true});worker.wake();return {job:result};
+  }
+  const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);
  case 'uncertainty-create':return {ref:await new StatisticalUncertaintyDefinitions(materials).create(data,{signal})};
  case 'uncertainty-change':case 'calculation-graph-change':{

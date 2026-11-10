@@ -141,6 +141,10 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    const text=await readRecordOwnerMetadata(source,name,16*1024*1024);if(text===null)damaged();const value=JSON.parse(text);
    if(classified.direct)await emit({kind:'metadata',name,content:text});
    else await retainAudit(name,text);
+   if(name.startsWith('.observanda/jobs/')&&value.type==='dataset.exchange'&&value.state==='completed'){
+    const {stageRecordOwnerExchange}=await import('./record-owner-dataset-exchanges.js');
+    await stageRecordOwnerExchange(source,target,receipt,value,{write,signal,check,checkpoint});
+   }
    await visitValue(value,item=>inspect(item,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)));
   };
   async function* seeds(){

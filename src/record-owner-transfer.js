@@ -165,6 +165,7 @@ export class RecordOwnerTransfer{
    const {initializeRecordOwnerReclamation}=await import('./record-owner-resources.js');await withRecordOwnerTransferWrite(store,value,()=>initializeRecordOwnerReclamation(store,value));
   }));
   const resumedCandidate=Boolean(value.progress.prepared);
+  let verifiedExchanges=false;
   if(value.phase==='copying'){
    await this.copyHistory(value,{write,signal,checkpoint,save});value=await read();
    const {prepareRecordOwnerEvidence}=await import('./record-owner-evidence.js');
@@ -193,6 +194,9 @@ export class RecordOwnerTransfer{
    const {retainRecordOwnerSourceDrafts}=await import('./record-owner-drafts.js');await retainRecordOwnerSourceDrafts(this.source,this.target,value,{signal,check:checked});
    const targetReceipt=await this.target.catalogue(store=>readRecordOwnerTransfer(store,id));
    if(targetReceipt.phase!=='complete'){
+    const {verifyRecordOwnerExchanges}=await import('./record-owner-dataset-exchanges.js');
+    await verifyRecordOwnerExchanges(this.source,this.target,value,{signal,check:checked});
+    verifiedExchanges=true;
     // A transfer can resume with a candidate prepared by an earlier service.
     // Correct its grants and derived membership before admitting that record.
     const prepared=value.progress.prepared;
@@ -213,6 +217,8 @@ export class RecordOwnerTransfer{
    if(published?.phase!=='complete'||published.fingerprint!==value.fingerprint)throw new AppError('CATALOGUE_DAMAGED');
    await compactRecordOwnerResources(this.target,published,{signal,write,checkpoint});
    await this.retire(value);
+   const {retireRecordOwnerExchanges}=await import('./record-owner-dataset-exchanges.js');
+   await retireRecordOwnerExchanges(this.source,this.target,value,{signal,check:checked,checkpoint,reopened:!verifiedExchanges});
    await checkpoint('source-retired',recordOwnerTransferStatus(value));
    await this.publication.settleRecordMove(this.source,outgoing,{signal});
    await this.publication.settleRecordMove(this.target,incoming,{incoming:true,signal});

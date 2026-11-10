@@ -10,6 +10,7 @@ import {policyScalarText} from './dataset-resource-values.js';
 import {clockScalarText,intervalScalarText} from './dataset-scalar-text.js';
 import {retainDomainValue,domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
 import {DATASET_ROWS_PER_PAGE} from './dataset-row-position.js';
+import {datasetSequenceWindows} from './dataset-sequence-windows.js';
 import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
 // Current retained datasets separate schema, row identities and cell values.
 // All content uses the existing immutable material metadata and sequence index.
@@ -20,7 +21,7 @@ import {schemaReferences,supportedValue} from './web/measurement-model.js';
 import {materialReferenceKey} from './web/material-reference.js';
 import {defaultColumn} from './web/dataset-schema.js';
 import {readPagedDataset} from './dataset-paged-reader.js';
-import {retainDatasetCell,validateDatasetCell,datasetCellReference} from './dataset-cell-storage.js';
+import {retainDatasetCell,validateDatasetCell,datasetCellReference,retainedCellSources} from './dataset-cell-storage.js';
 import {withScratch} from './scratch-work.js';
 import {nativeRowLocator} from './native-mapping.js';
 const fail=(code='MATERIAL_INVALID')=>{throw new AppError(code);};
@@ -33,6 +34,7 @@ export async function* storedDatasetCells(materials,doc,row){
 }
 export async function preparePagedDataset(materials,command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences,validColumns,preparedWrites=false}={}){
  const prepare=materials=>withScratch(async scratch=>{
+ const readSchema=datasetSequenceWindows(materials);
  const save=fn=>fn(),pages=materials.sequences.builder('pages',save),schemaInputs=materials.sequences.builder('references',save);
  const nativeMapping=command.nativeMapping??base?.content.nativeMapping,nativeSize=nativeMapping?(declaredNativeSize??(await materials.read(nativeMapping.artifact)).content.size):null;
  const nativeColumns=nativeMapping?[...new Set(['offsetColumn','lengthColumn','pointerColumn','idColumn'].map(k=>nativeMapping[k]).filter(v=>v!==null))]:[];
@@ -58,7 +60,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
   const native={columnIndices:nativeColumns,cells:[],valueKinds:[]},builder=materials.sequences.builder('cells',save);let index=0,cached=[],cachedOffset=0;
   async function* supplied(){if(typeof item.cells==='function')yield* item.cells();else for(let i=0;i<item.cells.length;i++)yield {value:item.cells[i],kind:item.valueKinds?.[i]??'string',...(item.cellPointers?{pointer:item.cellPointers[i]}:{}),...(item.cellSources?.[i]?{sources:item.cellSources[i]}:{}),...(item.cellComputations?.[i]!==undefined?{computation:item.cellComputations[i]}:{}),...(item.cellCoordinateAlignments?.[i]?{coordinateAlignment:item.cellCoordinateAlignments[i]}:{})};}
   for await(const raw of supplied()){
-   if(index>=width)fail();if(index%16===0){cachedOffset=index;cached=(await materials.sequences.page(schemaIndex,{offset:index,limit:16})).items;}
+   if(index>=width)fail();if(index%16===0){cachedOffset=index;cached=await readSchema(schemaIndex,index,16);}
    const column=cached[index-cachedOffset],supplied=domainValueReference(raw.value)&&(column.representation!=='domain'||revisionText(raw.value.definition)!==revisionText(column.domain))?{...raw,value:raw.value.original}:raw;let cell=await retainDatasetCell(materials,supplied,save);if(!!cell.coordinateAlignment!==!!column.coordinateAlignment)fail();if(cell.coordinateAlignment){await verifyCoordinateAlignment(materials,cell.coordinateAlignment,{column:column.coordinateAlignment,signal});}if(perCellComputation(column))resolveCellComputation(column,cell);hasCellComputations||=Object.hasOwn(cell,'computation');
    if(column.representation==='domain'&&!['null','absent'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))cell={...cell,value:await retainDomainValue(materials,cell,column.domain,save,{signal})};
    if(!['null','absent'].includes(cell.kind)){
@@ -91,7 +93,7 @@ export async function projectDatasetRows(materials,doc,rows,columns){
   if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');}
   for(const index of columns){let cell;if(doc.content.datasetFormat===3){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}cell=validateDatasetCell(materials,cached[index-start]);}
    else cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string',pointer:row.cellPointers?.[index],sources:row.cellSources?.[index]};
-   cells.push(cell.value);valueKinds.push(cell.kind);cellPointers.push(cell.pointer??null);cellSources.push(cell.sources??null);cellLineages.push(cell.lineage??null);cellComputations.push(cell.computation);cellCoordinateAlignments.push(cell.coordinateAlignment);
+   cells.push(cell.value);valueKinds.push(cell.kind);cellPointers.push(cell.pointer??null);cellSources.push(retainedCellSources(doc,row,cell));cellLineages.push(cell.lineage??null);cellComputations.push(cell.computation);cellCoordinateAlignments.push(cell.coordinateAlignment);
   }
   const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,cellLineages,cellComputations,...(cellCoordinateAlignments.some(Boolean)?{cellCoordinateAlignments}:{}),columnIndices:columns});
  }

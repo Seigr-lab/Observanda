@@ -26,8 +26,14 @@ export function projectSourceJobOwner(store,inventory,record,{signal}={}){
   if(id.startsWith('metadata:.observanda/dataset-jobs/'))return store.workspace.inspectCatalogue(store,()=>projectJobDiscoveryOwner(store,queue,record,id));
   const aggregation=/^metadata:\.observanda\/materials\/aggregation-work\/([a-f0-9-]{36})\.json$/.exec(id);
   const numerical=/^metadata:\.observanda\/materials\/numerical-work\/([a-f0-9-]{36})\.json$/.exec(id);
-  if(!id.startsWith(root)&&!aggregation&&!numerical)return null;
+  const exchange=/^metadata:\.observanda\/dataset-exchange-candidates\/([a-f0-9-]{36})\.json$/.exec(id);
+  if(!id.startsWith(root)&&!aggregation&&!numerical&&!exchange)return null;
   return store.workspace.inspectCatalogue(store,async()=>{
+   if(exchange){
+    const current=await queue.read(exchange[1]),{readExchangeCandidate}=await import('./dataset-exchange-jobs.js');
+    if(!current||!await readExchangeCandidate(store.workspace,current))damaged();
+    return job(current.id);
+   }
    signal?.throwIfAborted();
    if(numerical){const current=await queue.read(numerical[1]),command=current?.input?.command,kind=command?.cusum===undefined?'spectrum':'cusum',recipe=command?.[kind];if(current?.type!=='dataset.prepare'||(kind==='cusum'?command.spectrum!==undefined||!validCusumRecipe(recipe):![2,3].includes(recipe?.version)||!validSpectrumRecipe(recipe)))damaged();if(kind==='spectrum'&&recipe.version===3)await assertSpectralMethodsFormat(store.workspace);const validCursor=kind==='cusum'?validCusumExecutionCursor:validSpectrumExecutionCursor,work=new NumericalExecutionWork(new ResearchMaterials(store.workspace),command,{kind,jobId:current.id,signal,validCursor:value=>validCursor(value,recipe.range.count,kind==='spectrum'&&recipe.version===3?{version:3,method:recipe.method,window:recipe.window,frequencyCount:recipe.frequencyGrid?.count,missing:recipe.missing,excluded:recipe.excluded}:undefined)});if(!await work.read())damaged();return job(current.id);}
    if(aggregation){const current=await queue.read(aggregation[1]);if(current?.type!=='dataset.prepare'||!current.input.command?.aggregation)damaged();const materials=new ResearchMaterials(store.workspace),source=await materials.read(current.input.command.aggregation.source),work=await new AggregationWork(materials,current.input.command,{jobId:current.id,signal}).open(source.content.rowCount);if(!work.saved)damaged();return job(current.id);}

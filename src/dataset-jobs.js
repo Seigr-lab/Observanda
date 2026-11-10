@@ -39,8 +39,8 @@ export async function datasetJobs(materials,queue,recordId,options={}){
  const feed=new MetadataFeed(materials.workspace,source(recordId)),page=await feed.page(options),items=[];
  for(const item of page.items){
   const job=await queue.read(item.id);
-  if(!job||!['dataset.prepare','figure.calculate','analysis.compare'].includes(job.type)||job.scope!==recordId)throw new AppError('JOB_DAMAGED');
-  items.push({...jobSummary(job),title:job.input.command.title});
+  if(!job||!['dataset.prepare','figure.calculate','analysis.compare','dataset.exchange'].includes(job.type)||job.scope!==recordId)throw new AppError('JOB_DAMAGED');
+  items.push({...jobSummary(job),title:job.input.command.title??null});
  }
  return {items,next:page.next};
 }

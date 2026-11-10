@@ -19,7 +19,7 @@ export async function materialHttp(req,res,request,{contextId,body,json,execute}
  const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);
  const download=async({doc,content,name,contentType,chunks})=>{
   if(chunks){
-   if(typeof chunks[Symbol.asyncIterator]!=='function'||typeof name!=='string'||!['image/svg+xml','text/csv; charset=utf-8','application/json; charset=utf-8'].includes(contentType))throw new AppError('INVALID');
+   if(typeof chunks[Symbol.asyncIterator]!=='function'||typeof name!=='string'||!['image/svg+xml','text/csv; charset=utf-8','application/json; charset=utf-8','application/zip'].includes(contentType))throw new AppError('INVALID');
    res.setHeader('Content-Disposition',"attachment; filename*=UTF-8''"+encodeURIComponent(name));res.setHeader('Content-Type',contentType);res.setHeader('X-Content-Type-Options','nosniff');
    for await(const chunk of chunks){controller.signal.throwIfAborted();if(!res.write(chunk))await once(res,'drain',{signal:controller.signal});}
    controller.signal.throwIfAborted();res.end();return;
