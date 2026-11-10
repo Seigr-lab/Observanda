@@ -25,5 +25,8 @@
   "requiredPassword": "Angi et passord på minst 12 tegn for å beskytte denne labboken. Enhetsbeskyttelse er utilgjengelig på denne datamaskinen.",
   "confirmPassword": "Bekreft labbokpassord",
   "passwordMismatch": "Passordene er ikke like.",
-  "cancel": "Avbryt"
+  "cancel": "Avbryt",
+  "conversionTitle": "Gjør om til en laboratoriebok",
+  "conversionOffer": "Gi denne boken sin egen lagring som laboratoriebok. Oppføringene, historikken, originalene, datasettene, figurene, lenkene og delingsstatusen flyttes med.",
+  "conversionReview": "Se gjennom omgjøringen"
 }

@@ -1,7 +1,4 @@
 {
-  "title": "Convertir en un cuaderno de laboratorio",
-  "offer": "Dar a este cuaderno su propio almacenamiento de cuaderno de laboratorio. Sus registros, historial, originales, conjuntos de datos, figuras, enlaces y estado de compartición se trasladan con él.",
-  "open": "Revisar la conversión",
   "records": {
     "one": "Se trasladará {count} registro.",
     "other": "Se trasladarán {count} registros."

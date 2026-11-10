@@ -1,7 +1,4 @@
 {
-  "title": "Convert into a lab book",
-  "offer": "Give this book its own lab book storage. Its records, history, originals, datasets, figures, links and sharing state move with it.",
-  "open": "Review conversion",
   "records": {
     "one": "{count} record will move.",
     "other": "{count} records will move."

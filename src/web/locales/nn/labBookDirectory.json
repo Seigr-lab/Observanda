@@ -25,5 +25,8 @@
   "requiredPassword": "Set eit passord på minst 12 teikn for å verne denne labboka. Einingsvern er ikkje tilgjengeleg på denne datamaskina.",
   "confirmPassword": "Stadfest labbokpassord",
   "passwordMismatch": "Passorda er ikkje like.",
-  "cancel": "Avbryt"
+  "cancel": "Avbryt",
+  "conversionTitle": "Gjer om til ei laboratoriebok",
+  "conversionOffer": "Gi denne boka si eiga lagring som laboratoriebok. Oppføringane, historikken, originalane, datasetta, figurane, lenkjene og delingsstatusen blir flytta med.",
+  "conversionReview": "Sjå gjennom omgjeringa"
 }

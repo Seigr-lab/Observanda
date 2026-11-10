@@ -1,7 +1,4 @@
 {
-  "title": "Converteix en un quadern de laboratori",
-  "offer": "Dona a aquest quadern el seu propi emmagatzematge de quadern de laboratori. Els registres, l'historial, els originals, els conjunts de dades, les figures, els enllaços i l'estat de compartició s'hi traslladen.",
-  "open": "Revisa la conversió",
   "records": {
     "one": "Es traslladarà {count} registre.",
     "other": "Es traslladaran {count} registres."

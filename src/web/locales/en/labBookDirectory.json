@@ -25,5 +25,8 @@
   "requiredPassword": "Set a password of at least 12 characters to protect this lab book. Device protection is unavailable on this computer.",
   "confirmPassword": "Confirm lab book password",
   "passwordMismatch": "The passwords do not match.",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "conversionTitle": "Convert into a lab book",
+  "conversionOffer": "Give this book its own lab book storage. Its records, history, originals, datasets, figures, links and sharing state move with it.",
+  "conversionReview": "Review conversion"
 }

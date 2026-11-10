@@ -25,5 +25,8 @@
   "requiredPassword": "Establece una contraseña de al menos 12 caracteres para proteger este cuaderno de laboratorio. La protección por dispositivo no está disponible en este ordenador.",
   "confirmPassword": "Confirmar la contraseña del cuaderno de laboratorio",
   "passwordMismatch": "Las contraseñas no coinciden.",
-  "cancel": "Cancelar"
+  "cancel": "Cancelar",
+  "conversionTitle": "Convertir en un cuaderno de laboratorio",
+  "conversionOffer": "Dar a este cuaderno su propio almacenamiento de cuaderno de laboratorio. Sus registros, historial, originales, conjuntos de datos, figuras, enlaces y estado de compartición se trasladan con él.",
+  "conversionReview": "Revisar la conversión"
 }

@@ -11,7 +11,7 @@ import {locationToolsView,locationTools} from './modules/location-tools.js';
 import {locationToolCounts} from './modules/location-tool-counts.js';
 import {ancestors,childrenOf,locationName} from './workspace-structure.js';
 import {projectNotebooksUI} from './project-notebooks.js';
-import {bookConversionUI} from './book-conversion-ui.js';
+import {bookConversionEntry} from './book-conversion-offer.js';
 import {createDataSession,workspaceData} from './data-registry.js';
 import {defaultPanelConfig} from './dashboard-model.js';
 import { identityFields, identityFromForm } from './workspace-identity.js';
@@ -22,7 +22,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   const projectDeletion=projectDeletionUI({state,api,accessProject,esc,field,showDialog,enterProject,render,refreshDirectory:()=>projectDirectory.refresh()});
   const projectMoves=projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProject,refreshDirectory:()=>projectDirectory.refresh()});
   const projectStorage=projectStorageUI({state,api,esc,field,showDialog,accessProject,projectDirectory,rootBook,projectRoot:id=>projectDirectory.entries().find(entry=>entry.projectId===id)?.root,deleteProject:entry=>projectDeletion.confirm(entry),moved:async(result,targetPath)=>{await enterProject(null);state.page='projects';state.project=null;location.hash='#/projects';projectMoves.completed(result,targetPath);render();}});
-  const bookConversion=bookConversionUI({state,api,esc,field,showDialog,notify,report:error=>notify(error.message,true),refresh:async(projectId,labBookId)=>{await labBookDirectory.refresh(projectId);await enterProject(projectId,labBookId);render();}});
+  const bookConversion=bookConversionEntry({state,api,esc,field,showDialog,notify,report:error=>notify(error.message,true),refresh:async(projectId,labBookId)=>{await labBookDirectory.refresh(projectId);await enterProject(projectId,labBookId);render();}});
   const labNotebooks=projectNotebooksUI({state,api,esc,field,option,showDialog,render,notify,projectDirectory,labBookDirectory,accessProject,enterProject,rootBook,bookConversion});
   const ownedRecent=projectRecentRecords({state,api,access:accessProject,esc,table:recordsTable});
   const toolCounts=locationToolCounts({state,api,esc});

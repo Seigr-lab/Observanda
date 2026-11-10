@@ -1,7 +1,4 @@
 {
-  "title": "Gjør om til en laboratoriebok",
-  "offer": "Gi denne boken sin egen lagring som laboratoriebok. Oppføringene, historikken, originalene, datasettene, figurene, lenkene og delingsstatusen flyttes med.",
-  "open": "Se gjennom omgjøringen",
   "records": {
     "one": "{count} oppføring flyttes.",
     "other": "{count} oppføringer flyttes."

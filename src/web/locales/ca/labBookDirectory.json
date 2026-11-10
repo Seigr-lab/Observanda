@@ -25,5 +25,8 @@
   "requiredPassword": "Estableix una contrasenya de 12 caràcters com a mínim per protegir aquest llibre de laboratori. La protecció del dispositiu no està disponible en aquest ordinador.",
   "confirmPassword": "Confirma la contrasenya del llibre de laboratori",
   "passwordMismatch": "Les contrasenyes no coincideixen.",
-  "cancel": "Cancel·la"
+  "cancel": "Cancel·la",
+  "conversionTitle": "Converteix en un quadern de laboratori",
+  "conversionOffer": "Dona a aquest quadern el seu propi emmagatzematge de quadern de laboratori. Els registres, l'historial, els originals, els conjunts de dades, les figures, els enllaços i l'estat de compartició s'hi traslladen.",
+  "conversionReview": "Revisa la conversió"
 }

@@ -3,18 +3,14 @@
 // never decides on its own which records move: the server reads both stores.
 import {t} from './i18n/index.js';
 import './i18n/catalogues/bookConversion.js';
+import {conversionProject} from './book-conversion-offer.js';
 
-const text=(key,values)=>t('bookConversion',key,values);
+const text=(key,values)=>t('bookConversion',key,values),title=()=>t('labBookDirectory','conversionTitle');
 
 export function bookConversionUI({state,api,esc,field,showDialog,notify,report,refresh}){
  let busy=false,plan=null,progress=null;
  const route=(projectId,operation)=>'/api/projects/'+projectId+'/research/books/convert/'+operation;
- const ownerProject=()=>state.projectOwner&&!state.projectOwner.labBookId?state.projectOwner.projectId:null;
- // Only an ordinary book of a project that has its own store can be converted.
- function offer(book){
-  if(!book?.id||!ownerProject()||book.projectId!==ownerProject())return '';
-  return `<section class="panel book-conversion-offer"><h3>${esc(text('title'))}</h3><p>${esc(text('offer'))}</p><button type="button" class="button" data-action="book-convert-open" data-id="${esc(book.id)}">${esc(text('open'))}</button></section>`;
- }
+ const ownerProject=()=>conversionProject(state);
  const status=conversion=>conversion?`<p role="status">${esc(text('phase_'+conversion.phase,{records:conversion.records,moved:conversion.moved??0}))}</p>`:'';
  function view(){
   const conversion=plan.conversion,phase=conversion?.phase,unfinished=plan.unfinished??[];
@@ -26,13 +22,13 @@ export function bookConversionUI({state,api,esc,field,showDialog,notify,report,r
   const access=!conversion||phase==='returned'?`<fieldset><legend>${esc(t('labBookDirectory','creationAccess'))}</legend><p>${esc(t('labBookDirectory',state.access?.deviceAvailable?'optionalPassword':'requiredPassword'))}</p>${field(t('labBookDirectory','creationUsername'),'<input name="username" autocomplete="username" maxlength="80">')}${field(t('labBookDirectory','creationPassword'),`<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" ${state.access?.deviceAvailable?'':'required'}>`)}${field(t('labBookDirectory','confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="1024">')}</fieldset>`:'';
   const actions=!conversion||phase==='returned'?`<button class="button primary" ${busy?'disabled':''}>${esc(text('start'))}</button>`:
    ['moving','verified','returning'].includes(phase)?`<button type="button" class="button primary" data-action="book-convert-resume" ${busy?'disabled':''}>${esc(text(phase==='returning'?'resumeReturn':'resume'))}</button>${phase!=='returning'?`<button type="button" class="button" data-action="book-convert-return" ${busy?'disabled':''}>${esc(text('return'))}</button>`:''}`:'';
-  showDialog(`<form id="book-conversion-form" data-no-draft><h2 id="dialog-title">${esc(text('title'))}</h2><p><strong>${esc(plan.notebook.title)}</strong></p>
+  showDialog(`<form id="book-conversion-form" data-no-draft><h2 id="dialog-title">${esc(title())}</h2><p><strong>${esc(plan.notebook.title)}</strong></p>
    <p>${esc(text('records',{count:plan.records}))}</p><p>${esc(text('explain'))}</p>${unfinishedList}${status(conversion)}${conversion?.blocked?.length?`<p role="alert">${esc(text('blocked',{count:conversion.blocked.length}))}</p>`:''}${report}${running}${access}
    <p data-book-conversion-error role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">${esc(text('close'))}</button>${actions}</div></form>`);
  }
  async function load(notebookId){
   // Opening the plan reads the book's store; show the dialog at once while it does.
-  showDialog(`<section><h2 id="dialog-title">${esc(text('title'))}</h2><p role="status" aria-live="polite">${esc(text('loading'))}</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">${esc(text('close'))}</button></div></section>`);
+  showDialog(`<section><h2 id="dialog-title">${esc(title())}</h2><p role="status" aria-live="polite">${esc(text('loading'))}</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">${esc(text('close'))}</button></div></section>`);
   plan=await api(route(ownerProject(),'plan'),{workspaceId:state.book.id,notebookId},{adopt:false});view();
  }
  function failed(error){
@@ -67,5 +63,5 @@ export function bookConversionUI({state,api,esc,field,showDialog,notify,report,r
   if(password!==confirm){failed({message:t('labBookDirectory','passwordMismatch')});return true;}
   await run('start',{id:crypto.randomUUID(),username,password});return true;
  }
- return {offer,action,submit};
+ return {action,submit};
 }
