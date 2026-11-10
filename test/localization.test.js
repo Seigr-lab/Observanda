@@ -48,11 +48,13 @@ test('fallback, named parameters and plural messages do not reinterpret record v
  assert.equal(resolveLanguage('nn-NO'),'nn');assert.equal(resolveLanguage('nb_NO'),'nb');assert.equal(resolveLanguage('unknown'),'en');
 });
 test('language loading is atomic and an interrupted resource can be retried',async()=>{
- activateLanguage('en');let count=0;
- const fetcher=async url=>{count++;if(url.pathname.endsWith('/help.json'))return {ok:false};return {ok:true,json:()=>json('ca',path.basename(url.pathname,'.json'))};};
+ activateLanguage('en');let failedReads=0,retryReads=0;
+ const shipped=MESSAGE_NAMESPACES.filter(n=>catalogueLanguages(n).includes('ca')).length;
+ const fetcher=async url=>{failedReads++;if(url.pathname.endsWith('/help.json'))return {ok:false};return {ok:true,json:()=>json('ca',path.basename(url.pathname,'.json'))};};
  await assert.rejects(prepareLanguage('ca',{fetcher}));assert.equal(language(),'en');assert.equal(t('preferences','title'),'Preferences');
- await prepareLanguage('ca',{fetcher:async url=>({ok:true,json:()=>json('ca',path.basename(url.pathname,'.json'))})});
- activateLanguage('ca');assert.equal(t('preferences','title'),'Preferències');assert.equal(count,MESSAGE_NAMESPACES.filter(n=>catalogueLanguages(n).includes('ca')).length);
+ assert.ok(failedReads<shipped,'A failed language load stops requesting further catalogues');
+ await prepareLanguage('ca',{fetcher:async url=>{retryReads++;return {ok:true,json:()=>json('ca',path.basename(url.pathname,'.json'))};}});
+ activateLanguage('ca');assert.equal(t('preferences','title'),'Preferències');assert.equal(retryReads,shipped,'A retry loads every shipped catalogue once');
  assert.equal(t('access','unlock'),(await json('ca','access')).unlock);assert.equal(messageLanguage('access'),'ca');assert.equal(messageLanguage('help'),'ca');
  activateLanguage('en');await assert.rejects(prepareLanguage('../private'),/Unsupported/);
 });
