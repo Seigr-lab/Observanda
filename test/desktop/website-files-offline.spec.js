@@ -53,6 +53,19 @@ test('desktop website editing, persistence, preview and folder publication with 
   const appearance=page.getByRole('dialog',{name:'Site appearance'});await appearance.getByRole('combobox',{name:'Heading font',exact:true}).selectOption('serif');
   await expect(appearance.frameLocator('iframe').locator('h1').first()).toHaveCSS('font-family',/Georgia/);
   await appearance.getByRole('button',{name:'Apply to website'}).click();await expect(appearance).not.toBeVisible();
+  phase='design the Methods folder independently';await page.locator('[data-website-file-page]').selectOption('methods/index.html');
+  await page.getByRole('button',{name:'Themes',exact:true}).click();const themes=page.getByRole('dialog',{name:'Themes'});
+  await themes.getByRole('combobox',{name:'Theme library',exact:true}).selectOption('');await themes.getByLabel('Theme name').fill('Instrument methods');
+  await themes.getByRole('combobox',{name:'Palette',exact:true}).selectOption('night');
+  await themes.getByRole('combobox',{name:'Heading font',exact:true}).selectOption('serif');await themes.getByRole('combobox',{name:'Apply to',exact:true}).selectOption('folder');
+  await themes.getByRole('button',{name:'Save theme',exact:true}).click();await expect(themes).not.toBeVisible();
+  await expect(canvas.locator('body')).toHaveCSS('background-color','rgb(24, 35, 44)');
+  phase='edit an instrument note in split view';await page.getByRole('button',{name:'Canvas and code',exact:true}).click();
+  const sourceCode=page.getByRole('textbox',{name:'HTML',exact:true}),markup=await sourceCode.inputValue();
+  await sourceCode.fill(markup.replace('</main>','<aside id="instrument-note"><p>Detection limit at 526 nm.</p></aside></main>'));
+  await expect(canvas.locator('#instrument-note')).toContainText('Detection limit at 526 nm.');
+  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await page.locator('[data-website-file-page]').selectOption('index.html');await expect(canvas.locator('h1')).toHaveText('Saved HTML acceptance');
   phase='author gallery offline';await page.getByRole('button',{name:'Image gallery',exact:true}).click();
   await page.locator('[data-gallery-files]').setInputFiles(path.resolve('src/preview-assets/image.png'));
   await page.locator('[data-gallery-field="alt"]').fill('Test photograph');await page.locator('[data-gallery-field="caption"]').fill('Recorded observation');
@@ -64,7 +77,8 @@ test('desktop website editing, persistence, preview and folder publication with 
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(output);await page.getByRole('button',{name:'Review file changes',exact:true}).click();
   await page.locator('[data-website-file-folder-confirm]').check();await page.getByRole('button',{name:'Write reviewed files',exact:true}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:60000});
   expect(await readFile(path.join(output,'index.html'),'utf8')).toBe(previewBytes);expect(previewBytes).toContain('release-this-result');expect(previewBytes).not.toMatch(/withdraw-this-result|never-export-this-canary|Private appendix/);
-  server=createServer(async(req,res)=>{const file=req.url==='/'?'index.html':/^\/(?:style\.css|website-appearance\.css|methods\/index\.html|public-gallery\.(?:js|css)|pictures\/[a-f0-9-]{36}\.png)$/.test(req.url)?req.url.slice(1):null;if(!file){res.writeHead(404).end();return;}try{res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':file.endsWith('.png')?'image/png':'text/html; charset=utf-8'}).end(await readFile(path.join(output,file)));}catch{res.destroy();}});
+  const mediaTypes={'.css':'text/css','.js':'application/javascript','.png':'image/png','.html':'text/html; charset=utf-8','.wav':'audio/wav'};
+  server=createServer(async(req,res)=>{const file=req.url==='/'?'index.html':/^\/(?:style\.css|website-appearance\.css|website-themes\/[a-f0-9-]{36}\.css|methods\/index\.html|public-gallery\.(?:js|css)|pictures\/[a-f0-9-]{36}\.png|recordings\/[a-f0-9-]{36}\.wav)$/.test(req.url)?req.url.slice(1):null;if(!file){res.writeHead(404).end();return;}try{res.writeHead(200,{'Content-Type':mediaTypes[path.extname(file)]}).end(await readFile(path.join(output,file)));}catch{res.destroy();}});
   await new Promise((resolve,reject)=>server.once('error',reject).listen(0,'127.0.0.1',resolve));browser=await chromium.launch();const publicPage=await browser.newPage();await publicPage.goto('http://127.0.0.1:'+server.address().port+'/');
   await expect(publicPage.getByText('Edited with PostgreSQL offline.',{exact:true})).toHaveCSS('color','rgb(21, 43, 65)');
   await expect(publicPage.locator('math mfrac')).toBeVisible();await expect(publicPage.locator('p sub')).toHaveText('2');await expect(publicPage.locator('cite')).toHaveText('Transmission calibration protocol');
@@ -72,6 +86,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   await expect(publicPage.locator('p sup')).toHaveText('2');await expect(publicPage.locator('h1')).toHaveCSS('font-family',/Georgia/);
   if(process.env.OBSERVANDA_WEBSITE_LAYOUT_ARCHIVE==='1')await test.info().attach('published-website',{body:await publicPage.screenshot(),contentType:'image/png'});
   await publicPage.locator('nav a').filter({hasText:'Methods'}).click();await expect(publicPage.getByRole('heading',{name:'Methods'})).toHaveCSS('font-family',/Georgia/);
+  await expect(publicPage.locator('body')).toHaveCSS('background-color','rgb(24, 35, 44)');await expect(publicPage.locator('#instrument-note')).toContainText('Detection limit at 526 nm.');
   // Fail on any newly introduced API dependency, including a background poll
   // whose failed database read was swallowed by the application.
   const allowed=route=>route.startsWith('/api/website-files/')||['/api/session','/api/access/status','/api/language','/api/interface'].includes(route);

@@ -15,6 +15,8 @@ async function addInstrumentPlates(page){
  if(!await add.isVisible())await tools.locator('summary').click();
  await add.click();await page.getByLabel('Page title',{exact:true}).fill('Instrument plates');
  await page.getByLabel('Page file name',{exact:true}).fill('atlas/plates.html');
+ // New pages start as private drafts; this page belongs in the publication.
+ await page.getByRole('combobox',{name:'Publication',exact:true}).selectOption('included');
  await page.locator('[data-website-files-form] button[type=submit]').click();
  await page.locator('[data-website-file-block]').selectOption('feed');await page.getByRole('button',{name:'Insert element',exact:true}).click();
  const dialog=page.locator('dialog[data-website-feed-dialog]');

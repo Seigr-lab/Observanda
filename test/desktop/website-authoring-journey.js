@@ -18,9 +18,11 @@ export async function authorSite(page){
 
  await click('new-page');await page.getByLabel('Page title',{exact:true}).fill('Methods');
  await page.getByLabel('Page file name',{exact:true}).fill('methods/index.html');
+ // New pages start as private drafts; this page belongs in the publication.
+ await page.getByRole('combobox',{name:'Publication',exact:true}).selectOption('included');
  await page.locator('[data-website-files-form] button[type=submit]').click();
  await expect(canvas.getByRole('heading',{name:'Methods'})).toBeVisible();
- await click('menu');await click('menu-add');
+ await page.getByRole('button',{name:'Website menu',exact:true}).click();await click('menu-add');
  const row=page.locator('[data-menu-row]').last();await row.locator('[data-menu-field=label]').fill('Methods');
  await row.locator('[data-menu-field=href]').fill('methods/index.html');await click('menu-save');await click('menu-cancel');
  await page.locator('[data-website-file-page]').selectOption('index.html');await expect(paragraph).toBeVisible();
