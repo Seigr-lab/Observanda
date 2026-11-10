@@ -4,6 +4,7 @@ import {recordDraftPreview} from './record-draft-preview.js';
 import {recordDraftRecords} from './record-draft-records.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';
+import {language as appLanguage} from './i18n/index.js';
 const text=(key,args)=>t('recordDrafts',key,args);
 const validItem=item=>item&&researchId(item.id)&&revisionId(item.revision)&&typeof item.updatedAt==='string'&&Number.isFinite(Date.parse(item.updatedAt))&&Number.isSafeInteger(item.count)&&item.count>0&&Array.isArray(item.titles)&&item.titles.length===Math.min(item.count,3)&&item.titles.every(title=>typeof title==='string'&&title.length<=160);
 // Discovery owns one page. No checkpoint body is loaded until Review draft.
@@ -25,7 +26,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
  function renderPage(){
   const rows=page.drafts.map(item=>'<section class="record-draft-row"><h3>'+item.titles.map(title=>esc(title||text('untitled'))).join(' · ')+'</h3>'+
    (item.count>item.titles.length?'<p>'+esc(text('additional',{count:item.count-item.titles.length}))+'</p>':'')+
-   '<p>'+esc(text('checkpointedAt',{date:new Date(item.updatedAt).toLocaleString()}))+'</p><div class="inline-actions">'+button('review','review','data-id="'+item.id+'"')+button('discard','discard','data-id="'+item.id+'"')+'</div></section>').join('');
+   '<p>'+esc(text('checkpointedAt',{date:new Date(item.updatedAt).toLocaleString(appLanguage())}))+'</p><div class="inline-actions">'+button('review','review','data-id="'+item.id+'"')+button('discard','discard','data-id="'+item.id+'"')+'</div></section>').join('');
   frame((rows||'<p role="status">'+esc(text('empty'))+'</p>')+'<p>'+esc(text('live'))+'</p>','<nav class="inline-actions" aria-label="'+esc(text('pages'))+'">'+button('previous','previous',page.previousCursor?'':'disabled')+button('next','next',page.nextCursor?'':'disabled')+button('refresh','refresh')+'</nav>');
  }
  async function load(next=null,{preview=false,focus=null}={}){

@@ -2,6 +2,7 @@ import './i18n/catalogues/evidenceUpload.js';
 import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {matchingUploadPrefix} from './evidence-fingerprint.js';
 import {t} from './i18n/index.js';
+import {language as appLanguage} from './i18n/index.js';
 export const uploadText=(key,args)=>t('evidenceUpload',key,args);
 export function evidenceUploadUI({route=value=>value,call,frame,esc,field,button,guard,owner,context,sourceMount,sources,watchJob}){
  let session=null,controller=null,busy=false;
@@ -11,7 +12,7 @@ export function evidenceUploadUI({route=value=>value,call,frame,esc,field,button
   session=current;
   frame(uploadText(current?'resumeHeading':'heading'),'<p>'+esc(uploadText('introduction'))+'</p>'+
    field(esc(uploadText(current?'sameFile':'file')),'<input id="material-file" type="file">')+
-   (!current?field(esc(uploadText('provenance')),'<textarea id="material-provenance" rows="3"></textarea>'):'<p>'+esc(current.name)+' · '+esc(uploadText('bytes',{count:current.size.toLocaleString()}))+'</p>')+
+   (!current?field(esc(uploadText('provenance')),'<textarea id="material-provenance" rows="3"></textarea>'):'<p>'+esc(current.name)+' · '+esc(uploadText('bytes',{count:current.size.toLocaleString(appLanguage())}))+'</p>')+
    (!current?'<div id="material-picker-parent"><input type="hidden" data-value value=""></div>':'')+
    '<p id="material-progress" role="status" aria-live="polite"></p><progress id="material-meter" value="0" max="1" aria-label="'+esc(uploadText('progress'))+'"></progress>'+
    '<div class="inline-actions">'+button(uploadText(current?'resume':'import'),'upload')+button(uploadText('pause'),'pause','disabled')+'</div>');
@@ -35,7 +36,7 @@ export function evidenceUploadUI({route=value=>value,call,frame,esc,field,button
    if(!await matchingUploadPrefix(file,session,{signal,progress:n=>meter(file.size?n/file.size:1)}))throw Error(uploadText('different'));
    async function* chunks(){for(let index=session.receivedChunks;index<Math.ceil(file.size/session.chunkSize);index++)yield {id:session.id,index,blob:file.slice(index*session.chunkSize,(index+1)*session.chunkSize)};}
    await uploadEvidenceChunks(chunks(),{route,context:currentContext,signal,check:live,uploaded:(_chunk,saved)=>{
-    session=saved;progress(uploadText('received',{received:session.receivedBytes.toLocaleString(),total:file.size.toLocaleString()}));meter(file.size?session.receivedBytes/file.size:1);
+    session=saved;progress(uploadText('received',{received:session.receivedBytes.toLocaleString(appLanguage()),total:file.size.toLocaleString(appLanguage())}));meter(file.size?session.receivedBytes/file.size:1);
    }});
    live();progress(uploadText('queueing'));const result=await call('finish',{id:session.id},{signal});live();await watchJob(result.job);
   }catch(error){

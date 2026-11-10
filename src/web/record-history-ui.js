@@ -3,6 +3,7 @@ import {recordChanges,recordRevisionView,recordRevisionComparison} from './recor
 import {t} from './i18n/index.js';
 import {historyReadingPage,historyReadingControls} from './record-history-reading.js';
 import {resultStatementAnchor} from './figure-result-links.js';
+import {language as appLanguage} from './i18n/index.js';
 
 export function recordHistoryUI({state,api,esc,showDialog,notify,revisions,onRestore}){
  const media={assetUrl:id=>ownedAssetURL(state,'/api/media/'+id)};
@@ -16,7 +17,7 @@ export function recordHistoryUI({state,api,esc,showDialog,notify,revisions,onRes
  const command=extra=>({workspaceId,recordId:owner,...extra});
  const guard=()=>{if(context!==state.storage?.contextId||workspaceId!==state.book?.id||owner!==state.selected||!['editor','record-reader'].includes(state.page)||state.access?.locked)throw Error(message('reopen'));};
  const frame=(title,body,actions)=>{showDialog(`<div class="record-history"><h2 id="dialog-title" tabindex="-1">${esc(title)}</h2><div class="record-history-content" tabindex="0">${body}</div><div class="dialog-actions">${actions}</div></div>`);document.querySelector('.record-history h2')?.focus();};
- const date=v=>new Date(v).toLocaleString();
+ const date=v=>new Date(v).toLocaleString(appLanguage());
  async function list(cursor=pageCursor){
   controller?.abort();const request=new AbortController(),stamp=++epoch;controller=request;
   try{

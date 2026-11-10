@@ -6,6 +6,7 @@ import {documentEditors} from './document-editor.js';
 import {recordStarterCapture} from './record-starter-capture.js';
 import {recordStarterPages} from './record-starter-pages.js';
 import {sha256} from './vendor/sha256.js';
+import {language as appLanguage} from './i18n/index.js';
 const msg=(key,args)=>t('recordStarters',key,args);
 export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sourceRecord=()=>null}){
  let context,workspaceId,generation=0,requesting=false,items=[],next=null,pageCursor=null,previousPages=[],current=null,versions=[],historyCursor=null,selected=null,notebookId=null,imported=null,source=null,newBody='';
@@ -50,7 +51,7 @@ export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sou
  async function importReview(){const view=await request('packageView',{uploadId:imported.uploadId,offset:0}),body=await request('packageField',{uploadId:imported.uploadId,field:'body',position:0});frame(msg('importReview'),'<form id="starter-import-confirm-form" data-no-draft><p>'+text('importHelp')+'</p><p>'+text('sourceVersion',{number:view.release.number})+'</p><h3>'+esc(view.blueprint.name)+'</h3><p>'+esc(view.release.note)+'</p><div class="prose">'+renderProse(body.value)+'</div>'+button('reviewInstructions','readPackage')+'<details><summary>'+text('sourceFingerprint')+'</summary><code style="overflow-wrap:anywhere">'+imported.fingerprint+'</code></details><div class="dialog-actions">'+back()+'<button type="submit" class="button primary">'+text('confirmImport')+'</button></div></form>');}
  async function upload(form,file,password){
   if(!file?.size)throw Error(msg('fileRequired'));const serial=generation,check=()=>{guard();if(serial!==generation||!form.isConnected)throw Error(msg('reopen'));};
-  const progress=(key,done,total)=>{check();form.querySelector('[data-transfer-status]').textContent=msg(key,{done:done.toLocaleString(),total:total.toLocaleString()});const bar=form.querySelector('progress');bar.hidden=false;bar.max=total;bar.value=done;};
+  const progress=(key,done,total)=>{check();form.querySelector('[data-transfer-status]').textContent=msg(key,{done:done.toLocaleString(appLanguage()),total:total.toLocaleString(appLanguage())});const bar=form.querySelector('progress');bar.hidden=false;bar.max=total;bar.value=done;};
   const hash=sha256.create();try{
    for(let offset=0;offset<file.size;offset+=128*1024){hash.update(new Uint8Array(await file.slice(offset,offset+128*1024).arrayBuffer()));progress('hashingPackage',Math.min(file.size,offset+128*1024),file.size);}
    const digest=Array.from(hash.digest(),b=>b.toString(16).padStart(2,'0')).join(''),marker=file.size+':'+digest;

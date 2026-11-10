@@ -6,6 +6,7 @@ import {FILE_CHUNK,browserHash} from './evidence-fingerprint.js';
 import {createFileSelection,registerFileManifest,selectedFiles} from './evidence-file-selection.js';
 import {compareEvidenceFiles,evidencePurposes} from './evidence-files.js';
 import {t} from './i18n/index.js';
+import {language as appLanguage} from './i18n/index.js';
 const tr=(key,parameters)=>t('evidenceIntake',key,parameters);
 // Page file-choice metadata without opening file contents. The intake's own
 // verified content fingerprints are obtained only when the user starts it.
@@ -71,7 +72,7 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
    (batch.state==='open'?field(tr(batch.registered<batch.count?'completeFiles':'remainingFiles'),'<input id="intake-files" type="file" multiple'+(batch.sourceMode==='folder'?' webkitdirectory':'')+'>')+
     '<div class="inline-actions">'+button('uploadSelected','upload')+button('pause','pause','disabled')+'</div>':'')+
    progress(completed)+
-   '<ul class="material-list intake-files">'+data.items.map(f=>'<li><div><strong>'+esc(f.sourcePath??f.name)+'</strong><p>'+esc(tr('fileStatus',{size:f.size.toLocaleString(),status:f.completed?tr('fileAttached'):f.sha256?tr('verified'):f.reused?tr('reused'):tr('received',{count:f.received.toLocaleString()})}))+'</p>'+
+   '<ul class="material-list intake-files">'+data.items.map(f=>'<li><div><strong>'+esc(f.sourcePath??f.name)+'</strong><p>'+esc(tr('fileStatus',{size:f.size.toLocaleString(appLanguage()),status:f.completed?tr('fileAttached'):f.sha256?tr('verified'):f.reused?tr('reused'):tr('received',{count:f.received.toLocaleString(appLanguage())})}))+'</p>'+
     (f.sha256?'<details><summary>'+esc(tr('sha256'))+'</summary><code>'+f.sha256+'</code></details>':'')+'</div></li>').join('')+'</ul>'+
    '<div class="inline-actions">'+(at?button('previous','previous'):'')+(data.next!==null?button('more','more'):'')+'</div>',footer);
   document.getElementById('material-form')?.setAttribute('data-no-draft','');

@@ -3,6 +3,7 @@ import {localizedText,onLanguageChange} from './i18n/index.js';
 import {updateText,updateAttribute,updateProperty,placeAt} from './progress-dom.js';
 import {operationProgress} from './operation-progress-ui.js';
 import {storageProgressPresentation,storageSize} from './storage-progress-presentation.js';
+import {language as appLanguage} from './i18n/index.js';
 const text=localizedText('activity'),messages=new Map(['activity','storageProgress','recordSaveProgress'].map(namespace=>[namespace,localizedText(namespace)]));
 const optional=(namespace,key)=>{try{return messages.get(namespace)(key);}catch{return '';}};
 const active=entry=>['running','queued'].includes(entry.state);
@@ -54,9 +55,9 @@ function stageName(kind,stage){
 }
 function presentation(kind,value){
  if(activityCommand(kind).startsWith('/api/storage/')||activityCommand(kind).startsWith('/api/lab-books/import')){const resource=activityResource(kind),book=resource.startsWith('lab-book:')||activityCommand(kind).startsWith('/api/lab-books/import'),project=!book&&resource.startsWith('project:');return storageProgressPresentation((project||book)&&value.transfer?.phase!=='copying'?{...value,transfer:undefined}:value,{project,book});}
- const total=value.total,bytes=value.unit==='bytes',count=bytes?storageSize(value.completed):(value.completed??0).toLocaleString();
+ const total=value.total,bytes=value.unit==='bytes',count=bytes?storageSize(value.completed):(value.completed??0).toLocaleString(appLanguage());
  return {path:(value.stages??[]).filter(s=>s!=='preparing'&&s!==value.stage).map(s=>stageName(kind,s)).join(' › '),
-  count:!value.completed&&!(total>0)?'':text(bytes?total>0?'dataTotal':'data':total>0?'countTotal':'count',{count,total:bytes?storageSize(total):(total??0).toLocaleString()}),
+  count:!value.completed&&!(total>0)?'':text(bytes?total>0?'dataTotal':'data':total>0?'countTotal':'count',{count,total:bytes?storageSize(total):(total??0).toLocaleString(appLanguage())}),
   work:'',detail:'',barLabel:stageName(kind,value.stage),total:total??0,completed:value.completed??0};
 }
 

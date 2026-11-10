@@ -2,6 +2,7 @@ import {t} from './i18n/index.js';
 import {materialReferenceKey} from './material-reference.js';
 import {browserHash} from './evidence-fingerprint.js';
 import {revisionText} from './revision-model.js';
+import {language as appLanguage} from './i18n/index.js';
 const tr=(key,args)=>t('scientificEditors',key,args);
 
 // Each open editor owns one acknowledged revision. A second window gets a
@@ -122,7 +123,7 @@ export function scientificEditRecovery({request,scope,esc}){
   const owner=scope(),page=await request('scientific-draft-list',{workspaceId:owner.workspaceId,recordId:owner.recordId,cursor:more?next:null});
   ready(owner);rows=page.items;next=page.next;
   if(!rows.length)return '';
-  return '<section><h3>'+esc(tr('recoveryHeading'))+'</h3><ul>'+rows.map(row=>'<li>'+esc(tr('recovery-'+row.kind))+' · '+esc(new Date(row.updatedAt).toLocaleString())+' <button type="button" class="button" data-action="material-recovery-open" data-id="'+esc(row.id)+'">'+esc(tr('recoveryOpen'))+'</button></li>').join('')+'</ul>'+(next?'<button type="button" class="button" data-action="material-recovery-more">'+esc(tr('recoveryMore'))+'</button>':'')+'</section>';
+  return '<section><h3>'+esc(tr('recoveryHeading'))+'</h3><ul>'+rows.map(row=>'<li>'+esc(tr('recovery-'+row.kind))+' · '+esc(new Date(row.updatedAt).toLocaleString(appLanguage()))+' <button type="button" class="button" data-action="material-recovery-open" data-id="'+esc(row.id)+'">'+esc(tr('recoveryOpen'))+'</button></li>').join('')+'</ul>'+(next?'<button type="button" class="button" data-action="material-recovery-more">'+esc(tr('recoveryMore'))+'</button>':'')+'</section>';
  }
  async function restore(summary,open,showOutcome){
   const owner=scope();if(owner.workspaceId!==summary.owner.workspaceId||owner.recordId!==summary.owner.recordId)throw Error(tr('recoveryChanged'));

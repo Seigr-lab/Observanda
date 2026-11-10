@@ -1,5 +1,6 @@
 import {localizedText,onLanguageChange} from './i18n/index.js';
 import {updateText,updateProperty,updateAttribute} from './progress-dom.js';
+import {language as appLanguage} from './i18n/index.js';
 const text=localizedText('activity'),active=job=>['queued','running'].includes(job?.state);
 
 // Each mounted owner reads only its own current maintenance job. Leaving the
@@ -20,7 +21,7 @@ export function inventoryMaintenanceUI({state,api,esc,owner,actions,access=opera
   updateText(node.querySelector('[data-title]'),text('inventoryTitle'));updateText(node.querySelector('[data-help]'),text('inventoryHelp'));
   const stage=job?.state==='completed'?'inventoryComplete':job?.state==='failed'&&job.error==='CONFLICT'?'inventoryStale':job?.state==='cancelled'?'inventoryPaused':running?'inventoryStage:'+progress.stage:job?.state==='failed'?'failed':entry.loaded?'inventoryIdle':'inventoryLoading';
   let label;try{label=text(stage);}catch{label=text(running?'running':stage);}
-  if(running&&progress.total>0)label+=' '+text('countTotal',{count:progress.done.toLocaleString(),total:progress.total.toLocaleString()});
+  if(running&&progress.total>0)label+=' '+text('countTotal',{count:progress.done.toLocaleString(appLanguage()),total:progress.total.toLocaleString(appLanguage())});
   updateText(node.querySelector('[data-status]'),label);const bar=node.querySelector('[data-progress]');updateProperty(bar,'hidden',!running||!progress.total);if(running&&progress.total){updateProperty(bar,'max',progress.total);updateProperty(bar,'value',progress.done);updateAttribute(bar,'aria-label',label);}
   const failure=entry.error||(job?.state==='failed'&&job.error!=='CONFLICT'?job.message:'')||'',error=node.querySelector('[data-error]');updateText(error,failure);updateProperty(error,'hidden',!failure);
   for(const operation of ['start','cancel','retry','status']){const control=node.querySelector('[data-action="'+actions+'-'+operation+'"]');updateProperty(control,'disabled',entry.pending||!entry.loaded&&operation!=='status');updateProperty(control,'hidden',operation==='start'?!!job&&job.state!=='completed':operation==='cancel'?!running:operation==='retry'?!['failed','cancelled'].includes(job?.state):false);updateText(control,text({start:job?'inventoryAgain':'inventoryStart',cancel:'inventoryCancel',retry:'inventoryRetry',status:'inventoryRefresh'}[operation]));}

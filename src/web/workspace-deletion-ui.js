@@ -2,6 +2,7 @@ import {progressUnit} from './progress-units.js';
 import {t} from './i18n/index.js';
 import {operationProgress} from './operation-progress-ui.js';
 import {storageSize} from './storage-progress-presentation.js';
+import {language as appLanguage} from './i18n/index.js';
 
 export function workspaceDeletionUI({api,accessOwners=operation=>operation(),esc,field,showDialog,ready,switched,refreshWorkspaces,notify}){
  const m=(key,args)=>t('workspaceDeletion',key,args);let review;
@@ -34,8 +35,8 @@ export function workspaceDeletionUI({api,accessOwners=operation=>operation(),esc
   const selectedReview=review;
   if(!finish&&data.get('title')!==selectedReview?.title){form.elements.title.setCustomValidity(t('errors','STORAGE_DELETE_CONFIRM'));form.elements.title.reportValidity();form.elements.title.oninput=()=>form.elements.title.setCustomValidity('');return true;}
   const progress=operationProgress({className:'storage-progress',host:form,stageText:key=>m(key),presentation:value=>{
-   const deleting=value.stage==='delete-files'&&Number.isSafeInteger(value.total),count=value.completed?.toLocaleString()??'0';
-   return {path:'',count:deleting?m('count',{count,total:value.total.toLocaleString()}):['delete-check','delete-count','delete-check-owners'].includes(value.stage)?m('checking',{count}):['projects','books'].includes(value.unit)&&Number.isSafeInteger(value.total)?m('ownerCount',{count,total:value.total.toLocaleString(),unit:progressUnit(value.unit)}):'',work:deleting?m('bytes',{size:storageSize(value.activity?.bytes)}):'',detail:'',barLabel:m('delete'),total:value.total??0,completed:value.completed??0};
+   const deleting=value.stage==='delete-files'&&Number.isSafeInteger(value.total),count=value.completed?.toLocaleString(appLanguage())??'0';
+   return {path:'',count:deleting?m('count',{count,total:value.total.toLocaleString(appLanguage())}):['delete-check','delete-count','delete-check-owners'].includes(value.stage)?m('checking',{count}):['projects','books'].includes(value.unit)&&Number.isSafeInteger(value.total)?m('ownerCount',{count,total:value.total.toLocaleString(appLanguage()),unit:progressUnit(value.unit)}):'',work:deleting?m('bytes',{size:storageSize(value.activity?.bytes)}):'',detail:'',barLabel:m('delete'),total:value.total??0,completed:value.completed??0};
   }});
   let error,result;
   const command=()=>{if(!form.isConnected){const dialog=document.getElementById('dialog');dialog.replaceChildren(form);dialog.showModal();}return api(finish?'/api/workspaces/delete/finish':selectedReview.selected?'/api/workspaces/delete/confirm':'/api/storage/delete',finish?{id:form.dataset.id,confirmed:true,username:data.get('username'),password:data.get('password'),recovery:data.get('recovery')}:{id:selectedReview.id,path:selectedReview.source,title:data.get('title'),confirmed:data.get('confirmed')==='on'},{onProgress:progress.update});};

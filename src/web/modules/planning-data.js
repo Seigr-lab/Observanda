@@ -3,6 +3,7 @@ import {dashboardCollection,moduleCollectionQuery,moduleCollectionDiscovery,vali
 import {dashboardScope,dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
 import {proseReferences} from '../prose-model.js';
 import {t} from '../i18n/index.js';
+import {language as appLanguage} from '../i18n/index.js';
 const tr=key=>t('planningData',key);
 const token=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=8192;
 export function registerPlanningCards(registry){
@@ -22,6 +23,6 @@ export function registerPlanningCards(registry){
    return result;
   },
   discover:({api,context,search,offset,limit,signal})=>dashboardCollection(context)?moduleCollectionDiscovery(api,context,'planning',type,{search,offset,limit,signal}):api('/api/modules/planning/discovery',{workspaceId:context.book.id,type,search,offset,limit},{adopt:false,signal}),
-  items:(c,result)=>result.items.map(item=>type==='booking'?{...item,data:{...item.data,startsAt:new Date(item.data.startsAt).toLocaleString(),endsAt:new Date(item.data.endsAt).toLocaleString()}}:item)
+  items:(c,result)=>result.items.map(item=>type==='booking'?{...item,data:{...item.data,startsAt:new Date(item.data.startsAt).toLocaleString(appLanguage()),endsAt:new Date(item.data.endsAt).toLocaleString(appLanguage())}}:item)
  });
 }

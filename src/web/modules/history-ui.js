@@ -1,5 +1,6 @@
 import '../i18n/catalogues/moduleHistory.js';
 import {t,messageLanguage} from '../i18n/index.js';
+import {language as appLanguage} from '../i18n/index.js';
 const tr=(key,values)=>t('moduleHistory',key,values);
 // Retain one summary page, one selected body and a bounded return trail.
 export function moduleHistoryUI({api,esc,draw,current}){
@@ -36,7 +37,7 @@ export function moduleHistoryUI({api,esc,draw,current}){
    <p role="status" tabindex="-1" data-module-history-status>${esc(busy?tr('loading'):page?tr('range',{first:page.offset+1,last:page.offset+page.items.length,total:page.total}):tr('empty'))}</p>
    ${page?.changed?`<p>${esc(tr('changed'))}</p>`:''}
    ${hasSaved?`<nav class="module-actions" aria-label="${esc(tr('pages'))}">${button(tr('first'),'first',busy||!page?.offset)}${button(tr('previous'),'previous',busy||!trail.length)}${button(tr('next'),'next',busy||!page?.nextCursor)}${button(tr('refresh'),'refresh',busy)}</nav>`:''}
-   <div class="module-collection">${(page?.items??[]).map(item=>`<article class="module-item">${button(tr('open',{revision:item.revision}),'open',busy,`data-revision="${item.revision}" aria-expanded="${selected?.entity.revision===item.revision}"`)}<p>${esc(new Date(item.at).toLocaleString())} / ${esc(item.action)}</p>${selected?.entity.revision===item.revision?`<section class="module-history" aria-label="${esc(tr('selected',{revision:selected.entity.revision}))}"><h3 tabindex="-1" data-module-history-revision>${esc(tr('selected',{revision:selected.entity.revision}))}</h3>${button(tr('close'),'close',busy)}<pre>${esc(JSON.stringify(selected.entity.data,null,2))}</pre></section>`:''}</article>`).join('')}</div></section>`;
+   <div class="module-collection">${(page?.items??[]).map(item=>`<article class="module-item">${button(tr('open',{revision:item.revision}),'open',busy,`data-revision="${item.revision}" aria-expanded="${selected?.entity.revision===item.revision}"`)}<p>${esc(new Date(item.at).toLocaleString(appLanguage()))} / ${esc(item.action)}</p>${selected?.entity.revision===item.revision?`<section class="module-history" aria-label="${esc(tr('selected',{revision:selected.entity.revision}))}"><h3 tabindex="-1" data-module-history-revision>${esc(tr('selected',{revision:selected.entity.revision}))}</h3>${button(tr('close'),'close',busy)}<pre>${esc(JSON.stringify(selected.entity.data,null,2))}</pre></section>`:''}</article>`).join('')}</div></section>`;
  }
  async function action(name,node){
   if(!name.startsWith('history-'))return false;

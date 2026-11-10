@@ -1,5 +1,6 @@
 import {websiteContext} from './website-context.js';
 import {publicationText} from './publication-review.js';
+import {language as appLanguage} from './i18n/index.js';
 
 export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
  const call=(op,data={})=>api('/api/publication-jobs/'+op,data,{adopt:false});
@@ -19,7 +20,7 @@ export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
   const pager=document.getElementById('publication-jobs-pages');pager.hidden=!!id;
   if(!id){next=response.next;pager.querySelector('[data-action="publication-jobs-previous"]').disabled=!previous.length;pager.querySelector('[data-action="publication-jobs-next"]').disabled=!next;pager.querySelector('span').textContent=publicationText('page',{number:previous.length+1});}
   const container=document.getElementById('publication-jobs-status'),focused=document.activeElement,focusedAction=focused?.dataset.action,focusedId=focused?.dataset.id;
-  container.innerHTML=jobs.length?jobs.map(({job,createdAt})=>`<section class="panel"><h3>${text('edition',{date:new Date(createdAt).toLocaleString()})}</h3><p>${esc(status(job))}</p>${job.progress.stage==='capturing-selected-edition'&&Number.isSafeInteger(job.progress.recordsCaptured)?'<p>'+text('capturedRecords',{count:job.progress.recordsCaptured})+'</p>':''}${job.progress.total&&job.state==='running'?`<progress aria-label="${text('outputRetained')}" max="${job.progress.total}" value="${job.progress.done}"></progress>`:''}<div class="inline-actions">${actions(job)}</div></section>`).join(''):`<p>${text('empty')}</p>`;
+  container.innerHTML=jobs.length?jobs.map(({job,createdAt})=>`<section class="panel"><h3>${text('edition',{date:new Date(createdAt).toLocaleString(appLanguage())})}</h3><p>${esc(status(job))}</p>${job.progress.stage==='capturing-selected-edition'&&Number.isSafeInteger(job.progress.recordsCaptured)?'<p>'+text('capturedRecords',{count:job.progress.recordsCaptured})+'</p>':''}${job.progress.total&&job.state==='running'?`<progress aria-label="${text('outputRetained')}" max="${job.progress.total}" value="${job.progress.done}"></progress>`:''}<div class="inline-actions">${actions(job)}</div></section>`).join(''):`<p>${text('empty')}</p>`;
   if(focusedAction&&focusedId)container.querySelector(`[data-action="${focusedAction}"][data-id="${focusedId}"]`)?.focus();
   if(id&&response.job.state==='completed'){await openReview(response.job.result.id,token);return;}
   if(jobs.some(({job})=>['queued','running'].includes(job.state)))timer=setTimeout(()=>poll(token,id).catch(error=>{if(active(token))notify(error.message,true);}),750);

@@ -3,6 +3,7 @@ import {writeRecordCheckpoint} from './record-draft-transfer.js';
 import {recordCheckpointIdentity} from './record-checkpoint-identity.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';
+import {language as appLanguage} from './i18n/index.js';
 const text=(key,args)=>t('recordDrafts',key,args);
 // Writer identities stay in browser memory. Research checkpoints are stored
 // through the authenticated workspace writer, never in browser local storage.
@@ -69,7 +70,7 @@ export function recordDraftsUI({api,esc,snapshot,onChange,onReset,recover,recove
         status(text('saving'));
         const receipt=await checkpoint(owner,data,epoch);
         if(epoch!==generation){if(required)throw changedOwner();return;}
-        last=captured;checkpointTime=text('checkpointed',{time:new Date(receipt.updatedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});status(checkpointTime);
+        last=captured;checkpointTime=text('checkpointed',{time:new Date(receipt.updatedAt).toLocaleTimeString(appLanguage(), {hour:'2-digit',minute:'2-digit'})});status(checkpointTime);
         const current=await fingerprint();if(epoch===generation&&current!==captured&&snapshot())schedule();
         return receipt;
       }catch(error){checkpointFailure(error,owner,epoch);if(required)throw error;return null;}

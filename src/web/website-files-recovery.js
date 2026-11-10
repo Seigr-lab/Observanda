@@ -1,4 +1,5 @@
 import {researchId} from './research-reference.js';
+import {language as appLanguage} from './i18n/index.js';
 
 // One file-backed draft per editing session. The first edit starts the maximum
 // wait even when more input keeps arriving. Acknowledgements belong to their
@@ -27,9 +28,9 @@ export function websiteFilesRecovery({request,documentState,upload,restore,tr,es
  }
  function paint(){
   const node=document.querySelector('[data-website-recovery]');if(!node)return;
-  const status=error||(current&&serial===ackSerial?tr('recoveryAcknowledged',{time:new Date(current.updatedAt).toLocaleTimeString()}):'');
+  const status=error||(current&&serial===ackSerial?tr('recoveryAcknowledged',{time:new Date(current.updatedAt).toLocaleTimeString(appLanguage())}):'');
   node.innerHTML=(status?'<p role="status" title="'+esc(tr('recoveryWindow'))+'">'+esc(status)+'</p>':'')+(error&&owner?'<button type="button" class="button" data-action="website-files-recovery-retry">'+esc(tr('recoveryRetry'))+'</button>':'')+offers.map(row=>{
-   const info=tr('recoveryFound',{time:new Date(row.updatedAt).toLocaleString(),revision:row.baseRevision.slice(0,12)});
+   const info=tr('recoveryFound',{time:new Date(row.updatedAt).toLocaleString(appLanguage()),revision:row.baseRevision.slice(0,12)});
    const control=(action,label)=>'<button type="button" class="button" data-action="website-files-recovery-'+action+'" data-recovery-id="'+esc(row.id)+'">'+esc(tr(label))+'</button>';
    return '<section data-draft-id="'+esc(row.id)+'" tabindex="-1"><strong>'+esc(info)+'</strong> '+(row.capabilities.recover?control('restore','recoveryRestore'):'')+
     (row.capabilities.compare?control('compare','recoveryCompare'):'')+control('discard','recoveryDiscard')+

@@ -9,6 +9,7 @@ import {t,messageLanguage} from './i18n/index.js';
 import './i18n/catalogues/supportEditors.js';
 import supportMessages from './locales/en/supportEditors.json' with {type:'json'};
 import errorMessages from './locales/en/errors.json' with {type:'json'};
+import {language as appLanguage} from './i18n/index.js';
 const tr=(key,values)=>t('reviews',key,values);
 const detailKeys=new Map(Object.entries(supportMessages).filter(([key])=>key.startsWith('reviewDetail')).map(([key,value])=>[value,key]));
 const detailText=field=>detailKeys.has(field)?t('supportEditors',detailKeys.get(field)):field;
@@ -38,7 +39,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
   list=result;listError='';context=researchContext(state);
  }
  function entriesHTML(){
-  const entries=list.items.map(i=>'<article class="module-item"><h3>'+esc(i.contact??tr('unverified'))+'</h3><p>'+esc(tr(i.direction==='incoming'?'incoming':'outgoing'))+' / '+esc(new Date(i.createdAt).toLocaleString())+'</p>'+i.records.map(r=>{
+  const entries=list.items.map(i=>'<article class="module-item"><h3>'+esc(i.contact??tr('unverified'))+'</h3><p>'+esc(tr(i.direction==='incoming'?'incoming':'outgoing'))+' / '+esc(new Date(i.createdAt).toLocaleString(appLanguage()))+'</p>'+i.records.map(r=>{
    const d=i.decisions.find(d=>d.id===r.id);
    return '<p><strong>'+esc(r.title)+'</strong><br>'+esc(tr(d?d.decision:'awaiting'))+(d?' / '+esc(tr(r.current===null?'receivedRevision':r.current?'currentRevision':'changedRevision')):'')+'</p>'+(d?'<p>'+esc(d.comment)+'</p><details><summary>'+esc(tr('signature'))+'</summary><small class="tool-hash">'+esc(tr('signatureDetails',{key:i.signer,time:i.signedAt}))+'</small></details>':'');
   }).join('')+'<div class="module-actions">'+button('open','open','data-id="'+i.id+'"')+button(i.direction==='outgoing'?'downloadRequest':'downloadResponse','export','data-id="'+i.id+'" '+(i.direction==='incoming'&&!i.decisions.length?'disabled':''))+'</div></article>').join('')||'<p>'+esc(tr('empty'))+'</p>';

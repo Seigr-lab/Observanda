@@ -5,6 +5,7 @@ import {proseText} from '../prose-model.js';
 import {calendarTypes,calendarBlank,calendarForm,calendarInput} from './calendar-fields.js';
 import {calendarUI} from './calendar-ui.js';
 import {moduleEditor} from './workbench.js';
+import {language as appLanguage} from '../i18n/index.js';
 const taskStatuses=()=>['todo','doing','done','cancelled'].map(id=>[id,statusLabel(id)]);
 const bookingStatuses=()=>['confirmed','cancelled'].map(id=>[id,statusLabel(id)]);
 const zone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -21,7 +22,7 @@ export async function createPlanningUI(services){let prerequisites;const address
  card(e,c){
   const d=e.data,{esc}=c;
   if(calendarTypes.some(t=>t.id===e.type))return `<h2>${esc(d.name??d.title)}</h2><p>${esc(e.type==='event'?m('dateRange',{start:d.startsAt,end:d.endsAt}):e.type==='calendar'?(d.archived?m('archived'):m('statusActive')):d.enabled?m('included'):m('disabled'))}</p>`;
-  return `<div class="module-item-heading"><h2>${esc(d.title)}</h2><span class="status-badge">${esc((e.type==='task'?taskStatuses():bookingStatuses()).find(s=>s[0]===d.status)?.[1])}</span></div>${e.type==='task'?`<p>${esc(proseText(d.description))}</p><dl class="module-facts"><div><dt>${esc(m('due'))}</dt><dd>${esc(d.dueOn??m('notScheduled'))}</dd></div><div><dt>${esc(m('people'))}</dt><dd>${esc(d.assignees.join(', ')||m('unassigned'))}</dd></div><div><dt>${esc(m('checklist'))}</dt><dd>${d.checklist.filter(c=>c.done).length} / ${d.checklist.length}</dd></div><div><dt>${esc(m('priority'))}</dt><dd>${esc(priorityLabel(d.priority))}</dd></div></dl>`:`<p><strong>${esc(c.get(d.resourceId)?.data.name??m('equipmentUnavailable'))}</strong></p><p>${esc(m('dateRange',{start:new Date(d.startsAt).toLocaleString(),end:new Date(d.endsAt).toLocaleString()}))}</p><small>${esc(m('bookingFacts',{zone:zone(),kind:bookingKindLabel(d.kind),count:d.places}))}</small>`}<div>${c.links(d.links)}</div>`;
+  return `<div class="module-item-heading"><h2>${esc(d.title)}</h2><span class="status-badge">${esc((e.type==='task'?taskStatuses():bookingStatuses()).find(s=>s[0]===d.status)?.[1])}</span></div>${e.type==='task'?`<p>${esc(proseText(d.description))}</p><dl class="module-facts"><div><dt>${esc(m('due'))}</dt><dd>${esc(d.dueOn??m('notScheduled'))}</dd></div><div><dt>${esc(m('people'))}</dt><dd>${esc(d.assignees.join(', ')||m('unassigned'))}</dd></div><div><dt>${esc(m('checklist'))}</dt><dd>${d.checklist.filter(c=>c.done).length} / ${d.checklist.length}</dd></div><div><dt>${esc(m('priority'))}</dt><dd>${esc(priorityLabel(d.priority))}</dd></div></dl>`:`<p><strong>${esc(c.get(d.resourceId)?.data.name??m('equipmentUnavailable'))}</strong></p><p>${esc(m('dateRange',{start:new Date(d.startsAt).toLocaleString(appLanguage()),end:new Date(d.endsAt).toLocaleString(appLanguage())}))}</p><small>${esc(m('bookingFacts',{zone:zone(),kind:bookingKindLabel(d.kind),count:d.places}))}</small>`}<div>${c.links(d.links)}</div>`;
  },
  form(d,c){
   const {input,area,select,field,esc,option,button}=c,v=d.data;

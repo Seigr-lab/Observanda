@@ -2,6 +2,7 @@ import {m,inventoryLocation,statusLabel} from './editor-presentation.js';
 import {stockTracked,assetPlacement,inventoryLocations,inventoryOwner,inventoryQuantity,inventoryBOMUsage,inventoryScope} from './inventory-model.js';
 import {balance,compare,negate,add} from './quantities.js';
 import {projectUsesTool,projectToolScope} from '../project-tools.js';
+import {language as appLanguage} from '../i18n/index.js';
 
 export function inventoryPlaces(c,{existing=[]}={}){
  const book=c.services.state.book;
@@ -52,7 +53,7 @@ export function inventoryStockSection(c){
   <section class="module-block"><h2>${esc(tracked?m('stockLedger'):m('placementHistory'))}</h2>${events.map(e=>{
    const v=e.data,transfer=e.type!=='movement',title=transfer?(e.type==='stock-transfer'?m('quantityTransferred',{quantity:v.quantity+' '+v.unit}):m('itemMoved')):v.delta+' '+v.unit;
    const location=transfer?inventoryLocation(book,v.fromProjectId)+' → '+inventoryLocation(book,v.toProjectId):inventoryLocation(book,Object.hasOwn(v,'projectId')?v.projectId:resource.data.projectId);
-   return `<article class="module-ledger"><div><strong>${esc(title)}</strong><p>${esc(location)}</p><p>${esc(v.reason)}</p>${c.links(v.links)}</div><time>${esc(new Date(e.createdAt).toLocaleString())}</time></article>`;
+   return `<article class="module-ledger"><div><strong>${esc(title)}</strong><p>${esc(location)}</p><p>${esc(v.reason)}</p>${c.links(v.links)}</div><time>${esc(new Date(e.createdAt).toLocaleString(appLanguage()))}</time></article>`;
   }).join('')||'<p>'+esc(m('noMovements'))+'</p>'}${c.inventory?.navigation('movements')??''}</section>`;
 }
 export async function inventoryStockAction(name,node,c){
