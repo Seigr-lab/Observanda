@@ -3,5 +3,9 @@
   "remove": "Quitar",
   "delete": "Eliminar",
   "discard": "Descartar los cambios",
-  "replace": "Sustituir"
+  "replace": "Sustituir",
+  "save": "Guardar y salir",
+  "restore": "Restaurar",
+  "detach": "Desvincular",
+  "release": "Liberar"
 }

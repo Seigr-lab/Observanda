@@ -1,4 +1,5 @@
 import {feedItemEditor} from './website-feed-item-editor.js';
+import {confirmAction} from './confirm-action.js';
 import {websiteSearchChoices} from './website-files-picker-refinements.js';
 import {operationProgress} from './operation-progress-ui.js';
 
@@ -103,7 +104,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    status.hidden=!status.textContent;
   }
   function message(text=''){status.textContent=text;paint();}
-  function cancel(){if(!saving&&(!dirty||confirm(t('discardConfirm'))))close();}
+  async function cancel(){if(!saving&&(!dirty||await confirmAction(t('discardConfirm'),{action:'discard'})))close();}
   function fail(error){if(current===dialog){message(error.message||t('failed'));}}
   async function loadSearches(cursor=null,reset=false){
    const epoch=++searchEpoch;
@@ -130,7 +131,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    if(selectedCriteria&&presets.open)await loadSearches(null,true);
   }
   async function write(deleting){
-   if(saving||loading||!deleting&&!form.reportValidity()||deleting&&!confirm(t('feedRemoveConfirm')))return;
+   if(saving||loading||!deleting&&!form.reportValidity()||deleting&&!await confirmAction(t('feedRemoveConfirm'),{action:'remove'}))return;
    const payload={...pin,feedId:selected||null};
    if(!deleting){
     if(scope.value()==='filtered'&&!selectedCriteria){message(t('feedChooseSearch'));return;}
@@ -148,7 +149,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   form.onsubmit=e=>{e.preventDefault();void write(false).catch(fail);};
   form.oninput=e=>{if(e.target!==find)dirty=true;};form.onchange=paint;
   list.onchange=async()=>{
-   if(dirty&&!confirm(t('discardConfirm'))){list.value=selected;return;}
+   if(dirty&&!await confirmAction(t('discardConfirm'),{action:'discard'})){list.value=selected;return;}
    loading=true;editing.disabled=list.disabled=true;paint();try{await choose(list.value);}catch(error){list.value=selected;fail(error);}finally{loading=false;editing.disabled=list.disabled=false;paint();}
   };
   scope.group.onchange=paint;
@@ -161,7 +162,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   document.body.append(dialog);dialog.showModal();loading=true;editing.disabled=list.disabled=true;paint();
   try{
    const pending=recovery?.siteId===site.id&&recovery.page===page?recovery:null;
-   const restore=pending&&confirm(t('feedRestoreDraft'));if(pending)recovery=null;
+   const restore=pending&&await confirmAction(t('feedRestoreDraft'),{action:'restore'});if(pending)recovery=null;
    await choose(restore?(data.feeds.some(f=>f.id===pending.selected)?pending.selected:''):feedId??'');
    if(restore&&current===dialog){
     heading.value=pending.heading;scope.set(pending.scope);selectedCriteria=pending.criteria;template.set(pending.template);layout.set(pending.layout);

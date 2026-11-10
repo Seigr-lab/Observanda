@@ -1,4 +1,5 @@
 import {serializeWebsiteHTML} from './website-html-document.js';
+import {confirmAction} from './confirm-action.js';
 
 const protectedNodes='[data-observanda-source],[data-observanda-link],[data-website-instance],[data-website-region]';
 const authored=doc=>[...doc.querySelectorAll('audio,video')].filter(node=>!node.closest(protectedNodes));
@@ -132,8 +133,8 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    f.elements.defaultTrack.checked=recovered.defaultTrack;
   }
   f.oninput=f.onchange=()=>{modified=true;edited();};
-  block.onchange=()=>{if(modified&&!confirm(t('recordingDiscard'))){block.value=String(index);return;}const target=Number(block.value);void run(async()=>{if(modified)await forget();index=target;modified=false;recovered=null;render();}).catch(e=>notify(e.message,true));};
-  panel.querySelector('[data-recording-action="close"]').onclick=()=>{if(modified&&!confirm(t('recordingDiscard')))return;void run(async()=>{if(modified)await forget();reset();close();}).catch(e=>notify(e.message,true));};
+  block.onchange=async()=>{if(modified&&!await confirmAction(t('recordingDiscard'),{action:'discard'})){block.value=String(index);return;}const target=Number(block.value);void run(async()=>{if(modified)await forget();index=target;modified=false;recovered=null;render();}).catch(e=>notify(e.message,true));};
+  panel.querySelector('[data-recording-action="close"]').onclick=async()=>{if(modified&&!await confirmAction(t('recordingDiscard'),{action:'discard'}))return;void run(async()=>{if(modified)await forget();reset();close();}).catch(e=>notify(e.message,true));};
   const more=panel.querySelector('[data-recording-action="more"]');
   if(more)more.onclick=()=>void run(async()=>{const count=items.length;await loadLibrary(next);for(const item of items.slice(count))f.elements.reuse.add(new Option(item.label||item.name,item.name));more.hidden=!next;}).catch(e=>notify(e.message,true));
   f.onsubmit=event=>{

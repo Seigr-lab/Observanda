@@ -1,4 +1,5 @@
 import {bindWebsiteVisual} from './website-files-visual.js';
+import {confirmAction} from './confirm-action.js';
 import {componentMainControls} from './website-component-controls.js';
 import {componentFragment,componentReviewView,instanceForm} from './website-component-forms.js';
 import {defaultBreakpoints} from './website-breakpoint-model.js';
@@ -207,7 +208,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
    instanceForm({host,value:result,request,pin,t:tr,close:()=>host.close(),apply:async values=>{if(site()?.site.revision!==pin.expectedRevision)throw Error(tr('changed'));await write('customize',{instance,...values});}});
    host.addEventListener('close',()=>{if(dialog===host)dialog=null;host.remove();},{once:true});document.body.append(host);host.showModal();
   }
-  if(op==='detach'){if(!instance)throw Error(tr('componentSelectInstance'));if(!confirm(tr('componentDetachEffect')))return true;await save();await write(op,{instance});}
+  if(op==='detach'){if(!instance)throw Error(tr('componentSelectInstance'));if(!await confirmAction(tr('componentDetachEffect'),{action:'detach'}))return true;await save();await write(op,{instance});}
   if(op==='edit'){await save();const pin=local(),value=await request('components/main',{...pin,component:id});if(site()?.site.revision===value.revision&&site().site.id===pin.siteId)editor(value,pin);}
   return true;
  }

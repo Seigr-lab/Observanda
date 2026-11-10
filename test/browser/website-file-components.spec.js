@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {websiteFilesHttp} from '../../src/website-files-http.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {answerConfirmation} from './confirm-helper.js';
 
 test('drag a reusable section onto the canvas, edit scientific notation in the main and detach only one copy',async({page})=>{
  test.setTimeout(35000);page.setDefaultTimeout(6500);
@@ -49,7 +50,7 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await dialog.getByRole('button',{name:'Review component changes'}).click();
   await dialog.getByRole('button',{name:'Update all instances'}).click();await expect(dialog).not.toBeVisible();
   await expect(copies.locator('sup')).toHaveCount(2);
-  await copies.last().click({position:{x:4,y:4}});page.once('dialog',message=>message.accept());await library.getByRole('button',{name:'Detach selected instance'}).press('Enter');
+  await copies.last().click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).press('Enter');await answerConfirmation(page,'Detach');
   await expect(copies).toHaveCount(1);await expect(library.getByText('Placements 1 · Pages 1')).toBeVisible();
   const saved=await store.open(id);expect(saved.html.match(/<sup>2<\/sup>/g)).toHaveLength(2);expect(saved.html.match(/data-website-instance=/g)).toHaveLength(1);
   const detached=canvas.locator('main > section:not([data-website-instance]) p');
@@ -57,7 +58,7 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await expect(detached).toContainText('Detached observation.');await expect(copies).not.toContainText('Detached observation.');
-  await copies.click({position:{x:4,y:4}});page.once('dialog',message=>message.accept());await library.getByRole('button',{name:'Detach selected instance'}).click();
+  await copies.click({position:{x:4,y:4}});await library.getByRole('button',{name:'Detach selected instance'}).click();await answerConfirmation(page,'Detach');
   await expect(library.getByText('Placements 0 · Pages 0')).toBeVisible();
   await library.getByRole('button',{name:'Remove',exact:true}).click();await library.getByRole('button',{name:'Cancel',exact:true}).click();
   await library.getByRole('button',{name:'Remove',exact:true}).click();await library.getByRole('button',{name:'Remove',exact:true}).click();

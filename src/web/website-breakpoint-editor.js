@@ -1,4 +1,5 @@
 import {breakpointLabel,breakpointCondition,defaultBreakpoints,validBreakpoints} from './website-breakpoint-model.js';
+import {confirmAction} from './confirm-action.js';
 
 export function editWebsiteBreakpoints({site,t,review,apply,current,signal,trigger}){
  let ranges=structuredClone(site.breakpoints??defaultBreakpoints()),selected=null,plan=null,busy=false,changed=false,rowDirty=false;
@@ -32,8 +33,8 @@ export function editWebsiteBreakpoints({site,t,review,apply,current,signal,trigg
   if(!plan)return;
   await task(async()=>{await apply(ranges,plan.reviewId);changed=false;dialog.close();});
  });commit.classList.add('button-primary');commit.hidden=true;
- function dismiss(){if(!busy&&(!(changed||rowDirty)||confirm(t('discardConfirm'))))dialog.close();}
- function choose(row){if(!rowDirty||confirm(t('discardConfirm')))select(row);}
+ async function dismiss(){if(!busy&&(!(changed||rowDirty)||await confirmAction(t('discardConfirm'),{action:'discard'})))dialog.close();}
+ async function choose(row){if(!rowDirty||await confirmAction(t('discardConfirm'),{action:'discard'}))select(row);}
  function update(value){ranges=value;changed=true;plan=null;commit.hidden=true;result.replaceChildren();paint();}
  function select(row){
   rowDirty=false;selected=row;name.value=row?breakpointLabel(row,t):'';min.value=row?.min??'';max.value=row?.max??'';

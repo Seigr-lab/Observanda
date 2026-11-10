@@ -1,4 +1,5 @@
 import {websiteHTML} from './website-html-document.js';
+import {confirmAction} from './confirm-action.js';
 
 const windowSize=40;
 const normalize=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
@@ -149,12 +150,12 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
   }
   if(action==='save'){await save();return true;}
   if(action==='close'||action==='reload'){
-   if(touched&&!confirm(tr('discardConfirm')))return true;
+   if(touched&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return true;
    touched=false;pageSignature='';changed();
    if(action==='close')close();else{sync();render();}return true;
   }
   if(action==='open'){
-   if(touched){if(!confirm(tr('saveBeforeLeave')))return true;await save();}
+   if(touched){if(!await confirmAction(tr('saveBeforeLeave'),{action:'save'}))return true;await save();}
    await openPage(el.dataset.savedPage);return true;
   }
   if(action==='back'||action==='forward'){offset+=action==='back'?-windowSize:windowSize;repaintResults();return true;}

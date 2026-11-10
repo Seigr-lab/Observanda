@@ -1,6 +1,7 @@
 // The library supplies permission-checked visual references. Website authors can
 // arrange those references without copying research files into upload storage.
 import {defaultImageFrame,imageFrameControls,changeImageFrame,previewImageFrame,showOriginalImage} from './website-image-frame.js';
+import {confirmAction} from './confirm-action.js';
 export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,leave,signal,notify}){
  let draft=null,base=null,entry=null,choices=[],offset=0,orderPage=0,next=null,modified=false,epoch=0,requestGeneration=null;
  const same=(a,b)=>a.sourceId===b.sourceId&&a.key===b.key;
@@ -110,7 +111,7 @@ export function websiteSourceGallery({request,site,t,esc,render,changed,adopt,le
     items:draft.items.map(({slotId,unavailable,key,sourceId,sourceRevision,altOverride,captionOverride,frame})=>unavailable?{slotId,unavailable:true}:{slotId,key,sourceId,sourceRevision,altOverride,captionOverride,frame})},{signal:signal()});
    reset();adopt(value);return leave();
   }
-  if(op==='close'){if(!modified||confirm(t('discardConfirm'))){reset();changed(false);leave();}return;}
+  if(op==='close'){if(!modified||await confirmAction(t('discardConfirm'),{action:'discard'})){reset();changed(false);leave();}return;}
   if(op==='orderprev'||op==='ordernext'){orderPage=Math.max(0,orderPage+(op==='orderprev'?-1:1));render();return;}
   if(op==='move'){
    const field=el.closest('li').querySelector('[data-figure-position]');

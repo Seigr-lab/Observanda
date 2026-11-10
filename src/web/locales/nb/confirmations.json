@@ -3,5 +3,9 @@
   "remove": "Fjern",
   "delete": "Slett",
   "discard": "Forkast endringene",
-  "replace": "Erstatt"
+  "replace": "Erstatt",
+  "save": "Lagre og gå ut",
+  "restore": "Gjenopprett",
+  "detach": "Koble fra",
+  "release": "Frigi"
 }

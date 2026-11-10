@@ -1,4 +1,5 @@
 import {researchId} from './research-reference.js';
+import {confirmAction} from './confirm-action.js';
 import {language as appLanguage} from './i18n/index.js';
 
 // One file-backed draft per editing session. The first edit starts the maximum
@@ -150,11 +151,11 @@ export function websiteFilesRecovery({request,documentState,upload,restore,tr,es
   const row=offers.find(value=>value.id===id);if(!row)return;
   const job=epoch;
   if(operation==='discard'){
-   if(!confirm(tr('recoveryDiscardConfirm')))return;
+   if(!await confirmAction(tr('recoveryDiscardConfirm'),{action:'delete'}))return;
    await request('recovery/discard',pin(row),{signal:signal()});
   }else{
    const comparing=operation==='compare';
-   if(!comparing&&documentState()&&!confirm(tr('recoveryReplace')))return;
+   if(!comparing&&documentState()&&!await confirmAction(tr('recoveryReplace'),{action:'replace'}))return;
    const value=await request('recovery/'+(comparing?'compare':'read'),pin(row),{signal:signal()});
    if(!ok(job))return;
    if(typeof value.html!=='string'){offers=offers.map(item=>item.id===row.id?value.summary:item);paint();return;}

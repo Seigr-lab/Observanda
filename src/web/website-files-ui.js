@@ -1,4 +1,5 @@
 import './i18n/catalogues/websiteFiles.js';
+import {confirmAction} from './confirm-action.js';
 import {t} from './i18n/index.js';
 import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,applyCanvasCSS,websiteCanvasValue,canvasSelection,restoreCanvasSelection,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
 import {websiteFilesRecovery} from './website-files-recovery.js';
@@ -507,16 +508,16 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function beforeLeave(fromAction=false){
   if(busy&&!fromAction)return false;
-  if(recordings.dirty()){if(!confirm(tr('recordingDiscard')))return false;await recovery.forget();recordings.reset();}
-  if(figures.dirty()&&!figures.canSave()){if(!confirm(tr('discardConfirm')))return false;figures.reset();onDirty(dirty);}
+  if(recordings.dirty()){if(!await confirmAction(tr('recordingDiscard'),{action:'discard'}))return false;await recovery.forget();recordings.reset();}
+  if(figures.dirty()&&!figures.canSave()){if(!await confirmAction(tr('discardConfirm'),{action:'discard'}))return false;figures.reset();onDirty(dirty);}
   if(!dirty&&!destinationDirty&&!menu.dirty()&&!pagesPanel.dirty()&&!figures.dirty())return true;
-  if(!confirm(tr('saveBeforeLeave')))return false;
+  if(!await confirmAction(tr('saveBeforeLeave'),{action:'save'}))return false;
   if(figures.dirty())await figures.action('apply');
   if(dirty)await save();if(destinationDirty)await saveDestination();if(menu.dirty())await menu.save();if(pagesPanel.dirty())await pagesPanel.save();return true;
  }
  async function discard(){
-  if(figures.dirty()&&!confirm(tr('discardConfirm')))return false;
-  if((dirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||destinationDirty)&&!confirm(tr('discardConfirm')))return false;
+  if(figures.dirty()&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return false;
+  if((dirty||menu.dirty()||pagesPanel.dirty()||recordings.dirty()||destinationDirty)&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return false;
   if(!opened)return true;
   // Read the replacement first. A failed read leaves the editable draft intact.
   const current=opened,replacement=await request('open',{siteId:siteId(),path:opened.path},{signal:controller?.signal});if(opened!==current)return false;
@@ -879,7 +880,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(operation==='check-access'){await poll();return true;}
   if(sourcePane.pending&&!['discard','reopen','undo','redo','html','css'].includes(operation)&&!await sourcePane.check())return true;
   await run(async()=>{
-   if(mode==='media'&&recordings.dirty()&&!operation.startsWith('recovery-')&&!['save','reopen'].includes(operation)){if(!confirm(tr('recordingDiscard')))return;await recovery.forget();recordings.reset();mode='visual';}
+   if(mode==='media'&&recordings.dirty()&&!operation.startsWith('recovery-')&&!['save','reopen'].includes(operation)){if(!await confirmAction(tr('recordingDiscard'),{action:'discard'}))return;await recovery.forget();recordings.reset();mode='visual';}
    if(mode==='pages'&&pagesPanel.dirty()&&!operation.startsWith('pages-')&&operation!=='discard')await pagesPanel.save();
    if(mode==='menu'&&menu.dirty()&&!operation.startsWith('menu-')&&operation!=='discard')await menu.save();
 

@@ -3,5 +3,9 @@
   "remove": "Elimina",
   "delete": "Suprimeix",
   "discard": "Descarta els canvis",
-  "replace": "Substitueix"
+  "replace": "Substitueix",
+  "save": "Desa i surt",
+  "restore": "Restaura",
+  "detach": "Desvincula",
+  "release": "Allibera"
 }

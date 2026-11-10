@@ -2,7 +2,7 @@
 // The question is the dialog's accessible name, the buttons name the action, and Cancel has initial focus.
 import {t} from './i18n/index.js';
 
-const ACTIONS=new Set(['remove','delete','discard','replace']);
+const ACTIONS=new Set(['remove','delete','discard','replace','save','restore','detach','release']);
 
 export function confirmAction(question,{action}){
  if(!ACTIONS.has(action))throw new TypeError('Unknown confirmation action');

@@ -1,4 +1,5 @@
 import {websitePageRows,websitePageWindow} from './website-files-pages.js';
+import {confirmAction} from './confirm-action.js';
 import {mountMenuPreview} from './website-menu-canvas.js';
 import {operationProgress} from './operation-progress-ui.js';
 import {validWebsiteLink} from './website-files-text-link.js';
@@ -168,19 +169,19 @@ export function websiteFilesMenu({request,site,esc,tr,render,adopt,close,baseURL
   }
   return true;
  }
- async function switchMenu(el){if(dirty&&!confirm(tr('discardConfirm'))){el.value=menuId??'';return;}await open(el.value||null);}
+ async function switchMenu(el){if(dirty&&!await confirmAction(tr('discardConfirm'),{action:'discard'})){el.value=menuId??'';return;}await open(el.value||null);}
  async function handle(operation,element){
   if(!operation.startsWith('menu-'))return false;const op=operation.slice(5);
   if(op==='reload'){await open(menuId);return true;}
-  if(op==='cancel'){if(dirty&&!confirm(tr('discardConfirm')))return true;reset();changed();close();return true;}
+  if(op==='cancel'){if(dirty&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return true;reset();changed();close();return true;}
   if(op==='save'){await save();return true;}
   if(!live())throw Error(tr('changed'));
   if(op==='switch'){await switchMenu(element);return true;}
   if(op==='create'){
-   if(dirty&&!confirm(tr('discardConfirm')))return true;
+   if(dirty&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return true;
    menuId=crypto.randomUUID();name=tr('menuCreate');position='header';items=[];selected=chooser=null;creating=true;filter='';offset=0;mark();render();focusField('[data-menu-name]',true);return true;
   }
-  if(op==='delete'){if(!creating&&menuId&&confirm(tr('menuRemoveConfirm')))await save(true);return true;}
+  if(op==='delete'){if(!creating&&menuId&&await confirmAction(tr('menuRemoveConfirm'),{action:'delete'}))await save(true);return true;}
   if(op==='prior'||op==='more'){offset+=op==='more'?40:-40;paint('[data-menu-node] .menu-tree-label');return true;}
   const found=locate(element.dataset.menuItem,items);
   if(op==='select'){select(found?.item.uid,true);return true;}

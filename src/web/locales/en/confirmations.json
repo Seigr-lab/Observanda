@@ -3,5 +3,9 @@
   "remove": "Remove",
   "delete": "Delete",
   "discard": "Discard changes",
-  "replace": "Replace"
+  "replace": "Replace",
+  "save": "Save and leave",
+  "restore": "Restore",
+  "detach": "Detach",
+  "release": "Release"
 }

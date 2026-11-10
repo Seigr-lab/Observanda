@@ -11,6 +11,7 @@ import {convertPublicationRecord} from '../../src/publication-conversion-render.
 import {savedWebsiteSearches} from '../../src/website-saved-searches.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {answerConfirmation} from './confirm-helper.js';
 
 test.use({screenshot:'off',trace:'off',video:'off'});
 async function checkFeedDialogLayout(page,dialog){
@@ -101,7 +102,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const newest=captures[4];await store.putSource(newest,{token:await store.beginSourceUpdate({sourceId:newest.sourceId})});
   await expect(dialog).not.toBeVisible({timeout:30000});
   await expect(western.locator('.tide-plate')).toHaveCount(3,{timeout:30000});
-  page.once('dialog',d=>d.accept());await edit('Western stations','Unfinished heading');
+  await feed.getByRole('heading',{name:'Western stations',exact:true}).click();await page.locator('[data-feed-context]').click();await answerConfirmation(page,'Restore');await expect(dialog.locator('[data-feed-heading]')).toHaveValue('Unfinished heading');
   await dialog.locator('[data-feed-heading]').fill('Western stations');await save();
   const removed=captures[0];await store.putSource({...removed,visible:false,html:'',assets:[]},{token:await store.beginSourceUpdate({sourceId:removed.sourceId})});
   await expect(western.locator('.tide-plate')).toHaveCount(2,{timeout:30000});await expect(western).toContainText('Transect station 5');
@@ -117,7 +118,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await expect(visitor.locator('.tide-plate')).toHaveCount(2);await visitor.locator('a[rel=next]').first().click();await expect(visitor.locator('section[data-website-feed]')).toBeVisible();
   const published=await readFile(path.join(out,'index.html'),'utf8'),continuation=await readFile(path.join(out,more.split('#')[0]),'utf8');
   expect(published+continuation).not.toMatch(/private-landowner-canary|Transect station 1/);
-  await page.reload();await edit('Western stations');page.once('dialog',d=>d.accept());await dialog.getByRole('button',{name:'Remove feed',exact:true}).click();
+  await page.reload();await edit('Western stations');await dialog.getByRole('button',{name:'Remove feed',exact:true}).click();await answerConfirmation(page,'Remove');
   await expect(feed).toHaveCount(1);await expect(feed.first()).toContainText('All stations');expect(unexpected).toEqual([]);
  }finally{
   try{await visitor?.close();await app?.close();if(fixture)await clearVault(fixture.vault);}finally{if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;}

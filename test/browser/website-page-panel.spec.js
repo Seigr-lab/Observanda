@@ -1,14 +1,14 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
-import {readdirSync} from 'node:fs';
 
 test('large saved sites search by folder, title and publication state and edit literal page metadata',async({page})=>{
- // Serve only website editor modules; anything else aborts.
- const files=new Map(await Promise.all(readdirSync(new URL('../../src/web/',import.meta.url)).filter(name=>/^website-[a-z-]+\.js$/.test(name)).map(async name=>[name,await readFile(new URL('../../src/web/'+name,import.meta.url),'utf8')])));
- await page.context().route('http://page-panel.test/**',route=>{
+ // Serve the real application modules and catalogues the panel imports; anything else aborts.
+ await page.context().route('http://page-panel.test/**',async route=>{
   const name=new URL(route.request().url()).pathname.slice(1);
   if(name==='')return route.fulfill({contentType:'text/html',body:'<main></main>'});
-  return files.has(name)?route.fulfill({contentType:'text/javascript',body:files.get(name)}):route.abort();
+  if(!/^[\w/.-]+\.(?:js|json)$/.test(name)||name.split('/').includes('..'))return route.abort();
+  try{return route.fulfill({contentType:name.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web/'+name,import.meta.url),'utf8')});}
+  catch{return route.abort();}
  });
  await page.goto('http://page-panel.test/');
  await page.evaluate(async()=>{

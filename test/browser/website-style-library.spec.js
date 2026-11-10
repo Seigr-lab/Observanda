@@ -44,7 +44,6 @@ test('author reusable typography, inspect a local override, publish a licensed f
   await store.importFiles(site,{name:'Monitoring',files:new Map([['index.html',html],['style.css','body{font:15px sans-serif}']])});
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/offline';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'prefs.json'),port:0});
-  page.on('dialog',d=>d.accept());
   const clientErrors=[];page.on('pageerror',reason=>clientErrors.push(reason.stack??reason.message));
   const routes=[];page.on('request',r=>routes.push(new URL(r.url()).pathname));
   await page.goto(app.origin+'/?view=website#'+app.launchToken);

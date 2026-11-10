@@ -1,3 +1,4 @@
+import {confirmAction} from './confirm-action.js';
 export function websiteFilesVersions({site,request,signal,tr,esc,adopt,close,render,run}){
  let openSite,history,version,kind,path,area,items,comparison,review,query,offset,reviewOffset,component,label;
  function reset(){openSite=history=items=comparison=review=null;version=component=label=query='';kind='page';area='text';offset=reviewOffset=0;}
@@ -97,7 +98,7 @@ export function websiteFilesVersions({site,request,signal,tr,esc,adopt,close,ren
   if(operation==='refresh'){await open();return;}
   if(operation==='name'||operation==='release'){
    if(operation==='name'&&!label.trim()){document.querySelector('[data-versions="label"]')?.focus();return;}
-   if(operation==='release'&&!confirm(tr('versionReleaseConfirm')))return;
+   if(operation==='release'&&!await confirmAction(tr('versionReleaseConfirm'),{action:'release'}))return;
    const result=await call(operation,{path:site().path,label});adopt(result);
    await open();return;
   }

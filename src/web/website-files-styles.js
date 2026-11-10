@@ -1,4 +1,5 @@
 import {tokenGroups,tokenStates,tokenValue,tokenID} from './website-token-model.js';
+import {confirmAction} from './confirm-action.js';
 import {styleField,styleOptions} from './website-style-controls.js';
 import {inspectWebsiteStyle} from './website-style-inspection.js';
 
@@ -27,7 +28,7 @@ export async function editWebsiteStyles({t,opened,selection,target,instance,bloc
  const commands=element(editor,'div');commands.className='website-token-actions';
  const save=button(commands,'tokenSave',()=>saveDefinition());save.classList.add('button-primary');save.dataset.styleSave='';
  const remove=button(commands,'remove',async()=>{
-  if(!selected||!confirm(t('tokenRemoveConfirm',{name:selected.name,count:selected.pages})))return;
+  if(!selected||!await confirmAction(t('tokenRemoveConfirm',{name:selected.name,count:selected.pages}),{action:'remove'}))return;
   await write({action:'remove',tokenId:selected.id});await load(0);select(null);
  });
  const usage=element(editor,'p');usage.setAttribute('aria-live','polite');
@@ -48,7 +49,7 @@ export async function editWebsiteStyles({t,opened,selection,target,instance,bloc
  let catalog,selected,offset=0,edited=false,locked=false,epoch=0,timer=0,rules={},textOwner=selection,activeGroup='typography';
  let observed=null,names={},watchedDocument=null;
  const fresh=()=>dialog.open&&current()&&!signal.aborted;
- function dismiss(){if(!locked&&(!edited||confirm(t('discardConfirm'))))dialog.close();}
+ async function dismiss(){if(!locked&&(!edited||await confirmAction(t('discardConfirm'),{action:'discard'})))dialog.close();}
  async function task(callback){
   if(locked||!fresh())return;
   locked=true;close.disabled=true;dialog.setAttribute('aria-busy','true');editor.inert=browser.inert=fontForm.inert=true;
@@ -84,7 +85,7 @@ export async function editWebsiteStyles({t,opened,selection,target,instance,bloc
   for(const b of results.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.styleId===item?.id));
   renderFields();renderScopes();update();
  }
- function choose(item){if(edited&&!confirm(t('discardConfirm')))return;select(item);name.focus();}
+ async function choose(item){if(edited&&!await confirmAction(t('discardConfirm'),{action:'discard'}))return;select(item);name.focus();}
  function renderScopes(){
   const prior=scope.value,opts=[['site',t('site')]];
   const folder=opened.path.split('/').slice(0,-1).join('/');
@@ -167,7 +168,7 @@ export async function editWebsiteStyles({t,opened,selection,target,instance,bloc
  }
  query.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>void task(()=>load(0)),180);};
  name.oninput=()=>{edited=true;update();};state.onchange=renderFields;
- group.onchange=()=>{if(Object.keys(rules).length&&!confirm(t('discardConfirm'))){group.value=activeGroup;return;}activeGroup=group.value;rules={};edited=true;renderFields();renderScopes();update();};
+ group.onchange=async()=>{if(Object.keys(rules).length&&!await confirmAction(t('discardConfirm'),{action:'discard'})){group.value=activeGroup;return;}activeGroup=group.value;rules={};edited=true;renderFields();renderScopes();update();};
  property.onchange=()=>void task(inspect);inspector.ontoggle=()=>{if(inspector.open)void task(inspect);};
  scope.onchange=update;existingFont.onchange=()=>void task(displayFont);editor.onsubmit=event=>{event.preventDefault();void task(saveDefinition);};
  document.body.append(dialog);dialog.showModal();

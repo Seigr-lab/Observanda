@@ -1,4 +1,5 @@
 import {appearanceFonts,appearancePresets,appearanceCSS,scopedAppearanceCSS} from './website-appearance-model.js';
+import {confirmAction} from './confirm-action.js';
 import {loadWebsiteCanvas} from './website-html-document.js';
 import {websiteLayerAt} from './website-layer-model.js';
 
@@ -83,7 +84,7 @@ export async function editWebsiteAppearance({opened,directory,request,t,signal,c
   const choose=()=>{theme=initial.items.find(i=>i.id===collection.value)??null;original=theme?.values??appearancePresets.coast;draft={...original};nameInput.value=theme?.name??'';usage.textContent=theme?t('themeUsage',{count:theme.uses}):t('themeNewHelp');showValues();};
   collection.onchange=choose;nameInput.oninput=paint;scope.onchange=paint;
   inherit.onclick=()=>void submit({action:'apply',themeId:null,scope:scope.value,blockPath});
-  remove.onclick=()=>{if(confirm(t('themeConfirmRemove',{name:theme.name})))void submit({action:'remove',themeId:theme.id});};
+  remove.onclick=async()=>{if(await confirmAction(t('themeConfirmRemove',{name:theme.name}),{action:'delete'}))void submit({action:'remove',themeId:theme.id});};
   choose();
  }
  const dismiss=()=>dialog.close();dialog.addEventListener('cancel',event=>{if(submitting)event.preventDefault();});
