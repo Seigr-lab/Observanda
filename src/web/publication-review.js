@@ -37,5 +37,5 @@ export function publicationReviewView(p,{esc,field,option,icon}){
   ${p.destination?.kind==='github'&&!plan&&!planning?`<button class="button" data-action="publish-refresh-plan">${text('repositoryReview')}</button>`:''}
   ${p.destination?`<button class="button primary" data-action="publish-release" ${p.stale||planning||destinationConflictCount(plan)?'disabled':''}>${text(p.destination.kind==='github'?(p.destination.github.pages===false?'publishGithub':'publishPages'):'publishSsh')}</button>`:`<button class="button" data-action="integrations">${text('configure')}</button>`}
   <a id="full-public-preview" class="button" href="${esc(p.url)}" target="_blank" rel="noopener">${text('openPreview')}</a></div></section>
-  <iframe class="preview-frame" title="${text('previewFrame')}" src="${esc(p.url)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe><p class="source-note">${destination?text('destination',{destination}):text('noDestination')}</p>`;
+  <iframe class="preview-frame" data-publication-review title="${text('previewFrame')}" src="${esc(p.url)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"></iframe><p class="source-note">${destination?text('destination',{destination}):text('noDestination')}</p>`;
 }
