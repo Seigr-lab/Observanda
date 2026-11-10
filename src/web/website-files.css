@@ -96,6 +96,13 @@
  .website-page-controls .website-file-select { max-width:100%; min-height:1.7rem; height:1.85rem; font-size:.85rem }
  .website-files-stage:has(.website-selection-trail) { display:grid; grid-template-rows:minmax(0,1fr) auto }
 }
+@media(min-width:761px) and (max-height:52rem){
+ .website-files-app .website-page-controls:has(.website-task-group) { display:flex; flex-wrap:wrap; align-items:center; gap:.3rem 1.1rem; padding:.3rem .55rem }
+ .website-page-controls .website-task-group { flex:0 1 auto; max-width:100% }
+ .website-page-controls .website-task-group:not(:first-child) { padding-inline-start:0; margin-inline-start:0; border-inline-start:0 }
+ .website-page-controls .website-task-group>.website-task-label { display:inline-block; margin-inline-end:.4rem; vertical-align:middle; white-space:nowrap }
+ .website-page-controls .website-task-group .website-extra-tools { display:inline-flex; vertical-align:middle; max-width:100% }
+}
 @media(max-width:760px){.website-task-group>.website-task-label { display:none }}
 .website-files-app .website-files-stage { border:1px solid var(--border,#cbd3df); padding:0; border-radius:.45rem; overflow:hidden }
 .website-files-stage .website-files-canvas { border:0 }
