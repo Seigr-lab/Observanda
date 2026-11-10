@@ -22,6 +22,11 @@ function define(operation,{write,method='POST',input='json',schema='material-com
 for(const operation of reads)if(operation!=='retained-figure-export')define(operation,{write:false,download:operation==='download'});
 for(const operation of writes)define(operation,{write:true});
 for(const operation of ['scientific-draft-browse','scientific-draft-list','scientific-draft-read'])define(operation,{write:false,limit:8192});
+define('table-schema-search',{write:false,limit:4096});
+define('table-browse',{write:false,limit:160000});
+define('table-view-list',{write:false,limit:2048});
+define('table-view-save',{write:true,limit:1024*1024});
+define('table-view-remove',{write:true,limit:2048});
 define('scientific-draft-write',{write:true,limit:MAX_RECORD_COMMAND_BYTES});
 define('scientific-draft-discard',{write:true,limit:8192});
 define('retained-figure-export',{write:false,method:'GET',input:'query',schema:'retained-figure-selection',limit:4096,download:true});

@@ -31,6 +31,16 @@ export function projectSourceEvidenceOwner(store,record,{signal}={}){
   if(!id.startsWith(root))return null;
   return store.workspace.inspectCatalogue(store,async()=>{
    const tail=id.slice(root.length),parts=tail.split('/');let match;
+   if(parts[0]==='table-views'){
+    const [,recordId,datasetId,revision,name]=parts;
+    if(parts.length!==5||!researchId(recordId)||!researchId(datasetId)||!/^[a-f0-9]{64}$/.test(revision)||!name.endsWith('.json')||!researchId(name.slice(0,-5)))damaged();
+    const ref={kind:'dataset',id:datasetId,revision},doc=await materials.readStored(ref);
+    if(doc.recordId!==recordId)damaged();
+    const {decodeDatasetTableView}=await import('./dataset-table-views.js');
+    const stored=await store.object(id);
+    decodeDatasetTableView(stored?.text,{ref,id:name.slice(0,-5),recordId,width:doc.content.schemaIndex?.count??doc.content.columns.length});
+    return record(recordId);
+   }
    if((match=/^objects\/([^/]+)\/(head|[a-f0-9]{64})\.json$/.exec(tail))){
     if(!researchId(match[1]))damaged();const value=await json(id);
     if(value.id!==match[1]||!researchId(value.recordId))damaged();

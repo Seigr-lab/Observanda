@@ -7,6 +7,25 @@ export class QueryCachePressure extends Error{}
 const INDEX_BYTES=32+ENCRYPTION_OVERHEAD,FRAME_BYTES=512*1024,FRAME_ITEMS=128,FAN_IN=8;
 const damage=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const integer=value=>Number.isSafeInteger(value)&&value>=0;
+// A selected scientific value can exceed the size of a scratch frame. Its
+// comparator resolves equal prefixes from retained storage. Ordinary queries
+// continue to use the native synchronous array sort.
+async function sortWindow(rows,order,deferredOrder){
+ if(!deferredOrder){rows.sort(order);return;}
+ let source=rows,destination=new Array(rows.length);
+ for(let width=1;width<rows.length;width*=2){
+  for(let start=0;start<rows.length;start+=2*width){
+   const middle=Math.min(start+width,rows.length),end=Math.min(middle+width,rows.length);
+   let left=start,right=middle;
+   for(let i=start;i<end;i++){
+    if(right===end||left<middle&&await deferredOrder(source[left],source[right])<=0)destination[i]=source[left++];
+    else destination[i]=source[right++];
+   }
+  }
+  [source,destination]=[destination,source];
+ }
+ if(source!==rows)for(let i=0;i<rows.length;i++)rows[i]=source[i];
+}
 export class QueryResultSort{
  constructor(io,key,id,{check=()=>{}}={}){this.io=io;this.key=key;this.id=id;this.check=check;this.pass=0;this.generations=new Map();}
  aad(file,position,extra=''){return 'Observanda/query-result/v1/'+this.id+'/'+this.generations.get(file)+'/'+file+'/'+position+'/'+extra;}
@@ -24,24 +43,24 @@ export class QueryResultSort{
   const bytes=await this.io.read(file,offset+8,size),plain=unseal(bytes,this.key,this.aad(file,offset,count));let rows;
   try{rows=JSON.parse(plain);}catch{damage();}if(!Array.isArray(rows)||rows.length!==count)damage();return {rows,end:offset+8+size,bytes:8+size};
  }
- async build(source,order){
+ async build(source,order,{deferredOrder}={}){
   let runs=0,input='a',output='b',writer=this.writer(input),window=[],bytes=2;
   for await(const row of source){
    this.check();const size=Buffer.byteLength(JSON.stringify(row))+1;if(size+2>FRAME_BYTES)throw new QueryCachePressure();
-   if(window.length&&(window.length===FRAME_ITEMS||bytes+size>FRAME_BYTES)){window.sort(order);await writer.run(window);runs++;window=[];bytes=2;}
+   if(window.length&&(window.length===FRAME_ITEMS||bytes+size>FRAME_BYTES)){await sortWindow(window,order,deferredOrder);await writer.run(window);runs++;window=[];bytes=2;}
    window.push(row);bytes+=size;
   }
-  if(window.length){window.sort(order);await writer.run(window);runs++;window=[];}
+  if(window.length){await sortWindow(window,order,deferredOrder);await writer.run(window);runs++;window=[];}
   let receipt=await writer.finish();
   while(runs>1){
    this.check();await this.io.truncate(output+'.data',0);await this.io.truncate(output+'.runs',0);await this.io.truncate('pages',0);writer=this.writer(output);
    let nextRuns=0;
    for(let first=0;first<runs;first+=FAN_IN){
     const lanes=[];
-    for(let i=first;i<Math.min(runs,first+FAN_IN);i++){const [start,end,count]=await this.descriptor(input+'.runs',i),iterator=this.runRows(input+'.data',start,end,count,order)[Symbol.asyncIterator]();lanes.push({iterator,next:await iterator.next()});}
+    for(let i=first;i<Math.min(runs,first+FAN_IN);i++){const [start,end,count]=await this.descriptor(input+'.runs',i),iterator=this.runRows(input+'.data',start,end,count,order,deferredOrder)[Symbol.asyncIterator]();lanes.push({iterator,next:await iterator.next()});}
     const self=this;
     async function* merged(){
-     try{for(;;){self.check();let chosen;for(const lane of lanes)if(!lane.next.done&&(!chosen||order(lane.next.value,chosen.next.value)<0))chosen=lane;if(!chosen)return;yield chosen.next.value;chosen.next=await chosen.iterator.next();}}
+     try{for(;;){self.check();let chosen;for(const lane of lanes)if(!lane.next.done&&(!chosen||(deferredOrder?await deferredOrder(lane.next.value,chosen.next.value):order(lane.next.value,chosen.next.value))<0))chosen=lane;if(!chosen)return;yield chosen.next.value;chosen.next=await chosen.iterator.next();}}
      finally{await Promise.all(lanes.map(lane=>lane.iterator.return?.()));}
     }
     await writer.run(merged());nextRuns++;
@@ -50,9 +69,9 @@ export class QueryResultSort{
   }
   return {...receipt,file:input+'.data'};
  }
- async *runRows(file,start,end,count,order){
+ async *runRows(file,start,end,count,order,deferredOrder){
   if(start>end||!count)damage();let read=0,previous;
-  for(let at=start;at<end;){const frame=await this.frame(file,at);if(frame.end>end||frame.end<=at)damage();for(const row of frame.rows){this.check();if(previous&&order(previous,row)>=0)damage();previous=row;read++;yield row;}at=frame.end;}
+  for(let at=start;at<end;){const frame=await this.frame(file,at);if(frame.end>end||frame.end<=at)damage();for(const row of frame.rows){this.check();if(previous&&(deferredOrder?await deferredOrder(previous,row):order(previous,row))>=0)damage();previous=row;read++;yield row;}at=frame.end;}
   if(read!==count)damage();
  }
  writer(slot){
@@ -78,9 +97,9 @@ export class QueryResultSort{
   }
   if(rows.length!==Math.min(limit,receipt.total-offset))damage();return rows;
  }
- async rank(receipt,boundary,order,{includeEqual=true}={}){
+ async rank(receipt,boundary,order,{includeEqual=true,deferredOrder}={}){
   let low=0,high=receipt.total;
-  while(low<high){this.check();const at=Math.floor((low+high)/2),[row]=await this.page(receipt,at,1),difference=order(row,boundary);if(difference<0||includeEqual&&difference===0)low=at+1;else high=at;}
+  while(low<high){this.check();const at=Math.floor((low+high)/2),[row]=await this.page(receipt,at,1),difference=deferredOrder?await deferredOrder(row,boundary):order(row,boundary);if(difference<0||includeEqual&&difference===0)low=at+1;else high=at;}
   return low;
  }
 }

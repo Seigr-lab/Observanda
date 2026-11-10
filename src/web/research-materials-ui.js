@@ -31,7 +31,7 @@ import {measurementDomainControls,readMeasurementDomain,wireMeasurementDomains,d
 import {retainedFigureReader} from './retained-figure-reader.js';
 import {isRetainedFigure} from './retained-figure-model.js';
 import {measurementTransformControls,readMeasurementTransform,wireMeasurementTransforms,measurementTransformDescription} from './measurement-transform-ui.js';
-import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetColumnPager} from './dataset-column-picker.js';
+import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetColumnPager,bindDatasetColumnSearch} from './dataset-column-picker.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
 import {retainedSourceClient} from './retained-source-client.js';
 import {materialReference} from './material-reference.js';
@@ -67,6 +67,7 @@ import {localIntakeUI} from './local-intake-ui.js';
 import {runReadinessUI} from './run-readiness-ui.js';
 import {materialFileSummary,materialSourceLocation} from './material-file-summary.js';
 import {datasetPreparationUI,preparationText} from './dataset-preparation-ui.js';
+import {datasetTableControls} from './dataset-table-controls.js';
 import {datasetCalculationUI,calculationText} from './dataset-calculation-ui.js';
 import {datasetAggregationUI,aggregationText,weightedFitDescription} from './dataset-aggregation-ui.js';
 import {evidenceReuseUI} from './evidence-reuse-ui.js';
@@ -109,13 +110,18 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  document.getElementById('dialog')?.addEventListener('close',()=>recovery.reset());
  const stopWatching=()=>{dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
+ let cancelSchemaFind;
+ document.getElementById('dialog')?.addEventListener('close',()=>cancelSchemaFind?.());
  const frame=(title,body,actions=null)=>{
+  cancelSchemaFind?.();
+  if(document.querySelector('[data-dataset-table-tools]'))table.suspend();
   recovery.detach();
   stopWatching();previews.release();
   actions??=referenceContext?(referenceTrail.length?button(esc(t('figureProvenance','back')),'reference-back'):readingOverview?button(esc(t("evidenceIntake","back")),'home'):'')+'<button type="button" class="button" data-action="close-dialog">'+esc(t('attempts','close'))+'</button>':button(esc(t("evidenceIntake","back")),'home');
   let n=0;body=body.replace(/<(input|select|textarea)\b(?![^>]*\bname=)/g,(_,tag)=>'<'+tag+' name="material-'+(++n)+'" ');
   showDialog(`<div class="material-workbench"><h2 id="dialog-title">${esc(title)}</h2><form id="material-form">${body}</form><div class="dialog-actions">${actions}</div></div>`);
   const form=document.getElementById('material-form'),reference=selectedRef;
+  cancelSchemaFind=bindDatasetColumnSearch(form,{call,guard,notify});
   void materialReferenceElements(form,readNamespace??state.book?.id,{resolve:reference?items=>call('reference-addresses',{ref:reference,items}):undefined}).catch(error=>{if(form.isConnected)notify(error.message,true);});
  };
  const choose=(label,id,choices,selected)=>field(label,`<select id="material-${id}">${choices.map(([v,l])=>option(v,l,selected)).join('')}</select>`);
@@ -133,7 +139,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(state.storage?.researchStorage!=='catalogue'||!reference?.workspaceId)return;
   const generation=jobView;await sources.resolve(reference,{unlock:true});currentView(generation);
  }
- const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();return downloadResource(originalRoute(r)+'?context='+encodeURIComponent(workspaceContext));}});
+ const table=datasetTableControls({call,esc,guard,notify,readOnly:()=>referenceContext,refresh:datasetView});
+ document.getElementById('dialog')?.addEventListener('close',()=>table.close());
+ const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null,tableView:opened?.kind==='dataset'?table.snapshot():null}),download:r=>{guard();return downloadResource(originalRoute(r)+'?context='+encodeURIComponent(workspaceContext));}});
  const coordinateFrames=coordinateFrameUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>coordinateFrames.clean());
  const uncertainty=statisticalUncertaintyUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,watchJob,recovery});
@@ -368,12 +376,12 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const dataset=d.dataset??(c.inputs?.[0]?.kind==='dataset'?c.inputs[0]:null);
   return `<p>${esc(mt("denominator",{rows:d.rows.toLocaleString(),included:d.included.toLocaleString(),excluded:(d.excludedCount??d.excluded?.length??0).toLocaleString()}))}</p><details class="material-more"><summary>${esc(mt("coverage"))}</summary><p>${esc(mt("missingIncluded"))}</p><ul>${(d.missing??[]).map(m=>`<li>${esc(m.name??(mt("columnPosition",{position:m.column+1})))}: ${(m.count??m.rows?.length??0).toLocaleString()}</li>`).join('')}</ul>${dataset?button(esc(mt("inspectSourceRows")),'reference',`data-ref="${esc(JSON.stringify(dataset))}"`):''}</details>`;
  }
- async function inspect(reference,{atPage=0,comparisonView=null,retainedDocument=null}={}){
+ async function inspect(reference,{atPage=0,comparisonView=null,retainedDocument=null,tableView=null}={}){
   frame(mt("loadingEvidence"),'<p role="status">'+esc(mt("openingRevision"))+'</p>');
   const generation=jobView,requested=ref(inheritMaterialNamespace(reference,state.book?.id)),doc=retainedDocument??await call('read',{ref:requested});guard();
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
   selectedRef=requested;opened=doc;page=Math.min(atPage,Math.max(0,(opened.content.pageIndex?.count??opened.content.pages?.length??1)-1));columnOffset=0;
-  if(opened.kind==='dataset')return datasetView();
+  if(opened.kind==='dataset'){table.open(selectedRef,opened,tableView);return datasetView();}
   if(opened.content.comparison)return comparisons.open(selectedRef,{restore:comparisonView});
   const correctionControls=await corrections.controls(opened,selectedRef);
   const status=opened.kind==='analysis'?await call('analysis-status',{ref:selectedRef}):null;guard();if(generation!==jobView)return;const c=opened.content;frame(opened.title,`<p>${esc(materialKind(opened.kind))} Â· ${selectedRef.revision} Â· ${esc(opened.createdAt)}</p>${opened.previous?button(esc(mt("previousRevision")),'previous'):''}${correctionControls}
@@ -430,14 +438,23 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  }
  const referenceList=refs=>`<ul>${refs.map(r=>`<li>${button(esc(catalog.find(m=>m.id===r.id&&m.revision===r.revision)?.title??analysisText(r.kind==='record'?'retainedRecord':'retainedInput')),'reference',`data-ref="${esc(JSON.stringify(r))}"`)} Â· ${esc(materialKind(r.kind))} Â· ${r.revision.slice(0,12)}</li>`).join('')}</ul>`;
  async function datasetView(){
-  frame(mt("loadingDataset"),'<p role="status">'+esc(mt("openingRows"))+'</p>');
-  const generation=jobView,data=await call('rows',{ref:selectedRef,page,columnOffset});guard();const c=opened.content;
+  if(!document.querySelector('[data-dataset-table-tools]'))frame(mt("loadingDataset"),'<p role="status">'+esc(mt("openingRows"))+'</p>');
+  table.open(selectedRef,opened);
+  const generation=jobView,result=await table.load(selectedRef);guard();const c=opened.content;
+  if(!result)return;
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
-  frame(opened.title,`<p>${esc(mt("datasetRows",{rows:data.rowCount.toLocaleString(),page:data.pages?page+1:0,pages:data.pages}))}</p>
-   <div class="material-table" tabindex="0" role="region" aria-label="${esc(mt("datasetValues"))}"><table><thead><tr><th>${esc(t("measurements","surroundingRow"))}</th>${data.columns.map(col=>`<th>${esc(col.name)}<small>${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}${col.representation==='radix'?' Â· '+esc(mt("numeralBase",{base:col.radix})):''} Â· ${esc(col.unit)}</small>${computationLabel(col)?'<small>'+esc(computationLabel(col))+'</small>':''}</th>`).join('')}<th>${esc(t("measurements","exclusion"))}</th></tr></thead><tbody>${data.rows.map(r=>`<tr><th scope="row"><details class="material-row-identity"><summary>${esc(r.order??r.line)}</summary><span>${esc(r.id)}${r.locator?.pointer?'<br>'+esc(r.locator.pointer):''}</span></details></th>${r.cells.map((v,i)=>`<td><button type="button" class="link" data-action="material-measurement-inspect" data-source="${esc(JSON.stringify({ref:selectedRef,selector:{kind:'cell',page,row:data.rows.indexOf(r),column:columnOffset+i}}))}" aria-label="${esc(measurementText('inspect'))}: ${esc(data.columns[i].name)} Â· ${r.order}">${esc(['null','absent'].includes(r.valueKinds?.[i])?'['+r.valueKinds[i]+']':typeof v==='object'?(v.format==='domain-value'?(clockSynchronizationStatusDisplay(v)??clockStatusDisplay(v)??mt("inspectDomain",{domain:domainDescription(v.definition)})):mt("openCompleteValue",{characters:v.characters.toLocaleString()})):v||'âˆ…')}</button>${cellComputationView(data.columns[i],r,i,{esc})}</td>`).join('')}<td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>
+  const data={...result,columns:result.columns.map(item=>item.definition),columnCount:result.width};
+  page=data.rows[0]?.page??0;columnOffset=table.current.settings.columnOffset;
+  const cellButton=(r,rowIndex,v,i)=>{
+   const valueId='dataset-value-'+rowIndex+'-'+i;
+   return `<td><button type="button" class="link" data-action="material-measurement-inspect" data-table-row="${rowIndex}" data-table-column="${i}" data-source="${esc(JSON.stringify({ref:selectedRef,selector:{kind:'cell',page:r.page,row:r.index,column:result.columns[i].index}}))}" aria-label="${esc(measurementText('inspect'))}: ${esc(data.columns[i].name)} · ${r.order}" aria-describedby="${valueId}"><span id="${valueId}">${esc(['null','absent'].includes(r.valueKinds?.[i])?t('measurements',r.valueKinds[i]):typeof v==='object'?(v.format==='domain-value'?(clockSynchronizationStatusDisplay(v)??clockStatusDisplay(v)??mt("inspectDomain",{domain:domainDescription(v.definition)})):mt("openCompleteValue",{characters:v.characters.toLocaleString()})):v||t('datasetTable','emptyString'))}</span></button>${cellComputationView(data.columns[i],r,i,{esc})}</td>`;
+  };
+  frame(opened.title,`${table.render()}<p>${esc(table.range(result))}</p>
+   <div class="material-table" role="region" aria-label="${esc(mt("datasetValues"))}"><table data-table-grid role="grid" aria-multiselectable="true" aria-rowcount="${result.total+1}" aria-label="${esc(mt("datasetValues"))}"><thead><tr><th>${esc(t("measurements","surroundingRow"))}</th>${data.columns.map(col=>`<th>${esc(col.name)}<small>${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}${col.representation==='radix'?' · '+esc(mt("numeralBase",{base:col.radix})):''}${col.unit?' · '+esc(col.unit):''}</small>${computationLabel(col)?'<small>'+esc(computationLabel(col))+'</small>':''}</th>`).join('')}<th>${esc(t("measurements","exclusion"))}</th></tr></thead><tbody>${data.rows.map((r,rowIndex)=>`<tr aria-rowindex="${result.offset+rowIndex+2}"><th scope="row"><details class="material-row-identity"><summary>${esc(r.order??r.line)}</summary><span>${esc(r.id)}${r.locator?.pointer?'<br>'+esc(r.locator.pointer):''}</span></details></th>${r.cells.map((v,i)=>cellButton(r,rowIndex,v,i)).join('')}<td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>
    ${c.sourceMapping?`<details class="material-more"><summary>${esc(mt("sourceMapping"))}</summary><p>${esc(({delimited:mt('delimitedFormat'),json:mt('jsonArray'),jsonl:'JSON Lines','json-nested':preparationText('format')})[c.sourceMapping.format]??c.sourceMapping.format)}${c.sourceMapping.rowsPath?' Â· '+esc(mt("rowsAt",{path:c.sourceMapping.rowsPath})):''}</p>${preparation.summary(c.sourceMapping)}${(c.sourceMapping.fieldsInSchema||Array.isArray(c.sourceMapping.fields))?`<ul>${(c.sourceMapping.fieldsInSchema?data.columns.map(col=>col.sourceField).filter(Boolean):c.sourceMapping.fields).map(f=>`<li>${esc(f.name)}: ${esc(f.path)||esc(mt("rowValue"))}</li>`).join('')}</ul><p>${esc(mt("presenceHelp"))}</p>`:''}</details>`:''}
-   <div class="inline-actions">${button(esc(t("measurements","sync-previousColumns")),'columns-prev',columnOffset?'':'disabled')}<span>${esc(mt("columnPage",{first:columnOffset+1,last:columnOffset+data.columns.length,total:data.columnCount}))}</span>${button(esc(t("measurements","sync-nextColumns")),'columns-next',columnOffset+data.columns.length<data.columnCount?'':'disabled')}</div>
-   <div class="inline-actions">${button(esc(t("measurements","sync-previousRows")),'rows-prev',page?'':'disabled')}${button(esc(t("measurements","sync-nextRows")),'rows-next',page+1<data.pages?'':'disabled')}${calculatorResultActions(c,{esc,button,readOnly:referenceContext})}${c.spectrum?button(esc(spectrumText('review')),'spectrum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.cusum?button(esc(cusumText('review')),'cusum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.uncertainty?button(esc(uncertaintyText('review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-result="true"`):''}${referenceContext?'':(c.calculatorResult||c.spectrum||c.cusum?'':button(esc(mt("editSchema")),'schema'))+button(esc(uncertaintyText('open')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createFrame')),'coordinate-frames-open-frame',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createTransform')),'coordinate-frames-open-transform',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(synchronizationText('title')),'clock-sync-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(mt("createFigure")),'plot-form')+button(esc(spectrumText('open')),'spectrum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(cusumText('open')),'cusum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.spectrum?button(esc(spectrumText('repeat')),'spectrum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+(c.cusum?button(esc(cusumText('repeat')),'cusum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(aggregationText('open')),'aggregation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.aggregation?button(esc(aggregationText('repeat')),'aggregation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(calculationText('open')),'calculation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.calculation?button(esc(calculationText('repeat')),'calculation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')}${opened.previous?button(esc(mt("previousRevision")),'previous'):''}</div>`);
+   <div class="inline-actions">${button(esc(t("measurements","sync-previousColumns")),'columns-prev',columnOffset?'':'disabled')}<span>${esc(mt("columnPage",{first:columnOffset+1,last:Math.min(data.columnCount,columnOffset+16),total:data.columnCount}))}</span>${button(esc(t("measurements","sync-nextColumns")),'columns-next',columnOffset+16<data.columnCount?'':'disabled')}</div>
+   <div class="inline-actions">${button(esc(t("measurements","sync-previousRows")),'rows-prev',result.offset?'':'disabled')}${button(esc(t("measurements","sync-nextRows")),'rows-next',result.offset+data.rows.length<result.total?'':'disabled')}${calculatorResultActions(c,{esc,button,readOnly:referenceContext})}${c.spectrum?button(esc(spectrumText('review')),'spectrum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.cusum?button(esc(cusumText('review')),'cusum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.uncertainty?button(esc(uncertaintyText('review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-result="true"`):''}${referenceContext?'':(c.calculatorResult||c.spectrum||c.cusum?'':button(esc(mt("editSchema")),'schema'))+button(esc(uncertaintyText('open')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createFrame')),'coordinate-frames-open-frame',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createTransform')),'coordinate-frames-open-transform',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(synchronizationText('title')),'clock-sync-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(mt("createFigure")),'plot-form')+button(esc(spectrumText('open')),'spectrum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(cusumText('open')),'cusum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.spectrum?button(esc(spectrumText('repeat')),'spectrum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+(c.cusum?button(esc(cusumText('repeat')),'cusum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(aggregationText('open')),'aggregation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.aggregation?button(esc(aggregationText('repeat')),'aggregation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(calculationText('open')),'calculation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.calculation?button(esc(calculationText('repeat')),'calculation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')}${opened.previous?button(esc(mt("previousRevision")),'previous'):''}</div>`);
+  table.bind();
  }
  const missingRow=m=>`<div class="material-missing"><div class="material-fields">${field(esc(mt("missingValue")),`<input data-missing="value" name="missing-${crypto.randomUUID()}" value="${esc(m.value)}">`)}${field(esc(mt("meaning")),`<input data-missing="meaning" name="meaning-${crypto.randomUUID()}" value="${esc(m.meaning)}">`)}</div>${button(esc(mt("removeMissing")),'missing-remove')}</div>`;
  const exclusionRow=(row=1,reason='')=>`<div class="material-exclusion"><div class="material-fields">${field(esc(mt("acquisitionRow")),`<input data-exclusion="row" name="row-${crypto.randomUUID()}" type="number" min="1" max="${schemaRows.length}" value="${esc(row)}">`)}${field(esc(mt("exclusionReason")),`<input data-exclusion="reason" name="reason-${crypto.randomUUID()}" value="${esc(reason)}">`)}</div>${button(esc(mt("keepObservation")),'exclusion-remove')}</div>`;
@@ -704,8 +721,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act==='reference'){const r=JSON.parse(control.dataset.ref);await authorizeSource(r);if(referenceContext&&selectedRef)referenceTrail.push({ref:selectedRef,page});if(r.kind==='record')await openRevision(r);else await inspect(r);}
   if(act==='reference-back'){const previous=referenceTrail.pop();if(previous)await inspect(previous.ref,{atPage:previous.page});}
   if(act==='previous')await inspect({...selectedRef,revision:opened.previous});
-  if(act==='rows-prev'){page--;await datasetView();}
-  if(act==='rows-next'){page++;await datasetView();}
+  if(act==='rows-prev'){table.step(-1);await datasetView();}
+  if(act==='rows-next'){table.step(1);await datasetView();}
   if(act==='schema'){
    await openSchema(recovery.begin('schema',selectedRef));
   }
@@ -722,7 +739,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    const seen=new Set();for(const item of schemaExclusions){const row=Number(item.row);if(!Number.isInteger(row)||!schemaRows[row-1]||!item.reason.trim()||seen.has(row))throw Error(mt("distinctExclusion"));seen.add(row);exclusions[schemaRows[row-1].id]=item.reason;}
    const result=await queueDataset({recordId:owner,title:opened.title,id:opened.id,expectedRevision:selectedRef.revision,artifact:opened.content.inputs[0],baseDataset:selectedRef,sourceMapping:opened.content.sourceMapping,columnChanges,exclusions});await recovery.discard(current);await watchJob(result.job);
   }
-  if(act==='columns-prev'||act==='columns-next'){columnOffset+=act==='columns-next'?16:-16;await datasetView();}
+  if(act==='columns-prev'||act==='columns-next'){table.pageColumns(act==='columns-next'?1:-1);await datasetView();}
   if(act==='schema-prev'||act==='schema-next'){const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema();await schemaForm(schemaOffset+(act==='schema-next'?16:-16));}
   if(act==='plot-form')await plotForm();
   if(act==='plot'){await submitPlot(()=>capturePlot({validate:true}));}

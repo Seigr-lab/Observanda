@@ -107,7 +107,7 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
   if(key==='inspect')await open(JSON.parse(control.dataset.source));
   if(key==='retain')await start(source);
   if(key==='from-artifact')await open({ref:JSON.parse(control.dataset.ref),selector:{kind:'whole'}});
-  if(key==='back-source'){const previous=trail.pop();if(previous)await open(previous.source,{offset:previous.offset,componentOffset:previous.componentOffset??0,topologyCollection:previous.topologyCollection??null,alignmentOffset:previous.alignmentOffset??0,returning:true});else await inspect(returnTarget?.ref??source.ref,{atPage:returnTarget?.page??0,comparisonView:returnTarget?.comparisonView});}
+  if(key==='back-source'){const previous=trail.pop();if(previous)await open(previous.source,{offset:previous.offset,componentOffset:previous.componentOffset??0,topologyCollection:previous.topologyCollection??null,alignmentOffset:previous.alignmentOffset??0,returning:true});else await inspect(returnTarget?.ref??source.ref,{atPage:returnTarget?.page??0,comparisonView:returnTarget?.comparisonView,tableView:returnTarget?.tableView});}
   if(key==='back'){clean();await back();}
   if(key==='remove'){await dispose?.ready?.();capture();draft.sources.splice(Number(control.dataset.index),1);renderForm();}
   if(key==='add-source')await addSource();

@@ -28,7 +28,7 @@ export class PinnedQueryResults{
  }
  track(entry,operation){const promise=Promise.resolve().then(operation);entry.pending.add(promise);promise.then(()=>entry.pending.delete(promise),()=>entry.pending.delete(promise));return promise;}
  async clear(){const result=await Promise.allSettled([...this.entries.values()].map(entry=>this.dispose(entry)).concat([...this.disposals]));const failed=result.find(value=>value.status==='rejected');if(failed)throw failed.reason;}
- async window({workspace,ownerId,snapshotId,queryHash,order,point,after=null,offset=null,limit=25,includeEqual=true,preceding=false,reuse=true,signal},produce){
+ async window({workspace,ownerId,snapshotId,queryHash,order,deferredOrder,point,after=null,offset=null,limit=25,includeEqual=true,preceding=false,reuse=true,signal},produce){
   if(offset!==null&&(!Number.isSafeInteger(offset)||offset<0||after!==null))throw new AppError('INVALID');
   signal?.throwIfAborted();if(typeof workspace?.root!=='string'||!Buffer.isBuffer(workspace?.vault?.key)||queryCacheSuspended(workspace.root))return null;
   const scope=currentQueryCacheScope(),vault=workspace.vault,key=vault.key,fingerprint=hash(key),root=workspace.root,projectId=workspace.projectId??null,labBookId=workspace.labBookId??null,lifetimeVault=scope?.vault??vault,lifetimeKey=lifetimeVault?.key;
@@ -51,7 +51,7 @@ export class PinnedQueryResults{
      const check=()=>{admitted();lifetime();};let permit;
      try{
       check();permit=this.budget.reserve('buffer',32*1024*1024);entry.files=await detachedQueryCache(()=>this.open(workspace,{signal:AbortSignal.any([controller.signal,...(signal?[signal]:[])]),check:lifetime}));check();const sort=new QueryResultSort(entry.files,entry.key,entry.files.id,{check});
-      const input=await produce(check),receipt=await sort.build(input.rows,order);check();const metadata=await input.finish?.()??{};
+      const input=await produce(check),receipt=await sort.build(input.rows,order,{deferredOrder});check();const metadata=await input.finish?.()??{};
       if(Buffer.byteLength(JSON.stringify(metadata))>256*1024)throw new QueryCachePressure();await entry.files.finish();check();entry.receipt=receipt;entry.metadata=structuredClone(metadata);
      }finally{this.building--;permit?.release();}
     });
@@ -63,7 +63,7 @@ export class PinnedQueryResults{
     // New callbacks check this request's signal. The builder's request context
     // is never retained as the lifetime of a completed result.
     const check=()=>{admitted();entry.controller.signal.throwIfAborted();},sort=new QueryResultSort(entry.files,entry.key,entry.files.id,{check}),receipt=entry.receipt;
-    const skipped=offset!==null?Math.min(offset,receipt.total):after?await sort.rank(receipt,after,order,{includeEqual}):0,records=await sort.page(receipt,skipped,limit),prior=preceding?await sort.page(receipt,Math.max(0,skipped-limit-1),Math.min(limit+1,skipped)):[];check();await entry.files.assertNamed();
+    const skipped=offset!==null?Math.min(offset,receipt.total):after?await sort.rank(receipt,after,order,{includeEqual,deferredOrder}):0,records=await sort.page(receipt,skipped,limit),prior=preceding?await sort.page(receipt,Math.max(0,skipped-limit-1),Math.min(limit+1,skipped)):[];check();await entry.files.assertNamed();
     return {...structuredClone(entry.metadata),total:receipt.total,skipped,records,preceding:prior.map(point)};
     }finally{this.reading--;permit?.release();}
    });

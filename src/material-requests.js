@@ -128,6 +128,18 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  }
  case 'dataset-jobs':{const {queue}=await jobService();return datasetJobs(materials,queue,data.recordId,{cursor:data.cursor??null});}
  case 'rows':return materials.datasetPage(data.ref,data.page??0,{columnOffset:data.columnOffset??0});
+ case 'table-schema-search':{
+  const {searchDatasetSchema}=await import('./dataset-table-schema.js');
+  return searchDatasetSchema(materials,data,{signal,check});
+ }
+ case 'table-browse':{
+  const {browseDatasetTable}=await import('./dataset-table-browser.js');
+  return browseDatasetTable(materials,data,{signal,check});
+ }
+ case 'table-view-list':case 'table-view-save':case 'table-view-remove':{
+  const {tableViewRequest}=await import('./dataset-table-views.js');
+  return tableViewRequest(materials,operation,data,{signal,check});
+ }
  case 'collection':return materials.collection(data);
  case 'analysis':return materials.analysis(data);
  case 'comparison-page':return materials.comparisons.page(data,{signal});

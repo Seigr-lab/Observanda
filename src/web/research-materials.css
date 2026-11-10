@@ -16,6 +16,13 @@
 .material-table th,.material-table td { white-space:nowrap; min-width:8rem; padding:.6rem; }
 .material-table th small { display:block; }
 .material-table thead th { position:sticky; top:0; background:var(--surface,#fff); }
+.material-table td[aria-selected=true] { background:var(--accent-soft,#e7edff); box-shadow:inset 0 0 0 1px var(--accent,#345ac7); }
+.material-table-panels { display:flex; gap:.5rem; align-items:flex-start; flex-wrap:wrap; }
+.material-table-panels > details { border:1px solid var(--border); border-radius:.3rem; padding:.35rem .6rem; min-width:0; }
+.material-table-panels > details[open] { flex:1 1 24rem; }
+.material-table-panels summary { cursor:pointer; font-weight:600; }
+.material-table-panels label,.material-table-panels button { margin-block:.2rem; }
+[data-table-status]:empty { margin:0; }
 .material-hash { overflow-wrap:anywhere; font-family:monospace; }
 .material-figure svg { width:100%; height:auto; }
 .material-workbench progress[hidden] { display:none; }

@@ -230,6 +230,8 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   const exact=await readRecordOwnerMetadata(source,prefix+'.json',16*1024*1024);if(exact!==null)await emit({kind:'metadata',name:prefix+'.json',content:exact});
   for await(const key of objectNames(source,'metadata:'+prefix+'/',{signal})){const name=key.slice(9),text=await readRecordOwnerMetadata(source,name,16*1024*1024);if(text===null)damaged();await emit({kind:'metadata',name,content:text});}
  }
+ const {transferTableViews}=await import('./dataset-table-views.js');
+ await transferTableViews(source,target,receipt,{write,check,signal});
  state.ready=true;await write(persist);await saveProgress(state);return state;
 }
 export async function activateRecordOwnerEvidence(target,receipt,descriptor,{store,signal}={}){
