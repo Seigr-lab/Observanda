@@ -75,7 +75,9 @@ test('site appearance previews and publishes shared scientific pages while raw a
   await page.exposeFunction('filesAPI',call);await mountFilesEditor(page);
   await page.route('https://website.test/api/website-files/preview/**',async route=>{
    const url=new URL(route.request().url());if(url.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',body:'<!doctype html><body></body>'});
-   const [,revision,name]=url.pathname.match(/\/preview\/[^/]+\/([a-f0-9]{64})\/(.+)$/),file=await store.file(id,name,{revision,editor:true});
+   const [,revision,name]=url.pathname.match(/\/preview\/[^/]+\/([a-f0-9]{64})\/(.+)$/);
+   // Like the service, answer a request for a superseded revision with 409 rather than failing the route.
+   let file;try{file=await store.file(id,name,{revision,editor:true});}catch(error){if(error.code!=='CONFLICT')throw error;return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({errorCode:'CONFLICT'})});}
    return route.fulfill({contentType:file.contentType,body:file.bytes??await contentBuffer(file.content)});
   });
   const openTool=()=>page.getByRole('button',{name:'Site appearance',exact:true}).press('Enter');await openTool();
@@ -87,7 +89,7 @@ test('site appearance previews and publishes shared scientific pages while raw a
   await expect(preview.locator('#station')).toHaveCSS('color','rgb(104, 36, 89)');
   await apply.press('Enter');await expect(dialog).not.toBeVisible();
   await page.locator('[data-website-file-page]').selectOption(draft);await expect(page.frameLocator('#website-files-canvas').getByRole('heading',{name:'Private notebook'})).toBeVisible();
-  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('New method');await page.getByLabel('Page file name').fill('studies/new-method.html');await page.getByRole('button',{name:'Add page',exact:true}).click();
+  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('New method');await page.getByLabel('Page file name').fill('studies/new-method.html');await page.getByRole('combobox',{name:'Publication',exact:true}).selectOption('included');await page.getByRole('button',{name:'Add page',exact:true}).click();
   await expect(page.locator('[data-website-file-page]')).toHaveValue('studies/new-method.html');await openTool();await expect(dialog.getByRole('combobox',{name:'Body font',exact:true})).toHaveValue('mono');await dialog.getByRole('button',{name:'Cancel'}).click();
   const manifest=await store.scope(()=>store.raw(id));const sheet=manifest.appearance.file;expect(sheet).toBe('website-appearance-2.css');
   for(const name of ['index.html',method,draft,'studies/new-method.html',continuation]){
