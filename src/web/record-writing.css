@@ -20,7 +20,7 @@
 .record-contributor-values li{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem}
 .record-contributor-values li p{flex:1 1 14rem;margin:0;min-width:0;overflow-wrap:anywhere}
 .record-contributor-values .button{white-space:normal;overflow-wrap:anywhere;max-width:100%}
-.record-tags{max-width:48rem}
+.record-tags{max-width:48rem;container-type:inline-size}
 .record-tags ul{padding:0;margin:.4rem 0 .7rem;list-style:none}
 .record-tags li{display:grid;grid-template-columns:minmax(8rem,1fr) auto;align-items:center;gap:.75rem;padding:.45rem .25rem;border-bottom:1px solid var(--border,#c6cfdb);overflow-wrap:anywhere}
 .record-tags li>span{justify-self:start;border:1px solid var(--border,#c6cfdb);border-radius:.3rem;padding:.14rem .5rem;background:var(--surface-alt,#f0f3f8);font-size:.92rem;line-height:1.4}
