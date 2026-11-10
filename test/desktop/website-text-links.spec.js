@@ -74,7 +74,9 @@ test('authors external links in page prose and a reusable table cell, then publi
   await expect(cell.locator('a')).toHaveAttribute('href',taxonomyURL);
   await cell.locator('a').dblclick();await editor.getByRole('button',{name:english.richLink,exact:true}).click();
   await expect(href).toHaveValue(taxonomyURL);await panel.getByRole('button',{name:english.cancel}).click();
-  await editor.getByRole('button',{name:english.componentApply}).click();await expect(editor).toHaveCount(0);
+  // Updating a main component is reviewed first: the review lists the placements it changes.
+  await editor.getByRole('button',{name:english.componentReviewTitle,exact:true}).click();await expect(editor.getByRole('heading',{name:english.componentReviewTitle,exact:true})).toBeVisible();
+  await editor.getByRole('button',{name:english.componentApply,exact:true}).click();await expect(editor).toHaveCount(0);
   await page.reload();
   await expect(canvas.locator('#method a')).toHaveAttribute('href',fieldURL);
   await expect(canvas.locator('[data-website-instance] td a')).toHaveAttribute('href',taxonomyURL);
