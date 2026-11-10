@@ -26,7 +26,7 @@ test('an old backup imports verified current settings and unlocks with the curre
   await dialog.locator('[data-access-checkpoint]').setInputFiles({name:'current.observanda-access',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(exported.checkpoint))});
   await expect(dialog.locator('[name=verifiedFingerprint]')).toBeVisible();await dialog.locator('[name=verifiedFingerprint]').fill(exported.fingerprint);await dialog.locator('[name=confirmed]').check();await dialog.locator('[name=password]').fill(current);
   await dialog.getByRole('button',{name:'Import current access settings',exact:true}).click();await expect(dialog).not.toBeVisible();
-  await page.locator('#storage-unlock-form [name=password]').fill(previous);await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('#notice')).toContainText('credentials are incorrect');
+  await page.locator('#storage-unlock-form [name=password]').fill(previous);await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('#notice [role=alert]')).toContainText('credentials are incorrect');
   await page.locator('#storage-unlock-form [name=password]').fill(current);await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('workspace');
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();
   const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Save current access settings',exact:true}).click();const downloaded=await downloading;

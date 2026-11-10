@@ -46,6 +46,7 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    await expect(page.locator('#notice.error')).toBeHidden();
    await preferences(page,'Your profile');await expect(page.getByLabel('Display name',{exact:true})).toBeVisible();
    await page.getByLabel('Display name',{exact:true}).fill('Profile during copy');await page.getByRole('button',{name:'Save profile',exact:true}).click();await expect(page.locator('#notice')).toContainText('Profile saved.');
+   await expect(page.locator('#notice [role=alert]')).toHaveCount(0);await page.locator('#notice .notice-message').hover();await page.waitForTimeout(9000);await expect(page.locator('#notice .notice-message')).toHaveText('Profile saved.');await page.mouse.move(1,1);await expect(page.locator('#notice')).toBeHidden({timeout:15000});
    const appearance=page.waitForResponse(response=>/\/api\/(appearance|design)-preview$/.test(response.url()));
    await preferences(page,'Appearance');expect((await appearance).status()).toBe(200);
    await expect(page.locator('#design-preview')).toBeVisible();

@@ -159,7 +159,7 @@ function sourceVisibilityWrite(route,data){
 
 wireCustomFieldClipboard(document.body,{available:()=>!state.access?.locked&&!state.storageUnavailable});
 let previewSurfaces=[],dialogSurface=null;
-let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null;
+let noticeTimer, noticeToken = 0, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null;
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
@@ -324,10 +324,20 @@ async function ensureCompleteWorkspace(){
   try{await completingWorkspace;}finally{completingWorkspace=null;}
 }
 function notify(message, error = false) {
-  clearTimeout(noticeTimer);
-  const notice = notices.node, text = document.createElement('span'); text.className = 'notice-message'; text.textContent = message; notice.replaceChildren(text); notice.className = `notice${error ? ' error' : ''}`;
-  const close = document.createElement('button'); close.type = 'button'; close.textContent = appText('dismiss'); close.onclick = () => notices.hide(); notice.append(close); notices.show();
-  if (!error) noticeTimer = setTimeout(() => notices.hide(), 5000);
+  clearTimeout(noticeTimer); noticeTimer = null;
+  const notice = notices.node, token = ++noticeToken;
+  notice.replaceChildren(); notice.className = `notice${error ? ' error' : ''}`; notice.setAttribute('aria-live', error ? 'off' : 'polite'); notices.show();
+  // The message arrives after the region is rendered so assistive technology announces it; an error is announced once, as an alert.
+  requestAnimationFrame(() => {
+    if (token !== noticeToken || notice.hidden) return;
+    const text = document.createElement('span'); text.className = 'notice-message'; text.textContent = message; if (error) text.setAttribute('role', 'alert');
+    const close = document.createElement('button'); close.type = 'button'; close.textContent = appText('dismiss'); close.onclick = () => notices.hide(); notice.append(text, close);
+    if (!error) hideNoticeLater(token);
+  });
+}
+// A confirmation stays while the pointer or keyboard focus is on it, so it can be read at any pace.
+function hideNoticeLater(token) {
+  noticeTimer = setTimeout(() => { if (token !== noticeToken) return; if (notices.node.matches(':hover,:focus-within')) hideNoticeLater(token); else notices.hide(); }, 8000);
 }
 function report(error) {
   if(error?.name==='AbortError')return;
