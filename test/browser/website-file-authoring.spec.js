@@ -254,7 +254,7 @@ test('a missing bookmarked site can be recovered without displaying another site
  await mountFilesEditor(page,{hash:'#/websites/'+requested+'/editor'});
  await expect(page.getByText('This website could not be opened. Return to the workspace to check it.')).toBeVisible();
  await expect(page.locator('#website-files-canvas')).toHaveCount(0);
- await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+ await expect(page.getByText('There are no websites in this workspace.')).toHaveCount(0);
  await page.locator('[data-website-file-site]').selectOption(id);
  await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
  // Opening the recovered site also checks it for a recoverable draft.
@@ -269,7 +269,9 @@ for(const [state,message] of [
   await page.exposeFunction('filesAPI',route=>{calls.push(route);return sessionWith([],{state});});
   await mountFilesEditor(page);await expect(page.getByText(message,{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Retry'})).toHaveCount(1);
-  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
+  await expect(page.getByText('There are no websites in this workspace.')).toHaveCount(0);
+  // Preparation runs only when the workspace opens with research access, so the website window can still start a new site.
+  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(1);
   await expect(page.locator('#website-files-canvas')).toHaveCount(0);
   expect(calls).toEqual(['/api/website-files/session']);
  });
