@@ -35,15 +35,18 @@ test('desktop formatting controls demonstrate their effect and save mixed text a
   await expect(button('strikeThrough').locator('s')).toHaveCSS('text-decoration-line','line-through');
   await expect(button('subscript').locator('sub')).toHaveCSS('vertical-align','sub');
   await expect(button('superscript').locator('sup')).toHaveCSS('vertical-align','super');
-  await expect(button('subscript')).toHaveAccessibleName('Subscript');
-  await expect(button('superscript')).toHaveAccessibleName('Superscript');
   await expect(button('bold')).toHaveAttribute('aria-keyshortcuts','Control+B Meta+B');
   const select=async(id,start,count)=>{
    const p=frame.locator(id);await p.click({position:{x:3,y:5}});await page.keyboard.press('Home');
    for(let i=0;i<start;i++)await page.keyboard.press('ArrowRight');
    for(let i=0;i<count;i++)await page.keyboard.press('Shift+ArrowRight');
   };
-  await select('#water',1,1);await button('subscript').focus();await page.keyboard.press('Enter');
+  // Formatting controls are offered once the cursor is in the page.
+  await expect(button('subscript')).toBeHidden();
+  await select('#water',1,1);await expect(button('subscript')).toBeVisible();
+  await expect(button('subscript')).toHaveAccessibleName('Subscript');
+  await expect(button('superscript')).toHaveAccessibleName('Superscript');
+  await button('subscript').focus();await page.keyboard.press('Enter');
   await expect(frame.locator('#water sub')).toHaveText('2');await expect(button('subscript')).toHaveAttribute('aria-pressed','true');
   await select('#iron',2,2);await button('superscript').click();await expect(frame.locator('#iron sup')).toHaveText('3+');
   await select('#legend',0,9);await expect(button('bold')).toHaveAttribute('aria-pressed','mixed');

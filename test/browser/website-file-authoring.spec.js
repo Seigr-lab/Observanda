@@ -187,17 +187,19 @@ test('a prepared website opens from saved files without another user action',asy
  expect(calls).toEqual(['session','preparation','preparation','list','open','recovery/page'].map(op=>'/api/website-files/'+op));
 });
 
-test('private draft remains identifiable and new pages use the public stylesheet',async({page})=>{
+test('private draft remains identifiable and an added page is created by the site with its publication choice',async({page})=>{
  const draft={path:'drafts/notes.html',title:'Notes',draft:true},pages=[...savedSite.pages,draft];
  const site={...savedSite,pages},home={...savedPage,site,css:'main{color:blue}'};
  const privatePage={...savedPage,site:{...site,cssPath:'drafts/draft.css'},path:draft.path,css:'.private-note{color:red}'};
- const writes=[];
+ const creates=[];
  await page.exposeFunction('filesAPI',(route,data)=>{
   if(route==='/api/website-files/session')return sessionWith([site],{state:'ready'});
   if(route==='/api/website-files/open')return data.path===draft.path?privatePage:home;
   if(route==='/api/website-files/version')return {revision:site.revision};
-  if(route==='/api/website-files/save'){
-   writes.push(data);return {...home,path:data.path,html:data.html,site:{...site,pages:[...pages,{path:data.path,title:data.title}]}};
+  if(route==='/api/website-files/recovery/page')return {items:[],next:null};
+  if(route==='/api/website-files/page/create'){
+   // The service writes the starter page and links the site stylesheet; the editor only names the page.
+   creates.push(data);return {...home,path:data.path,html:'<!doctype html><html><head><link rel="stylesheet" href="../style.css"></head><body><main><h1>'+data.title+'</h1></main></body></html>',site:{...site,pages:[...pages,{path:data.path,title:data.title}]}};
   }
   throw Error('Unexpected request '+route);
  });
@@ -211,9 +213,10 @@ test('private draft remains identifiable and new pages use the public stylesheet
  await title.fill('NUL');await expect(file).toHaveValue('nul-page.html');
  await title.fill('Øresund – Résultats');await expect(file).toHaveValue('oresund-resultats.html');
  await file.fill('pages/field.html');await title.fill('Field work');await expect(file).toHaveValue('pages/field.html');
+ await expect(page.getByLabel('Publication')).toHaveValue('private');await page.getByLabel('Publication').selectOption('included');
  await page.getByRole('button',{name:'Add page'}).click();await expect(select).toHaveValue('pages/field.html');
- await expect(notice).toHaveCount(0);expect(writes).toHaveLength(1);
- expect(writes[0].html).toContain('href="../style.css"');expect(writes[0].css).toBe(home.css);
+ await expect(notice).toHaveCount(0);expect(creates).toHaveLength(1);
+ expect(creates[0]).toMatchObject({siteId:id,expectedRevision:site.revision,path:'pages/field.html',title:'Field work',inclusion:'included'});
 });
 
 test('the empty workspace creates once, disables actions while writing, and retains a failed form',async({page})=>{
@@ -245,6 +248,7 @@ test('a missing bookmarked site can be recovered without displaying another site
   calls.push([route,data?.siteId]);
   if(route==='/api/website-files/session')return sessionWith([savedSite],{state:'ready'});
   if(route==='/api/website-files/open')return data.siteId===requested?{errorCode:'NOT_FOUND',message:'Missing'}:savedPage;
+  if(route==='/api/website-files/recovery/page')return {items:[],next:null};
   throw Error('Unexpected request '+route);
  });
  await mountFilesEditor(page,{hash:'#/websites/'+requested+'/editor'});
@@ -253,7 +257,8 @@ test('a missing bookmarked site can be recovered without displaying another site
  await expect(page.getByRole('button',{name:'New website'})).toHaveCount(0);
  await page.locator('[data-website-file-site]').selectOption(id);
  await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Original saved home');
- expect(calls).toEqual([['/api/website-files/session',undefined],['/api/website-files/open',requested],['/api/website-files/open',id]]);
+ // Opening the recovered site also checks it for a recoverable draft.
+ await expect.poll(()=>calls).toEqual([['/api/website-files/session',undefined],['/api/website-files/open',requested],['/api/website-files/open',id],['/api/website-files/recovery/page',id]]);
 });
 for(const [state,message] of [
  ['unprepared','Open the workspace to check for saved websites.'],
@@ -275,6 +280,7 @@ test('visual edits preserve saved HTML, styles and placement and reject outdated
  const calls=[];await page.exposeFunction('filesAPI',async(route,data)=>{calls.push(route);switch(route){
   case '/api/website-files/session':return {workspaceId:id,title:'Lab',sites:[site()]};
   case '/api/website-files/open':return open();case '/api/website-files/version':return {revision:revision()};
+  case '/api/website-files/source/check':return {revision:data.expectedRevision};
   case '/api/website-files/save':if(data.expectedRevision!==revision())throw Error('stale revision');html=data.html;css=data.css;version++;return open();
   default:throw Error('Unexpected request '+route);
  }});
