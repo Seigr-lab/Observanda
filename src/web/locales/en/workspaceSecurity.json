@@ -74,7 +74,7 @@
   "encryptHelp": "All research files and history will be encrypted with a new key in the new folder. Existing device grants and recovery keys will not carry over. The original stays unchanged and accessible to its existing members.",
   "encryptPasswordHelp": "Use at least 12 characters for a password. Where device protection is available, leave it blank to authorize this device. Configure recovery in the new workspace.",
   "reviewEncrypted": "Review encrypted copy",
-  "storageHint": "Use an empty folder on this computer, an external drive, or a connected network/NAS share.",
+  "storageHint": "Use an empty folder on this computer, an external drive, or a network share.",
   "encryptedCopySharing": "Create encrypted copy with sharing & recovery",
   "passwordChanges": "Password changes keep data encrypted and sign out other sessions. Other authorized devices retain access. Setting a password removes passwordless access for this device.",
   "deviceBlank": "Leave both new password fields blank to use this device instead.",

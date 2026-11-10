@@ -27,7 +27,7 @@
   "portableReady": "Flyttbar kopi er klar",
   "portableNext": "Åpne denne mappen i Observanda på den andre datamaskinen. Lås opp arbeidsområdet med passordet eller gjenopprettingsnøkkelen, og lås deretter opp hvert prosjekt med sitt eget passord eller sin egen gjenopprettingsnøkkel.",
   "portableLocalSettings": "GitHub-pålogging og enhetsbeskyttet påloggingsinformasjon blir på denne datamaskinen; koble dem til på nytt på den nye. Sikkerhetskopier samarbeidsidentiteten separat hvis du trenger å fortsette å bruke den.",
-  "relocationHint": "Flytting flytter hele det administrerte arbeidsområdet, inkludert databasen. Lukk arbeidsområdet før du flytter mappen utenfor Observanda. Opprett en flyttbar kopi for et annet operativsystem. En NAS må støtte PostgreSQLs krav til varig lagring og låsing i filsystemet; en vellykket mappekontroll alene bekrefter ikke dette.",
+  "relocationHint": "Flytting flytter hele det administrerte arbeidsområdet, inkludert databasen. Lukk arbeidsområdet før du flytter mappen utenfor Observanda. Opprett en flyttbar kopi for et annet operativsystem.",
   "missingDatabase": "Forskningsdatabasen for dette arbeidsområdet er utilgjengelig på denne installasjonen. Opprett en flyttbar kopi av arbeidsområdet fra Lagring og tilgang på den opprinnelige datamaskinen, og åpne deretter den komplette kopien her.",
   "openHint": "Velg hele arbeidsområdemappen. Ved overføring mellom operativsystemer bruker du en flyttbar kopi av arbeidsområdet opprettet i Observanda.",
   "unlock": "Lås opp arbeidsområde",

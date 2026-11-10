@@ -74,7 +74,7 @@
   "encryptHelp": "Alle forskingsfiler og all historikk blir krypterte med ein ny nøkkel i den nye mappa. Eksisterande einingstilgangar og gjenopprettingsnøklar følgjer ikkje med. Originalen blir verande uendra og tilgjengeleg for dei eksisterande medlemene sine.",
   "encryptPasswordHelp": "Bruk minst 12 teikn i passordet. Der einingsvern er tilgjengeleg, kan du la feltet stå tomt for å autorisere denne eininga. Set opp gjenoppretting i det nye arbeidsområdet.",
   "reviewEncrypted": "Sjå gjennom kryptert kopi",
-  "storageHint": "Bruk ei tom mappe på denne datamaskina, ein ekstern disk eller ein tilknytt nettverks- eller NAS-ressurs.",
+  "storageHint": "Bruk ei tom mappe på denne datamaskina, ein ekstern disk eller ein tilknytt nettverksressurs.",
   "encryptedCopySharing": "Opprett kryptert kopi med deling og gjenoppretting",
   "passwordChanges": "Passordendringar held dataa krypterte og loggar ut andre økter. Andre autoriserte einingar beheld tilgangen. Når du oppgjev eit passord, blir passordfri tilgang for denne eininga fjerna.",
   "deviceBlank": "Lat begge felta for nytt passord stå tomme for å bruke denne eininga i staden.",

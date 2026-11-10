@@ -74,7 +74,7 @@
   "encryptHelp": "Alle forskningsfiler og all historikk krypteres med en ny nøkkel i den nye mappen. Eksisterende enhetstilganger og gjenopprettingsnøkler følger ikke med. Originalen forblir uendret og tilgjengelig for sine eksisterende medlemmer.",
   "encryptPasswordHelp": "Bruk minst 12 tegn i passordet. Der enhetsbeskyttelse er tilgjengelig, kan du la feltet stå tomt for å autorisere denne enheten. Konfigurer gjenoppretting i det nye arbeidsområdet.",
   "reviewEncrypted": "Se gjennom kryptert kopi",
-  "storageHint": "Bruk en tom mappe på denne datamaskinen, en ekstern disk eller en tilkoblet nettverks- eller NAS-ressurs.",
+  "storageHint": "Bruk en tom mappe på denne datamaskinen, en ekstern disk eller en tilkoblet nettverksressurs.",
   "encryptedCopySharing": "Opprett kryptert kopi med deling og gjenoppretting",
   "passwordChanges": "Passordendringer holder dataene kryptert og logger ut andre økter. Andre autoriserte enheter beholder tilgangen. Når du angir et passord, fjernes passordfri tilgang for denne enheten.",
   "deviceBlank": "La begge feltene for nytt passord stå tomme for å bruke denne enheten i stedet.",

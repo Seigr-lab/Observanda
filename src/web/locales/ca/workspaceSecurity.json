@@ -74,7 +74,7 @@
   "encryptHelp": "Tots els fitxers de recerca i l'historial es xifraran amb una clau nova a la carpeta nova. No s'hi transferiran les autoritzacions de dispositius ni les claus de recuperació existents. L'original es manté sense canvis i accessible als membres actuals.",
   "encryptPasswordHelp": "Utilitza almenys 12 caràcters per a la contrasenya. Si hi ha protecció del dispositiu disponible, deixa-la buida per autoritzar aquest dispositiu. Configura la recuperació a l'espai de treball nou.",
   "reviewEncrypted": "Revisa la còpia xifrada",
-  "storageHint": "Utilitza una carpeta buida d'aquest ordinador, d'una unitat externa o d'un recurs de xarxa o NAS connectat.",
+  "storageHint": "Utilitza una carpeta buida d'aquest ordinador, d'una unitat externa o d'un recurs de xarxa connectat.",
   "encryptedCopySharing": "Crea una còpia xifrada amb compartició i recuperació",
   "passwordChanges": "Els canvis de contrasenya mantenen les dades xifrades i tanquen les altres sessions. Els altres dispositius autoritzats conserven l'accés. Establir una contrasenya elimina l'accés sense contrasenya d'aquest dispositiu.",
   "deviceBlank": "Deixa buits els dos camps de contrasenya nova per utilitzar aquest dispositiu.",

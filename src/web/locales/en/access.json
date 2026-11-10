@@ -27,7 +27,7 @@
   "portableReady": "Portable copy ready",
   "portableNext": "Open this folder in Observanda on the other computer. Unlock the workspace with its password or recovery key, then unlock each project with its own password or recovery key.",
   "portableLocalSettings": "GitHub sign-in and device-protected credentials stay on this computer; reconnect them on the new one. Back up your collaboration identity separately if you need to continue using it.",
-  "relocationHint": "Move relocates the complete managed workspace, including its database. Close the workspace before moving its folder outside Observanda. For a different operating system, create a portable copy. A NAS must support PostgreSQL filesystem durability and locking; a successful folder check alone does not establish that.",
+  "relocationHint": "Move relocates the complete managed workspace, including its database. Close the workspace before moving its folder outside Observanda. For a different operating system, create a portable copy.",
   "missingDatabase": "This workspace’s research database is not available on this installation. Create a portable workspace copy from Storage & access on the original computer, then open that complete copy here.",
   "openHint": "Select the complete workspace folder. When transferring between operating systems, use a portable workspace copy created in Observanda.",
   "unlock": "Unlock workspace",

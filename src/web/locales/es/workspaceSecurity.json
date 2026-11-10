@@ -74,7 +74,7 @@
   "encryptHelp": "Todos los archivos de investigación y el historial se cifrarán con una clave nueva en la carpeta nueva. No se transferirán las autorizaciones de dispositivos ni las claves de recuperación existentes. El original se mantiene sin cambios y accesible para los miembros actuales.",
   "encryptPasswordHelp": "Utiliza al menos 12 caracteres para la contraseña. Si hay protección del dispositivo disponible, déjala vacía para autorizar este dispositivo. Configura la recuperación en el espacio de trabajo nuevo.",
   "reviewEncrypted": "Revisar la copia cifrada",
-  "storageHint": "Utiliza una carpeta vacía de este ordenador, de una unidad externa o de un recurso de red o NAS conectado.",
+  "storageHint": "Utiliza una carpeta vacía de este ordenador, de una unidad externa o de un recurso de red conectado.",
   "encryptedCopySharing": "Crear una copia cifrada con uso compartido y recuperación",
   "passwordChanges": "Los cambios de contraseña mantienen los datos cifrados y cierran las otras sesiones. Los otros dispositivos autorizados conservan el acceso. Establecer una contraseña elimina el acceso sin contraseña de este dispositivo.",
   "deviceBlank": "Deja vacíos los dos campos de contraseña nueva para utilizar este dispositivo.",

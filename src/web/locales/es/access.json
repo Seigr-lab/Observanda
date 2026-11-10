@@ -27,7 +27,7 @@
   "portableReady": "Copia portátil lista",
   "portableNext": "Abre esta carpeta en Observanda en el otro ordenador. Desbloquea el espacio de trabajo con su contraseña o clave de recuperación y, después, cada proyecto con su propia contraseña o clave de recuperación.",
   "portableLocalSettings": "El inicio de sesión en GitHub y las credenciales protegidas por el dispositivo permanecen en este ordenador; vuelve a conectarlos en el nuevo. Guarda por separado una copia de seguridad de tu identidad de colaboración si necesitas seguir utilizándola.",
-  "relocationHint": "Mover traslada todo el espacio de trabajo gestionado, incluida su base de datos. Cierra el espacio de trabajo antes de mover su carpeta fuera de Observanda. Para otro sistema operativo, crea una copia portátil. Un NAS debe admitir la durabilidad del sistema de archivos y el bloqueo que requiere PostgreSQL; una comprobación satisfactoria de la carpeta por sí sola no lo demuestra.",
+  "relocationHint": "Mover traslada todo el espacio de trabajo gestionado, incluida su base de datos. Cierra el espacio de trabajo antes de mover su carpeta fuera de Observanda. Para otro sistema operativo, crea una copia portátil.",
   "missingDatabase": "La base de datos de investigación de este espacio de trabajo no está disponible en esta instalación. Crea una copia portátil del espacio de trabajo desde Almacenamiento y acceso en el ordenador original y abre aquí esa copia completa.",
   "openHint": "Selecciona la carpeta completa del espacio de trabajo. Para transferirlo entre sistemas operativos, utiliza una copia portátil creada en Observanda.",
   "unlock": "Desbloquear el espacio de trabajo",

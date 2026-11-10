@@ -26,5 +26,5 @@ test('selected filesystem supports owned database creation, exclusive access, sh
  await owner.closeWorkspace(f.workspace.root);const moved=path.join(directory,'moved');await rename(f.workspace.root,moved);
  const next=new Workspace(moved,f.vault),after=await next.read();assert.equal(after.book.id,before.book.id);assert.equal(after.book.description,'Filesystem qualification');
  await next.catalogue(store=>store.verify({format:'observanda-research-catalogue',version:2,workspaceId:before.book.id}));
- t.diagnostic('Creation, encrypted research verification, filesystem lease and clean stopped-folder relocation passed. This does not establish power-loss durability of the NAS or its server configuration.');
+ t.diagnostic('Creation, encrypted research verification, filesystem lease and clean stopped-folder relocation passed. This does not establish power-loss durability of network storage or its server configuration.');
 });

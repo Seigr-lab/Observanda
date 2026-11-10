@@ -27,7 +27,7 @@
   "portableReady": "Còpia portàtil preparada",
   "portableNext": "Obre aquesta carpeta a Observanda a l'altre ordinador. Desbloqueja l'espai de treball amb la seva contrasenya o clau de recuperació i després desbloqueja cada projecte amb la seva pròpia contrasenya o clau de recuperació.",
   "portableLocalSettings": "L'inici de sessió de GitHub i les credencials protegides pel dispositiu es queden en aquest ordinador; torna-les a connectar al nou. Fes una còpia de seguretat separada de la identitat de col·laboració si has de continuar utilitzant-la.",
-  "relocationHint": "Mou trasllada tot l'espai de treball gestionat, inclosa la seva base de dades. Tanca l'espai de treball abans de moure'n la carpeta fora d'Observanda. Per a un sistema operatiu diferent, crea una còpia portàtil. Un NAS ha d'admetre la durabilitat i els bloquejos del sistema de fitxers de PostgreSQL; una comprovació de carpeta correcta no ho acredita per si sola.",
+  "relocationHint": "Mou trasllada tot l'espai de treball gestionat, inclosa la seva base de dades. Tanca l'espai de treball abans de moure'n la carpeta fora d'Observanda. Per a un sistema operatiu diferent, crea una còpia portàtil.",
   "missingDatabase": "La base de dades de recerca d'aquest espai de treball no està disponible en aquesta instal·lació. Crea una còpia portàtil de l'espai de treball des d'Emmagatzematge i accés a l'ordinador original i després obre aquí aquella còpia completa.",
   "openHint": "Selecciona la carpeta completa de l'espai de treball. En transferir entre sistemes operatius, utilitza una còpia portàtil creada a Observanda.",
   "unlock": "Desbloqueja l'espai de treball",
