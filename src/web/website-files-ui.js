@@ -614,7 +614,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(state==='preparing')return '<p role="status" data-website-preparation>'+esc(preparationMessage(session.preparation))+'</p>';
   if(missingSite||state!=='ready'){
    const message=missingSite?'unavailable':state==='failed'?'preparationFailed':'workspaceCheck';
-   return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('create','new')+button('retry','retry')+'</section>';
+   return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('retry','retry')+'</section>';
   }
   return '<section class="panel"><p>'+esc(tr('noWebsite'))+'</p>'+button('create','new')+'</section>';
  }
