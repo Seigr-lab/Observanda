@@ -76,7 +76,10 @@ test('save, undo and redo writing, styling, order and owned media; withdraw a so
   const token=await store.beginSourceUpdate({sourceId});
   await command('Undo').click();await expect(page.locator('#website-files-canvas')).toHaveCount(0);
   await store.putSource({sourceId,title:'Withdrawn',visible:false},{token});
-  await expect(text).toHaveText('Exposure series revised pending',{timeout:15000});await expect(command('Undo')).toBeDisabled();await save();
+  await expect(text).toHaveText('Exposure series revised pending',{timeout:15000});
+  // History is rebased onto the saved withdrawal: undo and redo move only the pending writing and never restore withdrawn material.
+  await command('Undo').click();await expect(text).toHaveText('Exposure series revised');await expect(canvas.getByText('Withdrawable observations')).toHaveCount(0);
+  await command('Redo').click();await expect(text).toHaveText('Exposure series revised pending');await expect(canvas.getByText('Withdrawable observations')).toHaveCount(0);await save();
   await expect(canvas.getByText('Withdrawable observations')).toHaveCount(0);await expect(canvas.getByRole('link',{name:'Field link'})).toHaveCount(0);
   const opened=await store.open(id);await expect(store.file(id,asset,{revision:opened.site.revision})).rejects.toMatchObject({code:'NOT_FOUND'});
   await command('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
