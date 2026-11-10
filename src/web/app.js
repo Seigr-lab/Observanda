@@ -960,7 +960,7 @@ function openCreatedRecord(e,{selectedDraft=false}={}){
   $('[data-entry=title]').focus(); $('[data-entry=title]').select();
 }
 
-const structureActions=new Set(['configuration-profile-retry','configuration-edit','new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','notebook-config-command','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);
+const structureActions=new Set(['book-convert-open','book-convert-resume','book-convert-return','configuration-profile-retry','configuration-edit','new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','notebook-config-command','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);
 const recordCreationActions=new Set(['new-entry','choose-notebook','choose-template','choose-type','configuration-record-retry']);
 const scopedRecordAction=name=>name?.startsWith('starter-')||name?.startsWith('record-content-')||name?.startsWith('result-')||name?.startsWith('attempt-')||name?.startsWith('workflow-')||name?.startsWith('material-')||name?.startsWith('media-import-')||recordCreationActions.has(name)||name==='delete-entry'||name==='save'||name==='discard-section'||name==='back-to-records'||name==='record-read'||name==='record-edit'||name==='record-section-jump'||name==='record-copy-reference'||name==='record-workflow-link'||name?.startsWith('record-link-')||name?.startsWith('research-target-')||name==='record-backlink-open'||name?.startsWith('record-history-')||name?.startsWith('record-activity-')||name?.startsWith('record-contributor-')||name?.startsWith('section-')||name?.startsWith('figure-')||name==='remove-media';
 async function rawAction(button) {
@@ -1222,6 +1222,7 @@ async function submitForm(form){
   if(form.id==='inventory-form'||form.id.startsWith('migration-import-'))return migration.submit(form);
   if(form.id.startsWith('review-'))return reviews.submit(form);
   if(form.dataset.busy)return;
+  if(form.id==='book-conversion-form')return structureUI.submit(form,new FormData(form));
   if(form.id==='website-site-form')return sites.submit(form,new FormData(form));
   if(['project-deletion-form','project-deletion-resume-form'].includes(form.id))return structureUI.projectDeletion.submit(form);
   if(await structureUI.projectMoves.submit(form))return;

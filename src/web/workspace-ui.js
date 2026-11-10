@@ -11,6 +11,7 @@ import {locationToolsView,locationTools} from './modules/location-tools.js';
 import {locationToolCounts} from './modules/location-tool-counts.js';
 import {ancestors,childrenOf,locationName} from './workspace-structure.js';
 import {projectNotebooksUI} from './project-notebooks.js';
+import {bookConversionUI} from './book-conversion-ui.js';
 import {createDataSession,workspaceData} from './data-registry.js';
 import {defaultPanelConfig} from './dashboard-model.js';
 import { identityFields, identityFromForm } from './workspace-identity.js';
@@ -21,7 +22,8 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   const projectDeletion=projectDeletionUI({state,api,accessProject,esc,field,showDialog,enterProject,render,refreshDirectory:()=>projectDirectory.refresh()});
   const projectMoves=projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProject,refreshDirectory:()=>projectDirectory.refresh()});
   const projectStorage=projectStorageUI({state,api,esc,field,showDialog,accessProject,projectDirectory,rootBook,projectRoot:id=>projectDirectory.entries().find(entry=>entry.projectId===id)?.root,deleteProject:entry=>projectDeletion.confirm(entry),moved:async(result,targetPath)=>{await enterProject(null);state.page='projects';state.project=null;location.hash='#/projects';projectMoves.completed(result,targetPath);render();}});
-  const labNotebooks=projectNotebooksUI({state,api,esc,field,option,showDialog,render,notify,projectDirectory,labBookDirectory,accessProject,enterProject,rootBook});
+  const bookConversion=bookConversionUI({state,api,esc,field,showDialog,notify,report:error=>notify(error.message,true),refresh:async(projectId,labBookId)=>{await labBookDirectory.refresh(projectId);await enterProject(projectId,labBookId);render();}});
+  const labNotebooks=projectNotebooksUI({state,api,esc,field,option,showDialog,render,notify,projectDirectory,labBookDirectory,accessProject,enterProject,rootBook,bookConversion});
   const ownedRecent=projectRecentRecords({state,api,access:accessProject,esc,table:recordsTable});
   const toolCounts=locationToolCounts({state,api,esc});
   const notebooks = id => state.book.notebooks.filter(n => n.projectId === id);
@@ -78,6 +80,7 @@ function generalPreferences(){
 
   async function action(button) {
     if(await ownedRecent.action(button))return true;
+    if(await bookConversion.action(button))return true;
     const name=button.dataset.action;
     if(name==='location-counts-retry'){toolCounts.retry();return true;}
     if(name==='project-recent-retry'){recentSession?.retry('records');return true;}
@@ -92,6 +95,7 @@ function generalPreferences(){
   }
   function accept(result){state.book=result.book;state.etag=result.etag;state.dirty=false;state.preview=null;}
   async function submit(form,data) {
+    if(await bookConversion.submit(form))return true;
     if(!['workspace-name-form','workspace-organize-form','workspace-organize-confirm'].includes(form.id))return false;
     if(isUploading()){notify(t('workspaceViews','uploadPending'),true);return true;}
     if(form.id==='workspace-name-form') {

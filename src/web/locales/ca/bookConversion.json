@@ -1,0 +1,46 @@
+{
+  "title": "Converteix en un quadern de laboratori",
+  "offer": "Dona a aquest quadern el seu propi emmagatzematge de quadern de laboratori. Els registres, l'historial, els originals, els conjunts de dades, les figures, els enllaços i l'estat de compartició s'hi traslladen.",
+  "open": "Revisa la conversió",
+  "records": {
+    "one": "Es traslladarà {count} registre.",
+    "other": "Es traslladaran {count} registres."
+  },
+  "explain": "Primer es copia i es verifica cada registre mentre aquest quadern continua sent l'actual; mentrestant els registres es poden llegir però no editar. Només quan tots estan verificats es trasllada cada registre al quadern de laboratori. Pots tancar Observanda i reprendre-ho més tard, o retornar-ho tot a aquest quadern fins que la conversió acabi.",
+  "unfinished": {
+    "one": "Hi ha {count} trasllat de registre anterior sense acabar",
+    "other": "Hi ha {count} trasllats de registres anteriors sense acabar"
+  },
+  "transfer_copying": "S'està copiant",
+  "transfer_verified": "Verificat, encara no traslladat",
+  "transfer_activating": "S'està col·locant al quadern de laboratori",
+  "transfer_retiring": "S'està retirant del quadern",
+  "transfer_complete": "Traslladat",
+  "transfer_cancelled": "Cancel·lat",
+  "phase_moving": "S'estan copiant i verificant els registres ({records} en aquest quadern).",
+  "phase_verified": "Tots els registres estan verificats. S'estan traslladant al quadern de laboratori: {moved} de {records} traslladats.",
+  "phase_switched": "Convertit. El quadern ja té el seu propi quadern de laboratori.",
+  "phase_returning": "S'estan retornant els registres a aquest quadern.",
+  "phase_returned": "Tots els registres tornen a ser en aquest quadern.",
+  "progress_verifying-records": "Verificant {done} de {total}",
+  "progress_activating-records": "Traslladant {done} de {total}",
+  "progress_returning-records": "Retornant {done} de {total}",
+  "blocked": {
+    "one": "{count} registre s'està traslladant a un altre lloc. Acaba o cancel·la aquest trasllat i després reprèn.",
+    "other": "{count} registres s'estan traslladant a un altre lloc. Acaba o cancel·la aquests trasllats i després reprèn."
+  },
+  "reportInventory": "Registres a l'inici",
+  "reportVerified": "Registres verificats",
+  "reportRemoved": "Eliminats durant la conversió",
+  "reportAdded": "Afegits durant la conversió",
+  "start": "Inicia la conversió",
+  "resume": "Reprèn",
+  "resumeReturn": "Reprèn el retorn",
+  "return": "Retorna-ho tot a aquest quadern",
+  "close": "Tanca",
+  "failed": "La conversió no ha pogut continuar.",
+  "done": "El quadern s'ha convertit en un quadern de laboratori.",
+  "returnedDone": "Tots els registres han tornat al quadern.",
+  "loading": "Llegint aquest quadern per planificar la conversió…",
+  "progressPreparing": "Preparant la conversió…"
+}

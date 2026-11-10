@@ -1,0 +1,46 @@
+{
+  "title": "Gjer om til ei laboratoriebok",
+  "offer": "Gi denne boka si eiga lagring som laboratoriebok. Oppføringane, historikken, originalane, datasetta, figurane, lenkjene og delingsstatusen blir flytta med.",
+  "open": "Sjå gjennom omgjeringa",
+  "records": {
+    "one": "{count} oppføring blir flytta.",
+    "other": "{count} oppføringar blir flytta."
+  },
+  "explain": "Først blir kvar oppføring kopiert og stadfesta medan denne boka framleis er den gjeldande; i mellomtida kan oppføringane lesast, men ikkje redigerast. Først når alle er stadfesta, blir kvar oppføring flytta inn i laboratorieboka. Du kan lukke Observanda og halde fram seinare, eller flytte alt tilbake til denne boka til omgjeringa er ferdig.",
+  "unfinished": {
+    "one": "{count} tidlegare flytting av ei oppføring er ikkje fullført",
+    "other": "{count} tidlegare flyttingar av oppføringar er ikkje fullførte"
+  },
+  "transfer_copying": "Kopierer",
+  "transfer_verified": "Stadfesta, ikkje flytta enno",
+  "transfer_activating": "Blir plassert i laboratorieboka",
+  "transfer_retiring": "Blir fjerna frå boka",
+  "transfer_complete": "Flytta",
+  "transfer_cancelled": "Avbroten",
+  "phase_moving": "Kopierer og stadfestar oppføringar ({records} i denne boka).",
+  "phase_verified": "Alle oppføringane er stadfesta. Flyttar dei inn i laboratorieboka: {moved} av {records} flytta.",
+  "phase_switched": "Gjort om. Boka har no si eiga laboratoriebok.",
+  "phase_returning": "Flyttar oppføringane tilbake til denne boka.",
+  "phase_returned": "Alle oppføringane er tilbake i denne boka.",
+  "progress_verifying-records": "Stadfestar {done} av {total}",
+  "progress_activating-records": "Flyttar {done} av {total}",
+  "progress_returning-records": "Flyttar tilbake {done} av {total}",
+  "blocked": {
+    "one": "{count} oppføring blir flytta ein annan stad. Fullfør eller avbryt den flyttinga, og hald så fram.",
+    "other": "{count} oppføringar blir flytta ein annan stad. Fullfør eller avbryt dei flyttingane, og hald så fram."
+  },
+  "reportInventory": "Oppføringar ved start",
+  "reportVerified": "Stadfesta oppføringar",
+  "reportRemoved": "Fjerna under omgjeringa",
+  "reportAdded": "Lagde til under omgjeringa",
+  "start": "Start omgjeringa",
+  "resume": "Hald fram",
+  "resumeReturn": "Hald fram med tilbakeflyttinga",
+  "return": "Flytt alt tilbake til denne boka",
+  "close": "Lukk",
+  "failed": "Omgjeringa kunne ikkje halde fram.",
+  "done": "Boka vart gjord om til ei laboratoriebok.",
+  "returnedDone": "Alle oppføringane vart flytta tilbake til boka.",
+  "loading": "Les denne boka for å planleggje omgjeringa …",
+  "progressPreparing": "Førebur omgjeringa …"
+}

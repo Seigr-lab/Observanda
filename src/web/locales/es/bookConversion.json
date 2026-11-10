@@ -1,0 +1,46 @@
+{
+  "title": "Convertir en un cuaderno de laboratorio",
+  "offer": "Dar a este cuaderno su propio almacenamiento de cuaderno de laboratorio. Sus registros, historial, originales, conjuntos de datos, figuras, enlaces y estado de compartición se trasladan con él.",
+  "open": "Revisar la conversión",
+  "records": {
+    "one": "Se trasladará {count} registro.",
+    "other": "Se trasladarán {count} registros."
+  },
+  "explain": "Primero se copia y verifica cada registro mientras este cuaderno sigue siendo el actual; mientras tanto, los registros se pueden leer pero no editar. Solo cuando todos están verificados se traslada cada registro al cuaderno de laboratorio. Puedes cerrar Observanda y reanudar más tarde, o devolverlo todo a este cuaderno hasta que termine la conversión.",
+  "unfinished": {
+    "one": "Hay {count} traslado de registro anterior sin terminar",
+    "other": "Hay {count} traslados de registros anteriores sin terminar"
+  },
+  "transfer_copying": "Copiando",
+  "transfer_verified": "Verificado, aún no trasladado",
+  "transfer_activating": "Colocándose en el cuaderno de laboratorio",
+  "transfer_retiring": "Retirándose del cuaderno",
+  "transfer_complete": "Trasladado",
+  "transfer_cancelled": "Cancelado",
+  "phase_moving": "Copiando y verificando registros ({records} en este cuaderno).",
+  "phase_verified": "Todos los registros están verificados. Trasladándolos al cuaderno de laboratorio: {moved} de {records} trasladados.",
+  "phase_switched": "Convertido. El cuaderno ya tiene su propio cuaderno de laboratorio.",
+  "phase_returning": "Devolviendo los registros a este cuaderno.",
+  "phase_returned": "Todos los registros vuelven a estar en este cuaderno.",
+  "progress_verifying-records": "Verificando {done} de {total}",
+  "progress_activating-records": "Trasladando {done} de {total}",
+  "progress_returning-records": "Devolviendo {done} de {total}",
+  "blocked": {
+    "one": "{count} registro se está trasladando a otro lugar. Termina o cancela ese traslado y luego reanuda.",
+    "other": "{count} registros se están trasladando a otro lugar. Termina o cancela esos traslados y luego reanuda."
+  },
+  "reportInventory": "Registros al inicio",
+  "reportVerified": "Registros verificados",
+  "reportRemoved": "Eliminados durante la conversión",
+  "reportAdded": "Añadidos durante la conversión",
+  "start": "Iniciar la conversión",
+  "resume": "Reanudar",
+  "resumeReturn": "Reanudar la devolución",
+  "return": "Devolverlo todo a este cuaderno",
+  "close": "Cerrar",
+  "failed": "La conversión no pudo continuar.",
+  "done": "El cuaderno se ha convertido en un cuaderno de laboratorio.",
+  "returnedDone": "Todos los registros han vuelto al cuaderno.",
+  "loading": "Leyendo este cuaderno para planificar la conversión…",
+  "progressPreparing": "Preparando la conversión…"
+}

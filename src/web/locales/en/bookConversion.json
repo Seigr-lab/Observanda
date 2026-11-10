@@ -1,0 +1,46 @@
+{
+  "title": "Convert into a lab book",
+  "offer": "Give this book its own lab book storage. Its records, history, originals, datasets, figures, links and sharing state move with it.",
+  "open": "Review conversion",
+  "records": {
+    "one": "{count} record will move.",
+    "other": "{count} records will move."
+  },
+  "explain": "First every record is copied and verified while this book stays current; records can be read but not edited meanwhile. Only when all are verified is each record moved into the lab book. You can close Observanda and resume later, or return everything to this book until the conversion finishes.",
+  "unfinished": {
+    "one": "{count} earlier record move is unfinished",
+    "other": "{count} earlier record moves are unfinished"
+  },
+  "transfer_copying": "Copying",
+  "transfer_verified": "Verified, not yet moved",
+  "transfer_activating": "Being placed in the lab book",
+  "transfer_retiring": "Being removed from the book",
+  "transfer_complete": "Moved",
+  "transfer_cancelled": "Cancelled",
+  "phase_moving": "Copying and verifying records ({records} in this book).",
+  "phase_verified": "All records verified. Moving them into the lab book: {moved} of {records} moved.",
+  "phase_switched": "Converted. The book now has its own lab book.",
+  "phase_returning": "Returning records to this book.",
+  "phase_returned": "All records are back in this book.",
+  "progress_verifying-records": "Verifying {done} of {total}",
+  "progress_activating-records": "Moving {done} of {total}",
+  "progress_returning-records": "Returning {done} of {total}",
+  "blocked": {
+    "one": "{count} record is being moved somewhere else. Finish or cancel that move, then resume.",
+    "other": "{count} records are being moved somewhere else. Finish or cancel those moves, then resume."
+  },
+  "reportInventory": "Records at the start",
+  "reportVerified": "Records verified",
+  "reportRemoved": "Removed during the conversion",
+  "reportAdded": "Added during the conversion",
+  "start": "Start conversion",
+  "resume": "Resume",
+  "resumeReturn": "Resume returning",
+  "return": "Return everything to this book",
+  "close": "Close",
+  "failed": "The conversion could not continue.",
+  "done": "The book was converted into a lab book.",
+  "returnedDone": "All records were returned to the book.",
+  "loading": "Reading this book to plan the conversion…",
+  "progressPreparing": "Preparing the conversion…"
+}
