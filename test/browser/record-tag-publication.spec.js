@@ -8,6 +8,7 @@ import {defaultPublicationPrivacy} from '../../src/web/record-publication-privac
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
+import {answerConfirmation} from './confirm-helper.js';
 
 test('saving a literal lab tag updates its website copy and finder without refreshing unrelated material',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(20000);await page.setViewportSize({width:1360,height:900});page.on('dialog',dialog=>dialog.accept());
@@ -45,7 +46,7 @@ test('saving a literal lab tag updates its website copy and finder without refre
   await row.locator('[data-tag-input="rename"]').fill('ICP, batch B');await Promise.all([page.waitForResponse(response=>response.url().endsWith('/api/research/records/tags')&&response.ok()),row.locator('[data-action="record-tag-rename"]').click()]);
   await expect.poll(async()=>{try{return (await store.open(site.site.id)).html;}catch(error){if(error.code!=='CONFLICT')throw error;return '';}}).toContain('ICP, batch B');
   expect((await store.searchLibrary({tags:['ICP, batch A']})).items).toHaveLength(0);
-  await Promise.all([page.waitForResponse(response=>response.url().endsWith('/api/research/records/tags')&&response.ok()),panel.locator('li').filter({hasText:'ICP, batch B'}).locator('[data-action="record-tag-remove"]').click()]);
+  const removed=page.waitForResponse(response=>response.url().endsWith('/api/research/records/tags')&&response.ok());await panel.locator('li').filter({hasText:'ICP, batch B'}).locator('[data-action="record-tag-remove"]').click();await answerConfirmation(page,'Remove');await removed;
   await expect(panel.locator('li').filter({hasText:'ICP, batch B'})).toHaveCount(0);
   await expect.poll(async()=>(await store.searchLibrary({tags:['ICP, batch B']})).items.length).toBe(0);
   const opened=await store.open(site.site.id);expect(opened.html).not.toContain('ICP, batch B');expect(opened.html).toContain('The website editor wrote this introduction.');
