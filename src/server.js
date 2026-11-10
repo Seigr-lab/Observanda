@@ -151,7 +151,7 @@ import {publicationText} from './web/publication-messages.js';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createFolderPicker} from './native-folder-picker.js';
-import {preferencesSnapshot,resetPreferences,dashboardSnapshot,saveDashboard,rememberLanguage} from './preferences.js';
+import {quantityFavoritePreferences,preferencesSnapshot,resetPreferences,dashboardSnapshot,saveDashboard,rememberLanguage} from './preferences.js';
 import {defaultLocation} from './locations.js';
 import {CalendarSources} from './calendar/service.js';
 import {calendarPage} from './calendar/pages.js';
@@ -307,6 +307,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const launches=new LaunchCapabilities(),downloads=new DownloadCapabilities();
   let contextRequired=false;
   const localPreferences=await readPreferences(preferencesFile);
+  const quantityFavorites=quantityFavoritePreferences(preferencesFile,localPreferences);
   const forgetDeleted=async source=>{
     // Another workspace may now occupy the old location. Its local bindings
     // belong to it, just as its new files do.
@@ -609,7 +610,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const check=req.checkWriter;await check();
           const projects=selectedContext.projects??=new ProjectApplication(workspace,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
           if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
-          return await materialHttp(req,res,selectedProject,{contextId:selectedContext.id,body,json,execute:(data,options)=>projects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
+          return await materialHttp(req,res,selectedProject,{contextId:selectedContext.id,body,json,execute:(data,options)=>projects.run(client,selectedProject,data,{...options,quantityFavorites,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         const data=await body(req,selectedProject.limit,selectedProject.capacity),check=req.checkWriter;
         await check();
@@ -1198,7 +1199,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const {events,...data}=result.data;selectedContext.calendarSources.reconcile(data.entities);return json({...result,data});
       }
       const material=materialRequest(url.pathname);
-      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});
+      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,quantityFavorites,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);

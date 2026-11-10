@@ -34,6 +34,14 @@ define('dataset-exchange-discard',{write:true,limit:2048});
 define('dataset-exchange-status',{write:false,limit:2048});
 define('dataset-exchange-download',{write:false,method:'GET',input:'query',schema:'dataset-exchange-id',limit:2048,download:true});
 define('retained-figure-export',{write:false,method:'GET',input:'query',schema:'retained-figure-selection',limit:4096,download:true});
+define('calibration-save',{write:true,limit:8192});
+define('calibration-inspect',{write:false,limit:2048});
+define('unit-definition-list',{write:false,limit:4096});
+define('unit-favorites-list',{write:false,limit:2048});
+// This command updates device preferences after a read grant, even on a read-only book.
+define('unit-favorite-set',{write:false,limit:2048});
+define('unit-definition-read',{write:false,limit:2048});
+define('unit-definition-save',{write:true,limit:1024*1024});
 define('dependency-review',{write:false,progress:true});
 define('original',{write:false,method:'GET',input:'path',schema:'artifact-id-and-revision',limit:0,download:true});
 define('chunks',{write:true,input:'stream',schema:'bounded-upload-frame-batch',limit:UPLOAD_BATCH_FRAMES*(FILE_CHUNK+UPLOAD_HEADER_BYTES+1)});

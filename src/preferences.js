@@ -7,9 +7,10 @@ import {randomUUID} from 'node:crypto';
 import {DEFAULT_INTERFACE,validInterface} from './web/interface-ui.js';
 import {assertRegular,atomicWrite,serialize,digest} from './storage.js';
 import {AppError} from './errors.js';
+import {favoriteQuantityPage,quantityFavoriteKey,validQuantityChoice,validQuantityFavorites} from './quantity-favorites.js';
 import {validLanguage} from './web/i18n/runtime.js';
 
-export const defaultPreferences=()=>({formatVersion:1,language:'en',workspace:null,recent:[],interface:structuredClone(DEFAULT_INTERFACE),dashboard:defaultDashboard()});
+export const defaultPreferences=()=>({formatVersion:1,language:'en',workspace:null,recent:[],quantityFavorites:[],interface:structuredClone(DEFAULT_INTERFACE),dashboard:defaultDashboard()});
 const validPath=p=>typeof p==='string'&&p.length<=4096&&path.isAbsolute(p)&&!/[\x00-\x1f]/.test(p);
 const validCatalogue=id=>id===undefined||typeof id==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id);
 export async function preferencesSnapshot(file){
@@ -17,7 +18,8 @@ export async function preferencesSnapshot(file){
  if(file)try{const stat=await assertRegular(file);if(stat.size>1048576)throw new AppError('PREFERENCES_FORMAT');raw=await readFile(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  if(!raw)return {value:defaultPreferences(),etag:'none',raw:null};
  let value;try{value=JSON.parse(raw.toString('utf8'));}catch{throw new AppError('PREFERENCES_FORMAT');}
- if(!value||Array.isArray(value)||value.formatVersion!==1||Object.keys(value).some(key=>!['formatVersion','workspace','recent','interface','dashboard','language'].includes(key))||value.language!==undefined&&!validLanguage(value.language)||(value.workspace!==null&&!validPath(value.workspace))||value.interface!==undefined&&!validInterface(value.interface)||value.recent!==undefined&&(!Array.isArray(value.recent)||value.recent.length>30||value.recent.some(item=>!item||!validPath(item.path)||typeof item.title!=='string'||item.title.length>160||typeof item.label!=='string'||item.label.length>60)))throw new AppError('PREFERENCES_FORMAT');
+ if(!value||Array.isArray(value)||value.formatVersion!==1||Object.keys(value).some(key=>!['formatVersion','workspace','recent','interface','dashboard','language','quantityFavorites'].includes(key))||value.language!==undefined&&!validLanguage(value.language)||(value.workspace!==null&&!validPath(value.workspace))||value.interface!==undefined&&!validInterface(value.interface)||value.recent!==undefined&&(!Array.isArray(value.recent)||value.recent.length>30||value.recent.some(item=>!item||!validPath(item.path)||typeof item.title!=='string'||item.title.length>160||typeof item.label!=='string'||item.label.length>60)))throw new AppError('PREFERENCES_FORMAT');
+ if(value.quantityFavorites!==undefined&&!validQuantityFavorites(value.quantityFavorites))throw new AppError('PREFERENCES_FORMAT');
  if(value.recent?.some(item=>!validCatalogue(item.catalogueId)))throw new AppError('PREFERENCES_FORMAT');
  const dashboard=value.dashboard===undefined?defaultDashboard():upgradeDashboard(value.dashboard);if(!dashboard)throw new AppError('PREFERENCES_FORMAT');
  return {value:{...defaultPreferences(),...value,dashboard},etag:digest(raw),raw};
@@ -72,4 +74,29 @@ export async function saveDashboard(file,settings,etag){
   if(file)await atomicWrite(file,serialize({...value,dashboard:settings}));
   return dashboardSnapshot(settings);
  });
+}
+
+export function quantityFavoritePreferences(file,session){
+ async function change(namespace,key,choice){
+  const update=value=>{
+   const rows=value.quantityFavorites,existing=rows.findIndex(row=>row.namespace===namespace&&quantityFavoriteKey(namespace,row.choice)===key);
+   if((existing>=0)===Boolean(choice))return value;
+   const quantityFavorites=choice?[...rows,{namespace,choice}]:rows.filter((_,index)=>index!==existing);
+   const next={...value,quantityFavorites};if(Buffer.byteLength(serialize(next))>1048576)throw new AppError('LIMIT');
+   return next;
+  };
+  if(file)await updatePreferences(file,update);else session.quantityFavorites=update(session).quantityFavorites;
+  return {key,selected:Boolean(choice)};
+ }
+ return {
+  async list(namespace,after){const value=file?await readPreferences(file):session;return favoriteQuantityPage(value.quantityFavorites,namespace,after);},
+  add(namespace,choice){
+   if(!validQuantityChoice(choice,namespace))throw new AppError('INVALID');
+   return change(namespace,quantityFavoriteKey(namespace,choice),choice);
+  },
+  remove(namespace,key){
+   if(!validCatalogue(namespace)||!namespace||typeof key!=='string'||!/^[0-9a-f]{64}$/.test(key))throw new AppError('INVALID');
+   return change(namespace,key,null);
+  }
+ };
 }

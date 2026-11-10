@@ -1,3 +1,4 @@
+import {assertScientificUnitFormat,scientificUnitMaterial} from './scientific-unit-format.js';
 import {weightedFitMaterial,assertWeightedFitFormat} from './weighted-fit-format.js';
 import {validWeightedFitContext} from './web/dataset-weighted-fit-model.js';
 import {coordinateAlignmentMaterial,assertCoordinateAlignmentFormat} from './coordinate-alignment-format.js';
@@ -224,6 +225,7 @@ export class ResearchMaterials {
   if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace,doc);
   if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
   if(statisticalUncertaintyMaterial(doc))await assertStatisticalUncertaintyFormat(this.workspace);
+  if(scientificUnitMaterial(doc))await assertScientificUnitFormat(this.workspace);
   if(weightedFitMaterial(doc))await assertWeightedFitFormat(this.workspace);if(pairedStatisticsMaterial(doc))await assertPairedStatisticsFormat(this.workspace);
   if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
@@ -777,6 +779,7 @@ export class ResearchMaterials {
     const doc=await this.read(ref);
     if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
   if(statisticalUncertaintyMaterial(doc))await assertStatisticalUncertaintyFormat(this.workspace);
+  if(scientificUnitMaterial(doc))await assertScientificUnitFormat(this.workspace);
   if(weightedFitMaterial(doc))await assertWeightedFitFormat(this.workspace);if(pairedStatisticsMaterial(doc))await assertPairedStatisticsFormat(this.workspace);
   if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);

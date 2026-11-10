@@ -1,6 +1,7 @@
 // Capability dispatch is loaded lazily by storage to avoid eager module cycles.
 // Reuse only these predicates and functions; every write checks its own database.
-import {requirePublicationOperations} from './catalogue-format.js';
+import {requirePublicationOperations,requireScientificUnitLibrary} from './catalogue-format.js';
+import {scientificUnitMetadata} from './scientific-unit-format.js';
 import {publicationOperationMetadataPath,publicationOperationMetadata} from './publication-operation-format.js';
 import {requirePagedResearchTables,requireReferencedCalculations,requireNativeNumericalModels,requireNativeClockModels,requireNativeDomainValues,requireClockDerivations,requireIntervalUncertainty,requireWindowCalculations,requireFigureProjectionPolicies,requireAxisPermutation,requireStatisticalUncertainty,requireMeasurementScalarPolicies,requireDatasetResourcePolicies,requireStructuredCalculator,requireApproximateCalculator,requirePairedStatistics,requireQuantileAggregation,requireWeightedFit,requireCoordinateAlignment,requireSpectralMethods,requireTopologyValues,requireSequenceValues,requireTensorValues,requireNumericalExecution,requireDatasetCusum,requireDatasetSpectra,requireComputedCells,requireCoordinateFrames,requireSegmentedClockSynchronization,requireClockSynchronization,requireDomainAlgebra,requireCalculatorDatasetResults,requireCalculationPolicies,requireReviewFigurePackages} from './catalogue-format.js';
 import {referencedCalculationMetadata} from './calculation-graph-format.js';
@@ -50,6 +51,7 @@ export async function requireMetadataCatalogueFormat(db,relative,text){
    if(statisticalUncertaintyMetadata(relative,value)){await requireNativeNumericalModels(db);await requireMeasurementScalarPolicies(db);await requireDatasetResourcePolicies(db);await requireStructuredCalculator(db);await requireApproximateCalculator(db);await requireStatisticalUncertainty(db);}
    if(pairedStatisticsMetadata(relative,value)){await requireMeasurementScalarPolicies(db);await requireDatasetResourcePolicies(db);await requireQuantileAggregation(db);await requirePairedStatistics(db);}
    if(quantileAggregationMetadata(relative,value)){await requireMeasurementScalarPolicies(db);await requireDatasetResourcePolicies(db);await requireQuantileAggregation(db);}
+   if(scientificUnitMetadata(relative,value))await requireScientificUnitLibrary(db);
    if(weightedFitMetadata(relative,value)){await requireWeightedFit(db);}
    if(coordinateAlignmentMetadata(relative,value)){await requireCoordinateAlignment(db);}
    if(spectralMethodsMetadata(relative,value)){await requireSpectralMethods(db);}

@@ -64,6 +64,12 @@ export function projectSourceEvidenceOwner(store,record,{signal}={}){
    if((match=/^corrections\/receipts\/([a-f0-9]{64})\.json$/.exec(tail))){const receipt=await json(id),event=await new EvidenceCorrections(materials).event(receipt.id);if(event.review!==match[1])damaged();return record(event.command.recordId);}
    if((match=/^corrections\/state\/([^/]+)\.json$/.exec(tail))){if(!researchId(match[1]))damaged();const corrections=new EvidenceCorrections(materials),state=await corrections.state(match[1]);if(!state)damaged();const event=await corrections.event(state.lastEvent);if(event.command.ref.id!==match[1])damaged();return record(event.command.recordId);}
    if((match=/^corrections\/records\/([a-f0-9-]{36})(?:-order\.json|(?:-order)?\/[^/]+\.json)$/.exec(tail)))return record(match[1]);
+   if((match=/^index\/(unit-definitions|calibrations)\/([^/]+)\.json$/.exec(tail))){
+    const key=match[2],unit=await head(key),pointer=await json(id),doc=await materials.readStored(unit);
+    const valid=match[1]==='unit-definitions'?(await import('./scientific-unit-library.js')).isScientificUnit:(await import('./scientific-calibrations.js')).isScientificCalibration;
+    if(!valid(doc)||pointer.id!==key||pointer.recordId!==doc.recordId)damaged();
+    return record(doc.recordId);
+   }
    if(tail==='index/state.json'){const value=await json(id);if(value.version!==1||!Number.isSafeInteger(value.generation)||value.generation<0)damaged();return derived;}
    if((match=/^index\/items\/([^/]+)\.json$/.exec(tail))){return record((await item(match[1])).recordId);}
    if((match=/^index\/dependencies\/([^/]+)\/([a-f0-9]{64})\.json$/.exec(tail))){const item=await json(id);if(item.id!==match[1]||item.revision!==match[2]||!materialRef(item))damaged();return record((await materials.readStored(item)).recordId);}

@@ -3,6 +3,7 @@ import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {validPolicyScalar,validatePolicyScalar,withScalarPolicy} from './measurement-scalar-policy.js';
 import {exactRational} from './measurement-rational.js';
 import {validNumeralContext} from './numeral-context.js';
+import {matchesUnitSource} from './measurement-unit-catalogue.js';
 const keys=(value,list)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===list.length&&list.every(key=>Object.hasOwn(value,key));
 const axis=value=>typeof value==='string'&&/^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$/.test(value);
 export const UNIT_KINDS=['difference','absolute'];
@@ -14,7 +15,7 @@ export function unitScalar(value,budget,policy){
  return exactRational(value.spelling,value.representation,value.radix,budget);
 }
 export function validUnitDefinition(value){
- if(!keys(value,['version','kind','dimensions','scale','offset',...(value?.version===2?['resourcePolicy']:[])])||![1,2].includes(value.version)||!UNIT_KINDS.includes(value.kind)||!Array.isArray(value.dimensions)||value.dimensions.length>16)return false;
+ if(!keys(value,['version','kind','dimensions','scale','offset',...(value?.version===2?['resourcePolicy']:[]),...(value?.source!==undefined?['source']:[])])||![1,2].includes(value.version)||!UNIT_KINDS.includes(value.kind)||!Array.isArray(value.dimensions)||value.dimensions.length>16||!matchesUnitSource(value))return false;
  if(!value.dimensions.every((d,i)=>keys(d,['axis','exponent'])&&axis(d.axis)&&Number.isInteger(d.exponent)&&d.exponent!==0&&Math.abs(d.exponent)<=32&&(i===0||value.dimensions[i-1].axis<d.axis)))return false;
  if(value.version===2)return validDatasetResourcePolicy(value.resourcePolicy)&&validPolicyScalar(value.scale,value.resourcePolicy)&&validPolicyScalar(value.offset,value.resourcePolicy);
  try{return unitScalar(value.scale).numerator>0n&&(value.kind==='absolute'||unitScalar(value.offset).numerator===0n)&&!!unitScalar(value.offset);}catch{return false;}

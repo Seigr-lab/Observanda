@@ -1,0 +1,106 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,realpath,rm,readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {clearVault} from '../src/encryption.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {executeMaterialRequest} from '../src/material-requests.js';
+import {catalogueUnit,catalogueUnits} from '../src/web/measurement-unit-catalogue.js';
+import {convertUnitValue,exactUnitScalar,validUnitDefinition} from '../src/web/measurement-unit-model.js';
+import {defaultColumn} from '../src/web/dataset-schema.js';
+import {schemaReferences} from '../src/web/measurement-model.js';
+import {quantityFavoritePreferences} from '../src/preferences.js';
+import {calibrationStatus,validCalibrationCoverage,validCalibrationReview} from '../src/web/measurement-calibration.js';
+import {catalogueFormat,catalogueRequiresScientificUnitLibrary} from '../src/catalogue-format.js';
+import {scientificUnitMetadata} from '../src/scientific-unit-format.js';
+
+test('catalogue edition identifies exact temperature points and intervals independently of their display label',()=>{
+ const definition=id=>catalogueUnit(id).definition;
+ const convert=(reading,from,to)=>convertUnitValue({numerator:BigInt(reading),denominator:1n},definition(from),definition(to));
+ assert.ok(catalogueUnits().every(unit=>validUnitDefinition(unit.definition)));
+ assert.deepEqual(convert(20,'celsius','kelvin'),{numerator:5863n,denominator:20n});
+ assert.deepEqual(convert(20,'celsius-interval','kelvin-interval'),{numerator:20n,denominator:1n});
+ assert.deepEqual(convert(32,'fahrenheit','celsius'),{numerator:0n,denominator:1n});
+ assert.deepEqual(convert(18,'fahrenheit-interval','celsius-interval'),{numerator:10n,denominator:1n});
+ assert.throws(()=>convert(1,'celsius','celsius-interval'));
+ assert.equal(validUnitDefinition({...definition('celsius'),offset:exactUnitScalar('0')}),false);
+ assert.equal(validUnitDefinition({...definition('celsius'),source:{catalogue:'observanda-units',id:'celsius',extra:true}}),false);
+ assert.equal(catalogueUnit('celsius',2),null);
+ const chunks='.observanda/materials/sequences/chunks/selected.json';
+ assert.equal(scientificUnitMetadata(chunks,{kind:'columns',items:[{quantity:{unitDefinition:definition('celsius')}}]}),true);
+ assert.equal(scientificUnitMetadata(chunks,{kind:'cells',items:[{value:'Observanda unit definition'}]}),false);
+});
+
+test('calibration uses the observation calendar day, both inclusive certificate boundaries, and the author-selected policy',()=>{
+ const source={kind:'analysis'},bounds={from:'2024-02-29',expiry:'dated',through:'2024-03-01'};
+ const review=(on,coverage=bounds,policy='inform')=>({version:1,on,coverage,policy});
+ for(const [on,status] of [[null,'undated'],['2024-02-28','future'],['2024-02-29','valid'],['2024-03-01','valid'],['2024-03-02','expired']]){
+  assert.equal(calibrationStatus(source,review(on)),status);
+  assert.equal(validCalibrationReview(review(on,bounds,'require-valid'),source),status==='valid');
+ }
+ assert.equal(calibrationStatus(null,review('2024-03-01',null)),'missing');
+ assert.equal(calibrationStatus(source,review('2024-03-01',null)),'unknown');
+ assert.equal(calibrationStatus(source,review('2030-01-01',{...bounds,expiry:'unknown',through:null})),'unknown');
+ assert.equal(calibrationStatus(source,review('2030-01-01',{...bounds,expiry:'open',through:null})),'valid');
+ assert.equal(validCalibrationCoverage({...bounds,from:'2025-02-29'}),false);
+ assert.equal(validCalibrationCoverage({...bounds,through:'2024-02-28'}),false);
+});
+
+test('saved lab units are reusable by alias, retain their exact edition, and cannot be substituted in an observed column',async t=>{
+ const parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-lab-units-')),book=sampleNotebook(),f=await encryptedFixture(root,book);
+ t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(root),parent);await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ const materials=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,other=book.entries[1].id;
+ const usesLibrary=()=>f.workspace.catalogue(async store=>catalogueRequiresScientificUnitLibrary(await catalogueFormat(store.catalogueDb??store.db)));
+ assert.equal(await usesLibrary(),false);
+ const preferences=path.join(root,'unit-preferences.json');
+ const request=(name,data)=>executeMaterialRequest(f.workspace,{material:name},data,{signal:t.signal,quantityFavorites:quantityFavoritePreferences(preferences)});
+ const definition={version:1,kind:'absolute',dimensions:[{axis:'lab.sensor.channel',exponent:1}],
+  scale:exactUnitScalar('10.3','radix-fraction',6),offset:exactUnitScalar('2.1','radix-fraction',6)};
+ const unit={symbol:'LS',quantity:'Sensor reading',aliases:['Channel scale'],definition};
+ const id=randomUUID(),first=await request('unit-definition-save',{id,recordId,expectedRevision:null,title:'Calibrated reading',unit});
+ assert.equal(await usesLibrary(),true);
+ const found=await request('unit-definition-list',{query:'channel scale',after:null});
+ assert.deepEqual(found.items.map(item=>[item.ref.revision,item.symbol]),[[first.ref.revision,'LS']]);
+ const original=await request('unit-definition-read',{ref:found.items[0].ref});
+ assert.deepEqual(original.unit.definition,definition);
+ const standard=catalogueUnit('kelvin').definition.source;
+ const [favorite]=await Promise.all([request('unit-favorite-set',{choice:original.ref}),request('unit-favorite-set',{choice:standard})]);
+ const listed=()=>request('unit-favorites-list',{after:null});
+ assert.equal((await listed()).items.length,2);
+ assert.equal((await readFile(preferences,'utf8')).includes('Sensor reading'),false);
+ await assert.rejects(request('unit-favorite-set',{choice:{...original.ref,workspaceId:randomUUID()}}),{code:'MATERIAL_INVALID'});
+ assert.deepEqual(await quantityFavoritePreferences(preferences).list(randomUUID(),null),{items:[],next:null});
+ const bytes=Buffer.from('Reading\n11.3\n'),upload=await materials.startImport({recordId:other,name:'readings.csv',size:bytes.length});
+ await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id);
+ const coverage={from:'2024-01-01',through:'2025-01-01',expiry:'dated'};
+ const certCommand={recordId:other,id:randomUUID(),expectedRevision:null,title:'Instrument certificate',evidence:artifact,coverage};
+ const cert=await request('calibration-save',certCommand);
+ const calibrationReview={version:1,on:'2024-12-31',coverage,policy:'require-valid'};
+ const quantity={origin:'measured',conversion:null,calibration:cert.ref,calibrationReview,unitDefinition:definition,unitSource:original.ref};
+ const column={...defaultColumn({label:'Reading'}),representation:'radix-fraction',radix:6,unit:'LS',quantity};
+ const snapshot=await materials.dataset({recordId:other,title:'Observed value',artifact,columns:[column]});
+ const revised=await request('calibration-save',{...certCommand,expectedRevision:cert.ref.revision,coverage:{...coverage,through:'2024-04-30'}});
+ assert.equal((await request('calibration-inspect',{ref:revised.ref})).coverage.through,'2024-04-30');
+ assert.deepEqual((await request('calibration-inspect',{ref:cert.ref})).coverage,coverage);
+ assert.deepEqual(await request('calibration-inspect',{ref:artifact}),{coverage:null});
+ const forged={...quantity,calibration:revised.ref};
+ await assert.rejects(materials.dataset({recordId:other,title:'Substituted certificate',artifact,columns:[{...column,quantity:forged}]}),{code:'MATERIAL_INVALID'});
+ const second=await request('unit-definition-save',{id,recordId,expectedRevision:first.ref.revision,title:'Renamed scale',unit:{...unit,aliases:['Revised alias'],symbol:'LS2'}});
+ const now=await request('unit-definition-list',{query:'revised alias',after:null});
+ assert.deepEqual(now.items.map(item=>item.ref.revision),[second.ref.revision]);
+ assert.equal((await request('unit-definition-list',{query:'Channel scale',after:null})).items.length,0);
+ assert.deepEqual((await request('unit-definition-read',{ref:original.ref})).unit,unit);
+ assert.equal((await listed()).items.find(item=>item.key===favorite.key).title,'Calibrated reading');
+ await request('unit-favorite-set',{remove:favorite.key});
+ assert.deepEqual((await listed()).items.map(item=>item.standard),[standard]);
+ const retained=await materials.retainedSchemaPage(await materials.read(snapshot),{offset:0,limit:1});
+ assert.deepEqual(retained.items[0].quantity,quantity);
+ assert.deepEqual(schemaReferences(retained.items[0]),[cert.ref,original.ref]);
+ const falsePin={...column,quantity:{...quantity,unitDefinition:{...definition,scale:exactUnitScalar('1')}}};
+ await assert.rejects(materials.dataset({recordId:other,title:'Wrong edition',artifact,columns:[falsePin]}),{code:'MATERIAL_INVALID'});
+ await assert.rejects(request('unit-definition-save',{id,recordId,expectedRevision:first.ref.revision,title:'Stale edit',unit}),{code:'MATERIAL_CHANGED'});
+});

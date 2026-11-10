@@ -16,6 +16,7 @@ import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {exactRational} from './measurement-rational.js';
 import {validClockDefinition,validateClockDefinition} from './measurement-clock-model.js';
+import {validCalibrationReview} from './measurement-calibration.js';
 import {validUnitDefinition,validateUnitDefinition} from './measurement-unit-model.js';
 export {exactRational} from './measurement-rational.js';
 export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported','domain'];
@@ -39,7 +40,7 @@ export function rationalIdentity(value){
  return {numerator:String(rational.numerator),denominator:String(rational.denominator)};
 }
 export const blankQuantity=()=>({origin:'unspecified',conversion:null,calibration:null});
-export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration','unitDefinition','uncertainty'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.unitDefinition===undefined||validUnitDefinition(q.unitDefinition))&&(q.uncertainty===undefined||validIntervalUncertainty(q.uncertainty))&&(q.origin!=='raw-code'||unit===''&&q.unitDefinition===undefined&&q.uncertainty===undefined);}
+export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration','calibrationReview','unitDefinition','unitSource','uncertainty'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.calibrationReview===undefined||validCalibrationReview(q.calibrationReview,q.calibration))&&(q.unitDefinition===undefined||validUnitDefinition(q.unitDefinition))&&(q.unitSource===undefined||q.unitDefinition&&!q.unitDefinition.source&&measurementRef(q.unitSource)&&Object.keys(q.unitSource).length===4&&q.unitSource.kind==='analysis'&&researchId(q.unitSource.workspaceId))&&(q.uncertainty===undefined||validIntervalUncertainty(q.uncertainty))&&(q.origin!=='raw-code'||unit===''&&q.unitDefinition===undefined&&q.uncertainty===undefined);}
 export const blankClock=()=>({width:null,frequency:'',ordering:'unknown',wrap:'unknown',reset:'unknown',epoch:'',model:null,referenceData:null});
 export function validTime(time){
  if(!keys(time,['kind','reference','resolution','uncertainty','clock'])||!TIME_KINDS.includes(time.kind)||!['reference','resolution','uncertainty'].every(k=>text(time[k],500)))return false;
@@ -49,7 +50,7 @@ export function validTime(time){
  if(c.frequency){try{if(exactRational(c.frequency).numerator<=0n)return false;}catch{return false;}}
  return time.kind!=='external'||!!c.model&&!!c.referenceData;
 }
-export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.spectrum?.analysis,column.cusum?.analysis,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis,column.coordinateFrame?.frame,column.coordinateFrame?.sourceFrame,column.coordinateFrame?.transform,column.coordinateAxis?.frame].filter(Boolean);}
+export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.unitSource,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.spectrum?.analysis,column.cusum?.analysis,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis,column.coordinateFrame?.frame,column.coordinateFrame?.sourceFrame,column.coordinateFrame?.transform,column.coordinateAxis?.frame].filter(Boolean);}
 export function validLocator(source){
  if(!keys(source,['ref','selector'])||!measurementRef(source.ref))return false;const s=source.selector;
  if(!s)return false;

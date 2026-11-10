@@ -31,7 +31,7 @@ import {associateOriginal} from './evidence-associations.js';
 import {resolveFigureSources} from './figure-provenance.js';
 import {jobSummary} from './jobs.js';
 import {AppError} from './errors.js';
-export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery,referenceAccess,check}={}){
+export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery,referenceAccess,quantityFavorites,check}={}){
  const materials=new ResearchMaterials(storage),operation=request.material;
  const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
@@ -50,6 +50,14 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'spectrum-inputs':if(!data||Object.keys(data).some(key=>!['ref','offset','limit'].includes(key)))throw new AppError('INVALID');return new DatasetSpectrumResults(materials).inputs(data,{signal});
  case 'coordinate-frame-create':case 'coordinate-frame-change':case 'coordinate-frame-page':case 'coordinate-frame-scalar':case 'coordinate-frame-transform-save':case 'coordinate-frame-transform-read':return coordinateFrameRequest(materials,operation,data,{signal,check});
  case 'calculator-retain':case 'calculator-repeat':case 'calculator-resume':return calculatorResultRequest(materials,operation,data,{jobs,referenceAccess,check,signal});
+ case 'calibration-save':case 'calibration-inspect':{
+  const {scientificCalibrationRequest}=await import('./scientific-calibrations.js');
+  return scientificCalibrationRequest(materials,operation,data,{signal,check});
+ }
+ case 'unit-favorites-list':case 'unit-favorite-set':case 'unit-definition-list':case 'unit-definition-read':case 'unit-definition-save':{
+  const {scientificUnitRequest}=await import('./scientific-unit-library.js');
+  return scientificUnitRequest(materials,operation,data,{signal,check,quantityFavorites});
+ }
  case 'source-owners':case 'source-items':case 'source-resolve':{if(!sourceDiscovery)throw new AppError('ACCESS_LOCKED');return sourceDiscovery(storage,operation,data,{signal});}
  case 'chunks':return appendMaterialUploadBatch(storage,stream,{signal});
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));

@@ -9,6 +9,8 @@ import {AppError} from './errors.js';
 import {validMeasurement,measurementReferences,validLocator,blankQuantity} from './web/measurement-model.js';
 import {inspectMeasurementSource} from './measurement-inspector.js';
 import {revisionText} from './web/revision-model.js';
+import {verifyCalibrationReview} from './scientific-calibrations.js';
+import {verifyScientificUnitSource} from './scientific-unit-library.js';
 const fail=()=>{throw new AppError('MEASUREMENT_INVALID');};
 
 // A measurement is an immutable, revision-addressed analysis. Existing evidence
@@ -17,6 +19,8 @@ export class Measurements {
  constructor(materials){this.materials=materials;}
  async validate(value,{signal,semantic=true}={}){
   if(!validMeasurement(value))fail();if(value.coordinateAlignment)await verifyCoordinateAlignment(this.materials,value.coordinateAlignment,{signal});if(value.coordinateAxis)await verifyCoordinateAlignmentAxis(this.materials,value.coordinateAxis,{signal});
+  if(value.quantity?.calibrationReview)await verifyCalibrationReview(this.materials,value.quantity,{signal});
+  if(value.quantity?.unitSource)await verifyScientificUnitSource(this.materials,value.quantity,{signal});
   if(semantic&&measurementScalarPolicies(value))await resolveScalarDefinitions(this.materials,value,{signal});
   for(const ref of measurementReferences(value)){signal?.throwIfAborted();await this.materials.read(ref);}
   for(const source of value.sources){
