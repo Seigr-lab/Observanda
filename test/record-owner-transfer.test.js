@@ -125,3 +125,19 @@ test('project record move preserves authenticated former namespaces for external
  assert.equal((await source.read()).book.entries.some(item=>item.id===record.id),false);
  await target.catalogue(store=>verifyRecordOwnerTransfers(store));await incoming.verify();
 });
+test('a move stopped after verification keeps its source current and the destination unchanged until it is resumed',{timeout:180000},async t=>{
+ const f=await projectTreeFixture(t),project=f.projects[0],[original,to]=f.books,source=new ProjectStorage(project.root,project.projectId,project.key),target=new LabBookStorage(to.root,to.labBookId,to.key);
+ await new LabBookDirectory(f.registry).register(to.projectId,to);
+ const record={...structuredClone(original.before.book.entries[0]),id:randomUUID()};
+ await source.update(book=>{book.notebooks=[structuredClone(original.before.book.notebooks[0])];book.entries=[record];return book;});
+ const namespace=(await source.outline()).metadata.id,sourceOwner={projectId:project.projectId,labBookId:null,workspaceId:namespace},targetOwner={projectId:to.projectId,labBookId:to.labBookId,workspaceId:to.namespaceId};
+ const member=await source.catalogue(async store=>store.member(await store.snapshot(),record.id)),engine=new RecordOwnerTransfer(source,target,{registry:f.registry,sourceOwner,targetOwner});
+ const command={id:randomUUID(),workspaceId:namespace,recordId:record.id,sourceNotebookId:record.notebookId,expectedStorageRevision:member.revision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId},address={workspaceId:namespace,recordId:record.id,id:command.id};
+ const inSource=async()=>(await source.read()).book.entries.some(item=>item.id===record.id),inTarget=()=>target.catalogue(async store=>Boolean(await store.member(await store.snapshot(),record.id)));
+ assert.equal((await engine.start(command,{until:'verified'})).phase,'verified');
+ assert.equal(await inSource(),true);assert.equal(await inTarget(),false);
+ assert.equal((await engine.resume(address,{until:'verified'})).phase,'verified');assert.equal(await inTarget(),false);
+ assert.equal((await engine.resume(address)).phase,'complete');
+ assert.equal(await inSource(),false);assert.equal(await inTarget(),true);
+ await target.catalogue(store=>verifyRecordOwnerTransfers(store));
+});

@@ -125,7 +125,8 @@ export class RecordOwnerTransfer{
   try{const control=this.source.catalogueStore(db);return await this.target.withCatalogueConnections(()=>this.source.catalogue(()=>this.performWithSourceReader(id,options,()=>readRecordOwnerTransfer(control,id))));}
   finally{await db.close();}
  }
- async performWithSourceReader(id,{signal,check=async()=>{},progress=async()=>{},checkpoint=async()=>{}}={},read){
+ async performWithSourceReader(id,{signal,check=async()=>{},progress=async()=>{},checkpoint=async()=>{},until=null}={},read){
+  if(until!==null&&until!=='verified')throw new AppError('INVALID');
   let value=await read();if(value.phase==='complete')return recordOwnerTransferStatus(value);if(value.phase==='cancelled')return this.finishCancellation(value,{signal,check,checkpoint});
   const checked=async()=>{signal?.throwIfAborted();await check();const live=await read();if(live.phase==='cancelled')throw new AppError('RECORD_TRANSFER_CANCELLED');return live;};
   const save=async patch=>{
@@ -182,6 +183,9 @@ export class RecordOwnerTransfer{
    const {verifyRecordOwnerEvidence}=await import('./record-owner-evidence.js');await verifyRecordOwnerEvidence(this.target,value,evidence,{signal,check:checked});
    await checked();await save({phase:'verified'});await checkpoint('verified',recordOwnerTransferStatus(value));
   }
+  // A caller that moves many records together can stop each one here: until
+  // activation nothing is irrevocable, and the source record is still current.
+  if(until==='verified'&&value.phase==='verified')return recordOwnerTransferStatus(value);
   if(!this.publication)throw new AppError('DATABASE_LOCATION');
   if(value.phase==='verified'){await checked();await save({phase:'activating'});await checkpoint('activating',recordOwnerTransferStatus(value));}
   // Activation is the first irrevocable phase. Fence both saved identities
