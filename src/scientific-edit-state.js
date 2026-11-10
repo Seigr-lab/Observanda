@@ -11,6 +11,15 @@ import {statisticalUncertaintyCell} from './web/measurement-statistical-uncertai
 const index=value=>Number.isSafeInteger(value)&&value>=0;
 const string=value=>typeof value==='string';
 const nullableRef=value=>value===null||validMaterialReference(value);
+function validBuilder(value){
+ const setting=item=>item===null||exact(item,['title','ref'])&&string(item.title)&&validMaterialReference(item.ref)&&item.ref.kind==='analysis';
+ return exact(value,['id','target','relative','paths','adapter','profile','extensions','fields',...(value&&Object.hasOwn(value,'amends')?['amends']:[])])&&researchId(value.id)&&
+  (value.amends==null||exact(value.amends,['id','pin','title','date'])&&researchId(value.amends.id)&&revisionId(value.amends.pin)&&string(value.amends.title)&&string(value.amends.date))&&
+  exact(value.target,['id','revision'])&&researchId(value.target.id)&&revisionId(value.target.revision)&&string(value.relative)&&
+  Array.isArray(value.paths)&&value.paths.length<=1000&&value.paths.every(string)&&setting(value.adapter)&&setting(value.profile)&&
+  Array.isArray(value.extensions)&&value.extensions.every(string)&&exact(value.fields,['packageTitle','purpose','sourceRevision','method','toolName','toolVersion','adapterName'])&&
+  Object.values(value.fields).every(string);
+}
 const pair=value=>Array.isArray(value)&&value.length===2&&index(value[0])&&object(value[1])&&string(value[1].name)&&string(value[1].representation)&&Array.isArray(value[1].missing)&&value[1].missing.every(item=>object(item)&&string(item.value)&&string(item.meaning));
 const intent=value=>{
  if(value===null)return true;
@@ -57,7 +66,7 @@ const kinds={
  'uncertainty-covariance':value=>uncertainty(value)&&index(value.item.i)&&index(value.item.j)&&operand(value.item.value),
  'cusum':value=>exact(value,['origin','parameterRef','title','recipe','offset','identity'])&&analytical(value)&&['target','allowance','threshold'].every(key=>scalar(value.recipe[key])),
  'spectrum':value=>exact(value,['origin','parameterRef','title','recipe','offset','identity','methodDraft'])&&analytical(value)&&object(value.recipe.sampling)&&scalar(value.recipe.sampling.origin)&&scalar(value.methodDraft?.step)&&frequencyGrid(value.methodDraft.frequencyGrid)&&(value.recipe.frequencyGrid===undefined||frequencyGrid(value.recipe.frequencyGrid)),
- 'local-intake':value=>exact(value,['source','proposal'])&&string(value.source)&&(value.proposal===null||exact(value.proposal,['id','pin'])&&researchId(value.proposal.id)&&revisionId(value.proposal.pin)),
+ 'local-intake':value=>(exact(value,['source','proposal'])||exact(value,['source','proposal','builder'])&&validBuilder(value.builder))&&string(value.source)&&(value.proposal===null||exact(value.proposal,['id','pin'])&&researchId(value.proposal.id)&&revisionId(value.proposal.pin)),
  'evidence-intake':value=>exact(value,['title','mode','purpose','provenance','selection','intent'])&&string(value.title)&&['folder','files'].includes(value.mode)&&evidencePurposes.includes(value.purpose)&&string(value.provenance)&&(value.selection===null||exact(value.selection,['count','fingerprint'])&&index(value.selection.count)&&value.selection.count>0&&revisionId(value.selection.fingerprint))&&evidenceIntent(value)
 };
 function uncertainty(value){

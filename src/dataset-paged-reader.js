@@ -26,7 +26,7 @@ export async function* readPagedDataset(source,input={},options={}){
  const mapping=datasetMapping(input);
  yield* scratchIterator(work=>mapping.format==='delimited'?csv(work,datasetTexts(source,{...options,keepBOM:true}),mapping,options):json(work,datasetTexts(source,options),mapping,options),options);
 }
-async function* csv(work,chunks,mapping,{signal}={}){
+async function* csv(work,chunks,mapping,{signal,sourceIdentities=false}={}){
  const iterator=chunks[Symbol.asyncIterator]();let delimiter=mapping.delimiter,prefixCount=0;
  try{if(delimiter==='auto'){
   // Retain the inspected prefix in encrypted scratch: even a multi-megabyte
@@ -60,9 +60,12 @@ async function* csv(work,chunks,mapping,{signal}={}){
    let index=0;for await(const original of storedCells()){
     if(mapping.header&&(!Object.hasOwn(original,'value')||original.value.length>200))fail();
     const base=mapping.header?original.value.trim()||'Column '+(index+1):'Column '+(index+1);let name=base,n=2;while(!await work.add('heading:'+name))name=base+' ('+n+++')';
-    await work.put('column:'+index++,{name});
+    // Interpretation profiles match the decoded source header. The distinct
+    // display name may have been trimmed, synthesized or suffixed above.
+    const field=sourceIdentities?{name,sourceHeader:mapping.header?original.value:null}:{name};
+    await work.put('column:'+index++,field);
    }
-   yield {columnCount:width,sourceMapping:{...mapping,delimiter},columns:async function*(){for(let i=0;i<width;i++)yield await work.get('column:'+i);}};
+   yield {columnCount:width,sourceMapping:{...mapping,delimiter},...(sourceIdentities?{locator:{format:'delimited',line:info.line,byteOffset:info.byteOffset,byteLength:info.byteLength}}:{}),columns:async function*(){for(let i=0;i<width;i++)yield await work.get('column:'+i);}};
    if(mapping.header)return;
   }
   if(info.columns!==width)fail();
@@ -94,8 +97,8 @@ async function* framedLines(chunks){
   }const tail=chunk.slice(start);if(tail){if(pending){yield ',';pending=false;}yield tail;content||=!!tail.trim();}}
  if(!seen&&!content)fail();yield ']';
 }
-async function* json(work,chunks,mapping,{signal}={}){
- const nested=mapping.format==='json-nested',rowPattern=parts(mapping.rowsPath??''),joins=nested?mapping.joins:[],fields=Array.isArray(mapping.fields)?mapping.fields:[],discover=mapping.fields==='all';let fieldCount=0,hasContext=false;
+async function* json(work,chunks,mapping,{signal,profileFields,sourceIdentities=false}={}){
+ const nested=mapping.format==='json-nested',rowPattern=parts(mapping.rowsPath??''),joins=nested?mapping.joins:[],fields=profileFields??(Array.isArray(mapping.fields)?mapping.fields:[]),discover=mapping.fields==='all';let fieldCount=0,hasContext=false;
  const definitions=[{name:'row',pattern:rowPattern},...joins.map(j=>({...j,pattern:parts(j.rowsPath)}))],byName=new Map(definitions.map(d=>[d.name,d]));
  // Stage only replaceable values. Duplicate-object and join identities still
  // use the scratch owner's atomic add operation immediately.
@@ -131,7 +134,10 @@ async function* json(work,chunks,mapping,{signal}={}){
   await writeSchema('field-next:'+index,prior??null);await writeSchema(key,index);await writeSchema('column:'+index,{name:f.name,sourceField:f});if(source==='context')hasContext=true;
  };
  try{
- for(const field of fields)await addField(field);
+ for await(const field of fields){
+  if(profileFields&&discover)await work.add('json-heading:'+field.name);
+  await addField(field);
+ }
  const match=(d,at,direct=false)=>direct?at.path.length===d.pattern.length+1&&at.arrays.includes(d.pattern.length)&&(nested?matches(d.pattern,{path:at.path.slice(0,-1),arrays:at.arrays}):same(d.pattern,at.path.slice(0,-1))):nested?matches(d.pattern,at):same(d.pattern,at.path);
  const active=new Map(),arrays=new Map(),found=new Set(),captures=new Map();let count=0,arrayCount=0,valueId=0;
  const scope=(pattern,path)=>pattern.flatMap((p,i)=>p==='*'?[path[i]]:[]);
@@ -151,7 +157,14 @@ async function* json(work,chunks,mapping,{signal}={}){
   if(hasContext){const context=await lookupFields('context',contextPath(at));if(context!==null)result.push({kind:'context',field:context,path:at.path});}
   return result;
  };
- const save=async(c,value)=>{for(const target of c.targets){if(target.kind==='key'){if(['array','object'].includes(value.kind))fail('DATASET_JOIN_KEY');await values.put(rowKey(target.row)+':'+target.slot,value);}
+ const trackPresence=sourceIdentities&&!!profileFields;
+ const markSeen=async function(field){
+  for(let i=field;i!==null;i=await readSchema('field-next:'+i)){
+   const key='profile-seen:'+i;
+   if(!await readSchema(key))await writeSchema(key,true);
+  }
+ };
+ const save=async(c,value)=>{for(const target of c.targets){if(trackPresence&&target.kind!=='key')await markSeen(target.field);if(target.kind==='key'){if(['array','object'].includes(value.kind))fail('DATASET_JOIN_KEY');await values.put(rowKey(target.row)+':'+target.slot,value);}
    else if(target.kind==='context')await values.put('context:'+pointer(target.path),value);
    else{let index=target.field;while(index!==null){await values.put(rowKey(target.row)+':field:'+index,value);index=await readSchema('field-next:'+index);}}
   }};
@@ -196,7 +209,10 @@ async function* json(work,chunks,mapping,{signal}={}){
  if(captures.size||active.size||!found.has('row')||!count)fail();
  for(let i=0;i<arrayCount;i++){const a=await values.get('alignment:'+i),r=a.name==='row'?a:await values.get(countKey('row',a.scope));for(const j of joins.filter(j=>j.mode==='position')){const b=a.name===j.name?a:await values.get(countKey(j.name,a.scope));if(!r||!b||r.length!==b.length)throw new AppError('DATASET_JOIN_LENGTH',[{acquisitions:r?.pointer??null,lookup:b?.pointer??null,expected:r?.length??null,actual:b?.length??null}]);}}
  await flush();
- yield {columnCount:fieldCount,sourceMapping:mapping,columns:async function*(){for(let i=0;i<fieldCount;i++)yield await readSchema('column:'+i);}};
+ yield {columnCount:fieldCount,sourceMapping:mapping,columns:async function*(){for(let i=0;i<fieldCount;i++){
+  const column=await readSchema('column:'+i);
+  yield trackPresence?{...column,sourcePresent:!!await readSchema('profile-seen:'+i)}:column;
+ }}};
  for(let order=0;order<count;order++){
   signal?.throwIfAborted();const row=await work.get('row:'+order),lookup=new Map();
   for(const j of joins){const d=byName.get(j.name);let value;

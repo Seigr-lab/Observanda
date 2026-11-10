@@ -12,6 +12,7 @@ import {revisionText} from './web/revision-model.js';
 import {withoutFigureSources} from './web/figure-provenance.js';
 import {indexScientificCalibration} from './scientific-calibrations.js';
 import {indexScientificUnit} from './scientific-unit-library.js';
+import {indexDatasetProfile} from './dataset-interpretation-profile.js';
 const root='.observanda/materials/index',marker=root+'/state.json';
 const kinds=['artifact','dataset','analysis','collection'];
 const invalid=()=>{throw new AppError('INVALID');};
@@ -53,6 +54,7 @@ export class MaterialIndex{
    if(!researchId(stagedBatch)||head.stagedBatch!==stagedBatch||head.kind!=='artifact')invalid();
   }
   await this.addHead(head);
+  await indexDatasetProfile(this.workspace,doc);
   await indexScientificUnit(this.workspace,doc);
   await indexScientificCalibration(this.workspace,doc);
   await this.workspace.writeMetadata(root+'/dependencies/'+doc.id+'/'+head.revision+'.json',JSON.stringify({kind:doc.kind,id:doc.id,revision:head.revision,...this.materials.referenceSet(doc.content)}));
@@ -70,6 +72,7 @@ export class MaterialIndex{
   const expected={kind:doc.kind,id:doc.id,revision:head.revision,recordId:doc.recordId,title:doc.title,createdAt:doc.createdAt,...this.materials.referenceSet(doc.content),figureHash:doc.content.figure?digest(revisionText(withoutFigureSources(doc.content.figure))):null,figureId:doc.content.figure?.id??null,ownerTransfer:transferId};
   if(revisionText(head)!==revisionText(expected))damaged();
   await this.workspace.catalogue(store=>requireRecordOwnerTransfers(store.db));await this.ensureLocked();
+  await indexDatasetProfile(this.workspace,doc);
   await indexScientificUnit(this.workspace,doc);
   await indexScientificCalibration(this.workspace,doc);
   if(await stageMaterialReturnHead(this.materials,head)){await this.workspace.writeMetadata(root+'/dependencies/'+head.id+'/'+head.revision+'.json',JSON.stringify({kind:doc.kind,id:doc.id,revision:head.revision,...this.materials.referenceSet(doc.content)}));return;}

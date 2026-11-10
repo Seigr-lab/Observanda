@@ -97,6 +97,7 @@ export class ScientificEditDrafts{
    if(isBase){const current=ref.kind==='record'?await target.recordSummary(ref.id):await target.current(ref.id);currentBase=current?.revision===ref.revision;}
   };
   try{
+   if(draft.kind==='local-intake'&&draft.value.builder)await materials.assertOwner(draft.value.builder.target.id);
    for(const ref of scientificEditReferences(draft.base,draft.value)){
     signal?.throwIfAborted();const isBase=draft.base&&materialReferenceKey(ref)===materialReferenceKey(draft.base);
     const external=await materials.externalReference(ref);
@@ -133,8 +134,8 @@ export class ScientificEditDrafts{
    const intake=new LocalIntake(this.workspace,queue),proposal=await intake.read(value.proposal.id,{optional:true});
    if(!proposal)return null;
    const target=await intake.executionManifest(proposal.manifest);
-   if(target.workspaceId!==workspaceId||target.recordId!==recordId||value.proposal.pin!==proposal.pin)fail('DRAFT_CHANGED');
-   return {proposal:proposal.id};
+   if(target.workspaceId!==workspaceId||target.recordId!==(value.builder?.target.id??recordId)||value.proposal.pin!==proposal.pin)fail('DRAFT_CHANGED');
+   return {proposal:proposal.id,...(target.recordId!==recordId?{proposalRecordId:target.recordId}:{})};
   }
   if(kind==='evidence-intake'&&value.intent){
    const {id,...intent}=value.intent;let batch;

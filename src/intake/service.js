@@ -94,16 +94,22 @@ export class LocalIntake{
  async stage(command,options={}){
   const {source,workspaceId,recordId,id,expectedPin}=command;
   if(!revisionId(expectedPin))throw new AppError('INTAKE_INVALID');
+  if(command.authoredManifest!==undefined){
+   validateIntake(command.authoredManifest);
+   if(command.authoredManifest.workspaceId!==workspaceId||command.authoredManifest.recordId!==recordId||command.authoredManifest.id!==id||intakeHash(command.authoredManifest)!==expectedPin)throw new AppError('INTAKE_TARGET');
+  }
   const prior=await this.read(id,{optional:true});
   if(prior){const target=await this.executionManifest(prior.manifest);await this.bind(target,{checkRevision:false});if(prior.pin!==expectedPin||target.workspaceId!==workspaceId||target.recordId!==recordId)throw new AppError('INTAKE_CHANGED');return this.status({workspaceId,recordId,id});}
-  const report=await inspectIntake(source,{...options,expectedPin});
+  if(command.authoredManifest!==undefined)await this.validateTargets(command.authoredManifest,{signal:options.signal});
+  const verification=command.authoredManifest&&command.proof!==undefined?await (await import('./builder.js')).checkedReview(this,command.authoredManifest,source,expectedPin,command.proof):undefined;
+  const report=await inspectIntake(source,{...options,expectedPin,authoredManifest:command.authoredManifest,verification});
   if(report.manifest.workspaceId!==workspaceId||report.manifest.recordId!==recordId||report.manifest.id!==id)throw new AppError('INTAKE_TARGET');
   const relative=path.relative(this.workspace.root,report.root);if(!relative||!relative.startsWith('..')&&!path.isAbsolute(relative))throw new AppError('INTAKE_INVALID');
   await this.queue.transaction(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
    const existing=await this.read(id,{optional:true});if(existing){if(existing.pin!==expectedPin)throw new AppError('INTAKE_CHANGED');return;}
    await this.validateTargets(report.manifest);
    const sourceVerification={pin:report.pin,manifestStamp:report.manifestStamp,files:report.files.map(({id,path,size,sha256,stamp})=>({id,path,size,sha256,stamp}))};
-   const proposal={version:1,id,manifest:report.manifest,pin:report.pin,source:report.root,sourceVerification,createdAt:new Date().toISOString(),state:'staging',stageJob:randomUUID(),applyJob:randomUUID(),prepared:[],receipt:null};
+   const proposal={version:1,id,manifest:report.manifest,pin:report.pin,source:report.root,sourceVerification,...(report.authored?{authored:true}:{}),createdAt:new Date().toISOString(),state:'staging',stageJob:randomUUID(),applyJob:randomUUID(),prepared:[],receipt:null};
    await this.write(proposal);const feed=this.feed(recordId);await feed.putLocked(proposal);await this.workspace.writeMetadata(feed.marker,JSON.stringify({version:1}));
    await this.queue.enqueueLocked({id:proposal.stageJob,type:'intake.stage',scope:recordId,input:{id,size:report.manifest.files.reduce((n,f)=>n+f.size,0)}});
   }));return this.status({workspaceId,recordId,id});
@@ -118,13 +124,22 @@ export class LocalIntake{
   return this.workspace.catalogue(async()=>{
    const p=await this.bound(command),jobId=p.state==='staging'?p.stageJob:p.applyJob,origin=await readRecordOwnerAuditMetadata(this.workspace,'.observanda/jobs/'+jobId+'.json',{recordId:p.manifest.recordId,limit:1048576}),job=origin?JSON.parse(origin.text):await this.queue.read(jobId);
    if(origin&&(job.id!==jobId||job.scope!==p.manifest.recordId||!['completed','failed','cancelled'].includes(job.state)))throw new AppError('CATALOGUE_DAMAGED');
-   return {...intakePreview(p.manifest,p.pin),state:p.state,createdAt:p.createdAt,stagedFiles:p.prepared.length,receipt:p.receipt,job:jobSummary(job)};
+   const profile=p.receipt&&p.manifest.analyses.length?(await import('./builder.js')).intakeInterpretation(p.manifest,p.receipt):null;
+   return {...intakePreview(p.manifest,p.pin),state:p.state,createdAt:p.createdAt,stagedFiles:p.prepared.length,receipt:p.receipt,job:jobSummary(job),...(profile?.files.length?{interpretation:profile}:{})};
   });
  }
  async list(command){
   return this.materials.readSnapshot(async()=>{
-   const {revision}=await this.bind(command,{checkRevision:false}),page=await this.feed(command.recordId).page({cursor:command.cursor??null});
-   return {...page,recordRevision:revision,items:await Promise.all(page.items.map(item=>this.status({...command,id:item.id})))};
+   const {record,revision}=await this.bind(command,{checkRevision:false}),page=await this.feed(command.recordId).page({cursor:command.cursor??null});
+   if(command.summaries===true){
+    const items=[];
+    for(const item of page.items){
+     const proposal=await this.bound({...command,id:item.id});
+     items.push({id:proposal.id,title:proposal.manifest.title,state:proposal.state});
+    }
+    return {items,next:page.next,recordTitle:record.title,recordRevision:revision};
+   }
+   return {...page,recordTitle:record.title,recordRevision:revision,items:await Promise.all(page.items.map(item=>this.status({...command,id:item.id})))};
   });
  }
  async apply(command){

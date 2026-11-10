@@ -54,6 +54,11 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
   const {scientificCalibrationRequest}=await import('./scientific-calibrations.js');
   return scientificCalibrationRequest(materials,operation,data,{signal,check});
  }
+ case 'dataset-profile-revision':case 'dataset-profile-save':case 'dataset-profile-review':case 'dataset-profile-review-batch':case 'dataset-profile-read':case 'dataset-profile-list':case 'dataset-profile-template':
+ case 'dataset-schema-group-review':case 'dataset-schema-group-columns':{
+  const {interpretationProfileRequest}=await import('./dataset-profile-requests.js');
+  return interpretationProfileRequest(materials,operation,data,{signal,check,sourceAccess});
+ }
  case 'unit-favorites-list':case 'unit-favorite-set':case 'unit-definition-list':case 'unit-definition-read':case 'unit-definition-save':{
   const {scientificUnitRequest}=await import('./scientific-unit-library.js');
   return scientificUnitRequest(materials,operation,data,{signal,check,quantityFavorites});
@@ -121,6 +126,10 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};
   if(operation==='retry-job'&&job.type==='dataset.exchange'){
    const result=await queueDatasetExchange(materials,service,job.input.command,job.id,{sourceAccess,check,signal,retry:true});worker.wake();return {job:result};
+  }
+  if(operation==='retry-job'&&job.type==='dataset.prepare'&&Object.hasOwn(job.input.command,'interpretationProfile')){
+   const {retryProfileApplication}=await import('./dataset-profile-application.js');
+   const result=await retryProfileApplication(materials,service,job,{sourceAccess,signal});worker.wake();return {job:summary(result)};
   }
   const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);

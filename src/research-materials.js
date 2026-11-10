@@ -413,6 +413,7 @@ export class ResearchMaterials {
   return {columns,columnOffset,columnCount,nextColumn:columnOffset+columns.length<columnCount?columnOffset+columns.length:null,rows};
  }
  async validateDataset(command){
+  if(Object.hasOwn(command,'interpretationProfile')){const {validateProfileApplication}=await import('./dataset-profile-application.js');return validateProfileApplication(this,command);}
   if(Object.hasOwn(command,'exchangeImport')){const {validateExchangeImport}=await import('./dataset-exchange-import.js');return validateExchangeImport(this,command);}
   if(command.cusum)return new DatasetCusumResults(this).validate(command);
   if(command.spectrum)return new DatasetSpectrumResults(this).validate(command);
@@ -442,7 +443,8 @@ export class ResearchMaterials {
   for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])for(const ref of schemaReferences(column))await this.checkReference(ref);
   if(!command.baseDataset)for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])if(column.coordinateFrame)await validateCoordinateFrameColumn(this,column);
  }
- async prepareDataset(command,{signal,progress=async()=>{},writePage,jobId=null}={}){
+ async prepareDataset(command,{signal,progress=async()=>{},writePage,jobId=null,grants}={}){
+  if(Object.hasOwn(command,'interpretationProfile')){const {prepareProfileApplication}=await import('./dataset-profile-application.js');return prepareProfileApplication(this,command,{signal,progress,writePage,grants});}
   if(Object.hasOwn(command,'exchangeImport')){const {prepareExchangeImport}=await import('./dataset-exchange-import.js');return prepareExchangeImport(this,command,{signal,progress,writePage});}
   if(command.cusum)return new DatasetCusumResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.spectrum)return new DatasetSpectrumResults(this).prepare(command,{signal,progress,writePage,jobId});

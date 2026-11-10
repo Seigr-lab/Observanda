@@ -64,9 +64,9 @@ export function projectSourceEvidenceOwner(store,record,{signal}={}){
    if((match=/^corrections\/receipts\/([a-f0-9]{64})\.json$/.exec(tail))){const receipt=await json(id),event=await new EvidenceCorrections(materials).event(receipt.id);if(event.review!==match[1])damaged();return record(event.command.recordId);}
    if((match=/^corrections\/state\/([^/]+)\.json$/.exec(tail))){if(!researchId(match[1]))damaged();const corrections=new EvidenceCorrections(materials),state=await corrections.state(match[1]);if(!state)damaged();const event=await corrections.event(state.lastEvent);if(event.command.ref.id!==match[1])damaged();return record(event.command.recordId);}
    if((match=/^corrections\/records\/([a-f0-9-]{36})(?:-order\.json|(?:-order)?\/[^/]+\.json)$/.exec(tail)))return record(match[1]);
-   if((match=/^index\/(unit-definitions|calibrations)\/([^/]+)\.json$/.exec(tail))){
+   if((match=/^index\/(unit-definitions|calibrations|interpretation-profiles|intake-adapters)\/([^/]+)\.json$/.exec(tail))){
     const key=match[2],unit=await head(key),pointer=await json(id),doc=await materials.readStored(unit);
-    const valid=match[1]==='unit-definitions'?(await import('./scientific-unit-library.js')).isScientificUnit:(await import('./scientific-calibrations.js')).isScientificCalibration;
+    const valid=match[1]==='intake-adapters'?(await import('./intake/adapter.js')).isIntakeAdapter:match[1]==='interpretation-profiles'?(await import('./dataset-interpretation-profile.js')).isDatasetInterpretationProfile:match[1]==='unit-definitions'?(await import('./scientific-unit-library.js')).isScientificUnit:(await import('./scientific-calibrations.js')).isScientificCalibration;
     if(!valid(doc)||pointer.id!==key||pointer.recordId!==doc.recordId)damaged();
     return record(doc.recordId);
    }

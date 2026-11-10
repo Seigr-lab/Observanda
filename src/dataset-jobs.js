@@ -2,6 +2,7 @@ import {prepareCusumScalars} from './dataset-cusum-results.js';
 import {prepareSpectrumScalars} from './dataset-spectrum-results.js';
 import {prepareAggregationScalars} from './dataset-aggregation-quantiles.js';
 import {prepareComparisonAdmission} from './comparison-job-admission.js';
+import {profileJobAdmission} from './dataset-profile-application.js';
 // Dataset and figure preparation share the workspace worker and paged job feed.
 import {randomUUID} from 'node:crypto';
 import {createFigure} from './web/figure-model.js';
@@ -20,7 +21,8 @@ async function enqueueMaterial(materials,queue,command,id=randomUUID(),type,opti
  if(type==='dataset.prepare'&&input.spectrum){const previous=await queue.read(id);input=await prepareSpectrumScalars(materials,input,{base:previous?.input?.command?.spectrum,write:fn=>queue.transaction(fn)});}
  if(type==='dataset.prepare'&&input.cusum){const previous=await queue.read(id);input=await prepareCusumScalars(materials,input,{base:previous?.input?.command?.cusum,write:fn=>queue.transaction(fn)});}
  if(type==='figure.calculate')input.base={...(command.base??createFigure()),id:command.base?.id??input.id,series:[]};
- const admission=type==='analysis.compare'&&!await queue.read(id)?await prepareComparisonAdmission(materials,input,{...options,check:()=>queue.check?.()}):null;let rollback;
+ const admit=type==='analysis.compare'?prepareComparisonAdmission:type==='dataset.prepare'&&Object.hasOwn(input,'interpretationProfile')?profileJobAdmission:null;
+ const admission=admit&&!await queue.read(id)?await admit(materials,input,{...options,check:()=>queue.check?.()}):null;let rollback;
  try{return await queue.transaction(async()=>{
   if(!await queue.read(id)){
    if(admission){await admission.verify();await admission.validateOutput();if(admission.open){if(!options.comparisonAccess)throw new AppError('ANALYSIS_SOURCE_ACCESS');rollback=options.comparisonAccess.bind(admission.workspaceId,id,input,admission.open);}}

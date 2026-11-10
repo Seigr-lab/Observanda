@@ -32,6 +32,8 @@ import {retainedFigureReader} from './retained-figure-reader.js';
 import {isRetainedFigure} from './retained-figure-model.js';
 import {measurementTransformControls,readMeasurementTransform,wireMeasurementTransforms,measurementTransformDescription} from './measurement-transform-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetColumnPager,bindDatasetColumnSearch} from './dataset-column-picker.js';
+import {schemaGroupControls,wireSchemaGroup,profileText} from './dataset-schema-group-ui.js';
+import {datasetInterpretationProfileUI} from './dataset-interpretation-profile-ui.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
 import {retainedSourceClient} from './retained-source-client.js';
 import {materialReference} from './material-reference.js';
@@ -109,7 +111,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  let sourcePickers={},materialCursor=null,materialPage={next:null},importCursor=null,importsNext=null,homeGeneration=0,homeExtrasController=null;
  const recovery=scientificEditRecovery({esc,scope:()=>({workspaceId:state.book.id,recordId:owner,context:state.storage?.contextId}),request:(name,data)=>api(route(endpoint+name),data,{adopt:false,owner:projectOwner})});
  document.getElementById('dialog')?.addEventListener('close',()=>recovery.reset());
- const stopWatching=()=>{dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
+ let profiles=null;
+ const stopWatching=()=>{profiles?.clean();dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  let cancelSchemaFind;
  document.getElementById('dialog')?.addEventListener('close',()=>cancelSchemaFind?.());
@@ -140,6 +143,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const selection=encodeURIComponent(JSON.stringify({id,recordId:owner}));
   return downloadResource(route(endpoint+'dataset-exchange-download')+'?context='+encodeURIComponent(workspaceContext)+'&selection='+selection);
  }});
+ profiles=datasetInterpretationProfileUI({call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob});
+ document.getElementById('dialog')?.addEventListener('close',()=>profiles.clean());
  async function authorizeSource(reference){
   if(state.storage?.researchStorage!=='catalogue'||!reference?.workspaceId)return;
   const generation=jobView;await sources.resolve(reference,{unlock:true});currentView(generation);
@@ -168,7 +173,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  document.getElementById('dialog')?.addEventListener('close',()=>measurements.clean());
  const intake=evidenceIntakeUI({route,call,frame,esc,field,guard,context:()=>workspaceContext,owner:()=>owner,recovery});
  const readiness=runReadinessUI({call:(action,data={})=>api(route('/api/v1/intake/'+action),{version:1,workspaceId:state.book.id,recordId:owner,...data},{adopt:false}),frame,esc,field,guard,notify,back:()=>home()});
- const continuing=localIntakeUI({api:(path,data,options)=>api(route(path),data,{...options,owner:projectOwner}),frame,esc,field,guard,owner:()=>owner,workspace:()=>state.book.id,readinessUI:readiness,recovery,refreshRecord:async()=>{guard();if(state.page==='record-reader'){readerRefreshPending=true;return;}const latest=await api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope?.ids??[owner]});guard();state.book=latest.book;state.etag=latest.etag;render();}});
+ const continuing=localIntakeUI({api:(path,data,options)=>api(route(path),data,{...options,owner:projectOwner}),frame,esc,field,guard,state,owner:()=>owner,workspace:()=>state.book.id,readinessUI:readiness,recovery,reviewFiles:(input,recordId)=>profiles.batch(input.profile,null,{recordId,files:input.files}),refreshRecord:async()=>{guard();if(state.page==='record-reader'){readerRefreshPending=true;return;}const latest=await api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope?.ids??[owner]});guard();state.book=latest.book;state.etag=latest.etag;render();}});
  document.getElementById('dialog')?.addEventListener('close',()=>readiness.stop());
  document.getElementById('dialog')?.addEventListener('close',()=>{continuing.stop();if(readerRefreshPending){readerRefreshPending=false;void refreshReader?.();}});
  const uploader=evidenceUploadUI({route,call,frame,esc,field,button,guard,context:()=>workspaceContext,owner:()=>owner,sourceMount,sources:()=>sourcePickers.parent.values(),watchJob});
@@ -406,7 +411,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const correctionControls=await corrections.controls(opened,selectedRef);
   const status=opened.kind==='analysis'?await call('analysis-status',{ref:selectedRef}):null;guard();if(generation!==jobView)return;const c=opened.content;frame(opened.title,`<p>${esc(materialKind(opened.kind))} Â· ${selectedRef.revision} Â· ${esc(opened.createdAt)}</p>${opened.previous?button(esc(mt("previousRevision")),'previous'):''}${correctionControls}
    ${opened.kind==='artifact'?`<dl>${materialSourceLocation(c,esc)}<dt>${esc(mt("originalBytes"))}</dt><dd>${c.size.toLocaleString()}</dd><dt>SHA-256</dt><dd class="material-hash">${c.sha256}</dd><dt>${esc(mt("provenance"))}</dt><dd>${esc(c.provenance)||esc(mt("notSupplied"))}</dd></dl>${button(esc(t("measurements","download")),'download')}`:''}
-   ${opened.kind==='artifact'&&!referenceContext?button(esc(measurementText('heading')),'measurement-from-artifact',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(exchangeText('importHeading')),'dataset-exchange-import'):''}
+   ${opened.kind==='artifact'&&!referenceContext?button(esc(measurementText('heading')),'measurement-from-artifact',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(exchangeText('importHeading')),'dataset-exchange-import')+button(esc(profileText('apply')),'dataset-profile-library'):''}
+   ${c.tool==='Observanda dataset interpretation profile'&&c.version==='1'&&!referenceContext?button(esc(profileText('revise')),'dataset-profile-revise')+button(esc(profileText('apply')),'dataset-profile-apply'):''}
    ${calculatorRecipeView(c,esc,{button,readOnly:referenceContext})}${analysisChangesView(status,esc)}${c.method&&!['Observanda clock synchronization','Observanda coordinate frame transform'].includes(c.tool)?comparisons.methodView(c.method):''}
    ${['Observanda uncertainty definition','Observanda statistical uncertainty'].includes(c.tool)?'<p>'+esc(uncertaintyText('method'))+'</p><p>'+esc(c.definition?.rationale??'')+'</p><p>'+esc(uncertaintyText('noCoverage'))+'</p>'+button(esc(uncertaintyText(c.tool==='Observanda uncertainty definition'?'edit':'review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" ${c.tool==='Observanda uncertainty definition'?'data-existing="true"':'data-result="true"'}`):''}
    ${c.tool==='Observanda clock synchronization'?clockSynchronizationView(c,{esc,button})+(c.version===2?button(esc(segmentedClockText('review')),'clock-segments-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):referenceContext?'':button(esc(synchronizationText('revise')),'clock-sync-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
@@ -474,7 +480,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   frame(opened.title,`${table.render()}<p>${esc(table.range(result))}</p>${imported}
    <div class="material-table" role="region" aria-label="${esc(mt("datasetValues"))}"><table data-table-grid role="grid" aria-multiselectable="true" aria-rowcount="${result.total+1}" aria-label="${esc(mt("datasetValues"))}"><thead><tr><th>${esc(t("measurements","surroundingRow"))}</th>${data.columns.map(col=>`<th>${esc(col.name)}<small>${esc(measurementText(col.representation==='radix'?'radixLabel':col.representation))}${col.representation==='radix'?' · '+esc(mt("numeralBase",{base:col.radix})):''}${col.unit?' · '+esc(col.unit):''}</small>${computationLabel(col)?'<small>'+esc(computationLabel(col))+'</small>':''}</th>`).join('')}<th>${esc(t("measurements","exclusion"))}</th></tr></thead><tbody>${data.rows.map((r,rowIndex)=>`<tr aria-rowindex="${result.offset+rowIndex+2}"><th scope="row"><details class="material-row-identity"><summary>${esc(r.order??r.line)}</summary><span>${esc(r.id)}${r.locator?.pointer?'<br>'+esc(r.locator.pointer):''}</span></details></th>${r.cells.map((v,i)=>cellButton(r,rowIndex,v,i)).join('')}<td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>
    ${c.sourceMapping?`<details class="material-more"><summary>${esc(mt("sourceMapping"))}</summary><p>${esc(({delimited:mt('delimitedFormat'),json:mt('jsonArray'),jsonl:'JSON Lines','json-nested':preparationText('format')})[c.sourceMapping.format]??c.sourceMapping.format)}${c.sourceMapping.rowsPath?' Â· '+esc(mt("rowsAt",{path:c.sourceMapping.rowsPath})):''}</p>${preparation.summary(c.sourceMapping)}${(c.sourceMapping.fieldsInSchema||Array.isArray(c.sourceMapping.fields))?`<ul>${(c.sourceMapping.fieldsInSchema?data.columns.map(col=>col.sourceField).filter(Boolean):c.sourceMapping.fields).map(f=>`<li>${esc(f.name)}: ${esc(f.path)||esc(mt("rowValue"))}</li>`).join('')}</ul><p>${esc(mt("presenceHelp"))}</p>`:''}</details>`:''}
-   <div class="inline-actions">${button(esc(t("measurements","sync-previousColumns")),'columns-prev',columnOffset?'':'disabled')}<span>${esc(mt("columnPage",{first:columnOffset+1,last:Math.min(data.columnCount,columnOffset+16),total:data.columnCount}))}</span>${button(esc(t("measurements","sync-nextColumns")),'columns-next',columnOffset+16<data.columnCount?'':'disabled')}${!referenceContext?button(esc(exchangeText('heading')),'dataset-exchange'):''}</div>
+   <div class="inline-actions">${button(esc(t("measurements","sync-previousColumns")),'columns-prev',columnOffset?'':'disabled')}<span>${esc(mt("columnPage",{first:columnOffset+1,last:Math.min(data.columnCount,columnOffset+16),total:data.columnCount}))}</span>${button(esc(t("measurements","sync-nextColumns")),'columns-next',columnOffset+16<data.columnCount?'':'disabled')}${!referenceContext?button(esc(exchangeText('heading')),'dataset-exchange'):''}${!referenceContext&&c.inputs?.[0]?.kind==='artifact'&&c.sourceMapping&&!c.calculation&&!c.aggregation&&!c.exchangeOrigin&&!c.spectrum&&!c.cusum&&!c.calculatorResult&&!c.uncertainty?button(esc(profileText('create')),'dataset-profile-author'):''}</div>
    <div class="inline-actions">${button(esc(t("measurements","sync-previousRows")),'rows-prev',result.offset?'':'disabled')}${button(esc(t("measurements","sync-nextRows")),'rows-next',result.offset+data.rows.length<result.total?'':'disabled')}${calculatorResultActions(c,{esc,button,readOnly:referenceContext})}${c.spectrum?button(esc(spectrumText('review')),'spectrum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.cusum?button(esc(cusumText('review')),'cusum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}${c.uncertainty?button(esc(uncertaintyText('review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-result="true"`):''}${referenceContext?'':(c.calculatorResult||c.spectrum||c.cusum?'':button(esc(mt("editSchema")),'schema'))+button(esc(uncertaintyText('open')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createFrame')),'coordinate-frames-open-frame',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(coordinateFrameText('createTransform')),'coordinate-frames-open-transform',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(synchronizationText('title')),'clock-sync-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(mt("createFigure")),'plot-form')+button(esc(spectrumText('open')),'spectrum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(cusumText('open')),'cusum-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.spectrum?button(esc(spectrumText('repeat')),'spectrum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+(c.cusum?button(esc(cusumText('repeat')),'cusum-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(aggregationText('open')),'aggregation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.aggregation?button(esc(aggregationText('repeat')),'aggregation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')+button(esc(calculationText('open')),'calculation-open',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+(c.calculation?button(esc(calculationText('repeat')),'calculation-repeat',`data-ref="${esc(JSON.stringify(selectedRef))}"`):'')}${opened.previous?button(esc(mt("previousRevision")),'previous'):''}</div>`);
   table.bind();
  }
@@ -486,14 +492,17 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const exclusions=schemaRows.flatMap((r,i)=>r.excluded?[{row:String(i+1),reason:r.excluded}]:[]);
   schemaExclusions=restored?.exclusions??exclusions;schemaInitialExclusions=JSON.stringify(exclusions);datasetIntent=restored?.intent??null;await schemaForm();
  }
- async function schemaForm(targetOffset=schemaOffset){
+ async function schemaForm(targetOffset=schemaOffset,applyReviewed=null){
   const form=document.getElementById('material-form'),controls=[...document.querySelectorAll('#dialog input,#dialog select,#dialog textarea,#dialog button')].map(el=>({el,disabled:el.disabled}));
   form.dataset.busy='true';form.setAttribute('aria-busy','true');for(const {el} of controls)el.disabled=true;
   try{
   const generation=jobView,data=await call('schema',{ref:selectedRef,offset:targetOffset});guard();
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
+  // The previous form can still checkpoint while the selected schema page
+  // loads. Merge the reviewed change after its timer has been detached.
+  recovery.detach();applyReviewed?.();
   schemaOffset=targetOffset;schemaOriginal=data.items;schemaTotal=data.total;
-  const columns=data.items.map((col,i)=>schemaDraft.get(schemaOffset+i)??col);frame(mt("schemaTitle"),`<p>${esc(mt("schemaHelp"))}</p>
+  const columns=data.items.map((col,i)=>schemaDraft.get(schemaOffset+i)??col);frame(mt("schemaTitle"),`<p>${esc(mt("schemaHelp"))}</p>${schemaGroupControls(schemaOffset,columns,{esc,field})}
    ${columns.map((col,i)=>`<details class="material-schema-column"${i===0?' open':''}><summary>${esc(col.name)}</summary>${computationLabel(col)?'<p>'+esc(computationLabel(col))+'</p>':''}<div data-material-column="${schemaOffset+i}" data-scalar-policy-owner="column" class="material-fields">
     ${field(esc(t("retainedFigureEditor","name")),`<input data-schema="name" value="${esc(col.name)}">`)}
     ${field(esc(measurementText('representation')),`<select data-schema="representation">${REPRESENTATIONS.map(v=>option(v,measurementText(v==='radix'?'radixLabel':v),col.representation)).join('')}</select>`)}
@@ -509,7 +518,15 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    <input type="hidden" id="material-schema-structure" value="0"><fieldset><legend>${esc(mt("excludedObservations"))}</legend><p>${esc(mt("exclusionsHelp"))}</p><div id="material-exclusions">${schemaExclusions.map(r=>exclusionRow(r.row,r.reason)).join('')}</div>${button(esc(mt("excludeObservation")),'exclusion-add')}</fieldset>`,`<div class="material-schema-pagination">${button(esc(t("measurementTransform","previous")),'schema-prev','aria-label="'+esc(mt("previousSchema"))+'" '+(schemaOffset?'':'disabled'))}<span>${esc(mt("schemaPage",{first:schemaOffset+1,last:schemaOffset+columns.length,total:schemaTotal}))}</span>${button(esc(t("measurementTransform","next")),'schema-next','aria-label="'+esc(mt("nextSchema"))+'" '+(schemaOffset+columns.length<schemaTotal?'':'disabled'))}</div>`+button(esc(mt("saveDatasetRevision")),'schema-save')+button(esc(t("evidenceIntake","back")),'home'));
   if(schemaDraft.size||JSON.stringify(schemaExclusions)!==schemaInitialExclusions)document.getElementById('material-schema-structure').value='1';
   {const element=document.getElementById('material-form'),reference=structuredClone(selectedRef),provenance=wireProvenance(element,{call,esc,field,recordId:owner,guard,available:()=>element.dataset.busy!=='true',reference:node=>({ref:reference,column:Number(node.closest('[data-material-column]').dataset.materialColumn)})}),domains=wireMeasurementDomains(element),frameColumns=wireCoordinateFrameColumns(element,{call,esc,field,guard,recordId:owner,available:()=>element.dataset.busy!=='true'}),policies=wireScalarPolicies(element,'column'),refresh=event=>{if(event.target.matches('[data-schema=representation]'))event.target.closest('[data-material-column]').querySelector('[data-column-policy]').hidden=!isScalarRepresentation(event.target.value);};element.addEventListener('change',refresh);schemaDispose=()=>{provenance();domains();frameColumns();policies();element.removeEventListener('change',refresh);};schemaDispose.action=frameColumns.action;schemaDispose.ready=async()=>{await frameColumns.ready();await provenance.ready();};}
-  recovery.mount(document.getElementById('material-form'),()=>{captureSchema();return {offset:schemaOffset,rowPage:page,columns:[...schemaDraft],exclusions:schemaExclusions,intent:datasetIntent};});
+  const schemaControls=schemaDispose,host=document.getElementById('material-form'),reference=selectedRef;
+  const groupDispose=wireSchemaGroup(host,{esc,call,recordId:owner,ref:reference,width:schemaTotal,
+   capture:async()=>{await schemaControls.ready();guard();if(!host.isConnected||reference!==selectedRef)throw new DOMException('Dataset changed','AbortError');captureSchema({validate:true});},
+   donor:index=>schemaDraft.get(index)??schemaOriginal[index-schemaOffset],
+   pending:ranges=>[...schemaDraft].filter(([index])=>ranges.some(range=>index>=range.offset&&index<range.offset+range.count)).map(([index,column])=>({index,column})),
+   apply:async pages=>{guard();if(reference!==selectedRef||!host.isConnected)throw new DOMException('Dataset changed','AbortError');await schemaForm(schemaOffset,()=>{for(const items of pages)for(const change of items)schemaDraft.set(change.index,change.column);});}
+  });
+  schemaDispose=Object.assign(()=>{groupDispose();schemaControls();},{action:schemaControls.action,ready:schemaControls.ready});
+  recovery.mount(host,()=>{captureSchema();return {offset:schemaOffset,rowPage:page,columns:[...schemaDraft],exclusions:schemaExclusions,intent:datasetIntent};});
   }finally{delete form.dataset.busy;form.removeAttribute('aria-busy');for(const {el,disabled} of controls)if(el.isConnected)el.disabled=disabled;}
  }
  function captureSchema({validate=false}={}){
@@ -563,7 +580,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
     if(result.archived&&result.job.state!=='completed')return frame(materialJobState(result.job.state),'<p role="status">'+esc(result.job.message??materialJobState(result.job.state))+'</p>');
     if(result.job)return watchJob(result.job);
    if(result.batch)return intake.open(result.batch);
-   if(result.proposal)return continuing.show(result.proposal);
+   if(result.proposal)return continuing.show(result.proposal,result.proposalRecordId);
    return inspect(result.result);
   });guard();
  }
@@ -660,6 +677,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    document.querySelector('[data-entry="title"]')?.focus();return true;
   }
   guard();
+  if(act==='dataset-profile-author'){await profiles.author(selectedRef);return true;}
+  if(act==='dataset-profile-revise'){await profiles.author(null,selectedRef);return true;}
+  if(act==='dataset-profile-apply'){await profiles.batch(selectedRef);return true;}
+  if(act==='dataset-profile-library'){await profiles.library({...selectedRef,title:opened.title});return true;}
   if(act==='dataset-exchange'){exchange.open(opened,selectedRef);return true;}
   if(act==='dataset-exchange-import'){exchange.openImport(opened,selectedRef);return true;}
   if(await exchange.action(act,control))return true;

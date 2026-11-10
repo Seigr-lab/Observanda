@@ -27,7 +27,8 @@ export function intakeJobDefinitions(workspace,queue){
    for(const file of verification.files)files.set(file.id,file);
    current.sourceVerification={...verification,files:[...files.values()]};await service.write(current);
   });
-  const report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress,verification:p.sourceVerification,checkpoint});await service.validateTargets(p.manifest,{signal});
+  const report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress,verification:p.sourceVerification,checkpoint,
+   authoredManifest:p.authored?p.manifest:undefined});await service.validateTargets(p.manifest,{signal});
   let done=0;const total=job.input.size;
   for(const f of report.files){
    signal.throwIfAborted();const previous=p.prepared.find(v=>v.id===f.id);

@@ -15,6 +15,7 @@ export const deferredCatalogues=Object.freeze({
  supportEditors:()=>import('./catalogues/supportEditors.js'),
  materialEditors:()=>import('./catalogues/materialEditors.js'),
  datasetExchange:()=>import('./catalogues/datasetExchange.js'),
+ datasetProfile:()=>import('./catalogues/datasetProfile.js'),
  datasetTable:()=>import('./catalogues/datasetTable.js'),
  projectEditors:()=>import('./catalogues/projectEditors.js'),
  editorControls:()=>import('./catalogues/editorControls.js'),

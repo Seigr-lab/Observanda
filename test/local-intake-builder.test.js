@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {mkdir,writeFile,access} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {intakeFixture,hash} from './fixtures/local-intake.js';
+import {intakeCommand} from '../src/intake/commands.js';
+import {INTAKE_MANIFEST,validateIntake} from '../src/intake/contract.js';
+import {inspectIntake} from '../src/intake/source.js';
+import {validScientificEdit} from '../src/scientific-edit-state.js';
+
+test('guided intake retains the selected originals, verifies its source again on change and reuses a named lab adapter in a different folder',async t=>{
+ const f=await intakeFixture(t),target={workspaceId:f.book.id,recordId:f.record.id},call=(name,data={})=>
+  intakeCommand(f.ws,f.queue,name,{version:1,...target,...data},{signal:t.signal});
+ const a=path.join(f.directory,'first-device-export'),b=path.join(f.directory,'next-device-export');
+ await mkdir(a);await mkdir(b);await mkdir(path.join(a,'attachments'));
+ await writeFile(path.join(a,'channels.csv'),'Reading\n0.050\n');
+ await writeFile(path.join(a,'attachments','device-data.bin'),Buffer.from([19,0,91]));
+ await writeFile(path.join(b,'new-run.csv'),'Reading\n0.060\n');
+ const record=await call('builder-target');assert.equal(record.title,f.record.title);
+ const browser=await call('builder-files',{source:a,relative:'',after:null});
+ assert.deepEqual(browser.items.map(item=>[item.path,item.directory]),[['attachments',true],['channels.csv',false]]);
+ const {paths}=await call('builder-folder',{source:a,relative:'',extensions:[]});
+ assert.deepEqual(paths,['attachments/device-data.bin','channels.csv']);
+ const settings={purpose:'evidence',method:'Retain device originals',tool:'Field logger',toolVersion:'4',extensions:['.csv']};
+ const save={id:randomUUID(),title:'Field logger CSV',expectedRevision:record.revision,profile:null,settings};
+ const adapter=await call('builder-adapter-save',save);
+ assert.deepEqual(await call('builder-adapter-save',save),adapter);
+ assert.equal((await call('builder-adapters',{query:'logger',after:null})).items[0].title,save.title);
+ const loaded=await call('builder-adapter-read',adapter);assert.deepEqual(loaded.settings,settings);
+ const command={id:randomUUID(),source:a,paths,title:'Incoming device export',purpose:'evidence',method:settings.method,tool:settings.tool,
+  toolVersion:settings.toolVersion,sourceRevision:'',expectedRevision:record.revision,adapter:adapter.ref,profile:null};
+ const report=await call('builder-review',command);
+ assert.equal(validateIntake(report.manifest).files.length,2);
+ assert.equal(report.manifest.files[1].sha256,hash('Reading\n0.050\n'));assert.equal(report.manifest.analyses[0].inputs[0].id,adapter.ref.id);
+ assert.deepEqual(report.formats.map(item=>item.format),['original','delimited']);
+ await assert.rejects(access(path.join(a,INTAKE_MANIFEST)),{code:'ENOENT'});
+ await assert.rejects(call('builder-review',{...command,workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
+ await assert.rejects(call('builder-review',{...command,expectedRevision:'3'.repeat(64)}),{code:'RECORD_CHANGED'});
+ const stage={id:command.id,source:a,expectedPin:report.preview.pin,authoredManifest:report.manifest,proof:report.proof};
+ await writeFile(path.join(a,'channels.csv'),'Reading\n0.099\n');
+ await assert.rejects(call('stage',stage),error=>error.code==='INTAKE_CHANGED'&&error.details[0].path==='channels.csv'&&error.details[0].reason==='sha256');
+ await writeFile(path.join(a,'channels.csv'),'Reading\n0.050\n');
+ await call('stage',stage);await f.worker.runOnce();assert.equal((await call('status',{id:command.id})).state,'prepared');
+ assert.equal(await f.service.materials.current(report.manifest.files[0].id),null);
+ await call('apply',{id:command.id,expectedPin:report.preview.pin});await f.worker.runOnce();
+ const done=await call('status',{id:command.id});assert.equal(done.state,'completed');assert.equal(done.receipt.files.length,2);
+ assert.deepEqual((await call('stage',stage)).receipt,done.receipt);
+ await assert.rejects(call('stage',{...stage,authoredManifest:{...report.manifest,title:'Changed after acceptance'}}),{code:'INTAKE_TARGET'});
+ assert.deepEqual((await call('list',{summaries:true})).items,[{id:done.id,title:report.manifest.title,state:'completed'}]);
+ const next=await call('builder-folder',{source:b,relative:'',extensions:loaded.settings.extensions});
+ const earlier=await call('builder-antecedents',{cursor:null});
+ assert.equal(earlier.items[0].id,done.id);
+ const amends={id:earlier.items[0].id,pin:earlier.items[0].pin};
+ const second=await call('builder-review',{...command,id:randomUUID(),title:'Follow-up evidence',purpose:'amendment',amends,source:b,paths:next.paths});
+ assert.deepEqual(JSON.parse(second.manifest.analyses[0].parameters).amends,amends);
+ assert.deepEqual(second.manifest.analyses[0].inputs[1],done.receipt.analyses[0]);
+ assert.notEqual(second.manifest.files[0].id,report.manifest.files[1].id);
+ await writeFile(path.join(b,INTAKE_MANIFEST),JSON.stringify(second.manifest));
+ assert.equal((await inspectIntake(b,{signal:t.signal})).pin,second.preview.pin);
+ const builder={id:command.id,target:{id:f.record.id,revision:record.revision},relative:'',paths,adapter:{title:save.title,ref:adapter.ref},profile:null,extensions:['.csv'],
+  fields:{packageTitle:'Partly authored',purpose:'evidence',sourceRevision:'',method:'',toolName:'',toolVersion:'',adapterName:''}};
+ assert.equal(validScientificEdit('local-intake',{source:a,proposal:null,builder}),true);
+});

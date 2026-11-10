@@ -1,0 +1,78 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,realpath,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {ResearchMaterials} from '../../src/research-materials.js';
+import {defaultColumn} from '../../src/web/dataset-schema.js';
+import {retainDatasetOriginal} from '../fixtures/dataset-original.js';
+import {clearVault} from '../../src/encryption.js';
+import {startServer} from '../../src/server.js';
+
+test('review twenty columns, cancel, retain the group, author a reusable profile and apply it to a reordered original through the ordinary record',async({page})=>{
+ test.setTimeout(200000);page.setDefaultTimeout(18000);
+ const parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-profile-ui-')),book=sampleNotebook(),recordId=book.entries[0].id;
+ const fixture=await encryptedFixture(root,book),materials=new ResearchMaterials(fixture.workspace);
+ const names=Array.from({length:21},(_,index)=>'Channel '+(index+1));
+ const evidence=async(title,columns)=>{const bytes=Buffer.from(columns.join(',')+'\n'+columns.map(()=> '00015').join(',')+'\n');return retainDatasetOriginal(materials,recordId,title,bytes.length,[bytes]);};
+ const baseline=await evidence('instrument-reference.csv',names);
+ const template=await materials.dataset({recordId,title:'Instrument settings',artifact:baseline,columns:names.map((name,index)=>{
+  const col=defaultColumn({label:name});return index===0?{...col,representation:'radix',radix:6,unit:'counts'}:col;
+ })});
+ await evidence('instrument-reordered.csv',names.toReversed());
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ let app;
+ try{
+  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),headless:true});
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
+  await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
+  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  const dialog=page.locator('#dialog'),item=title=>dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true});
+  const openTable=async()=>{await item('Instrument settings').click();await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();};
+  const prepare=async()=>{
+   await dialog.locator('[data-schema-group]>summary').click();
+   await dialog.getByLabel('Target columns').fill('2–21');await dialog.getByLabel('Number format and base',{exact:true}).check();
+   await dialog.getByLabel('Quantity, unit and calibration',{exact:true}).check();
+   const response=page.waitForResponse(item=>item.url().includes('/dataset-schema-group-review'));
+   await dialog.getByRole('button',{name:'Review changes',exact:true}).click();
+   const report=await (await response).json();
+   expect(report.changedColumns.items[0].column.unit).toBe('counts');
+   await expect(dialog.locator('[data-group-status]')).toHaveText('20 selected · 20 changed · 0 issues');
+  };
+  await openTable();await prepare();
+  expect((await materials.current(template.id)).revision).toBe(template.revision);
+  await dialog.getByRole('button',{name:'Cancel review'}).click();
+  expect((await materials.current(template.id)).revision).toBe(template.revision);
+  await prepare();
+  await dialog.getByRole('button',{name:'Apply to pending revision'}).click();
+  await expect(dialog.locator('[data-material-column="1"] [data-schema="unit"]')).toHaveValue('counts');
+  expect((await materials.current(template.id)).revision).toBe(template.revision);
+  await dialog.getByRole('button',{name:'Save dataset revision'}).click();
+  await expect(dialog.getByRole('heading',{name:'Instrument settings',exact:true})).toBeVisible({timeout:80000});
+  const revised=await materials.current(template.id);
+  expect(revised.revision).not.toBe(template.revision);
+  const last=await materials.schemaPage(revised,{offset:20,limit:1});
+  expect([last.items[0].representation,last.items[0].radix,last.items[0].unit]).toEqual(['radix',6,'counts']);
+  expect((await materials.schemaPage(template,{offset:20,limit:1})).items[0].representation).toBe('text');
+  await dialog.getByRole('button',{name:'Create interpretation profile'}).click();
+  await dialog.getByLabel('Profile name').fill('Bench channels');
+  await dialog.getByRole('button',{name:'Review changes',exact:true}).click();
+  await dialog.getByRole('button',{name:'Save reviewed profile'}).click();
+  await expect(dialog.getByRole('heading',{name:'Bench channels',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'Apply profile to files'}).click();
+  const picker=dialog.locator('[data-picker]');
+  await picker.getByRole('checkbox',{name:/^instrument-reordered\.csv ·/}).check();
+  await expect(picker.getByRole('status')).toHaveText('1 selected');
+  await dialog.getByRole('button',{name:'Check selected files'}).click();
+  await expect(dialog.locator('[data-status]').last()).toHaveText('1 file checked');
+  await dialog.locator('[data-report] details>summary').click();
+  await expect(dialog.getByRole('cell',{name:'Reordered column'}).first()).toBeVisible();
+  await dialog.getByRole('button',{name:'Retain eligible datasets'}).click();
+  await expect(dialog.getByRole('button',{name:'Open dataset job'})).toBeVisible();
+  await dialog.getByRole('button',{name:'Open dataset job'}).click();
+  await expect(dialog.getByRole('heading',{name:'instrument-reordered.csv',exact:true})).toBeVisible({timeout:80000});
+  await expect(dialog.getByRole('button',{name:'Inspect value: Channel 21 · 1',exact:true})).toHaveText('00015');
+  expect(errors).toEqual([]);
+ }finally{await app?.close();await clearVault(fixture.vault);expect(path.dirname(await realpath(root))).toBe(parent);await rm(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});}
+});

@@ -7,7 +7,7 @@ import {AppError} from './errors.js';
 import {authorizeLive,liveRecord} from './collaboration/live-access.js';
 import {auditLive} from './collaboration/live-audit.js';
 export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
- const materials=new ResearchMaterials(workspace),attempts=new Map();
+ const materials=new ResearchMaterials(workspace),attempts=new Map(),profileAttempts=new Map();
  const checkpoint=(job,options)=>options.write??(fn=>queue().checkpoint(job.id,job.lease.token,fn));
  return {'dataset.exchange':datasetExchangeJob(materials,queue,comparisonAccess),'analysis.compare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
@@ -34,8 +34,25 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
   commit:(job,prepared)=>materials.commitPlot(job.input.command,prepared)
  },'dataset.prepare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
-  prepare:(job,options)=>materials.prepareDataset(job.input.command,{...options,jobId:job.id,writePage:checkpoint(job,options)}),
-  commit:(job,prepared)=>materials.commitDataset(job.input.command,prepared)
+  prepare:async(job,options)=>{
+   const command=job.input.command,preparation={...options,jobId:job.id,writePage:checkpoint(job,options)};
+   if(!Object.hasOwn(command,'interpretationProfile'))return materials.prepareDataset(command,preparation);
+   if(!comparisonAccess)throw new AppError('ACCESS_LOCKED');
+   const namespace=(await workspace.outline()).metadata.id,open=comparisonAccess.take(namespace,job);
+   const access=await open(workspace,{signal:options.signal});profileAttempts.set(job.lease.token,access);
+   const {withProfileAccess}=await import('./dataset-profile-requests.js');
+   return withProfileAccess(materials,{recordId:command.recordId,write:true,signal:options.signal,check:()=>access.verify(),
+    sourceAccess:async()=>({...access,close:async()=>{}})},grants=>materials.prepareDataset(command,{...preparation,grants}));
+  },
+  commit:async(job,prepared)=>{
+   if(Object.hasOwn(job.input.command,'interpretationProfile')){
+    const grant=profileAttempts.get(job.lease.token);
+    if(!grant)throw new AppError('ACCESS_LOCKED');
+    await grant.verify();
+   }
+   return materials.commitDataset(job.input.command,prepared);
+  },
+  discard:async job=>{const grant=profileAttempts.get(job.lease.token);profileAttempts.delete(job.lease.token);await grant?.close();}
  },'evidence.finalize':{
   authorize:async job=>{
    const session=await materials.importState(job.input.importId);if(session.batchId||session.id!==job.id||session.recordId!==job.scope||session.size!==job.input.size)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);

@@ -1,17 +1,14 @@
 import {scientificColumnUsesLibrary} from './scientific-unit-format.js';
 import {isWeightedFitMetric} from './web/dataset-weighted-fit-model.js';
 import {coordinateAlignmentReferences,verifyCoordinateAlignment,verifyCoordinateAlignmentAxis} from './coordinate-alignment.js';
-import {perCellComputation,resolveCellComputation} from './web/measurement-computation.js';
+import {perCellComputation} from './web/measurement-computation.js';
 import {preserveCoordinateFrameResult} from './web/coordinate-frame-schema.js';
 import {retainCoordinateFrameSchema} from './coordinate-frame-schema-storage.js';
 import {verifyCalibrationReview} from './scientific-calibrations.js';
 import {verifyScientificUnitSource} from './scientific-unit-library.js';
 import {isPairStatisticMetric} from './web/dataset-aggregation-model.js';
-import {retainScalarDefinitions,measurementScalarPolicies,resolveScalarOperand} from './measurement-scalar-storage.js';
-import {calculatorResultScalar} from './calculator-results.js';
-import {policyScalarText} from './dataset-resource-values.js';
-import {clockScalarText,intervalScalarText} from './dataset-scalar-text.js';
-import {retainDomainValue,domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
+import {retainScalarDefinitions,measurementScalarPolicies} from './measurement-scalar-storage.js';
+import {interpretDatasetCell} from './dataset-cell-interpretation.js';
 import {DATASET_ROWS_PER_PAGE} from './dataset-row-position.js';
 import {datasetSequenceWindows} from './dataset-sequence-windows.js';
 import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
@@ -20,11 +17,11 @@ import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
 import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {revisionText} from './web/revision-model.js';
-import {schemaReferences,supportedValue} from './web/measurement-model.js';
+import {schemaReferences} from './web/measurement-model.js';
 import {materialReferenceKey} from './web/material-reference.js';
 import {defaultColumn} from './web/dataset-schema.js';
 import {readPagedDataset} from './dataset-paged-reader.js';
-import {retainDatasetCell,validateDatasetCell,datasetCellReference,retainedCellSources} from './dataset-cell-storage.js';
+import {validateDatasetCell,retainedCellSources} from './dataset-cell-storage.js';
 import {withScratch} from './scratch-work.js';
 import {nativeRowLocator} from './native-mapping.js';
 const fail=(code='MATERIAL_INVALID')=>{throw new AppError(code);};
@@ -68,14 +65,9 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
   async function* supplied(){if(typeof item.cells==='function')yield* item.cells();else for(let i=0;i<item.cells.length;i++)yield {value:item.cells[i],kind:item.valueKinds?.[i]??'string',...(item.cellPointers?{pointer:item.cellPointers[i]}:{}),...(item.cellSources?.[i]?{sources:item.cellSources[i]}:{}),...(item.cellComputations?.[i]!==undefined?{computation:item.cellComputations[i]}:{}),...(item.cellCoordinateAlignments?.[i]?{coordinateAlignment:item.cellCoordinateAlignments[i]}:{})};}
   for await(const raw of supplied()){
    if(index>=width)fail();if(index%16===0){cachedOffset=index;cached=await readSchema(schemaIndex,index,16);}
-   const column=cached[index-cachedOffset],supplied=domainValueReference(raw.value)&&(column.representation!=='domain'||revisionText(raw.value.definition)!==revisionText(column.domain))?{...raw,value:raw.value.original}:raw;let cell=await retainDatasetCell(materials,supplied,save);if(!!cell.coordinateAlignment!==!!column.coordinateAlignment)fail();if(cell.coordinateAlignment){await verifyCoordinateAlignment(materials,cell.coordinateAlignment,{column:column.coordinateAlignment,signal});}if(perCellComputation(column))resolveCellComputation(column,cell);hasCellComputations||=Object.hasOwn(cell,'computation');
-   if(column.representation==='domain'&&!['null','absent'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))cell={...cell,value:await retainDomainValue(materials,cell,column.domain,save,{signal})};
-   if(!['null','absent'].includes(cell.kind)){
-    if(domainValueReference(cell.value)){if(column.representation!=='domain')fail();validateDomainValue(materials,cell.value,column.domain);}
-    else if(column.resourcePolicy&&!column.missing.some(m=>m.value===cell.value))await resolveScalarOperand(materials,cell,column,{signal});
-    else if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation)&&!await policyScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await clockScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await intervalScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await calculatorResultScalar(materials,cell.value,column,command.calculatorResult,{signal}))fail();}
-    else if(!column.missing.some(m=>m.value===cell.value)&&!supportedValue(cell.value,column.representation,column.radix)&&!await policyScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await calculatorResultScalar(materials,cell.value,column,command.calculatorResult,{signal}))fail();
-   }
+   const column=cached[index-cachedOffset];
+   const cell=await interpretDatasetCell(materials,raw,column,save,{signal,calculation:command.calculation??base?.content.calculation,calculatorResult:command.calculatorResult});
+   hasCellComputations||=Object.hasOwn(cell,'computation');
    const nativeIndex=nativeColumns.indexOf(index);if(nativeIndex>=0){native.cells[nativeIndex]=cell.value;native.valueKinds[nativeIndex]=cell.kind;}
    await builder.append(cell);index++;
   }
