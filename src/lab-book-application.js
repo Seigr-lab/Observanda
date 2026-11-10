@@ -12,6 +12,7 @@ import {LabBookSettings} from './lab-book-settings.js';
 import {LabBookRenames} from './lab-book-rename.js';
 import {LabBookCreation} from './lab-book-creation.js';
 import {LabBookRegistry} from './lab-book-registry.js';
+import {convertingLabBooks} from './book-conversion.js';
 import {LabBookRouter} from './lab-book-router.js';
 import {readAccess,verifyAccess} from './access.js';
 import {ProjectStorage} from './project-storage.js';
@@ -51,7 +52,11 @@ export function labBookRequest(suffix,method='POST'){
 export async function executeLabBookRequest(project,selected,data,{deviceStore,access:bookAccess,check=async()=>{},jobs,stopJobs=async()=>{},publishBook=async()=>{},...options}={}){
  const registry=new LabBookRegistry(project);await check();
  if(selected.bookOperation==='list'){
-  if(!data||Object.keys(data).some(key=>!['after','limit','revision'].includes(key)))throw new AppError('INVALID');return registry.list(data);
+  if(!data||Object.keys(data).some(key=>!['after','limit','revision'].includes(key)))throw new AppError('INVALID');
+  // A lab book that is still only receiving verified copies of a book's records stays out of the directory.
+  const [page,converting]=await Promise.all([registry.list(data),convertingLabBooks(project)]);if(!converting.size)return page;
+  let registered=0;for(const id of converting)if((await registry.state(id)).state==='active')registered++;
+  return {...page,items:page.items.filter(item=>!converting.has(item.labBookId)),total:Math.max(0,page.total-registered)};
  }
  if(selected.bookOperation==='deletions'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return pendingLabBookDeletions(project,data);}
  if(selected.bookOperation==='creations'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return new LabBookCreation(project,deviceStore,{publish:publishBook,withConfigurationSource:options.withConfigurationSource}).pending(data);}

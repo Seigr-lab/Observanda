@@ -6,6 +6,7 @@ import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
 import {RecordOwnerTransferApplication,recordOwnerTransferRequest} from './record-owner-transfer-application.js';
+import {BookConversionApplication,bookConversionRequest} from './book-conversion.js';
 import {InventoryWorkspaceConnections} from './inventory-workspace-connections.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
@@ -106,7 +107,7 @@ export function projectRequest(route,method){
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
  if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
- const command=inventoryMaintenanceRequest('/api/'+match[2],method)??pdfDocumentRequest('/api/'+match[2],method)??recordOwnerTransferRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
+ const command=inventoryMaintenanceRequest('/api/'+match[2],method)??pdfDocumentRequest('/api/'+match[2],method)??recordOwnerTransferRequest('/api/'+match[2],method)??bookConversionRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
  if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
@@ -117,7 +118,7 @@ export class ProjectApplication{
  constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations,publicationConversion}={}){
   this.publicationConversion=publicationConversion;
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  this.importAccess=new ProjectImportAccess(this);this.recordTransfers=new RecordOwnerTransferApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions,publicationFiles:publicationConversion?.files});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
+  this.importAccess=new ProjectImportAccess(this);this.recordTransfers=new RecordOwnerTransferApplication(this);this.bookConversions=new BookConversionApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions,publicationFiles:publicationConversion?.files});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
  }
  async recoverProjectRename(client,projectId,options){return this.renames.recover(client,projectId,options);}
  async registry(){
@@ -202,6 +203,7 @@ export class ProjectApplication{
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,quantityFavorites,websiteId,websitePin,websiteContext,binary,headless,query,contentLength,calendarSources,check=async()=>{},setCheck=()=>{}}={}){
   if(selected.recordTransfer)return this.recordTransfers.run(client,selected,data,{check,signal,onProgress});
+  if(selected.bookConversion)return this.bookConversions.run(client,selected,data,{check,signal,onProgress});
   if(selected.operation?.startsWith('move/'))return this.tracked(()=>this.workspaceMoves.target(client,selected.operation,data,{check}));
   if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
