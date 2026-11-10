@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {confirmAction} from './confirm-action.js';
 export function recordFigureActions({state,api,esc,current,refresh,reveal,render,report}){
  const text=(key,args)=>t('recordValues',key,args),pending=new Map();let saving=false,context=null;
  const owner=reading=>JSON.stringify([state.storage?.contextId,reading.workspaceId,reading.recordId]);
@@ -26,7 +27,7 @@ export function recordFigureActions({state,api,esc,current,refresh,reveal,render
     try{base=await api('/api/research/records/values/read',{workspaceId:reading.workspaceId,recordId:reading.recordId,field:'figure:'+id},{adopt:false});}
     finally{saving=false;render();}
     if(current()!==reading||!base.value.value)return true;
-    if(action==='duplicate'||confirm(text('confirmRemoveFigure',{title:base.value.value.title})))await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,id:crypto.randomUUID(),figureId:id,action,expectedRevision:base.revision});
+    if(action==='duplicate'||await confirmAction(text('confirmRemoveFigure',{title:base.value.value.title}),{action:'remove'}))await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,id:crypto.randomUUID(),figureId:id,action,expectedRevision:base.revision});
    }
   }catch(error){report(error);}return true;
  }

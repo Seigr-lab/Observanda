@@ -1,4 +1,5 @@
 import {observationAnnotation,createObservationAnnotation} from './figure-observation-annotations.js';
+import {confirmAction} from './confirm-action.js';
 import {observationControls,observationText} from './figure-observation-ui.js';
 import {t} from './i18n/index.js';
 import {createAnnotation} from './figure-annotations.js';
@@ -56,12 +57,12 @@ export function figureCompositionUI({esc,getFigures,refresh,changed,update,canRe
   else if(f.kind==='panels'){
    const p=current(f),i=f.panels.indexOf(p);
    if(name==='copy'){
-    if(!canRemove(p.figure)||!confirm(tr('replace')))return true;
+    if(!canRemove(p.figure)||!await confirmAction(tr('replace'),{action:'replace'}))return true;
     const source=selectCopy?await selectCopy():getFigures().find(s=>s.id===el.closest('[data-figure-id]').querySelector('[data-composition-source]').value&&s.kind!=='panels');
     if(!source)return true;await prepare([source]);const copy=cloneFigure(source);copied([[source,copy]]);p.figure=copy;
    }else if(name==='blank'){
     if(f.panels.length>=8)return true;const figure=createFigure();figure.series[0].points=[{x:null,y:null,error:null}];const panel={id:crypto.randomUUID(),label:String.fromCharCode(65+f.panels.length),figure};f.panels.push(panel);selected.set(f.id,panel.id);
-   }else if(name==='remove'){if(f.panels.length<=2||!canRemove(p.figure)||!confirm(tr('removeConfirm')))return true;f.panels.splice(i,1);}
+   }else if(name==='remove'){if(f.panels.length<=2||!canRemove(p.figure)||!await confirmAction(tr('removeConfirm'),{action:'remove'}))return true;f.panels.splice(i,1);}
    else if(name==='up'&&i>0)[f.panels[i-1],f.panels[i]]=[p,f.panels[i-1]];
    else if(name==='down'&&i<f.panels.length-1)[f.panels[i+1],f.panels[i]]=[p,f.panels[i+1]];
   }

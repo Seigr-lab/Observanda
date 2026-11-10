@@ -52,6 +52,7 @@
   "name": "Navn på visning",
   "load": "Åpne visning",
   "delete": "Slett lagret visning",
+  "deleteConfirm": "Slette den lagrede visningen «{name}»?",
   "range": "Rad {first}–{last} av {total} resultater · {source} opprinnelige observasjoner",
   "copy": "Kopier vist utvalg",
   "copied": "Utvalget er kopiert.",

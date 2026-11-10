@@ -1,4 +1,5 @@
 import {noticeLayout} from './notice-layout.js';
+import {confirmAction} from './confirm-action.js';
 import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {websiteEditingGuard} from './website-editing-guard.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
@@ -1106,7 +1107,7 @@ async function rawAction(button) {
 
   if (name === 'delete-entry') {
     if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);
-    if (!confirm(t('recordAuthoring','confirmRemove'))) return;
+    if (!await confirmAction(t('recordAuthoring','confirmRemove'),{action:'remove'})) return;
     if(supportsRecordSelection())return removeSelectedRecord();
     const previous=draftWorkspace(state.book);
     try{state.book.entries=state.book.entries.filter(e=>e.id!==state.selected);state.book.branding=state.book.branding.filter(b=>b.target!=='entry:'+state.selected);state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='entry:'+state.selected);dirty();await save();}
@@ -1320,8 +1321,8 @@ async function extendedAction(button) {
   if(name==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
   if (name === 'branding') { state.brandReturn=routeFor(state); state.brandTarget = button.dataset.target ?? 'home'; state.page = 'branding'; $('#dialog').close(); render(); return true; }
   if(recordSections.action(button))return true;
-  if (name === 'remove-media') { if (confirm(appText('removeMedia'))) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
-  if (name === 'delete-page') { if (confirm(appText('removePage'))) { state.book.pages = state.book.pages.filter(p => p.id !== id); state.book.branding = state.book.branding.filter(b => b.target !== 'page:' + id); state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='page:'+id); state.book.website.navigation = state.book.website.navigation.filter(item => item.target !== 'page:' + id).map(item=>item.parent==='page:'+id?{...item,parent:null}:item); dirty(); render(); } return true; }
+  if (name === 'remove-media') { if (await confirmAction(appText('removeMedia'),{action:'remove'})) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
+  if (name === 'delete-page') { if (await confirmAction(appText('removePage'),{action:'remove'})) { state.book.pages = state.book.pages.filter(p => p.id !== id); state.book.branding = state.book.branding.filter(b => b.target !== 'page:' + id); state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='page:'+id); state.book.website.navigation = state.book.website.navigation.filter(item => item.target !== 'page:' + id).map(item=>item.parent==='page:'+id?{...item,parent:null}:item); dirty(); render(); } return true; }
   if (name === 'remove-project-logo') { state.book.projects.find(p => p.id === id).logoId = null; dirty(); $('#dialog').close(); render(); return true; }
   if (name === 'remove-logo') { state.book.website.logoId = null; const b = state.book.branding.find(item => item.target === 'home'); if (b) b.logos.splice(0,1); dirty(); render(); return true; }
   return false;

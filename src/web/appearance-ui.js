@@ -1,4 +1,5 @@
 import {ux} from './experience-ui.js';
+import {confirmAction} from './confirm-action.js';
 import {websiteContext} from './website-context.js';
 import { STARTING_THEMES, fontStack, startingAppearance, sameAppearance, contrastRatio } from './themes.js';
 import {fontSelect,axisControls} from './font-picker.js';
@@ -89,7 +90,7 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
     }
     if (name === 'theme-delete') {
       const preset = chosen();
-      if (preset && confirm(message('deleteConfirm',{name:preset.name}))) {
+      if (preset && await confirmAction(message('deleteConfirm',{name:preset.name}),{action:'delete'})) {
         state.book.themes = state.book.themes.filter(t => t.id !== preset.id);
         if (state.book.activeThemeId === preset.id) state.book.activeThemeId = null;
         dirty(); render(); await save(); notify(message('deleted'));

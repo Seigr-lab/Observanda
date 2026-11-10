@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {confirmAction} from './confirm-action.js';
 // Section structure is an explicit saved command. Text edits use the separate
 // recoverable writing owner; omitted sections never enter either command.
 export function recordSectionActions({state,api,esc,current,refresh,edit,render,report}){
@@ -17,7 +18,7 @@ export function recordSectionActions({state,api,esc,current,refresh,edit,render,
   if(waiting()&&action!=='retry')return true;
   const id=control.dataset.section,section=reading.sections.values.find(value=>value.id===id),position=reading.sections.offset+reading.sections.values.findIndex(value=>value.id===id);
   if(!['add','retry'].includes(action)&&!section)return true;
-  if(action==='remove'&&!confirm(text('confirmRemove',{title:section.title})))return true;
+  if(action==='remove'&&!await confirmAction(text('confirmRemove',{title:section.title}),{action:'remove'}))return true;
   const target={workspaceId:reading.workspaceId,recordId:reading.recordId,sectionId:action==='add'?crypto.randomUUID():id,expectedStructureRevision:reading.structureRevision};
   const ownerKey=owner(reading),command=action==='retry'?pending.get(ownerKey):action==='add'?{...target,action:'insert',beforeId:null,value:{title:text('newSection'),body:''}}:
    action==='remove'?{...target,action:'remove',expectedValueRevision:reading.writingRevisions[id]}:

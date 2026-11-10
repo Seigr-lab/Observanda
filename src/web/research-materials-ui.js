@@ -1,4 +1,5 @@
 import {downloadResource} from './session-download.js';
+import {confirmAction} from './confirm-action.js';
 import {browserHash} from './evidence-fingerprint.js';
 import {revisionText as commandText} from './revision-model.js';
 import './i18n/catalogues/materialEditors.js';
@@ -599,7 +600,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  async function addFigure(figure){
   if(state.page==='record-reader'&&editRetainedFigure){guard();document.getElementById('dialog').close();await editRetainedFigure({recordId:owner,figure});return;}
   guard();const e=editableRecord(state.book,state.selected),existing=e.figures.findIndex(f=>f.id===figure.id);
-  if(existing>=0&&!confirm(mt("replaceFigureConfirm")))return;
+  if(existing>=0&&!await confirmAction(mt("replaceFigureConfirm"),{action:'replace'}))return;
   if(existing>=0)e.figures[existing]=structuredClone(figure);else e.figures.push(structuredClone(figure));
   dirty();document.getElementById('dialog').close();render();notify(mt("figureAdded"));
  }
@@ -744,7 +745,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    catch(error){if(status?.isConnected)status.textContent=mt("completionUnconfirmed",{message:error.message??mt("connectionInterrupted")});}
    finally{uploading=false;if(control.isConnected)control.disabled=false;}
   }
-  if(act==='draft-cancel'){if(confirm(mt("discardSelectionConfirm"))){await call('draft-cancel',{id:referenceDraft.id});referenceIntent=null;await home({fresh:true});}}
+  if(act==='draft-cancel'){if(await confirmAction(mt("discardSelectionConfirm"),{action:'discard'})){await call('draft-cancel',{id:referenceDraft.id});referenceIntent=null;await home({fresh:true});}}
   if(act==='draft-save-selection'){
    const slot=control.dataset.slot,selection=sourcePickers.remaining.snapshot(),draft=referenceDraft;
    if(!selection.count||selection.count>draft.totals[slot]-draft.received[slot])throw Error(mt("selectionRange",{maximum:draft.totals[slot]-draft.received[slot],slot:referenceSlot(slot)}));

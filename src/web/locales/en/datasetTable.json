@@ -52,6 +52,7 @@
   "name": "View name",
   "load": "Open view",
   "delete": "Delete saved view",
+  "deleteConfirm": "Delete the saved view “{name}”?",
   "range": "Rows {first}–{last} of {total} results · {source} original observations",
   "copy": "Copy displayed selection",
   "copied": "Selection copied.",

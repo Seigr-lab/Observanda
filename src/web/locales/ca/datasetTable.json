@@ -52,6 +52,7 @@
   "name": "Nom de la vista",
   "load": "Obre la vista",
   "delete": "Elimina la vista desada",
+  "deleteConfirm": "Vols suprimir la vista desada «{name}»?",
   "range": "Files {first}–{last} de {total} resultats · {source} observacions originals",
   "copy": "Copia la selecció mostrada",
   "copied": "S’ha copiat la selecció.",

@@ -52,6 +52,7 @@
   "name": "Namn på vising",
   "load": "Opne vising",
   "delete": "Slett lagra vising",
+  "deleteConfirm": "Slette den lagra visinga «{name}»?",
   "range": "Rad {first}–{last} av {total} resultat · {source} opphavlege observasjonar",
   "copy": "Kopier det viste utvalet",
   "copied": "Utvalet er kopiert.",

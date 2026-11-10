@@ -1,4 +1,5 @@
 import {scientificText as st,figureTypeOptions} from './scientific-editor-text.js';
+import {confirmAction} from './confirm-action.js';
 import {axisControls,axisControlInput,axisControlAction} from './figure-axis-controls-ui.js';
 import {referencedObservation,removedObservation} from './figure-observation-annotations.js';
 import {observationText} from './figure-observation-ui.js';
@@ -189,10 +190,10 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   if(name==='figure-expand'){expand(host,el);return true;}
   if(name==='figure-design-tab'){designTabs.set(f.id,el.dataset.tab);host.querySelector('[data-figure-design-host]').innerHTML=figureDesignView(f,{tab:el.dataset.tab});return true;}
   if(name==='figure-svg'||name==='figure-csv'){const issues=figureIssues(f);if(issues.length){notify(issues[0],true);return true;}download(name==='figure-svg'?renderFigure(f):figureCSV(f),name==='figure-svg'?'image/svg+xml':'text/csv',f.title.replace(/[^\p{L}\p{N} _-]/gu,'_')+(name==='figure-svg'?'.svg':'.csv'));return true;}
-  if(name==='figure-remove'){if(!canRemove(f)||!confirm(st("removeFigureConfirm")))return true;items.splice(items.indexOf(f),1);host.remove();closeStudio();selected.delete(f.id);importer.forget(f.id);}
+  if(name==='figure-remove'){if(!canRemove(f)||!await confirmAction(st("removeFigureConfirm"),{action:'remove'}))return true;items.splice(items.indexOf(f),1);host.remove();closeStudio();selected.delete(f.id);importer.forget(f.id);}
   else if(name==='figure-duplicate'){await prepare([f]);const copy=cloneFigure(f);copy.title+=' (copy)';copied([[f,copy]]);items.splice(items.indexOf(f)+1,0,copy);(studio?.dialog.contains(host)?studio.placeholder:host).insertAdjacentHTML('afterend',card(copy));}
   else if(name==='figure-series-add'){delete f.summary;const s=createSeries('Series '+(f.series.length+1),f.series.length);s.points=current(f).points.map(p=>({x:p.x,y:null,error:null}));f.series.push(s);if(f.series.length===2)f.legend=true;selected.set(f.id,s.id);refresh(f.id);}
-  else if(name==='figure-series-remove'){if(referencedObservation(f,current(f).id)){notify(observationText('referenced'),true);return true;}if(f.series.length<2||!confirm(st("removeSeriesConfirm")))return true;delete f.summary;f.series.splice(f.series.indexOf(current(f)),1);refresh(f.id);}
+  else if(name==='figure-series-remove'){if(referencedObservation(f,current(f).id)){notify(observationText('referenced'),true);return true;}if(f.series.length<2||!await confirmAction(st("removeSeriesConfirm"),{action:'remove'}))return true;delete f.summary;f.series.splice(f.series.indexOf(current(f)),1);refresh(f.id);}
   else if(name==='figure-row-add'){delete f.summary;current(f).points.push({x:null,y:null,error:null});refresh(f.id);root().querySelector(`[data-figure-id="${f.id}"] .figure-data tbody tr:last-child input`)?.focus();}
   else if(name==='figure-row-remove'){if(referencedObservation(f,current(f).id,Number(el.dataset.index))){notify(observationText('referenced'),true);return true;}removedObservation(f,current(f).id,Number(el.dataset.index));delete f.summary;current(f).points.splice(Number(el.dataset.index),1);refresh(f.id);}
   else return true;

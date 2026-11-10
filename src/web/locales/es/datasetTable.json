@@ -52,6 +52,7 @@
   "name": "Nombre de la vista",
   "load": "Abrir vista",
   "delete": "Eliminar vista guardada",
+  "deleteConfirm": "¿Eliminar la vista guardada «{name}»?",
   "range": "Filas {first}–{last} de {total} resultados · {source} observaciones originales",
   "copy": "Copiar la selección mostrada",
   "copied": "Selección copiada.",

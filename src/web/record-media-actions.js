@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {confirmAction} from './confirm-action.js';
 
 export function recordMediaActions({state,api,esc,current,refresh,reveal,render,report}){
  const text=(key,args)=>t('recordContent',key,args),pending=new Map();let saving=false,context=null;
@@ -40,7 +41,7 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
     try{base=await api('/api/research/records/values/read',{workspaceId:reading.workspaceId,recordId:reading.recordId,field:'media:'+id},{adopt:false});}
     finally{saving=false;render();}
     if(current()!==reading)return true;
-    if(confirm(text('confirmRemoveMedia',{label:base.value.value.caption||text('unnamedMedia')})))await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,action:'remove',mediaId:id,expectedRevision:base.revision});
+    if(await confirmAction(text('confirmRemoveMedia',{label:base.value.value.caption||text('unnamedMedia')}),{action:'remove'}))await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,action:'remove',mediaId:id,expectedRevision:base.revision});
    }
   }catch(error){report(error);}
   return true;

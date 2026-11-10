@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {confirmAction} from './confirm-action.js';
 import {validRecordTag} from './record-tags-model.js';
 export function recordTagActions({state,api,esc,current,refresh,reveal,render,report}){
  const text=(key,args)=>t('recordValues',key,args),pending=new Map(),drafts=new Map();let saving=false,context=null;
@@ -34,7 +35,7 @@ export function recordTagActions({state,api,esc,current,refresh,reveal,render,re
    if(!['add','rename','remove'].includes(action))return true;
    if(action!=='add'&&tag===undefined)return true;
    const value=action==='remove'?null:(action==='add'?draft.add:draft.editing?.value);if(action!=='remove'&&!validRecordTag(value))throw Error(text('tagInvalid'));
-   if(action==='remove'&&!confirm(text('confirmRemoveTag',{tag})))return true;
+   if(action==='remove'&&!await confirmAction(text('confirmRemoveTag',{tag}),{action:'remove'}))return true;
    await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,id:crypto.randomUUID(),action,position:action==='add'?null:position,tag:value,expectedRevision:action==='rename'?draft.editing.revision:page.revision});
   }catch(error){report(error);}return true;
  }

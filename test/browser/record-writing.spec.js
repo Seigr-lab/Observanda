@@ -11,6 +11,7 @@ import {RecordWriting} from '../../src/record-writing.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {RecordContent} from '../../src/record-content.js';
+import {answerConfirmation} from './confirm-helper.js';
 
 test('enter editing from the reader and recover a late section without loading an entire record',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(20000);
@@ -27,7 +28,7 @@ test('enter editing from the reader and recover a late section without loading a
   expect(editorRequests).toBe(0);
   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('spinbutton',{name:'Go to section number',exact:true}).fill('129');await page.getByRole('button',{name:'Go',exact:true}).click();
   let releaseEngine;const engineReady=new Promise(resolve=>{releaseEngine=resolve;});
-  await page.route('**/vendor/rich-text-editor.js',async route=>{await engineReady;await route.continue();},{times:1});
+  await page.context().route('**/vendor/rich-text-editor.js',async route=>{await engineReady;await route.continue();},{times:1});
   await section.getByRole('button',{name:'Edit section',exact:true}).click();await expect(dialog.locator('.document-field')).toHaveAttribute('aria-busy','true');
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(dialog).not.toBeVisible();
   releaseEngine();await expect.poll(()=>editorRequests).toBe(1);
@@ -62,7 +63,7 @@ test('enter editing from the reader and recover a late section without loading a
   await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
   // The service commits the insertion, but its first response is lost. The
   // explicit retry must confirm that same section instead of creating another.
-  await page.route('**/api/research/records/sections',async route=>{await route.fetch();await route.abort('failed');},{times:1});
+  await page.context().route('**/api/research/records/sections',async route=>{await route.fetch();await route.abort('failed');},{times:1});
   await page.getByRole('button',{name:'Add writing section',exact:true}).click();
   await page.getByRole('button',{name:'Retry section change',exact:true}).click();
   await expect(dialog).toBeVisible();await dialog.getByLabel('Section heading',{exact:true}).fill('Added through the reader');
@@ -74,7 +75,7 @@ test('enter editing from the reader and recover a late section without loading a
   const newSection=page.locator('#record-section-'+created.id);await expect(newSection).toContainText('New writing uses the same retained block workflow.');
   await newSection.getByRole('button',{name:'Move up',exact:true}).click();
   await expect.poll(async()=>(await read()).sections.values[0].id).toBe(created.id);
-  page.once('dialog',prompt=>prompt.accept());await newSection.getByRole('button',{name:'Remove section',exact:true}).click();
+  await newSection.getByRole('button',{name:'Remove section',exact:true}).click();await answerConfirmation(page,'Remove');
   await expect.poll(async()=>(await read()).sections.total).toBe(129);await expect(newSection).toHaveCount(0);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save'||route==='/api/research/drafts/transfer/readBase')).toEqual([]);
   expect(errors).toEqual([]);

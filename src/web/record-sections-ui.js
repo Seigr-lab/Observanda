@@ -1,4 +1,5 @@
 import {ownedAssetURL} from './project-context.js';
+import {confirmAction} from './confirm-action.js';
 import {editableRecord} from './workspace-snapshot.js';
 import {proseText,renderProse} from './prose-model.js';
 import {recordFigureRenderer} from './book-reading.js';
@@ -63,10 +64,18 @@ export function recordSectionsUI({state,documents,esc,field,icon,dirty,render}){
   const sections=editableRecord(state.book,e.id).sections,index=sections.findIndex(s=>s.id===control.dataset.id);let next=index;
   if(name==='section-add'){sections.push({id:crypto.randomUUID(),title:text('new'),body:''});next=sections.length-1;}
   else if(index<0)return true;
-  else if(name==='section-remove'){if(proseText(sections[index].body)&&!confirm(text('confirmRemove')))return true;sections.splice(index,1);next=Math.min(index,sections.length-1);}
+  else if(name==='section-remove'){
+   const id=sections[index].id,remove=()=>{const current=editableRecord(state.book,e.id).sections,at=current.findIndex(s=>s.id===id);if(at<0)return;current.splice(at,1);finish(e,current,Math.min(at,current.length-1),name);};
+   // Only a section with written text asks first; the answer arrives after this synchronous handler returns.
+   if(proseText(sections[index].body)){void confirmAction(text('confirmRemove'),{action:'remove'}).then(accepted=>{if(accepted&&!state.recordReading&&record()?.id===e.id)remove();});return true;}
+   remove();return true;
+  }
   else{next=index+(name==='section-up'?-1:1);if(next<0||next>=sections.length)return true;[sections[index],sections[next]]=[sections[next],sections[index]];}
+  finish(e,sections,next,name);return true;
+ }
+ function finish(e,sections,next,name){
   const updated=record();if(next<offset||next>=offset+size)choose(updated,Math.floor(Math.max(0,next)/size)*size);else position(updated);
-  focus={id:sections[next]?.id??null,select:name==='section-add'};dirty(e.id);render();return true;
+  focus={id:sections[next]?.id??null,select:name==='section-add'};dirty(e.id);render();
  }
  function bind(){
   if(!focus)return;const target=focus.reading?document.getElementById(sectionAnchor({id:focus.id})):document.querySelector('[data-writing-heading="'+focus.id+'"]');

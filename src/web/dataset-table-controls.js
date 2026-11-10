@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {confirmAction} from './confirm-action.js';
 import './i18n/catalogues/datasetTable.js';
 import {emptyTableQuery,datasetPresenceTests,datasetValueTests} from './dataset-table-query.js';
 const tr=(key,args)=>t('datasetTable',key,args);
@@ -149,7 +150,7 @@ export function datasetTableControls({call,esc,guard,refresh,readOnly,notify}){
   if(name==='load'||name==='delete'){
    const found=v.views[address(control,'index')];
    if(name==='delete'){
-    if(!window.confirm(tr('delete')+' · '+found.name+'?'))return;
+    if(!await confirmAction(tr('deleteConfirm',{name:found.name}),{action:'delete'}))return;
     await call('table-view-remove',{ref:v.ref,id:found.id,previous:found.revision});guard();
     if(v.savedId===found.id){v.savedId=null;v.savedName='';v.savedRevision=null;}return list();
    }
