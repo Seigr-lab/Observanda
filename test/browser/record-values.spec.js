@@ -25,7 +25,7 @@ test('reader details save and recover independently, preserve exact custom value
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await expect(page.locator('[data-record-detail-field] option[value="type"]')).toHaveCount(0);
   await open('title');let dialog=page.getByRole('dialog',{name:'Edit Record title',exact:true});
-  await page.route('**/api/research/drafts/values/write',async route=>{await route.fetch();await route.abort('failed');},{times:1});
+  await page.context().route('**/api/research/drafts/values/write',async route=>{await route.fetch();await route.abort('failed');},{times:1});
   await dialog.getByLabel('Record title',{exact:true}).fill('Earlier value with lost acknowledgement');await expect(dialog.locator('[data-writing-error]')).not.toBeEmpty();
   // Closing must retry the ambiguous write and then persist the later edit.
   await dialog.getByLabel('Record title',{exact:true}).fill('Recovered title');

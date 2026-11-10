@@ -20,7 +20,7 @@ test('a slow calculator open leaves the current preferences page and its input i
   // Observe the real initializer settling; a network response can precede its
   // completion and is not a reliable witness for the navigation assertion.
   await page.evaluate(async()=>{const {FEATURE_MODULES}=await import('/feature-modules.js'),module=FEATURE_MODULES.find(m=>m.id==='scientific-calculator'),create=module.createUI;module.createUI=async services=>{try{return await create(services);}finally{module.createUI=create;window.lifetimeInitializerSettled=true;}};});
-  await page.route('**/api/modules/items',async route=>{const result=await route.fetch();held=true;await gate;await route.fulfill({response:result});});
+  await page.context().route('**/api/modules/items',async route=>{const result=await route.fetch();held=true;await gate;await route.fulfill({response:result});});
   await navigate(page,'Scientific calculator');await expect.poll(()=>held).toBe(true);
   await navigate(page,'Dashboard');await navigate(page,'Preferences');await page.getByLabel('Workspace name',{exact:true}).fill('Retained preference input');
   release();await page.unrouteAll({behavior:'wait'});await page.waitForFunction(()=>window.lifetimeInitializerSettled===true,{},{timeout:15000});

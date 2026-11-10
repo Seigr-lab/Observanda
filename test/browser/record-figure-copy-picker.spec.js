@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function fixture(page,{selectionOnly=true}={}){
- await page.route('https://copy-picker.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;return route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<!doctype html><button id="open">Open</button>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});await page.goto('https://copy-picker.test/');
+ await page.context().route('https://copy-picker.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;return route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<!doctype html><button id="open">Open</button>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});await page.goto('https://copy-picker.test/');
  await page.evaluate(async selectionOnly=>{
   const {recordFigureCopyPicker}=await import('/record-figure-copy-picker.js'),{createFigure}=await import('/figure-model.js'),id=()=>crypto.randomUUID();window.ids=Array.from({length:20},id);window.calls=[];window.badChild=false;window.hold=false;window.release=null;window.selection='waiting';const workspaceId=id(),recordId=id(),source={workspaceId,id:recordId,kind:'record',revision:'a'.repeat(64)},state={book:{id:workspaceId},access:{locked:false}};window.context=1;
   const picker=recordFigureCopyPicker({state,esc:String,context:()=>context,selectionOnly,api:async(path,command)=>{

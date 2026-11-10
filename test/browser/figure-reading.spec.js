@@ -53,7 +53,7 @@ test('record and lab-book readers enlarge precise figures without entering editi
 test('exported scientific figures can be inspected at native size with JavaScript disabled',async({browser},info)=>{
  const {book,record}=fixtureBook(),publication=buildPublication(book),filename=[...publication.files].find(([name,body])=>name.endsWith('.html')&&String(body).includes('id="record-figure-'+record.figures[0].id+'"'))[0];
  const context=await browser.newContext({javaScriptEnabled:false,viewport:{width:390,height:844}}),page=await context.newPage();
- await page.route('https://figure-reading.test/**',route=>{
+ await page.context().route('https://figure-reading.test/**',route=>{
   const file=publication.files.get(decodeURIComponent(new URL(route.request().url()).pathname.slice(1)));
   const extension=path.extname(new URL(route.request().url()).pathname),type={'.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.js':'text/javascript'}[extension]??'application/octet-stream';
   return route.fulfill(file===undefined?{status:404}:{status:200,contentType:type,body:typeof file==='string'?file:Buffer.from(file)});

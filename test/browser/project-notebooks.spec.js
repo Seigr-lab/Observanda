@@ -45,7 +45,7 @@ test('authenticated appearance preview searches and retries lab-book continuatio
   const choice=page.getByLabel('Preview page',{exact:true});await expect(choice).toBeEnabled();await choice.selectOption(collectionPagePath('project:'+book.notebooks[0].projectId));
   const frame=page.frameLocator('#design-preview'),feed=frame.locator('.project-book-directory'),rows=feed.locator('[data-feed-item]'),ids=()=>frame.locator('#page-records [data-record-id]').evaluateAll(nodes=>nodes.map(n=>n.dataset.recordId));
   await expect(rows).toHaveCount(24);const before=await ids();
-  await page.route('**/appearance-preview/**/_assets/**/projects/feed-*-1.html',route=>route.fulfill({status:503,body:'Interrupted directory transfer'}),{times:1});
+  await page.context().route('**/appearance-preview/**/_assets/**/projects/feed-*-1.html',route=>route.fulfill({status:503,body:'Interrupted directory transfer'}),{times:1});
   await feed.getByRole('link',{name:'Next lab books',exact:true}).click();await expect(feed.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await expect(rows.first()).toHaveText('Lab book 0000');
   await feed.getByRole('button',{name:'Retry',exact:true}).click();await expect(rows.first()).toHaveText('Lab book 0024');expect(await ids()).toEqual(before);
   await feed.getByLabel('Search lab books',{exact:true}).fill('Lab book 0052');await feed.getByRole('button',{name:'Apply filters',exact:true}).click();await expect(rows).toHaveCount(1);await expect(rows).toHaveText('Lab book 0052');expect(await ids()).toEqual(before);

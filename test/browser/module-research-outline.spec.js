@@ -42,7 +42,7 @@ test('recovery pages preserve unfinished calculations, retry failed navigation a
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await expect(main.locator('[data-recovery-item]')).toHaveCount(10);expect(loaded).toEqual([]);
   await main.getByRole('button',{name:'New calculation',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('My unfinished calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(9)');
   await page.evaluate(()=>{window.retainedCalculatorInput=document.querySelector('[data-calc-expression="0"]');});await main.getByRole('button',{name:'Next checkpoints',exact:true}).focus();await page.keyboard.press('Enter');await expect(main.locator('.module-recovery')).toContainText('Recovered calculation 14');await expect(main.getByRole('button',{name:'Next checkpoints',exact:true})).toBeFocused();expect(await page.evaluate(()=>window.retainedCalculatorInput===document.querySelector('[data-calc-expression="0"]'))).toBe(true);await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(9)');
-  await page.route('**/api/modules/drafts/list',route=>route.fulfill({status:503,json:{message:'Synthetic recovery interruption'}}),{times:1});
+  await page.context().route('**/api/modules/drafts/list',route=>route.fulfill({status:503,json:{message:'Synthetic recovery interruption'}}),{times:1});
   await main.getByRole('button',{name:'Next checkpoints',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic recovery interruption');await expect(main.locator('[data-recovery-item]')).toHaveCount(10);
   await main.getByRole('button',{name:'Retry recovery list',exact:true}).click();await expect(main.locator('[data-recovery-item]')).toHaveCount(5);await expect(main.getByRole('button',{name:'Next checkpoints',exact:true})).toBeDisabled();
   await expect(main.getByLabel('Name',{exact:true})).toHaveValue('My unfinished calculation');expect(loaded).toEqual([]);
@@ -59,7 +59,7 @@ test('navigation retains an unfinished item after a lost checkpoint reply and re
  test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main');let lost=true,writes=0;
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();
-  await page.route('**/api/modules/drafts/write',async route=>{
+  await page.context().route('**/api/modules/drafts/write',async route=>{
    const response=await route.fetch();expect(response.ok(),response.ok()?'':await response.text()).toBe(true);writes++;
    if(lost)await route.fulfill({status:503,json:{message:'Synthetic lost checkpoint reply'}});else await route.fulfill({response});
   });
@@ -91,7 +91,7 @@ test('module history pages open one original, retain drafts and recover failed n
   await main.getByRole('button',{name:'Open revision 45',exact:true}).click();await expect(main.locator('.module-history pre')).toContainText('Calculation revision 45');
   await expect(main.locator('.module-history pre')).not.toContainText('Unfinished local name');await main.getByRole('button',{name:'Close revision',exact:true}).click();await expect(main.locator('.module-history pre')).toHaveCount(0);
   await main.getByRole('button',{name:'Next history page',exact:true}).click();await expect(main.getByRole('button',{name:'Open revision 25',exact:true})).toBeVisible();
-  await page.route('**/api/modules/history?*',route=>route.fulfill({status:503,json:{message:'Synthetic history interruption'}}),{times:1});
+  await page.context().route('**/api/modules/history?*',route=>route.fulfill({status:503,json:{message:'Synthetic history interruption'}}),{times:1});
   await main.getByRole('button',{name:'Next history page',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic history interruption');
   await main.getByRole('button',{name:'Retry history',exact:true}).click();await expect(main.getByRole('button',{name:/^Open revision /})).toHaveCount(5);await expect(main.getByRole('button',{name:'Next history page',exact:true})).toBeDisabled();
   await save(45);await main.getByRole('button',{name:'Previous history page',exact:true}).click();await expect(main.getByText('New revisions are available. Refresh history to see them.',{exact:true})).toBeVisible();
@@ -107,17 +107,17 @@ for(const count of [42,420])test('tools, linked inventory and planning retain no
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();
   await main.getByLabel('Name',{exact:true}).fill('Retained calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(4)');await expect(main.getByLabel('Result 1',{exact:true})).toHaveText('2');
-  await page.route('**/api/modules/references/query',route=>route.fulfill({status:503,json:{message:'Synthetic search interruption'}}),{times:1});
+  await page.context().route('**/api/modules/references/query',route=>route.fulfill({status:503,json:{message:'Synthetic search interruption'}}),{times:1});
   await main.getByRole('button',{name:'Link research',exact:true}).click();await expect(dialog.getByRole('alert')).toHaveText('Synthetic search interruption');
   await dialog.getByRole('button',{name:'Retry linked work',exact:true}).click();await expect(dialog.locator('.research-link-targets li')).toHaveCount(25);
   await dialog.getByRole('button',{name:'Next items',exact:true}).click();await expect(dialog.locator('[data-reference-content] > [role="status"]')).toContainText('26');
   await dialog.getByLabel('Search linked work').fill('Specimen 030');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);
   await dialog.locator('[data-reference-command="choose"]').focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
   await expect(main.locator('.module-link')).toContainText('Specimen 030');await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(4)');
-  await page.route('**/api/modules/command*',route=>route.fulfill({status:503,json:{message:'Synthetic save interruption'}}),{times:1});
+  await page.context().route('**/api/modules/command*',route=>route.fulfill({status:503,json:{message:'Synthetic save interruption'}}),{times:1});
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic save interruption');
   await expect(main.locator('.module-link')).toContainText('Specimen 030');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  await page.route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});
+  await page.context().route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});
   await page.reload();await expect(main.getByRole('alert')).toContainText('Synthetic title interruption');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText('Specimen 030');
   const reader=new ProjectModuleReader(f.workspace,f.book.id),item=(await reader.list({workspaceId:f.book.id,type:'calculation'})).items[0],saved=(await reader.selected({workspaceId:f.book.id,id:item.id})).entity;expect(saved.data.links).toEqual([{workspaceId:f.book.id,type:'record',id:f.book.entries[30].id}]);
   for(const [name,create,label,value,save] of [['Spreadsheet','New spreadsheet','Name','Measurement table','Save spreadsheet'],['Chemical structures','New chemical import','Name','Editable structure','Save chemical import']]){
@@ -142,7 +142,7 @@ test('module link searches discard late replies and retain an unfinished item on
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('Unfinished calculation');
   let release,arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);
-  await page.route('**/api/modules/references/query',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/modules/references/query',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await main.getByRole('button',{name:'Link research',exact:true}).click();await received;await dialog.getByLabel('Search linked work').fill('Specimen 041');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);release();await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);await expect(dialog.locator('.research-link-targets')).toContainText('Specimen 041');
   await page.keyboard.press('Escape');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished calculation');expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
@@ -168,7 +168,7 @@ test('invalid and missing record labels retain saved module links and allow reco
  test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),id=randomUUID(),record=f.book.entries[0],data={name:'Linked calculation',links:[{workspaceId:f.book.id,type:'record',id:record.id}],engine:1,mode:'expression',angle:'rad',expression:'2+2',digits:'',fromBase:10,toBase:6};
  try{
   await workspaceModules(f.workspace).execute({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:null,data}});
-  await page.route('**/api/modules/references/labels',async route=>{const payload=route.request().postDataJSON();await route.fulfill({json:{workspaceId:payload.workspaceId,etag:payload.etag,items:[null]}});},{times:1});
+  await page.context().route('**/api/modules/references/labels',async route=>{const payload=route.request().postDataJSON();await route.fulfill({json:{workspaceId:payload.workspaceId,etag:payload.etag,items:[null]}});},{times:1});
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'Open calculation',exact:true}).click();
   await expect(main.getByRole('alert')).toContainText('The linked-work response could not be verified');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText(record.title);
   expect(f.bodies).toEqual([]);

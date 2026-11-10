@@ -35,11 +35,11 @@ test('connected calendar opens selected notes with retry and cancels a closed de
   await page.goto(app.origin+'/#/modules/planning');await main.getByLabel('Month',{exact:true}).fill('2026-10');
   await main.getByRole('button',{name:'Unlock workspace',exact:true}).click();await dialog.getByRole('button',{name:'Unlock',exact:true}).click();await expect(dialog).not.toBeVisible();
   const eventButton=main.locator('[data-calendar-day="2026-10-15"]').getByRole('button',{name:/Remote field session/});await expect(eventButton).toBeVisible();expect(opened).toEqual([]);await expect(main).not.toContainText('Private selected event notes');
-  await page.route('**/api/calendars/event',route=>route.fulfill({status:503,json:{message:'Synthetic notes interruption'}}),{times:1});await eventButton.click();await expect(dialog.getByRole('alert')).toContainText('Synthetic notes interruption');
+  await page.context().route('**/api/calendars/event',route=>route.fulfill({status:503,json:{message:'Synthetic notes interruption'}}),{times:1});await eventButton.click();await expect(dialog.getByRole('alert')).toContainText('Synthetic notes interruption');
   await dialog.getByRole('button',{name:'Retry event notes',exact:true}).focus();await page.keyboard.press('Enter');await expect(dialog.locator('.calendar-notes')).toHaveText(notes);expect(opened).toEqual([event]);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   let started;const gate=new Promise(resolve=>{release=resolve;}),waiting=new Promise(resolve=>{started=resolve;});
-  await page.route('**/api/calendars/event',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/calendars/event',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
   await eventButton.click();await waiting;await expect(dialog).toContainText('Loading event notes');await page.keyboard.press('Escape');release();await expect(dialog).not.toBeVisible();
   await eventButton.click();await expect(dialog.locator('.calendar-notes')).toHaveText(notes);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(errors).toEqual([]);

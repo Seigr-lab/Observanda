@@ -29,7 +29,7 @@ test('evidence sources page, search and cross records without losing exact selec
   const picker=dialog.locator('#material-picker-inputs');
   await expect(picker.getByRole('checkbox')).toHaveCount(20);
   let lost=false;
-  await page.route('**/api/research/materials/selection-change',async route=>{
+  await page.context().route('**/api/research/materials/selection-change',async route=>{
    if(!lost){lost=true;await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await picker.getByRole('checkbox').first().check();

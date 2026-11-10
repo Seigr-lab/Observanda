@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function fixture(page){
- await page.route('https://figure-editor.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="editor"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.context().route('https://figure-editor.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="editor"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
  await page.goto('https://figure-editor.test/');await page.evaluate(async()=>{
   const {retainedFigureEditor}=await import('/retained-figure-editor.js'),id=()=>crypto.randomUUID();
   const figure={kind:'retained',version:1,id:id(),title:'Test figure',source:{kind:'analysis',id:id(),revision:'a'.repeat(64)},document:{format:'figure-document',version:1,data:{root:'c'.repeat(64),index:'d'.repeat(64)},presentation:{root:'e'.repeat(64),index:'f'.repeat(64)},counts:{panels:1,series:1,points:1,annotations:0,ticks:0}}};

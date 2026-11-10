@@ -33,8 +33,8 @@ const editable=async page=>expect(page.getByLabel('Record title',{exact:true})).
 test('interrupted comparison load stays separate from an empty workspace and retries only the unfinished page',async({page})=>{
  test.setTimeout(90000);const f=await fixture(page);let pages=0;
  try{
-  await page.route('**/api/notebook',route=>route.abort());
-  await page.route('**/api/workspace/read/page',async route=>{
+  await page.context().route('**/api/notebook',route=>route.abort());
+  await page.context().route('**/api/workspace/read/page',async route=>{
    pages++;if(pages===2)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted connection'})});
    await route.continue();
   });
@@ -59,7 +59,7 @@ test('comparison load can pause and resume by keyboard on a narrow enlarged-text
  const gate=new Promise(resolve=>{release=resolve;});
  try{
   await page.setViewportSize({width:390,height:844});
-  await page.route('**/api/workspace/read/page',async route=>{
+  await page.context().route('**/api/workspace/read/page',async route=>{
    pages++;if(pages===2){await gate;try{await route.abort();}catch{}return;}await route.continue();
   });
   await openComparison(page,f);
@@ -79,7 +79,7 @@ test('comparison load can pause and resume by keyboard on a narrow enlarged-text
 test('invalid pages never become a partial book and a clean reload can recover',async({page})=>{
  test.setTimeout(90000);const f=await fixture(page);let corrupt=true;
  try{
-  await page.route('**/api/workspace/read/page',async route=>{
+  await page.context().route('**/api/workspace/read/page',async route=>{
    const response=await route.fetch(),data=await response.json();
    if(corrupt){data.records[1]=data.records[0];corrupt=false;}
    await route.fulfill({response,json:data});
@@ -96,7 +96,7 @@ test('invalid pages never become a partial book and a clean reload can recover',
 test('locking during comparison load discards received pages and requires unlocking before opening records',async({page})=>{
  test.setTimeout(90000);const f=await fixture(page);let pages=0;
  try{
-  await page.route('**/api/workspace/read/page',async route=>{
+  await page.context().route('**/api/workspace/read/page',async route=>{
    if(++pages===2){
     const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});
     expect(locked.ok()).toBe(true);

@@ -35,7 +35,7 @@ for(const count of [65,650])test('planning pages, prerequisites and bookings use
   await main.getByLabel('Status',{exact:true}).selectOption('done');await main.getByRole('button',{name:'Save task',exact:true}).click();await expect(main.getByRole('alert')).toBeVisible();await expect(main.getByLabel('Task title',{exact:true})).toHaveValue('Task 030');
   await main.getByRole('button',{name:'Discard edits',exact:true}).click();await expect(main.getByLabel('Status',{exact:true})).toHaveValue('todo');
   let releaseList,listingStarted,listingFinished;const listGate=new Promise(resolve=>{releaseList=resolve;}),listStarted=new Promise(resolve=>{listingStarted=resolve;}),listFinished=new Promise(resolve=>{listingFinished=resolve;});
-  await page.route('**/api/modules/items',async route=>{
+  await page.context().route('**/api/modules/items',async route=>{
    if(route.request().postDataJSON()?.type!=='booking')return route.continue();
    listingStarted();const response=await route.fetch();await listGate;await route.fulfill({response}).catch(()=>{});listingFinished();
   });

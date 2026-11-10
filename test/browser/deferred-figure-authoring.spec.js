@@ -20,7 +20,7 @@ for(const compiled of [false,true])test('figure authoring loads on demand and sa
   let browserAssets;if(compiled){const out=path.join(directory,'frontend');await buildBrowser({out});browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});}
   fixture=await encryptedFixture(directory,book);app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json'),browserAssets});
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(requests).toBe(0);
-  if(!compiled)await page.route('**/figure-editor.js',route=>route.abort(),{times:1});
+  if(!compiled)await page.context().route('**/figure-editor.js',route=>route.abort(),{times:1});
   await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
   await page.getByLabel('Record title',{exact:true}).fill('Retained deferred figure');

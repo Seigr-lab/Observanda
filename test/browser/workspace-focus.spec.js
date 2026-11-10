@@ -17,7 +17,7 @@ test('skip navigation and selected writing saves retain a useful keyboard destin
   await expect(page.locator('main h1')).toHaveText('All records');await expect(page.locator('main h1')).toBeFocused();
   const route=page.url();await page.locator('.skip-link').focus();await page.keyboard.press('Enter');
   await expect(page).toHaveURL(route);await expect(page.locator('main h1')).toBeFocused();await expect(page).toHaveTitle('All records · Observanda');
-  const held=new Promise(resolve=>releaseRecord=resolve);await page.route('**/api/workspace/read/record-content',async route=>{const response=await route.fetch();await held;await route.fulfill({response});},{times:1});
+  const held=new Promise(resolve=>releaseRecord=resolve);await page.context().route('**/api/workspace/read/record-content',async route=>{const response=await route.fetch();await held;await route.fulfill({response});},{times:1});
   await page.goto(app.origin+'/#/records/'+book.entries[0].id);const actions=page.locator('details[data-disclosure=record-actions]');await actions.locator(':scope > summary').click();releaseRecord();await expect(page.locator('.record-editing h1')).toHaveText(book.entries[0].title);await expect(actions).toHaveAttribute('open','');await expect(actions.locator(':scope > summary')).toBeFocused();
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
   await expect(page.locator('[data-disclosure="record-evidence"]')).toHaveAttribute('open','');

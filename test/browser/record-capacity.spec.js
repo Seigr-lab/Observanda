@@ -20,7 +20,7 @@ test('near-limit records recover newer input after a lost checkpoint reply and c
   const title=page.getByLabel('Record title',{exact:true});
   await expect(title).toHaveValue(book.entries[0].title);
   const gate=new Promise(resolve=>{release=resolve;});
-  await page.route('**/api/research/drafts/write',async route=>{
+  await page.context().route('**/api/research/drafts/write',async route=>{
    requests.push(route.request().postDataJSON());
    if(lost){lost=false;const response=await route.fetch();expect(response.ok()).toBe(true);await gate;await route.abort('failed');}
    else await route.continue();
@@ -51,8 +51,8 @@ test('near-limit records recover newer input after a lost checkpoint reply and c
   expect(saved.title).toBe('Newer unsaved title');expect(saved.sections).toEqual(book.entries[0].sections);
   // A separately lost checkpoint reply followed directly by Save must also
   // resolve and remove the uncertain writer rather than orphaning its draft.
-  await page.unroute('**/api/research/drafts/write');lost=true;
-  await page.route('**/api/research/drafts/write',async route=>{
+  await page.context().unroute('**/api/research/drafts/write');lost=true;
+  await page.context().route('**/api/research/drafts/write',async route=>{
    if(lost){lost=false;expect((await route.fetch()).ok()).toBe(true);await route.abort('failed');}
    else await route.continue();
   });

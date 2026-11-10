@@ -56,7 +56,7 @@ test('large preview collections continue in place, preserve the page through the
   await expect(frame.locator('body')).toHaveCSS('--accent','#334455');
   await expect(page.getByLabel('Preview page',{exact:true})).toHaveValue(selected);
   await expect.poll(()=>frame.locator('.publication-card h2').allTextContents()).toEqual(titles);
-  await page.route('**/appearance-preview/**',route=>route.request().isNavigationRequest()?route.fulfill({status:503,json:{message:'Synthetic interrupted card page'}}):route.continue(),{times:1});
+  await page.context().route('**/appearance-preview/**',route=>route.request().isNavigationRequest()?route.fulfill({status:503,json:{message:'Synthetic interrupted card page'}}):route.continue(),{times:1});
   await frame.locator('[data-collection-next]').first().click();await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted card page');
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(frame.locator('[data-collection-previous]').first()).toBeVisible();
   await expect.poll(()=>frame.locator('.publication-card h2').allTextContents()).not.toEqual(titles);
@@ -74,7 +74,7 @@ for(const count of [42,420])test('appearance saves themes and personal settings 
   await page.locator('[data-action="theme-start"][data-theme="studio"]').click();
   await page.getByLabel('Accent',{exact:true}).fill('#334455');
   await page.getByRole('button',{name:'Save as new theme',exact:true}).click();await page.getByLabel('Theme name',{exact:true}).fill('Field design');
-  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted theme save'}}),{times:1});
+  await page.context().route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted theme save'}}),{times:1});
   await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted theme save');
   await expect(page.getByLabel('Theme name',{exact:true})).toHaveValue('Field design');await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.locator('.preferences-tabs [data-action="interface"]').click();await page.locator('[data-disclosure="app-layout"] summary').click();
@@ -124,7 +124,7 @@ test('appearance page choices continue without losing the selected page, and lat
   await page.getByRole('button',{name:'Expand preview',exact:true}).click();
   await expect(page.frameLocator('.expanded-preview iframe').locator('.record-page')).toContainText(nextRecord.body);
   await page.getByRole('button',{name:'Close preview',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('.record-page')).toContainText(nextRecord.body);
-  await page.route('**/api/appearance-preview/*/pages?cursor=*',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted page choices'}}),{times:1});
+  await page.context().route('**/api/appearance-preview/*/pages?cursor=*',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted page choices'}}),{times:1});
   await more.click();await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted page choices');
   await more.click();await expect(previous).toBeEnabled();await previous.click();await expect(previous).toBeDisabled();
   await page.frameLocator('#design-preview').locator('[data-book-back]').click();await expect(page.frameLocator('#design-preview').locator('[data-book-records] li')).toHaveCount(40);
@@ -135,7 +135,7 @@ test('appearance page choices continue without losing the selected page, and lat
   // A slow selector-label response must not make a subsequent style change
   // forget the page which is already visible in the frame.
   let releaseLabel,labelRequested=false;const heldLabel=new Promise(resolve=>releaseLabel=resolve);
-  await page.route(/\/api\/appearance-preview\/[^/]+\/pages\?path=browse\.html%3F/,async route=>{const response=await route.fetch();labelRequested=true;await heldLabel;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route(/\/api\/appearance-preview\/[^/]+\/pages\?path=browse\.html%3F/,async route=>{const response=await route.fetch();labelRequested=true;await heldLabel;await route.fulfill({response}).catch(()=>{});},{times:1});
   try{
    await page.frameLocator('#design-preview').locator('[data-book-back]').click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]').first()).toHaveAttribute('data-public-record',middleRecord.id);
    await expect.poll(()=>labelRequested).toBe(true);
@@ -146,7 +146,7 @@ test('appearance page choices continue without losing the selected page, and lat
   await page.frameLocator('#design-preview').getByRole('button',{name:'Apply filters',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]')).toHaveCount(1);
   await expect(page.frameLocator('#design-preview').locator('[data-public-record]')).toHaveAttribute('data-public-record',f.book.entries.at(-1).id);
   await page.frameLocator('#design-preview').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]')).toHaveCount(40);
-  await page.route('**/appearance-preview/*/browse.html?cursor=*',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted browse page'}}),{times:1});
+  await page.context().route('**/appearance-preview/*/browse.html?cursor=*',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted browse page'}}),{times:1});
   await page.frameLocator('#design-preview').locator('[data-browse-next]').click();await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted browse page');
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]').first()).toHaveAttribute('data-public-record',middleRecord.id);
   await page.getByRole('button',{name:'Expand preview',exact:true}).click();await expect(page.locator('.expanded-preview iframe')).toHaveAttribute('sandbox','allow-same-origin');
@@ -164,14 +164,14 @@ test('appearance page choices continue without losing the selected page, and lat
 test('appearance previews retry, reject stale replies and show only selected website records',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page,42,{publicRecord:true});
  try{
-  await page.route('**/api/appearance-preview',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted preview'}}),{times:1});await open(page,f);
+  await page.context().route('**/api/appearance-preview',route=>route.fulfill({status:503,json:{message:'Synthetic interrupted preview'}}),{times:1});await open(page,f);
   await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted preview');await expect(page.getByLabel('Preview page',{exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(page.getByLabel('Preview content',{exact:true})).toHaveValue('website');
   await page.getByLabel('Preview page',{exact:true}).selectOption('entries/'+f.book.entries[0].id+'.html');await expect(page.frameLocator('#design-preview').locator('body')).toContainText('Approved readable observation.');await expect(page.frameLocator('#design-preview').locator('body')).not.toContainText('PRIVATE_ORIGINAL_');
   const url=new URL(await page.locator('#design-preview').getAttribute('src'),f.app.origin),designId=url.pathname.split('/')[2];
   expect((await fetch(url)).status).toBe(401);expect((await sessionRequest(page,'get',f.app.origin+'/api/export/'+designId)).status()).toBe(404);
   let release,arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);
-  await page.route('**/api/appearance-preview',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/appearance-preview',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await page.getByLabel('Preview content',{exact:true}).selectOption('examples');await received;
   await page.getByLabel('Preview content',{exact:true}).selectOption('website');await expect(page.getByLabel('Preview page',{exact:true})).toBeEnabled();release();
   await expect(page.getByLabel('Preview content',{exact:true})).toHaveValue('website');await expect(page.frameLocator('#design-preview').locator('.specimen-banner')).toHaveCount(0);

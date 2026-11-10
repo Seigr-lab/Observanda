@@ -23,7 +23,7 @@ for(const fresh of [false,true])test(`${fresh?'fresh-key':'ordinary'} workspace 
   if(fresh){await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await page.getByText('Continue with a different group',{exact:true}).click();await page.getByRole('button',{name:'Create private successor',exact:true}).click();}
   else await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);if(fresh)await dialog.getByRole('button',{name:'Review encrypted copy',exact:true}).click();
-  await page.route('**'+route,async request=>{attempts++;if(attempts===1)return request.abort('connectionreset');const result=await request.fetch();expect(result.ok()).toBe(true);confirmed=true;await request.abort('connectionreset');});
+  await page.context().route('**'+route,async request=>{attempts++;if(attempts===1)return request.abort('connectionreset');const result=await request.fetch();expect(result.ok()).toBe(true);confirmed=true;await request.abort('connectionreset');});
   const submit=dialog.getByRole('button',{name:fresh?'Encrypt and use this copy':'Copy and use this folder',exact:true});await submit.click();await expect(submit).toBeEnabled();
   await expect(access(destination)).rejects.toMatchObject({code:'ENOENT'});expect(await f.workspace.read()).toEqual(before);
   await submit.click();await expect.poll(()=>confirmed).toBe(true);await expect(dialog).not.toBeVisible();expect(attempts).toBe(2);

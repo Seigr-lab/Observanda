@@ -27,7 +27,7 @@ test('import a protected project tree in its section and resume after navigation
   ProjectImports.prototype.run=function(command,options){return original.call(this,command,{...options,checkpoint:async stage=>{if(stage==='prepared'&&hold){hold=false;entered();await gate;}if(stage==='copied'&&interrupt){interrupt=false;await provider.closeLabBook(book.book.root);await provider.closeProject(child.root);await provider.closeProject(source.root);await rename(source.root,path.join(directory,'Source unavailable'));throw Error('Interrupted before registration');}}});};
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await page.locator('#workspace-navigation [data-action=projects]').click();
   let droppedAdmission=false,admissionSubmissions=0;
-  await page.route('**/api/projects/open/access/submit',async route=>{
+  await page.context().route('**/api/projects/open/access/submit',async route=>{
    admissionSubmissions++;if(droppedAdmission)return route.continue();
    const response=await route.fetch();expect(response.ok(),await response.text()).toBe(true);
    droppedAdmission=true;await route.abort('failed');

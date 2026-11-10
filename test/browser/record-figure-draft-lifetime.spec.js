@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function fixture(page){
- await page.route('https://figure-draft.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body></body></html>'});return route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});await page.goto('https://figure-draft.test/');
+ await page.context().route('https://figure-draft.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body></body></html>'});return route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});await page.goto('https://figure-draft.test/');
  await page.evaluate(async()=>{
   const {recordValueEditor}=await import('/record-value-editor.js'),id=()=>crypto.randomUUID(),rev=n=>String(n).padStart(64,'0');window.calls=[];window.mode='normal';window.release=null;window.pending=null;window.savedValue=null;window.state={book:{id:id()},storage:{contextId:id()},access:{locked:false}};let sequence=2;
   const field='figure:'+id(),recordId=id(),base={workspaceId:state.book.id,recordId,field,revision:rev(1),storageRevision:rev(1),etag:rev(1),recordTitle:'Synthetic record',value:{value:null}};

@@ -37,8 +37,8 @@ test('new lab books and records from an independent writer appear automatically 
  page.on('request',r=>{if(r.resourceType()==='document')documentLoads++;});
  try{
   await openProject(page,f);const route=page.url();
-  await page.route('**/api/notebook',route=>route.abort());
-  await page.route('**/api/workspace/read/page',route=>route.abort());
+  await page.context().route('**/api/notebook',route=>route.abort());
+  await page.context().route('**/api/workspace/read/page',route=>route.abort());
   const {notebook}=await f.createBook();
   await expect(page.locator('.project-notebook').filter({hasText:'External Help'})).toContainText('1 record',{timeout:15000});
   expect(page.url()).toBe(route);expect(documentLoads).toBe(0);
@@ -51,7 +51,7 @@ test('logo refresh stays on the project and retries a failed revision check',asy
  test.setTimeout(90000);const f=await fixture(page);let fail=true;
  try{
   await openProject(page,f);const route=page.url();
-  await page.route('**/api/workspace/read/version',async request=>fail?request.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interruption'}}):request.continue());
+  await page.context().route('**/api/workspace/read/version',async request=>fail?request.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interruption'}}):request.continue());
   await f.createBook();await logo(page).click();
   await expect(page.locator('[data-workspace-refresh-status]')).toContainText('Could not check');
   expect(page.url()).toBe(route);fail=false;
@@ -82,7 +82,7 @@ test('typing during a refresh keeps the draft; later clean record refresh loads 
   await page.evaluate(id=>location.hash='#/records/'+id,record.id);
   await expect(page.locator('.record-editing h1')).toHaveText(record.title);
   let held=false;
-  await page.route('**/api/workspace/read/start',async route=>{const response=await route.fetch();held=true;await gate;await route.fulfill({response}).catch(()=>{});});
+  await page.context().route('**/api/workspace/read/start',async route=>{const response=await route.fetch();held=true;await gate;await route.fulfill({response}).catch(()=>{});});
   await f.rename(record,'Saved while open');const refresh=logo(page).click();
   await expect.poll(()=>held).toBe(true);
   const dialog=await openRecordDetail(page);await dialog.getByLabel('Record title',{exact:true}).fill('Typing during refresh');release();await refresh;
@@ -104,7 +104,7 @@ test('locking during a refresh cancels adoption and a form dialog is preserved',
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const guard=page.getByRole('dialog',{name:'Unsaved changes',exact:true});await guard.getByRole('button',{name:'Discard changes',exact:true}).click();
   let held=false;const gate=new Promise(resolve=>{release=resolve;});
-  await page.route('**/api/workspace/read/start',async route=>{const response=await route.fetch();held=true;await gate;await route.fulfill({response}).catch(()=>{});});
+  await page.context().route('**/api/workspace/read/start',async route=>{const response=await route.fetch();held=true;await gate;await route.fulfill({response}).catch(()=>{});});
   await logo(page).click();await expect.poll(()=>held).toBe(true);
   await page.getByRole('button',{name:'Lock workspace',exact:true}).click();release();
   await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();

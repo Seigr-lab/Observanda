@@ -36,10 +36,10 @@ test('encrypted indexed searches keep old pages, refresh edits, recover errors a
   await expect(page.getByRole('button',{name:'Edit record',exact:true})).toBeVisible();
   await expect(page.locator('.record-reader')).toContainText('Private quartz sensor observation 31');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(rows).toHaveCount(1);
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'IO',message:'Synthetic interrupted search'})}));
+  await page.context().route('**/api/research/records/query',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'IO',message:'Synthetic interrupted search'})}));
   await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(page.locator('#entry-results [role="alert"]')).toHaveText('Synthetic interrupted search');
   await expect(search).toHaveValue('QUARTZ');await expect(page.getByLabel('Progress',{exact:true})).toHaveValue('incomplete');
-  await page.unroute('**/api/research/records/query');await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(rows).toHaveCount(1);
+  await page.context().unroute('**/api/research/records/query');await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(rows).toHaveCount(1);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
   await search.focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.type('feldspar');
   await page.getByLabel('Progress',{exact:true}).selectOption('all');

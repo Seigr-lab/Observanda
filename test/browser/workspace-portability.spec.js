@@ -25,7 +25,7 @@ test('portable copy can be prepared and retried from the app without consuming t
   await expect(page.locator('#notice')).toContainText('Enter the workspace password or recovery key');
   await dialog.getByText('Use a recovery key',{exact:true}).click();await dialog.getByLabel('Recovery key',{exact:true}).fill(kit.recovery);
   await expect(dialog.getByRole('heading',{name:'Review portable workspace copy'})).toHaveCount(0);await expect(dialog).not.toContainText(kit.recovery);
-  await page.route('**/api/storage/portable',async route=>{requests++;if(requests===1){await route.fetch();return route.abort('connectionreset');}return route.continue();});
+  await page.context().route('**/api/storage/portable',async route=>{requests++;if(requests===1){await route.fetch();return route.abort('connectionreset');}return route.continue();});
   const confirm=dialog.getByRole('button',{name:'Create verified portable copy',exact:true});await confirm.click();await expect(confirm).toBeEnabled();expect(requests).toBe(1);
   const archive=await readFile(path.join(destination,CATALOGUE_ARCHIVE));await confirm.click();await expect(dialog.getByRole('heading',{name:'Portable copy ready'})).toBeVisible();expect(requests).toBe(2);
   expect(await readFile(path.join(destination,CATALOGUE_ARCHIVE))).toEqual(archive);await expect(access(path.join(destination,CATALOGUE_FILE))).rejects.toMatchObject({code:'ENOENT'});

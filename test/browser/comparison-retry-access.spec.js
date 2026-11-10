@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function fixture(page){
- await page.route('https://comparison.test/**',async route=>{const path=new URL(route.request().url()).pathname;if(path==='/')return route.fulfill({contentType:'text/html',body:'<main></main><dialog id="dialog"></dialog>'});return route.fulfill({contentType:path.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+path,import.meta.url),'utf8')});});
+ await page.context().route('https://comparison.test/**',async route=>{const path=new URL(route.request().url()).pathname;if(path==='/')return route.fulfill({contentType:'text/html',body:'<main></main><dialog id="dialog"></dialog>'});return route.fulfill({contentType:path.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+path,import.meta.url),'utf8')});});
  await page.goto('https://comparison.test/');await page.evaluate(async()=>{
   const {researchMaterialsUI}=await import('/research-materials-ui.js'),id=()=>crypto.randomUUID();window.source={workspaceId:id(),kind:'dataset',id:id(),revision:'a'.repeat(64)};window.record={id:id(),title:'Result observation',type:'observation',figures:[]};window.state={page:'record-reader',selected:record.id,book:{id:id(),title:'Result project',entries:[record]},projectOwner:{projectId:id(),labBookId:null},storage:{contextId:id(),researchStorage:'catalogue',researchFormatVersion:21}};
   window.job={id:id(),type:'analysis.compare',state:'queued',sources:[source],title:'Retained comparison',progress:{done:0,total:1},message:'Waiting for selected sources'};window.calls=[];window.prompts=0;window.polls=0;window.mode='cancel';window.errors=[];window.held=null;

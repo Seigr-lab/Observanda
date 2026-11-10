@@ -31,7 +31,7 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   await dialog.getByLabel('Chart type').selectOption('bar');
   await dialog.locator('[data-material-value="1"]').check();
   let loseResponse=true,release;const attempts=[],gate=new Promise(resolve=>{release=resolve;});
-  await page.route('**/api/research/materials/plot',async route=>{
+  await page.context().route('**/api/research/materials/plot',async route=>{
    attempts.push(route.request().postDataJSON().jobId);
    if(loseResponse){loseResponse=false;await route.fetch();await gate;await route.abort('failed');}else await route.continue();
   });
@@ -44,7 +44,7 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();
   await expect(dialog.getByRole('heading',{name:'Calculate figure',exact:true})).toBeVisible();
   expect(attempts.length).toBe(2);expect(new Set(attempts).size).toBe(1);
-  await page.unroute('**/api/research/materials/plot');
+  await page.context().unroute('**/api/research/materials/plot');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();
   await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
   await dialog.getByText('Evidence preparation jobs',{exact:true}).click();

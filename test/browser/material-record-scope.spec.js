@@ -56,11 +56,11 @@ for(const count of [62,620])test('external analysis discovers and pins exact met
   await expect(dialog).toContainText('Changed method before selection.');await expect(dialog).not.toContainText('Later method revision.');
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByText('Analysis, collections & verification',{exact:true}).click();await dialog.getByRole('button',{name:'Record external analysis',exact:true}).click();
   await dialog.getByRole('button',{name:'Choose saved method / run',exact:true}).click();await expect(picker.locator('[data-action="research-target-choose"]')).toHaveCount(25);
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}),{times:1});
+  await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}),{times:1});
   await picker.getByRole('button',{name:'Next results',exact:true}).click();await expect(picker.getByRole('alert')).toContainText('Synthetic discovery interruption');await picker.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(picker.locator('[data-action="research-target-choose"]')).toHaveCount(25);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('analysis-method-phone.png')});
-  let arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);await page.route('**/api/research/materials/pin',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  let arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);await page.context().route('**/api/research/materials/pin',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await picker.getByRole('button',{name:/Take 000/}).click();await received;
   await picker.getByRole('button',{name:'Cancel',exact:true}).click();await expect(picker).toBeHidden();await expect(dialog.getByRole('heading',{name:'Record external analysis',exact:true})).toBeVisible();
   release();await expect(dialog.locator('[data-method-summary]')).toHaveText('No saved method or run selected.');

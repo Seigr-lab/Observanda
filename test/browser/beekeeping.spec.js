@@ -55,7 +55,7 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
   await page.getByLabel('Queen observation',{exact:true}).scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('inspection-narrow.png')});
-  await page.route('**/api/research/records/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic interrupted save'})}),{times:1});
+  await page.context().route('**/api/research/records/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic interrupted save'})}),{times:1});
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted save');
   await expect(page.getByLabel('Queen observation',{exact:true})).toHaveValue('Not seen');expect((await f.workspace.read()).book.entries).toHaveLength(4);
   await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();await save();const saved=(await f.workspace.read()).book,created=saved.entries.find(e=>e.title==='First October inspection');
@@ -95,7 +95,7 @@ test('hive history pages navigate backwards and recover a failed page request',a
   await history.getByRole('button',{name:'Next records',exact:true}).focus();await page.keyboard.press('Enter');await expect(history.locator('[data-activity-status]')).toBeFocused();await expect(history).toContainText('11-20 of 25');
   const second=await links.allTextContents();await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(links).toHaveCount(5);await expect(history).toContainText('21-25 of 25');
   await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(second);await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(first);
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic history unavailable'})}),{times:1});
+  await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic history unavailable'})}),{times:1});
   await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(history.getByRole('alert')).toContainText('Synthetic history unavailable');await history.getByRole('button',{name:'Retry linked records',exact:true}).click();await expect(links).toHaveText(first);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

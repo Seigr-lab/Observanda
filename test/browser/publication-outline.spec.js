@@ -29,17 +29,17 @@ for(const count of [42,420])test('saved publication, destination and review rema
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await page.getByLabel('GitHub owner / organization',{exact:true}).fill('example');await page.getByLabel('Repository name',{exact:true}).fill('notebook');
   let finishSave,saving;const savedReply=new Promise(r=>finishSave=r),saveStarted=new Promise(r=>saving=r);
-  await page.route('**/api/publishing/save',async route=>{const response=await route.fetch();saving();await savedReply;await route.fulfill({response});},{times:1});
+  await page.context().route('**/api/publishing/save',async route=>{const response=await route.fetch();saving();await savedReply;await route.fulfill({response});},{times:1});
   await page.getByLabel('After upload',{exact:true}).selectOption('upload');await page.getByRole('button',{name:'Save destination',exact:true}).click();await saveStarted;
   await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');finishSave();
   await expect(page.locator('#destination-status')).toContainText('Destination saved');await expect(page.getByLabel('Repository',{exact:true})).toHaveCount(0);await expect(page.getByLabel('GitHub token',{exact:true})).toHaveValue('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');
   await page.getByRole('button',{name:'Check connection',exact:true}).click();await expect(page.locator('#publish-outcome')).toContainText('Upload only');
   await navigate(page,'Publishing');expect(loaded).toEqual([]);
   // A failed preparation stays in its workflow and can be retried directly.
-  await page.route('**/api/publication-jobs/start',r=>r.fulfill({status:503,json:{message:'Synthetic preparation interruption'}}),{times:1});
+  await page.context().route('**/api/publication-jobs/start',r=>r.fulfill({status:503,json:{message:'Synthetic preparation interruption'}}),{times:1});
   await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#publication-jobs-status')).toContainText('Synthetic preparation interruption');await expect(page.getByRole('button',{name:'Recover preparation status',exact:true})).toBeVisible();await page.getByRole('button',{name:'Continue working',exact:true}).click();
   let finishStart,preparing;const startReply=new Promise(r=>finishStart=r),startArrived=new Promise(r=>preparing=r);
-  await page.route('**/api/publication-jobs/start',async route=>{const response=await route.fetch();preparing();await startReply;await route.fulfill({response});},{times:1});
+  await page.context().route('**/api/publication-jobs/start',async route=>{const response=await route.fetch();preparing();await startReply;await route.fulfill({response});},{times:1});
   await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await startArrived;
   await page.getByRole('button',{name:'Continue working',exact:true}).click();const startDelivered=page.waitForResponse('**/api/publication-jobs/start');finishStart();await startDelivered;
   await expect(page.getByRole('heading',{name:'Publishing',exact:true})).toBeVisible();
@@ -62,7 +62,7 @@ for(const count of [42,420])test('saved publication, destination and review rema
   // A late open reply must not pull someone back out of the current screen.
   await page.getByRole('button',{name:'Website preparations',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toBeVisible();
   let release,arrived;const held=new Promise(r=>release=r),started=new Promise(r=>arrived=r);
-  await page.route('**/api/publication-jobs/open',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response});},{times:1});
+  await page.context().route('**/api/publication-jobs/open',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response});},{times:1});
   await page.getByRole('button',{name:'Open review',exact:true}).click();await started;await page.getByRole('button',{name:'Continue working',exact:true}).click();
   const delivered=page.waitForResponse('**/api/publication-jobs/open');release();await delivered;await expect(page.getByRole('heading',{name:'Publishing',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Website preparations',exact:true}).click();await page.getByRole('button',{name:'Open review',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();

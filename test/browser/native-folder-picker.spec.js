@@ -34,7 +34,7 @@ test('a pending native dialog blocks duplicate requests and leaves setup usable 
 });
 
 test('native dialog errors preserve the entered location and allow a retry',async({page})=>{
- await page.goto(app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Retry selection');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.route('**/api/storage/pick',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'The system folder picker could not open.'})}));
+ await page.goto(app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Retry selection');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.context().route('**/api/storage/pick',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'The system folder picker could not open.'})}));
  await page.getByRole('button',{name:'Choose folder',exact:true}).click();await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(root);await expect(page.getByRole('button',{name:'Choose folder',exact:true})).toBeEnabled();await expect(page.locator('#notice')).toContainText('could not open');
- await page.unroute('**/api/storage/pick');await page.getByRole('button',{name:'Choose folder',exact:true}).click();await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(selected);
+ await page.context().unroute('**/api/storage/pick');await page.getByRole('button',{name:'Choose folder',exact:true}).click();await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(selected);
 });

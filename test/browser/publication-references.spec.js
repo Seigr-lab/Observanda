@@ -43,7 +43,7 @@ test('appearance reference navigation survives theme edits and failed transfers'
   const frame=page.frameLocator('#design-preview'),section=frame.locator('#record-references'),links=section.locator('.record-related a');
   await expect(links).toHaveCount(24);await section.getByRole('link',{name:'Next references',exact:true}).click();await expect(links.first()).toHaveText(book.entries[25].title);
   await page.getByLabel('Accent',{exact:true}).fill('#334455');await expect(frame.locator('html')).toHaveCSS('--accent','#334455');await expect(links.first()).toHaveText(book.entries[25].title);
-  await page.route('**/appearance-preview/**/entries/*.html?references=*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Interrupted reference request'})}),{times:1});
+  await page.context().route('**/appearance-preview/**/entries/*.html?references=*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Interrupted reference request'})}),{times:1});
   await section.getByRole('link',{name:'Next references',exact:true}).click();await expect(page.locator('[data-action="theme-preview-retry"]')).toBeVisible();
   await page.locator('[data-action="theme-preview-retry"]').click();await expect(links).toHaveCount(5);await expect(frame.locator('.record-page > .prose')).toHaveText(book.entries[0].body);
   await expect(page.locator('#design-preview')).toHaveAttribute('sandbox','allow-same-origin');expect(errors).toEqual([]);

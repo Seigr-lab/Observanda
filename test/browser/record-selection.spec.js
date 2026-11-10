@@ -36,9 +36,9 @@ test('relationship search pages summaries and exact method links survive later e
   await expect(choices).toHaveCount(25);await expect(choices.first()).toContainText('Observation 01');expect(bodies).toEqual([]);
   await dialog.getByRole('button',{name:'Next results',exact:true}).focus();await page.keyboard.press('Enter');await expect(choices.first()).toBeFocused();await expect(choices.first()).toContainText('Observation 26');
   await dialog.getByRole('button',{name:'Previous results',exact:true}).click();await expect(choices.first()).toContainText('Observation 01');
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Synthetic search interruption'})}));
+  await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Synthetic search interruption'})}));
   await dialog.getByLabel('Find in this workspace',{exact:true}).fill('Observation 60');await expect(picker.getByRole('alert')).toHaveText('Synthetic search interruption');
-  await page.unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(choices).toHaveCount(1);
+  await page.context().unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(choices).toHaveCount(1);
   const original=f.book.entries[60];
   const updated=await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,body:'Changed listening method'}}]},{recordIds:[original.id]}),changed=updated.book.entries[0];
   await choices.first().click();await expect(picker.getByRole('alert')).toContainText('changed after this search');await expect(dialog).toBeVisible();
@@ -63,13 +63,13 @@ test('cancelled linking ignores late pin replies and malformed searches can be r
   const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
   await dialog.getByLabel('Version to choose').selectOption('exact');await dialog.getByRole('button',{name:'Choose target',exact:true}).click();await expect(choices).toHaveCount(25);
   const gate=new Promise(resolve=>release=resolve);let started;const pending=new Promise(resolve=>started=resolve);
-  await page.route('**/api/research/materials/pin',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});});
+  await page.context().route('**/api/research/materials/pin',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});});
   await choices.first().click();await pending;await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(picker).toHaveCount(0);
   await dialog.getByLabel('Version to choose').selectOption('current');await dialog.getByRole('button',{name:'Choose target',exact:true}).click();await expect(choices).toHaveCount(25);release();await page.unrouteAll({behavior:'wait'});
   await expect(dialog).toBeVisible();await expect(dialog.getByLabel('Observanda reference',{exact:true})).toHaveValue('');
-  await page.route('**/api/research/records/query',async route=>{const response=await route.fetch(),body=await response.json();body.records[0].revision='invalid';await route.fulfill({response,json:body});});
+  await page.context().route('**/api/research/records/query',async route=>{const response=await route.fetch(),body=await response.json();body.records[0].revision='invalid';await route.fulfill({response,json:body});});
   await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(picker.getByRole('alert')).toContainText('response was incomplete');await expect(choices).toHaveCount(0);
-  await page.unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(choices).toHaveCount(25);
+  await page.context().unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(choices).toHaveCount(25);
   await dialog.getByLabel('Look for',{exact:true}).selectOption('notebook');await expect(choices).toHaveCount(f.book.notebooks.length);await choices.first().click();
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   const saved=(await f.workspace.read()).book.entries[0];expect(saved.relations).toHaveLength(1);expect(saved.relations[0].target.kind).toBe('notebook');expect(saved.relations[0].target.revision).toBeUndefined();expect(fullReads).toEqual([]);expect(errors).toEqual([]);
@@ -95,9 +95,9 @@ test('record bodies stay on demand while inline links search and page through su
   await expect(dialog.getByRole('button',{name:'Previous destinations',exact:true})).toBeVisible();await expect(destinations).toHaveCount(25);
   expect(await destinations.locator('strong').allTextContents()).not.toEqual(first);await expect(destinations.first()).toBeFocused();
   await dialog.getByRole('button',{name:'Previous destinations',exact:true}).click();await expect(destinations.locator('strong')).toHaveText(first);
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic destination failure'})}));
+  await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic destination failure'})}));
   await dialog.getByLabel('Find link destination',{exact:true}).fill('Observation 60');await expect(dialog.getByRole('alert')).toHaveText('Synthetic destination failure');
-  await page.unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Retry destinations',exact:true}).click();await expect(destinations).toHaveCount(1);
+  await page.context().unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Retry destinations',exact:true}).click();await expect(destinations).toHaveCount(1);
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await destinations.first().focus();await page.keyboard.press('Enter');await expect(dialog.getByRole('button',{name:'Apply link',exact:true})).toBeFocused();await page.keyboard.press('Enter');
   await expect(editor.locator('a')).toHaveAttribute('href',new RegExp(f.book.entries[60].id));
@@ -131,9 +131,9 @@ test('an incomplete outline cannot fall back to loading all records when opening
  try{
   await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);
   page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/workspace/read/selection'))fullReads.push(r.url());});
-  await page.route('**/api/workspace/read/start',async route=>{const response=await route.fetch(),body=await response.json();delete body.notebookCounts;await route.fulfill({response,json:body});});
+  await page.context().route('**/api/workspace/read/start',async route=>{const response=await route.fetch(),body=await response.json();delete body.notebookCounts;await route.fulfill({response,json:body});});
   await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[1].id);await expect(page.locator('#notice')).toContainText('workspace response was incomplete');await expect(page.locator('.record-editing h1')).toHaveText('Observation 00');expect(fullReads).toEqual([]);
-  await page.unroute('**/api/workspace/read/start');await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Observation 01');expect(fullReads).toEqual([]);
+  await page.context().unroute('**/api/workspace/read/start');await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Observation 01');expect(fullReads).toEqual([]);
  }finally{await f.close();}
 });
 

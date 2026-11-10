@@ -59,7 +59,7 @@ test('a delayed file review cannot reopen a closed dialog and its saved plan rem
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});let release;const waiting=new Promise(resolve=>release=resolve);let reached;const ready=new Promise(resolve=>reached=resolve);
  try{
   await page.goto(app.url);await review(page);const dialog=page.locator('#dialog');await dialog.getByLabel('Destination folder').fill(destination);
-  await page.route('**/api/local-export/plan',async route=>{const response=await route.fetch();reached();await waiting;await route.fulfill({response});});
+  await page.context().route('**/api/local-export/plan',async route=>{const response=await route.fetch();reached();await waiting;await route.fulfill({response});});
   await dialog.getByRole('button',{name:'Review file changes'}).click();await ready;await dialog.getByRole('button',{name:'Return to review'}).click();release();await expect(dialog).not.toBeVisible();
   await page.getByRole('button',{name:'Export to local folder'}).click();await expect(dialog.getByRole('button',{name:'Write reviewed files'})).toBeEnabled({timeout:30000});await expect(confirm(dialog)).not.toBeChecked();await expect(dialog.getByLabel('Destination folder')).toHaveValue(destination);
  }finally{release();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

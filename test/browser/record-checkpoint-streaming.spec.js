@@ -14,7 +14,7 @@ test('edits made during a streamed checkpoint remain recoverable after reload',a
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-checkpoint-streaming-')),book=largeRecordBook(),f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
  let release,entered,first=true;const pending=new Promise(resolve=>{entered=resolve;});
- await page.route('**/api/research/drafts/transfer/start',async route=>{
+ await page.context().route('**/api/research/drafts/transfer/start',async route=>{
   if(first){first=false;entered();await new Promise(resolve=>{release=resolve;});}
   await route.continue();
  });

@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 test('shared configuration versions page independently without replacing review choices and ignore obsolete reads',async({page})=>{
- await page.route('https://sharing.test/**',async route=>{
+ await page.context().route('https://sharing.test/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   if(path==='/')return route.fulfill({contentType:'text/html',body:'<dialog id="dialog"></dialog>'});
   return route.fulfill({contentType:path.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+path,import.meta.url),'utf8')});

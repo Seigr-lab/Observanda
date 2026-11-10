@@ -68,9 +68,9 @@ test('desktop formatting controls demonstrate their effect and save mixed text a
   const candidate=await WebsiteFilesCandidate.open(store,opened.site.id,opened.site.revision);await candidate.verify();
   const html=(await contentBuffer(candidate.files.get('index.html'),{maxBytes:65536})).toString();
   expect(html).not.toMatch(/contenteditable|data-observanda-editor/);
-  await page.route('https://published.test/index.html',route=>route.fulfill({contentType:'text/html',body:html}));
+  await page.context().route('https://published.test/index.html',route=>route.fulfill({contentType:'text/html',body:html}));
   const css=await contentBuffer(candidate.files.get('style.css'),{maxBytes:65536});
-  await page.route('https://published.test/style.css',route=>route.fulfill({contentType:'text/css',body:css}));
+  await page.context().route('https://published.test/style.css',route=>route.fulfill({contentType:'text/css',body:css}));
   await page.goto('https://published.test/index.html');
   await expect(page.locator('#water')).toHaveText('H2O');await expect(page.locator('#water sub')).toHaveCSS('vertical-align','sub');
   await expect(page.locator('#iron')).toHaveText('Fe3+');await expect(page.locator('#iron sup')).toHaveCSS('vertical-align','super');

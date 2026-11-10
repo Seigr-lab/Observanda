@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 async function fixture(page){
- await page.route('https://directory.test/**',async route=>{
+ await page.context().route('https://directory.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<main><h1>Project directory</h1><div id="directories"></div><label>Retained input<input id="retained" value="Unrelated editing"></label></main>'});
   const body=await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8');await route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body});

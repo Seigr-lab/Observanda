@@ -70,7 +70,7 @@ test('generic links retain owner-qualified labels, draft return, saved history a
   await main.locator('[data-module-links]').getByRole('button',{name:'Unfinished project calculation',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished project calculation',{timeout:15000});expect(page.url()).toBe(sourceURL);
   await main.getByLabel('Name',{exact:true}).fill('Pending return draft');await main.locator('.module-link-list').getByRole('button',{name:'Book observation',exact:true}).click();await expect(main.locator('h1')).toHaveText('Book observation',{timeout:15000});
   let arrived;const started=new Promise(resolve=>arrived=resolve),held=new Promise(resolve=>releaseReturn=resolve),heldRoute='**/api/projects/'+f.projectId+'/workspace/read/start';
-  await page.route(heldRoute,async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route(heldRoute,async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await main.locator('[data-action="back-to-records"]').click();await started;await page.locator('[data-action="preferences"]').click();await expect(main.getByRole('heading',{name:'Preferences',exact:true})).toBeVisible({timeout:15000});const preferenceURL=page.url();releaseReturn();await page.unrouteAll({behavior:'wait'});
   await expect(main.getByRole('heading',{name:'Preferences',exact:true})).toBeVisible();expect(page.url()).toBe(preferenceURL);expect(new URL(preferenceURL).hash).toBe('#/preferences/general');
   expect((await reader.selected({workspaceId:f.model.id,id:saved.id})).entity.data.name).toBe('Unfinished project calculation');

@@ -22,7 +22,7 @@ test('Move starts from one action, survives a lost completion response, and leav
   const dialog=page.locator('#dialog');await dialog.getByLabel('Workspace folder',{exact:true}).fill(destination);
   await expect(dialog.getByRole('button',{name:/Review/})).toHaveCount(0);await expect(dialog).toContainText('removes the original workspace folder');
   await expect(access(destination)).rejects.toMatchObject({code:'ENOENT'});
-  await page.route('**/api/storage/move',async route=>{transfers++;const result=await route.fetch();expect(result.ok()).toBe(true);await route.abort('connectionreset');});
+  await page.context().route('**/api/storage/move',async route=>{transfers++;const result=await route.fetch();expect(result.ok()).toBe(true);await route.abort('connectionreset');});
   await dialog.getByRole('button',{name:'Move and use this folder',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:45000});
   await expect(page.locator('.notice')).toContainText('Workspace moved and verified. The original folder has been removed.');
   expect(transfers).toBe(1);await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});expect(await catalogueBinding(destination)).toEqual(before);

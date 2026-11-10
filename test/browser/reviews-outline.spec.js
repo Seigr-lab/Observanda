@@ -35,7 +35,7 @@ for(const count of [42,420])test('review workflow reads only its selected record
   await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();await page.evaluate(()=>location.hash='#/modules/collaboration');await expect(page.getByRole('heading',{name:'Collaboration',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Request review',exact:true}).click();const dialog=page.locator('#dialog'),scope=dialog.getByLabel('Send for review',{exact:true}),create=dialog.getByRole('button',{name:'Create encrypted request',exact:true});
   await scope.selectOption('notebook:'+f.book.notebooks[0].id);await expect(create).toBeDisabled();
-  await page.route('**/api/reviews/plan',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic selection interruption'}}),{times:1});
+  await page.context().route('**/api/reviews/plan',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic selection interruption'}}),{times:1});
   await dialog.getByRole('button',{name:'Preview selection',exact:true}).click();await expect(dialog.locator('[role="alert"]')).toContainText('PostgreSQL is unavailable.');await expect(create).toBeDisabled();
   await dialog.getByRole('button',{name:'Preview selection',exact:true}).click();await expect(dialog.locator('[data-review-plan] li')).toHaveCount(2);expect(f.bodies).toEqual([]);
   const target=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:target.id,expectedRevision:recordRevision(target),record:{...target,title:'Changed after preview'}}]},{recordIds:[target.id]});f.bodies.length=0;
@@ -56,7 +56,7 @@ test('review browsing pages, retries, and direct routes keep archive bodies out 
  test.setTimeout(120000);const f=await fixture(page,42);
  try{
   for(let i=0;i<7;i++)await f.reviews.run('create',{workspaceId:f.book.id,id:randomUUID(),recipient:reviewHash(f.contact),message:'Request '+i,records:[{id:f.book.entries[0].id,revision:recordRevision(f.book.entries[0])}]});f.bodies.length=0;
-  await page.route('**/api/reviews/list',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic list interruption'}}),{times:1});
+  await page.context().route('**/api/reviews/list',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic list interruption'}}),{times:1});
   await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();await page.evaluate(()=>location.hash='#/modules/collaboration');await expect(page.locator('main [role="alert"]')).toContainText('PostgreSQL is unavailable.');await page.getByRole('button',{name:'Retry reviews',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toHaveCount(5);
   const next=page.getByRole('button',{name:'Next reviews',exact:true});await next.focus();await page.keyboard.press('Enter');await expect(page.getByRole('button',{name:'Open review',exact:true})).toHaveCount(2);await expect(page.getByRole('button',{name:'Previous reviews',exact:true})).toBeFocused();
   await page.getByRole('button',{name:'Previous reviews',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toHaveCount(5);
@@ -71,11 +71,11 @@ test('late review previews cannot select a different scope and a saved request s
   await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();await page.evaluate(()=>location.hash='#/modules/collaboration');await page.getByRole('button',{name:'Request review',exact:true}).click();
   const dialog=page.locator('#dialog'),scope=dialog.getByLabel('Send for review',{exact:true}),preview=dialog.getByRole('button',{name:'Preview selection',exact:true}),create=dialog.getByRole('button',{name:'Create encrypted request',exact:true});
   let release,arrived;const held=new Promise(resolve=>release=resolve),received=new Promise(resolve=>arrived=resolve);
-  await page.route('**/api/reviews/plan',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/reviews/plan',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await scope.selectOption('notebook:'+f.book.notebooks[0].id);await preview.click();await received;await scope.selectOption('notebook:'+f.book.notebooks[1].id);release();
   await expect(dialog.locator('[data-review-plan]')).toContainText('Preview the saved record titles');await expect(create).toBeDisabled();
   await scope.selectOption('notebook:'+f.book.notebooks[0].id);await preview.click();await expect(create).toBeEnabled();
-  await page.route('**/api/reviews/list',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Refresh after saving failed'}}),{times:1});
+  await page.context().route('**/api/reviews/list',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Refresh after saving failed'}}),{times:1});
   const download=page.waitForEvent('download');await create.click();await download;await expect(dialog).not.toBeVisible();await expect(page.locator('main [role="alert"]')).toContainText('PostgreSQL is unavailable.');
   await page.getByRole('button',{name:'Retry reviews',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toHaveCount(1);
   await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await openRecordActions(page);await expect(page.getByRole('button',{name:'Witnessed by',exact:true})).toBeVisible();

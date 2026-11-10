@@ -38,7 +38,7 @@ test('PDF outline navigation and movement retain history while bounded thumbnail
  });
  const app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore}),documents=new PdfDocuments(fixture.workspace,(await fixture.workspace.outline()).metadata.id);
  page.on('pageerror',error=>errors.push(error.message));
- await page.route('**/vendor/pdfjs/pdf.worker.js',async route=>{
+ await page.context().route('**/vendor/pdfjs/pdf.worker.js',async route=>{
   if(!holdWorker){await route.continue();return;}holdWorker=false;workerHeld=true;
   await releaseWorker.promise;try{await route.continue();}catch{}finally{workerFinished.resolve();}
  });

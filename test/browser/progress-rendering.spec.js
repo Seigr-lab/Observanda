@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 
 async function fixture(page){
  const namespaces=new Set(['operationProgress','storageProgress','activity','evidenceIntake']);
- await page.route('http://progress.test/**',async route=>{
+ await page.context().route('http://progress.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<header><div data-activity-slot></div></header><main id="main"><h1>Storage</h1></main>'});
   let body=await readFile(new URL('../../src/web'+pathname.replace('/locales/nb/','/locales/en/'),import.meta.url),'utf8');

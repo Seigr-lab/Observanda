@@ -30,7 +30,7 @@ test('author named themes on a folder and one section and open the styled public
   await store.importFiles(id,{name:'Field methods',files:new Map([['index.html',file('Publications','Atlas','style.css')],[methods,file('Optical measurements','Instrument traces','../style.css')],[maps,file('Station maps','River stations','../style.css')],['style.css','body{margin:2rem}']])});
   await page.exposeFunction('filesAPI',async(route,data)=>{let result;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL(route,'https://website.test'),body:async()=>data??{},json:r=>{result=r;},check:async()=>{},title:'Field methods',preparation:async()=>({state:'ready',defaultSiteId:id})});return result;});
   await mountFilesEditor(page);
-  await page.route('https://website.test/api/website-files/preview/**',async route=>{
+  await page.context().route('https://website.test/api/website-files/preview/**',async route=>{
    const u=new URL(route.request().url());if(u.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',body:'<!doctype html><body></body>'});
    const [,revision,name]=u.pathname.match(/\/preview\/[^/]+\/([a-f0-9]{64})\/(.+)$/),f=await store.file(id,name,{revision,editor:true});
    return route.fulfill({contentType:f.contentType,body:f.bytes??await contentBuffer(f.content)});
@@ -73,7 +73,7 @@ test('site appearance previews and publishes shared scientific pages while raw a
   const feed=await saveWebsiteFeed(store,id,{expectedRevision:await store.siteVersion(id),path:method,heading:'Field entries',pageSize:1});const continuation=feed.site.feedPages[0].path;
   const call=async(route,data)=>{let result;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL(route,'https://website.test'),body:async()=>data??{},json:r=>{result=r;},check:async()=>{},title:'Coastal measurements',preparation:async()=>({state:'ready',defaultSiteId:id})});return result;};
   await page.exposeFunction('filesAPI',call);await mountFilesEditor(page);
-  await page.route('https://website.test/api/website-files/preview/**',async route=>{
+  await page.context().route('https://website.test/api/website-files/preview/**',async route=>{
    const url=new URL(route.request().url());if(url.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',body:'<!doctype html><body></body>'});
    const [,revision,name]=url.pathname.match(/\/preview\/[^/]+\/([a-f0-9]{64})\/(.+)$/);
    // Like the service, answer a request for a superseded revision with 409 rather than failing the route.

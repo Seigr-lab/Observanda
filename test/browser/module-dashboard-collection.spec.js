@@ -30,7 +30,7 @@ test('planning and stock cards open and save in their selected dedicated book',a
    let release,finished;
    if(location==='Second edit'){
     const gate=new Promise(resolve=>release=resolve);let started,complete;const reading=new Promise(resolve=>started=resolve);finished=new Promise(resolve=>complete=resolve);
-    await page.route('**/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});complete();},{times:1});
+    await page.context().route('**/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});complete();},{times:1});
     await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await reading;
    }
    const input=page.getByLabel('Place or meeting link',{exact:true});await input.fill(location);

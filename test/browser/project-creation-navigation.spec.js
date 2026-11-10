@@ -19,8 +19,8 @@ test('first project opens without waiting for directory refresh and leads to a b
  try{
   const f=await encryptedFixture(path.join(directory,'workspace'),createNotebook('Workspace',''));vault=f.vault;
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json'),browserAssets:await builtAssets(directory)});page.on('pageerror',error=>errors.push(error.message));
-  await page.route('**/api/projects/create',async route=>{const response=await route.fetch();created=response.ok();await route.fulfill({response});});
-  await page.route('**/api/projects/list',async route=>{if(created){held++;await pending;}await route.continue();});
+  await page.context().route('**/api/projects/create',async route=>{const response=await route.fetch();created=response.ok();await route.fulfill({response});});
+  await page.context().route('**/api/projects/list',async route=>{if(created){held++;await pending;}await route.continue();});
   await page.goto(app.url);await page.locator('.first-work [data-action=new-project]').click();const dialog=page.locator('#dialog');
   await dialog.getByLabel('Name',{exact:true}).fill('New observations');await dialog.getByRole('button',{name:'Create project',exact:true}).click();
   await expect.poll(()=>held,{timeout:60000}).toBeGreaterThan(0);

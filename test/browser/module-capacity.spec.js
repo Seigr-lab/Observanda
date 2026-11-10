@@ -34,7 +34,7 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
   await page.reload();const main=page.locator('main');await main.getByRole('button',{name:'Open spreadsheet',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue(data.name);await measure();
   await expect(main.getByLabel('Cell A1',{exact:true})).toHaveValue(data.cells[0][0]);
   await main.getByRole('button',{name:'Next rows',exact:true}).click();await expect(main.getByLabel('Cell A26',{exact:true})).toHaveValue(data.cells[25][0]);
-  let checkpoint;await page.route('**/api/modules/drafts/write',async route=>{checkpoint=route.request().postDataJSON();const response=await route.fetch();expect(response.ok()).toBe(true);await route.fulfill({status:503,json:{message:'Synthetic lost reply'}});},{times:1});
+  let checkpoint;await page.context().route('**/api/modules/drafts/write',async route=>{checkpoint=route.request().postDataJSON();const response=await route.fetch();expect(response.ok()).toBe(true);await route.fulfill({status:503,json:{message:'Synthetic lost reply'}});},{times:1});
   await main.getByLabel('Name',{exact:true}).fill('Unfinished large sheet');await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();
   await expect(main.getByRole('alert')).toContainText('Synthetic lost reply');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished large sheet');
   expect(checkpoint.drafts[0].baseRevision).toBe(1);expect(checkpoint.drafts[0].base).toBeUndefined();expect(Buffer.byteLength(JSON.stringify(checkpoint))).toBeLessThan(3*1024*1024);

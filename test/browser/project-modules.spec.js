@@ -42,14 +42,14 @@ test('project calculator authoring, history and recovery stay owned while unrela
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   const replies=new Set(),gateA=new Promise(resolve=>releaseA=resolve),gateB=new Promise(resolve=>releaseB=resolve);
   const delayed=async route=>{const id=new URL(route.request().url()).pathname.split('/')[3],response=await route.fetch();replies.add(id);await (id===a.id?gateA:gateB);await route.fulfill({response});};
-  await page.route(/\/api\/projects\/[^/]+\/modules\/command/,delayed);
+  await page.context().route(/\/api\/projects\/[^/]+\/modules\/command/,delayed);
   await page.evaluate(()=>window.ownerNavigationMarker='same document');
   await main.getByLabel('Name',{exact:true}).fill('Saved after leaving Project A');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect.poll(()=>replies.has(a.id)).toBe(true);
   await page.goto(url(b));await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Project B calculation');expect(await page.evaluate(()=>window.ownerNavigationMarker)).toBe('same document');
   await main.getByLabel('Name',{exact:true}).fill('Concurrent Project B save');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect.poll(()=>replies.has(b.id)).toBe(true);
   releaseA();await expect.poll(async()=>!(await new ProjectModuleDrafts(a.storage,a.book.id).list({workspaceId:a.book.id,moduleId:'scientific-calculator'})).drafts.some(d=>d.titles.includes('Saved after leaving Project A'))).toBe(true);
   await expect(main.locator('.module-workbench')).toHaveAttribute('aria-busy','true');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Concurrent Project B save');expect(new URL(page.url()).hash).toContain('/owners/'+b.id+'/');
-  releaseB();await expect(main.locator('[data-module-status]')).toHaveText('Saved');await page.unroute(/\/api\/projects\/[^/]+\/modules\/command/,delayed);
+  releaseB();await expect(main.locator('[data-module-status]')).toHaveText('Saved');await page.context().unroute(/\/api\/projects\/[^/]+\/modules\/command/,delayed);
   await page.goto(app.origin+'/#/owners/'+a.id+'/modules/planning/scope/'+a.id+'/agenda');await expect(main.locator('[data-calendar-view]')).toBeVisible();
   await main.locator('[data-command="calendar-subscribe"]').click();await expect(main.getByLabel('Calendar subscription URL',{exact:true})).toBeVisible();
   for(const type of ['event','task','subscription']){await main.locator('[data-command="list"][data-type="'+type+'"]').click();await expect(main.locator('[data-module-items-status]')).toBeVisible();await expect(page.locator('dialog[open]')).toHaveCount(0);}

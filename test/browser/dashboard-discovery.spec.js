@@ -58,14 +58,14 @@ test('card discovery retries failed or malformed pages and cancels obsolete sear
  try{
   const library=page.getByRole('region',{name:'Data library'});await expect(library.locator('.desk-library-item')).toHaveCount(12);
   await library.getByRole('combobox',{name:'Show'}).selectOption('contributors');await expect(library.locator('[data-discovery-page]')).toHaveText('1–12 of 43');
-  await page.route('**/api/projects/dashboard-collection/discovery',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}));
+  await page.context().route('**/api/projects/dashboard-collection/discovery',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}));
   await library.getByRole('searchbox',{name:'Find data to display'}).fill('Artist');await expect(library.getByRole('alert')).toContainText('Synthetic discovery interruption');
   await page.unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(12);
-  await page.route('**/api/projects/dashboard-collection/discovery',route=>{const command=route.request().postDataJSON();return route.fulfill({json:{...command,items:[{key:'bad'}],total:1}});});
+  await page.context().route('**/api/projects/dashboard-collection/discovery',route=>{const command=route.request().postDataJSON();return route.fulfill({json:{...command,items:[{key:'bad'}],total:1}});});
   await library.getByRole('searchbox',{name:'Find data to display'}).fill('Artist 0');await expect(library.getByRole('alert')).toContainText('response was incomplete');
   await page.unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(5);
   let ready;const started=new Promise(resolve=>ready=resolve),gate=new Promise(resolve=>release=resolve);
-  await page.route('**/api/projects/dashboard-collection/discovery',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
+  await page.context().route('**/api/projects/dashboard-collection/discovery',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
   await library.getByRole('searchbox',{name:'Find data to display'}).fill('Study');await started;await library.getByRole('button',{name:'Close data library'}).click();release();await page.unrouteAll({behavior:'wait'});
   await expect(library).toHaveCount(0);expect(f.requests.filter(r=>r.url.endsWith('/page'))).toEqual([]);expect(f.errors).toEqual([]);
  }finally{release?.();await page.unrouteAll({behavior:'wait'});await f.close();}

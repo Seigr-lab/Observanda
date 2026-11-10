@@ -30,7 +30,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   await page.goto(app.origin+'/#/modules/spreadsheet/sheet');const main=page.locator('main'),dialog=page.locator('[data-module-reference-picker]');
   await expect(main.locator('.module-item')).toHaveCount(25);expect(loaded).toEqual([]);await measure();
   await main.getByRole('button',{name:'Next items',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('26');expect(loaded).toEqual([]);
-  await page.route('**/api/modules/items',route=>route.fulfill({status:503,json:{message:'Synthetic list interruption'}}),{times:1});
+  await page.context().route('**/api/modules/items',route=>route.fulfill({status:503,json:{message:'Synthetic list interruption'}}),{times:1});
   await main.getByRole('button',{name:'Next items',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic list interruption');await expect(main.locator('.module-item')).toHaveCount(25);
   await main.getByRole('button',{name:'Retry items',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('51');
   await main.getByLabel('Search items',{exact:true}).fill('Sheet 030');await expect(main.locator('.module-item')).toHaveCount(1);
@@ -61,11 +61,11 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   const connected=main.locator('[data-module-links]');await expect(connected.getByRole('status')).toContainText('of '+count);await expect(connected.locator('[data-action="module-reference-open"]')).toHaveCount(25);expect(loaded).toHaveLength(originalCount);
   await connected.getByRole('button',{name:'Next items',exact:true}).click();await expect(connected.getByRole('status')).toContainText('26');expect(loaded).toHaveLength(originalCount);
   await connected.getByRole('button',{name:'Previous items',exact:true}).click();await connected.getByRole('button',{name:'Authored table',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Authored table');expect(loaded.at(-1)).toBe(entities[30].id);
-  await page.route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});await page.reload();
+  await page.context().route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});await page.reload();
   await expect(main.getByRole('alert')).toContainText('Synthetic title interruption');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link-list')).toContainText('Reference calculation');
   // A late selected-original response must not reopen a module after navigation.
   let release,started;const gate=new Promise(resolve=>{release=resolve;}),waiting=new Promise(resolve=>{started=resolve;});
-  await page.route('**/api/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
   await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
   await main.locator('.module-item').filter({hasText:'Sheet 000'}).getByRole('button').click();await waiting;
   await page.goto(app.origin+'/#/records/'+book.entries[1].id);await expect(connected.getByRole('status')).toHaveText('No matching items.');release();

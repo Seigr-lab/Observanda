@@ -29,7 +29,7 @@ test('manual readiness selects project editions, exposes source receipts and det
   await findWebsite(ids[0]);await expect(dialog.getByLabel('Prepared edition',{exact:true})).toBeVisible();
   const chosenEdition=await dialog.getByLabel('Prepared edition',{exact:true}).inputValue();let readinessReads=0;page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('/intake/readiness'))readinessReads++;});
   const pageDirection=await dialog.getByRole('button',{name:'Next websites',exact:true}).isEnabled()?'Next websites':'Previous websites';
-  await page.route('**/api/v1/intake/receipt-websites',route=>route.fulfill({status:503,json:{message:'Synthetic website page interruption'}}),{times:1});
+  await page.context().route('**/api/v1/intake/receipt-websites',route=>route.fulfill({status:503,json:{message:'Synthetic website page interruption'}}),{times:1});
   await dialog.getByRole('button',{name:pageDirection,exact:true}).click();await expect(dialog.getByRole('alert')).toContainText('Websites could not load');await expect(website).toHaveValue(ids[0]);
   await dialog.getByRole('button',{name:'Retry websites',exact:true}).click();await expect(website).toBeEnabled();await expect(dialog.getByLabel('Prepared edition',{exact:true})).toHaveValue(chosenEdition);await expect(website).toHaveValue(ids[0]);expect(readinessReads).toBe(0);
   expect(await website.locator('option').count()).toBeLessThanOrEqual(21);await expect(dialog.getByRole('button',{name:'Save receipt',exact:true})).toBeEnabled();await dialog.getByRole('button',{name:'Save receipt',exact:true}).click();
@@ -44,7 +44,7 @@ test('manual readiness selects project editions, exposes source receipts and det
   // Returning to evidence while the policy response is delayed must not let
   // that late response replace the user's current view.
   let policyWritten;const written=new Promise(resolve=>{policyWritten=resolve;}),hold=new Promise(resolve=>{releasePolicy=resolve;});
-  await page.route('**/api/v1/intake/policy',async route=>{const response=await route.fetch();policyWritten();await hold;await route.fulfill({response});});
+  await page.context().route('**/api/v1/intake/policy',async route=>{const response=await route.fetch();policyWritten();await hold;await route.fulfill({response});});
   await dialog.getByText('Project completion policy',{exact:true}).click();await dialog.getByLabel('Git commit',{exact:true}).check();await dialog.getByRole('button',{name:'Save completion policy',exact:true}).click();await written;
   await dialog.getByRole('button',{name:'Back to evidence',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();const delivered=page.waitForResponse('**/api/v1/intake/policy');releasePolicy();await delivered;await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();expect(errors).toEqual([]);
  }finally{releasePolicy?.();await page.close();await app.close();await cleanup();}

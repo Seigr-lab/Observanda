@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 
 for(const choice of ['save','discard'])for(const exit of ['stay','escape'])test(`${choice} can wait without trapping the leave dialog; ${exit} prevents late navigation`,async({page})=>{
  const source=await readFile(new URL('../../src/web/unsaved-changes.js',import.meta.url),'utf8');
- await page.route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main><h1>Current page</h1></main>'}));
+ await page.context().route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main><h1>Current page</h1></main>'}));
  await page.goto('http://dialog.test/');
  await page.evaluate(async()=>{
   const {unsavedChanges}=await import('/unsaved-changes.js');
@@ -25,13 +25,13 @@ for(const choice of ['save','discard'])for(const exit of ['stay','escape'])test(
 
 test('clean history navigation needs no decision while real edits and busy forms remain guarded',async({page})=>{
  const source=await readFile(new URL('../../src/web/unsaved-changes.js',import.meta.url),'utf8');
- await page.route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main>Ready</main>'}));await page.goto('http://dialog.test/');
+ await page.context().route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main>Ready</main>'}));await page.goto('http://dialog.test/');
  const result=await page.evaluate(async()=>{const {unsavedChanges}=await import('/unsaved-changes.js');let labels=[],busy=false;const guard=unsavedChanges({esc:v=>v,changes:()=>({labels}),busy:()=>busy,notify:()=>{}}),values=[guard.canLeaveImmediately()];labels=['Edit'];values.push(guard.canLeaveImmediately());labels=[];busy=true;values.push(guard.canLeaveImmediately());busy=false;values.push(guard.canLeaveImmediately());return values;});expect(result).toEqual([true,false,false,true]);await expect(page.locator('#leave-dialog')).not.toBeVisible();
 });
 
 async function prepareFixture(page){
  const source=await readFile(new URL('../../src/web/unsaved-changes.js',import.meta.url),'utf8');
- await page.route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main>Current draft</main>'}));
+ await page.context().route('http://dialog.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':'text/html',body:route.request().url().endsWith('.js')?source:'<main>Current draft</main>'}));
  await page.goto('http://dialog.test/');
  await page.evaluate(async()=>{
   const {unsavedChanges}=await import('/unsaved-changes.js');

@@ -50,7 +50,7 @@ test('module and template switches save independently, retain failed edits and k
   await writer.run('ROLLBACK');await writer.close();writer=null;
   await preferences(page,'Modules');
   const fail=async route=>route.request().method()==='POST'?route.fulfill({status:503,json:{code:'IO',message:'Synthetic settings save failure'}}):route.continue();
-  await page.route('**/api/dashboard/pending',fail);
+  await page.context().route('**/api/dashboard/pending',fail);
   await main.getByRole('switch',{name:'Enable Planning',exact:true}).check();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
   await main.locator('[data-module-settings-id="resources"]').click();await expect(main.locator('[data-module-settings-slot="resources"]')).toBeVisible();
   await main.locator('[data-tool-project="'+before.book.projects[0].id+'"]').check();
@@ -64,7 +64,7 @@ test('module and template switches save independently, retain failed edits and k
   await expect(page).toHaveURL(/#\/websites$/);await expect(page.locator('#leave-dialog')).not.toBeVisible();
   await page.goBack();await expect(main.locator('.website-site-context')).toBeVisible();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   await navigate(page,'Preferences');await preferences(page,'Modules');await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
-  await page.unroute('**/api/dashboard/pending',fail);await main.getByRole('button',{name:'Retry',exact:true}).click();
+  await page.context().unroute('**/api/dashboard/pending',fail);await main.getByRole('button',{name:'Retry',exact:true}).click();
   await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('planning');
   await expect(main.locator('.desk-save-message')).toBeHidden();
   await preferences(page,'Templates');await page.reload();await expect(page).toHaveURL(/#\/preferences\/templates$/);await expect(research).toBeChecked();

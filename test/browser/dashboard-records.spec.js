@@ -74,7 +74,7 @@ for(const count of [42,420])test('general and module preferences save metadata w
   const research=main.getByRole('switch',{name:'Enable Research & development',exact:true});if(!await research.isChecked())await research.check();
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();const types=main.locator('[data-module-settings-slot="laboratory-research-development"]');
   await types.getByLabel('Record type name',{exact:true}).fill('Research questions');
-  await page.route('**/api/workspace/structure',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic settings interruption'}}),{times:1});
+  await page.context().route('**/api/workspace/structure',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic settings interruption'}}),{times:1});
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('Synthetic settings interruption');await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('No unsaved changes');
   await page.reload();await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
@@ -92,7 +92,7 @@ test('project pages keep accurate lab-book counts and scoped recent records with
   book.entries.forEach((record,i)=>{record.notebookId=book.notebooks[i%3].id;});
  }});let fail=true;
  try{
-  await page.route('**/api/workspace/read/dashboard',route=>{if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic project interruption'}});}return route.continue();});
+  await page.context().route('**/api/workspace/read/dashboard',route=>{if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic project interruption'}});}return route.continue();});
   await page.goto(f.app.url);await page.evaluate(()=>location.hash='#/projects');
   await expect(page.locator('.project-card')).toHaveCount(2);for(const node of await page.locator('.project-card').all())await expect(node).toContainText('140 records');
   expect(f.bodies).toHaveLength(0);
@@ -162,7 +162,7 @@ test('record cards load independent filters, recover errors in place, and keep c
  field.config.title='Field takes';field.options.tag='field';studio.config.title='Studio takes';studio.options.tag='studio';
  const f=await fixture(page,{cards:[field,studio]});let fail=true;
  try{
-  await page.route('**/api/projects/dashboard-collection/records',route=>{
+  await page.context().route('**/api/projects/dashboard-collection/records',route=>{
    if(fail&&route.request().postDataJSON().options.tag==='field'){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic card interruption'}});}
    return route.continue();
   });
@@ -193,7 +193,7 @@ test('arriving card data preserves a focused numeric field and its selected text
  try{
   await page.goto(f.app.url);await expect(card(page,'takes').locator('.desk-item')).toHaveCount(6);
   let received;const pending=new Promise(resolve=>received=resolve),held=new Promise(resolve=>release=resolve);
-  await page.route('**/api/projects/dashboard-collection/records',async route=>{
+  await page.context().route('**/api/projects/dashboard-collection/records',async route=>{
    if(route.request().postDataJSON().limit===12){const response=await route.fetch();received();await held;await route.fulfill({response});}
    else await route.continue();
   });
@@ -252,7 +252,7 @@ test('record lists query summaries, retain historical type choices, and open sel
 test('card paging replaces its visible items, retains keyboard focus and retries a lost page response',async({page},testInfo)=>{
  test.setTimeout(90000);const f=await fixture(page,{count:45,cards:[createPanel('contributors','credits')]});let fail=true;
  try{
-  await page.route('**/api/projects/dashboard-collection/records',route=>{if(fail&&route.request().postDataJSON().cursor){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic page interruption'}});}return route.continue();});
+  await page.context().route('**/api/projects/dashboard-collection/records',route=>{if(fail&&route.request().postDataJSON().cursor){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic page interruption'}});}return route.continue();});
   await page.goto(f.app.url);const credits=card(page,'credits');await expect(credits.locator('.desk-item')).toHaveCount(6);await expect(credits).toContainText('Items 1–6 of 45');
   await credits.getByRole('button',{name:'Next items',exact:true}).focus();await page.keyboard.press('Enter');await expect(credits).toContainText('Synthetic page interruption');
   await credits.getByRole('button',{name:'Retry',exact:true}).click();await expect(credits).toContainText('Items 7–12 of 45');await expect(credits.locator('.desk-item')).toHaveCount(6);await expect(credits.getByRole('button',{name:'Next items',exact:true})).toBeFocused();
@@ -277,7 +277,7 @@ test('record-type choices are on demand, bounded, searchable, scoped and retaine
  }});
  let fail=true,release,started;
  try{
-  await page.route('**/api/projects/dashboard-collection/types',async route=>{
+  await page.context().route('**/api/projects/dashboard-collection/types',async route=>{
    if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic type interruption'}});}
    if(route.request().postDataJSON().search==='delayed'){
     started?.();await new Promise(resolve=>{release=resolve;});
@@ -335,7 +335,7 @@ test('record type finder pages without accumulating options and saved views reso
  }});
  let fail=false,release,started;
  try{
-  await page.route('**/api/workspace/read/record-types',async route=>{
+  await page.context().route('**/api/workspace/read/record-types',async route=>{
    const command=route.request().postDataJSON();
    if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic discovery interruption'}});}
    if(command.search==='delayed'){started?.();await new Promise(resolve=>{release=resolve;});try{await route.continue();}catch{}return;}

@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 
 const moduleURL=new URL('../../src/web/website-files-table.js',import.meta.url),messages=JSON.parse(await readFile(new URL('../../src/web/locales/en/websiteFiles.json',import.meta.url)));
 async function setup(page,html){
- await page.route('http://table-fixture.test/**',async route=>{
+ await page.context().route('http://table-fixture.test/**',async route=>{
   const name=new URL(route.request().url()).pathname;
   if(name==='/')return route.fulfill({contentType:'text/html',body:'<main><iframe></iframe><aside></aside></main>'});
   const file=name==='/table.js'?moduleURL:new URL('../../src/web'+name,import.meta.url);

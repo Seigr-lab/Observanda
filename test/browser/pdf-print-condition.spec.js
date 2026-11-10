@@ -19,7 +19,7 @@ test('printer condition imports exact retained bytes without filenames and survi
  // The separate desktop qualification exercises final ICC colour processing.
  const removeRenderer=installPdfRenderer(async(input)=>{compiled.push({printCondition:structuredClone(input.printCondition),iccProfile:input.iccProfile});const view=await browser.newPage();try{await view.route('**/*',route=>route.abort());await view.emulateMedia({media:'print'});await view.setContent(input.html);const preflight=await view.evaluate(measurePdfPreflight),bytes=await view.pdf({preferCSSPageSize:true,printBackground:true,tagged:true,outline:true});return {bytes,preflight,sha256:createHash('sha256').update(bytes).digest('hex'),renderer:{engine:'chromium',electron:'test',chromium:browser.version(),recipeVersion:1}};}finally{await view.close();}},{capabilities:async()=>({archival:true})}),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().endsWith('/api/pdf/print-profile-import'))requests.push(request.postDataJSON());});
  try{
-  let interrupted=0;await page.route(url=>url.pathname.endsWith('/pdf/print-profile-import'),async route=>{
+  let interrupted=0;await page.context().route(url=>url.pathname.endsWith('/pdf/print-profile-import'),async route=>{
    if(interrupted>=2)return route.continue();interrupted++;
    const response=await route.fetch();expect(response.status()).toBe(200);await route.abort('failed');
   });

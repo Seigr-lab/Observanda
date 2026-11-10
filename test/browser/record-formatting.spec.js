@@ -25,7 +25,7 @@ for(const compiled of [false,true])test('saved formatting survives reader, editi
   let equationRequests=0;
   page.on('request',request=>{if(new URL(request.url()).pathname==='/vendor/equations.js')equationRequests++;});
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(equationRequests).toBe(0);
-  if(!compiled)await page.route('**/vendor/equations.js',route=>route.abort(),{times:1});
+  if(!compiled)await page.context().route('**/vendor/equations.js',route=>route.abort(),{times:1});
   await page.goto(app.origin+'/#/records/'+record.id+'/read/'+id);
   const section=page.locator('#record-section-'+id),formatted=section.locator('.rt-font-editorial');
   const check=async root=>{await expect(root.locator('.rt-color-123456')).toHaveCSS('color','rgb(18, 52, 86)');await expect(root.locator('.rt-highlight-fedcba')).toHaveCSS('background-color','rgb(254, 220, 186)');await expect(root.locator('.rt-font-editorial')).toHaveCSS('font-family',/Georgia/);};

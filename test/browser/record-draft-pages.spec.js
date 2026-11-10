@@ -39,10 +39,10 @@ test('draft discovery pages, retries and recovers one selected original without 
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}),rows=dialog.locator('.record-draft-row');
   await expect(rows).toHaveCount(10);await expect(rows.first()).toContainText('Unfinished observation 23');expect(f.draftBodies).toEqual([]);
-  await page.route('**/api/research/drafts/list',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic discovery failure'}}));
+  await page.context().route('**/api/research/drafts/list',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic discovery failure'}}));
   await dialog.getByRole('button',{name:'Next drafts',exact:true}).focus();await page.keyboard.press('Enter');
   await expect(dialog.getByRole('alert').first()).toContainText('could not be loaded');
-  await page.unroute('**/api/research/drafts/list');await dialog.getByRole('button',{name:'Retry drafts',exact:true}).click();
+  await page.context().unroute('**/api/research/drafts/list');await dialog.getByRole('button',{name:'Retry drafts',exact:true}).click();
   await expect(rows).toHaveCount(10);await expect(rows.first()).toContainText('Unfinished observation 13');
   await dialog.getByRole('button',{name:'Next drafts',exact:true}).click();await expect(rows).toHaveCount(4);await expect(rows.first()).toContainText('Unfinished observation 03');
   await dialog.getByRole('button',{name:'Previous drafts',exact:true}).click();await expect(rows.first()).toContainText('Unfinished observation 13');await expect(dialog.getByRole('button',{name:'Previous drafts',exact:true})).toBeFocused();
@@ -67,12 +67,12 @@ test('closing discovery cancels late pages; stale discard requires a refresh and
   const dialog=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}),rows=dialog.locator('.record-draft-row');
   await expect(rows).toHaveCount(2);
   let started;const waiting=new Promise(resolve=>{started=resolve;});
-  await page.route('**/api/research/drafts/list',async route=>{started();await new Promise(resolve=>{release=resolve;});try{await route.continue();}catch{}});
+  await page.context().route('**/api/research/drafts/list',async route=>{started();await new Promise(resolve=>{release=resolve;});try{await route.continue();}catch{}});
   await dialog.getByRole('button',{name:'Refresh drafts',exact:true}).click();await waiting;
   const aborted=page.waitForEvent('requestfailed',{predicate:r=>r.url().endsWith('/drafts/list')});
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await aborted;release();release=null;
   await expect(page.getByRole('button',{name:'Review drafts',exact:true})).toBeFocused();
-  await page.unroute('**/api/research/drafts/list');await page.getByRole('button',{name:'Review drafts',exact:true}).click();await expect(rows).toHaveCount(2);
+  await page.context().unroute('**/api/research/drafts/list');await page.getByRole('button',{name:'Review drafts',exact:true}).click();await expect(rows).toHaveCount(2);
   const command=f.commands[1];await f.drafts.write({...command,changes:command.changes.map(c=>({...c,record:{...c.record,title:'Changed in the other editor'}}))});
   await rows.first().getByRole('button',{name:'Discard draft',exact:true}).click();await rows.first().getByRole('button',{name:'Confirm discard',exact:true}).click();
   await expect(dialog.locator('[data-draft-error]')).toContainText('changed');
@@ -87,10 +87,10 @@ test('a failed recovery save retains its source draft and review for retry',asyn
   await page.goto(f.app.url);await page.getByRole('button',{name:'Review drafts',exact:true}).click();
   await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
   await page.locator('.record-draft-preview [data-preview-recover]').click();const review=page.locator('.record-draft-review');
-  await page.route('**/api/research/drafts/review/apply',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic unavailable storage'}}));
+  await page.context().route('**/api/research/drafts/review/apply',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic unavailable storage'}}));
   await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review.locator('[role=alert]')).toContainText('Synthetic unavailable storage');
   expect(await f.drafts.read(f.commands[0].id)).not.toBe(null);
-  await page.unroute('**/api/research/drafts/review/apply');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader > h1')).toHaveText('Unfinished observation 00');
+  await page.context().unroute('**/api/research/drafts/review/apply');await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review).toHaveCount(0,{timeout:30000});await expect(page.locator('.record-reader > h1')).toHaveText('Unfinished observation 00');
   expect(await f.drafts.read(f.commands[0].id)).toBe(null);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -126,9 +126,9 @@ test('large checkpoint review pages saved sections, retries a failed window and 
   const preview=page.getByRole('dialog',{name:'Long field notebook draft',exact:true});
   await expect(preview.getByRole('heading',{name:'Saved section 0',exact:true})).toBeVisible();
   await expect(preview.locator('.record-draft-preview-content>section')).toHaveCount(4);
-  await page.route('**/api/research/drafts/content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic section read failure'}}));
+  await page.context().route('**/api/research/drafts/content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic section read failure'}}));
   await preview.getByRole('button',{name:'Next sections',exact:true}).click();await expect(preview.getByRole('alert')).toContainText('Synthetic section read failure');
-  await page.unroute('**/api/research/drafts/content');await preview.getByRole('button',{name:'Retry saved sections',exact:true}).click();
+  await page.context().unroute('**/api/research/drafts/content');await preview.getByRole('button',{name:'Retry saved sections',exact:true}).click();
   await expect(preview.getByRole('heading',{name:'Saved section 4',exact:true})).toBeVisible();await expect(preview).toContainText('Sections 5–8 of 40');
   await preview.getByLabel('Go to section',{exact:true}).fill('39');await preview.getByRole('button',{name:'Go',exact:true}).click();
   await expect(preview.getByRole('heading',{name:'Saved section 38',exact:true})).toBeVisible();await expect(preview.locator('.record-draft-preview-content>section')).toHaveCount(2);

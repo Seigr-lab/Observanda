@@ -16,11 +16,11 @@ test('a selection above ten thousand files reaches paged registration and recove
   await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import file set',exact:true}).click();await dialog.getByLabel('Collection title',{exact:true}).fill('Growing recording set');
   await dialog.getByLabel('Original files',{exact:true}).evaluate(input=>{const selection=new DataTransfer();for(let i=0;i<10017;i++)selection.items.add(new File([],'take-'+i+'.txt',{type:'text/plain'}));input.files=selection.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
-  await page.route('**/api/research/materials/intake-selection-append',async route=>{requests.push(route.request().postDataJSON());await route.fetch();await route.abort('failed');});
+  await page.context().route('**/api/research/materials/intake-selection-append',async route=>{requests.push(route.request().postDataJSON());await route.fetch();await route.abort('failed');});
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
   await expect.poll(()=>requests.length).toBe(1);expect(requests[0].items).toHaveLength(64);
   await expect(dialog.getByRole('button',{name:'Upload file set',exact:true})).toBeEnabled();
-  await page.unroute('**/api/research/materials/intake-selection-append');
+  await page.context().unroute('**/api/research/materials/intake-selection-append');
   await dialog.getByLabel('Original files',{exact:true}).setInputFiles({name:'continued.txt',mimeType:'text/plain',buffer:Buffer.from('continued')});
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Verify and attach file set'})).toBeEnabled({timeout:30000});await dialog.getByRole('button',{name:'Verify and attach file set'}).click();
@@ -75,7 +75,7 @@ test('file sets resume after lost upload replies and reload, then attach togethe
   await dialog.getByLabel('Provenance / acquisition notes').fill('Private path E:\\private\\recordings');
   await dialog.getByLabel('Original files',{exact:true}).setInputFiles(files);
   let lost=false;
-  await page.route('**/api/research/materials/chunks',async route=>{
+  await page.context().route('**/api/research/materials/chunks',async route=>{
    if(!lost){lost=true;await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
@@ -124,7 +124,7 @@ test('single originals resume after a lost chunk reply, reject a changed prefix,
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles(file);
   let lost=false;
-  await page.route('**/api/research/materials/chunks',async route=>{
+  await page.context().route('**/api/research/materials/chunks',async route=>{
    if(!lost){lost=true;const response=await route.fetch();const json=await response.json();sizes.push(JSON.stringify(json).length);expect(json.sessions).toHaveLength(8);expect(json.sessions.every(session=>session.chunks===undefined)).toBe(true);await route.abort('failed');}
    else await route.continue();
   });

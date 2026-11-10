@@ -44,14 +44,14 @@ test('saved editing checkpoints only the selected value, retains failed saves an
  try{
   const dialog=await openTitle(page),title=dialog.getByLabel('Record title',{exact:true}),save=dialog.getByRole('button',{name:'Save changes',exact:true});
   await title.fill('Edited field observation');await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
-  await page.route('**/api/research/records/values/save',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic record save failure'}}));
+  await page.context().route('**/api/research/records/values/save',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic record save failure'}}));
   await save.click();await expect(dialog.getByRole('alert')).toContainText('Synthetic record save failure');await expect(title).toHaveValue('Edited field observation');
-  expect((await f.service.read(f.target('title'))).value.value).toBe(f.active.title);await page.unroute('**/api/research/records/values/save');
-  const held=new Promise(resolve=>release=resolve);await page.route('**/api/research/records/values/save',async route=>{await held;await route.continue();});
+  expect((await f.service.read(f.target('title'))).value.value).toBe(f.active.title);await page.context().unroute('**/api/research/records/values/save');
+  const held=new Promise(resolve=>release=resolve);await page.context().route('**/api/research/records/values/save',async route=>{await held;await route.continue();});
   const request=page.waitForRequest(r=>r.url().endsWith('/api/research/records/values/save'));await save.click();const sent=(await request).postDataJSON();
   expect(sent.recordId).toBe(f.active.id);expect(sent.field).toBe('title');expect(sent.value).toEqual({value:'Edited field observation'});expect(sent.record).toBeUndefined();
   await expect(dialog.locator('[data-writing-fields]')).toHaveJSProperty('inert',true);await expect(save).toBeDisabled();await expect(dialog.locator('.record-save-progress')).toBeVisible();await expect(page.locator('#main .record-save-progress')).toHaveCount(0);release();await expect(dialog).not.toBeVisible();
-  await expect(page.locator('.record-editing h1')).toHaveText('Edited field observation');await page.unroute('**/api/research/records/values/save');
+  await expect(page.locator('.record-editing h1')).toHaveText('Edited field observation');await page.context().unroute('**/api/research/records/values/save');
   expect((await new ResearchDrafts(f.workspace).list()).drafts).toEqual([]);f.scoped();const stored=await f.read();expect(stored.entries.slice(1)).toEqual(f.book.entries.slice(1));expect(stored.entries[0].body).toEqual(f.active.body);
  }finally{release();await page.unrouteAll({behavior:'wait'});await f.close();}
 });
@@ -73,9 +73,9 @@ test('discard removes only the selected checkpoint and a failed reader refresh r
  try{
   const dialog=await openTitle(page);await dialog.getByLabel('Record title',{exact:true}).fill('Unfinished local title');await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
   await f.change('title','Saved by another writer');
-  await page.route('**/api/workspace/read/record-content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic refresh interruption'}}));
+  await page.context().route('**/api/workspace/read/record-content',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic refresh interruption'}}));
   await dialog.getByRole('button',{name:'Discard this edit',exact:true}).click();await dialog.getByRole('button',{name:'Discard this edit and its checkpoint?',exact:true}).click();await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('Synthetic refresh interruption');await page.unroute('**/api/workspace/read/record-content');await page.getByRole('button',{name:'Try again',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('Synthetic refresh interruption');await page.context().unroute('**/api/workspace/read/record-content');await page.getByRole('button',{name:'Try again',exact:true}).click();
   await expect(page.locator('.record-editing h1')).toHaveText('Saved by another writer');expect((await new ResearchDrafts(f.workspace).list()).drafts).toEqual([]);f.scoped();
  }finally{await f.close();}
 });
@@ -83,7 +83,7 @@ test('discard removes only the selected checkpoint and a failed reader refresh r
 test('a locked workspace cannot return a selected value into the editing view',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page);
  try{
-  await page.route('**/api/research/records/values/read',async route=>{const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);await route.continue();});
+  await page.context().route('**/api/research/records/values/read',async route=>{const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);await route.continue();});
   const response=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/read'));await openTitle(page);const result=await response;expect(result.ok()).toBe(false);expect((await result.json()).code).toBe('ACCESS_LOCKED');
   await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();await expect(page.locator('.record-writing[open]')).toHaveCount(0);await expect(page.locator('.record-editing')).toHaveCount(0);f.scoped();
  }finally{await f.close();}
@@ -92,14 +92,14 @@ test('a locked workspace cannot return a selected value into the editing view',a
 test('incomplete selected reads and save acknowledgements never discard the edit or its checkpoint',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page);
  try{
-  await page.route('**/api/research/records/values/read',async route=>{const response=await route.fetch(),body=await response.json();body.recordId=randomUUID();await route.fulfill({response,json:body});});
-  await openTitle(page);let dialog=page.locator('dialog.record-writing[open]');await expect(dialog.getByRole('alert')).toContainText('selected content response was incomplete');await expect(dialog.locator('[data-record-value]')).toHaveCount(0);await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.unroute('**/api/research/records/values/read');
-  await page.route('**/api/research/drafts/values/write',route=>alterReply(route,body=>{delete body.revision;}));
+  await page.context().route('**/api/research/records/values/read',async route=>{const response=await route.fetch(),body=await response.json();body.recordId=randomUUID();await route.fulfill({response,json:body});});
+  await openTitle(page);let dialog=page.locator('dialog.record-writing[open]');await expect(dialog.getByRole('alert')).toContainText('selected content response was incomplete');await expect(dialog.locator('[data-record-value]')).toHaveCount(0);await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.context().unroute('**/api/research/records/values/read');
+  await page.context().route('**/api/research/drafts/values/write',route=>alterReply(route,body=>{delete body.revision;}));
   dialog=await openTitle(page);await dialog.getByLabel('Record title',{exact:true}).fill('Retained after incomplete replies');await expect(dialog.getByRole('alert')).toContainText('checkpoint response was incomplete');
-  await page.unroute('**/api/research/drafts/values/write');await dialog.getByRole('button',{name:'Retry checkpoint',exact:true}).click();await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await expect(dialog.locator('[data-writing-error]')).toBeEmpty();
-  await page.route('**/api/research/records/values/save',route=>alterReply(route,body=>{delete body.etag;}));
+  await page.context().unroute('**/api/research/drafts/values/write');await dialog.getByRole('button',{name:'Retry checkpoint',exact:true}).click();await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await expect(dialog.locator('[data-writing-error]')).toBeEmpty();
+  await page.context().route('**/api/research/records/values/save',route=>alterReply(route,body=>{delete body.etag;}));
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog.getByRole('alert')).toContainText('save response was incomplete');await expect(dialog.getByLabel('Record title',{exact:true})).toHaveValue('Retained after incomplete replies');
   expect((await new ResearchDrafts(f.workspace).list()).drafts).toHaveLength(1);const committed=(await f.workspace.outline()).etag;
-  await page.unroute('**/api/research/records/values/save');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();expect((await f.workspace.outline()).etag).toBe(committed);expect((await new ResearchDrafts(f.workspace).list()).drafts).toEqual([]);f.scoped();
+  await page.context().unroute('**/api/research/records/values/save');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();expect((await f.workspace.outline()).etag).toBe(committed);expect((await new ResearchDrafts(f.workspace).list()).drafts).toEqual([]);f.scoped();
  }finally{await f.close();}
 });

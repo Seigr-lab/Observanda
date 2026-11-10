@@ -48,7 +48,7 @@ test('an older open editor saves alongside new and deleted records and retains t
   ResearchCatalogue.prototype.manifest=ResearchCatalogue.prototype.read=()=>{throw Error('Full workspace assembled while saving the open editor');};
   SnapshotIndex.prototype.members=()=>{throw Error('Full membership scanned while saving the open editor');};
   let requested;const started=new Promise(resolve=>requested=resolve),gate=new Promise(resolve=>release=resolve);
-  await page.route('**/api/research/records/save',async route=>{const response=await route.fetch();requested();await gate;await route.fulfill({response});});
+  await page.context().route('**/api/research/records/save',async route=>{const response=await route.fetch();requested();await gate;await route.fulfill({response});});
   const responsePromise=page.waitForResponse(r=>r.url().endsWith('/api/research/records/save'));
   await page.getByRole('button',{name:'Save record',exact:true}).click();await started;
   await page.getByLabel('Record title',{exact:true}).fill('Typing while the save returns');release();
@@ -57,7 +57,7 @@ test('an older open editor saves alongside new and deleted records and retains t
   expect(result.book.entries.map(r=>r.id)).toEqual([edited.id]);expect(result.recordScope.total).toBe(book.entries.length);
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Typing while the save returns');
   await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
-  await page.unroute('**/api/research/records/save');
+  await page.context().unroute('**/api/research/records/save');
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   Object.assign(ResearchCatalogue.prototype,prior);SnapshotIndex.prototype.members=members;
   await page.evaluate(id=>location.hash='#/records/'+id,added.id);
@@ -123,7 +123,7 @@ test('default transactional workspace saves, reopens in the same folder and rest
   await page.setViewportSize({width:1280,height:900});
   let release,requested;
   const gate=new Promise(resolve=>release=resolve),started=new Promise(resolve=>requested=resolve);
-  await page.route('**/api/storage',async route=>{
+  await page.context().route('**/api/storage',async route=>{
    const response=await route.fetch();requested();await gate;await route.fulfill({response});
   });
   try{
@@ -135,7 +135,7 @@ test('default transactional workspace saves, reopens in the same folder and rest
    await page.getByRole('button',{name:'Save record',exact:true}).click();
    await expect(page.locator('#save-status')).toHaveText('Saved');
    expect((await workspace.read()).book.entries[0].title).toBe('Draft survives late settings');
-  }finally{release();await page.unroute('**/api/storage');}
+  }finally{release();await page.context().unroute('**/api/storage');}
   expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(vault);await rm(parent,{recursive:true,force:true});}
 });

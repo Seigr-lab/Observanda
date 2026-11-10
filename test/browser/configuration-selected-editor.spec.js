@@ -72,7 +72,7 @@ test('selected configuration pages preserve late edits and create from the saved
   await initial.getByLabel('Value',{exact:true}).selectOption('template:field_24');await expect(initial.locator('[data-custom-choice-results]')).toContainText('Condition choice 0');
   await initial.locator('[data-custom-choice-page=next]').click();await initial.locator('[data-custom-choice-page=next]').click();await initial.getByRole('button',{name:'Saved late condition',exact:true}).click();
   await expect(initial.locator('[data-custom-choice-selected]')).toHaveValue('Saved late condition');
-  let lost=false;await page.route('**/api/research/drafts/review/apply',async route=>{applied.push(route.request().postDataJSON());if(lost)return route.continue();lost=true;await route.fetch();await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost selected creation acknowledgement'}});});
+  let lost=false;await page.context().route('**/api/research/drafts/review/apply',async route=>{applied.push(route.request().postDataJSON());if(lost)return route.continue();lost=true;await route.fetch();await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost selected creation acknowledgement'}});});
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic lost selected creation acknowledgement');
   await expect(initial.locator('[data-writing-fields]')).toHaveJSProperty('inert',true);
   const count=()=>fixture.workspace.catalogue(async store=>{const snapshot=await store.snapshot();return {count:snapshot.count,row:await store.member(snapshot,created)};});

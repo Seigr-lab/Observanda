@@ -19,7 +19,7 @@ test('analysis record drafts recover after a rejected checkpoint, restart and co
  page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
  let rejected=false,lost=false;
  try{
-  await page.route('**/api/research/drafts/values/write',async route=>{
+  await page.context().route('**/api/research/drafts/values/write',async route=>{
    const command=route.request().postDataJSON();requests.push(command);
    if(!rejected){rejected=true;await route.fulfill({status:400,json:{code:'INVALID',message:'Synthetic checkpoint validation refusal'}});return;}
    if(!lost){lost=true;await route.fetch();await route.abort();return;}
@@ -39,7 +39,7 @@ test('analysis record drafts recover after a rejected checkpoint, restart and co
   const current=(await f.workspace.read()).book.entries.find(row=>row.id===record.id),remote={...current,results:{version:1,statements:[...record.results.statements,{...record.results.statements[0],id:randomUUID(),title:'Independent conclusion',text:'Concurrent observation'}]}};
   await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(current),record:remote}]},{receipt:true});
   await edit.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();
-  await page.unroute('**/api/research/drafts/values/write');await page.reload();
+  await page.context().unroute('**/api/research/drafts/values/write');await page.reload();
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();
   await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
   edit=page.getByRole('dialog',{name:'Edit Record title',exact:true});await expect(edit.locator('.record-writing-conflict')).toHaveCount(0);

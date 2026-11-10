@@ -54,7 +54,7 @@ test('large recovery retries its pinned batch, cancels without losing the source
  const f=await fixture(page,400),calls=[];
  try{
   let interrupted=false;
-  await page.route('**/api/workspace/read/selection',async route=>{
+  await page.context().route('**/api/workspace/read/selection',async route=>{
    const command=route.request().postDataJSON();calls.push(command);
    if(command.ids.length===5&&!interrupted){interrupted=true;await route.fulfill({status:503,json:{code:'IO',message:'Synthetic recovery interruption'}});}
    else await route.continue();
@@ -71,12 +71,12 @@ test('large recovery retries its pinned batch, cancels without losing the source
   await expect(recovery(page)).toBeVisible();expect(calls.map(c=>c.ids.length)).toEqual([20,5,5]);expect(calls[2]).toEqual(calls[1]);
   await expect(recovery(page).locator('.record-conflict')).toHaveCount(0);
   await recovery(page).getByRole('button',{name:'Cancel',exact:true}).click();await expect(draftList(page)).toBeVisible();
-  await page.unroute('**/api/workspace/read/selection');
-  await page.route('**/api/workspace/read/selection',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted read'}}));
+  await page.context().unroute('**/api/workspace/read/selection');
+  await page.context().route('**/api/workspace/read/selection',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted read'}}));
   await draftList(page).getByRole('button',{name:'Review draft',exact:true}).click();await expect(loading(page).getByRole('alert')).toBeVisible();
   await page.keyboard.press('Escape');await expect(draftList(page)).toBeVisible();expect(await f.drafts.read(f.draftId)).not.toBeNull();
   await draftList(page).getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Observation 00');
-  await page.unroute('**/api/workspace/read/selection');
+  await page.context().unroute('**/api/workspace/read/selection');
   await reviewDraft(page);await expect(recovery(page).locator('.record-conflict')).toHaveCount(1);await expect(recovery(page)).toContainText('Changed in another window');
   await recovery(page).getByLabel('Your version',{exact:false}).check();await recovery(page).getByRole('button',{name:'Continue editing',exact:true}).click();
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
@@ -91,12 +91,12 @@ test('a committed large save retries loading without resubmitting and preserves 
  try{
   await applyDraft(page);
   const gate=new Promise(resolve=>release=resolve);
-  await page.route('**/api/research/records/save',async route=>{await gate;await route.continue();});
+  await page.context().route('**/api/research/records/save',async route=>{await gate;await route.continue();});
   const request=page.waitForRequest(r=>r.url().endsWith('/api/research/records/save'));
   await page.getByRole('button',{name:'Save record',exact:true}).click();await request;
   await page.getByLabel('Summary / context',{exact:true}).fill('Typed during the large save');
   let failed=false;const batches=[];
-  await page.route('**/api/workspace/read/selection',async route=>{
+  await page.context().route('**/api/workspace/read/selection',async route=>{
    const command=route.request().postDataJSON();batches.push(command);
    if(command.ids.length===5&&!failed){failed=true;await route.fulfill({status:503,json:{code:'IO',message:'Synthetic saved-version interruption'}});}
    else await route.continue();
@@ -118,13 +118,13 @@ test('cancelling a saved selection reload retains the checkpoint and retry compa
  const f=await fixture(page);
  try{
   await applyDraft(page);
-  await page.route('**/api/workspace/read/selection',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic reload interruption'}}));
+  await page.context().route('**/api/workspace/read/selection',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic reload interruption'}}));
   await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(loading(page).getByRole('alert')).toBeVisible();
   const committed=(await f.workspace.outline()).etag;
   await loading(page).getByRole('button',{name:'Cancel loading',exact:true}).click();await expect(page.locator('#notice')).toContainText('Your records were saved, but loading them was cancelled');
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Recovered Observation 00');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
   expect((await f.drafts.list({workspaceId:f.book.id})).drafts).toHaveLength(1);
-  await page.unroute('**/api/workspace/read/selection');
+  await page.context().unroute('**/api/workspace/read/selection');
   await page.getByRole('button',{name:'Save record',exact:true}).click();
   const review=page.getByRole('dialog',{name:'Review record changes',exact:true});await expect(review).toBeVisible();await expect(review.locator('.record-conflict')).toHaveCount(0);
   await review.getByRole('button',{name:'Continue editing',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
@@ -146,7 +146,7 @@ test('cancelling an in-flight recovery ignores its late response and a locked se
  const f=await fixture(page);let release=()=>{};
  try{
   const gate=new Promise(resolve=>release=resolve);let started;const pending=new Promise(resolve=>started=resolve);
-  await page.route('**/api/workspace/read/selection',async route=>{
+  await page.context().route('**/api/workspace/read/selection',async route=>{
    if(route.request().postDataJSON().ids.length!==5){await route.continue();return;}
    const response=await route.fetch();started();await gate;await route.fulfill({response});
   });
@@ -154,7 +154,7 @@ test('cancelling an in-flight recovery ignores its late response and a locked se
   await loading(page).getByRole('button',{name:'Cancel loading',exact:true}).click();await expect(draftList(page)).toBeVisible();
   release();await page.unrouteAll({behavior:'wait'});await expect(recovery(page)).not.toBeVisible();await expect(draftList(page)).toBeVisible();
   expect(await f.drafts.read(f.draftId)).not.toBeNull();
-  await page.route('**/api/workspace/read/selection',async route=>{
+  await page.context().route('**/api/workspace/read/selection',async route=>{
    if(route.request().postDataJSON().ids.length===5){
     const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);
    }

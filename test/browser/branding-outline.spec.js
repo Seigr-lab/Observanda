@@ -41,7 +41,7 @@ for(const count of [42,420])test('branding searches scopes and saves without loa
   expect(await scope.locator('option').count()).toBeLessThan(10);
   await page.getByLabel('Add logo',{exact:true}).setInputFiles(svg);await expect(page.getByLabel('Logo 1 alternative text')).toBeVisible({timeout:20000});
   await page.getByLabel('Logo 1 alternative text').fill('A private record mark');
-  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic branding interruption'}}),{times:1});
+  await page.context().route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic branding interruption'}}),{times:1});
   await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic branding interruption');await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
   await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();await expect(scope.locator('option:checked')).toHaveText('Record: '+selected.title);await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
@@ -61,12 +61,12 @@ test('record branding retries failed names, rejects missing targets and ignores 
  test.setTimeout(90000);const f=await fixture(page,42);
  try{
   await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();
-  await page.route('**/api/workspace/read/labels',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic name interruption'}}),{times:1});
+  await page.context().route('**/api/workspace/read/labels',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic name interruption'}}),{times:1});
   await page.evaluate(id=>location.hash='#/branding/'+encodeURIComponent('entry:'+id),f.book.entries[0].id);
   await expect(page.locator('main [role="alert"]')).toHaveText('Synthetic name interruption');await expect(page.getByLabel('Add logo',{exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'Retry record name',exact:true}).click();await expect(page.getByLabel('Branding scope').locator('option:checked')).toHaveText('Record: '+f.book.entries[0].title);await expect(page.getByLabel('Add logo',{exact:true})).toBeEnabled();
   let release,arrived;const held=new Promise(resolve=>release=resolve),received=new Promise(resolve=>arrived=resolve);
-  await page.route('**/api/workspace/read/labels',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route('**/api/workspace/read/labels',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await page.evaluate(id=>location.hash='#/branding/'+encodeURIComponent('entry:'+id),f.book.entries[1].id);await received;
   await page.getByLabel('Branding scope').selectOption('home');release();await expect(page.getByLabel('Branding scope')).toHaveValue('home');await expect(page.getByLabel('Add logo',{exact:true})).toBeEnabled();
   await page.evaluate(id=>location.hash='#/branding/'+encodeURIComponent('entry:'+id),randomUUID());

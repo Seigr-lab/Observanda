@@ -84,7 +84,7 @@ test('create, edit, persist, customize, review, and download an independent note
   await page.getByLabel('Value 2', { exact: true }).fill('8');
   let releaseCommit;const commitGate=new Promise(resolve=>{releaseCommit=resolve;});
   const applyRoute='**/api/**/research/drafts/review/apply';
-  await page.route(applyRoute,async route=>{await commitGate;await route.continue();},{times:1});
+  await page.context().route(applyRoute,async route=>{await commitGate;await route.continue();},{times:1});
   try{
     const committing=page.waitForRequest(applyRoute);
     await page.locator('.section-save [data-action=save]').click();
@@ -95,17 +95,17 @@ test('create, edit, persist, customize, review, and download an independent note
     await expect(page.getByLabel('Record title')).toHaveValue('First green leaves');
   }finally{releaseCommit();}
   await expect(page.locator('.record-editing')).toContainText('Two leaves opened today.',{timeout:15000});
-  await page.unroute(applyRoute);
+  await page.context().unroute(applyRoute);
   await page.reload();await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
   await navigate(page,'Dashboard');await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   let releasePolicy,policyArrived;const policyGate=new Promise(resolve=>{releasePolicy=resolve;}),oldOwnerLoading=new Promise(resolve=>{policyArrived=resolve;});
   const ownedPolicy='**/api/projects/*/lab-books/*/media-policy';
-  await page.route(ownedPolicy,async route=>{const response=await route.fetch();policyArrived();await policyGate;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await page.context().route(ownedPolicy,async route=>{const response=await route.fetch();policyArrived();await policyGate;await route.fulfill({response}).catch(()=>{});},{times:1});
   try{
     await page.goBack();await oldOwnerLoading;
     await navigate(page,'Dashboard');await navigate(page,'All records');
     await expect(page.getByRole('heading',{name:'All records',exact:true})).toBeVisible();
-  }finally{releasePolicy();await page.unroute(ownedPolicy);}
+  }finally{releasePolicy();await page.context().unroute(ownedPolicy);}
   await expect(page).toHaveURL(/#\/records$/);
   await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toHaveCount(0);
   const ownerReads=[];const trackOwnerRead=request=>{if(/\/lab-books\/[^/]+\/workspace\/read\/start$/.test(request.url()))ownerReads.push(request.url());};page.on('request',trackOwnerRead);
@@ -158,7 +158,7 @@ test('edits made while a save is in flight are kept, then saved on the next requ
   await page.getByRole('button', { name: 'Watching a seed unfold' }).click();
   await page.getByRole('button',{name:'Edit record',exact:true}).click();
   let release; const waiting = new Promise(resolve => { release = resolve; });
-  await page.route('**/api/research/records/save', async route => { await waiting; await route.continue(); });
+  await page.context().route('**/api/research/records/save', async route => { await waiting; await route.continue(); });
   await page.getByLabel('Summary / context').fill('First draft');
   const sent=page.waitForRequest('**/api/research/records/save');
   await page.locator('.section-save [data-action=save]').click();
@@ -168,7 +168,7 @@ test('edits made while a save is in flight are kept, then saved on the next requ
   await expect(page.locator('.section-save [data-action=save]')).toBeEnabled();
   await expect(page.getByLabel('Summary / context')).toHaveText('Newer draft while saving');
   await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
-  await page.unroute('**/api/research/records/save');
+  await page.context().unroute('**/api/research/records/save');
   await page.locator('.section-save [data-action=save]').click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();

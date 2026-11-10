@@ -68,7 +68,7 @@ test('select files across pages and resume attachment after a lost committed rep
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='150%');
   expect(await picker.evaluate(el=>el.scrollWidth<=el.clientWidth+2)).toBe(true);await dialog.screenshot({path:info.outputPath('batch-selection-phone.png')});
   let lost=false;
-  await page.route('**/api/research/materials/association-step',async route=>{if(!lost){lost=true;await route.fetch();await route.abort('failed');}else await route.continue();});
+  await page.context().route('**/api/research/materials/association-step',async route=>{if(!lost){lost=true;await route.fetch();await route.abort('failed');}else await route.continue();});
   await dialog.getByRole('button',{name:'Attach selected files',exact:true}).click();
   await expect(dialog.locator('[data-association-error]')).not.toBeEmpty();await expect(dialog.getByRole('button',{name:'Continue attaching',exact:true})).toBeVisible();
   expect((await materials.associations.list({recordId:second.id})).items[0].attached).toBe(32);
@@ -89,9 +89,9 @@ test('select files across pages and resume attachment after a lost committed rep
    if(i)await picker.getByRole('button',{name:'More sources',exact:true}).click();
    await picker.getByRole('button',{name:'Select displayed sources',exact:true}).click();await expect(picker.locator('[data-selection]')).toContainText(((i+1)*20)+' selected');
   }
-  await page.unroute('**/api/research/materials/association-step');let release,entered;
+  await page.context().unroute('**/api/research/materials/association-step');let release,entered;
   const committed=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve);
-  await page.route('**/api/research/materials/association-step',async route=>{const response=await route.fetch();entered();await held;await route.fulfill({response});});
+  await page.context().route('**/api/research/materials/association-step',async route=>{const response=await route.fetch();entered();await held;await route.fulfill({response});});
   await dialog.getByRole('button',{name:'Attach selected files',exact:true}).click();await committed;
   await dialog.getByRole('button',{name:'Pause attaching',exact:true}).click();release();
   await expect(dialog.getByRole('button',{name:'End this attachment task',exact:true})).toBeVisible();await expect(dialog).toContainText('32 of 60 files attached');

@@ -15,13 +15,13 @@ test('figure source preparation disables conflicting controls and restores them 
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
   let entered;const requested=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
-  await page.route('**/api/research/materials/figure-sources',async route=>{entered();await waiting;await route.continue();});
+  await page.context().route('**/api/research/materials/figure-sources',async route=>{entered();await waiting;await route.continue();});
   const cards=page.locator('.record-figures > [data-figure-cards] > .figure-workbench'),add=page.getByRole('button',{name:'Add multi-panel figure',exact:true});
   await cards.first().getByRole('button',{name:'Duplicate',exact:true}).click();await requested;
   await expect(add).toBeDisabled();await expect(cards.first().getByLabel('Value 1',{exact:true})).toBeDisabled();release();
   await expect(cards).toHaveCount(2);await expect(add).toBeEnabled();await page.unrouteAll({behavior:'wait'});
   await add.click();await expect(page.locator('.figure-composition')).toHaveCount(1);
-  await page.route('**/api/research/materials/figure-sources',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic source interruption'})}));
+  await page.context().route('**/api/research/materials/figure-sources',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic source interruption'})}));
   await cards.first().getByRole('button',{name:'Duplicate',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic source interruption');
   await expect(add).toBeEnabled();await expect(cards.first().getByLabel('Value 1',{exact:true})).toBeEnabled();await expect(cards).toHaveCount(3);
  }finally{release?.();await page.unrouteAll({behavior:'wait'});await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

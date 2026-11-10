@@ -12,7 +12,7 @@ import {clearVault} from '../../src/encryption.js';
 import {decodeNumeralClipboard} from '../../src/web/numeral-clipboard.js';
 
 test('typed clipboard refuses unknown context and stale reads without changing drafts or inferring ordinary text',async({page})=>{
- await page.route('https://numeral.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="host"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.context().route('https://numeral.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="host"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
  await page.goto('https://numeral.test/');await page.evaluate(async()=>{
   const {numeralClipboardControls,wireNumeralClipboard}=await import('/numeral-clipboard-ui.js'),{encodeNumeralClipboard}=await import('/numeral-clipboard.js');window.encoded=encodeNumeralClipboard({spelling:'0010',context:{version:1,representation:'radix',radix:6}});window.clipboard=encoded;window.hold=false;window.release=null;
   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{readText:()=>hold?new Promise(resolve=>release=resolve):Promise.resolve(clipboard),writeText:async value=>{clipboard=value;}}});

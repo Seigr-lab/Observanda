@@ -38,7 +38,7 @@ test('record transfer UI keeps its source through owner access, cancellation and
   const original=await f.workspace.catalogue(async store=>store.member(await store.snapshot(),source.id)),saved=await destination.catalogue(async store=>store.member(await store.snapshot(),source.id));
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));
   let receipt=null,needsBookAccess=true,loseCompletion=true,failCleanup=true;
-  await page.route('**/api/research/records/transfer/*',async route=>{
+  await page.context().route('**/api/research/records/transfer/*',async route=>{
    const request=route.request(),operation=new URL(request.url()).pathname.split('/').at(-1),command=request.postDataJSON();calls.push({operation,command});
    const reply=value=>route.fulfill({status:200,contentType:operation==='status'?'application/json':'application/x-ndjson',body:operation==='status'?JSON.stringify(value):JSON.stringify({result:value})+'\n'});
    expect(command.workspaceId).toBe(book.id);expect(command.recordId).toBe(source.id);

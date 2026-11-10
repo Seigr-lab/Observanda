@@ -12,7 +12,7 @@ const origin='http://127.0.0.1:48218', base='/api/website-files/preview/site/'+r
 
 async function fixture(page){
  let published;
- await page.route(origin+'/**',async route=>{
+ await page.context().route(origin+'/**',async route=>{
   const url=new URL(route.request().url());
   if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:'<style>body{display:grid;grid-template-columns:22rem 1fr}iframe{width:100%;height:720px}</style><main id="styles"></main><iframe title="Canvas" sandbox="allow-same-origin" src="'+base+'index.html?canvas=1"></iframe>'});
   if(url.searchParams.has('canvas'))return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'none'"},body:'<title>Canvas</title>'});

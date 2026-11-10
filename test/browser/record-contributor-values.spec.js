@@ -30,8 +30,8 @@ test('reader contributor authoring recovers additions and removals, reviews conf
   await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();await recover();
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('');await expect(dialog.getByLabel('Role or contribution',{exact:true})).toHaveValue('Field work');
   await save();await expect(dialog).toBeVisible();await dialog.getByLabel('Name',{exact:true}).fill('Recovered contributor');
-  let dropped=false;await page.route('**/api/research/records/values/save',async route=>{if(dropped)return route.continue();dropped=true;await route.fetch();await route.abort('failed');});
-  await save();await expect(dialog.locator('[data-writing-error]')).not.toBeEmpty();await save();await expect(dialog).not.toBeVisible();await page.unroute('**/api/research/records/values/save');
+  let dropped=false;await page.context().route('**/api/research/records/values/save',async route=>{if(dropped)return route.continue();dropped=true;await route.fetch();await route.abort('failed');});
+  await save();await expect(dialog.locator('[data-writing-error]')).not.toBeEmpty();await save();await expect(dialog).not.toBeVisible();await page.context().unroute('**/api/research/records/values/save');
   await tail();await expect(page.locator('.record-contributor-values')).toContainText('Recovered contributor');
   const added=await new RecordContent(f.workspace).read({workspaceId:book.id,recordId:record.id,pagedHeader:true,windows:{contributors:9}});expect(added.collections.contributors.total).toBe(10);const created=added.header.contributors[0];
   await page.getByRole('button',{name:'Edit contributor Contributor 8',exact:true}).click();await dialog.getByLabel('Name',{exact:true}).fill('My correction');

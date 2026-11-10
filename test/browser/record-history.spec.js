@@ -91,7 +91,7 @@ test('retained history pages keep navigation and selected reference inspection t
   await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'History',exact:true}).click();
   const dialog=page.locator('#dialog'),items=dialog.locator('.record-history-list li');await expect(items).toHaveCount(20);
   await expect(dialog).toContainText('Versions 1–20. More retained references remain to be checked.');await expect(dialog).not.toContainText('No earlier versions yet.');
-  let fail=true;await page.route('**/api/research/records/history/list',route=>fail?(fail=false,route.abort('failed')):route.continue());
+  let fail=true;await page.context().route('**/api/research/records/history/list',route=>fail?(fail=false,route.abort('failed')):route.continue());
   const previous=await items.allTextContents();await dialog.getByRole('button',{name:'Older versions',exact:true}).click();
   await expect(page.locator('#notice')).toBeVisible();expect(await items.allTextContents()).toEqual(previous);await expect(dialog.getByRole('button',{name:'Newer versions',exact:true})).toBeDisabled();
   await dialog.getByRole('button',{name:'Older versions',exact:true}).click();await expect(dialog).toContainText('Versions 21–40.');

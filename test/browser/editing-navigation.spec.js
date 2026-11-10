@@ -32,10 +32,10 @@ test('leaving an editor offers Stay, Discard and Save without carrying mistakes 
 
 test('failed saves keep the decision open and preserve the draft for correction or retry',async({page})=>{
   await editWebsite(page);await page.getByLabel('Page title',{exact:true}).fill('Keep this draft');
-  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic write failure'})}));
+  await page.context().route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic write failure'})}));
   await navigate(page,'Projects');await choose(page,'Save and continue');
   await expect(guard(page).getByRole('alert')).toHaveText('Synthetic write failure');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Keep this draft');
-  await page.unroute('**/api/websites/editor/save');await choose(page,'Save and continue');await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
+  await page.context().unroute('**/api/websites/editor/save');await choose(page,'Save and continue');await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
   expect((await new WebsiteSites(fixture.workspace).read(null)).book.pages[0].title).toBe('Keep this draft');
 });
 
@@ -90,14 +90,14 @@ test('menu placement, size, visibility and ordering are previewable, discardable
 test('failed website saves retain page drafts; repeated saves never duplicate a page and discard removes failed edits',async({page})=>{
   await navigate(page,'Website editor');await page.getByRole('button',{name:'Add page',exact:true}).click();
   await page.getByLabel('Page title',{exact:true}).fill('One saved page');await page.getByLabel('Page introduction',{exact:true}).fill('Original content');
-  let release;const waiting=new Promise(resolve=>{release=resolve;});await page.route('**/api/websites/editor/save',async route=>{await waiting;await route.continue();});
+  let release;const waiting=new Promise(resolve=>{release=resolve;});await page.context().route('**/api/websites/editor/save',async route=>{await waiting;await route.continue();});
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();release();
-  await expect(page.locator('#save-status')).toHaveText('Saved');await page.unroute('**/api/websites/editor/save');
+  await expect(page.locator('#save-status')).toHaveText('Saved');await page.context().unroute('**/api/websites/editor/save');
   let saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.pages).toHaveLength(1);
   await page.getByLabel('Page title',{exact:true}).fill('Unwanted failed edit');
-  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic form write failure'})}));
+  await page.context().route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic form write failure'})}));
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic form write failure');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Unwanted failed edit');
-  await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('One saved page');await page.unroute('**/api/websites/editor/save');
+  await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('One saved page');await page.context().unroute('**/api/websites/editor/save');
   await task(page,'Page');await page.getByLabel('Editing area',{exact:true}).selectOption('footer');await page.getByLabel('Footer text').fill('A separate intended change');await page.locator('.section-save [data-action=save]').click();await expect(page.locator('#save-status')).toHaveText('Saved');saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.pages).toHaveLength(1);expect(saved.pages[0].title).toBe('One saved page');
 });
 

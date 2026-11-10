@@ -52,7 +52,7 @@ test('a real module draft stays editable while its checkpoint waits and a discar
   await page.goto(app.url);await navigate(page,'Calendar & planning');
   await page.getByRole('button',{name:'Subscribe',exact:true}).click();
   const began=new Promise(resolve=>waiting=resolve);
-  await page.route('**/api/modules/drafts/write',async route=>{waiting();await gate;await route.continue().catch(()=>{});});
+  await page.context().route('**/api/modules/drafts/write',async route=>{waiting();await gate;await route.continue().catch(()=>{});});
   await page.getByLabel('Name',{exact:true}).fill('Retained subscription');await began;
   await page.locator('.module-tabs').getByRole('button',{name:'Events',exact:true}).click();await expect(page.locator('main h1')).toHaveText('Events');
   await page.locator('.module-drafts').getByRole('button',{name:'Retained subscription',exact:true}).click();

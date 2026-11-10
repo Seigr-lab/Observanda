@@ -63,7 +63,7 @@ test('leaving an inspection ignores its late result and cancellation permits a f
  await migrationFixture(source,{creative:true});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
  let release,entered;const blocked=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve);let first=true,calls=0,releaseCancelled,enteredCancelled;const cancelledRequest=new Promise(resolve=>enteredCancelled=resolve),cancelledReply=new Promise(resolve=>releaseCancelled=resolve);
- await page.route('**/api/migration/inventory',async route=>{
+ await page.context().route('**/api/migration/inventory',async route=>{
   calls++;if(calls===3){enteredCancelled();await cancelledReply;try{await route.fulfill({status:200,contentType:'application/x-ndjson',body:'{\"result\":{\"complete\":true}}\\n'});}catch{}return;}
   if(first){first=false;entered();await blocked;try{await route.fulfill({status:200,contentType:'application/x-ndjson',body:'{"result":{"complete":true}}\n'});}catch{}return;}
   await route.continue();

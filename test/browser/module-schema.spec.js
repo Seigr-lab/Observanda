@@ -31,7 +31,7 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
   await expect(main.getByLabel('Field label',{exact:true})).toHaveCount(10);
   await expect(main.locator('[data-schema-choice]')).toHaveCount(20);
   let loseAcknowledgements=true;
-  await page.route('**/api/modules/drafts/transfer/*',async route=>{
+  await page.context().route('**/api/modules/drafts/transfer/*',async route=>{
    const response=await route.fetch({timeout:60000}),reply=await response.json();
    if(loseAcknowledgements&&response.ok()&&reply.etag)return route.fulfill({status:503,json:{message:'Lost large checkpoint reply'}});
    await route.fulfill({response});

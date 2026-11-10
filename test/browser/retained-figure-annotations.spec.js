@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function fixture(page){
- await page.route('https://figure-annotations.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.context().route('https://figure-annotations.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
  await page.goto('https://figure-annotations.test/');await page.evaluate(async()=>{
   window.helpers=await import('/retained-figure-annotation-ui.js');window.header={id:crypto.randomUUID(),kind:'line',title:'Log measurements',x:{kind:'number',scale:'linear',label:'X'},y:{scale:'log',label:'Y'},legend:true};window.id=crypto.randomUUID();window.seriesId=crypto.randomUUID();window.calls=[];window.root=document.querySelector('main');
   window.call=async(operation,{selection})=>{calls.push({operation,selection});return {items:selection.collection==='series'?[{id:seriesId,plotId:header.id,position:selection.offset,value:{name:'Measured series'}}]:[{id:crypto.randomUUID(),plotId:header.id,seriesId,position:selection.offset,value:{x:2,y:4,error:null}}]};};

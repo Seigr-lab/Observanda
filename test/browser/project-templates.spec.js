@@ -38,7 +38,7 @@ async function fixture(configure=()=>{},password=''){
  };
  return {...f,app,directory,readProject,readLabBooks,close:async()=>{await app.close();await owner.close();detach();await clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-types-ui-'))throw Error('Invalid fixture');await rm(directory,{recursive:true,force:true});}};
 }
-const rejectSave=(page)=>page.route(/\/api\/(?:projects(?:\/[a-f0-9-]+\/(?:workspace\/structure|settings\/save)|\/create)|workspace\/structure)$/,route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({code:'INVALID',message:'Synthetic rejected save'})}),{times:1});
+const rejectSave=(page)=>page.context().route(/\/api\/(?:projects(?:\/[a-f0-9-]+\/(?:workspace\/structure|settings\/save)|\/create)|workspace\/structure)$/,route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({code:'INVALID',message:'Synthetic rejected save'})}),{times:1});
 const noTemplateEditor=async dialog=>{
  for(const label of ['Template name','Record type name','Field label','Purpose / guidance'])await expect(dialog.getByLabel(label,{exact:true})).toHaveCount(0);
  for(const label of ['Use template','Customize template','Add record type','Add field','Save and create lab book'])await expect(dialog.getByRole('button',{name:label,exact:true})).toHaveCount(0);

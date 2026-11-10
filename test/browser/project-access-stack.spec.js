@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 async function fixture(page){
- await page.route('http://access.test/**',async route=>{
+ await page.context().route('http://access.test/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   if(path==='/')return route.fulfill({contentType:'text/html',body:'<dialog id="dialog"><form><label>Analysis title<input value="Retained comparison"></label><label>Column mapping<select><option>Value</option><option selected>State</option></select></label><button type="button" id="choose">Choose source</button></form></dialog>'});
   return route.fulfill({contentType:path.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+path,import.meta.url),'utf8')});

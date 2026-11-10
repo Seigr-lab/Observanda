@@ -49,14 +49,14 @@ test('failed and malformed run pages retry and late responses cannot replace ano
  test.setTimeout(90000);const f=await fixture(page);let release;
  try{
   const runs=area(page);await expect(runs).toContainText('1–10 of 23');
-  await page.route('**/api/research/records/runs',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Synthetic page interruption'})}));
+  await page.context().route('**/api/research/records/runs',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Synthetic page interruption'})}));
   await runs.getByRole('button',{name:'Next runs',exact:true}).click();await expect(runs.getByRole('alert')).toHaveText('Synthetic page interruption');
-  await page.unroute('**/api/research/records/runs');await runs.getByRole('button',{name:'Retry runs',exact:true}).click();await expect(runs).toContainText('11–20 of 23');
-  await page.route('**/api/research/records/runs',async route=>{const response=await route.fetch(),body=await response.json();body.runs[0].revision='bad';await route.fulfill({response,json:body});});
+  await page.context().unroute('**/api/research/records/runs');await runs.getByRole('button',{name:'Retry runs',exact:true}).click();await expect(runs).toContainText('11–20 of 23');
+  await page.context().route('**/api/research/records/runs',async route=>{const response=await route.fetch(),body=await response.json();body.runs[0].revision='bad';await route.fulfill({response,json:body});});
   await runs.getByRole('button',{name:'Compare conditions and changes',exact:true}).click();await expect(runs.getByRole('alert')).toContainText('response was incomplete');
-  await page.unroute('**/api/research/records/runs');await runs.getByRole('button',{name:'Retry runs',exact:true}).click();await expect(runs.getByRole('region',{name:'Run comparison',exact:true})).toBeVisible();
+  await page.context().unroute('**/api/research/records/runs');await runs.getByRole('button',{name:'Retry runs',exact:true}).click();await expect(runs.getByRole('region',{name:'Run comparison',exact:true})).toBeVisible();
   let ready;const started=new Promise(resolve=>ready=resolve),gate=new Promise(resolve=>release=resolve);
-  await page.route('**/api/research/records/runs',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
+  await page.context().route('**/api/research/records/runs',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
   await runs.getByRole('button',{name:'Next runs',exact:true}).click();await started;
   await page.evaluate(id=>location.hash='#/records/'+id,f.method.id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(f.method.title);
   release();await page.unrouteAll({behavior:'wait'});await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(f.method.title);await expect(area(page)).not.toContainText('21–23');

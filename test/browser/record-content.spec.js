@@ -28,7 +28,7 @@ test('normal record reading pages stored sections without selection hydration an
   expect(requests.some(url=>url.endsWith('/start'))).toBe(false);
   expect(requests.some(url=>/\/(selection|page)$/.test(url))).toBe(false);
   let interrupt=true;const cursors=[];
-  await page.route('**/api/workspace/read/record-content',async route=>{
+  await page.context().route('**/api/workspace/read/record-content',async route=>{
    const command=route.request().postDataJSON();if(command.cursor&&command.search){cursors.push(command.cursor);if(interrupt){interrupt=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic interrupted reading request'})});return;}}
    await route.continue();
   });
@@ -36,13 +36,13 @@ test('normal record reading pages stored sections without selection hydration an
   await expect(page.getByRole('alert')).toContainText('Synthetic interrupted reading request');await page.getByRole('button',{name:'Try again',exact:true}).click();
   await expect(page.locator('#record-section-'+record.sections[256].id)).toBeFocused();
   await expect(page.getByRole('button',{name:'Next sections',exact:true})).toBeDisabled();
-  expect(cursors[0]).toBe(cursors[1]);await page.unroute('**/api/workspace/read/record-content');
+  expect(cursors[0]).toBe(cursors[1]);await page.context().unroute('**/api/workspace/read/record-content');
   let resume;const held=new Promise(resolve=>resume=resolve);let waiting;const reached=new Promise(resolve=>waiting=resolve);let pause=true;
-  await page.route('**/api/workspace/read/record-content',async route=>{if(pause&&route.request().postDataJSON().cursor){pause=false;waiting();await held;}await route.continue().catch(()=>{});});
+  await page.context().route('**/api/workspace/read/record-content',async route=>{if(pause&&route.request().postDataJSON().cursor){pause=false;waiting();await held;}await route.continue().catch(()=>{});});
   await page.getByLabel('Find section heading',{exact:true}).fill('Observation 240');await page.getByRole('button',{name:'Find next',exact:true}).click();await reached;
   await page.getByRole('button',{name:'Cancel loading',exact:true}).click();resume();await expect(page.getByRole('alert')).toContainText('Loading stopped');
   await expect(page.locator('#record-section-'+record.sections[256].id)).toBeVisible();
-  await page.getByRole('button',{name:'Try again',exact:true}).click();await expect(page.locator('#record-section-'+record.sections[239].id)).toBeFocused();await page.unroute('**/api/workspace/read/record-content');
+  await page.getByRole('button',{name:'Try again',exact:true}).click();await expect(page.locator('#record-section-'+record.sections[239].id)).toBeFocused();await page.context().unroute('**/api/workspace/read/record-content');
   await page.getByLabel('Go to section number',{exact:true}).fill('129');await page.getByRole('button',{name:'Go',exact:true}).click();
   await expect(page.locator('#record-section-'+record.sections[128].id)).toBeFocused();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');

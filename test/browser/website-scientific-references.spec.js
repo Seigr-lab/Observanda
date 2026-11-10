@@ -60,7 +60,7 @@ test('captions, descriptive links and a bibliography survive native file save, r
   const fresh=await store.open(id),publication=await WebsiteFilesCandidate.open(store,id,fresh.site.revision);await publication.verify();
   const chunks=[];for await(const bytes of contentStream(publication.files.get('index.html')))chunks.push(bytes);
   const html=Buffer.concat(chunks).toString();expect(html).not.toMatch(/data-observanda-editor|contenteditable|Released sample/i);
-  await page.route('https://field.test/**',route=>route.fulfill({contentType:'text/html',body:html}));await page.goto('https://field.test/');
+  await page.context().route('https://field.test/**',route=>route.fulfill({contentType:'text/html',body:html}));await page.goto('https://field.test/');
   await expect(page.locator('table > caption')).toHaveText('Observed insects by plot');await page.getByRole('link',{name:'Compare the plot counts'}).click();await expect(page).toHaveURL('https://field.test/#'+tableId);
   await page.getByRole('link',{name:'Field group (2025)'}).click();await expect(page).toHaveURL('https://field.test/#'+refId);
   await expect(page.locator('cite')).toHaveText('Field sampling methods');await expect(page.getByRole('link',{name:'https://doi.org/10.1234/field.25'})).toHaveAttribute('href','https://doi.org/10.1234/field.25');

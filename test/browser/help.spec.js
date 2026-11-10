@@ -56,14 +56,14 @@ test('language and documentation failures can be retried without accepting a bro
  const f=await fixture();try{
   await page.goto(f.app.url);await page.evaluate(()=>location.hash='#/preferences/help');
   await expect(page.getByRole('link',{name:'Records, methods and runs',exact:true})).toBeVisible();
-  await page.route('**/locales/es/navigation.json',route=>route.fulfill({status:503,body:'Unavailable'}));
+  await page.context().route('**/locales/es/navigation.json',route=>route.fulfill({status:503,body:'Unavailable'}));
   await page.locator('[data-language-choice]').selectOption('es');
   await expect(page.locator('.language-preference [role=alert]')).toContainText('previous choice is unchanged');
   await expect(page.locator('[data-language-choice]')).toHaveValue('en');
-  await page.unroute('**/locales/es/navigation.json');
-  await page.route('**/locales/es/guide.json',route=>route.fulfill({status:503,body:'Unavailable'}));
+  await page.context().unroute('**/locales/es/navigation.json');
+  await page.context().route('**/locales/es/guide.json',route=>route.fulfill({status:503,body:'Unavailable'}));
   await page.locator('[data-language-choice]').selectOption('es');await expect(page.locator('.help-view [role=alert]')).toContainText('No se ha podido');
-  await page.unroute('**/locales/es/guide.json');await page.getByRole('button',{name:'Reintentar',exact:true}).click();
+  await page.context().unroute('**/locales/es/guide.json');await page.getByRole('button',{name:'Reintentar',exact:true}).click();
   await expect(page.getByRole('link',{name:'Registros, métodos y ejecuciones',exact:true})).toBeVisible();
  }finally{await f.close();}
 });
@@ -94,10 +94,10 @@ test('a missing saved language falls back to English without breaking applicatio
  const f=await fixture();try{
   await page.goto(f.app.url);await page.evaluate(()=>location.hash='#/preferences/help');
   await page.locator('[data-language-choice]').selectOption('nn');await expect(page.locator('.preferences-heading')).toContainText('Innstillingar');
-  await page.route('**/locales/nn/navigation.json',route=>route.fulfill({status:503,body:'Unavailable'}));await page.reload();
+  await page.context().route('**/locales/nn/navigation.json',route=>route.fulfill({status:503,body:'Unavailable'}));await page.reload();
   await expect(page.locator('.language-preference [role=alert]')).toContainText('English is being used');
   await expect(page.getByRole('searchbox',{name:'Search documentation'})).toBeVisible();
-  await page.unroute('**/locales/nn/navigation.json');await page.locator('[data-language-choice]').selectOption('nn');
+  await page.context().unroute('**/locales/nn/navigation.json');await page.locator('[data-language-choice]').selectOption('nn');
   await expect(page.locator('.preferences-heading')).toContainText('Innstillingar');
  }finally{await f.close();}
 });

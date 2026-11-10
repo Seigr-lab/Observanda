@@ -8,7 +8,7 @@ export async function mountFilesEditor(page,{resource=()=>'',hash='',httpOrigin}
   const res=await fetch(route,{method:'POST',signal,headers:{'Content-Type':'application/json',...(onProgress?{Accept:'application/x-ndjson'}:{})},body:JSON.stringify(data??{})});
   if(!res.ok)throw await res.json();return onProgress?readProgressStream(res,onProgress):res.json();}`:
   `async(route,data)=>{const response=await window.filesAPI(route,data);if(response?.errorCode)throw Object.assign(Error(response.message),{code:response.errorCode});return response;}`;
- await page.route(origin+'/**',async route=>{
+ await page.context().route(origin+'/**',async route=>{
   const url=new URL(route.request().url());if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:`<!doctype html><main id="root"></main><script type="module">
    import {websiteFilesUI} from '/website-files-ui.js';const root=document.querySelector('#root'),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
    ${httpOrigin?"import {readProgressStream} from '/progress-stream.js';":''}

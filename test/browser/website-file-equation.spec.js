@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 const web=new URL('../../src/web/',import.meta.url),labels=JSON.parse(await readFile(new URL('locales/en/websiteFiles.json',web)));
 async function mount(page,html){
- await page.route('http://equation.test/**',async route=>{
+ await page.context().route('http://equation.test/**',async route=>{
   const filename=new URL(route.request().url()).pathname.slice(1);
   if(!filename)return route.fulfill({contentType:'text/html',body:'<button id="edit">Compose</button><iframe title="Published math" sandbox="allow-same-origin"></iframe>'});
   const allowed=['website-files-equation.js','website-equation-math.js','website-equation-markup.js','website-equation-structures.js','retry-module.js','vendor/equations.js','website-files-equation.css'];

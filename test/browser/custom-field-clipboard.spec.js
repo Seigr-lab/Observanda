@@ -13,7 +13,7 @@ const context={version:1,representation:'radix-fraction',radix:6};
 const encoded=spelling=>encodeNumeralClipboard({spelling,context});
 
 test('fixed field clipboard guards targets and pending reads without consuming unrelated controls',async({page})=>{
- await page.route('https://fields.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="host"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.context().route('https://fields.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main id="host"></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
  await page.goto('https://fields.test/');await page.evaluate(async()=>{
   const {templateFieldInput}=await import('/custom-field-input.js'),{wireCustomFieldClipboard}=await import('/custom-field-clipboard-ui.js'),{encodeNumeralClipboard}=await import('/numeral-clipboard.js');
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

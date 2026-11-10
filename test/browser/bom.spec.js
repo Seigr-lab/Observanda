@@ -87,7 +87,7 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   expect((await stock()).reserved).toBe('4');
   // Lose the reply after commit: retry must recover the receipt, not consume again.
   let fail=true;
-  await page.route('**/api/modules/command*',async route=>{
+  await page.context().route('**/api/modules/command*',async route=>{
    if(fail&&route.request().postDataJSON()?.action==='bom.finish'){fail=false;const response=await route.fetch();expect(response.status()).toBe(200);await route.abort('failed');return;}
    await route.continue();
   });

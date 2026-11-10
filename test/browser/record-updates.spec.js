@@ -27,7 +27,7 @@ test('an already-open compatibility editor receives bounded saved updates and re
   await f.workspace.save(changed,base.etag);
   ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace read during update');};
   let fail=true;
-  await page.route('**/api/workspace/read/change-page',async route=>{
+  await page.context().route('**/api/workspace/read/change-page',async route=>{
    requests.push(route.request().postDataJSON());
    const response=await route.fetch();
    if(requests.length===2&&fail){fail=false;await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost page reply'}});}

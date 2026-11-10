@@ -32,10 +32,10 @@ test('shared research links retain inspected methods, preserve local writing, ex
   await expect(form.locator('[data-link-conflict]')).toBeVisible();await expect(form.getByRole('button',{name:'Save research link',exact:true})).toBeDisabled();await expect(form.getByLabel('Relationship',{exact:true})).toHaveValue('Builds on');
   await form.getByRole('button',{name:'Use latest shared link',exact:true}).click();await expect(form.getByLabel('Relationship',{exact:true})).toHaveValue('Supports');await form.getByLabel('Relationship',{exact:true}).selectOption('Builds on');
   let lost=false,command;
-  await page.route('**/api/live/request',async route=>{const data=route.request().postDataJSON();if(data.operation==='link-write'){if(!lost){lost=true;command=data.data;await route.fetch();await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic lost response'})});return;}expect(data.data).toEqual(command);}await route.continue();});
+  await page.context().route('**/api/live/request',async route=>{const data=route.request().postDataJSON();if(data.operation==='link-write'){if(!lost){lost=true;command=data.data;await route.fetch();await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic lost response'})});return;}expect(data.data).toEqual(command);}await route.continue();});
   await form.getByRole('button',{name:'Save research link',exact:true}).click();await expect(form.getByRole('button',{name:'Retry pending request',exact:true})).toBeEnabled();await expect(form.getByLabel('Relationship',{exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'Close shared books',exact:true}).click();await expect(form).toBeVisible();
-  await form.getByRole('button',{name:'Retry pending request',exact:true}).click();await expect(form).toBeHidden();await page.unroute('**/api/live/request');
+  await form.getByRole('button',{name:'Retry pending request',exact:true}).click();await expect(form).toBeHidden();await page.context().unroute('**/api/live/request');
   const saved=(await client.call('links',{recordId:source.id})).relations.find(r=>r.id===link.id);expect(saved.type).toBe('Builds on');expect(saved.target.revision).toBe(link.target.revision);
   await details.getByRole('button',{name:'Discard detail changes',exact:true}).click();
   // A target changed after selection must be inspected again, not silently pinned.

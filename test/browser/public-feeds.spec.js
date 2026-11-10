@@ -72,9 +72,9 @@ test('reconciling the same preview rebinds visible feed controls and cancels det
   f.candidate.files.set('feed-reconcile-test.js','window.replaceFeedPreview=html=>{('+disposePublicFeeds.toString()+')(document);const incoming=new DOMParser().parseFromString(html,"text/html");('+reconcileCanvas.toString()+')(document.body,incoming.body);('+enhancePublicFeeds.toString()+')(document,window,window.fetch.bind(window));};');
   await page.addScriptTag({url:new URL('feed-reconcile-test.js',f.url).href});
   let release;const held=new Promise(resolve=>{release=resolve;});
-  await page.route('**/feed-*.html',async route=>{await held;await route.continue().catch(()=>{});});
+  await page.context().route('**/feed-*.html',async route=>{await held;await route.continue().catch(()=>{});});
   await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','true');
-  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));release();await page.unroute('**/feed-*.html');
+  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));release();await page.context().unroute('**/feed-*.html');
   await expect(feed.getByLabel('Search this feed',{exact:true})).toBeVisible();expect(await items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).toEqual(initial);
   await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(items).toHaveCount(10);await expect.poll(()=>items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).not.toEqual(initial);
   await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));
@@ -144,10 +144,10 @@ test('a failed or cancelled feed request preserves its current results and other
   await page.goto(f.url);const feeds=page.locator('[data-public-feed]'),feed=feeds.first(),items=feed.locator('[data-feed-item]');
   const ids=()=>items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId)),initial=await ids();
   const other=await feeds.nth(1).locator('[data-feed-item]').evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId));
-  await page.route('**/feed-*.html',route=>route.fulfill({status:503,body:'Temporarily unavailable'}));
+  await page.context().route('**/feed-*.html',route=>route.fulfill({status:503,body:'Temporarily unavailable'}));
   await feed.getByLabel('Order',{exact:true}).selectOption('oldest');await expect(feed.getByRole('button',{name:'Retry',exact:true})).toBeVisible();expect(await ids()).toEqual(initial);
-  await page.unroute('**/feed-*.html');await feed.getByRole('button',{name:'Retry',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','false');await expect.poll(ids).not.toEqual(initial);
-  const restored=await ids();await page.route('**/feed-*.html',async route=>{await new Promise(resolve=>setTimeout(resolve,400));await route.abort().catch(()=>{});});
+  await page.context().unroute('**/feed-*.html');await feed.getByRole('button',{name:'Retry',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','false');await expect.poll(ids).not.toEqual(initial);
+  const restored=await ids();await page.context().route('**/feed-*.html',async route=>{await new Promise(resolve=>setTimeout(resolve,400));await route.abort().catch(()=>{});});
   await feed.getByLabel('Search this feed',{exact:true}).fill('absent');await feed.getByRole('button',{name:'Apply filters',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','true');await feed.getByRole('button',{name:'Cancel loading',exact:true}).click();
   await expect(feed).toHaveAttribute('aria-busy','false');expect(await ids()).toEqual(restored);await expect(feed.getByLabel('Search this feed',{exact:true})).toHaveValue('');
   expect(await feeds.nth(1).locator('[data-feed-item]').evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).toEqual(other);

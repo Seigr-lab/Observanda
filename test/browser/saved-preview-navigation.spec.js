@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 test('a preview menu tracks a click while page images are still loading',async({page})=>{
  const origin='http://127.0.0.1:48218',navigation=await readFile(new URL('../../src/web/website-files-navigation.js',import.meta.url),'utf8');
  const stalled=Promise.withResolvers();
- await page.route(origin+'/**',async route=>{
+ await page.context().route(origin+'/**',async route=>{
   switch(new URL(route.request().url()).pathname){
    case '/':return route.fulfill({contentType:'text/html',body:'<iframe sandbox="allow-same-origin" title="Preview"></iframe><output></output>'});
    case '/navigation.js':return route.fulfill({contentType:'text/javascript',body:navigation});

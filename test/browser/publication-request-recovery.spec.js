@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 async function pageModules(page){
- await page.route('https://publication-requests.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main></main><dialog id="dialog"></dialog>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.context().route('https://publication-requests.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main></main><dialog id="dialog"></dialog>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
  await page.goto('https://publication-requests.test/');
 }
 

@@ -40,13 +40,13 @@ test('initial record Save streams large authoring, replays lost acknowledgements
   const cancelled=await create(page,book.notebooks[0].id,'Cancelled before Save');await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveCount(0);
   expect((await inspect(f.workspace,cancelled)).row).toBe(null);expect((await drafts.list({workspaceId:book.id})).drafts).toEqual([]);
   const id=await create(page,book.notebooks[0].id,'Initial growing record');let checkpointEntered;const checkpointHeld=new Promise(resolve=>checkpointEntered=resolve);let lostCheckpoint=false;
-  await page.route('**/api/research/drafts/transfer/finish',async route=>{
+  await page.context().route('**/api/research/drafts/transfer/finish',async route=>{
    if(lostCheckpoint)return route.continue();lostCheckpoint=true;await route.fetch();checkpointEntered();await new Promise(resolve=>releaseCheckpoint=resolve);await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost checkpoint acknowledgement'}});
   });
   const sections=await writeLarge(page);await checkpointHeld;await page.getByLabel('Record title',{exact:true}).fill('Typed while checkpoint was streaming');releaseCheckpoint();releaseCheckpoint=null;
   await expect(page.locator('[data-record-checkpoint]')).toContainText('not checkpointed');expect((await inspect(f.workspace,id)).row).toBe(null);
   let applyEntered;const applyHeld=new Promise(resolve=>applyEntered=resolve);let lostApply=false;
-  await page.route('**/api/research/drafts/review/apply',async route=>{
+  await page.context().route('**/api/research/drafts/review/apply',async route=>{
    applyCommands.push(route.request().postDataJSON());if(lostApply)return route.continue();lostApply=true;await route.fetch();applyEntered();await new Promise(resolve=>releaseApply=resolve);await route.fulfill({status:503,json:{code:'IO',message:'Synthetic lost creation acknowledgement'}});
   });
   await page.getByRole('button',{name:'Save record',exact:true}).click();await applyHeld;

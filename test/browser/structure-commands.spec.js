@@ -92,7 +92,7 @@ test('stale structure forms keep their draft and remain keyboard usable at a nar
 test('retrying a lost structure acknowledgement reuses its receipt without creating another project',async({page})=>{
  const f=await fixture(page),dialog=page.locator('#dialog'),commands=[];let lost=true,committed=null;
  try{
-  await page.route('**/api/workspace/structure',async route=>{
+  await page.context().route('**/api/workspace/structure',async route=>{
    commands.push(route.request().postDataJSON());
    if(lost){lost=false;const response=await route.fetch();expect(response.ok()).toBe(true);committed=(await f.ws.outline()).etag;await route.abort('failed');}
    else await route.continue();

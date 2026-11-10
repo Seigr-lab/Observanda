@@ -61,9 +61,9 @@ test('closing Help cancels a pending guide load and never remounts the setup for
  let held,release;const intercepted=new Promise(resolve=>{release=resolve;});
  try{
   await page.goto(f.app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Retain this draft');
-  await page.route('**/locales/en/guide.json',route=>{held=route;release();});
+  await page.context().route('**/locales/en/guide.json',route=>{held=route;release();});
   await page.getByRole('button',{name:'Help',exact:true}).click();await intercepted;await expect(help(page).getByRole('status').filter({hasText:'Loading documentation'})).toBeVisible();
-  await page.keyboard.press('Escape');await expect(help(page)).toHaveCount(0);await held.abort().catch(()=>{});await page.unroute('**/locales/en/guide.json');
+  await page.keyboard.press('Escape');await expect(help(page)).toHaveCount(0);await held.abort().catch(()=>{});await page.context().unroute('**/locales/en/guide.json');
   await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('Retain this draft');await page.getByRole('button',{name:'Help',exact:true}).click();await expect(help(page).locator('#help-getting-started-setup')).toBeVisible();
   await page.keyboard.press('Escape');await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('Retain this draft');expect(observed.errors).toEqual([]);
  }finally{await f.close();}
@@ -74,9 +74,9 @@ test('locked Help retries failed documentation without opening research and retu
  try{
   await page.goto(f.app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   await page.getByText('Use a recovery key',{exact:true}).click();await page.getByLabel('Recovery key',{exact:true}).fill(f.recovery);
-  await page.route('**/locales/en/guide.json',route=>route.fulfill({status:503,body:'Unavailable'}));observed.requests.length=0;
+  await page.context().route('**/locales/en/guide.json',route=>route.fulfill({status:503,body:'Unavailable'}));observed.requests.length=0;
   await page.getByRole('button',{name:'Help',exact:true}).click();await expect(help(page).getByRole('alert')).toContainText('could not be loaded');
-  await page.unroute('**/locales/en/guide.json');await help(page).getByRole('button',{name:'Try again'}).click();await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
+  await page.context().unroute('**/locales/en/guide.json');await help(page).getByRole('button',{name:'Try again'}).click();await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
   await expect(help(page)).not.toContainText('Private workspace canary');await page.keyboard.press('Control+s');
   await help(page).getByRole('button',{name:'Return to form'}).click();await expect(page.getByLabel('Recovery key',{exact:true})).toHaveValue(f.recovery);
   expect(observed.requests).toEqual([]);expect((await sessionRequest(page,'get',new URL('/api/notebook',f.app.url).href)).status()).toBe(401);
@@ -114,7 +114,7 @@ test('missing-workspace Help preserves the open-folder dialog and supports direc
 test('English access labels and Help instructions follow the same resource without modifying credentials',async({page},testInfo)=>{
  const f=await fixture('locked'),observed=watch(page);
  try{
-  await page.route('**/locales/en/access.json',async route=>{
+  await page.context().route('**/locales/en/access.json',async route=>{
    const response=await route.fetch(),catalogue=await response.json();
    await route.fulfill({response,json:{...catalogue,unlock:'Open protected workspace',useRecovery:'Enter the recovery key'}});
   });
@@ -130,7 +130,7 @@ test('English access labels and Help instructions follow the same resource witho
 test('English setup messages can change without changing form values or stable template identities',async({page})=>{
  const f=await fixture(),observed=watch(page);
  try{
-  await page.route('**/locales/en/setup.json',async route=>{
+  await page.context().route('**/locales/en/setup.json',async route=>{
    const response=await route.fetch(),catalogue=await response.json();
    await route.fulfill({response,json:{...catalogue,name:'Name this workspace',continue:'Next step',createTitle:'Start your workspace'}});
   });

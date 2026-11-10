@@ -89,11 +89,11 @@ test('book reading keeps copied figures clipped to their own axes after paginati
 test('a failed reading page can retry and switching view discards a late content response',async({page})=>{
  const f=await fixture(page);let release;
  try{
-  await page.route('**/api/workspace/read/record-content',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic page interruption'})}));
+  await page.context().route('**/api/workspace/read/record-content',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic page interruption'})}));
   await page.getByRole('button',{name:'Read lab book',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Synthetic page interruption');await expect(page.locator('[data-reading-record]')).toHaveCount(0);
-  await page.unroute('**/api/workspace/read/record-content');await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(page.locator('[data-reading-record]')).toHaveCount(5);
+  await page.context().unroute('**/api/workspace/read/record-content');await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(page.locator('[data-reading-record]')).toHaveCount(5);
   let entered;const ready=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
-  await page.route('**/api/workspace/read/record-content',async route=>{const response=await route.fetch();entered();await waiting;await route.fulfill({response});});
+  await page.context().route('**/api/workspace/read/record-content',async route=>{const response=await route.fetch();entered();await waiting;await route.fulfill({response});});
   await page.getByRole('button',{name:'Next records',exact:true}).click();await ready;
   await page.getByRole('button',{name:'Record list',exact:true}).click();await expect(page.locator('.records-table tbody tr')).toHaveCount(7);release();
   await page.unrouteAll({behavior:'wait'});await expect(page.locator('[data-reading-record]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Record list',exact:true})).toHaveAttribute('aria-pressed','true');
@@ -113,9 +113,9 @@ test('lab-book reading pages a large saved record and late siblings without whol
   await heavy.getByLabel('Go to section number',{exact:true}).fill('33');await heavy.getByRole('button',{name:'Go',exact:true}).click();await expect(heavy.getByRole('heading',{name:'Observation 36',exact:true})).toBeVisible();
   expect(await entries.nth(1).evaluate(node=>node===window.retainedSiblingCard)).toBe(true);await expect(heavy.locator('.prose section[id]')).toHaveCount(4);
   // A failed independent window keeps the last successfully displayed content.
-  let failed=false;await page.route('**/api/workspace/read/record-content',async route=>{const command=route.request().postDataJSON();if(!failed&&command.recordId===record.id&&command.offset===28){failed=true;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic selected reading interruption'})});}else await route.continue();});
+  let failed=false;await page.context().route('**/api/workspace/read/record-content',async route=>{const command=route.request().postDataJSON();if(!failed&&command.recordId===record.id&&command.offset===28){failed=true;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic selected reading interruption'})});}else await route.continue();});
   await heavy.getByRole('button',{name:'Previous sections',exact:true}).click();await expect(heavy.getByRole('alert')).toContainText('Synthetic selected reading interruption');await expect(heavy.getByRole('heading',{name:'Observation 36',exact:true})).toBeVisible();
-  await heavy.getByRole('button',{name:'Try again',exact:true}).click();await expect(heavy.getByRole('heading',{name:'Observation 29',exact:true})).toBeVisible();await page.unroute('**/api/workspace/read/record-content');
+  await heavy.getByRole('button',{name:'Try again',exact:true}).click();await expect(heavy.getByRole('heading',{name:'Observation 29',exact:true})).toBeVisible();await page.context().unroute('**/api/workspace/read/record-content');
   // An unloaded in-record anchor resolves within this card, not another record.
   await heavy.locator('.prose').getByRole('link',{name:'Jump to notes',exact:true}).click();await expect(heavy.locator('[id="reading-'+record.id+'-record-section-'+record.sections[35].id+'"]')).toBeFocused();
   // Update the saved head without permitting this open book page to drift.

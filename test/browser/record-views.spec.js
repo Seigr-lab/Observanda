@@ -41,10 +41,10 @@ test('save, reopen, edit, discard and remove a private record view without copyi
   await dialog.getByRole('button',{name:'Back to saved views',exact:true}).click();await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes'}).click();
   await expect(dialog.getByRole('heading',{name:'Summer sessions',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Edit',exact:true}).click();await page.getByLabel('View name').fill('Session comparison');
-  await page.route('**/api/research/views/save',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'IO',message:'Synthetic unavailable drive'})}));
+  await page.context().route('**/api/research/views/save',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'IO',message:'Synthetic unavailable drive'})}));
   await dialog.getByRole('button',{name:'Save view',exact:true}).click();
   await expect(page.getByLabel('View name')).toHaveValue('Session comparison');await expect(page.locator('#notice')).toContainText('Synthetic unavailable drive');
-  await page.unroute('**/api/research/views/save');await dialog.getByRole('button',{name:'Save view',exact:true}).click();
+  await page.context().unroute('**/api/research/views/save');await dialog.getByRole('button',{name:'Save view',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Session comparison',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Close',exact:true}).click();expect((await ws.read()).etag).toBe(etag);
   // The saved definition finds new matching content, without materializing duplicates.

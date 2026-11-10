@@ -39,7 +39,7 @@ test('unfinished selections survive lost replies and reload, and completion atta
   await picker.getByRole('button',{name:'More selected sources',exact:true}).focus();await page.keyboard.press('Enter');
   expect((await picker.locator('[data-value]').inputValue()).length).toBeLessThan(1500);
   let lostBatch=false;
-  await page.route('**/api/research/materials/draft-append',async route=>{
+  await page.context().route('**/api/research/materials/draft-append',async route=>{
    if(!lostBatch){lostBatch=true;await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await dialog.getByRole('button',{name:'Save collection',exact:true}).click();
@@ -72,7 +72,7 @@ test('unfinished selections survive lost replies and reload, and completion atta
   }
   await page.screenshot({path:test.info().outputPath('unfinished-collection-phone.png')});
   let lostFinish=false;
-  await page.route('**/api/research/materials/draft-finish',async route=>{
+  await page.context().route('**/api/research/materials/draft-finish',async route=>{
    if(!lostFinish){lostFinish=true;await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await dialog.getByRole('button',{name:'Complete collection',exact:true}).click();
@@ -111,7 +111,7 @@ test('external analysis saves exact input and output pages and preserves its too
   await dialog.getByLabel('Tool version or source revision',{exact:true}).fill('commit abc123');
   await dialog.getByLabel('Parameters and procedure',{exact:true}).fill('Window 4096; each take kept separate.');
   await dialog.locator('#material-picker-outputs').getByRole('checkbox',{name:/spectrum.json/}).check();
-  await page.route('**/api/research/materials/draft-append',async route=>{
+  await page.context().route('**/api/research/materials/draft-append',async route=>{
    if(route.request().postDataJSON().slot==='outputs'){await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await dialog.getByLabel('Unrecorded identities and why they are unavailable').fill('Manual procedure; no executable tool source.');await dialog.getByLabel('Uncertainty convention / unknown uncertainty').fill('Not quantified.');await dialog.getByLabel('Sources, scope and limitations').fill('Fixture observations only.');await dialog.getByRole('button',{name:'Save analysis',exact:true}).click();

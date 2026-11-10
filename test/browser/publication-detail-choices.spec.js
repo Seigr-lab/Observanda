@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 test('edition detail choices persist for current and retained records without changing inventory defaults',async({page})=>{
- await page.route('https://edition-details.test/**',async route=>{
+ await page.context().route('https://edition-details.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<dialog id="dialog"></dialog>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});
  });

@@ -62,7 +62,7 @@ test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained sche
   await page.setViewportSize({width:390,height:844});
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   let loseResponse=true;const attempts=[];
-  await page.route('**/api/research/materials/dataset',async route=>{
+  await page.context().route('**/api/research/materials/dataset',async route=>{
    attempts.push(route.request().postDataJSON().jobId);
    if(loseResponse){loseResponse=false;await route.fetch();await route.abort('failed');}else await route.continue();
   });
@@ -71,7 +71,7 @@ test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained sche
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Prepare dataset',exact:true})).toBeVisible();
   expect(attempts.length).toBe(2);expect(new Set(attempts).size).toBe(1);
-  await page.unroute('**/api/research/materials/dataset');
+  await page.context().unroute('**/api/research/materials/dataset');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();
   await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
   await dialog.getByText('Evidence preparation jobs',{exact:true}).click();
@@ -123,7 +123,7 @@ test('wide dataset inspection and schema paging retain edits, exclusions and exa
   await col(0).getByLabel('Representation',{exact:true}).selectOption('integer');
   await col(0).getByLabel('Unit',{exact:true}).fill('counter');
   let failOnce=true;
-  await page.route('**/api/research/materials/schema',async route=>{if(failOnce){failOnce=false;await route.abort('failed');}else await route.continue();});
+  await page.context().route('**/api/research/materials/schema',async route=>{if(failOnce){failOnce=false;await route.abort('failed');}else await route.continue();});
   await dialog.getByRole('button',{name:'Next schema columns'}).click();
   await expect(dialog.getByRole('button',{name:'Next schema columns'})).toBeEnabled();
   await expect(col(0).getByLabel('Unit',{exact:true})).toHaveValue('counter');

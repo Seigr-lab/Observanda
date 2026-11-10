@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 async function fixture(page,{native=false}={}){
- await page.route('https://publication-sources.test/**',async route=>{
+ await page.context().route('https://publication-sources.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<main id="main"></main>'});
   const body=await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8');await route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body});
