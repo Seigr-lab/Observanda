@@ -336,7 +336,7 @@ function report(error) {
   if(error?.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','AUTH'].includes(error.code)){notify(error.message??appText('unlockProject'),true);return;}
   if(error?.code==='ACCESS_LOCKED'){state.access={...state.access,locked:true};render();return;}
   const message = error?.message ?? appText('connectionInterrupted');
-  const publicationIssue=publicationErrorView(error,esc);
+  const publicationIssue=publicationErrorView(error,esc,{titleId:'dialog-title'});
   if(publicationIssue){showDialog(publicationIssue+'<div class="dialog-actions"><button class="button" data-action="close-dialog">'+esc(publicationText('closeIssues'))+'</button></div>');return;}
   if (error?.code === 'PRIVACY' || error?.code === 'INVALID') {
     showDialog(`<h2 id="dialog-title">${esc(error.code === 'PRIVACY' ? appText('publicationChecks') : appText('checkFields'))}</h2><p>${esc(message)}</p><ul class="privacy-details">${(error.details ?? []).map(issue => `<li>${esc(issue.field)} ${issue.recordId ? `<button class="button subtle" data-action="open-issue" data-id="${esc(issue.recordId)}">${esc(appText('openRecord'))}</button>` : ''}</li>`).join('')}</ul><div class="dialog-actions"><button class="button" data-action="close-dialog">${esc(appText('backWorkspace'))}</button></div>`);
