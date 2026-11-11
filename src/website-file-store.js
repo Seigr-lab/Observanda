@@ -74,7 +74,7 @@ function assetSources(pages){
   if(!uses.has(row.id))uses.set(row.id,{all:false,names:new Set()});
   const use=uses.get(row.id);
   if(row.gallery){use.names.add(row.asset);for(const name of row.assets??[])use.names.add(name);}
-  else if(row.display)for(const asset of row.assets)use.names.add(asset);
+  else if(row.display||row.partial){for(const asset of row.assets)use.names.add(asset);if(row.partial)use.sheet=true;}
   else use.all=true;
  }
  return uses;
@@ -328,7 +328,8 @@ export class WebsiteFileStore{
     const available=new Set(source.assets.map(asset=>asset.name));
     for(const name of all.names)if(!available.has(name))throw new AppError('CONFLICT');
    }
-   for(const asset of sourceFiles(source))if(all.all||all.names.has(asset.name))includeAsset(files,source,asset,!(published?.all||published?.names.has(asset.name)));
+   const styled=(use,asset)=>use?.sheet&&(asset.name===styleName(source.id)||/^font\//.test(asset.contentType??''));
+   for(const asset of sourceFiles(source))if(all.all||all.names.has(asset.name)||styled(all,asset))includeAsset(files,source,asset,!(published?.all||published?.names.has(asset.name)||styled(published,asset)));
   }
   return [...files.values()];
  }

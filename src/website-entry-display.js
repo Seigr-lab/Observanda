@@ -150,13 +150,19 @@ const recordAttributes=record=>{
  if(!record)return '';const hidden=[...new Set(record.hidden)].sort();
  return (hidden.length?' '+hideKey+'="'+hidden.join(' ')+'"':'')+(record.layout&&record.layout!=='article'?' '+layoutKey+'="'+record.layout+'"':'');
 };
-export function displayPlacement(node){
- const id=attr(node,displayId),presentation=attr(node,displayMode);if(id===undefined&&presentation===undefined)return null;
- if(node.tagName!=='section'||!researchId(id)||!['card','section'].includes(presentation))throw new AppError('INVALID');
+function placedAssets(node){
  const assets=new Set();for(const child of descendants(node))for(const a of child.attrs??[]){
   if(['src','href','poster','srcset'].includes(a.name))for(const url of imageResourceURLs(a.name,a.value)){const match=sourceAsset.exec(url);if(match)assets.add(match[1]);}
  }
- return {display:id,presentation,assets:[...assets]};
+ return [...assets];
+}
+export function displayPlacement(node){
+ const id=attr(node,displayId),presentation=attr(node,displayMode);
+ // A full copy that leaves parts out publishes only the files it still shows,
+ // with its stylesheet and the fonts that stylesheet uses.
+ if(id===undefined&&presentation===undefined)return node.tagName==='section'&&attr(node,hideKey)!==undefined?{partial:true,assets:placedAssets(node)}:null;
+ if(node.tagName!=='section'||!researchId(id)||!['card','section'].includes(presentation))throw new AppError('INVALID');
+ return {display:id,presentation,assets:placedAssets(node)};
 }
 
 // Keep the chosen section's own permitted markup. Each placed copy has its
