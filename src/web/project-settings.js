@@ -137,7 +137,14 @@ export function projectSettings(services){
   base=structuredClone(draft);etag=state.etag;type=projectTypeChoice(draft.kind,state.dashboardSettings);
   source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id,{parents:!editingTemplate&&!!(creation||state.projectOwner)});
   if(native()&&!editingTemplate&&current?.labBookTemplate)void loadSavedTypes(current.id);
-  if(native()&&editingTemplate){const selection=draft;await configuration.open({workspaceId:state.book.id,projectId:draft.id,notebookId:null,slot:'labBookTemplate'});if(draft!==selection)return;draft.labBookTemplate.name=configuration.descriptor()?.header.name??draft.labBookTemplate.name;draw();}
+  if(native()&&editingTemplate){
+   const selection=draft,initialName=draft.labBookTemplate.name;
+   await configuration.open({workspaceId:state.book.id,projectId:draft.id,notebookId:null,slot:'labBookTemplate'});if(draft!==selection)return;
+   // A name typed while the template was opening is the author's: keep it and record it in the draft.
+   capture();const typed=draft.labBookTemplate.name;
+   if(typed!==initialName)configuration.changedHeader('name',typed);else draft.labBookTemplate.name=configuration.descriptor()?.header.name??typed;
+   draw();
+  }
  }
  async function apply(){
   if(source==='choose')return;const captured=draft,choice=source;
