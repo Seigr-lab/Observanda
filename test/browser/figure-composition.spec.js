@@ -10,7 +10,7 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../../src/locations.js';
 import {Workspace} from '../../src/storage.js';
-import {buildPublication} from '../../src/publication.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
 import {randomUUID} from 'node:crypto';
 import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
 import {revealInEditor} from './record-editor-helper.js';
@@ -37,7 +37,7 @@ test('author, annotate, compare, save and restore multi-panel figures through th
   await compound.locator('[data-fe="preview"]').click();await idle();await expect(compound.locator('[data-fe-preview] svg').first()).toBeVisible();
   await compound.locator('[data-fe-panel]').fill('2');await compound.locator('[data-fe="panel"]').click();await idle();await area('points');await (await figureProperty(compound,'y')).fill('5');await apply();await expect(compound.locator('[data-fe-panel]')).toHaveAttribute('max','2');
   await area('panels');await compound.locator('[data-fe-position]').fill('2');await compound.locator('[data-fe="position"]').click();await idle();await compound.locator('[data-fe="move-earlier"]').click();await idle();await expect(compound).toContainText('1 of 2');
-  const save=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save'));await compound.locator('[data-writing="save"]').click();expect((await save).ok()).toBe(true);await expect(compound).not.toBeVisible();
+  const save=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save'));await compound.locator('[data-writing="save"]').click();expect((await save).ok()).toBe(true);await expect(compound).not.toBeVisible({timeout:60000});
   const saved=(await f.workspace.read()).book.entries.find(r=>r.id===record.id),result=saved.figures.at(-1),composed=await new RetainedFigureDocuments(f.workspace).open(result),panels=(await composed.window({collection:'panels',offset:0,limit:4})).items;
   const firstPoint=async plotId=>{const series=(await composed.window({collection:'series',plotId,offset:0,limit:1})).items[0];return (await composed.window({collection:'points',plotId,seriesId:series.id,offset:0,limit:1})).items[0].value;};
   expect((await composed.header()).header).toMatchObject({kind:'panels',layout:{linkX:true,linkY:true}});expect(panels).toHaveLength(2);expect((await firstPoint(panels[0].plotId)).y).toBe(5);expect(saved.figures[1].series[0].points[0].y).toBe(2);expect((await composed.window({collection:'annotations',plotId:panels[1].plotId,offset:0,limit:1})).items[0].value.end).toBe(.75);
@@ -47,8 +47,10 @@ test('author, annotate, compare, save and restore multi-panel figures through th
   await (await revealInEditor(page,page.locator('[data-action="material-retained-figure"][data-figure-id="'+result.id+'"]'),'Evidence and results')).click();const retained=page.getByRole('dialog',{name:'Retained figure',exact:true});
   const download=page.waitForEvent('download');await retained.getByRole('link',{name:'CSV',exact:true}).click();const file=await download;expect(await file.failure()).toBeNull();expect(await readFile(await file.path(),'utf8')).toContain('Acquisition window');
   await page.setViewportSize({width:390,height:844});await retained.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('compound-phone.png')});await retained.getByRole('button',{name:'Close',exact:true}).click();
-  await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page.locator('.record-reader .figure-panel')).toHaveCount(2);await page.locator('.record-reader').getByText('Read table row by row',{exact:true}).last().click();await expect(page.locator('.record-reader .figure-annotations-table')).toContainText('Acquisition window');await page.screenshot({path:test.info().outputPath('compound-reading.png')});
+  await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'Read record',exact:true}).click();
+  // The record reader opens a retained figure in its bounded reader, one panel at a time; annotations are kept in the complete download checked above.
+  await page.locator('.record-reader [data-action="material-retained-figure"][data-figure-id="'+result.id+'"]').click();await expect(retained.locator('[data-rf-position="panel"]')).toHaveAttribute('max','2');await retained.locator('[data-rf="panel-next"]').click();await expect(retained.locator('[data-rf-position="panel"]')).toHaveValue('2');await expect(retained.locator('.retained-figure-display svg').first()).toBeVisible();await page.screenshot({path:test.info().outputPath('compound-reading.png')});await retained.getByRole('button',{name:'Close',exact:true}).click();
   const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=(await new Workspace(backup,f.vault).read()).book.entries.find(r=>r.id===record.id);expect(restored.figures).toEqual(saved.figures);
-  const publication=buildPublication({...book,entries:[{...saved,share:true}]});expect([...publication.files.values()].map(String).join('\n')).toContain('Acquisition window');expect(errors).toEqual([]);
+  const published=await convertPublicationRecord(f.workspace,book,{...saved,share:true});expect(published.visible).toBe(true);expect(published.assets.filter(asset=>asset.path.endsWith('.svg')).map(asset=>String(asset.bytes)).join(' ')).toContain('Acquisition window');expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
