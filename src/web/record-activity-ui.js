@@ -18,8 +18,9 @@ import {recordBrowse} from './record-query.js';
 import {recordDateLabel} from './record-date.js';
 import {editableRecord} from './workspace-snapshot.js';
 import {researchTargetPicker} from './research-target-picker.js';
+import {relationValue} from './record-relation-value.js';
 
-export function recordActivityUI({state,api,esc,field,showDialog,notify,render,dirty,revisions,create,getRecord}){
+export function recordActivityUI({state,api,esc,field,showDialog,notify,render,dirty,revisions,create,getRecord,relationSaved=async()=>{}}){
  const targets=researchTargetPicker({state,api,esc,field,showDialog});
  const configuration=configurationDocumentClient({state,api});
  const typeChoices=configurationTypeChoices({state,api,esc,showDialog});
@@ -62,6 +63,16 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
   }catch(e){if(request===generation&&active()&&identity()===requestedKey&&e.name!=='AbortError'){error=e;loading=false;paint();}}
  }
  function bind(){targets.sync();if(!active()){stop();return;}sync();if(native()&&!contextPending&&!contextLoaded&&!contextError&&record().template?.id)void loadContext();if(opened&&!result&&!error&&!loading)void load();}
+ // A saved record gains its subject as one new research link, saved through the record's own values,
+ // so neither the workspace nor the subject's body is read.
+ async function linkSubject(e,subject,stillCurrent){
+  const workspaceId=state.book.id;if(!subject||subject.id===e.id)throw Error(tr('activityAlreadyLinked'));
+  if((e.relations??[]).some(l=>l.type==='Documents'&&l.target?.workspaceId===workspaceId&&l.target?.kind==='record'&&l.target?.id===subject.id&&!l.target?.revision))throw Error(tr('activityAlreadyLinked'));
+  const target={workspaceId,recordId:e.id,field:'relation:'+crypto.randomUUID()},base=await api('/api/research/records/values/read',target,{adopt:false});if(!stillCurrent())return;
+  const result=await api('/api/research/records/values/save',{...target,expectedRevision:base.revision,value:{value:relationValue({type:'Documents',label:subject.title,target:{workspaceId,kind:'record',id:subject.id}})}},{adopt:false});if(!stillCurrent())return;
+  document.querySelector('#dialog').close();targets.stop();resetHistory();await relationSaved(result);
+ }
+ function resetHistory(){result=null;error=null;opened=true;}
  async function action(control){
   if(await targets.action(control)||await typeChoices.action(control))return true;
   const name=control.dataset.action;if(!name?.startsWith('record-activity-')||!active())return false;
@@ -73,6 +84,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
   if(name==='record-activity-subjects'){
    targets.open({title:tr('activityLink',{subject:trackingLabel(context,e.template?.profileId,'subjectLabel',tr('activitySubject')).toLocaleLowerCase()}),recordType:'subject',recordsOnly:true,onChoose:(subject,{stillCurrent})=>{
     if(!stillCurrent())return;
+    if(native())return linkSubject(e,subject,stillCurrent);
     if(!documentRecord(state.book.id,editableRecord(state.book,e.id),subject))throw Error(tr('activityAlreadyLinked'));
     dirty();document.querySelector('#dialog').close();targets.stop();render();
    }});return true;

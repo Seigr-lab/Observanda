@@ -524,7 +524,7 @@ async function navigateResearch(target,{origin:providedOrigin}={}){
   else if(!target.selector)window.scrollTo(0,0);
 }
 const displayedRecord=()=>state.page==='record-reader'?recordContent.current():entry();
-const recordActivity=recordActivityUI({getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,dirty:()=>dirtyRecord(),revisions:()=>state.page==='record-reader'?{[state.selected]:recordContent.savedRevision()}:savedRecordRevisions,create:addEntry});
+const recordActivity=recordActivityUI({getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,dirty:()=>dirtyRecord(),revisions:()=>state.page==='record-reader'?{[state.selected]:recordContent.savedRevision()}:savedRecordRevisions,create:addEntry,relationSaved:async()=>{await workspaceLive.check();render();}});
 const recordStarters=recordStartersUI({state,api,esc,showDialog,notify,sourceRecord:()=>state.page==='record-reader'?recordContent.captureTarget():null,openRecord:id=>rawAction({dataset:{action:'edit-entry',id}})});
 const workflow=recordWorkflowUI({getRecord:displayedRecord,state,api,esc,notify,revisions:()=>savedRecordRevisions,create:openCreatedRecord});
 const recordDetails=recordDetailsUI({state,esc,field,dirty:()=>dirtyRecord(),render,showDialog,notify,navigate:navigateResearch,api});
@@ -1053,7 +1053,9 @@ async function rawAction(button) {
    if(name?.startsWith('workflow-')){await workflow.action(button);return;}
    if(name==='record-removal-open'){if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);recordRemoval.open();return;}
    // The linked-record type chooser opened from this record reports its choice through the same owner.
-   if(name?.startsWith('record-activity-')&&name!=='record-activity-subjects'||name?.startsWith('configuration-type-')){if(await recordActivity.action(button)||name?.startsWith('record-activity-'))return;}
+   // In catalogue storage a subject is linked through the record's own values, without loading the workspace;
+   // its paged subject picker answers its own controls first, so paging never loads the whole workspace either.
+   if(name?.startsWith('record-activity-')&&(name!=='record-activity-subjects'||state.storage?.researchStorage==='catalogue')||name?.startsWith('configuration-type-')||name?.startsWith('research-target-')){if(await recordActivity.action(button)||name?.startsWith('record-activity-'))return;}
    if(name?.startsWith('migration-provenance-')){await migrationProvenance.action(button);return;}
    if(name?.startsWith('review-')){await reviews.action(button);return;}
    if(name==='record-content-reference'){await bookReferences.action(button);return;}

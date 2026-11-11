@@ -19,14 +19,18 @@ test('inspection subject search pages only saved hives and colonies without load
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return load.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/notebook'))fullReads.push(r.url());});
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+inspection.id);await page.getByLabel('Record title',{exact:true}).fill('Inspection with unfinished notes');
-  await page.getByRole('button',{name:'Choose hive / colony',exact:true}).click();
+  // The hive or colony an inspection is about is chosen from the record editor's activity and history area;
+  // the saved inspection gains the link as one research link of its own values.
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+inspection.id);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Choose hive / colony',exact:true}),'Activity and history')).click();
   const dialog=page.getByRole('dialog',{name:'Link hive / colony',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]');
   await expect(choices).toHaveCount(25);await expect(dialog).toContainText('of 64');await expect(dialog.getByRole('button',{name:/Autumn inspection/})).toHaveCount(0);
   await dialog.getByRole('button',{name:'Next results',exact:true}).click();await expect(choices.first()).toBeFocused();await expect(dialog).toContainText('26–50 of 64');
-  await dialog.getByLabel('Find in this workspace',{exact:true}).fill('Hive 63');await expect(choices).toHaveCount(1);await choices.first().click();
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Inspection with unfinished notes');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  expect(fullReads).toEqual([]);expect(new Set(bodies)).toEqual(new Set([inspection.id]));ResearchCatalogue.prototype.record=load;
+  await dialog.getByLabel('Find in this workspace',{exact:true}).fill('Hive 63');await expect(choices).toHaveCount(1);
+  // Searching reads neither the workspace nor any record body (the editor reads the inspection's values);
+  // choosing saves the link without reading the subject, then refreshes the view as any saved value does.
+  expect(fullReads).toEqual([]);expect(bodies).toEqual([]);
+  await choices.first().click();await expect(dialog).not.toBeVisible({timeout:30000});expect(bodies).not.toContain(book.entries.at(-1).id);ResearchCatalogue.prototype.record=load;
   const saved=(await f.workspace.read()).book.entries.find(r=>r.id===inspection.id);expect(saved.relations).toHaveLength(3);expect(saved.relations.at(-1).target.id).toBe(book.entries.at(-1).id);expect(errors).toEqual([]);
  }finally{ResearchCatalogue.prototype.record=load;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

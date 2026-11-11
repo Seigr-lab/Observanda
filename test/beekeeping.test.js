@@ -18,6 +18,8 @@ import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {buildPublication,publicProjection} from '../src/publication.js';
+import {RecordValues} from '../src/record-values.js';
+import {relationValue} from '../src/web/record-relation-value.js';
 
 const query=()=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()});
 const relatedTo=(book,id)=>({workspaceId:book.id,id});
@@ -63,4 +65,22 @@ test('a published hive never discloses its private linked inspections or query m
  const {book,hive,inspection}=beekeepingFixture();hive.share=true;
  const projected=publicProjection(book);assert.ok(!projected.entries.some(e=>e.id===inspection.id));
  for(const file of buildPublication(book).files.values()){const text=Buffer.from(file).toString();assert.ok(!text.includes('PRIVATE HEALTH NOTES'));assert.ok(!text.includes(inspection.id));assert.ok(!text.includes('referenceTargets'));}
+});
+
+// The record editor links a saved inspection to its hive or colony as one new research link of the
+// inspection's own values (record-activity-ui.js linkSubject), never through a workspace read.
+test('a saved inspection gains its subject through its own values without reading the workspace or the subject',async t=>{
+ const {book,other,inspection}=beekeepingFixture(),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-subject-')),f=await encryptedFixture(directory,book);
+ t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const values=new RecordValues(f.workspace),read=ResearchCatalogue.prototype.read,load=ResearchCatalogue.prototype.record,bodies=[];
+ ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace loaded to link a subject');};ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return load.call(this,id,...args);};
+ const before=(await new RecordQuery(f.workspace).list({workspaceId:book.id,query:query(),relatedTo:relatedTo(book,other.id)})).total;
+ try{
+  const target={workspaceId:book.id,recordId:inspection.id,field:'relation:'+randomUUID()},base=await values.read(target);
+  await values.save({...target,expectedRevision:base.revision,value:{value:relationValue({type:'Documents',label:other.title,target:{workspaceId:book.id,kind:'record',id:other.id}})}});
+  assert.ok(!bodies.includes(other.id));
+ }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=load;}
+ const saved=(await f.workspace.read()).book.entries.find(r=>r.id===inspection.id);
+ assert.equal(saved.relations.length,inspection.relations.length+1);assert.deepEqual(saved.relations.at(-1),{id:saved.relations.at(-1).id,type:'Documents',label:other.title,target:{workspaceId:book.id,kind:'record',id:other.id}});
+ assert.equal((await new RecordQuery(f.workspace).list({workspaceId:book.id,query:query(),relatedTo:relatedTo(book,other.id)})).total,before+1);
 });
