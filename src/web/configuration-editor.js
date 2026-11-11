@@ -25,11 +25,19 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
   node.classList.toggle('module-error',Boolean(error||client.error()));
  }
  function stop(){epoch++;controller?.abort();controller=null;client.stop();section=definition=choice=null;choiceText=choiceBase='';sections=fields=choices=profiles=empty();error=null;busy=false;retry=null;}
+ // Redrawing replaces the editor's controls. Keep keyboard focus on the
+ // equivalent control, such as the record type just chosen from its list.
+ const focusAttributes=['data-command','data-key','data-direction','data-collection','data-configuration-section-prop','data-configuration-field-prop','data-configuration-choice','data-configuration-add-profile','data-configuration-profile'];
+ function focusedControl(){
+  const active=document.activeElement;if(!active||!root()?.contains(active))return null;
+  return focusAttributes.filter(name=>active.hasAttribute(name)).map(name=>'['+name+'="'+CSS.escape(active.getAttribute(name))+'"]').join('')||null;
+ }
+ function restoreFocus(selector){const target=selector&&root()?.querySelector(selector);if(target&&!target.disabled&&target!==document.activeElement)target.focus({preventScroll:true});}
  async function run(operation){
-  const current=++epoch;controller?.abort();controller=new AbortController();busy=true;error=null;retry=operation;draw?.();
+  const current=++epoch,focus=focusedControl();controller?.abort();controller=new AbortController();busy=true;error=null;retry=operation;draw?.();
   try{await operation(controller.signal);if(current!==epoch)return;retry=null;}
   catch(reason){if(current!==epoch||reason.name==='AbortError')return;error=reason;}
-  finally{if(current===epoch){busy=false;draw?.();status();onChange();}}
+  finally{if(current===epoch){busy=false;draw?.();restoreFocus(focus);status();onChange();}}
  }
  async function flushChoice(){
   if(!choice||choiceText===choiceBase)return;
