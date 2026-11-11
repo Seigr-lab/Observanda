@@ -11,6 +11,7 @@ import {startServer} from '../../src/server.js';
 import {workspaceModules} from '../../src/modules/index.js';
 import {InventoryReader} from '../../src/modules/inventory-reader.js';
 import {navigate,preferences} from './preferences-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('physical and VST templates coexist; a record BOM reserves parts and records actual use through inventory',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(12000);
@@ -30,8 +31,11 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   }
   await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);
   await main.getByRole('button',{name:'Lab book settings',exact:true}).click();
-  await dialog.getByLabel('Physical prototyping',{exact:true}).check();
-  await dialog.getByLabel('Audio software & VST',{exact:true}).check();
+  // Lab book types are added from the list of enabled types; each added type is then shown as a checked type of this book.
+  for(const name of ['Physical prototyping','Audio software & VST']){
+   await dialog.getByLabel('Lab-book type to add',{exact:true}).selectOption({label:name});await dialog.getByRole('button',{name:'Add lab-book type',exact:true}).click();
+   await expect(dialog.getByRole('checkbox',{name,exact:true})).toBeChecked();
+  }
   await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();
   await expect(dialog).not.toBeVisible();
   const saved=(await f.workspace.read()).book.notebooks[0].configuration;
@@ -41,7 +45,8 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await expect(dialog.getByRole('button',{name:'Create host & real-time test',exact:true})).toBeVisible();
   await page.keyboard.press('Escape');
   await page.goto(app.origin+'/#/records/'+book.entries[0].id);
-  await main.getByRole('button',{name:'New bill of materials',exact:true}).click();
+  // Connected work, including a new bill of materials, is in the record's Evidence and results area.
+  await (await revealInEditor(page,main.getByRole('button',{name:'New bill of materials',exact:true}),'Evidence and results')).click();
   await expect(main.getByRole('button',{name:'Prototype / run record',exact:true})).toContainText(book.entries[0].title);
   await expect(main.getByLabel('Template name',{exact:true})).toHaveCount(0);
   await main.getByLabel('BOM title',{exact:true}).fill('Board A components');
