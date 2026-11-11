@@ -117,3 +117,10 @@ test('forensic version 2 keeps an unbroken chain of custody and verified acquisi
  for(const [section,key] of [['cases','requester'],['evidence','received-from'],['custody','from'],['custody','to']])assert.equal(field(section,key).private,true,section+'/'+key);
  assert.equal(profile.introduced.private['custody/from'],2);
 });
+
+test('educational version 2 plans courses and sessions and never publishes learner data',()=>{
+ const profile=tracks('educational',{subjects:['course','activities'],primary:'sessions',events:['sessions','work','feedback'],formats:{'course/version':'identifier'}});
+ const field=(section,key)=>profile.sections.find(s=>s.key===section).fields.find(f=>f.key===key);
+ for(const [section,key] of [['work','field2'],['work','support'],['feedback','feedback']])assert.equal(field(section,key).private,true,section+'/'+key);
+ assert.equal(profile.introduced.private['work/field2'],2,'a released learner reference becomes private through the upgrade');
+});
