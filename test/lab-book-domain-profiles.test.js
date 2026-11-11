@@ -73,3 +73,13 @@ test('physical prototyping version 2 tracks devices and serial-numbered units an
  for(const key of ['device','unit','firmware'])assert.equal(profile.introduced.sections[key],2);
  for(const key of ['design','assembly','bring-up','rework','findings'])assert.equal(profile.introduced.sections[key],1);
 });
+
+test('environmental work logs sites, taxa and occurrences on the record date, keeping precise locations in the site register',()=>{
+ const profile=tracks('environmental-agricultural',{subjects:['sites','taxon'],primary:'occurrence',events:['campaigns','observations','results','occurrence'],formats:{'taxon/reference':'uri','results/raw-data-sha256':'sha-256'}});
+ assert.equal(profile.version,2);
+ const occurrence=profile.sections.find(s=>s.key==='occurrence').fields,site=profile.sections.find(s=>s.key==='sites').fields;
+ assert.ok(!occurrence.some(f=>f.type==='date'),'an occurrence is dated by its record date and its precision');
+ assert.ok(!occurrence.some(f=>f.key==='precise-location'));assert.ok(site.some(f=>f.key==='precise-location'));
+ assert.ok(occurrence.find(f=>f.key==='count-type').choices.includes('Looked for, not found'),'absence is recordable');
+ for(const key of ['taxon','occurrence'])assert.equal(profile.introduced.sections[key],2);
+});

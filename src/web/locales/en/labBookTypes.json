@@ -18,7 +18,7 @@
   "educational.label": "Educational",
   "educational.description": "Learning activities, cohorts, learner work and feedback.",
   "environmental-agricultural.label": "Environmental & agricultural",
-  "environmental-agricultural.description": "Sites, field campaigns, soil, water, crops and observations.",
+  "environmental-agricultural.description": "Sites, taxa and species occurrences, field campaigns, soil, water, crops and measurements.",
   "physical-prototyping.label": "Physical prototyping",
   "physical-prototyping.description": "Devices and serial-numbered units, designs, assemblies, firmware, measurements and rework.",
   "research-development.label": "Research & development",
