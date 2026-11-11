@@ -39,7 +39,7 @@ test('beekeeping is opt-in in the shared registry and retains editable independe
 test('linked history stays paged, private and revision-anchored across saves and backup',async t=>{
  const {book,hive,other,colony,inspection,record}=beekeepingFixture();
  for(let i=0;i<24;i++){const r=record('inspection','Visit '+i,'2026-09-'+String(i+1).padStart(2,'0'));r.status=i===23?'incomplete':'completed';r.body='PRIVATE BODY '.repeat(200);documentRecord(book.id,r,hive);book.entries.push(r);}
- const external=record('inspection','Same ID in another workspace');documentRecord(randomUUID(),external,hive);book.entries.push(external);
+ const external=record('inspection','Same ID in another workspace'),foreign=randomUUID();documentRecord(foreign,external,hive);book.entries.push(external);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-')),f=await encryptedFixture(directory,book),queries=new RecordQuery(f.workspace),records=new ResearchRecords(f.workspace,{});
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const command={workspaceId:book.id,query:query(),relatedTo:relatedTo(book,hive.id),limit:10},read=ResearchCatalogue.prototype.read,load=ResearchCatalogue.prototype.record;let first;
@@ -51,7 +51,9 @@ test('linked history stays paged, private and revision-anchored across saves and
  await records.save({workspaceId:book.id,changes:[{id:inspection.id,expectedRevision:recordRevision(inspection),record:{...inspection,relations:[]}}]});
  const next=await queries.list({...command,cursor:first.nextCursor});assert.equal(next.changed,true);assert.equal(next.total,25);assert.equal((await queries.list(command)).total,24);
  await assert.rejects(queries.list({...command,query:query(),relatedTo:relatedTo(book,other.id),cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
- await assert.rejects(queries.list({...command,relatedTo:{workspaceId:randomUUID(),id:hive.id}}),{code:'INVALID'});
+ // A subject in another workspace or store is a different subject with the same identifier (record-reference namespaces).
+ const elsewhere=await queries.list({...command,relatedTo:{workspaceId:foreign,id:hive.id}});assert.equal(elsewhere.total,1);assert.equal(elsewhere.records[0].id,external.id);
+ assert.equal((await queries.list({...command,relatedTo:{workspaceId:randomUUID(),id:hive.id}})).total,0);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual((await new RecordQuery(new Workspace(copy,f.vault)).list({...command,cursor:first.nextCursor})).records,next.records);
  const restored=(await new Workspace(copy,f.vault).read()).book;assert.equal(restored.entries.find(r=>r.id===inspection.id).template.values.queen,'Not seen');
