@@ -13,7 +13,7 @@ test('reader media details recover, resolve conflicts, retry a lost acknowledgem
  ResearchCatalogue.prototype.record=()=>{throw Error('Media detail UI reconstructed a full record');};
  const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);});
  const dialog=page.getByRole('dialog',{name:'Edit Media details',exact:true}),save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click(),last=f.record.attachments[8];
- const tail=async()=>{await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await page.locator('[data-collection-position="attachments"]').fill('9');await page.locator('[data-action="content-collection-go"][data-collection="attachments"]').click();await expect(page.locator('[data-record-media="'+last.id+'"]')).toBeVisible();};
+ const tail=async()=>{await page.getByRole('button',{name:'Evidence and results',exact:true}).click();/* Nine attachments fit in one gallery window of 24, so no paging is needed. */await expect(page.locator('[data-record-media="'+last.id+'"]')).toBeVisible();};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await tail();
   await page.getByRole('button',{name:'Edit media details for Media 8',exact:true}).click();await expect(dialog.getByLabel('Accessible description',{exact:true})).toHaveValue('Description 8');
