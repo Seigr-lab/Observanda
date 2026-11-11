@@ -50,8 +50,9 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    const appearance=page.waitForResponse(response=>/\/api\/(appearance|design)-preview$/.test(response.url()));
    await preferences(page,'Appearance');expect((await appearance).status()).toBe(200);
    await expect(page.locator('#design-preview')).toBeVisible();
-   const interfaceSave=page.waitForResponse(response=>response.url().endsWith('/api/interface')&&response.request().method()==='POST');
-   await page.getByLabel('Header alignment',{exact:true}).selectOption('left');await page.getByRole('button',{name:'Save app settings',exact:true}).click();expect((await interfaceSave).status()).toBe(200);
+   // App settings save independently of the busy workspace writer.
+   await preferences(page,'App appearance');const interfaceSave=page.waitForResponse(response=>response.url().endsWith('/api/interface')&&response.request().method()==='POST');
+   await page.getByLabel('App theme',{exact:true}).selectOption('studio');await page.getByRole('button',{name:'Save app settings',exact:true}).click();expect((await interfaceSave).status()).toBe(200);
    await preferences(page,'Your profile');await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Profile during copy');
    await preferences(page,'Modules');await expect(page.locator('#notice.error')).toBeHidden();
    await preferences(page,'Help');await expect(page.locator('#notice.error')).toBeHidden();
