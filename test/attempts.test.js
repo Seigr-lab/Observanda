@@ -5,7 +5,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {attemptFixture,preparation,event,assessment,fact} from './fixtures/attempts.js';
-import {validAttempt,appendOnlyAttempt,mergeAttemptAdditions,attemptComparison,currentAttemptItems} from '../src/web/attempt-model.js';
+import {validAttempt,appendOnlyAttempt,mergeAttemptAdditions,attemptComparison,currentAttemptItems,hasNestedAttemptContinuations} from '../src/web/attempt-model.js';
 import {attemptView} from '../src/web/attempt-view.js';
 import {attemptComparisonView} from '../src/web/attempt-comparison.js';
 import {createRun} from '../src/web/record-workflow.js';
@@ -115,6 +115,8 @@ test('growing history compatibility preserves current facts, merges and nested-f
  assert.ok(validAttempt(value));assert.ok(validAttempt(value,{draft:true}));const mine=structuredClone(value),stored=structuredClone(value),correction={...events[256],id:randomUUID(),supersedes:events[256].id,reason:'Late receipt correction',label:'Corrected late acquisition'};mine.events.push(correction);stored.assessments.push(assessment(p,1,{observed:'Independent later assessment'}));
  const combined=mergeAttemptAdditions(value,mine,stored);assert.ok(combined);assert.deepEqual(currentAttemptItems(combined.events),[...events.slice(0,256),correction]);assert.equal(attemptComparison(combined).assessments.at(-1).preparationNumber,33);assert.deepEqual(value,before);
  const html=attemptView(combined,esc);assert.match(html,/Preparation revision 33/);assert.ok(html.indexOf('Acquisition 1')<html.indexOf('Acquisition 255'));assert.ok(html.includes('Corrected late acquisition'));
- for(const group of ['conditions','inputs','observations','criteria']){const invalid=structuredClone(value);invalid.preparations[32][group]=Array.from({length:65},()=>({...p[group][0],id:randomUUID()}));assert.equal(validAttempt(invalid),false);assert.equal(validAttempt(invalid,{draft:true}),false);}
+ for(const group of ['conditions','inputs','observations','criteria']){const invalid=structuredClone(value);invalid.preparations[32][group]=[...p[group],...Array.from({length:65-p[group].length},()=>({...p[group][0],id:randomUUID()}))];
+  // Preparation collections are paged: more than 64 rows are valid and marked as continuations for older readers.
+  assert.equal(validAttempt(invalid),true);assert.equal(validAttempt(invalid,{draft:true}),true);assert.equal(hasNestedAttemptContinuations(invalid),true);assert.equal(hasNestedAttemptContinuations(value),false);}
  const refs=structuredClone(value);refs.events[256].references=Array.from({length:21},()=>({workspaceId:randomUUID(),kind:'record',id:randomUUID(),revision:'a'.repeat(64),label:'Retained source'}));assert.equal(validAttempt(refs),false);assert.equal(validAttempt(refs,{draft:true}),false);
 });
