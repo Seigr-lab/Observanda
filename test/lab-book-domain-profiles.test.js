@@ -110,3 +110,10 @@ test('computer and IT version 2 pins environments and data by digest and tracks 
  assert.equal(profile.sections.find(s=>s.key==='runs').fields.find(f=>f.key==='value').uncertainty,'absolute');
  assert.deepEqual(profile.sections.find(s=>s.key==='environments').fields.slice(0,2).map(f=>f.key),['field1','field2'],'version 1 fields keep their keys');
 });
+
+test('forensic version 2 keeps an unbroken chain of custody and verified acquisition digests',()=>{
+ const profile=tracks('crime-forensic',{subjects:['evidence'],primary:'custody',events:['custody','acquisition','examinations','reports'],formats:{'evidence/item-id':'identifier','evidence/seal':'identifier','custody/seal':'identifier','acquisition/sha256':'sha-256','acquisition/sha512':'sha-512','examinations/sop':'identifier'}});
+ const field=(section,key)=>profile.sections.find(s=>s.key===section).fields.find(f=>f.key===key);
+ for(const [section,key] of [['cases','requester'],['evidence','received-from'],['custody','from'],['custody','to']])assert.equal(field(section,key).private,true,section+'/'+key);
+ assert.equal(profile.introduced.private['custody/from'],2);
+});
