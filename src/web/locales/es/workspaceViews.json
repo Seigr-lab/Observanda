@@ -16,6 +16,7 @@
   "bookTemplate": "Plantilla de cuaderno de laboratorio",
   "newBook": "Nuevo cuaderno de laboratorio",
   "createBookHelp": "Crea un cuaderno de laboratorio y elige su tipo.",
+  "workspaceBooksOnly": "Este proyecto se guarda dentro del espacio de trabajo, como los proyectos compartidos, así que no se le pueden añadir cuadernos de laboratorio nuevos. Crea los cuadernos de laboratorio nuevos en un proyecto propio.",
   "recentRecords": "Registros recientes",
   "allRecords": "Todos los registros de aquí",
   "details": "Detalles del espacio de trabajo",

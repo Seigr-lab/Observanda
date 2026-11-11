@@ -16,6 +16,7 @@
   "bookTemplate": "Lab-book template",
   "newBook": "New lab book",
   "createBookHelp": "Create a lab book and choose its type.",
+  "workspaceBooksOnly": "This project is held in the workspace itself, as shared projects are, so new lab books cannot be added to it. Create new lab books in a project of your own.",
   "recentRecords": "Recent records",
   "allRecords": "All records here",
   "details": "Workspace details",

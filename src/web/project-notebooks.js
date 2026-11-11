@@ -4,6 +4,7 @@ import {configurationDocumentClient} from './configuration-document-client.js';
 import {t} from './i18n/index.js';
 
 import './i18n/catalogues/projectEditors.js';
+import './i18n/catalogues/workspaceViews.js';
 import {labBookProfileLabel} from './project-type-presentation.js';
 import {projectSettings} from './project-settings.js';
 import {newLabBookConfiguration,templateAvailable,templateChoices,starterTemplate,retainedTemplateAvailable} from './project-templates.js';
@@ -178,6 +179,8 @@ export function projectNotebooksUI(services){
   if(['new-project','edit-project'].includes(a.action)){await projects.open(a.action==='edit-project'?a.id:null,a.action==='new-project'?a.id:null,false,a.action==='new-project'&&Object.hasOwn(a,'copyWorkspaceDetails')?{title:state.book.title,description:state.book.description}:null);return true;}
   if(['new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(a.action)){
    if(!state.book.projects.length){notify(msg('createProjectFirst'));return true;}
+   // A project held in the workspace itself (for example a shared project) takes no new lab books in catalogue storage.
+   if(a.action==='new-notebook'&&native()&&!(state.projectOwner&&(state.projectOwner.projectId===a.id||(services.projectDirectory?.entries()??[]).some(entry=>entry.projectId===a.id)))){notify(t('workspaceViews','workspaceBooksOnly'),true);return true;}
    await openNotebook(a.action==='new-notebook'?null:a.id,a.action==='new-notebook'?a.id:null);return true;
   }
   return false;

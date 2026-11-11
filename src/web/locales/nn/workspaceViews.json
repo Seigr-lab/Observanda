@@ -16,6 +16,7 @@
   "bookTemplate": "Labbokmal",
   "newBook": "Ny labbok",
   "createBookHelp": "Opprett ei labbok og vel type.",
+  "workspaceBooksOnly": "Dette prosjektet blir lagra i sjølve arbeidsområdet, slik delte prosjekt blir, så nye labbøker kan ikkje leggjast til i det. Opprett nye labbøker i eit eige prosjekt.",
   "recentRecords": "Nylege oppføringar",
   "allRecords": "Alle oppføringar her",
   "details": "Arbeidsområdedetaljar",

@@ -16,6 +16,7 @@
   "bookTemplate": "Plantilla de llibre de laboratori",
   "newBook": "Llibre de laboratori nou",
   "createBookHelp": "Crea un llibre de laboratori i tria’n el tipus.",
+  "workspaceBooksOnly": "Aquest projecte es desa dins de l’espai de treball, com els projectes compartits, de manera que no s’hi poden afegir llibres de laboratori nous. Crea els llibres de laboratori nous en un projecte propi.",
   "recentRecords": "Registres recents",
   "allRecords": "Tots els registres d’aquí",
   "details": "Detalls de l’espai de treball",

@@ -117,3 +117,21 @@ test('lab-book deletion review translates the count and escapes names before any
   assert.deepEqual(f.services.state.book,before);assert.equal(f.saved(),undefined);
  }
 });
+
+// In catalogue storage a new lab book gets its own store through a project's store. A project held in
+// the workspace itself (for example a shared project in a collaboration copy) takes no new lab books.
+test('a project held in the workspace refuses new lab books with a translated explanation',async context=>{
+ const f=fixture(context),notices=[];let dialogs=0;
+ Object.assign(f.services,{notify:(message,error)=>notices.push({message,error}),showDialog:()=>{dialogs++;}});
+ f.services.state.storage={contextId:'context',researchStorage:'catalogue'};
+ const ui=projectNotebooksUI(f.services),before=structuredClone(f.services.state.book);
+ for(const locale of locales){
+  await load(locale);activateLanguage(locale);
+  for(const owner of [undefined,{projectId:'00000000-0000-4000-8000-000000000009'}]){
+   f.services.state.projectOwner=owner;notices.length=0;
+   assert.equal(await ui.action({dataset:{action:'new-notebook',id:projectId}}),true);
+   assert.deepEqual(notices,[{message:t('workspaceViews','workspaceBooksOnly'),error:true}]);
+  }
+ }
+ assert.equal(dialogs,0);assert.deepEqual(f.services.state.book,before);assert.equal(f.saved(),undefined);
+});
