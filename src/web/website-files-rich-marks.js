@@ -6,7 +6,7 @@ const tags={
 };
 const tagMarks=new Map(Object.entries(tags).flatMap(([mark,names])=>names.map(tag=>[tag,mark])));
 const formattingClass=/^(?:rt-(?:font|size|color|highlight)-|ow-visual-[a-f0-9-]{36}$)/;
-const protectedNodes='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance]';
+const protectedNodes='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance],[data-website-region]';
 function marksOn(el){
   const tag=tagMarks.get(el.localName);
   if(tag)return tag;

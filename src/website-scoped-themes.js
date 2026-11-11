@@ -38,7 +38,7 @@ export function sectionNode(doc,address){
  let node=[...descendants(doc)].find(n=>n.tagName==='body');
  for(const index of address.split('/'))node=node?.childNodes?.filter(n=>n.tagName)[Number(index)];
  if(!node?.tagName||!node.sourceCodeLocation?.startTag)invalid();
- for(let parent=node;parent;parent=parent.parentNode)if(parent.attrs?.some(a=>['data-observanda-source','data-observanda-link','data-observanda-part','data-website-instance','data-website-feed','data-website-source-gallery','data-observanda-editor','data-website-menu'].includes(a.name)))invalid();
+ for(let parent=node;parent;parent=parent.parentNode)if(parent.attrs?.some(a=>['data-observanda-source','data-observanda-link','data-observanda-part','data-website-instance','data-website-feed','data-website-source-gallery','data-observanda-editor','data-website-menu','data-website-region'].includes(a.name)))invalid();
  return node;
 }
 const directoryFor=owner=>{const dir=path.posix.dirname(owner);return dir==='.'?'':dir+'/';};

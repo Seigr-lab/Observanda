@@ -21,7 +21,13 @@ const attributes={div:galleryAttrs,section:galleryAttrs,a:['href','rel','target'
 const idRefs=new Set(['aria-describedby','aria-labelledby','headers']);
 const invalid=()=>{throw new AppError('INVALID');};
 const conflict=()=>{throw new AppError('CONFLICT');};
-const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item','data-website-feed','data-website-feed-source','data-website-source-gallery',marker,'data-website-menu','hidden'].includes(a.name));
+const protectedNode=node=>['nav','header','footer','template'].includes(node.tagName)||node.attrs?.some(a=>a.name.startsWith('data-observanda-')||['data-record-id','data-public-record','data-feed-item','data-website-feed','data-website-feed-source','data-website-source-gallery',marker,'data-website-menu','data-website-region','hidden'].includes(a.name));
+// A site region holds its one instance directly, or inside the phone toggle.
+function regionHolder(node,slot){
+ const toggle=node.parentNode?.tagName==='details'&&attr(node.parentNode,'data-website-region-toggle')!==undefined?node.parentNode:null;
+ const wrapper=toggle?toggle.parentNode:node.parentNode;
+ return attr(wrapper,'data-website-region')===slot&&wrapper.parentNode?.tagName==='body'?wrapper:null;
+}
 const nodes=root=>[...descendants(root)].filter(node=>node.tagName);
 
 function oneRoot(html){
@@ -196,7 +202,9 @@ export function checkComponentInstances(html,page,context){
  for(const node of all){
   const id=attr(node,marker);if(id===undefined)continue;
   const instance=instances.get(id),main=context.components.get(instance?.component);if(!main)conflict();
-  ancestry(node.parentNode);instances.delete(id);
+  if(instance.region){if(!regionHolder(node,instance.region))conflict();}
+  else ancestry(node.parentNode);
+  instances.delete(id);
   if(renderComponentInstance(main,instance,page,{...context,verifyOnly:true},componentEntries(node,instance))!==serializeOuter(node))conflict();
   const authored=[node];
   while(authored.length){

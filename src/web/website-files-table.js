@@ -3,7 +3,7 @@
 import {readDelimitedTable,MAX_TABLE_TEXT} from './tabular-data.js';
 import {websiteTableGrid,editWebsiteAxis,moveWebsiteAxis,mergeWebsiteCells,splitWebsiteCell,groupWebsiteCells,referencedTableHeaders} from './website-table-grid.js';
 import {inventoryWindow} from './website-inventory.js';
-const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-feed],[data-website-instance]';
+const protectedContent='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-observanda-editor],[data-website-feed],[data-website-instance],[data-website-region]';
 const tag=node=>node?.localName;
 function blankCell(document,reference){
  const cell=document.createElement(tag(reference)==='th'?'th':'td');

@@ -1,5 +1,5 @@
 const children=node=>Array.from(node.childNodes).filter(n=>!n.hasAttribute?.('data-observanda-editor'));
-const managed='[data-observanda-source],[data-observanda-link],[data-website-instance],[data-website-feed],[data-website-source-gallery],[data-website-menu]';
+const managed='[data-observanda-source],[data-observanda-link],[data-website-instance],[data-website-region],[data-website-feed],[data-website-source-gallery],[data-website-menu]';
 export function websiteTextRuns(document,range){
  const container=range.commonAncestorContainer,walker=document.createTreeWalker(container,4);
  const texts=container.nodeType===3?[container]:[];

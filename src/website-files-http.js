@@ -25,6 +25,7 @@ import {serveContent,contentHash,contentSize} from './file-content.js';
 import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
 import {componentOperation} from './website-component-storage.js';
+import {regionOperation} from './website-region-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
 import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementPresentationOptions,setPlacementPresentation} from './website-file-placements.js';
 import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
@@ -133,7 +134,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   }
   const data=req.method==='POST'?await body(req,20*1024*1024):{};
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
-  if(writes.has(operation)||operation==='menu/save'||/^components\/(create|insert|wrap|update|detach|remove|customize)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
+  if(writes.has(operation)||operation==='menu/save'||operation==='regions/assign'||/^components\/(create|insert|wrap|update|detach|remove|customize)$/.test(operation)||/^library\/(remove|move|present)-placement$/.test(operation)){onWrite();await check();}
   if(operation==='session'){
    const [result,progress]=await Promise.all([store.list({limit:100}),preparation()]);
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
@@ -300,6 +301,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal},true));return true;}
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}
   if(operation==='media/library'){json(await websiteRecordingLibrary(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='regions'){json(await regionOperation(store,'list',siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='regions/assign'){await observed(()=>operationStage('regionSave',{unit:'files'},()=>regionOperation(store,'assign',siteId,{...options,expectedRevision,signal})));return true;}
   if(operation==='menu'){json(await store.menu(siteId,{expectedRevision,menuId:options.menuId,signal}));return true;}
   if(operation==='menu/save'){await observed(()=>operationStage('menuSave',{unit:'files'},()=>store.saveMenu(siteId,{...options,expectedRevision,signal})));return true;}
   if(operation==='version'){

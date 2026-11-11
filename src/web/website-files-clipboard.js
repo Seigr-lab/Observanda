@@ -3,7 +3,7 @@ import {websiteLink} from './website-links.js';
 const semantic=new Set(['strong','em','u','s','sub','sup','mark','code','cite','small']);
 const flow=new Set(['p','div','br','ol','ul','li','blockquote','pre','h1','h2','h3','h4','h5','h6']);
 const aliases={b:'strong',i:'em',strike:'s',del:'s'};
-const privateOrComplex='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-feed],[data-website-instance],table,math,svg,img,audio,video';
+const privateOrComplex='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-feed],[data-website-instance],[data-website-region],table,math,svg,img,audio,video';
 const ignored='style,script,template,noscript,head,iframe,object,embed,form,input,button,[hidden],[aria-hidden="true"]';
 const pasteBoundaries=new WeakMap();
 

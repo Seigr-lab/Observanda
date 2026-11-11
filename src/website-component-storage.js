@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {affectedComponents,checkComponentSchema,checkInstanceOptions,componentDependencies,componentUseCounts,migrateInstance} from './website-component-schema.js';
 import {componentImpact} from './website-component-impact.js';
+import {REGION_SLOTS} from './website-region-model.js';
 import {componentCSS} from './website-component-styles.js';
 import {validateWebsiteHTML} from './website-file-policy.js';
 import {websiteRecordingKind} from './website-recordings.js';
@@ -34,7 +35,7 @@ export function checkComponentManifest(manifest,files){
  for(const page of manifest.pages){
   let sources;
   for(const row of page.instances??[]){
-   if(!uuid(row.id)||placements.has(row.id)||!ids.has(row.component))bad();
+   if(!uuid(row.id)||placements.has(row.id)||!ids.has(row.component)||row.region!==undefined&&(!REGION_SLOTS.includes(row.region)||row.entries))bad();
    placements.add(row.id);
    if(row.values||row.variant||row.entries)checkInstanceOptions(components?.get(row.component)??{},row,files,page.draft);
    if(row.entries){
@@ -133,13 +134,15 @@ export function componentOperation(store,operation,id,options={},requireReview=f
   if(operation==='remove'){
    if(!visible)throw new AppError('NOT_FOUND');
    if(page.draft&&!main.draft)throw new AppError('WEBSITE_PUBLIC_COMPONENT');
-   if(manifest.pages.some(owner=>owner.instances?.some(row=>row.component===component))||list(manifest).some(c=>c.slots?.some(s=>s.component===component)))fail();
+   if(manifest.pages.some(owner=>owner.instances?.some(row=>row.component===component))||list(manifest).some(c=>c.slots?.some(s=>s.component===component))||
+    Object.values(manifest.regions?.slots??{}).some(row=>row.component===component)||manifest.regions?.overrides.some(row=>row.component===component))fail();
    const components=list(manifest).filter(row=>row.id!==component),kept=new Set([...manifest.pages.flatMap(p=>[...(p.pictures??[]),...(p.recordings??[])]),...Object.values(manifest.pictureStyles??{}).flat()]);
    const files=manifest.files.filter(file=>!file.picture&&!file.recording||kept.has(file.name));
    const candidate={...manifest,components,files};await store.assertSources(candidate);
    return store.present(await store.commit(candidate,{signal}),path,{signal});
   }
-  if(operation==='detach'&&!page.instances?.some(i=>i.id===instance))fail();
+  // A region instance belongs to the site; it is changed through its region, never detached.
+  if(operation==='detach'&&!page.instances?.some(i=>i.id===instance&&!i.region))fail();
   const current=operation==='detach'?context.components.get(page.instances.find(i=>i.id===instance).component):operation==='create'?null:main;
   if(operation!=='create'&&(!current||current.draft&&!page.draft))throw new AppError('NOT_FOUND');
   if(['update','review'].includes(operation)&&page.draft&&!current.draft)throw new AppError('WEBSITE_PUBLIC_COMPONENT');

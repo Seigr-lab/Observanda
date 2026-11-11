@@ -3,7 +3,7 @@ import {decodedWebsiteCSS,websiteCSSURLs} from './website-css-urls.js';
 import {literal,mergeOrder} from './website-three-way.js';
 import {imageResourceURLs} from './website-image-candidates.js';
 
-const ownerNames=['data-observanda-source','data-observanda-link','data-website-source-gallery','data-website-feed','data-website-instance','data-website-menu-id','data-website-theme-sheet','data-website-appearance'];
+const ownerNames=['data-observanda-source','data-observanda-link','data-website-source-gallery','data-website-feed','data-website-instance','data-website-region','data-website-menu-id','data-website-theme-sheet','data-website-appearance'];
 const htmlOf=node=>node?.outerHTML??(node?.nodeType===8?'<!--'+node.data+'-->':node?.data??null);
 const children=node=>[...(node.content??node).childNodes];
 const anchor=node=>node.nodeType===1&&(node.getAttribute('data-section-id')||node.id)||null;

@@ -1,5 +1,5 @@
 import {safeEquationElement} from './website-equation-markup.js';
-const protectedNodes='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance],nav,header,footer';
+const protectedNodes='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance],[data-website-region],nav,header,footer';
 export const templates={
  fraction:['equationNumerator','equationDenominator'],power:['equationBase','equationExponent'],subscript:['equationBase','equationSubscript'],
  root:['equationRadicand'],matrix:[],text:['equationWords']

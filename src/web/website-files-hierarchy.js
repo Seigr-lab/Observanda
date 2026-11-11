@@ -74,7 +74,7 @@ export function websiteHierarchy({t,site,enabled,available,snapshot,read,edit,bu
   observer?.disconnect();
   model=indexWebsiteLayers(doc);draw();paintTrail();
   observer=new MutationObserver(records=>updateRows(doc,records));
-  observer.observe(doc.body,{subtree:true,characterData:true,childList:true,attributes:true,attributeFilter:['id','aria-label','alt','class','hidden','data-section-id','data-region-kind','data-observanda-source','data-observanda-link','data-observanda-part','data-observanda-editor','data-image-gallery','data-website-source-gallery','data-website-recording','data-website-feed','data-website-instance','data-website-menu','data-website-annotation']});
+  observer.observe(doc.body,{subtree:true,characterData:true,childList:true,attributes:true,attributeFilter:['id','aria-label','alt','class','hidden','data-section-id','data-region-kind','data-observanda-source','data-observanda-link','data-observanda-part','data-observanda-editor','data-image-gallery','data-website-source-gallery','data-website-recording','data-website-feed','data-website-instance','data-website-region','data-website-menu','data-website-annotation']});
  }
  function updateRows(doc,records){
   if(!model||!list?.isConnected)return;

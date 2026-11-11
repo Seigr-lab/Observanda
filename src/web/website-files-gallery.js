@@ -5,7 +5,7 @@ import {imageResourceURLs,displayWidths} from './website-image-candidates.js';
 import {imageFrameControls,readImageFrame,applyImageFrame,changeImageFrame,imageFrameCSS,previewImageFrame,showOriginalImage} from './website-image-frame.js';
 
 const selector='.site-gallery,[data-image-gallery]';
-const protectedContent='[data-observanda-source],[data-observanda-link],[data-website-feed],[data-website-source-gallery],[data-website-instance]';
+const protectedContent='[data-observanda-source],[data-observanda-link],[data-website-feed],[data-website-source-gallery],[data-website-instance],[data-website-region]';
 const pageSize=12;
 const galleryList=doc=>[...doc.querySelectorAll(selector)].filter(node=>!node.closest(protectedContent)&&!node.querySelector(protectedContent));
 const figures=grid=>Array.from(grid?.children??[]).filter(node=>node.matches('figure')&&node.querySelector('img'));

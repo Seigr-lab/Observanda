@@ -1,7 +1,7 @@
 import {websiteHTML,serializeWebsiteHTML} from './website-html-document.js';
 
 import {applyChange} from './website-text-splice.js';
-const ownerAttributes=['data-observanda-source','data-observanda-link','data-website-instance','data-website-feed','data-website-source-gallery','data-website-menu-id','data-website-appearance','data-website-theme-sheet'];
+const ownerAttributes=['data-observanda-source','data-observanda-link','data-website-instance','data-website-region','data-website-feed','data-website-source-gallery','data-website-menu-id','data-website-appearance','data-website-theme-sheet'];
 const managed=ownerAttributes.map(a=>'['+a+']').join(',')+',nav';
 function grantedTextShape(fragment){
  const doc=websiteHTML(fragment),walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);

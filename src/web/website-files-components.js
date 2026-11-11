@@ -8,7 +8,7 @@ import {componentGallery} from './website-component-gallery.js';
 const marker='data-website-instance',dragType='application/x-observanda-component';
 const blocks='section,article,aside,div,figure,table,p,h1,h2,h3,h4,h5,h6,blockquote,ol,ul,dl,details,pre,hr,img,video,audio';
 const container='body,main,section,article,aside,div,blockquote,li,dd';
-const protectedArea='header,nav,footer,template,[hidden],[data-record-id],[data-public-record],[data-feed-item],[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-menu],[data-website-feed],[data-website-feed-source],[data-website-source-gallery]';
+const protectedArea='header,nav,footer,template,[hidden],[data-record-id],[data-public-record],[data-feed-item],[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-region],[data-website-menu],[data-website-feed],[data-website-feed-source],[data-website-source-gallery]';
 const caption=node=>(node?.querySelector('h1,h2,h3,h4,h5,h6,figcaption,caption')?.textContent||node?.textContent||node?.localName||'').trim().replace(/\s+/g,' ').slice(0,100);
 export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adopt,render,run,notify,showInstance}){
  let opened=false,items=[],query='',name='',position='end',offset=0,next=null,revision=null,total=0,drag=null,canvas=null,dialog=null,epoch=0,controller=null,debounce=null;

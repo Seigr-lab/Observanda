@@ -4,6 +4,7 @@ export {hasPrivateText} from './privacy-text.js';
 import {isDownloadPath} from './web/website-file.js';
 import {PUBLIC_POPUPS_SCRIPT} from './publication-popups.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
+import {PUBLIC_REGIONS_SCRIPT} from './public-regions.js';
 import {FileContent,contentBuffer} from './file-content.js';
 import {legacyPagePath} from './web/publication-links-model.js';
 import {knownPublicBookScript} from './publication-scripts.js';
@@ -73,6 +74,8 @@ export function assertPublicFiles(files, blockedValues = []) {
       if(content!==PUBLIC_POPUPS_SCRIPT)throw new AppError('UNSAFE');
     } else if(name==='public-gallery.js'){
       if(content!==PUBLIC_GALLERY_SCRIPT)throw new AppError('UNSAFE');
+    } else if(name==='public-regions.js'){
+      if(content!==PUBLIC_REGIONS_SCRIPT)throw new AppError('UNSAFE');
     } else if(name==='public-feeds.js'){
       if(content!==PUBLIC_FEEDS_SCRIPT)throw new AppError('UNSAFE');
     } else if (publicTextFile(name)) {

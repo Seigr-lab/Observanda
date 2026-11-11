@@ -34,7 +34,8 @@ function layoutStyle(raw=''){
  }
  return output.join(';');
 }
-const ownedMarker=name=>name.startsWith('data-observanda-')||name.startsWith('data-website-feed')||['hidden','data-public-record','data-record-id','data-feed-item','data-website-source-gallery','data-website-menu','data-image-gallery'].includes(name);
+// Site regions are left out: a page made from a design receives its site's regions.
+const ownedMarker=name=>name.startsWith('data-observanda-')||name.startsWith('data-website-feed')||['hidden','data-public-record','data-record-id','data-feed-item','data-website-source-gallery','data-website-menu','data-image-gallery','data-website-region'].includes(name);
 const skipped=node=>node.attrs?.some(a=>ownedMarker(a.name)||a.name==='aria-hidden'&&a.value.toLowerCase()==='true'||a.name==='style'&&/(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|content-visibility\s*:\s*hidden)\b/i.test(a.value));
 export function validatePageDesigns(manifest){
  if(manifest.pageDesigns===undefined)return;

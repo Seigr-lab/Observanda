@@ -25,6 +25,9 @@ import {validateDiscovery} from './website-discovery-settings.js';
 import {applyDiscovery,discoveryNames} from './website-discovery-output.js';
 import {cssStructureIssue} from './web/website-source-text.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
+import {REGION_FILES,placeSiteRegions,regionFiles} from './website-region-storage.js';
+import {REGION_SCRIPT} from './website-region-markup.js';
+import {checkRegions} from './website-region-model.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSources,updateWebsiteSource} from './website-file-html.js';
 import {assertPageDestination,websitePageIdentity} from './website-page-paths.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
@@ -298,6 +301,7 @@ export class WebsiteFileStore{
   if(value.breakpoints!==undefined&&!validBreakpoints(value.breakpoints))throw new AppError('FORMAT');
   validateDiscovery(value.discovery);
   checkComponentManifest(value,names);
+  checkRegions(value);
   for(const source of value.sources)if(!hex(source.id)||!hex(source.revision))throw new AppError('FORMAT');return value;
  }
  async raw(id,{missing=false}={}){
@@ -575,10 +579,11 @@ export class WebsiteFileStore{
   const inspected=await this.inspectPageSource(manifest,page,html,css,signal,designInstances,creation);
   const {former,draft,cssPath,scripts,htmlPictures,cssPictures,recordingNames,addViewer}=inspected,sources=new Map();
   let {placements}=inspected;
-  if(!former){
-   ({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
-   validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});
-  }
+  if(!former)({html,placements}=await inheritSiteMenu(this,manifest,html,page,placements,{signal}));
+  // Every saved or created page carries the regions its site resolves for it.
+  const placed=placeSiteRegions(manifest,html,{path:page,draft,instances:designInstances??former?.instances}),pageInstances=placed.instances;
+  if(placed.instances?.some(row=>row.region))scripts.add(REGION_SCRIPT);
+  if(!former||placed.html!==html){html=placed.html;validateWebsiteHTML(html,{scripts,file:page,pictures:htmlPictures,recordings:recordingNames});}
   const historyFiles=editHistory(manifest,historyKey,page);
   const files=manifest.files.filter(file=>file.name!==page&&file.name!==cssPath);
   for(const file of historyFiles)if(htmlPictures.has(file.name)||cssPictures.has(file.name)||recordingNames.has(file.name))files.push(file);
@@ -590,10 +595,13 @@ export class WebsiteFileStore{
   const pages=manifest.pages.filter(value=>value.path!==page);pages.push({path:page,title:pageTitle?title(pageTitle):websiteDocumentTitle(html),placements,pictures:[...htmlPictures],recordings:[...recordingNames],...(draft?{draft:true}:{})});
   if(creation?.stylePath||former?.stylePath)pages.at(-1).stylePath=creation?.stylePath??former.stylePath;
   if(former?.sharedDraftBase)pages.at(-1).sharedDraftBase=true;
-  if(designInstances?.length||former?.instances?.length)pages.at(-1).instances=designInstances??former.instances;
+  if(pageInstances?.length)pages.at(-1).instances=pageInstances;
   if(former?.sourceGalleries?.length)pages.at(-1).sourceGalleries=former.sourceGalleries;
   if(former?.entryDisplays)pages.at(-1).entryDisplays=former.entryDisplays;
   for(const value of pages)for(const source of value.placements)sources.set(source.id,source);
+  // Later steps read this list, so the managed region files are set in it.
+  for(let index=files.length-1;index>=0;index--)if(REGION_FILES.includes(files[index].name))files.splice(index,1);
+  files.push(...await regionFiles(this,id,{...manifest,pages},{signal}));
   const candidate={...manifest,files,pages,sources:[...sources.values()]};
   if(creation?.styleTokens?.length)candidate.styleBook={...manifest.styleBook,pages:{...manifest.styleBook.pages,[page]:creation.styleTokens}};
   await this.assertSources(candidate);

@@ -1,4 +1,4 @@
-const owned='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance],[data-observanda-editor],[data-website-feed]';
+const owned='[data-observanda-source],[data-observanda-part],[data-observanda-link],[data-website-instance],[data-website-region],[data-observanda-editor],[data-website-feed]';
 const bibliography='[data-website-bibliography]',entry='li[data-website-reference]';
 const objects='figure,table,h1,h2,h3,h4,h5,h6,'+entry;
 const prose='p,li,dt,dd,h1,h2,h3,h4,h5,h6,td,th,figcaption,blockquote';

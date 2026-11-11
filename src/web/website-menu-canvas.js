@@ -2,7 +2,7 @@ import {loadWebsiteCanvas,websiteHTML} from './website-html-document.js';
 import {menuCSS} from './website-menu-theme.js';
 import {validWebsiteLink} from './website-files-text-link.js';
 
-const protectedArea='[data-observanda-source],[data-observanda-part],[data-website-instance],[data-website-feed],[data-website-source-gallery]';
+const protectedArea='[data-observanda-source],[data-observanda-part],[data-website-instance],[data-website-region],[data-website-feed],[data-website-source-gallery]';
 function primaryMenu(doc){
  const navs=[...doc.querySelectorAll('nav:not([data-website-menu-id])')].filter(n=>!n.closest(protectedArea));
  const candidates=[...navs.filter(n=>n.hasAttribute('data-website-menu')),...navs.filter(n=>n.getAttribute('aria-label')==='Website'||n.parentElement?.classList.contains('site-top')),

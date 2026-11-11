@@ -1,7 +1,7 @@
 import {websiteLayerAt} from './website-layer-model.js';
 import {applyVisualStyle,readVisualStyle,visualClass,writeVisualStyle} from './website-files-visual-style.js';
 
-const controlled='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-menu],[data-website-source-gallery],[data-website-feed]';
+const controlled='[data-observanda-source],[data-observanda-link],[data-observanda-part],[data-website-instance],[data-website-region],[data-website-menu],[data-website-source-gallery],[data-website-feed]';
 export function accessRepairKind(key,node){
  if(!node||node.closest(controlled))return null;
  if(key==='missingAlt'||key==='accessImageText')return 'image';

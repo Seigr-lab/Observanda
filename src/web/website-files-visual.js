@@ -85,7 +85,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const sheet=temporary('style');
   // Keep the outer composition visible. The pointer and keyboard overlay
   // outlines the precise nested part being edited.
-  sheet.textContent=':where('+blocks+'):not(:where([data-observanda-source] *,[data-website-instance] *)){outline:1px dashed #4968a699;outline-offset:-1px}';
+  sheet.textContent=':where('+blocks+'):not(:where([data-observanda-source] *,[data-website-instance] *,[data-website-region] *)){outline:1px dashed #4968a699;outline-offset:-1px}';
   document.head.append(sheet);
   const savedStyle=document.head.querySelector('style[data-observanda-editor]');
   const frame=temporary('div');
