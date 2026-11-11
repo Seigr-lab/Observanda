@@ -30,10 +30,16 @@ test('the block menu offers an image and a video next to the gallery, each label
 test('a block or page can take a site picture as its background, sized, placed and overlaid visually',async()=>{
  const {backgroundPictureValue}=await import('../src/web/website-files-visual-style.js');
  const pictures=['pictures/11111111-1111-4111-8111-111111111111.png'];
- assert.equal(backgroundPictureValue(pictures[0],'style.css'),'url("pictures/11111111-1111-4111-8111-111111111111.png")');
- assert.equal(backgroundPictureValue(pictures[0],'notes/2026/style.css'),'url("../../pictures/11111111-1111-4111-8111-111111111111.png")');
+ // The picture sits under an overlay layer drawn from its own colour and strength.
+ const layer='color-mix(in srgb, var(--website-overlay-color, #000000) calc(var(--website-overlay-strength, 0) * 100%), transparent)';
+ assert.equal(backgroundPictureValue(pictures[0],'style.css'),'linear-gradient('+layer+', '+layer+'), url("pictures/11111111-1111-4111-8111-111111111111.png")');
+ assert.ok(backgroundPictureValue(pictures[0],'notes/2026/style.css').endsWith('url("../../pictures/11111111-1111-4111-8111-111111111111.png")'));
  const fields=visualStyleFields({fonts:[]},(key,args)=>(en[key]??key).replace(/\{(\w+)\}/g,(_,name)=>args?.[name]??''),{pictures,stylesheetPath:'notes/style.css'}),byName=new Map(fields.map(f=>[f.name,f]));
- assert.deepEqual(byName.get('background-image').options,[['none','No picture'],['url("../pictures/11111111-1111-4111-8111-111111111111.png")','Picture 1 (11111111)']]);
+ assert.deepEqual(byName.get('background-image').options,[['none','No picture'],[backgroundPictureValue(pictures[0],'notes/style.css'),'Picture 1 (11111111)']]);
+ assert.equal(byName.get('--website-overlay-color').type,'color');assert.deepEqual([byName.get('--website-overlay-strength').min,byName.get('--website-overlay-strength').max],[0,0.9]);
+ // An overlay and a drop shadow are separate declarations on the same block.
+ const both=fakeStyle();applyVisualStyle(both,[['--website-overlay-color','#102030'],['--website-overlay-strength','0.5'],['box-shadow','rgba(0, 0, 0, 0.16) 0px 4px 12px 0px']]);
+ assert.deepEqual([...both.values.keys()].sort(),['--website-overlay-color','--website-overlay-strength','box-shadow']);
  for(const name of ['background-size','background-position','background-repeat'])assert.ok(byName.get(name).options.length>1,name);
  assert.ok(byName.get('box-shadow').options.some(([value])=>value.endsWith('100vmax inset')));
  for(const field of fields)assert.ok(en[field.label],field.label);

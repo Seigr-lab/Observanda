@@ -10,6 +10,8 @@ const properties = {
   'letter-spacing': ['--letter-spacing'],
   padding: [],
   'background-image': [],
+  '--website-overlay-color': [],
+  '--website-overlay-strength': [],
   'background-size': [],
   'background-position': [],
   'background-repeat': [],
@@ -60,8 +62,11 @@ export function writeVisualStyle(css, name, style) {
 
 // A site picture as a background, written relative to the stylesheet that
 // holds the rule, so the published site and the canvas resolve it alike.
+// The picture is drawn under an overlay layer whose colour and strength are
+// separate controls, so a block can have an overlay and a drop shadow.
+const overlayLayer='color-mix(in srgb, var(--website-overlay-color, #000000) calc(var(--website-overlay-strength, 0) * 100%), transparent)';
 export function backgroundPictureValue(name, stylesheetPath) {
-  return 'url("' + '../'.repeat(stylesheetPath.split('/').length - 1) + name + '")';
+  return 'linear-gradient(' + overlayLayer + ', ' + overlayLayer + '), url("' + '../'.repeat(stylesheetPath.split('/').length - 1) + name + '")';
 }
 
 export function visualStyleFields(document, t, {pictures = [], stylesheetPath = 'style.css'} = {}) {
@@ -87,6 +92,8 @@ export function visualStyleFields(document, t, {pictures = [], stylesheetPath = 
     {name:'letter-spacing', label:'sectionLetterSpacing', type:'number', step:'any', unit:'px'},
     {name:'padding', label:'sectionPadding', type:'number', min:0, step:'any', unit:'px'},
     {name:'background-image', label:'sectionBackgroundPicture', options:[['none',t('sectionNoPicture')],...pictures.map((name,i)=>[backgroundPictureValue(name,stylesheetPath),t('sectionPictureNumber',{number:i+1,name:name.slice(9,17)})])]},
+    {name:'--website-overlay-color', label:'sectionOverlayColour', type:'color'},
+    {name:'--website-overlay-strength', label:'sectionOverlayStrength', type:'number', min:0, max:0.9, step:0.05},
     {name:'background-size', label:'sectionBackgroundSize', options:[['cover',t('sectionBackgroundCover')],['contain',t('sectionBackgroundContain')],['auto',t('sectionBackgroundNatural')]]},
     {name:'background-position', label:'sectionBackgroundPosition', options:[['center center',t('sectionCenter')],['center top',t('sectionTop')],['center bottom',t('sectionBottom')],['left center',t('sectionLeft')],['right center',t('sectionRight')]]},
     {name:'background-repeat', label:'sectionBackgroundRepeat', options:[['no-repeat',t('sectionRepeatOnce')],['repeat',t('sectionRepeatTile')]]},

@@ -1024,6 +1024,8 @@
   "placementNoCover": "Uten forsidebilde",
   "placementCoverPhoto": "Fotografi",
   "placementShowDate": "Vis datoen for oppføringen",
+  "sectionOverlayColour": "Farge på laget over bildet",
+  "sectionOverlayStrength": "Styrke på laget (0 til 0,9)",
   "sectionBackgroundPicture": "Bakgrunnsbilde",
   "sectionNoPicture": "Uten bilde",
   "sectionPictureNumber": "Bilde {number} ({name})",

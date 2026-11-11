@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sin imagen de portada",
   "placementCoverPhoto": "Fotografía",
   "placementShowDate": "Mostrar la fecha de la entrada",
+  "sectionOverlayColour": "Color de la capa sobre la imagen",
+  "sectionOverlayStrength": "Intensidad de la capa (de 0 a 0,9)",
   "sectionBackgroundPicture": "Imagen de fondo",
   "sectionNoPicture": "Sin imagen",
   "sectionPictureNumber": "Imagen {number} ({name})",

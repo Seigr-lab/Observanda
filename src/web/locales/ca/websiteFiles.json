@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sense imatge de portada",
   "placementCoverPhoto": "Fotografia",
   "placementShowDate": "Mostra la data de l’entrada",
+  "sectionOverlayColour": "Color de la capa sobre la imatge",
+  "sectionOverlayStrength": "Intensitat de la capa (de 0 a 0,9)",
   "sectionBackgroundPicture": "Imatge de fons",
   "sectionNoPicture": "Sense imatge",
   "sectionPictureNumber": "Imatge {number} ({name})",
