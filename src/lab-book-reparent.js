@@ -54,7 +54,7 @@ export class LabBookReparents{
  async locate(value){
   const roots=await this.roots(value);
   const candidates=value.version===2?[value.phase==='copying'?roots.source:roots.destination]:[roots.destination,roots.source];
-  for(const root of candidates){const expected=value.version===2&&root===roots.destination?value.transfer.identity:value.identity,stat=await assertRegular(root,{directory:true,missing:true});if(!stat||!sameIdentity(value.version===2?await projectMoveDirectory(root):identity(stat),expected))continue;if(await realpath(root)!==root||await hash(path.join(root,'.observanda/access.json'))!==value.accessHash||await hash(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');return root;}
+  for(const root of candidates){const expected=value.version===2&&root===roots.destination?value.transfer.identity:value.identity,stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root||!sameIdentity(value.version===2?await projectMoveDirectory(root):identity(stat),expected))continue;if(await realpath(root)!==root||await hash(path.join(root,'.observanda/access.json'))!==value.accessHash||await hash(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');return root;}
   throw new AppError('STORAGE_RENAME_STATE');
  }
  async locked(source,target,directory,operation){

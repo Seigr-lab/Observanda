@@ -37,7 +37,9 @@ export async function locateProjectRename(registry,value){
  const native=value.ownerDirectoryVersion===2,transferred=native?value.copied===true:value.version===2,owner=transferred?(native?await nativeRelocationOwners(registry,value).get(''):value.transfer.owners.find(item=>item.relative==='')):null;
  for(const relative of transferred?[value.phase==='copying'?value.source:value.destination]:[value.destination,value.source]){
   const root=nestedRenameRoot(registry.workspace.root,relative),stat=await assertRegular(root,{directory:true,missing:true});
-  if(!stat||!sameDirectory(transferred||native?await projectMoveDirectory(root):directoryIdentity(stat),transferred?(relative===value.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
+  // Check the exact spelling first: on case-insensitive volumes a case-only
+  // destination resolves to the source until the rename happens.
+  if(!stat||await realpath(root)!==root||!sameDirectory(transferred||native?await projectMoveDirectory(root):directoryIdentity(stat),transferred?(relative===value.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity))continue;
   if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(['preparing','prepared'].includes(value.phase)&&relative===value.source&&!await workspaceRename(root)))throw new AppError('STORAGE_RENAME_STATE');return root;
  }
  throw new AppError('STORAGE_RENAME_STATE');

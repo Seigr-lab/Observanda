@@ -66,7 +66,7 @@ export class ProjectWorkspaceMoves{
   if(value.ownerDirectoryVersion===2)return locateNativeRelocation(this,value);
   const scope=this.scope(value),owner=value.transfer?.owners.find(item=>item.relative==='');
   for(const root of value.version===2?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
-   const stat=await assertRegular(root,{directory:true,missing:true});if(!stat)continue;
+   const stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root)continue;
    if(!sameDirectory(value.version===2?await projectMoveDirectory(root):directoryIdentity(stat),value.version===2?(root===scope.source?owner.sourceIdentity:owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
    if(await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_MOVE_STATE');return root;
   }

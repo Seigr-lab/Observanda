@@ -30,7 +30,8 @@ const relative=(root,file)=>path.relative(root,file).split(path.sep).join('/');
 export async function locateNativeRelocation(command,value){
  const scope=command.scope(value),owner=value.copied?await nativeRelocationOwners(command.registry,value).get(''):null;
  for(const root of value.copied?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
-  if(!await assertRegular(root,{directory:true,missing:true}))continue;const expected=value.copied?(root===scope.source?owner.identity:owner.destinationIdentity):value.identity,actual=await projectMoveDirectory(root);
+  // A case-only destination resolves to the source on case-insensitive volumes; skip spellings that are not exact.
+  if(!await assertRegular(root,{directory:true,missing:true})||await realpath(root)!==root)continue;const expected=value.copied?(root===scope.source?owner.identity:owner.destinationIdentity):value.identity,actual=await projectMoveDirectory(root);
   if(actual.dev!==expected?.dev||actual.ino!==expected?.ino)continue;if(await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');return root;
  }throw new AppError('STORAGE_RENAME_STATE');
 }
