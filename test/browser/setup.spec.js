@@ -57,7 +57,9 @@ test('encrypted-copy review protects all existing files and retains the original
  await page.getByLabel('Workspace folder').fill(destination);await page.getByLabel('Workspace password',{exact:true}).fill('converted private password');await page.getByLabel('Confirm password',{exact:true}).fill('converted private password');
  await page.getByRole('button',{name:'Review encrypted copy',exact:true}).click();await expect(page.locator('[data-encryption-review]')).toContainText('Ready to encrypt');
  await page.getByRole('button',{name:'Encrypt and use this copy',exact:true}).click();await expect(page.locator('#dialog')).not.toBeVisible({timeout:30000});await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Encrypted workspace',exact:true})).toBeVisible();
- expect(await workspaceManifest(root)).toEqual(before);for(const file of await workspaceManifest(destination))if(file.path!=='.observanda/access.json')expect(encrypted(await readFile(path.join(destination,file.path)))).toBe(true);
+ expect(await workspaceManifest(root)).toEqual(before);
+ // Operating-system lock and lease files are empty: they hold no bytes to encrypt. Every file with content must be encrypted.
+ for(const file of await workspaceManifest(destination)){if(file.path==='.observanda/access.json')continue;const bytes=await readFile(path.join(destination,file.path));if(!bytes.length&&/(?:\.lock|\/admission|\/writer)$/.test(file.path))continue;expect(encrypted(bytes),file.path).toBe(true);}
  await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await page.getByLabel('Password',{exact:true}).fill('converted private password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
 });
 
