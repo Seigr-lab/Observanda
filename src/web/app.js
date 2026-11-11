@@ -341,6 +341,16 @@ function notify(message, error = false) {
 function hideNoticeLater(token) {
   noticeTimer = setTimeout(() => { if (token !== noticeToken) return; if (notices.node.matches(':hover,:focus-within')) hideNoticeLater(token); else notices.hide(); }, 8000);
 }
+// Lab book settings opened from a project page edit the lab book in its own store. Once the dialog
+// closes, the project page reads its project's store again, so its records and settings are the project's.
+function returnToProjectAfterBookSettings(name){
+ const projectId=state.project,owner=state.projectOwner,dialog=$('#dialog');
+ if(!['edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(name)||state.page!=='project'||!owner?.labBookId||owner.projectId!==projectId||!dialog.open)return;
+ dialog.addEventListener('close',()=>{
+  if(state.page!=='project'||state.project!==projectId||state.projectOwner?.labBookId!==owner.labBookId)return;
+  projectOwners.enter(projectId).then(()=>{if(state.page==='project'&&state.project===projectId)render();},error=>{if(error?.name!=='AbortError')report(error);});
+ },{once:true});
+}
 function report(error) {
   if(error?.name==='AbortError')return;
   if(error?.code==='LEGACY_WRITE_LOCK'){void writerRecovery.check({force:true}).catch(error=>notify(error.message,true));return;}
@@ -1083,7 +1093,7 @@ async function rawAction(button) {
   if(await editionSelection.action(button))return;
   if(name==='storage')return storageControls.action(button);
   if(name==='integrations'){if(!state.publishing?.dirty)await publishUI.load();state.page='integrations';render();return;}
-  if(await structureUI.notebooks.action(button))return;
+  if(await structureUI.notebooks.action(button)){returnToProjectAfterBookSettings(name);return;}
   if(name==='module-open'&&moduleDestination(button.dataset.moduleId)){state.page=moduleDestination(button.dataset.moduleId);state.project=null;state.notebook='all';render();return;}
   if(name==='module-open')document.querySelector('#dialog').close();
   if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await localExport.action(button)||await migration.action(button)||await reviews.action(button)||await publicationJobs.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await figures.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button)||await website.action(button))return;
