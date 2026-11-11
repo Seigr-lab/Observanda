@@ -90,3 +90,10 @@ test('analytical and quality control version 2 reports results with uncertainty 
  assert.deepEqual(fieldValueErrors([value],{value:'0.123 ± 0.004'}),[]);
  assert.equal(profile.introduced.sections.result,2);assert.equal(profile.introduced.fields['samples/field1'],1);
 });
+
+test('biosafety version 2 tracks facilities and agents and never publishes the people involved',()=>{
+ const profile=tracks('biosafety-containment',{subjects:['facilities','inventory'],primary:'decontamination',events:['assessments','training','incidents','decontamination'],formats:{'facilities/equipment-id':'identifier','inventory/strain':'identifier','decontamination/cycle':'identifier'}});
+ const field=(section,key)=>profile.sections.find(s=>s.key===section).fields.find(f=>f.key===key);
+ for(const [section,key] of [['training','person'],['incidents','people'],['incidents','medical']])assert.equal(field(section,key).private,true,section+'/'+key);
+ assert.equal(field('facilities','airflow').uncertainty,'absolute');
+});
