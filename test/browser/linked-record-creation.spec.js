@@ -19,22 +19,30 @@ for(const templated of [false,true])test(`create ${templated?'a template inspect
  const original=ResearchCatalogue.prototype.record,loaded=[],requests=[],errors=[],applyCommands=[];let created,plan,acknowledgement,interrupted=false,finished=false;
  ResearchCatalogue.prototype.record=function(id,...args){if(book.entries.some(r=>r.id===id))throw Error('Linked creation loaded an existing body');loaded.push(id);return original.call(this,id,...args);};
  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const route=new URL(request.url()).pathname;if(/\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')requests.push({path:route,body:request.postDataJSON()});if(route==='/api/research/drafts/review/apply')applyCommands.push(request.postDataJSON());});
+ // Linked records are added from the record editor's activity and history area.
  const dialog=page.getByRole('dialog',{name:'Add linked record',exact:true}),reader=page.locator('.record-reader');
  try{
   await page.goto(app.url);
   if(templated){await navigate(page,'Preferences');await preferences(page,'Templates');const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='save'&&r.ok());await page.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;}
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await expect(reader).toContainText(hive.title);
-  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(reader).toContainText(hive.title);expect(requests).toEqual([]);
-  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await page.evaluate(id=>location.hash='#/records/'+id+'/read',other.id);await expect(dialog).not.toBeVisible();await expect(reader).toContainText(other.title);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(reader).toContainText(hive.title);expect(requests).toEqual([]);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();await page.evaluate(id=>location.hash='#/records/'+id+'/read',other.id);await expect(dialog).not.toBeVisible();await expect(reader).toContainText(other.title);
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');
-  if(templated){await page.getByRole('button',{name:'New inspection',exact:true}).click();await expect(page.getByLabel('Queen observation',{exact:true})).toHaveValue('');}
-  else{await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await dialog.getByLabel('Record template').selectOption('type:note');await dialog.getByRole('button',{name:'Create record',exact:true}).click();}
-  await page.getByLabel('Record title',{exact:true}).fill('New linked observation');expect(requests).toEqual([]);created=new URL(page.url()).hash.split('/')[2];expect(created).toBeTruthy();expect(book.entries.some(record=>record.id===created)).toBe(false);
+  // A template inspection is entered one value at a time, starting with its title; an ordinary note opens the writing editor.
+  const host=page.locator('[data-configuration-record-host]'),title=()=>templated?host.locator('[data-record-value]'):page.getByLabel('Record title',{exact:true});
+  if(templated){
+   await (await revealInEditor(page,page.getByRole('button',{name:'New inspection',exact:true}),'Activity and history')).click();await expect(host.locator('[data-record-value]')).toBeVisible({timeout:30000});
+   // The new inspection's own fields start empty.
+   await host.getByLabel('Choose what to edit',{exact:true}).selectOption('custom');await host.getByLabel('Value',{exact:true}).selectOption('template:queen');await expect(host.locator('[data-custom-choice-selected]')).toHaveValue('');
+   await host.getByLabel('Choose what to edit',{exact:true}).selectOption('details');await expect(host.getByLabel('Value',{exact:true})).toHaveValue('title');
+  }
+  else{await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();await dialog.getByRole('button',{name:'Create free-form note',exact:true}).click();}
+  await title().fill('New linked observation');expect(requests).toEqual([]);created=new URL(page.url()).hash.split('/')[2];expect(created).toBeTruthy();expect(book.entries.some(record=>record.id===created)).toBe(false);
   // Initial Save commits the durable checkpoint through a retained review plan.
   // Interrupt its apply request, then prove retry keeps that exact identity.
   await page.context().route('**/api/research/drafts/review/prepare',async route=>{const response=await route.fetch();plan=await readProgressStream(new Response(await response.body()),()=>{});await route.fulfill({response});});
   await page.context().route('**/api/research/drafts/review/apply',async route=>{if(!interrupted){interrupted=true;return route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted creation'}});}const response=await route.fetch();acknowledgement=await readProgressStream(new Response(await response.body()),()=>{});await route.fulfill({response});});
-  const prepared=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/prepare')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await prepared;expect(plan).toMatchObject({recordId:created,newRecord:true,count:0,storageRevision:null});await expect(page.locator('#notice')).toContainText('Synthetic interrupted creation');await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('New linked observation');
+  const prepared=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/prepare')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await prepared;expect(plan).toMatchObject({recordId:created,newRecord:true,count:0,storageRevision:null});await expect(page.locator('#notice')).toContainText('Synthetic interrupted creation');await expect(title()).toHaveValue('New linked observation');
   expect(await f.workspace.catalogue(async store=>store.member(await store.snapshot(),created))).toBe(null);await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();
   const saved=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/apply')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await saved;expect(acknowledgement).toMatchObject({recordDraftRecovered:true,recordId:created});expect(acknowledgement.book).toBeUndefined();await expect(page.locator('.record-editing h1')).toHaveText('New linked observation');
   expect(applyCommands).toHaveLength(2);expect(applyCommands[0]).toEqual({id:plan.id,workspaceId:book.id,expectedRevision:plan.revision});expect(applyCommands[1]).toEqual(applyCommands[0]);expect(loaded).toEqual([]);expect(requests).toEqual([]);
