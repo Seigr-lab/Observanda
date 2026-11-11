@@ -4,21 +4,23 @@ import './i18n/catalogues/recordEditors.js';
 const text=key=>t('recordDates',key);
 const issue=value=>recordDateIssue(value,{translate:t});
 
-export function recordDateFields(value,{field,option,esc}){
+// `label` names the date for other owners of the same contract, such as the
+// capture date of a photograph; records keep "Record date".
+export function recordDateFields(value,{field,option,esc,label=text('fieldDate')}){
  const d=dateParts(value),kind=d.kind;
- return `<fieldset class="record-date-fields"><legend>${esc(text('fieldDate'))}</legend>
+ return `<fieldset class="record-date-fields"><legend>${esc(label)}</legend>
  ${field(text('fieldPrecision'),`<select data-record-date="kind">${[['day','precisionDay'],['month','precisionMonth'],['year','precisionYear'],['range','precisionRange'],['unknown','precisionUnknown']].map(([id,key])=>option(id,text(key),kind)).join('')}</select>`)}
- <div data-record-date-values>${recordDateValues(value,{field,esc})}</div>
+ <div data-record-date-values>${recordDateValues(value,{field,esc,label})}</div>
  <p class="muted" id="record-date-help">${esc(text('fieldHelp'))}</p>
  <p data-record-date-error role="status">${esc(issue(value))}</p></fieldset>`;
 }
-function recordDateValues(value,{field,esc}){
+function recordDateValues(value,{field,esc,label=text('fieldDate')}){
  const d=dateParts(value);
  if(d.kind==='unknown')return '<p class="muted">'+esc(text('noDate'))+'</p>';
  const input=(label,key,type,value)=>field(label,`<input type="${type}" data-record-date="${key}" ${key==='value'&&d.kind==='day'?'data-entry="occurredOn"':''} value="${esc(value)}" ${type==='text'?'inputmode="numeric" maxlength="4" placeholder="YYYY"':''} aria-describedby="record-date-help">`);
  return (d.kind==='range'
   ?input(text('fieldStart'),'from','date',d.from)+input(text('fieldEnd'),'to','date',d.to)
-  :input(text(d.kind==='day'?'fieldDate':d.kind==='month'?'fieldMonth':'fieldYear'),'value',d.kind==='day'?'date':d.kind==='month'?'month':'text',d.value))+
+  :input(d.kind==='day'?label:text(d.kind==='month'?'fieldMonth':'fieldYear'),'value',d.kind==='day'?'date':d.kind==='month'?'month':'text',d.value))+
   `<label class="checkbox"><input type="checkbox" data-record-date="estimated" ${d.estimated?'checked':''}><span>${esc(text(d.kind==='range'?'estimatedRange':'estimatedDate'))}</span></label>`;
 }
 export function updateRecordDate(el,record,helpers){

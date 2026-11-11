@@ -84,6 +84,6 @@ export function recordValuesView(options,lifecycle){
    if(!element.hasAttribute('data-record-value'))return false;
    value.value=base.definition?templateInputValue(base.definition,element.value):(base.field==='share'||base.field==='sharePdf')?element.value==='true':base.field==='outcome'&&!element.value?null:element.value;return true;
   },
-  validate(dialog,base,value){if(resultValueId(base.field))return results.validate();if(attemptValueField(base.field))return attempts.validate();if(figureValueId(base.field))return figures.validate();if(relationValueId(base.field))return relations.validate(dialog,base,value);if(base.field!=='occurredOn')return true;const issue=recordDateIssue(value.value);if(issue){dialog.querySelector('[data-record-date-error]').textContent=dateIssueLabel(issue);return false;}return true;}
+  validate(dialog,base,value){if(mediaValueId(base.field))return media.validate(dialog,value);if(resultValueId(base.field))return results.validate();if(attemptValueField(base.field))return attempts.validate();if(figureValueId(base.field))return figures.validate();if(relationValueId(base.field))return relations.validate(dialog,base,value);if(base.field!=='occurredOn')return true;const issue=recordDateIssue(value.value);if(issue){dialog.querySelector('[data-record-date-error]').textContent=dateIssueLabel(issue);return false;}return true;}
  };
 }

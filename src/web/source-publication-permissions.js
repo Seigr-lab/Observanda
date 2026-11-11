@@ -7,7 +7,9 @@ export const SOURCE_PUBLICATION_VERSION=1;
 export const sourceNotebookAllowed=(book,target='website')=>!!book&&(target==='website'?book.share!==false:target==='pdf'&&book.sharePdf===true);
 export const sourceRecordAllowed=(record,metadata,target='website')=>(target==='website'?record.share===true:target==='pdf'&&record.sharePdf===true)&&(!metadata||metadata.notebooks.some(book=>book.id===record.notebookId&&sourceNotebookAllowed(book,target)));
 export const publicRecordSections=(record,target='website')=>(record.sections??[]).filter(section=>target==='website'?section.share!==false:target==='pdf'&&section.sharePdf===true);
-export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true);
+// Source and capture details (creator, licence, private location) stay in the
+// lab book: no output receives them until it projects attribution explicitly.
+export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true).map(({metadata,...item})=>item);
 export function sourcePublicationRecord(record,target='website',retainedTargets=[]){
  const result={...record,sections:publicRecordSections(record,target),attachments:publicRecordAttachments(record,target)};
  for(const key of ['body','outcome'])if(!publicationPartAllowed(record,key,target))result[key]='';
