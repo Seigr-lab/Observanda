@@ -3,7 +3,8 @@ import {derivedComputation} from './web/measurement-computation.js';
 // The authoring format is intentionally unreadable by ordinary exporters.
 import {randomUUID,createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {RetainedFigureDocuments,RetainedFigureCollections,figureValidationValue,memberIdSequence} from './retained-figure-document.js';
+import {RetainedFigureDocuments,RetainedFigureCollections,figureValidationValue,memberIdSequence,runEntry,writeMemberRun} from './retained-figure-document.js';
+import {MEMBER_RUN_MEMBERS,MEMBER_RUN_BYTES} from './retained-figure-blocks.js';
 import {RetainedFigurePresentation,spliceFigureText} from './retained-figure-presentation.js';
 import {RecordDocument} from './record-document.js';
 import {indexCheckpointDue} from './retained-table-index.js';
@@ -72,7 +73,11 @@ class DraftEdit extends RetainedFigurePresentation{
  async checkpoint(){await this.index.flushRoots([this.reader.data,this.reader.presentation].flatMap(body=>Object.values(body.collections).map(value=>value.root)).concat([this.reader.dataIndex,this.reader.presentationIndex].flatMap(body=>Object.values(body.collections).flatMap(value=>Object.values(value)))));}
  async setMember(member){
   const {body,index}=this.tables(member.collection),collection=body.collections[member.collection]??={count:0,root:null},indexes=index.collections[member.collection]??=emptyIndexes();
-  const revision=await this.tree.retain(member);collection.root=await this.index.change(collection.root,ordinal(member.ordinal),revision);indexes.keys=await this.index.change(indexes.keys,member.id,revision);
+  return this.indexMember(member,await this.tree.retain(member));
+ }
+ async indexMember(member,revision){
+  const {body,index}=this.tables(member.collection),collection=body.collections[member.collection]??={count:0,root:null},indexes=index.collections[member.collection]??=emptyIndexes();
+  collection.root=await this.index.change(collection.root,ordinal(member.ordinal),revision);indexes.keys=await this.index.change(indexes.keys,member.id,revision);
   if(member.plotId)indexes.plots=await this.index.change(indexes.plots,member.plotId+':'+ordinal(member.ordinal),revision);
   if(member.seriesId)indexes.series=await this.index.change(indexes.series,member.seriesId+':'+ordinal(member.position),revision);
   if(indexCheckpointDue(this.index))await this.checkpoint();return member;
@@ -85,11 +90,21 @@ class DraftEdit extends RetainedFigurePresentation{
  }
  async rewrite(collection,{keep=()=>true,selected=null,other=null}={}){
   const prior=this.reader.collection(collection).collection,root=prior.root,total=prior.count,{body,index}=this.tables(collection);body.collections[collection]={count:0,root:null};index.collections[collection]=emptyIndexes();
+  // Points are written back as member runs, so moving or removing one point
+  // of a large figure does not turn every other point into its own block.
+  const points=collection==='points',positions=new Map();let run=null;
+  const flush=async()=>{if(!run)return;const current=run;run=null;const revision=await writeMemberRun(this.blocks,current,current.entries);for(const item of current.items)await this.indexMember(item,revision);};
   for(let at=0;at<total;at++){
    this.check();const entry=await this.index.entryAt({root},at);let member=await this.reader.member(entry.revision,collection,{slot:'collection',key:entry.id});if(!await keep(member))continue;
    if(other){if(member.id===selected.id)member=other;else if(member.id===other.id)member=selected;}
-   await this.append(collection,null,{id:member.id,plotId:member.plotId,seriesId:member.seriesId,bodyRoot:member.body,texts:member.texts});
+   if(!points||!member.plotId||!member.seriesId){await this.append(collection,null,{id:member.id,plotId:member.plotId,seriesId:member.seriesId,bodyRoot:member.body,texts:member.texts});continue;}
+   const position=positions.get(member.seriesId)??0;positions.set(member.seriesId,position+1);
+   const item={format:'figure-member',version:1,collection,id:member.id,plotId:member.plotId,seriesId:member.seriesId,position,ordinal:body.collections[collection].count++,body:member.body,texts:member.texts};
+   const runItem=await runEntry(this.blocks,item),bytes=Buffer.byteLength(serialize(runItem));
+   if(run&&(run.plotId!==item.plotId||run.seriesId!==item.seriesId||run.items.length===MEMBER_RUN_MEMBERS||run.bytes+bytes>MEMBER_RUN_BYTES))await flush();
+   run??={plotId:item.plotId,seriesId:item.seriesId,items:[],entries:[],bytes:0};run.items.push(item);run.entries.push(runItem);run.bytes+=bytes;
   }
+  await flush();
  }
  async point(operation){
   const member=await this.member('points',operation.id,operation.plotId);let body=member.body,texts={...member.texts};

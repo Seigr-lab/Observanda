@@ -44,6 +44,16 @@ export async function retainedMember(blocks,revision,collection,select=null){
  if(block?.type!=='member-run')return blocks.tree().read(revision);
  if(collection!=='points')fail();const members=memberRunMembers(block);blocks.embed(revision,members);return structuredClone(selectRunMember(members.map(item=>item.member),select));
 }
+// Write one series' ordered point members as a member run block. A body
+// already known only from inside an earlier run travels inside this run too.
+export async function runEntry(blocks,item,value){
+ if(value===undefined&&blocks.embedded?.has(item.body)){const node=await blocks.read('value',item.body);if(node.type==='inline')value=node.value;}
+ return {id:item.id,position:item.position,ordinal:item.ordinal,...(item.categoryId?{categoryId:item.categoryId}:{}),body:item.body,texts:item.texts,...(value!==undefined?{value}:{})};
+}
+export async function writeMemberRun(blocks,{plotId,seriesId},entries){
+ const node={type:'member-run',version:1,collection:'points',plotId,seriesId,members:entries};
+ const revision=await blocks.put('value',node);blocks.embed(revision,memberRunMembers(node));return revision;
+}
 export const figureValidationValue=value=>value?.format==='figure-text'?'Retained text':Array.isArray(value)?value.map(figureValidationValue):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,child])=>[key,figureValidationValue(child)])):value;
 const invalid=()=>{throw new AppError('MATERIAL_INVALID');};
 const sample=header=>({x:header.x?.kind==='number'?1:header.x?.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})});
@@ -85,7 +95,7 @@ export class RetainedFigureCollections{
   const item={format:'figure-member',version:1,collection:name,id,plotId,seriesId,position:position??collection.count,ordinal:collection.count++,...(categoryId?{categoryId}:{}),...(visiblePosition!==null?{visiblePosition}:{}),body:embed?digest(inline):bodyRoot??await this.tree.retain(body),texts:texts??lengths(body)};
   if(this.runs&&name==='points'&&plotId&&seriesId){
    if(this.run&&(this.run.plotId!==plotId||this.run.seriesId!==seriesId))await this.flushRun();
-   const entry={id,position:item.position,ordinal:item.ordinal,...(categoryId?{categoryId}:{}),body:item.body,texts:item.texts,...(embed?{value:body}:{})},bytes=Buffer.byteLength(serialize(entry));
+   const entry=await runEntry(this.blocks,item,embed?body:undefined),bytes=Buffer.byteLength(serialize(entry));
    if(this.run&&this.run.bytes+bytes>MEMBER_RUN_BYTES)await this.flushRun();
    this.run??={plotId,seriesId,members:[],ids:new Set(),bytes:0};this.run.members.push({entry,item,lookup,coordinate});this.run.ids.add(id);this.run.bytes+=bytes;
    if(this.run.members.length===MEMBER_RUN_MEMBERS)await this.flushRun();return item;
@@ -97,8 +107,7 @@ export class RetainedFigureCollections{
  // every member at that block exactly as single members are indexed.
  async flushRun(){
   const run=this.run;if(!run)return;this.run=null;
-  const node={type:'member-run',version:1,collection:'points',plotId:run.plotId,seriesId:run.seriesId,members:run.members.map(member=>member.entry)};
-  const revision=await this.blocks.put('value',node);this.blocks.embed(revision,memberRunMembers(node));
+  const revision=await writeMemberRun(this.blocks,run,run.members.map(member=>member.entry));
   for(const {item,lookup,coordinate} of run.members)await this.indexMember('points',item,revision,{lookup,coordinate});
   if(indexCheckpointDue(this.index))await this.index.flushRoots(this.roots());
  }

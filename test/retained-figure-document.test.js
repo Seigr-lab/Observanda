@@ -160,4 +160,14 @@ test('saved series pack their points into member runs that read, verify, edit an
  draft=await owner.change(draft,{type:'patch',collection:'points',plotId:figure.id,id:target.id,patch:{y:99}});const edited=await owner.finish(draft);
  const changed=structuredClone(figure);changed.series[0].points[200].y=99;assert.deepEqual(await json(await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(edited)),changed);
  assert.deepEqual(await json(await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(saved)),figure);await (await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(edited)).verify();
+ // Moving and removing points rewrites the draft as runs, not as one block per point.
+ const before=[...f.files.keys()].filter(name=>name.includes('/figures/value/')).length;let reordered=await owner.start(saved);
+ const points=(await (await owner.open(reordered)).window({collection:'points',seriesId:figure.series[0].id,offset:10,limit:2})).items;
+ reordered=await owner.change(reordered,{type:'move',collection:'points',plotId:figure.id,id:points[1].id,direction:-1});
+ reordered=await owner.change(reordered,{type:'remove',collection:'points',plotId:figure.id,id:(await (await owner.open(reordered)).window({collection:'points',seriesId:figure.series[1].id,offset:39,limit:1})).items[0].id});
+ const moved=await owner.finish(reordered),added=[...f.files.keys()].filter(name=>name.includes('/figures/value/')).length-before;
+ assert.ok(added<120,'two rewrites of 340 points stay packed: '+added);
+ const expected=structuredClone(figure);[expected.series[0].points[10],expected.series[0].points[11]]=[expected.series[0].points[11],expected.series[0].points[10]];expected.series[1].points.pop();
+ const movedReader=await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(moved);assert.deepEqual(await json(movedReader),expected);await movedReader.verify();
+ assert.deepEqual(await json(await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(saved)),figure);
 });
