@@ -22,7 +22,7 @@
   "seriesName": "Gi hver serie et navn.",
   "pointInvalid": "Ugyldige data i {series}, rad {row}.",
   "pointCoordinate": "{series}, rad {row}: oppgi en gyldig vannrett koordinat.",
-  "pointLogValue": "{series}, rad {row}: logaritmiske verdier og usikkerhetsgrenser må være positive.",
+  "pointLogValue": "{series}, rad {row}: logaritmiske verdier må være positive.",
   "pointLogCoordinate": "{series}, rad {row}: logaritmiske koordinater må være positive.",
   "seriesMeasured": "{series}: legg til minst én måleverdi.",
   "csvSeries": "Rad {row}: oppgi et serienavn og fire kolonner.",

@@ -22,7 +22,7 @@
   "seriesName": "Posa un nom a cada sèrie.",
   "pointInvalid": "Dades no vàlides a {series}, fila {row}.",
   "pointCoordinate": "{series}, fila {row}: introduïu una coordenada horitzontal vàlida.",
-  "pointLogValue": "{series}, fila {row}: els valors logarítmics i els límits d'incertesa han de ser positius.",
+  "pointLogValue": "{series}, fila {row}: els valors logarítmics han de ser positius.",
   "pointLogCoordinate": "{series}, fila {row}: les coordenades logarítmiques han de ser positives.",
   "seriesMeasured": "{series}: afegiu almenys un valor mesurat.",
   "csvSeries": "Fila {row}: introduïu un nom de sèrie i quatre columnes.",

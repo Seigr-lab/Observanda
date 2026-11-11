@@ -83,7 +83,8 @@ function figureIssuesRaw(figure,{draft=false,retained=false,resourceErrors=false
    if(x===null)fail(fm('pointCoordinate',{series:series.name,row:i+1}));
    if(p.y!==null){
     complete++;
-    if(figure.y.scale==='log'&&p.y-(p.error??0)<=0)fail(fm('pointLogValue',{series:series.name,row:i+1}));
+    // An uncertainty reaching zero or below is drawn clipped at the axis; the value itself must be positive.
+    if(figure.y.scale==='log'&&p.y<=0)fail(fm('pointLogValue',{series:series.name,row:i+1}));
    }
    if(figure.x.scale==='log'&&x<=0)fail(fm('pointLogCoordinate',{series:series.name,row:i+1}));
   }

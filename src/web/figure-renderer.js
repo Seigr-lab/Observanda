@@ -133,7 +133,7 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,local
  const magnitude=value=>axisFraction(transform(value,yd,figure.y.scale==='log'),figure.y);
  const cx=value=>left+coordinate(value)*plotW,cy=value=>top+coordinate(value)*plotH;
  const vx=value=>left+magnitude(value)*plotW,vy=value=>top+(1-magnitude(value))*plotH;
- const valid=p=>p.y!==null&&Number.isFinite(p.y)&&xValue(p.x,figure.x.kind)!==null&&(figure.y.scale!=='log'||p.y-(p.error??0)>0)&&(figure.x.scale!=='log'||p.x>0);
+ const valid=p=>p.y!==null&&Number.isFinite(p.y)&&xValue(p.x,figure.x.kind)!==null&&(figure.y.scale!=='log'||p.y>0)&&(figure.x.scale!=='log'||p.x>0);
  let graphic='';
  if(style.showTitle)graphic+=svgText(figure.title,width/2,style.titleSize+7,{size:style.titleSize,parts:titleLines,weight:'600',cls:'figure-title'});
  const valueCount=horizontal?Math.max(2,Math.floor(plotW/(fontSize*7))):Math.max(2,Math.floor(plotH/60));
@@ -195,7 +195,7 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,local
     else if(line.marker==='diamond')graphic+=`<path d="M${numeric(px)},${numeric(py-r*1.3)} l${r*1.3},${r*1.3} l${-r*1.3},${r*1.3} l${-r*1.3},${-r*1.3} Z" stroke="${style.background}">${title}</path>`;
     else graphic+=`<circle cx="${numeric(px)}" cy="${numeric(py)}" r="${r}" stroke="${style.background}" stroke-width="1">${title}</circle>`;
    }
-   graphic+=renderIntervals(p,{px,py,horizontal,cx,cy,vx,vy,numeric});
+   graphic+=renderIntervals(p,{px,py,horizontal,cx,cy,vx,vy,numeric,logMin:{...(figure.x.scale==='log'?{x:xd.min}:{}),...(figure.y.scale==='log'?{y:yd.min}:{})}});
   }
   graphic+='</g>';
  }

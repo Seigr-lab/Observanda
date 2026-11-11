@@ -59,7 +59,10 @@ test('selected presentation edits keep data identities and splice complete long 
 test('presentation admission checks actual hidden intervals, counts, ticks and logarithmic annotations',async()=>{
  const f=fixture(),documents=new RetainedFigureDocuments(f.workspace),base=()=>{const figure=createFigure();figure.kind='scatter';figure.series[0].points=[{x:2,y:4,error:null}];return figure;};
  const interval=base();interval.series.push({...createSeries('Hidden interval',1),style:{visible:false},points:[{x:2,y:4,error:null,xLower:-1,xUpper:3}]});const intervals=await documents.retain(interval);
- await assert.rejects(changeRetainedFigure(documents,intervals,{type:'patch',collection:'header',patch:{x:{scale:'log'}}}),{code:'MATERIAL_INVALID'});
+ // A hidden interval reaching below zero is clipped on a logarithmic axis; a non-positive hidden coordinate is refused.
+ await changeRetainedFigure(documents,intervals,{type:'patch',collection:'header',patch:{x:{scale:'log'}}});
+ const negative=base();negative.series.push({...createSeries('Hidden negative',1),style:{visible:false},points:[{x:-2,y:4,error:null}]});
+ await assert.rejects(changeRetainedFigure(documents,await documents.retain(negative),{type:'patch',collection:'header',patch:{x:{scale:'log'}}}),{code:'MATERIAL_INVALID'});
  const counted=base();counted.markerArea={unitArea:1,label:'Population'};counted.series[0].points[0].count=1000;const counts=await documents.retain(counted);
  await assert.rejects(changeRetainedFigure(documents,counts,{type:'patch',collection:'header',patch:{markerArea:{unitArea:100}}}),{code:'MATERIAL_INVALID'});
  const missing=await documents.retain(base());await assert.rejects(changeRetainedFigure(documents,missing,{type:'patch',collection:'header',patch:{markerArea:{unitArea:1,label:'Population'}}}),{code:'MATERIAL_INVALID'});

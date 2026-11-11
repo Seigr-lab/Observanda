@@ -122,7 +122,11 @@ export class RetainedFigurePresentation{
   if(header.kind==='panels'){if(!header.title.trim()||!header.layout||Object.keys(header.layout).sort().join()!=='columns,linkX,linkY'||!Number.isInteger(header.layout.columns)||header.layout.columns<1||header.layout.columns>3||typeof header.layout.linkX!=='boolean'||typeof header.layout.linkY!=='boolean')invalid();return;}
   const point={x:header.x.kind==='number'?1:header.x.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})};if(figureIssues({...header,series:[{id:header.id,name:'Validation',color:'#123456',points:[point]}]},{retained:true,resourceErrors:true}).length)invalid();
   const panel=await this.reader.panelMember(plotId),domains=(await this.tree.selected(panel.body,['domains'])).value;
-  for(const axis of ['x','y'])if(header[axis].scale==='log'&&domains[axis].min!==null&&domains[axis].min<=0)invalid();
+  // Domains include uncertainty bounds, which may reach zero and are drawn
+  // clipped. Only then are the plotted values themselves checked.
+  if(['x','y'].some(axis=>header[axis].scale==='log'&&domains[axis].min!==null&&domains[axis].min<=0))for await(const member of this.reader.memberRows({collection:'points',plotId})){
+   this.check();const {source,...point}=substitute(await this.reader.bounded(member.body,member.texts));void source;validateRetainedFigurePoint(point,header);
+  }
  }
  async validatePlotConstraints(plotId,{points=false}={}){
   const panel=await this.reader.panelMember(plotId),header=substitute((await this.reader.bounded(panel.body,panel.texts)).header);

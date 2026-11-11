@@ -136,7 +136,7 @@ async function pointTransforms(reader,g,p,rank){
  if(g.f.x.kind==='category'&&!Number.isSafeInteger(index))throw new Error('Missing retained category');
  return transforms(g,index);
 }
-function validPoint(p,f){return p.y!==null&&Number.isFinite(p.y)&&(f.x.kind==='category'?typeof p.x==='string'||retainedFigureText(p.x):xValue(p.x,f.x.kind)!==null)&&(f.y.scale!=='log'||p.y-(p.error??0)>0)&&(f.x.scale!=='log'||xValue(p.x,f.x.kind)>0);}
+function validPoint(p,f){return p.y!==null&&Number.isFinite(p.y)&&(f.x.kind==='category'?typeof p.x==='string'||retainedFigureText(p.x):xValue(p.x,f.x.kind)!==null)&&(f.y.scale!=='log'||p.y>0)&&(f.x.scale!=='log'||xValue(p.x,f.x.kind)>0);}
 async function* axes(reader,g){
  const {f,style,left,top,plotW,plotH,horizontal}=g,t=transforms(g,null),custom={x:0,y:0};
  for await(const row of items(reader,'ticks',g.plotId,g.signal)){
@@ -225,7 +225,7 @@ async function* seriesGraphic(reader,g,row,index){
    else if(line.marker==='diamond')yield '<path d="M'+n(px)+','+n(py-r*1.3)+' l'+r*1.3+','+r*1.3+' l'+(-r*1.3)+','+r*1.3+' l'+(-r*1.3)+','+(-r*1.3)+' Z" stroke="'+style.background+'">'+title+'</path>';
    else yield '<circle cx="'+n(px)+'" cy="'+n(py)+'" r="'+r+'" stroke="'+style.background+'" stroke-width="1">'+title+'</circle>';
   }
-  yield renderIntervals(p,{px,py,horizontal:g.horizontal,...t,numeric:n});yield '</g>';
+  yield renderIntervals(p,{px,py,horizontal:g.horizontal,...t,numeric:n,logMin:{...(f.x.scale==='log'?{x:g.x.min}:{}),...(f.y.scale==='log'?{y:g.y.min}:{})}});yield '</g>';
  }
  yield '</g>';
 }

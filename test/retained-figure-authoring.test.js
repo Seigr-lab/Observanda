@@ -64,7 +64,8 @@ test('callouts keep their exact measurement across moves and refuse destructive 
  draft=await owner.change(draft,{type:'remove',collection:'annotations',id:inline.annotations[0].id,plotId:inline.id});draft=await owner.change(draft,{type:'remove',collection:'points',plotId:inline.id,id:points[2].id});await owner.verify(await owner.finish(draft));
 });
 test('strict finish validates complete ticks, logarithmic bounds, linked panels and copied wrapper identity',async()=>{
- const f=fixture(),owner=new RetainedFigureAuthoring(f.workspace),documents=new RetainedFigureDocuments(f.workspace),inline=createFigure();inline.series[0].points=[{x:1,y:2,error:3}];let draft=await owner.start(inline);
+ const f=fixture(),owner=new RetainedFigureAuthoring(f.workspace),documents=new RetainedFigureDocuments(f.workspace),inline=createFigure();inline.series[0].points=[{x:1,y:2,error:3},{x:2,y:-1,error:null}];let draft=await owner.start(inline);
+ // The uncertainty of the first point is clipped on a logarithmic axis; the negative value of the second is refused.
  draft=await owner.change(draft,{type:'patch',collection:'header',id:draft.id,patch:{y:{scale:'log'}}});await assert.rejects(owner.finish(draft),{code:'MATERIAL_INVALID'});draft=await owner.change(draft,{type:'patch',collection:'header',id:draft.id,patch:{y:{scale:'linear'}}});
  draft=await owner.change(draft,{type:'append',collection:'ticks',plotId:inline.id,value:{axis:'x',value:1,label:' '}});await assert.rejects(owner.finish(draft),{code:'MATERIAL_INVALID'});
  const tick=(await rows(owner,draft,'ticks'))[0];draft=await owner.change(draft,{type:'patch',collection:'ticks',id:tick.id,plotId:inline.id,patch:{label:'Tick'}});const saved=await owner.finish(draft);await owner.verify(saved);

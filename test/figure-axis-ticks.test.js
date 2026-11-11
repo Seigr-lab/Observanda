@@ -31,3 +31,16 @@ test('a log figure within one decade draws more than its two bounds',()=>{
  const labels=[...renderFigure(f).matchAll(/<text class="figure-value-tick"[^>]*><title>([^<]*)<\/title>/g)].map(m=>m[1]);
  assert.ok(labels.length>=2,labels.join());assert.ok(labels.includes('5')||labels.includes('2'),labels.join());
 });
+
+test('a log-axis uncertainty reaching zero or below is drawn clipped at the axis and kept exact',async()=>{
+ const {figureIssues}=await import('../src/web/figure-model.js'),{RetainedFigureDocuments}=await import('../src/retained-figure-document.js'),{retainedFigureSVG}=await import('../src/web/retained-figure-svg.js');
+ const f=createFigure();f.title='Low signal';f.kind='scatter';f.x.kind='number';f.y.scale='log';
+ f.series[0].points=[{x:1,y:0.001,error:0.002},{x:2,y:0.5,error:0.1},{x:3,y:2,error:null,yLower:-1,yUpper:3}];
+ assert.deepEqual(figureIssues(f),[]);const before=structuredClone(f),svg=renderFigure(f);
+ assert.equal((svg.match(/figure-interval-clipped/g)??[]).length,2);assert.equal((svg.match(/<circle cx=/g)??[]).length-1,3,'Every point is drawn (one legend circle)');
+ assert.ok(!/NaN|Infinity/.test(svg));assert.deepEqual(f,before);
+ f.series[0].points[0].y=0;assert.ok(figureIssues(f).length);f.series[0].points[0].y=0.001;
+ const values=new Map(),documents=new RetainedFigureDocuments({readMetadata:async key=>values.get(key)??null,writeMetadata:async(key,value)=>{values.set(key,value);}});
+ let retained='';for await(const chunk of retainedFigureSVG(await documents.open(await documents.retain(f))))retained+=chunk;
+ assert.equal((retained.match(/figure-interval-clipped/g)??[]).length,2);assert.ok(!/NaN|Infinity/.test(retained));
+});

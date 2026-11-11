@@ -9,7 +9,7 @@
   "none": "Ikkje tilordna",
   "invalid": "Målegrenser må bruke gyldige koordinatar og endelege talverdiar.",
   "complete": "Oppgje begge intervallendepunkta rundt ein målt observasjon. Kategorikoordinatar kan ikkje ha intervall.",
-  "enclose": "Intervallendepunkt må omslutte målinga si; logaritmiske intervallendepunkt må vere positive.",
+  "enclose": "Intervallendepunkt må omslutte målinga si.",
   "conflict": "Vel verdigrenser eller symmetrisk uvisse for ein observasjon, ikkje begge delar.",
   "heatmap": "Bruk eit måleplott til å vise intervall; ei varmekartcelle representerer éin verdi.",
   "mapping": "Intervall kan berre tilordnast einskildmålingar. Vel gyldige grensekolonnar med kompatible einingar.",

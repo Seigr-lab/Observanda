@@ -9,7 +9,7 @@
   "none": "Sense assignar",
   "invalid": "Els límits de mesura han d'utilitzar coordenades vàlides i valors numèrics finits.",
   "complete": "Proporciona tots dos extrems de l'interval al voltant d'una observació mesurada. Les coordenades categòriques no poden tenir intervals.",
-  "enclose": "Els extrems de l'interval han de contenir la seva mesura; els extrems d'intervals logarítmics han de ser positius.",
+  "enclose": "Els extrems de l'interval han de contenir la seva mesura.",
   "conflict": "Tria límits del valor o incertesa simètrica per a una observació, no tots dos.",
   "heatmap": "Utilitza un gràfic de mesures per mostrar intervals; una cel·la d'un mapa de calor representa un sol valor.",
   "mapping": "Només es poden assignar intervals a mesures individuals. Selecciona columnes de límits vàlides amb unitats compatibles.",

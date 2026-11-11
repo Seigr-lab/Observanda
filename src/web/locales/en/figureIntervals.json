@@ -9,7 +9,7 @@
  "none":"Not mapped",
  "invalid":"Measurement bounds must use valid coordinates and finite numerical values.",
  "complete":"Supply both interval endpoints around a measured observation. Category coordinates cannot have intervals.",
- "enclose":"Interval endpoints must enclose their measurement; logarithmic interval endpoints must be positive.",
+ "enclose":"Interval endpoints must enclose their measurement.",
  "conflict":"Choose value bounds or symmetric uncertainty for an observation, not both.",
  "heatmap":"Use a measurement plot to display intervals; a heatmap cell represents one value.",
  "mapping":"Intervals can only be mapped for individual measurements. Select valid bound columns with compatible units.",

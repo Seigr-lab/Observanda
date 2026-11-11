@@ -22,7 +22,7 @@
   "seriesName": "Pon un nombre a cada serie.",
   "pointInvalid": "Datos no válidos en {series}, fila {row}.",
   "pointCoordinate": "{series}, fila {row}: introduce una coordenada horizontal válida.",
-  "pointLogValue": "{series}, fila {row}: los valores logarítmicos y los límites de incertidumbre deben ser positivos.",
+  "pointLogValue": "{series}, fila {row}: los valores logarítmicos deben ser positivos.",
   "pointLogCoordinate": "{series}, fila {row}: las coordenadas logarítmicas deben ser positivas.",
   "seriesMeasured": "{series}: añade al menos un valor medido.",
   "csvSeries": "Fila {row}: introduce un nombre de serie y cuatro columnas.",

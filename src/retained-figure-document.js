@@ -37,7 +37,7 @@ export function validateRetainedFigurePoint(point,header){
  const keys=['x','y','error',...INTERVAL_FIELDS.filter(key=>Object.hasOwn(point,key)),...(Object.hasOwn(point,'count')?['count']:[])];
  const number=value=>typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=1e100;
  if(!point||Object.keys(point).sort().join()!==keys.sort().join()||xValue(point.x,header.x.kind)===null||!(point.y===null||number(point.y))||!(point.error===null||number(point.error)&&point.error>=0)||intervalIssues(point,header,xValue).length||point.count!==undefined&&point.count!==null&&(!Number.isSafeInteger(point.count)||point.count<0))invalid();
- if(header.x.scale==='log'&&xValue(point.x,header.x.kind)<=0||header.y.scale==='log'&&point.y!==null&&point.y-(point.error??0)<=0||header.kind==='heatmap'&&point.error!==null||header.markerArea&&point.y!==null&&(point.count==null||point.count*header.markerArea.unitArea>65536))invalid();
+ if(header.x.scale==='log'&&xValue(point.x,header.x.kind)<=0||header.y.scale==='log'&&point.y!==null&&point.y<=0||header.kind==='heatmap'&&point.error!==null||header.markerArea&&point.y!==null&&(point.count==null||point.count*header.markerArea.unitArea>65536))invalid();
 }
 
 export class RetainedFigureCollections{

@@ -22,7 +22,7 @@
   "seriesName": "Name each series.",
   "pointInvalid": "Invalid data in {series}, row {row}.",
   "pointCoordinate": "{series}, row {row}: enter a valid horizontal coordinate.",
-  "pointLogValue": "{series}, row {row}: logarithmic values and uncertainty bounds must be positive.",
+  "pointLogValue": "{series}, row {row}: logarithmic values must be positive.",
   "pointLogCoordinate": "{series}, row {row}: logarithmic coordinates must be positive.",
   "seriesMeasured": "{series}: add at least one measured value.",
   "csvSeries": "Row {row}: enter a series name and four columns.",

@@ -53,7 +53,9 @@ test('numeric spacing, gaps, uncertainty and CSV round trips use the same figure
  assert.ok(Math.abs((cx[3]-cx[2])/(cx[4]-cx[2])-.1)<.001,'numeric X uses coordinate distance, not row spacing');
  f.kind='line';assert.equal((renderFigure(f).match(/stroke-linejoin="round"/g)||[]).length,3,'missing values split a line');
  assert.equal(xValue('2026-02-30','date'),null);assert.equal(xValue('2026-02-28','date'),Date.parse('2026-02-28'));
- f.y.scale='log';f.series[0].points[0].error=2;assert.ok(figureIssues(f).some(s=>s.includes('positive')));
+ // An uncertainty reaching below zero is drawn clipped at the logarithmic axis; the value itself must be positive.
+ f.y.scale='log';f.series[0].points[0].error=2;assert.deepEqual(figureIssues(f),[]);assert.match(renderFigure(f),/figure-interval-clipped/);
+ f.series[0].points[0].y=0;assert.ok(figureIssues(f).some(s=>s.includes('positive')));f.series[0].points[0].y=1;
  assert.throws(()=>parseFigureCSV('Time,Value\n0,not-a-number','number'));
 });
 test('rich prose shares module validation, and competing documents are explicit conflicts',()=>{
