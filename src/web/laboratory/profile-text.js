@@ -22,7 +22,8 @@ export const trackingText=(profileId,name,subject)=>t('labBookProfiles',profileI
 export const profileUpgradeItems=plan=>[
  ...plan.sections.map(s=>profileText(s.label)),
  ...plan.fields.map(({section,field})=>profileText(sectionLabel(plan,section))+': '+profileText(field.label)),
- ...plan.choices.map(({section,field,choice})=>profileText(fieldLabel(plan,section,field))+': '+profileText(choice))
+ ...plan.choices.map(({section,field,choice})=>profileText(fieldLabel(plan,section,field))+': '+profileText(choice)),
+ ...(plan.private??[]).map(({section,field})=>profileText(fieldLabel(plan,section,field))+' ('+t('customFields','privateMark')+')')
 ];
 const sectionLabel=(plan,key)=>plan.profile.sections.find(s=>s.key===key)?.label??key;
 const fieldLabel=(plan,section,key)=>plan.profile.sections.find(s=>s.key===section)?.fields.find(f=>f.key===key)?.label??key;

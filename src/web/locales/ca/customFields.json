@@ -48,5 +48,7 @@
  "uncertainties.interval":"Interval [inferior, superior]",
  "uncertaintyExamples.absolute":"12.30 ± 0.05",
  "uncertaintyExamples.relative":"12.30 ± 0.4 %",
- "uncertaintyExamples.interval":"[12.25, 12.35]"
+ "uncertaintyExamples.interval":"[12.25, 12.35]",
+ "private":"No publiquis mai aquest camp",
+ "privateMark":"mai no es publica"
 }

@@ -8,6 +8,6 @@ export function fieldNumberLabel(field){
 }
 // Labels, units and choices copied from a lab book profile display in the
 // interface language; stored values and authored text stay as they are.
-export const customFieldLabel=field=>profileText(field.label)+(field.unit?' ('+profileText(field.unit)+')':'')+(field.type==='number'&&field.numeric?' · '+fieldNumberLabel(field):'')+(field.type==='number'&&field.uncertainty?' · '+customFieldText('uncertainties.'+field.uncertainty):'')+(field.type==='text'&&field.format?' · '+customFieldText('formats.'+field.format):'');
+export const customFieldLabel=field=>profileText(field.label)+(field.unit?' ('+profileText(field.unit)+')':'')+(field.type==='number'&&field.numeric?' · '+fieldNumberLabel(field):'')+(field.type==='number'&&field.uncertainty?' · '+customFieldText('uncertainties.'+field.uncertainty):'')+(field.type==='text'&&field.format?' · '+customFieldText('formats.'+field.format):'')+(field.private?' · '+customFieldText('privateMark'):'');
 export const customFieldValueText=(field,value)=>field?.type==='select'?profileText(value):value;
 export {profileText as templateText};

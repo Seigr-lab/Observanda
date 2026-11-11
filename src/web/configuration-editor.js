@@ -14,7 +14,7 @@ const copy=value=>structuredClone(value);
 const empty=()=>({rows:[],total:0,offset:0,next:null});
 const pageSize=20;
 // Interpretation properties a field no longer carries are removed from the stored field.
-const removedInterpretation=value=>{const remove=['numeric','format','uncertainty'].filter(name=>!Object.hasOwn(value,name));return remove.length?{remove}:{};};
+const removedInterpretation=value=>{const remove=['numeric','format','uncertainty','private'].filter(name=>!Object.hasOwn(value,name));return remove.length?{remove}:{};};
 export function configurationEditor({state,api,esc,field,option,draw,onChange=()=>{},root=()=>document.querySelector('[data-configuration-editor]'),actionName='configuration-edit'}){
  let section=null,definition=null,choice=null,choiceText='',choiceBase='',profileId,sections=empty(),fields=empty(),choices=empty(),profiles=empty(),busy=false,error=null,epoch=0,controller=null,retry=null;
  const client=configurationDocumentClient({state,api,onChange:()=>{status();onChange();}});
@@ -87,7 +87,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
    field(customFieldText('label'),'<textarea '+attr('label')+' required maxlength="160" rows="1">'+esc(templateText(value.label))+'</textarea>')+
    field(customFieldText('type'),'<select '+attr('type')+'>'+['text','number','date','boolean','select'].map(type=>option(type,customFieldText('types.'+type),value.type)).join('')+'</select>')+
    (value.type==='number'?field(customFieldText('unit'),'<input '+attr('unit')+' maxlength="80" value="'+esc(templateText(value.unit))+'">'):'')+
-   '<label class="checkbox"><input type="checkbox" '+attr('required')+' '+(value.required?'checked':'')+'>'+esc(customFieldText('required'))+'</label>'+button('removeField','field-remove')+'</div>'+
+   '<label class="checkbox"><input type="checkbox" '+attr('required')+' '+(value.required?'checked':'')+'>'+esc(customFieldText('required'))+'</label><label class="checkbox"><input type="checkbox" '+attr('private')+' '+(value.private?'checked':'')+'>'+esc(customFieldText('private'))+'</label>'+button('removeField','field-remove')+'</div>'+
    fieldNumberControls(value,{field,option,esc},attr)+fieldTextFormatControls(value,{field,option},attr)+(value.type==='select'?'<section><h4>'+esc(text('choices'))+'</h4><div class="lab-type-list">'+choices.rows.map(row=>button('choiceValue','choice-select','data-key="'+esc(row.key)+'" aria-current="'+(choice?.key===row.key)+'"',templateText(row.value))).join('')+'</div>'+pages('choices',choices)+button('addChoice','choice-add')+(choice?field(esc(text('choiceValue')),'<input data-configuration-choice maxlength="160" required value="'+esc(choiceText)+'">')+button('save','choice-apply')+button('removeChoice','choice-remove'):'')+'</section>':'')+'</div>';
  }
  function view(){
@@ -105,7 +105,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
   const sectionProperty=element.dataset.configurationSectionProp,fieldProperty=element.dataset.configurationFieldProp;
   if(sectionProperty&&section){section.value[sectionProperty]=element.value;client.changed({type:'replace',collection:'sections',key:section.key,value:copy(section.value)});return true;}
   if(fieldProperty&&definition){
-   if(!setCustomFieldProperty(definition.value,fieldProperty,fieldProperty==='required'?element.checked:element.value))return true;
+   if(!setCustomFieldProperty(definition.value,fieldProperty,['required','private'].includes(fieldProperty)?element.checked:element.value))return true;
    client.changed({type:'replace',collection:'fields',sectionId:section.key,key:definition.key,value:copy(definition.value),...removedInterpretation(definition.value)});
    if(['type','numericRepresentation'].includes(fieldProperty))void run(async signal=>{await flush();if(fieldProperty==='type')await loadField(definition.key,{signal});});
    return true;

@@ -18,7 +18,7 @@ export default defineProfile({id:'music',version:1,icon:'book',
   section('derivative',[select('process',['edit','mix','master','stem','render','transcode']),text('sources'),text('tool'),text('settings'),text('file',{format:'identifier'}),text('sha256',{format:'sha-256'}),number('loudness','LUFS'),number('true-peak','dBTP'),select('provenance',['declared','verified']),text('notes')]),
   section('listening',[text('source'),select('timing',['time','samples','bars']),text('position'),text('monitoring'),text('observation'),text('action')]),
   section('performance',[text('venue'),text('set-list'),text('performers'),text('technical'),text('recording'),text('notes')]),
-  section('credits',[text('subject'),text('public-credit'),text('roles'),text('rights'),text('agreements'),text('isrc',{format:'identifier'}),text('licence'),select('attribution',['confirmed','unresolved','disputed'])]),
+  section('credits',[text('subject'),text('public-credit'),text('roles'),text('rights'),text('agreements',{private:true}),text('isrc',{format:'identifier'}),text('licence'),select('attribution',['confirmed','unresolved','disputed'])]),
   section('release',[text('title'),text('edition'),date('released'),text('contents'),text('artwork'),text('catalogue-number',{format:'identifier'}),text('barcode',{format:'identifier'}),text('channels'),text('master-sha256',{format:'sha-256'}),select('review',['working','candidate','delivered'])]),
   section('reflection',[text('context'),text('response'),text('decisions'),text('next-steps')])
  ]

@@ -147,6 +147,7 @@ export class ConfigurationCommands{
        const row=await section(key),definition=row&&await reader.item({collection:'fields',sectionId:row.key,key:field}).catch(absent);
        if(definition?.value.type==='select'&&!await reader.item({collection:'choices',sectionId:row.key,fieldKey:field,key:choice}).catch(absent))await apply([{type:'append',collection:'choices',sectionId:row.key,fieldKey:field,value:choice}]);
       }
+      for(const {section:key,field} of plan.private){const row=await section(key),definition=row&&await reader.item({collection:'fields',sectionId:row.key,key:field}).catch(absent);if(definition&&definition.value.private!==true)await apply([{type:'replace',collection:'fields',sectionId:row.key,key:field,value:{private:true}}]);}
       await apply([{type:'replace',collection:'profiles',key:profile.id,value:{...chosen.value,version:profile.version}}]);
      }
     }else if(operation.type==='section-move'){if(!exact(operation,['type','key','direction'])||![-1,1].includes(operation.direction))invalid();await apply([{type:'move',collection:'sections',key:operation.key,direction:operation.direction}]);}

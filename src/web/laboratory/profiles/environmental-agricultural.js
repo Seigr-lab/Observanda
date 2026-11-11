@@ -13,7 +13,7 @@ const v2={since:2};
 export default defineProfile({id:'environmental-agricultural',version:2,icon:'leaf',
  tracking:{subjects:['sites','taxon'],primary:'occurrence',events:['campaigns','observations','results','occurrence']},
  sections:[
-  section('sites',[text('field1'),text('field2'),text('name',v2),text('habitat',v2),text('precise-location',v2),text('datum',v2),number('coordinate-uncertainty','m',v2),number('elevation','m',v2),text('generalized-locality',v2),select('sensitivity',['open','generalize','withhold'],v2),text('access',v2)]),
+  section('sites',[text('field1'),text('field2'),text('name',v2),text('habitat',v2),text('precise-location',{since:2,private:true}),text('datum',v2),number('coordinate-uncertainty','m',v2),number('elevation','m',v2),text('generalized-locality',v2),select('sensitivity',['open','generalize','withhold'],v2),text('access',{since:2,private:true})]),
   section('campaigns',[text('field1'),text('field2'),text('protocol',v2),text('effort',v2),text('team',v2)]),
   section('observations',[text('field1'),text('field2'),text('weather',v2),text('conditions',v2),text('observer',v2)]),
   section('results',[text('field1'),text('field2'),text('value',v2),text('uncertainty',v2),text('detection-limit',v2),text('instrument',v2),text('raw-data-sha256',{format:'sha-256',since:2})]),

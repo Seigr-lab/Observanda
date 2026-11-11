@@ -31,6 +31,10 @@ export function setCustomFieldProperty(field,key,value){
   if(value==='number')field.numeric={...fieldNumberContext(field)};else delete field.numeric;
   if(value!=='text')delete field.format;
   if(value!=='number')delete field.uncertainty;
+ }else if(key==='private'){
+  // Only true is stored: a field is publishable unless marked never to publish.
+  if(typeof value!=='boolean')return false;
+  if(value)field.private=true;else delete field.private;
  }else if(key==='uncertainty'){
   // An empty choice means no declared uncertainty; only number fields carry one.
   if(field.type!=='number'||value!==''&&!validFieldUncertainty(value))return false;

@@ -13,8 +13,10 @@ const since=value=>{if(!Number.isSafeInteger(value)||value<1)throw new TypeError
 export const unit=id=>({unit:id});
 // Options: since (the profile version that added the field); for text, an
 // exact format (custom-field-formats.js) for identifiers and digests; for
-// numbers, how the uncertainty is written (custom-field-uncertainty.js).
-const field=(key,type,{unit:measure='',choices=[],format=null,uncertainty=null,since:version=1}={})=>({key,type,unit:measure,choices,format,uncertainty,since:since(version)});
+// numbers, how the uncertainty is written (custom-field-uncertainty.js); and
+// private (true, or the version that made it private), for personal data or
+// precise locations that are never published.
+const field=(key,type,{unit:measure='',choices=[],format=null,uncertainty=null,private:hidden=false,since:version=1}={})=>({key,type,unit:measure,choices,format,uncertainty,hidden:hidden===true?version:hidden===false?null:since(hidden),since:since(version)});
 export const text=(key,options)=>field(key,'text',options);
 export const date=(key,options)=>field(key,'date',options);
 export const number=(key,measure='',options={})=>field(key,'number',{...options,unit:measure});
@@ -25,21 +27,24 @@ export const section=(key,fields,{since:version=1}={})=>({key,fields,since:since
 // `introduced` records the profile version that added each section, field and
 // choice. An upgrade adds only what is newer than the book's version, so what an
 // author removed after adopting it stays removed (catalog.js, upgradeProfile).
+// `private` records the version from which a field is never published; an
+// upgrade only ever adds that protection.
 export function defineProfile({id,version,icon,tracking=null,sections}){
  since(version);
- const introduced={sections:{},fields:{},choices:{}};
+ const introduced={sections:{},fields:{},choices:{},private:{}};
  const unitText=measure=>typeof measure==='object'?say('units.'+measure.unit):measure;
  const within=value=>{if(value>version)throw new TypeError('Profile item is newer than its profile: '+id);return value;};
  const built=sections.map(s=>{
   introduced.sections[s.key]=within(s.since);
   return {key:s.key,label:say(`${id}.${s.key}.label`),description:say(`${id}.${s.key}.description`),fields:s.fields.map(f=>{
    introduced.fields[s.key+'/'+f.key]=within(Math.max(f.since,s.since));
+   if(f.hidden!==null)introduced.private[s.key+'/'+f.key]=within(Math.max(f.hidden,f.since,s.since));
    const choices=f.choices.map(choice=>{
     const item=typeof choice==='string'?{id:choice,since:1}:choice,value=say(`${id}.${s.key}.choices.${f.key}.${item.id}`);
     introduced.choices[s.key+'/'+f.key+'/'+value]=within(Math.max(since(item.since),f.since,s.since));
     return value;
    });
-   return {key:f.key,label:say(`${id}.${s.key}.fields.${f.key}`),type:f.type,unit:unitText(f.unit),required:false,choices,...(f.format?{format:f.format}:{}),...(f.uncertainty?{uncertainty:f.uncertainty}:{})};
+   return {key:f.key,label:say(`${id}.${s.key}.fields.${f.key}`),type:f.type,unit:unitText(f.unit),required:false,choices,...(f.format?{format:f.format}:{}),...(f.uncertainty?{uncertainty:f.uncertainty}:{}),...(f.hidden!==null?{private:true}:{})};
   })};
  });
  const keys=new Set(built.map(s=>s.key));

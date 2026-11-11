@@ -17,7 +17,7 @@ export function sectionDetails(s,i,c){
     ${field(tr('label'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="label" rows="1" required maxlength="160">${esc(templateText(f.label))}</textarea>`)}
     ${field(tr('type'),`<select ${attr} data-lab-field="${j}" data-lab-field-prop="type">${fieldTypes.map(id=>option(id,tr('types.'+id),f.type)).join('')}</select>`)}
     ${f.type==='number'?field(tr('unit'),`<input ${attr} data-lab-field="${j}" data-lab-field-prop="unit" maxlength="80" value="${esc(templateText(f.unit))}">`):''}
-    <div class="lab-field-actions"><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="required" ${f.required?'checked':''}>${esc(tr('required'))}</label>${button(tr('remove'),'field-remove',`data-index="${i}" data-field="${j}" aria-label="${esc(tr('removeField',{label:templateText(f.label)}))}"`,'subtle')}</div>
+    <div class="lab-field-actions"><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="required" ${f.required?'checked':''}>${esc(tr('required'))}</label><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="private" ${f.private?'checked':''}>${esc(tr('private'))}</label>${button(tr('remove'),'field-remove',`data-index="${i}" data-field="${j}" aria-label="${esc(tr('removeField',{label:templateText(f.label)}))}"`,'subtle')}</div>
    </div>
    ${fieldNumberControls(f,c,key=>`${attr} data-lab-field="${j}" data-lab-field-prop="${key}"`)}
    ${fieldTextFormatControls(f,c,key=>`${attr} data-lab-field="${j}" data-lab-field-prop="${key}"`)}
@@ -31,7 +31,7 @@ export function sectionInput(el,lab){
  const s=lab.sections[Number(a.labSection)];if(!s)return false;
  if(a.labField!==undefined){
   const f=s.fields[Number(a.labField)],key=a.labFieldProp;
-  return setCustomFieldProperty(f,key,key==='required'?el.checked:key==='choices'?storedChoices(el.value.split('\n').map(v=>v.trim()).filter(Boolean),f.choices):el.value);
+  return setCustomFieldProperty(f,key,['required','private'].includes(key)?el.checked:key==='choices'?storedChoices(el.value.split('\n').map(v=>v.trim()).filter(Boolean),f.choices):el.value);
  }else if(['label','description','enabled'].includes(a.labSectionProp))s[a.labSectionProp]=a.labSectionProp==='enabled'?el.checked:el.value;
  else return false;
  return true;

@@ -32,6 +32,7 @@ test('the configuration service upgrades a book exactly like the lab book editor
   configuration.sections=configuration.sections.filter(s=>s.profileId!==profile.id||profile.introduced.sections[s.key]===1);
   for(const s of configuration.sections.filter(s=>s.profileId===profile.id)){
    s.fields=s.fields.filter(f=>profile.introduced.fields[s.key+'/'+f.key]===1);
+   for(const f of s.fields)if((profile.introduced.private[s.key+'/'+f.key]??1)>1)delete f.private;
    for(const f of s.fields)f.choices=f.choices.filter(c=>profile.introduced.choices[s.key+'/'+f.key+'/'+c]===1);
   }
  }
@@ -47,7 +48,7 @@ test('the configuration service upgrades a book exactly like the lab book editor
  assert.deepEqual(sections.map(r=>(r.value.profileId??'')+':'+r.value.key),expected.sections.map(s=>(s.profileId??'')+':'+s.key));
  for(const row of sections){
   const want=expected.sections.find(s=>s.profileId===row.value.profileId&&s.key===row.value.key),fields=await rows(commands,base,changed.draft,'fields',{sectionId:row.key});
-  assert.deepEqual(fields.map(f=>f.key),want.fields.map(f=>f.key),row.value.key);
+  assert.deepEqual(fields.map(f=>[f.key,f.value.private===true]),want.fields.map(f=>[f.key,f.private===true]),row.value.key);
   for(const field of fields.filter(f=>f.value.type==='select'))assert.deepEqual((await rows(commands,base,changed.draft,'choices',{sectionId:row.key,fieldKey:field.key})).map(c=>c.value),want.fields.find(f=>f.key===field.key).choices);
  }
  assert.ok(profileById('beekeeping'));

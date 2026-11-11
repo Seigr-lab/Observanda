@@ -76,7 +76,7 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
   await page.setViewportSize({width:1440,height:1000});await open(hive.id);
   await history().getByRole('button',{name:'Add linked record',exact:true}).click();await expect(dialog.getByLabel('Record template')).toBeVisible();
   await dialog.getByLabel('Record template').selectOption({label:'Hive & equipment movement'});await dialog.getByRole('button',{name:'Create record',exact:true}).click();
-  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(/Hive & equipment movement/);await page.getByLabel('Destination apiary / address',{exact:true}).fill('Synthetic upper apiary');await save();
+  await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(/Hive & equipment movement/);await page.getByLabel('Destination apiary / address · never published',{exact:true}).fill('Synthetic upper apiary');await save();
   await navigate(page,'Preferences');await preferences(page,'Templates');const disabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).uncheck();await disabled;
   await open(hive.id);await expect(history().getByRole('button',{name:'New inspection',exact:true})).toHaveCount(0);await expect(history().getByRole('link',{name:created.title,exact:true})).toBeVisible();
   expect(errors).toEqual([]);

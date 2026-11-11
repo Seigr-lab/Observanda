@@ -25,8 +25,8 @@ test('shipped profiles describe every item with the version that introduced it',
 
 test('an upgrade adds only newer items and keeps author edits, removals and order',()=>{
  const {next}=nextVersion(),lab={profiles:[],sections:[]};
- enableProfile(lab,'beekeeping',true);lab.profiles[0].version=1;
- // What version 1 would have copied: without the items version 2 introduced.
+ enableProfile(lab,'beekeeping',true);
+ // What the current version would have copied: without the items version 2 introduced.
  lab.sections=lab.sections.filter(s=>s.key!=='harvest');
  const inspection=lab.sections.find(s=>s.key==='inspection'),colony=lab.sections.find(s=>s.key==='colony'),origin=colony.fields.find(f=>f.key==='origin');
  inspection.fields=inspection.fields.filter(f=>f.key!=='next-visit');origin.choices=origin.choices.filter(c=>c!=='Unknown');
@@ -34,11 +34,11 @@ test('an upgrade adds only newer items and keeps author edits, removals and orde
  inspection.label='Visit';inspection.fields=inspection.fields.filter(f=>f.key!=='weather');origin.choices=origin.choices.filter(c=>c!=='Package');
  const monitoring=lab.sections.find(s=>s.key==='monitoring');monitoring.enabled=false;lab.sections.reverse();
  const order=lab.sections.map(s=>s.id),before=structuredClone(lab);
- const plan=profileUpgrade(next,1);
+ const {current}=nextVersion(),plan=profileUpgrade(next,current.version);
  assert.deepEqual(plan.sections.map(s=>s.key),['harvest']);assert.deepEqual(plan.fields.map(f=>f.section+'/'+f.field.key),['inspection/next-visit']);assert.deepEqual(plan.choices,[{section:'colony',field:'origin',choice:'Unknown'}]);
  assert.equal(profileUpgradeItems(plan).length,3);
  assert.equal(upgradeProfile(lab,'beekeeping',next),true);
- assert.ok(validConfiguration(lab));assert.equal(lab.profiles[0].version,2);
+ assert.ok(validConfiguration(lab));assert.equal(lab.profiles[0].version,next.version);
  assert.deepEqual(lab.sections.slice(0,order.length).map(s=>s.id),order,'existing order is kept and new sections are appended');
  assert.equal(lab.sections.at(-1).key,'harvest');
  assert.equal(inspection.label,'Visit');assert.ok(!inspection.fields.some(f=>f.key==='weather'),'removed fields stay removed');

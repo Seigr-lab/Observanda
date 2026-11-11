@@ -15,6 +15,12 @@ export function sourcePublicationRecord(record,target='website',retainedTargets=
  for(const key of ['body','outcome'])if(!publicationPartAllowed(record,key,target))result[key]='';
  for(const key of ['contributors','tags','figures','relations'])if(!publicationPartAllowed(record,key,target))result[key]=[];
  for(const key of ['results','attempt','template'])if(!publicationPartAllowed(record,key,target))delete result[key];
+ // A field marked never to publish (personal data, precise locations) leaves
+ // every output with its value, whatever the record's other choices.
+ if(result.template?.fields?.some(field=>field.private===true)){
+  const fields=result.template.fields.filter(field=>field.private!==true),kept=new Set(fields.map(field=>field.key));
+  result.template={...result.template,fields,values:Object.fromEntries(Object.entries(result.template.values??{}).filter(([key])=>kept.has(key)))};
+ }
  const hidden=new Set(record.publication?.[target]?.hiddenFigures);
  if(hidden.size&&result.figures)result.figures=result.figures.filter(figure=>!hidden.has(figure.id));
  // Prose alternatives and captions may themselves contain withheld content.

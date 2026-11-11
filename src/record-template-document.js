@@ -18,7 +18,7 @@ async function boundedValue(document,revision,{signal}={}){
 async function definitionAt(document,path,schemaRevision,{signal}={}){
  const header={};let choices=false;
  for await(const child of document.properties(path,{signal})){
-  if(!['key','label','type','unit','required','choices','numeric','format','uncertainty'].includes(child.name)||Object.hasOwn(header,child.name))invalid();
+  if(!['key','label','type','unit','required','choices','numeric','format','uncertainty','private'].includes(child.name)||Object.hasOwn(header,child.name))invalid();
   if(child.name==='choices'){if(choices)invalid();choices=true;continue;}
   Object.defineProperty(header,child.name,{value:await boundedValue(document,child.value,{signal}),enumerable:true});
  }

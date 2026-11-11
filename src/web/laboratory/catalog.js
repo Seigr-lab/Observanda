@@ -39,7 +39,9 @@ export function profileUpgrade(profile,from){
  return {profile,from,to:profile.version,
   sections:profile.sections.filter(s=>newer(introduced.sections[s.key])),
   fields:kept.flatMap(s=>s.fields.filter(f=>newer(introduced.fields[s.key+'/'+f.key])).map(field=>({section:s.key,field}))),
-  choices:kept.flatMap(s=>s.fields.filter(f=>!newer(introduced.fields[s.key+'/'+f.key])).flatMap(f=>f.choices.filter(choice=>newer(introduced.choices[s.key+'/'+f.key+'/'+choice])).map(choice=>({section:s.key,field:f.key,choice}))))};
+  choices:kept.flatMap(s=>s.fields.filter(f=>!newer(introduced.fields[s.key+'/'+f.key])).flatMap(f=>f.choices.filter(choice=>newer(introduced.choices[s.key+'/'+f.key+'/'+choice])).map(choice=>({section:s.key,field:f.key,choice})))),
+  // Fields the book already has that a later version never publishes.
+  private:kept.flatMap(s=>s.fields.filter(f=>!newer(introduced.fields[s.key+'/'+f.key])&&newer(introduced.private[s.key+'/'+f.key]??0)).map(f=>({section:s.key,field:f.key})))};
 }
 export function upgradeProfile(lab,id,profile=profileById(id)){
  const chosen=lab.profiles.find(p=>p.id===id);
@@ -48,5 +50,6 @@ export function upgradeProfile(lab,id,profile=profileById(id)){
  for(const starter of plan.sections)if(!find(starter.key))lab.sections.push({...structuredClone(starter),id:crypto.randomUUID(),profileId:id,enabled:true});
  for(const {section,field} of plan.fields){const target=find(section);if(target&&!target.fields.some(f=>f.key===field.key))target.fields.push(structuredClone(field));}
  for(const {section,field,choice} of plan.choices){const target=find(section)?.fields.find(f=>f.key===field);if(target?.type==='select'&&!target.choices.includes(choice))target.choices.push(choice);}
+ for(const {section,field} of plan.private){const target=find(section)?.fields.find(f=>f.key===field);if(target)target.private=true;}
  chosen.version=profile.version;return true;
 }
