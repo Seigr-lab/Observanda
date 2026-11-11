@@ -40,8 +40,8 @@ test('source inspection is read-only and rejects hard-linked scientific data',wi
 test('workspace admission proof reopens across fresh processes and rejects another vault or root',windows,async t=>{
  const {root,directory,dispose}=await fixture(t),workspace={vault:{id:randomUUID(),key:randomBytes(32)}};let guard=await acquirePostgresRuntimeGuard({directory,workspace});dispose(()=>guard.close());dispose(()=>workspace.vault.key.fill(0));await guard.files.write(path.join(directory,'retained'),'original');await guard.close();const stamp=await readFile(path.join(directory,'owner.lock'));assert.equal(stamp.subarray(0,8).toString(),'OBSGRD03');
  guard=await acquirePostgresRuntimeGuard({directory,workspace});assert.equal(guard.cached,true);await guard.close();
- await assert.rejects(acquirePostgresRuntimeGuard({directory,workspace:{vault:{id:workspace.vault.id,key:randomBytes(32)}}}),{code:'DATABASE_GUARD_STORAGE',reason:'runtime-admission-authentication-failed'});
- const second=path.join(root,'second');guard=await acquirePostgresRuntimeGuard({directory:second,workspace});await guard.close();await writeFile(path.join(second,'owner.lock'),stamp);await assert.rejects(acquirePostgresRuntimeGuard({directory:second,workspace}),{code:'DATABASE_GUARD_STORAGE',reason:'runtime-admission-authentication-failed'});
+ await assert.rejects(acquirePostgresRuntimeGuard({directory,workspace:{vault:{id:workspace.vault.id,key:randomBytes(32)}}}),{code:'ENCRYPTION_DAMAGED',reason:'runtime-admission-authentication-failed'});assert.deepEqual(await readFile(path.join(directory,'owner.lock')),stamp);guard=await acquirePostgresRuntimeGuard({directory,workspace});assert.equal(guard.cached,true);await guard.close();
+ const second=path.join(root,'second');guard=await acquirePostgresRuntimeGuard({directory:second,workspace});await guard.close();await writeFile(path.join(second,'owner.lock'),stamp);await assert.rejects(acquirePostgresRuntimeGuard({directory:second,workspace}),{code:'ENCRYPTION_DAMAGED',reason:'runtime-admission-authentication-failed'});
  assert.equal(await readFile(path.join(directory,'retained'),'utf8'),'original');
 });
 

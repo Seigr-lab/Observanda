@@ -51,7 +51,10 @@ test('workspace databases own separate files, credentials and lifecycle',async t
 test('portable runtime requires the workspace key and refuses ownership left by another installation',async t=>{
  const f=await fixture(t),workspace=await f.create('protected'),service=await f.start(workspace);await query(service.env,'CREATE TABLE retained(value integer)');await query(service.env,'INSERT INTO retained VALUES (37)');await service.close();
  const file=path.join(workspace.root,'.observanda','postgresql','service.observanda'),bytes=await readFile(file),aad='Observanda/workspace-postgresql/v1/'+workspace.vault.id;
- await assert.rejects(f.start({...workspace,vault:{...workspace.vault,key:randomBytes(32)}}),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await readFile(file),bytes);
+ const lock=path.join(workspace.root,'.observanda','postgresql','owner.lock'),admission=await readFile(lock);
+ await assert.rejects(f.start({...workspace,vault:{...workspace.vault,key:randomBytes(32)}}),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await readFile(file),bytes);assert.deepEqual(await readFile(lock),admission);
+ // A refused wrong key leaves no admission or ownership that blocks the right one.
+ const verified=await f.start(workspace);assert.deepEqual(await query(verified.env,'SELECT value FROM retained'),[{value:37}]);await verified.close();
  const config=JSON.parse(unseal(bytes,workspace.vault.key,aad));config.running=true;config.ownerId=randomUUID();await writeFile(file,seal(Buffer.from(JSON.stringify(config)),workspace.vault.key,aad));
  await assert.rejects(f.start(workspace),{code:'DATABASE_WORKSPACE_RUNNING'});
  await writeFile(file,bytes);const reopened=await f.start(workspace);assert.deepEqual(await query(reopened.env,'SELECT value FROM retained'),[{value:37}]);

@@ -17,7 +17,9 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
  child.stdout.on('data',bytes=>{
   try{header+=bytes.toString();if(header.length>262144)throw new AppError('DATABASE_GUARD_UNAVAILABLE');let newline;
    while((newline=header.indexOf('\n'))>=0){const message=JSON.parse(header.slice(0,newline));header=header.slice(newline+1);if(message.ready===true){readyResolve();continue;}const item=pending.get(message.id);if(!item)throw new AppError('DATABASE_GUARD_UNAVAILABLE');pending.delete(message.id);
-    if(message.error){const code=message.error==='EBUSY'?'DATABASE_RUNNING':['DATABASE_GUARD_STORAGE','DATABASE_GUARD_UNAVAILABLE','STORAGE_COPY','UNSAFE','ENOENT','EEXIST','ENOTEMPTY','LIMIT','CONFLICT'].includes(message.error)?message.error:'DATABASE_GUARD_STORAGE',error=new AppError(code);error.code=code;error.diagnostic=message.diagnostic;if(typeof message.reason==='string')error.reason=message.reason;item.reject(error);}else item.resolve(message.result);
+    // A runtime admission proof made with another workspace key, or copied from
+    // another folder, is replaced or damaged data, not a storage limitation.
+    if(message.error){const code=message.error==='EBUSY'?'DATABASE_RUNNING':message.reason==='runtime-admission-authentication-failed'?'ENCRYPTION_DAMAGED':['DATABASE_GUARD_STORAGE','DATABASE_GUARD_UNAVAILABLE','STORAGE_COPY','UNSAFE','ENOENT','EEXIST','ENOTEMPTY','LIMIT','CONFLICT'].includes(message.error)?message.error:'DATABASE_GUARD_STORAGE',error=new AppError(code);error.code=code;error.diagnostic=message.diagnostic;if(typeof message.reason==='string')error.reason=message.reason;item.reject(error);}else item.resolve(message.result);
    }
   }catch(error){fail(error);child.kill();}
  });
