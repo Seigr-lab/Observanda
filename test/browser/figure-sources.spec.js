@@ -9,6 +9,7 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
+import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
 import {revealInEditor} from './record-editor-helper.js';
 
 test('copy a calculated plot into panels and inspect its exact source chain while reading the lab book',async({page})=>{
@@ -24,11 +25,14 @@ test('copy a calculated plot into panels and inspect its exact source chain whil
  const dialog=page.locator('#dialog'),editor=page.getByRole('dialog',{name:'Edit Figure',exact:true}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});page.on('request',r=>{if(new URL(r.url()).pathname==='/api/research/records/values/save')writes.push(r);});
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const compound=editor.locator('.figure-composition');
-  await compound.getByLabel('Multi-panel title',{exact:true}).fill('Linked source panels');
-  for(let i=0;i<2;i++){await compound.getByLabel('Editing panel',{exact:true}).selectOption({index:i});await compound.getByRole('button',{name:'Copy figure into panel',exact:true}).click();await picker.getByRole('button',{name:calculation.figure.title,exact:true}).click();await expect(compound.getByRole('button',{name:'Inspect calculation',exact:true})).toHaveCount(1);}
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const area=async value=>{await expect(editor.locator('[data-fe-part]')).toBeEnabled();await editor.locator('[data-fe-part]').selectOption(value);await expect(editor.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');};
+  // The multi-panel figure is edited in the retained property editor: the figure title is its first property,
+  // and each saved plot copied into it becomes a panel whose observations keep their calculation source.
+  await expect(editor.locator('[data-fe-value]')).toHaveValue('Data figure');await editor.locator('[data-fe-value]').fill('Linked source panels');await expect(editor.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
+  for(let i=0;i<2;i++){await editor.getByRole('button',{name:'Copy saved plot',exact:true}).click();await picker.getByRole('button',{name:calculation.figure.title,exact:true}).click();await expect(picker).not.toBeVisible();await expect(editor.locator('[data-fe-panel]')).toHaveAttribute('max',String(i+1));await editor.locator('[data-fe-panel]').fill(String(i+1));await editor.locator('[data-fe="panel"]').click();await area('points');await expect(editor.getByRole('button',{name:'Inspect original calculation',exact:true})).toHaveCount(1);await area('figure');}
   await editor.getByRole('button',{name:'Save changes',exact:true}).click();await expect(editor).not.toBeVisible();
-  const saved=await f.workspace.read(),stored=saved.book.entries[0];expect(stored.figures[1].panels[0].figure.source).toEqual(calculation.ref);expect(stored.results).toBeUndefined();
+  const saved=await f.workspace.read(),stored=saved.book.entries[0];const composed=await new RetainedFigureDocuments(f.workspace).open(stored.figures[1]),panels=(await composed.window({collection:'panels',offset:0,limit:4})).items;expect(panels).toHaveLength(2);
+  for(const panel of panels){const series=(await composed.window({collection:'series',plotId:panel.plotId,offset:0,limit:1})).items[0],point=(await composed.window({collection:'points',plotId:panel.plotId,seriesId:series.id,offset:0,limit:1})).items[0];expect(point.value.source.origin.ref).toEqual(calculation.ref);}expect(stored.results).toBeUndefined();
   await page.reload();await expect(page.locator('.record-reader h1')).toHaveText(record.title);
   await page.evaluate(id=>location.hash='#/notebooks/'+id,record.notebookId);await page.getByRole('button',{name:'Read lab book',exact:true}).click();
   const reader=page.locator('[data-reading-record]');await expect(reader).toHaveCount(1);await expect(page.locator('[contenteditable=true]')).toHaveCount(0);
