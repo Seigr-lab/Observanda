@@ -1051,7 +1051,8 @@ async function rawAction(button) {
    if(name==='record-location-open'){recordLocation.open();return;}
    if(name?.startsWith('workflow-')){await workflow.action(button);return;}
    if(name==='record-removal-open'){if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);recordRemoval.open();return;}
-   if(name?.startsWith('record-activity-')&&name!=='record-activity-subjects'){await recordActivity.action(button);return;}
+   // The linked-record type chooser opened from this record reports its choice through the same owner.
+   if(name?.startsWith('record-activity-')&&name!=='record-activity-subjects'||name?.startsWith('configuration-type-')){if(await recordActivity.action(button)||name?.startsWith('record-activity-'))return;}
    if(name?.startsWith('migration-provenance-')){await migrationProvenance.action(button);return;}
    if(name?.startsWith('review-')){await reviews.action(button);return;}
    if(name==='record-content-reference'){await bookReferences.action(button);return;}
