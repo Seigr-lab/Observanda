@@ -99,7 +99,7 @@ for(const crossFilesystem of [false,true])test('a killed book move resumes from 
  }finally{if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await ended;}provider=new WorkspaceDatabases({...options,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(provider);}
  await assert.rejects(stat(sourceRoot),{code:'ENOENT'});const located=await stat(destinationRoot);
  const result=await new LabBookReparents(registry,storage.labBookId).run(source,target,storage.vault,{id});assert.equal(result.book.root,destinationRoot);assert.equal((await stat(destinationRoot)).ino,located.ino);
- const reopened=new LabBookStorage(destinationRoot,storage.labBookId,storage.vault),after=await reopened.read();assert.equal(after.book.id,before.book.id);assert.deepEqual(after.book.entries,before.book.entries);assert.equal(after.book.notebooks[0].projectId,target.projectId);
+ const reopened=new LabBookStorage(destinationRoot,storage.labBookId,storage.vault),after=await reopened.read();assert.equal(after.book.id,before.book.id);assert.deepEqual(after.book.entries,[{...before.book.entries[0],share:false,updatedAt:after.book.entries[0].updatedAt}]);assert.equal(after.book.notebooks[0].projectId,target.projectId);
  // Reopen both parent owners after the killed process, then drain their adopted runtimes.
  assert.equal((await source.outline()).metadata.projects[0].id,source.projectId);assert.equal((await target.outline()).metadata.projects[0].id,target.projectId);
 });

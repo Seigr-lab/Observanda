@@ -37,8 +37,8 @@ test('workspace move application authenticates both workspaces and protected own
   }
  }
  assert.equal(missing.size,2);
- const originalFinish=ProjectWorkspaceMoves.prototype.finish;let expireOnce=true;
- const expire=t.mock.method(ProjectWorkspaceMoves.prototype,'finish',function(value,key,options){return originalFinish.call(this,value,key,{...options,checkpoint:async stage=>{if(stage==='stopped'&&expireOnce){expireOnce=false;app.moveTargets.entries.get(target.id).expires=0;}}});});
+ const originalRun=ProjectWorkspaceMoves.prototype.run;let expireOnce=true;
+ const expire=t.mock.method(ProjectWorkspaceMoves.prototype,'run',function(storage,options){return originalRun.call(this,storage,{...options,checkpoint:async stage=>{if(stage==='stopped'&&expireOnce){expireOnce=false;app.moveTargets.entries.get(target.id).expires=0;}}});});
  await assert.rejects(run(projectId+'/storage/move',command),{code:'PROJECT_MOVE_DESTINATION_ACCESS'});expire.mock.restore();
  assert.equal((await run('move/pending',{after:null,limit:20})).items.length,1);app.moveTargets.expire();target=await targetOpen();command.target=target.id;
  await run('move/target/unlock',{target:target.id,projectId:parentId,username:'',password:parentPassword,recovery:''});
