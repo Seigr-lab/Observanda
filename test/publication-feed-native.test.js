@@ -15,6 +15,7 @@ import {enumerateFeedMembers,readFeedSource} from '../src/website-feed-query.js'
 import {seedEligibleWebsiteOwner} from '../src/website-library-discovery.js';
 import {upgradeControl} from '../src/website-upgrade-lease.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createFigure} from '../src/web/figure-model.js';
 
 test('eligible lab edits update saved live feed files and matching rules while an ordinary website copy keeps its authored composition',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-')),book=sampleNotebook(),record=book.entries[2],hidden=randomUUID();
@@ -38,6 +39,9 @@ test('eligible lab edits update saved live feed files and matching rules while a
  const ordinary=await store.open(created.site.id);assert.equal(ordinary.html,saved.html);assert.equal(ordinary.site.revision,saved.site.revision);
  await writing(hidden,'Private text changed');assert.equal((await live()).revision,current.revision);
  await store.scope(()=>assert.rejects(readFeedSource(store,source.id,source.revision),{code:'CONFLICT'}));
+ // A figure added through its selected value is new to the live site: the site is fenced before the write and refreshed after it.
+ const beforeFigure=await live(),figure=createFigure();figure.title='Storm response';figure.series[0].points=[{x:1,y:2,error:null}];await value('figure:'+figure.id,figure);
+ const withFigure=await live();assert.notEqual(withFigure.revision,beforeFigure.revision);assert.match(await fragment(withFigure),/Storm response/);
  await value('share',false);await store.scope(()=>assert.rejects(readFeedSource(store,source.id),{code:'NOT_FOUND'}));assert.deepEqual(await enumerateFeedMembers(store,rule),[]);
  await value('share',true);assert.deepEqual((await enumerateFeedMembers(store,rule)).map(m=>m.id),[source.id]);
  const afterRestore=await store.open(created.site.id),currentRecord=(await workspace.read()).book.entries[0];

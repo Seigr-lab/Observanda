@@ -14,9 +14,9 @@ export async function feedContentStamp(document,publication,{liveFields,selected
  for(const field of liveFields??fields){
   if(!publicationPartAllowed({publication},field,'website'))continue;
   if(['sections','attachments','figures'].includes(field)){
-   const admitted=[],hidden=field==='figures'?new Set(publication?.website?.hiddenFigures):null;
+   const admitted=[],hidden=field==='figures'?new Set(publication?.website?.hiddenFigures):null;let selected=false;
    for await(const item of document.items([field])){
-    const id=(await document.tree.selected(item.value,['id'])).value;if(selectedId&&id!==selectedId)continue;
+    const id=(await document.tree.selected(item.value,['id'])).value;if(selectedId&&id!==selectedId)continue;selected=true;
     if(hidden){if(hidden.has(id))continue;admitted.push(item.value);}
     else{
      const allowed=(await document.tree.selected(item.value,['share'])).value;
@@ -26,7 +26,10 @@ export async function feedContentStamp(document,publication,{liveFields,selected
      admitted.push(await Promise.all(keys.map(key=>document.tree.select(item.value,[key]))));
     }
    }
-   if(!selectedId||admitted.length)refs.push([field,admitted]);
+   // An existing item the website does not admit leaves the site untouched. An
+   // absent selected item may be created by this change, so the site is fenced
+   // before the research write and compared again after it.
+   if(!selectedId||admitted.length||!selected)refs.push([field,admitted]);
   }else refs.push([field,await document.reference([field])]);
  }
  return refs.length?digest(serialize(refs)):null;
