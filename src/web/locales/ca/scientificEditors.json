@@ -30,6 +30,8 @@
   "yearMonthDay": "Any-mes-dia",
   "yearMonth": "Any-mes",
   "dateTimeUTC": "Data i hora (UTC)",
+  "dateTimeSecondsUTC": "Data i hora amb segons (UTC)",
+  "dateTimeMillisecondsUTC": "Data i hora amb mil·lisegons (UTC)",
   "axesColour": "Color dels eixos",
   "bothAxes": "Tots dos eixos",
   "gridColour": "Color de la quadrícula",

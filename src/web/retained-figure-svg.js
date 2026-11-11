@@ -6,6 +6,7 @@ import {retainedFigureWindow} from './retained-figure-window.js';
 // point, series, panel and annotation counts; consumers must drain the stream.
 import {readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
 import {figureDomain,figureFraction,figureTicks} from './figure-scales.js';
+import {figureDateTicks,figureDateLabel} from './figure-time-axis.js';
 import {axisFraction} from './figure-axis-controls.js';
 import {xValue} from './figure-model.js';
 import {figureDataNumber,figureCoordinateNumber,figureTickLabels} from './figure-number-labels.js';
@@ -159,10 +160,12 @@ async function* axes(reader,g){
    }
    continue;
   }
-  const values=figureTicks(g[axis],f[axis].scale==='log',Math.max(2,Math.floor((isHorizontal?plotW:plotH)/(style.fontSize*7)))),labels=figureTickLabels(values,style);
+  const date=axis==='x'&&f.x.kind==='date',count=Math.max(2,Math.floor((isHorizontal?plotW:plotH)/(style.fontSize*(date?(['seconds','milliseconds'].includes(style.dateFormat)?17:12):7))));
+  // Calendar axes step through whole calendar units, like the record renderer.
+  const values=date?figureDateTicks(g[axis],count,style.dateFormat):figureTicks(g[axis],f[axis].scale==='log',count),labels=date?values.map(value=>figureDateLabel(value,style.dateFormat)):figureTickLabels(values,style);
   for(let i=0;i<values.length;i++){
    const raw=axis==='x'&&f.x.kind==='date'?new Date(values[i]).toISOString():values[i],pos=(axis==='x'?(horizontal?t.cy:t.cx):(horizontal?t.vx:t.vy))(raw);
-   const label=axis==='x'&&f.x.kind==='date'?raw.slice(0,style.dateFormat==='year'?4:style.dateFormat==='month'?7:style.dateFormat==='datetime'?16:10):labels[i];
+   const label=labels[i];
    yield* tickLine(g,pos,isHorizontal,axis);
    const tickWidth=isHorizontal?plotW/Math.max(1,values.length):left-24;let tickSize=style.fontSize;
    // Generated numeric/date tokens must stay intact. Fit against the same

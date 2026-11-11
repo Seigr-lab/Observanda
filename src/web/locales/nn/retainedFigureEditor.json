@@ -121,6 +121,8 @@
   "option_month": "Månad",
   "option_year": "År",
   "option_datetime": "Dato og tid",
+  "option_seconds": "Dato og klokkeslett med sekund",
+  "option_milliseconds": "Dato og klokkeslett med millisekund",
   "option_key": "Forklaring",
   "option_hidden": "Skjult",
   "option_linear": "Lineær",

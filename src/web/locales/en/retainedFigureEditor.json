@@ -121,6 +121,8 @@
  "option_month": "Month",
  "option_year": "Year",
  "option_datetime": "Date and time",
+ "option_seconds": "Date and time with seconds",
+ "option_milliseconds": "Date and time with milliseconds",
  "option_key": "Key",
  "option_hidden": "Hidden",
  "option_linear": "Linear",

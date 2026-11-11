@@ -30,6 +30,8 @@
   "yearMonthDay": "Year-month-day",
   "yearMonth": "Year-month",
   "dateTimeUTC": "Date and time (UTC)",
+  "dateTimeSecondsUTC": "Date and time with seconds (UTC)",
+  "dateTimeMillisecondsUTC": "Date and time with milliseconds (UTC)",
   "axesColour": "Axes colour",
   "bothAxes": "Both axes",
   "gridColour": "Grid colour",

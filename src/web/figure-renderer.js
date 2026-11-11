@@ -16,6 +16,7 @@ import {linkedPanelPlots} from './figure-composition.js';
 import {formatFigureNumber,figureTickLabels,figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
 import {figureDomain as domain,figureTicks as ticks,figureFraction as transform} from './figure-scales.js';
 import {wrapFigureText,figureLegendLayout} from './figure-text-layout.js';
+import {figureDateTicks,figureDateLabel} from './figure-time-axis.js';
 export {formatFigureNumber} from './figure-number-labels.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -52,28 +53,9 @@ function fitNumberTicks(domain,log,count,width,size,style){
 function coordinateLabel(value,figure,style){
  if(figure.x.kind==='category')return String(value);
  if(figure.x.kind==='number')return formatFigureNumber(value,style);
- const iso=new Date(value).toISOString();
- return style.dateFormat==='year'?iso.slice(0,4):style.dateFormat==='month'?iso.slice(0,7):style.dateFormat==='datetime'?iso.slice(0,16).replace('T',' ')+' UTC':iso.slice(0,10);
+ return figureDateLabel(value,style.dateFormat);
 }
 
-function dateTicks(domain,count,format){
- const day=86400000,span=domain.max-domain.min,minimum=format==='year'?day*365.25:format==='month'?day*30:format==='date'?day:60000;
- const interval=Math.max(minimum,span/Math.max(2,count)),result=[];
- if(interval>=day*28){
-  const months=interval<day*75?1:interval<day*150?3:interval<day*300?6:12*Math.max(1,Math.ceil(interval/(day*365.25)));
-  const date=new Date(domain.min),month=date.getUTCFullYear()*12+date.getUTCMonth();
-  let index=Math.ceil(month/months)*months;
-  for(let i=0;i<40;i++,index+=months){
-   const value=Date.UTC(Math.floor(index/12),index%12,1);
-   if(value>domain.max)break;
-   if(value>=domain.min)result.push(value);
-  }
- }else{
-  const step=[60000,300000,900000,1800000,3600000,10800000,21600000,43200000,day,2*day,7*day,14*day,28*day].find(step=>step>=interval)??28*day;
-  for(let value=Math.ceil(domain.min/step)*step;value<=domain.max&&result.length<40;value+=step)result.push(value);
- }
- return result.length?result:[(domain.min+domain.max)/2];
-}
 export function figureSummary(figure,{translate}={}){
  const text=modelMessages('figureDisplay',displayMessages,translate);
  if(figure.kind==='panels')return figure.panels.map(p=>text('summaryPanel',{label:p.label,title:p.figure.title,summary:figureSummary(p.figure,{translate})})).join(' ');
@@ -164,9 +146,9 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,local
  }
  const projected=rotation?Math.abs(Math.cos(rotation*Math.PI/180))*labelWidth+Math.abs(Math.sin(rotation*Math.PI/180))*fontSize*1.4:Math.min(140,longest);
  const step=style.labelStep||Math.max(1,Math.ceil((horizontal?fontSize*2.8:projected+16)*categories.length/(horizontal?plotH:plotW)));
- const coordinateCount=Math.max(2,Math.floor((horizontal?plotH:plotW)/(figure.x.kind==='date'?fontSize*12:fontSize*7)));
+ const coordinateCount=Math.max(2,Math.floor((horizontal?plotH:plotW)/(figure.x.kind==='date'?fontSize*(['seconds','milliseconds'].includes(style.dateFormat)?17:12):fontSize*7)));
  const numberAxis=figure.x.kind==='number'?fitNumberTicks(xd,figure.x.scale==='log',coordinateCount,horizontal?plotH:plotW,fontSize,style):null;
- const coordTicks=customX?[]:category?categories.filter((_,i)=>i%step===0):figure.x.kind==='date'?dateTicks(xd,coordinateCount,style.dateFormat):numberAxis.values;
+ const coordTicks=customX?[]:category?categories.filter((_,i)=>i%step===0):figure.x.kind==='date'?figureDateTicks(xd,coordinateCount,style.dateFormat):numberAxis.values;
  const coordinateSize=numberAxis?labelSize(numberAxis.labels,horizontal?left-28:plotW/Math.max(1,coordTicks.length)-6,fontSize):fontSize;
  for(const [i,value] of coordTicks.entries()){
   const raw=figure.x.kind==='date'?new Date(value).toISOString():value,position=horizontal?cy(raw):cx(raw),text=numberAxis?numberAxis.labels[i]:coordinateLabel(value,figure,style);

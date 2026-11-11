@@ -30,6 +30,8 @@
   "yearMonthDay": "År-månad-dag",
   "yearMonth": "År-månad",
   "dateTimeUTC": "Dato og klokkeslett (UTC)",
+  "dateTimeSecondsUTC": "Dato og klokkeslett med sekund (UTC)",
+  "dateTimeMillisecondsUTC": "Dato og klokkeslett med millisekund (UTC)",
   "axesColour": "Aksefarge",
   "bothAxes": "Begge aksar",
   "gridColour": "Rutenettfarge",

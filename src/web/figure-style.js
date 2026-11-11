@@ -1,4 +1,5 @@
 // Presentation is independent of measurements. Old figures use these defaults.
+import {FIGURE_DATE_FORMATS} from './figure-time-axis.js';
 export const FIGURE_FONTS = [['sans','Sans serif'],['serif','Serif'],['mono','Monospace']];
 // Engineering uses powers of a thousand; SI writes those powers as prefixes.
 export const FIGURE_NUMBER_FORMATS = ['auto','decimal','scientific','engineering','si','percent','radix'];
@@ -28,7 +29,7 @@ const schema = {
   radix:v=>Number.isInteger(v)&&within(v,2,36),
   decimals:v=>v===null||Number.isInteger(v)&&within(v,0,15),
   significantDigits:v=>v===null||Number.isInteger(v)&&within(v,1,17),
-  dateFormat:v=>['date','month','year','datetime'].includes(v),
+  dateFormat:v=>FIGURE_DATE_FORMATS.includes(v),
   annotationLabels:v=>['auto','key','hidden'].includes(v),
   width:v=>within(v,320,2400),height:v=>within(v,240,2400)
 };

@@ -26,7 +26,7 @@ import {figureHasResults,copyFigureResults} from './figure-result-links.js';
 import {figureSourceView} from './figure-provenance-ui.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const options=(items,value)=>items.map(([id,label])=>`<option value="${id}" ${id===value?'selected':''}>${esc(label)}</option>`).join('');
-const fieldInput=(name,label,value,type='text')=>`<label>${esc(label)}<input aria-label="${esc(label)}" data-figure-field="${name}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(value)}"></label>`;
+const fieldInput=(name,label,value,type='text')=>`<label>${esc(label)}<input aria-label="${esc(label)}" data-figure-field="${name}" type="${type}" ${type==='number'?'step="any"':type==='datetime-local'?'step="0.001"':''} value="${esc(value)}"></label>`;
 const select=(name,label,items,value)=>`<label>${esc(label)}<select aria-label="${esc(label)}" data-figure-field="${name}">${options(items,value)}</select></label>`;
 const button=(action,label,extra='')=>`<button type="button" class="button" data-action="figure-${action}" ${extra}>${esc(label)}</button>`;
 export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},prepareCopies=async()=>{},selectCopy=null,copyPairs=null,busyChanged=()=>{},changed,notify,context,root=()=>document,selectedOnly=false}){
@@ -95,7 +95,8 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   dialog.showModal();bind();
   if(trigger.closest('.figure-import'))host.querySelector('.figure-import').scrollIntoView({block:'start'});
  }
- function bound(f,key,label){const date=key.startsWith('x.')&&f.x.kind==='date',value=f[key[0]][key.slice(2)];return fieldInput(key,label,date&&value!==null?new Date(value).toISOString().slice(0,10):value,date?'date':'number');}
+ // Calendar bounds are UTC instants to the millisecond, like the plotted timestamps.
+ function bound(f,key,label){const date=key.startsWith('x.')&&f.x.kind==='date',value=f[key[0]][key.slice(2)];return fieldInput(key,label,date&&value!==null?new Date(value).toISOString().slice(0,23):value,date?'datetime-local':'number');}
  function card(f,panel=false){
   if(f.kind==='panels')return `<article class="figure-workbench figure-composition" data-figure-id="${f.id}"><header><h4>${esc(f.title)}</h4><div class="inline-actions">${selectedOnly?'':button('expand',st("expandEditor"))}${button('svg',st("downloadSVG"))}${button('csv',st("downloadData"))}${selectedOnly?'':button('duplicate',st("duplicate"))+button('remove',t("retainedFigureEditor","remove"))}</div></header><div data-figure-validation role="status"></div><div class="figure-preview" data-figure-preview></div>${composition.view(f,card)}</article>`;
   const s=current(f);
@@ -157,7 +158,7 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   if(el.dataset.figureRow!==undefined){delete f.summary;const p=current(f).points[Number(el.dataset.figureRow)],key=el.dataset.figureColumn;p[key]=['x','xLower','xUpper'].includes(key)&&f.x.kind!=='number'?(el.value.trim()?el.value:null):el.value.trim()===''?null:Number(el.value);}
   else if(el.dataset.figureField){
    const path=el.dataset.figureField.split('.'),parent=path.length===1?f:path[0]==='series'?current(f):f[path[0]],key=path.at(-1);
-   parent[key]=el.type==='date'?(el.value?Date.parse(el.value):null):el.type==='checkbox'?el.checked:el.type==='number'?(el.value.trim()===''?null:Number(el.value)):el.value;
+   parent[key]=el.type==='date'?(el.value?Date.parse(el.value):null):el.type==='datetime-local'?(el.value?Date.parse(el.value+'Z'):null):el.type==='checkbox'?el.checked:el.type==='number'?(el.value.trim()===''?null:Number(el.value)):el.value;
    if(el.dataset.figureField==='kind'){if(['bar','bar-horizontal','area'].includes(f.kind))f.y.scale='linear';if(f.kind==='heatmap'){f.heatmap??=defaultHeatmap();f.x.kind='category';f.x.scale='linear';f.y.scale='linear';for(const s of f.series)for(const p of s.points)p.x=String(p.x??'');}changed();refresh(f.id);return true;}
    if(el.dataset.figureField==='kind'&&['bar','bar-horizontal','area'].includes(f.kind))f.y.scale='linear';
    if(el.dataset.figureField==='x.kind'){

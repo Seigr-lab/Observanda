@@ -121,6 +121,8 @@
   "option_month": "Mes",
   "option_year": "Any",
   "option_datetime": "Data i hora",
+  "option_seconds": "Data i hora amb segons",
+  "option_milliseconds": "Data i hora amb mil·lisegons",
   "option_key": "Llegenda",
   "option_hidden": "Ocultes",
   "option_linear": "Lineal",

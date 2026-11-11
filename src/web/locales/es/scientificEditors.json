@@ -30,6 +30,8 @@
   "yearMonthDay": "Año-mes-día",
   "yearMonth": "Año-mes",
   "dateTimeUTC": "Fecha y hora (UTC)",
+  "dateTimeSecondsUTC": "Fecha y hora con segundos (UTC)",
+  "dateTimeMillisecondsUTC": "Fecha y hora con milisegundos (UTC)",
   "axesColour": "Color de los ejes",
   "bothAxes": "Ambos ejes",
   "gridColour": "Color de la cuadrícula",
