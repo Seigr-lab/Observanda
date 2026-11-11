@@ -46,6 +46,7 @@ export async function withRetainedFigure(materials,command,consume,{signal}={}){
  return materials.workspace.withCatalogueConnections?materials.workspace.withCatalogueConnections(run):run();
 }
 const selectorKeys=['ref','workspaceId','recordId','figureId','expectedRevision'];
+const SOURCE_LIMIT=32,SOURCE_POINTS=512;
 export function retainedFigureRequest(materials,command,{signal,download,exporting=false}={}){
  const allowed=[...selectorKeys,...(exporting?['format']:['operation','selection','window','language'])];
  if(!command||typeof command!=='object'||Object.keys(command).some(key=>!allowed.includes(key))||!validRetainedFigureLanguage(command,{exporting}))throw new AppError('INVALID');
@@ -75,6 +76,22 @@ export async function dispatchRetainedFigure(reader,revision,command,{signal,dow
     let origin=item.value.source?.origin??null;
     const ref=reader.figure?.source??(command.ref?.kind==='analysis'?command.ref:null);if(!origin&&ref)origin={ref,seriesId:item.seriesId,pointId:item.id};
     if(origin&&!validAuthoredPointOrigin(origin))fail();return {origin,revision};
+   }
+   case 'sources':{
+    // Figure-level calculation sources for readers: the figure's own source,
+    // then distinct point origins of each panel, read within fixed bounds.
+    if(Object.keys(selection).length)throw new AppError('INVALID');
+    const found=new Map(),add=(ref,plotId)=>{const key=JSON.stringify([ref.kind,ref.id,ref.revision]);if(!found.has(key))found.set(key,{ref:structuredClone(ref),plotId});};
+    let complete=true;if(reader.figure?.source)add(reader.figure.source,null);
+    panels:for await(const panel of reader.items({collection:'panels'})){
+     if(found.size>=SOURCE_LIMIT){complete=false;break;}let scanned=0;const plotId=panel.plotId??panel.value?.plotId;
+     for await(const point of reader.items({collection:'points',plotId})){
+      signal?.throwIfAborted();if(++scanned>SOURCE_POINTS){complete=false;break;}
+      const origin=point.value.source?.origin;if(!origin)continue;if(!validAuthoredPointOrigin(origin))fail();
+      add(origin.ref,plotId);if(found.size>=SOURCE_LIMIT){complete=false;break panels;}
+     }
+    }
+    return {sources:[...found.values()],complete,revision};
    }
    case 'text':if(!validRetainedFigureText(selection))throw new AppError('INVALID');return {...await reader.text(selection),revision};
    case 'svg':{

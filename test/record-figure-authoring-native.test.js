@@ -77,6 +77,9 @@ test('imported authored figures retain exact original point references and rejec
  const selector={workspaceId:book.id,recordId:record.id,figureId},current=await values.read(target),point=imported.items[0],pointSelection={plotId:point.plotId,seriesId:point.seriesId,pointId:point.id};
  const origin=await retainedFigureRequest(materials,{...selector,expectedRevision:current.revision,operation:'source',selection:pointSelection});assert.deepEqual(origin.origin,{ref,seriesId:original.items[0].seriesId,pointId:original.items[0].id});
  const source=await retainedFigureRequest(materials,{ref:origin.origin.ref,operation:'item',selection:{collection:'points',seriesId:origin.origin.seriesId,id:origin.origin.pointId}});assert.deepEqual(source.item.value,{x:1,y:3,error:null});
+ // Readers list a retained figure's calculation sources at figure level.
+ const sources=await retainedFigureRequest(materials,{...selector,expectedRevision:current.revision,operation:'sources'});assert.deepEqual(sources.sources,[{ref,plotId:point.plotId}]);assert.equal(sources.complete,true);assert.equal(sources.revision,current.revision);
+ await assert.rejects(async()=>retainedFigureRequest(materials,{...selector,operation:'sources',selection:{plotId:point.plotId}}),{code:'INVALID'});
  await assert.rejects(retainedFigureRequest(materials,{...selector,expectedRevision:'0'.repeat(64),operation:'source',selection:pointSelection}),{code:'RECORD_CHANGED'});
  await assert.rejects(retainedFigureRequest(materials,{...selector,operation:'source',selection:{...pointSelection,seriesId:randomUUID()}}),{code:'INVALID'});
  const output=await retainedFigureRequest(materials,{...selector,format:'json'},{exporting:true,download:async({chunks})=>JSON.parse(await collect(chunks))});assert.deepEqual(output.series[0].points,input.series[0].points);assert.equal(JSON.stringify(output).includes('origin'),false);

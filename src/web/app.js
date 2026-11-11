@@ -19,6 +19,7 @@ import {publicationPreviewUrl} from './website-context.js';
 import {projectDirectory} from './project-directory.js';
 import {projectAccessUI} from './project-access-ui.js';
 import {projectContexts,projectApiRoute,projectRoute,ownedRoute,researchContext,researchOwner,ownedAssetURL} from './project-context.js';
+import {retainedFigureReadingSlots} from './retained-figure-reader.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {startApplication} from './application-startup.js';
 import {downloadResource} from './session-download.js';
@@ -552,6 +553,11 @@ const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordCon
 const recordRemoval=recordRemovalUI({state,api,esc,notify,target:()=>recordContent.removalTarget(),refresh:()=>workspaceLive.check(),onRemoved:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.selected=null;state.page='entries';state.preview=null;render();}});
 const recordSections=recordSectionsUI({state,documents,esc,field,icon,dirty:dirtyRecord,render});
 const materials=researchMaterialsUI({currentRecordRevision:()=>recordContent.savedRevision(),showFigureResults:figureId=>recordContent.action({dataset:{action:'content-results-figure',resultFigure:figureId}}),access:operation=>withProjectAccess(operation),refreshReader:()=>workspaceLive.check(),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,dirty,render,revisions:()=>savedRecordRevisions,create:openCreatedRecord,editRetainedFigure:({recordId,figure})=>recordValues.open({recordId,field:'figure:'+figure.id,retainedFigure:figure})});
+// Retained figures in record readers are drawn inline and list their calculation sources.
+retainedFigureReadingSlots({root:document.body,current:()=>JSON.stringify([state.storage?.contextId,state.book?.id]),
+ selection:node=>{const figureId=node.dataset.figureId;if(!state.book||state.access?.locked)return null;if(!node.dataset.figureRef)return {workspaceId:state.book.id,recordId:node.dataset.recordId,figureId};const ref=JSON.parse(node.dataset.figureRef);return ref.workspaceId&&ref.workspaceId!==state.book.id?null:{ref:{kind:ref.kind,id:ref.id,revision:ref.revision},figureId};},
+ imageURL:selected=>ownedAssetURL(state,'/api/research/materials/retained-figure-export')+'?context='+encodeURIComponent(state.storage?.contextId??'')+'&selection='+encodeURIComponent(JSON.stringify({...selected,format:'svg'})),
+ read:body=>api('/api/research/materials/retained-figure',body,{adopt:false})});
 const attempts=attemptUI({editPreparation:recordId=>recordValues.open({recordId,field:'attempt:preparation:'+crypto.randomUUID()}),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,dirty:()=>dirtyRecord(),render,revisions:()=>savedRecordRevisions,openReference:ref=>materials.openReference(ref),requestClose:()=>action({dataset:{action:'close-dialog'}})});
 const results=resultStatementsUI({state,api,esc,field,showDialog,notify,dirty:()=>dirtyRecord(),render,openReference:ref=>materials.openReference(ref)});
 const localExport=localExportUI({state,api,esc,field,showDialog,notify});

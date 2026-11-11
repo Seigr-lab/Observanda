@@ -1,6 +1,7 @@
 import {t,language,onLanguageChange} from './i18n/index.js';
 import {retainedFigureText,escapeFigureText as esc} from './retained-figure-text.js';
 import {seriesStyle} from './figure-style.js';
+import {figureReadingView} from './figure-reading-view.js';
 const text=(key,args)=>t('retainedFigureReader',key,args);
 const preview=value=>retainedFigureText(value)?value.preview.replace(/[\uD800-\uDBFF]$/,'')+'\u2026':typeof value==='object'?JSON.stringify(value):String(value??'');
 const button=(label,action,disabled=false)=>'<button type="button" class="button" data-rf="'+action+'"'+(disabled?' disabled':'')+'>'+esc(label)+'</button>';
@@ -72,4 +73,26 @@ export function retainedFigureReader({root,request,downloadURL,inspectSource=nul
  const unlisten=onLanguageChange(refreshLanguage);
  const ready=(async()=>{working(true);try{await load();}catch(error){if(error.name!=='AbortError'&&status())status().textContent=error.message;throw error;}finally{finished();}})();
  return {ready,dispose(){disposed=true;controller.abort();unlisten();root.removeEventListener('click',action);}};
+}
+// Record readers mark retained figures with drawing and source slots. Each slot
+// is filled once for its exact selection: the complete figure drawing, and the
+// calculation sources found within the server's fixed bounds.
+export function retainedFigureReadingSlots({root,selection,imageURL,read,current}){
+ const cache=new Map(),slots='[data-retained-figure-drawing],[data-retained-figure-sources]';
+ function fill(node){
+  if(node.dataset.retainedFigureSlot)return;node.dataset.retainedFigureSlot='filled';
+  const selected=selection(node),title=node.dataset.figureTitle??'';if(!selected)return;
+  if(node.hasAttribute('data-retained-figure-drawing')){node.innerHTML=figureReadingView('<img src="'+esc(imageURL(selected))+'" alt="'+esc(title)+'" loading="lazy" decoding="async">',title);return;}
+  // Only a record revision reference is immutable enough to reuse its answer.
+  const key=selected.ref?JSON.stringify(selected):null,token=current(),request=key&&cache.get(key)||read({...selected,operation:'sources'});if(key){cache.delete(key);cache.set(key,request);if(cache.size>256)cache.delete(cache.keys().next().value);}
+  node.setAttribute('aria-busy','true');
+  request.then(result=>{
+   if(!node.isConnected||token!==current())return;if(!Array.isArray(result?.sources))throw Error('Invalid sources');
+   node.innerHTML=result.sources.map(({ref})=>'<p>'+esc(t('figureProvenance','retained',{title,revision:ref.revision.slice(0,12)}))+' <button type="button" class="button" data-action="material-figure-source" data-ref="'+esc(JSON.stringify(ref))+'">'+esc(t('figureProvenance','inspect'))+'</button></p>').join('')+(result.complete?'':'<p>'+esc(t('figureProvenance','sourcesMore'))+'</p>');
+  }).catch(()=>{if(key)cache.delete(key);if(node.isConnected&&token===current())node.textContent=t('figureProvenance','sourcesUnavailable');}).finally(()=>node.removeAttribute('aria-busy'));
+ }
+ const scan=scope=>{if(scope.matches?.(slots))fill(scope);for(const node of scope.querySelectorAll?.(slots)??[])fill(node);};
+ const observer=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1)scan(node);});
+ observer.observe(root,{childList:true,subtree:true});scan(root);
+ return {dispose(){observer.disconnect();cache.clear();}};
 }

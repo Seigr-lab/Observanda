@@ -4,5 +4,7 @@
   "inspect": "Se gjennom beregning",
   "back": "Tilbake til forrige dokumentasjon",
   "changed": "Figuren eller oppføringen endra seg mens beregningslenken ble kontrollert. Prøv kopieringen på nytt.",
-  "checking": "Kontrollerer bevarte beregningslenker…"
+  "checking": "Kontrollerer bevarte beregningslenker…",
+  "sourcesMore": "Enkelte observasjoner kan lenke til flere beregningskilder. Åpne den bevarte figuren for å se gjennom hver av dem.",
+  "sourcesUnavailable": "Beregningskildene kunne ikke leses. Åpne den bevarte figuren for å se gjennom hver observasjon."
 }

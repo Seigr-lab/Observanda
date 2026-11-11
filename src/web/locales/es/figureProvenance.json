@@ -4,5 +4,7 @@
   "inspect": "Inspeccionar el cálculo",
   "back": "Volver a las evidencias anteriores",
   "changed": "La figura o el registro han cambiado mientras se comprobaba su enlace de cálculo. Vuelve a intentar la copia.",
-  "checking": "Comprobando los enlaces de cálculo conservados…"
+  "checking": "Comprobando los enlaces de cálculo conservados…",
+  "sourcesMore": "Algunas observaciones pueden enlazar más fuentes de cálculo. Abre la figura conservada para inspeccionarlas una a una.",
+  "sourcesUnavailable": "No se han podido leer las fuentes de cálculo. Abre la figura conservada para inspeccionar cada observación."
 }

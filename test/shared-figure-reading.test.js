@@ -11,6 +11,16 @@ test('mixed shared panels retain child navigation anchors only once across repea
  for(const order of [[composition.id,retained.id,composition.id],[retained.id,composition.id,retained.id]]){
   const render=recordFigureRenderer(record,esc,{figureSources:false,retainedFigureAction:figure=>'<button data-shared-figure="'+figure.id+'">Read selected figure</button>'}),html=order.map(render).join('');
   for(const id of [composition.id,retained.id,inline.id])assert.equal(html.split(' id="record-figure-'+id+'"').length-1,1);
-  assert.ok(html.includes('data-shared-figure="'+retained.id+'"'));assert.ok(html.includes('<svg'));assert.ok(html.includes('Retained child'));assert.ok(html.includes('Inline child'));
+  assert.ok(html.includes('data-shared-figure="'+retained.id+'"'));assert.equal(html.includes('data-retained-figure-drawing'),false);assert.equal(html.includes('data-retained-figure-sources'),false);assert.ok(html.includes('<svg'));assert.ok(html.includes('Retained child'));assert.ok(html.includes('Inline child'));
  }
+});
+test('local readers draw retained figures inline and list figure-level sources for the displayed revision',()=>{
+ const authored={id:randomUUID(),kind:'retained',version:1,title:'Authored panels'},copied={id:randomUUID(),kind:'retained',version:1,title:'Copied plot',source:{kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)}};
+ const record={id:randomUUID(),figures:[authored,copied],results:{version:1,statements:[]},attachments:[]},reference={kind:'record',id:record.id,revision:'b'.repeat(64),workspaceId:randomUUID()};
+ const render=recordFigureRenderer(record,esc,{figureReference:reference}),own=render(authored.id),copy=render(copied.id);
+ assert.ok(own.includes('<div data-retained-figure-drawing data-record-id="'+record.id+'" data-figure-id="'+authored.id+'"'));assert.ok(own.includes('data-figure-ref="'+esc(JSON.stringify(reference))+'"'));
+ assert.ok(own.includes('data-retained-figure-sources'));assert.ok(own.includes('data-action="material-retained-figure"'));
+ // A whole copied plot already names its calculation; points add no second list.
+ assert.ok(copy.includes('data-retained-figure-drawing'));assert.equal(copy.includes('data-retained-figure-sources'),false);assert.ok(copy.includes('data-action="material-figure-source"'));
+ assert.equal(recordFigureRenderer(record,esc,{figureReference:reference,figureSources:false})(authored.id).includes('data-retained-figure-sources'),false);
 });
