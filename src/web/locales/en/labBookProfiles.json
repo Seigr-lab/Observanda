@@ -563,7 +563,7 @@
   "software-development.decision.fields.status": "Status",
   "software-development.decision.choices.status.proposed": "Proposed",
   "software-development.decision.choices.status.accepted": "Accepted",
-  "software-development.decision.choices.status.superseded": "Superseded",
+  "software-development.decision.choices.status.superseded": "Superseded by a later decision",
   "software-development.decision.choices.status.rejected": "Rejected",
   "software-development.decision.fields.context": "Context and forces",
   "software-development.decision.fields.decision": "Decision",

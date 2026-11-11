@@ -563,7 +563,7 @@
   "software-development.decision.fields.status": "Estado",
   "software-development.decision.choices.status.proposed": "Propuesta",
   "software-development.decision.choices.status.accepted": "Aceptada",
-  "software-development.decision.choices.status.superseded": "Sustituido",
+  "software-development.decision.choices.status.superseded": "Sustituida por una decisión posterior",
   "software-development.decision.choices.status.rejected": "Rechazada",
   "software-development.decision.fields.context": "Contexto y condicionantes",
   "software-development.decision.fields.decision": "Decisión",

@@ -563,7 +563,7 @@
   "software-development.decision.fields.status": "Status",
   "software-development.decision.choices.status.proposed": "Føreslått",
   "software-development.decision.choices.status.accepted": "Godteken",
-  "software-development.decision.choices.status.superseded": "Erstatta",
+  "software-development.decision.choices.status.superseded": "Erstatta av ei seinare avgjerd",
   "software-development.decision.choices.status.rejected": "Avvist",
   "software-development.decision.fields.context": "Kontekst og drivkrefter",
   "software-development.decision.fields.decision": "Avgjerd",

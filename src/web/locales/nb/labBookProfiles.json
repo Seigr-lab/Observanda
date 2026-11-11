@@ -563,7 +563,7 @@
   "software-development.decision.fields.status": "Status",
   "software-development.decision.choices.status.proposed": "Foreslått",
   "software-development.decision.choices.status.accepted": "Godtatt",
-  "software-development.decision.choices.status.superseded": "Erstattet",
+  "software-development.decision.choices.status.superseded": "Erstattet av en senere beslutning",
   "software-development.decision.choices.status.rejected": "Avvist",
   "software-development.decision.fields.context": "Kontekst og drivkrefter",
   "software-development.decision.fields.decision": "Beslutning",

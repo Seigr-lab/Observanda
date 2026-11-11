@@ -563,7 +563,7 @@
   "software-development.decision.fields.status": "Estat",
   "software-development.decision.choices.status.proposed": "Proposada",
   "software-development.decision.choices.status.accepted": "Acceptada",
-  "software-development.decision.choices.status.superseded": "Substituït",
+  "software-development.decision.choices.status.superseded": "Substituïda per una decisió posterior",
   "software-development.decision.choices.status.rejected": "Rebutjada",
   "software-development.decision.fields.context": "Context i condicionants",
   "software-development.decision.fields.decision": "Decisió",
