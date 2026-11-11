@@ -59,6 +59,15 @@ test('nonempty untrusted runtime is preserved and cannot be admitted by tighteni
  await assert.rejects(f.acquire(directory),{code:'DATABASE_GUARD_STORAGE',reason:'nonprivate-runtime-requires-migration'});assert.equal(await readFile(path.join(directory,'retained'),'utf8'),'retained');
 });
 
+test('a diagnosed command reports its error output only when it fails',{...options,skip:process.platform!=='win32'||!process.env.OBSERVANDA_TEST_POSTGRES_BIN},async t=>{
+ const f=await fixture(t),directory=path.join(f.root,'runtime'),guard=await f.acquire(directory),bin=process.env.OBSERVANDA_TEST_POSTGRES_BIN,data=path.join(directory,'data'),number=await port();t.after(()=>guard.close());
+ await assert.rejects(guard.run(path.join(bin,'pg_ctl.exe'),['-D',path.join(directory,'missing'),'-w','-t','5','start'],{diagnose:true}),error=>error.code==='DATABASE_INSTALL'&&error.exitCode===1&&/pg_ctl/.test(error.diagnostic));
+ await guard.run(path.join(bin,'initdb.exe'),['-D',data,'-U','guard_test','--auth=trust','--encoding=UTF8','--no-locale']);
+ // The running server keeps the inherited error pipe open; the result must not wait for it.
+ const started=Date.now();await guard.run(path.join(bin,'pg_ctl.exe'),['-D',data,'-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+number+' -c shared_buffers=16MB -c max_connections=10','-w','-t','30','start'],{diagnose:true});assert.ok(Date.now()-started<30000);
+ await guard.run(path.join(bin,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','30','stop']);
+});
+
 test('native job ownership stops actual PostgreSQL descendants when the guard helper dies',{...options,skip:process.platform!=='win32'||!process.env.OBSERVANDA_TEST_POSTGRES_BIN},async t=>{
  const f=await fixture(t),directory=path.join(f.root,'runtime'),guard=await f.acquire(directory),bin=process.env.OBSERVANDA_TEST_POSTGRES_BIN,data=path.join(directory,'data'),number=await port();
  await guard.run(path.join(bin,'initdb.exe'),['-D',data,'-U','guard_test','--auth=trust','--encoding=UTF8','--no-locale']);

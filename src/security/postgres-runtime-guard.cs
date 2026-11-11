@@ -41,6 +41,8 @@ namespace Observanda {
   [DllImport("kernel32.dll",SetLastError=true)] static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern bool CreatePipe(out SafeFileHandle read,out SafeFileHandle write,IntPtr security,uint size);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern bool PeekNamedPipe(SafeFileHandle pipe,IntPtr buffer,uint size,IntPtr read,out uint available,IntPtr left);
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern uint GetDriveType(string root);
   [StructLayout(LayoutKind.Sequential)] struct GuardBasicInfo {public long Created,Accessed,Written,Changed;public uint Attributes;}
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool SetFileInformationByHandle(SafeFileHandle handle,int kind,ref GuardBasicInfo value,uint size);
@@ -251,14 +253,19 @@ namespace Observanda {
   }
   static void GuardLaunch(Dictionary<string,object> command,int id){
    lock(guardState){if(guardRoot==null||guardClosing||guardChild!=IntPtr.Zero)throw new Failure("INVALID");string executable=Text(command,"command");if(!Path.IsPathRooted(executable))throw new Failure("UNSAFE");var args=(ArrayList)command["args"];var text=new StringBuilder(GuardQuote(executable));foreach(object item in args){if(!(item is string))throw new Failure("INVALID");text.Append(' ').Append(GuardQuote((string)item));}
-    SafeFileHandle captured=null;FileStream capture=null;
+    SafeFileHandle captured=null,errorRead=null,errorWrite=null;FileStream capture=null;
     try{
      if(Flag(command,"capture")){captured=GuardOpen(guardRoot,".runtime-output-"+Guid.NewGuid().ToString("N"),false,2,7,null,0xC0170080);Delete(captured);if(!SetHandleInformation(captured.DangerousGetHandle(),1,1))throw new Win32Exception();capture=new FileStream(captured,FileAccess.ReadWrite,4096,false);}
-     var startup=new Startup{Size=(uint)Marshal.SizeOf(typeof(Startup)),Flags=0x100,Input=guardNull.DangerousGetHandle(),Output=captured==null?guardNull.DangerousGetHandle():captured.DangerousGetHandle(),Error=guardNull.DangerousGetHandle()};ProcessInfo process;
-     if(!CreateProcessW(executable,text,IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,guardPath,ref startup,out process))throw new Win32Exception();
+     // A diagnosed command writes its error output to a pipe that is only read,
+     // without waiting, after a failed exit. Descendants that keep the inherited
+     // end open cannot block the result, and a success discards the pipe.
+     if(Flag(command,"diagnose")){if(!CreatePipe(out errorRead,out errorWrite,IntPtr.Zero,65536)||!SetHandleInformation(errorWrite.DangerousGetHandle(),1,1))throw new Win32Exception();}
+     var startup=new Startup{Size=(uint)Marshal.SizeOf(typeof(Startup)),Flags=0x100,Input=guardNull.DangerousGetHandle(),Output=captured==null?guardNull.DangerousGetHandle():captured.DangerousGetHandle(),Error=errorWrite==null?guardNull.DangerousGetHandle():errorWrite.DangerousGetHandle()};ProcessInfo process;
+     try{if(!CreateProcessW(executable,text,IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,guardPath,ref startup,out process))throw new Win32Exception();}finally{if(errorWrite!=null)errorWrite.Dispose();}
      try{if(!AssignProcessToJobObject(guardJob,process.Process))throw new Win32Exception();if(ResumeThread(process.Thread)==0xffffffff)throw new Win32Exception();guardChild=process.Process;}catch{TerminateProcess(process.Process,1);CloseHandle(process.Process);throw;}finally{CloseHandle(process.Thread);}
-     guardThread=new Thread(()=>{uint code=1;string stdout="";try{WaitForSingleObject(process.Process,0xffffffff);GetExitCodeProcess(process.Process,out code);if(capture!=null){byte[] bytes=new byte[8192];capture.Position=0;int count=capture.Read(bytes,0,bytes.Length);stdout=Encoding.UTF8.GetString(bytes,0,count);}}catch{code=1;}finally{if(capture!=null)capture.Dispose();lock(guardState){CloseHandle(process.Process);guardChild=IntPtr.Zero;}}GuardSend(new {id=id,result=new {exitCode=code,stdout=stdout}});});guardThread.IsBackground=true;guardThread.Start();
-    }catch{if(capture!=null)capture.Dispose();else if(captured!=null)captured.Dispose();throw;}
+     var diagnosed=errorRead;guardThread=new Thread(()=>{uint code=1;string stdout="",stderr="";try{WaitForSingleObject(process.Process,0xffffffff);GetExitCodeProcess(process.Process,out code);if(capture!=null){byte[] bytes=new byte[8192];capture.Position=0;int count=capture.Read(bytes,0,bytes.Length);stdout=Encoding.UTF8.GetString(bytes,0,count);}
+      uint available;if(diagnosed!=null&&code!=0&&PeekNamedPipe(diagnosed,IntPtr.Zero,0,IntPtr.Zero,out available,IntPtr.Zero)&&available>0){using(var pipe=new FileStream(diagnosed,FileAccess.Read,1,false)){byte[] bytes=new byte[Math.Min(available,8192u)];int count=pipe.Read(bytes,0,bytes.Length);stderr=Encoding.UTF8.GetString(bytes,0,count);}}}catch{code=1;}finally{if(capture!=null)capture.Dispose();if(diagnosed!=null&&!diagnosed.IsClosed)diagnosed.Dispose();lock(guardState){CloseHandle(process.Process);guardChild=IntPtr.Zero;}}GuardSend(new {id=id,result=new {exitCode=code,stdout=stdout,stderr=stderr}});});guardThread.IsBackground=true;guardThread.Start();
+    }catch{if(capture!=null)capture.Dispose();else if(captured!=null)captured.Dispose();if(errorRead!=null)errorRead.Dispose();throw;}
    }
   }
   static void GuardStop(){if(guardJob==IntPtr.Zero)return;if(!TerminateJobObject(guardJob,1))throw new Win32Exception();for(;;){JobAccounting value;if(!QueryInformationJobObject(guardJob,1,out value,(uint)Marshal.SizeOf(typeof(JobAccounting)),IntPtr.Zero))throw new Win32Exception();if(value.Active==0)break;Thread.Sleep(10);}var thread=guardThread;if(thread!=null)thread.Join();}

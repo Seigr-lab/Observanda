@@ -30,15 +30,15 @@ import {registerRuntimeStorage} from './database-runtime-environment.js';
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
 export const windowsRuntime=Object.freeze({version:'17.11',url:'https://sbp.enterprisedb.com/getfile.jsp?fileid=1260569',bytes:379726839,sha256:'b9424ee7bc60b52450ff910a3630225df32e633f3cb29c1d126d9299d59aea28'});
 const executable=(bin,name)=>path.join(bin,name+suffix);
-export function runtimeCommand(command,args,{signal,inherit=false,env=process.env,waitForPipes=true}={}){
+export function runtimeCommand(command,args,{signal,inherit=false,env=process.env,waitForPipes=true,diagnose=false}={}){
  return new Promise((resolve,reject)=>{
   const child=spawn(command,args,{windowsHide:true,shell:false,stdio:inherit?'inherit':['ignore','pipe','pipe'],signal,env});let output='',failed=false;
-  child.stdout?.on('data',c=>{if(output.length<8192)output+=c.toString();});child.stderr?.resume();
+  let errors='';child.stdout?.on('data',c=>{if(output.length<8192)output+=c.toString();});if(diagnose)child.stderr?.on('data',c=>{if(errors.length<8192)errors+=c.toString();});else child.stderr?.resume();
   child.once('error',()=>{failed=true;});
   // Abort emits an error before a child necessarily exits. Ordinary helpers
   // also drain their pipes. pg_ctl start deliberately leaves a managed server
   // running; inherited Windows pipe handles must not make startup await stop.
-  const finish=code=>{if(code===0&&!failed)resolve(output.trim());else{const error=new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL');error.exitCode=code;reject(error);}};
+  const finish=code=>{if(code===0&&!failed)resolve(output.trim());else{const error=new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL');error.exitCode=code;if(errors.trim())error.diagnostic=errors.trim();reject(error);}};
   if(!waitForPipes)child.once('exit',code=>{child.stdout?.destroy();child.stderr?.destroy();finish(code);});
   child.once('close',finish);
  });
@@ -262,7 +262,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   for(let attempt=1;;attempt++){
    config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
    mayBeRunning=true;
-   try{await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});break;}
+   try{await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false,diagnose:true});break;}
    catch(error){if(error.code!=='DATABASE_INSTALL'||attempt>=3||signal?.aborted||!await serverStopped().catch(()=>false))throw error;mayBeRunning=false;await new Promise(resolve=>setTimeout(resolve,500*attempt));}
   }
   const admin=await diagnosticPhase('runtime-connect',()=>connectManagedAdmin(config,{signal,deadline:startupDeadline}));

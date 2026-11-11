@@ -45,10 +45,10 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
  };
  return {directory,identity:receipt.identity,cached:receipt.cached,files,processId:child.pid,inspectSource:(source,{parentIdentity,expectedIdentity})=>request('inspect-source',{source,parentIdentity,expectedIdentity}),sourceFence:(source,options)=>request('source-fence',{source,...options}),lease:{close:async()=>{}},
   stopWitness:receipt.localStopSupported?options=>request('local-stop-witness',options):null,
-  async run(command,args,{signal:commandSignal,capture=false}={}){
+  async run(command,args,{signal:commandSignal,capture=false,diagnose=false}={}){
    commandSignal?.throwIfAborted();let cancelled;
    const abort=()=>{cancelled??=request('cancel');void cancelled.catch(()=>{});};commandSignal?.addEventListener('abort',abort,{once:true});
-   try{const result=await request('run',{command,args,capture});await cancelled;if(commandSignal?.aborted)throw new AppError('DATABASE_CANCELLED');if(result.exitCode!==0)throw Object.assign(new AppError('DATABASE_INSTALL'),{exitCode:result.exitCode});return result.stdout??'';}
+   try{const result=await request('run',{command,args,capture,diagnose});await cancelled;if(commandSignal?.aborted)throw new AppError('DATABASE_CANCELLED');if(result.exitCode!==0)throw Object.assign(new AppError('DATABASE_INSTALL'),{exitCode:result.exitCode},result.stderr?{diagnostic:result.stderr}:{});return result.stdout??'';}
    finally{commandSignal?.removeEventListener('abort',abort);}
   },close
  };
