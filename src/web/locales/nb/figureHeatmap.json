@@ -39,6 +39,9 @@
   "numeralBase": "Tallbase (2–36)",
   "radixHelp": "Velg Tallbase som tallformat for å bruke dette grunntallet for akser, verdier og lesetabeller. Hver verdi har et base#-prefiks. Eksponenter og eksakte brøker bruker det samme grunntallet. ≈ markerer avrunda etiketter. Tallet på desimaler gjelder desimalformatene; kildemålingene blir ikke endra.",
   "decimals": "Desimaler · tomt gir automatisk valg",
+  "engineering": "Ingeniør",
+  "si": "SI-prefikser",
+  "significantDigits": "Gjeldende sifre · tomt gir automatisk valg",
   "rowVisible": "Vis rad",
   "rowName": "Radetikett"
 }

@@ -4,7 +4,7 @@ import {computationLabel} from './measurement-computation.js';
 import {retainedFigureWindow} from './retained-figure-window.js';
 // Complete retained-figure SVG output. Iteration is bounded independently of
 // point, series, panel and annotation counts; consumers must drain the stream.
-import {figureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
+import {readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
 import {figureDomain,figureFraction,figureTicks} from './figure-scales.js';
 import {axisFraction} from './figure-axis-controls.js';
 import {xValue} from './figure-model.js';
@@ -80,7 +80,7 @@ async function keyHeight(reader,g){
  return height;
 }
 async function plotLayout(reader,options){
- check(options.signal);const opened=await reader.header({plotId:options.plotId}),f=opened.header,domains=opened.domains,style=figureStyle(f),plotId=f.plotId??f.id;
+ check(options.signal);const opened=await reader.header({plotId:options.plotId}),f=opened.header,domains=opened.domains,style=readerFigureStyle(f,options.locale),plotId=f.plotId??f.id;
  if(!domains||!domains.x||!domains.y)throw new Error('Missing retained figure domains');
  const width=Math.max(320,options.width??style.width),height=options.height??Math.max(260,width*style.height/style.width),horizontal=f.kind==='bar-horizontal';
  const g={f,plotId,domains,counts:opened.counts,style,width,height,horizontal,signal:options.signal,translate:options.translate};

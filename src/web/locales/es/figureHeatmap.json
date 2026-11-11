@@ -39,6 +39,9 @@
   "numeralBase": "Base de numeración (2–36)",
   "radixHelp": "Elige Base de numeración como formato numérico para utilizar esta base en ejes, valores y tablas de lectura. Cada valor lleva un prefijo base#. Los exponentes y las fracciones exactas utilizan la misma base. ≈ indica etiquetas redondeadas. Decimales se aplica a los formatos decimales; las mediciones de origen no cambian.",
   "decimals": "Decimales · vacío para automático",
+  "engineering": "Ingeniería",
+  "si": "Prefijos SI",
+  "significantDigits": "Cifras significativas · vacío para automático",
   "rowVisible": "Mostrar fila",
   "rowName": "Etiqueta de fila"
 }

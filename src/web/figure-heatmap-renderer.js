@@ -1,15 +1,15 @@
 import {modelMessages} from './model-messages.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
-import {figureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
+import {readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
 import {wrapFigureText} from './figure-text-layout.js';
 import {formatFigureNumber,figureDataNumber} from './figure-number-labels.js';
 import {heatmapBand,heatmapThresholdText} from './figure-heatmap.js';
 import messages from './locales/en/figureHeatmap.json' with {type:'json'};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const foreground=color=>{const rgb=color.slice(1).match(/../g).map(v=>{const n=parseInt(v,16)/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722>.179?'#000000':'#ffffff';};
-export function renderHeatmap(figure,{width,translate}={}){
+export function renderHeatmap(figure,{width,translate,locale}={}){
  const textMessage=modelMessages('figureHeatmap',messages,translate);
- const style=figureStyle(figure),settings=figure.heatmap,rows=figure.series.filter(s=>seriesStyle(s).visible),columns=[...new Set(rows.flatMap(s=>s.points.map(p=>p.x)))];
+ const style=readerFigureStyle(figure,locale),settings=figure.heatmap,rows=figure.series.filter(s=>seriesStyle(s).visible),columns=[...new Set(rows.flatMap(s=>s.points.map(p=>p.x)))];
  width=Math.max(320,width??style.width);const size=style.fontSize,left=Math.min(width*.35,Math.max(90,...rows.map(s=>s.name.length*size*.64+16))),cellW=Math.max(50,(width-left-24)/Math.max(1,columns.length));width=Math.max(width,left+cellW*columns.length+24);
  const title=style.showTitle?wrapFigureText(figure.title,width-40,style.titleSize):[],columnLines=columns.map(label=>wrapFigureText(label,cellW-8,size)),rowLines=rows.map(s=>wrapFigureText(s.name,left-24,size)),headerLines=Math.max(1,...columnLines.map(v=>v.length)),top=28+title.length*style.titleSize*1.3+size*(3+headerLines*1.25),cellH=Math.max(38,size*(Math.max(1,...rowLines.map(v=>v.length))*1.25+1)),bottom=top+rows.length*cellH;
  const text=(value,x,y,{anchor='middle',fill=style.textColor,font=size,lines=[String(value)]}={})=>`<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${font}" fill="${fill}"><title>${esc(value)}</title>${lines.map((line,i)=>`<tspan x="${x}" dy="${i?font*1.25:0}">${esc(line)}</tspan>`).join('')}</text>`;

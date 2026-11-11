@@ -1,15 +1,19 @@
 // Presentation is independent of measurements. Old figures use these defaults.
 export const FIGURE_FONTS = [['sans','Sans serif'],['serif','Serif'],['mono','Monospace']];
+// Engineering uses powers of a thousand; SI writes those powers as prefixes.
+export const FIGURE_NUMBER_FORMATS = ['auto','decimal','scientific','engineering','si','percent','radix'];
 export const FONT_FAMILIES = {sans:'system-ui, sans-serif',serif:'Georgia, serif',mono:'ui-monospace, monospace'};
 export const figureStyleDefaults = () => ({
   font:'sans',fontSize:12,titleSize:18,legendSize:12,textColor:'#344155',
   background:'#ffffff',gridColor:'#dde3ed',axisColor:'#8997aa',
   grid:'y',showTitle:true,legendPosition:'top',labelRotation:'auto',
-  labelStep:0,numberFormat:'auto',radix:10,decimals:null,dateFormat:'date',annotationLabels:'auto',
+  labelStep:0,numberFormat:'auto',radix:10,decimals:null,significantDigits:null,dateFormat:'date',annotationLabels:'auto',
   width:840,height:460
 });
 export const seriesStyleDefaults = () => ({lineWidth:2.3,dash:'solid',marker:'circle',radius:3.5,visible:true});
 export const figureStyle = figure => ({...figureStyleDefaults(),...figure.style});
+// The reader's language formats labels; it is never stored with the figure.
+export const readerFigureStyle = (figure,locale) => ({...figureStyle(figure),...(typeof locale==='string'&&locale?{locale}:{})});
 export const seriesStyle = series => ({...seriesStyleDefaults(),...series.style});
 const color = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 const within = (v,min,max) => typeof v === 'number' && Number.isFinite(v) && v>=min && v<=max;
@@ -20,9 +24,10 @@ const schema = {
   legendPosition:v=>['top','bottom','right'].includes(v),
   labelRotation:v=>['auto','0','-45','-90'].includes(v),
   labelStep:v=>Number.isInteger(v)&&within(v,0,1000),
-  numberFormat:v=>['auto','decimal','scientific','percent','radix'].includes(v),
+  numberFormat:v=>FIGURE_NUMBER_FORMATS.includes(v),
   radix:v=>Number.isInteger(v)&&within(v,2,36),
-  decimals:v=>v===null||Number.isInteger(v)&&within(v,0,8),
+  decimals:v=>v===null||Number.isInteger(v)&&within(v,0,15),
+  significantDigits:v=>v===null||Number.isInteger(v)&&within(v,1,17),
   dateFormat:v=>['date','month','year','datetime'].includes(v),
   annotationLabels:v=>['auto','key','hidden'].includes(v),
   width:v=>within(v,320,2400),height:v=>within(v,240,2400)

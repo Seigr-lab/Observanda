@@ -10,7 +10,7 @@ import intervalMessages from './locales/en/figureIntervals.json' with {type:'jso
 import {renderHeatmap} from './figure-heatmap-renderer.js';
 import {heatmapThresholdTable} from './figure-heatmap-export.js';
 import {xValue} from './figure-model.js';
-import {figureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
+import {figureStyle,readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
 import {renderAnnotations,renderAnnotationKey,annotationTable} from './figure-annotations.js';
 import {linkedPanelPlots} from './figure-composition.js';
 import {formatFigureNumber,figureTickLabels,figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
@@ -88,14 +88,14 @@ export function plotDomains(figure){
  return {x:domain([...series.flatMap(s=>s.points.flatMap(p=>pointIntervals(p).x.map(v=>xValue(v,figure.x.kind)))),...axisTickValues(figure.x)],figure.x),
   y:domain([...series.flatMap(s=>s.points.flatMap(p=>p.y===null?[]:pointIntervals(p).y)),...axisTickValues(figure.y)],figure.y,['bar','bar-horizontal','area'].includes(figure.kind))};
 }
-function renderPanels(figure,{width=1000,idPrefix='figure',translate}={}){
+function renderPanels(figure,{width=1000,idPrefix='figure',translate,locale}={}){
  width=Math.max(280,width);const columns=Math.max(1,Math.min(figure.layout.columns,Math.floor(width/360))),gap=16,panelWidth=(width-gap*(columns-1))/columns,plots=linkedPanelPlots(figure,plotDomains);
  const titleLines=wrapFigureText(figure.title,width-40,22);
  let y=22*1.25*titleLines.length+24,graphic='';
  for(let start=0;start<plots.length;start+=columns){
   let rowHeight=0;
   for(let i=start;i<Math.min(start+columns,plots.length);i++){
-   const plot=plots[i],svg=renderFigure(plot,{width:panelWidth,idPrefix:idPrefix+'-panel-'+figure.panels[i].id,translate}),box=svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/),scale=Math.min(1,panelWidth/Number(box[1])),height=Number(box[2])*scale,x=(i-start)*(panelWidth+gap);
+   const plot=plots[i],svg=renderFigure(plot,{width:panelWidth,idPrefix:idPrefix+'-panel-'+figure.panels[i].id,translate,locale}),box=svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/),scale=Math.min(1,panelWidth/Number(box[1])),height=Number(box[2])*scale,x=(i-start)*(panelWidth+gap);
    rowHeight=Math.max(rowHeight,height+28);
    graphic+=`<g class="figure-panel" data-panel-label="${esc(figure.panels[i].label)}" transform="translate(${x} ${y})">${svgText(figure.panels[i].label,8,16,{anchor:'start',weight:'600',width:panelWidth-16,size:14})}<g transform="translate(0 28) scale(${scale})">${svg}</g></g>`;
   }
@@ -106,11 +106,12 @@ function renderPanels(figure,{width=1000,idPrefix='figure',translate}={}){
 export function renderFigure(figure,options={}){
  return appendProjectionDescription(renderPlotFigure(figure,options),figure,options);
 }
-function renderPlotFigure(figure,{width,height,idPrefix='figure',translate}={}){
+function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,locale}={}){
  const text=modelMessages('figureDisplay',displayMessages,translate),intervalText=modelMessages('figureIntervals',intervalMessages,translate);
- if(figure.kind==='panels')return renderPanels(figure,{width,idPrefix,translate});
- if(figure.kind==='heatmap')return renderHeatmap({...figure,heatmap:{...figure.heatmap,valueLabel:projectionAxisLabel(figure,'y',{translate})}},{width,translate});
- const style=figureStyle(figure),fontSize=style.fontSize;
+ if(figure.kind==='panels')return renderPanels(figure,{width,idPrefix,translate,locale});
+ if(figure.kind==='heatmap')return renderHeatmap({...figure,heatmap:{...figure.heatmap,valueLabel:projectionAxisLabel(figure,'y',{translate})}},{width,translate,locale});
+ // Tick labels follow the reader's language; stored values never change.
+ const style=readerFigureStyle(figure,locale),fontSize=style.fontSize;
  width=Math.max(figure.markerArea?352:280,width??style.width);
  height=height??Math.max(260,width*style.height/style.width);
  const horizontal=figure.kind==='bar-horizontal',bars=horizontal||figure.kind==='bar';

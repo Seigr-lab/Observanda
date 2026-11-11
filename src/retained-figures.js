@@ -80,7 +80,7 @@ export async function dispatchRetainedFigure(reader,revision,command,{signal,dow
    case 'svg':{
     const window=command.window;if(!window||Object.keys(window).some(key=>!['plotId','seriesOffset','seriesLimit','pointOffset','pointLimit'].includes(key))||!researchId(window.plotId)||!['seriesOffset','pointOffset'].every(key=>Number.isSafeInteger(window[key]??0)&&(window[key]??0)>=0)||!Number.isInteger(window.seriesLimit)||window.seriesLimit<1||window.seriesLimit>16||!Number.isInteger(window.pointLimit)||window.pointLimit<1||window.pointLimit>128)throw new AppError('INVALID');
     const translate=Object.hasOwn(command,'language')?await retainedFigureTranslator(command.language):undefined;
-    let svg='',bytes=0;for await(const chunk of retainedFigureSVG(reader,{signal,window,translate})){bytes+=Buffer.byteLength(chunk);if(bytes>4*1024*1024)throw new AppError('LIMIT');svg+=chunk;}return {svg,revision,...await reader.header({plotId:window.plotId}),window,...(translate?{language:command.language}:{})};
+    let svg='',bytes=0;for await(const chunk of retainedFigureSVG(reader,{signal,window,translate,...(translate?{locale:command.language}:{})})){bytes+=Buffer.byteLength(chunk);if(bytes>4*1024*1024)throw new AppError('LIMIT');svg+=chunk;}return {svg,revision,...await reader.header({plotId:window.plotId}),window,...(translate?{language:command.language}:{})};
    }
    default:throw new AppError('INVALID');
   }

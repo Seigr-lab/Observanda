@@ -1,7 +1,7 @@
 import {isRetainedFigure} from './retained-figure-model.js';
 import {allFigurePlots} from './figure-provenance.js';
 import {retainedFigureText} from './retained-figure-text.js';
-import {t} from './i18n/index.js';
+import {t,language} from './i18n/index.js';
 import {renderFigureView,figureTable} from './figure-renderer.js';
 import {figureResultView} from './result-statements.js';
 import {bookText} from './book-messages.js';
@@ -17,7 +17,7 @@ export function recordFigure(record,id,esc,{assetUrl=id=>'/api/media/'+id,figure
  if(isRetainedFigure(f)){
   const title=retainedFigureText(f.title)?f.title.preview+'\u2026':f.title;
   return '<figure id="record-figure-'+f.id+'" tabindex="-1"><figcaption>'+esc(title)+(figureResults?figureResults(f):figureResultView(f,record.results,esc))+(figureSources?figureSourceView(f,esc):'')+'</figcaption>'+(retainedFigureAction?retainedFigureAction(f):'<button type="button" class="button" data-action="material-retained-figure" data-record-id="'+esc(record.id)+'" data-figure-id="'+esc(f.id)+'"'+(f.source?' data-figure-source="'+esc(JSON.stringify(f.source))+'"':'')+(figureReference?' data-figure-ref="'+esc(JSON.stringify(figureReference))+'"':'')+'>'+esc(t('retainedFigureReader','open'))+'</button>')+figureActions(f)+'</figure>';
- }if(f)return '<figure id="record-figure-'+f.id+'" tabindex="-1">'+figureReadingView(renderFigureView(f,{idPrefix:'record-view-'+ ++figureViewSequence,translate}),f.title)+'<figcaption>'+esc(f.title)+(figureResults?figureResults(f):figureResultView(f,record.results,esc))+(figureSources?figureSourceView(f,esc):'')+'</figcaption><details><summary>'+esc(bookText('tableReading'))+'</summary>'+figureTable(f,{translate})+'</details>'+figureActions(f)+'</figure>';
+ }if(f)return '<figure id="record-figure-'+f.id+'" tabindex="-1">'+figureReadingView(renderFigureView(f,{idPrefix:'record-view-'+ ++figureViewSequence,translate,locale:language()}),f.title)+'<figcaption>'+esc(f.title)+(figureResults?figureResults(f):figureResultView(f,record.results,esc))+(figureSources?figureSourceView(f,esc):'')+'</figcaption><details><summary>'+esc(bookText('tableReading'))+'</summary>'+figureTable(f,{translate})+'</details>'+figureActions(f)+'</figure>';
  const a=record.attachments.find(a=>a.id===id&&a.kind==='image');if(!a)return '';
  return '<figure id="record-figure-'+a.id+'" tabindex="-1"><img src="'+esc(assetUrl(a.id))+'" alt="'+esc(a.alt||a.caption)+'"><figcaption>'+esc(a.caption)+'</figcaption>'+(a.transcript?'<div class="book-diagram-reading">'+esc(a.transcript)+'</div>':'')+'</figure>';
 }
