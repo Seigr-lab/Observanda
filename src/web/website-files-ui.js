@@ -960,7 +960,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation.startsWith('pages-'))await pagesPanel.handle(operation,element);
    else if(operation==='regions'){if(await beforeLeave(true)){await regions.open();mode='regions';render();}}
    else if(operation.startsWith('regions-'))await regions.handle(operation,element);
-   else if(operation==='exchange'){if(await beforeLeave(true)){exchange.reset();mode='exchange';render();}}
+   else if(operation==='exchange'){if(await beforeLeave(true)){await exchange.open();mode='exchange';render();}}
    else if(operation.startsWith('exchange-'))await exchange.handle(operation,element);
    else if(operation==='menu')await openMenu(element.dataset.menuId||null);
    else if(operation.startsWith('menu-'))await menu.handle(operation,element);

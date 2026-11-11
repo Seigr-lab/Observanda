@@ -1469,5 +1469,9 @@
   "designOmitted_resource": "necessita un fitxer que no està disponible",
   "designPackageExport": "Preparant el paquet de disseny",
   "designPackageImport": "Important el disseny",
-  "designOmitted_private": "és privat i no s’ha triat"
+  "designExportPrivate": "Els components privats en queden fora tret que els incloguis: {names}",
+  "designImportPrivate": {
+    "one": "En crear el paquet es va deixar fora {count} component privat.",
+    "other": "En crear el paquet es van deixar fora {count} components privats."
+  }
 }

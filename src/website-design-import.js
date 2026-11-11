@@ -101,12 +101,14 @@ export function readDesignPackage(bytes,{blockedValues=[]}={}){
   return {name:r.name,picture:Boolean(r.picture),recording:Boolean(r.recording),...(r.label?{label:r.label}:{}),bytes:member(r.file)};
  });
  for(const font of fonts)used.add('files/'+font.file);
+ const privateComponents=design.privateComponents;
+ if(!Number.isSafeInteger(privateComponents)||privateComponents<0||privateComponents>100000)bad();
  const omitted=list(design.omitted??[],2000).map(row=>{if(!object(row)||!text(row.kind,40)||!text(row.name,200)||!text(row.reason,40))bad();return {kind:row.kind,name:row.name,reason:row.reason};});
  if([...files.keys()].some(name=>!used.has(name)))bad();
  // The same canary the export applies: research markup or private values refuse the package.
  for(const value of [JSON.stringify(design),stylesheet?.css??'',...pageDesigns.map(d=>d.css)])if(researchMarkup.test(value))throw new AppError('PRIVACY');
  assertPublicFields([{field:'design',value:design},{field:'stylesheet',value:stylesheet?.css??''},...pageDesigns.map(d=>({field:d.name,value:d.css}))],blockedValues);
- return {name:design.name.trim(),stylesheet,breakpoints:design.breakpoints,themes,tokens,site,fonts,components,regions,pageDesigns,resources,omitted,sha256:digest(bytes)};
+ return {name:design.name.trim(),stylesheet,breakpoints:design.breakpoints,themes,tokens,site,fonts,components,regions,pageDesigns,resources,omitted,privateComponents,sha256:digest(bytes)};
 }
 
 // A name the site does not use yet: "Name", then "Name (2)", "Name (3)" ...
@@ -189,7 +191,7 @@ export async function reviewWebsiteDesign(store,siteId,{expectedRevision,path:ad
   if(!manifest.pages.some(p=>p.path===address))throw new AppError('NOT_FOUND');
   const {rows}=plan(manifest,pkg),components=new Map(pkg.components.map(c=>[c.id,c]));
   const regionRows=Object.entries(pkg.regions).map(([slot,entry])=>({slot,component:components.get(entry.component).name,current:manifest.regions?.slots?.[slot]?(manifest.components??[]).find(c=>c.id===manifest.regions.slots[slot].component)?.name??null:null}));
-  return {revision:expectedRevision,reviewId:reviewToken(siteId,expectedRevision,pkg),name:pkg.name,rows,regions:regionRows,stylesheet:Boolean(pkg.stylesheet),omitted:pkg.omitted,counts:{resources:pkg.resources.length}};
+  return {revision:expectedRevision,reviewId:reviewToken(siteId,expectedRevision,pkg),name:pkg.name,rows,regions:regionRows,stylesheet:Boolean(pkg.stylesheet),omitted:pkg.omitted,privateComponents:pkg.privateComponents,counts:{resources:pkg.resources.length}};
  },{signal});
 }
 

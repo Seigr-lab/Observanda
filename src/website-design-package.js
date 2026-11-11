@@ -40,11 +40,12 @@ export function exportWebsiteDesign(store,siteId,{expectedRevision,includeDrafts
    for(const f of found)resources.set(f.name,f);return true;
   };
   // Components with their pictures, recordings and captions; without those that
-  // hold research markup, private ones not chosen (named in the package so the
-  // importer knows they exist) or a nested component that cannot travel.
-  const mains=manifest.components??[],kept=new Map();
+  // hold research markup, private ones not chosen or a nested component that
+  // cannot travel. Private material never travels: of the private components
+  // left out the package records only how many there are.
+  const mains=manifest.components??[],kept=new Map();let privateComponents=0;
   for(const main of mains){
-   if(main.draft&&!includeDrafts){omitted.push({kind:'component',name:main.name,reason:'private'});continue;}
+   if(main.draft&&!includeDrafts){privateComponents++;continue;}
    if(researchMarkup.test(main.html)||main.pictures.some(p=>!exportable(p.name,main.draft))||(main.recordings??[]).some(r=>!exportable(r.name,main.draft,true))){omitted.push({kind:'component',name:main.name,reason:'research'});continue;}
    kept.set(main.id,main);
   }
@@ -104,7 +105,7 @@ export function exportWebsiteDesign(store,siteId,{expectedRevision,includeDrafts
   const design={format:designFormat,version:designVersion,name:manifest.name,created:new Date().toISOString(),
    stylesheet,breakpoints:manifest.breakpoints??null,themes:(manifest.themeBook?.items??[]).map(({id,name,values})=>({id,name,values})),
    styles,fonts,components,regions,pageDesigns,
-   resources:[...resources.values()].map(f=>({name:f.name,file:'files/'+f.name,...(f.picture?{picture:true}:{}),...(f.recording?{recording:true,...(f.label?{label:f.label}:{})}:{})})).sort((a,b)=>a.name<b.name?-1:1),omitted};
+   resources:[...resources.values()].map(f=>({name:f.name,file:'files/'+f.name,...(f.picture?{picture:true}:{}),...(f.recording?{recording:true,...(f.label?{label:f.label}:{})}:{})})).sort((a,b)=>a.name<b.name?-1:1),omitted,privateComponents};
   const json=JSON.stringify(design,null,1);
   // The canary: no research markup and no local paths or private values.
   for(const text of [json,...texts.values()])if(researchMarkup.test(text))throw new AppError('PRIVACY');

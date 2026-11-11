@@ -1469,5 +1469,9 @@
   "designOmitted_resource": "treng ei fil som ikkje er tilgjengeleg",
   "designPackageExport": "Førebur designpakken",
   "designPackageImport": "Importerer designet",
-  "designOmitted_private": "er privat og vart ikkje vald"
+  "designExportPrivate": "Private komponentar blir utelatne om du ikkje tek dei med: {names}",
+  "designImportPrivate": {
+    "one": "{count} privat komponent vart utelaten då pakken vart laga.",
+    "other": "{count} private komponentar vart utelatne då pakken vart laga."
+  }
 }

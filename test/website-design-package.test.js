@@ -143,6 +143,7 @@ test('malformed, foreign and unsafe packages are refused before the site changes
  await assert.rejects(review(zip(new Map([...valid,['files/extra.png','x']]))),{code:'WEBSITE_DESIGN_PACKAGE'});
  await assert.rejects(review(zip(new Map([...valid,['design.json',JSON.stringify({...json,version:99})]]))),{code:'WEBSITE_DESIGN_VERSION'});
  await assert.rejects(review(zip(new Map([...valid,['design.json',JSON.stringify({...json,format:'other'})]]))),{code:'WEBSITE_DESIGN_PACKAGE'});
+ for(const count of [-1,1.5,'2',undefined])await assert.rejects(review(zip(new Map([...valid,['design.json',JSON.stringify({...json,privateComponents:count})]]))),{code:'WEBSITE_DESIGN_PACKAGE'});
  const planted={...json,components:json.components.map(c=>({...c,html:c.html.replace('<p>','<p data-observanda-source="x">')}))};
  await assert.rejects(review(zip(new Map([...valid,['design.json',JSON.stringify(planted)]]))),{code:'PRIVACY'});
  const missing={...json,regions:{footer:{...json.regions.footer,component:randomUUID()}}};
@@ -171,7 +172,9 @@ test('a component that plays a recording travels with its recording and captions
  const valid=readDesignArchive(await packageBytes((await exportWebsiteDesign(store,siteId,{expectedRevision:state.site.revision,labels})).members));
  const pkg=readDesignPackage(await packageBytes(valid));
  assert.deepEqual(pkg.components.map(c=>c.name),['Players']);
- assert.deepEqual(pkg.omitted,[{kind:'component',name:'Private legend',reason:'private'}]);
+ // A private component never travels, not even its name: the package counts it.
+ assert.deepEqual(pkg.omitted,[]);assert.equal(pkg.privateComponents,1);
+ for(const [name,content] of valid)assert.equal(content.includes(Buffer.from('Private legend'))||content.includes(Buffer.from('Unfinished legend')),false,name);
  assert.deepEqual(pkg.resources.filter(r=>r.recording).map(r=>[r.name,r.label]).sort(),[[audio,'Hive hum'],[track,undefined]].sort());
 
  // The original upload, metadata included, takes the place of the display copy: import must prepare it again.
@@ -179,7 +182,7 @@ test('a component that plays a recording travels with its recording and captions
  const bytes=Buffer.from(zipSync(Object.fromEntries([...planted].map(([name,value])=>[name,new Uint8Array(value)]))));
  const blank=await blankSite(store);
  const review=await reviewWebsiteDesign(store,blank.id,{expectedRevision:blank.revision,bytes});
- assert.deepEqual(review.omitted,[{kind:'component',name:'Private legend',reason:'private'}]);
+ assert.deepEqual(review.omitted,[]);assert.equal(review.privateComponents,1);
  await applyWebsiteDesign(store,blank.id,{expectedRevision:blank.revision,bytes,reviewId:review.reviewId,options:{}});
  const site=await raw(store,blank.id),main=site.components.find(c=>c.name==='Players');
  assert.equal(main.recordings.length,2);

@@ -1469,5 +1469,9 @@
   "designOmitted_resource": "needs a file that is unavailable",
   "designPackageExport": "Preparing the design package",
   "designPackageImport": "Importing the design",
-  "designOmitted_private": "is private and was not chosen"
+  "designExportPrivate": "Private components are left out unless you include them: {names}",
+  "designImportPrivate": {
+    "one": "{count} private component was left out when the package was made.",
+    "other": "{count} private components were left out when the package was made."
+  }
 }

@@ -6,10 +6,17 @@ import {downloadResource} from './session-download.js';
 // one design package and enters another site after a review.
 const slotKey={header:'regionHeader',sidebar:'regionSidebar','secondary-sidebar':'regionSecondarySidebar',footer:'regionFooter'};
 export function websiteFilesDesignExchange({request,site,esc,tr,render,adopt,close}){
- let review=null,file=null,notice='',epoch=0,includeDrafts=false;
+ let review=null,file=null,notice='',epoch=0,includeDrafts=false,privateNames=[];
  const panel=()=>document.querySelector('.website-files-design-exchange');
  const action=(key,id,attributes='')=>'<button type="button" class="button" data-action="website-files-exchange-'+id+'" '+attributes+'>'+esc(tr(key))+'</button>';
- function reset(){epoch++;review=file=null;notice='';includeDrafts=false;}
+ function reset(){epoch++;review=file=null;notice='';includeDrafts=false;privateNames=[];}
+ // The names of private components are read from the site and shown only here:
+ // a package records how many were left out, never their names.
+ async function open(){
+  reset();const current=site(),token=epoch;
+  const result=await request('regions',{siteId:current.site.id,expectedRevision:current.site.revision,path:current.path});
+  if(token===epoch)privateNames=result.components.filter(row=>row.draft).map(row=>row.name);
+ }
  function upload(data){
   const json=new TextEncoder().encode(JSON.stringify(data)),length=new Uint8Array(4);new DataView(length.buffer).setUint32(0,json.length);
   return new Blob([length,json,file],{type:'application/octet-stream'});
@@ -19,8 +26,9 @@ export function websiteFilesDesignExchange({request,site,esc,tr,render,adopt,clo
   const rows=review.rows.map(row=>'<li>'+esc(tr('designKind_'+row.kind))+': '+esc(row.from?tr('designImportRenamed',{name:row.name,from:row.from}):row.name)+'</li>').join('');
   const regions=review.regions.map(row=>'<li><label><input type="checkbox" data-design-region="'+esc(row.slot)+'"> '+esc(tr(row.current?'designImportRegionReplace':'designImportRegion',{component:row.component,slot:tr(slotKey[row.slot]),current:row.current??''}))+'</label></li>').join('');
   const omitted=review.omitted.length?'<h4>'+esc(tr('designImportOmitted'))+'</h4><ul>'+review.omitted.map(row=>'<li>'+esc(row.name)+' ('+esc(tr('designOmitted_'+row.reason))+')</li>').join('')+'</ul>':'';
+  const privateCount=review.privateComponents?'<p>'+esc(tr('designImportPrivate',{count:review.privateComponents}))+'</p>':'';
   return '<section class="website-design-review" aria-label="'+esc(tr('designImportReview'))+'"><h3>'+esc(tr('designImportFrom',{name:review.name}))+'</h3>'+
-   (rows?'<p>'+esc(tr('designImportRows'))+'</p><ul>'+rows+'</ul>':'<p>'+esc(tr('designImportNothing'))+'</p>')+omitted+
+   (rows?'<p>'+esc(tr('designImportRows'))+'</p><ul>'+rows+'</ul>':'<p>'+esc(tr('designImportNothing'))+'</p>')+omitted+privateCount+
    (review.stylesheet?'<p><label><input type="checkbox" data-design-stylesheet> '+esc(tr('designImportStylesheet'))+'</label></p>':'')+
    (regions?'<ul class="website-design-regions">'+regions+'</ul>':'')+
    '<div class="inline-actions">'+action('designImportApply','apply','data-primary')+action('cancel','discard')+'</div></section>';
@@ -28,7 +36,7 @@ export function websiteFilesDesignExchange({request,site,esc,tr,render,adopt,clo
  function view(){
   return '<section class="panel website-files-design-exchange" aria-label="'+esc(tr('designExchange'))+'"><header><div><h2>'+esc(tr('designExchange'))+'</h2><p>'+esc(tr('designExchangeHelp'))+'</p></div>'+action('closePreview','close')+'</header>'+
    (notice?'<p role="status">'+esc(notice)+'</p>':'')+
-   '<section><h3>'+esc(tr('designExport'))+'</h3><p>'+esc(tr('designExportHelp'))+'</p><p><label><input type="checkbox" data-design-drafts'+(includeDrafts?' checked':'')+'> '+esc(tr('designIncludePrivate'))+'</label></p>'+action('designExport','export')+'</section>'+
+   '<section><h3>'+esc(tr('designExport'))+'</h3><p>'+esc(tr('designExportHelp'))+'</p><p><label><input type="checkbox" data-design-drafts'+(includeDrafts?' checked':'')+'> '+esc(tr('designIncludePrivate'))+'</label></p>'+(privateNames.length?'<p>'+esc(tr('designExportPrivate',{names:privateNames.join(', ')}))+'</p>':'')+action('designExport','export')+'</section>'+
    '<section><h3>'+esc(tr('designImport'))+'</h3><p>'+esc(tr('designImportHelp'))+'</p><label>'+esc(tr('designImportChoose'))+' <input type="file" accept=".observanda-design,application/zip" data-design-file></label> '+action('designImportReview','review')+reviewView()+'</section></section>';
  }
  async function handle(operation,element){
@@ -57,5 +65,5 @@ export function websiteFilesDesignExchange({request,site,esc,tr,render,adopt,clo
  function bind(){
   panel()?.addEventListener('change',event=>{if(event.target.matches('[data-design-drafts]'))includeDrafts=event.target.checked;});
  }
- return {view,bind,handle,reset};
+ return {open,view,bind,handle,reset};
 }

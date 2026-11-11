@@ -1469,5 +1469,9 @@
   "designOmitted_resource": "trenger en fil som ikke er tilgjengelig",
   "designPackageExport": "Forbereder designpakken",
   "designPackageImport": "Importerer designet",
-  "designOmitted_private": "er privat og ble ikke valgt"
+  "designExportPrivate": "Private komponenter blir utelatt med mindre du tar dem med: {names}",
+  "designImportPrivate": {
+    "one": "{count} privat komponent ble utelatt da pakken ble laget.",
+    "other": "{count} private komponenter ble utelatt da pakken ble laget."
+  }
 }

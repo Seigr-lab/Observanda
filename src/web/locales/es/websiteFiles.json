@@ -1469,5 +1469,9 @@
   "designOmitted_resource": "necesita un archivo que no está disponible",
   "designPackageExport": "Preparando el paquete de diseño",
   "designPackageImport": "Importando el diseño",
-  "designOmitted_private": "es privado y no se eligió"
+  "designExportPrivate": "Los componentes privados quedan fuera a menos que los incluyas: {names}",
+  "designImportPrivate": {
+    "one": "Al crear el paquete se dejó fuera {count} componente privado.",
+    "other": "Al crear el paquete se dejaron fuera {count} componentes privados."
+  }
 }
