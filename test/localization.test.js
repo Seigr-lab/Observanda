@@ -9,7 +9,7 @@ import {validateGuide,searchGuide,guideLoader,guideWithMessages,mergeGuide} from
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 import {defaultPreferences,rememberLanguage,rememberInterface,readPreferences} from '../src/preferences.js';
 import {AppError,safeError} from '../src/errors.js';
-import {checkLocales,checkGuideCoverage} from '../scripts/check-locales.js';
+import {checkLocales,checkGuideCoverage,duplicateKeys} from '../scripts/check-locales.js';
 const json=async(locale,namespace)=>JSON.parse(await readFile(new URL('../src/web/locales/'+locale+'/'+namespace+'.json',import.meta.url),'utf8'));
 test('all shipped language catalogues match their owner keys, parameters and guide anchors',async()=>{
  await checkLocales();
@@ -26,6 +26,10 @@ test('all shipped language catalogues match their owner keys, parameters and gui
  }
  for(const guide of guides)assert.deepEqual(guide,guides[0]);
  assert.ok(LANGUAGES.some(l=>l.id==='nb'));assert.ok(LANGUAGES.some(l=>l.id==='nn'));
+});
+test('shipping checks find a repeated key that JSON parsing would silently keep only once',()=>{
+ assert.deepEqual(duplicateKeys('{"a":"1","b":{"one":"x","one":"y"},"c":["a","a"],"a":"2","d":"\\"a\\""}'),['one','a']);
+ assert.deepEqual(duplicateKeys('{"a":"x, \\"b\\": y","b":"z"}'),[]);
 });
 test('shipping checks reject incomplete Help translations and changed control references',async()=>{
  const source=await json('en','guide'),translation=await json('es','guide');

@@ -2,7 +2,27 @@ import {readFile} from 'node:fs/promises';
 import {LANGUAGES,validateCatalogue,placeholders} from '../src/web/i18n/runtime.js';
 import {validateGuide,guideWithMessages,mergeGuide} from '../src/web/help/model.js';
 import {MESSAGE_NAMESPACES,catalogueLanguages,t,prepareNamespaces} from '../src/web/i18n/index.js';
-const resource=async(locale,name)=>JSON.parse(await readFile(new URL('../src/web/locales/'+locale+'/'+name+'.json',import.meta.url),'utf8'));
+// JSON.parse keeps the last of two equal keys without a word, so a duplicated
+// message silently replaces the first. Scan the raw text for repeated keys.
+export function duplicateKeys(text){
+ const found=[],stack=[];let i=0;
+ const string=()=>{const start=i++;while(text[i]!=='"')i+=text[i]==='\\'?2:1;i++;return JSON.parse(text.slice(start,i));};
+ while(i<text.length){
+  const c=text[i];
+  if(c==='{'){stack.push({keys:new Set(),key:true});i++;}
+  else if(c==='['){stack.push(null);i++;}
+  else if(c==='}'||c===']'){stack.pop();i++;}
+  else if(c===','){if(stack.at(-1))stack.at(-1).key=true;i++;}
+  else if(c==='"'){const top=stack.at(-1),value=string();if(top?.key){if(top.keys.has(value))found.push(value);top.keys.add(value);top.key=false;}}
+  else i++;
+ }
+ return found;
+}
+const resource=async(locale,name)=>{
+ const text=await readFile(new URL('../src/web/locales/'+locale+'/'+name+'.json',import.meta.url),'utf8'),repeated=duplicateKeys(text);
+ if(repeated.length)throw new Error('Duplicate message keys in '+locale+'/'+name+': '+repeated.join(', '));
+ return JSON.parse(text);
+};
 export function checkGuideCoverage(source,translation,locale){
  validateGuide(source);validateGuide(translation);
  const shape=guide=>JSON.stringify(guide.topics.map(topic=>[topic.id,topic.sections.map(section=>[section.id,section.paragraphs.length])]));
