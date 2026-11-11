@@ -17,6 +17,19 @@ export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchId
  if(!await hasCatalogue(workspace.root))return operation();
  return workspace.catalogue(store=>withMetadataBatch(store,operation,{prefetchIds,signal}));
 }
+// One write contract for retained data: up to 128 objects share a single
+// authenticated checkpoint per writer transaction, and each group of 32 is
+// prefetched and written in turn inside it.
+export const GROUPED_METADATA_OBJECTS=128;
+export async function withGroupedMetadataBatch(workspace,items,{prefetchId,apply,signal}={}){
+ if(!Array.isArray(items)||items.length>GROUPED_METADATA_OBJECTS||typeof prefetchId!=='function'||typeof apply!=='function')throw new AppError('INVALID');
+ return withWorkspaceMetadataBatch(workspace,async()=>{
+  for(let at=0;at<items.length;at+=32){
+   const group=items.slice(at,at+32);signal?.throwIfAborted();
+   await withWorkspaceMetadataBatch(workspace,async()=>{for(const item of group){signal?.throwIfAborted();await apply(item);}},{prefetchIds:group.map(prefetchId),signal});
+  }
+ });
+}
 export function metadataBatchIndex(store){
  const batch=batches.getStore();
  return batch?.store.db===store.db&&batch.store.workspace.root===store.workspace.root?batch:null;

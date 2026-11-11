@@ -2,25 +2,18 @@
 // staging joins cell and plot-member roots into authorized transactions; no
 // reference escapes until all children and final roots have durably committed.
 import {MaterialSequence} from './material-sequence.js';
-import {withWorkspaceMetadataBatch} from './metadata-batch.js';
+import {withGroupedMetadataBatch,GROUPED_METADATA_OBJECTS} from './metadata-batch.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
-const MAX_BYTES=256*1024,MAX_OBJECTS=128,PREFETCH_OBJECTS=32;
+const MAX_BYTES=256*1024,MAX_OBJECTS=GROUPED_METADATA_OBJECTS;
 export async function withDatasetPreparationWrites(materials,{writePage,signal},operation){
  const pending=new Map(),cached=new Map();let bytes=0,cacheBytes=0;
  const write=writePage??(fn=>materials.workspace.withLock(fn));
  const touch=key=>{const entry=cached.get(key);if(entry){cached.delete(key);cached.set(key,entry);}return entry;};
  const cache=(key,value,size,staged=false)=>{if(size>MAX_BYTES)return;const prior=cached.get(key);if(prior){cacheBytes-=prior.size;cached.delete(key);}while(cached.size>=64||cacheBytes+size>MAX_BYTES){const old=cached.keys().next().value;cacheBytes-=cached.get(old).size;cached.delete(old);}cached.set(key,{value:structuredClone(value),size,staged});cacheBytes+=size;};
- const commit=entries=>{const batch=[...entries];return write(()=>withWorkspaceMetadataBatch(materials.workspace,async()=>{
-  // Keep a single bounded checkpoint's authenticated branches warm while each
-  // prefetch and SQL object write still admits at most thirty-two objects.
-  for(let at=0;at<batch.length;at+=PREFETCH_OBJECTS){
-   const group=batch.slice(at,at+PREFETCH_OBJECTS);signal?.throwIfAborted();
-   await withWorkspaceMetadataBatch(materials.workspace,async()=>{
-    for(const entry of group){signal?.throwIfAborted();if(entry.kind)await materials.sequences.put(entry.kind,entry.value);else await materials.put(entry.file,entry.value);}
-   },{prefetchIds:group.map(entry=>'metadata:'+(entry.kind?'.observanda/materials/sequences/'+entry.kind+'/'+entry.id+'.json':materials.relative(entry.file))),signal});
-  }
- }));};
+ const commit=entries=>{const batch=[...entries];return write(()=>withGroupedMetadataBatch(materials.workspace,batch,{signal,
+  prefetchId:entry=>'metadata:'+(entry.kind?'.observanda/materials/sequences/'+entry.kind+'/'+entry.id+'.json':materials.relative(entry.file)),
+  apply:async entry=>{if(entry.kind)await materials.sequences.put(entry.kind,entry.value);else await materials.put(entry.file,entry.value);}}));};
  const flush=async()=>{if(!pending.size)return;signal?.throwIfAborted();await commit(pending.values());signal?.throwIfAborted();pending.clear();bytes=0;};
  const stage=async(key,entry)=>{
   signal?.throwIfAborted();if(pending.has(key)||touch(key)?.staged)return;

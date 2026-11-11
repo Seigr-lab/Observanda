@@ -38,7 +38,7 @@ test('figure block batches coalesce authenticated catalogue writes and preserve 
   if(discard)await assert.rejects(write,error=>error===rollback);else await write;return stats;
  };
  const individual=await measure(true,true);assert.equal(await head(),before);await workspace.catalogue(async()=>{for(const item of items)assert.equal(await workspace.readMetadata(item.path,65536),null);});
- const batched=await measure(false,false);assert.equal(individual.indexHeads,items.length);assert.equal(batched.indexHeads,Math.ceil(items.length/32));assert.ok(batched.queries<individual.queries/2,JSON.stringify({individual,batched}));assert.ok(batched.objectWrites<individual.objectWrites);
+ const batched=await measure(false,false);assert.equal(individual.indexHeads,items.length);assert.equal(batched.indexHeads,Math.ceil(items.length/128));assert.ok(batched.queries<individual.queries/2,JSON.stringify({individual,batched}));assert.ok(batched.objectWrites<individual.objectWrites);
  const reader=new RetainedFigureBlocks(workspace,{readOnly:true,signal:t.signal}),closure=[];await workspace.catalogue(async()=>{for await(const item of reader.closure([revision]))closure.push(item.path);});assert.equal(closure.length,items.length);assert.deepEqual(new Set(closure),new Set(items.map(item=>item.path)));
  t.diagnostic(JSON.stringify({blocks:items.length,individual,batched}));
  // Force real staged SQL rows into the transaction, then fail before publication.
