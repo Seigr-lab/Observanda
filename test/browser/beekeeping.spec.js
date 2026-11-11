@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {navigate,preferences} from './preferences-helper.js';
 import {documentRecord} from '../../src/web/record-activity.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('inspection subject search pages only saved hives and colonies without loading their bodies',async({page})=>{
  const {book,inspection,record}=beekeepingFixture();
@@ -92,8 +93,8 @@ test('hive history pages navigate backwards and recover a failed page request',a
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+hive.id+'/read');await expect(links).toHaveCount(10);
   const first=await links.allTextContents();await expect(history.getByRole('button',{name:'Previous records',exact:true})).toBeDisabled();
-  await history.getByRole('button',{name:'Next records',exact:true}).focus();await page.keyboard.press('Enter');await expect(history.locator('[data-activity-status]')).toBeFocused();await expect(history).toContainText('11-20 of 25');
-  const second=await links.allTextContents();await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(links).toHaveCount(5);await expect(history).toContainText('21-25 of 25');
+  await history.getByRole('button',{name:'Next records',exact:true}).focus();await page.keyboard.press('Enter');await expect(history.locator('[data-activity-status]')).toBeFocused();await expect(history).toContainText('11–20 of 25');
+  const second=await links.allTextContents();await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(links).toHaveCount(5);await expect(history).toContainText('21–25 of 25');
   await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(second);await history.getByRole('button',{name:'Previous records',exact:true}).click();await expect(links).toHaveText(first);
   await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic history unavailable'})}),{times:1});
   await history.getByRole('button',{name:'Next records',exact:true}).click();await expect(history.getByRole('alert')).toContainText('Synthetic history unavailable');await history.getByRole('button',{name:'Retry linked records',exact:true}).click();await expect(links).toHaveText(first);
@@ -109,8 +110,9 @@ test('ordinary records use the same linked history and dedicated creation workfl
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+hive.id+'/read');
   await expect(history.getByRole('button',{name:'New inspection',exact:true})).toHaveCount(0);await history.getByRole('button',{name:'Show linked records',exact:true}).click();
   await expect(history.getByRole('link',{name:inspection.title,exact:true})).toBeVisible();
-  await history.getByRole('button',{name:'Add linked record',exact:true}).click();await dialog.getByLabel('Record template').selectOption('type:note');await dialog.getByRole('button',{name:'Create record',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('Interpretation after a second visit');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  // Linked records are added from the record editor's activity and history area; a free-form note opens the writing editor.
+  await (await revealInEditor(page,history.getByRole('button',{name:'Add linked record',exact:true}),'Activity and history')).click();await dialog.getByRole('button',{name:'Create free-form note',exact:true}).click();
+  await page.getByLabel('Record title',{exact:true}).fill('Interpretation after a second visit',{timeout:30000});await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('Interpretation after a second visit',{timeout:30000});
   const created=(await f.workspace.read()).book.entries.find(e=>e.title==='Interpretation after a second visit');expect(created.relations).toEqual([expect.objectContaining({type:'Documents',target:{workspaceId:book.id,kind:'record',id:hive.id}})]);
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results')).toBeVisible();
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await history.getByRole('button',{name:'Show linked records',exact:true}).click();await history.getByRole('link',{name:created.title,exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText(created.title);
