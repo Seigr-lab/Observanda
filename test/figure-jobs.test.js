@@ -14,6 +14,7 @@ import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 const mapping={x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'median',kind:'bar',order:'source',mode:'replace',decimal:'.'};
 async function fixture(t,count=43440){
@@ -61,7 +62,7 @@ test('43,440 retained measurements calculate without loading a table; medians, c
  assert.deepEqual((await f.materials.read(completed.result)).content,doc.content);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.read(completed.result)).content,doc.content);
- const source=await restored.datasetPage(d.dataset,0);assert.equal(source.rows[0].cells[3],'18446744073709551615');assert.equal(source.rows[0].cells[4],'105');assert.equal(source.rows[99].excluded,'Recorder interrupted');
+ const source=await restored.datasetPage(d.dataset,0);assert.equal(source.rows[0].cells[3],'18446744073709551615');assert.equal(source.rows[0].cells[4],'105');{const excluded=await restored.datasetPage(d.dataset,Math.floor(99/DATASET_ROWS_PER_PAGE));assert.equal(excluded.rows[99%DATASET_ROWS_PER_PAGE].order,100);assert.equal(excluded.rows[99%DATASET_ROWS_PER_PAGE].excluded,'Recorder interrupted');}
  assert.equal((await restored.artifact(f.artifact)).doc.content.size,f.bytes);
 });
 test('figure jobs fence retries, cancel partial sorting and atomically retain an immutable result',async t=>{
