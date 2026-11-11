@@ -3,7 +3,9 @@ import {attemptText} from './attempt-messages.js';
 
 // One presentation owner for authoring, retained revisions and static pages.
 // The public renderer receives only a previously projected reference set.
-export function attemptView(value,esc,{message=attemptText,reference=null,correct=null,window=null,navigation=()=>''}={}){
+// `inputCheck` adds a verification control to a declared input hash, where the
+// reading surface can compare it with the referenced original.
+export function attemptView(value,esc,{message=attemptText,reference=null,correct=null,window=null,navigation=()=>'',inputCheck=()=>''}={}){
  if(!value)return '';
  const t=(key,args)=>esc(message(key,args)),allRefs=attemptReferences(value),referencePositions=new Map(),preparations=new Map(value.preparations.map((item,position)=>[item.id,{item,position}]));
  for(const [position,ref] of allRefs.entries())if(!referencePositions.has(ref))referencePositions.set(ref,position);
@@ -17,7 +19,7 @@ export function attemptView(value,esc,{message=attemptText,reference=null,correc
  const preparation=p=>'<section><h3>'+esc(preparationName(p))+'</h3><dl>'+pair('applicability',p.applicability)+pair('reason',p.reason)+pair('recordedAt',p.recordedAt)+'</dl>'+ref(p.basedOn)+
   (p.protocols.length?'<h4>'+t('protocols')+'</h4>'+refs(p.protocols):'')+
   (p.conditions.length?'<h4>'+t('conditions')+'</h4>'+nested(p,'conditions')+table(['name','value','unit','basis','reference'],p.conditions.map(c=>[esc(c.name),esc(c.value)||t('none'),esc(c.unit),t(c.basis)+(c.reason?'<p>'+esc(c.reason)+'</p>':''),ref(c.reference)])):'')+
-  (p.inputs.length?'<h4>'+t('inputs')+'</h4>'+nested(p,'inputs')+table(['label','inputKind','hash','reference'],p.inputs.map(i=>[esc(i.label),t(i.kind),esc(i.algorithm)+' · <code>'+esc(i.hash)+'</code>',ref(i.reference)])):'')+
+  (p.inputs.length?'<h4>'+t('inputs')+'</h4>'+nested(p,'inputs')+table(['label','inputKind','hash','reference'],p.inputs.map(i=>[esc(i.label),t(i.kind),esc(i.algorithm)+' · <code>'+esc(i.hash)+'</code>'+inputCheck(i),ref(i.reference)])):'')+
   (p.observations.length?'<h4>'+t('observations')+'</h4>'+nested(p,'observations')+'<ul>'+p.observations.map(o=>'<li>'+esc(o.label)+'</li>').join('')+'</ul>':'')+
   (p.criteria.length?'<h4>'+t('criteria')+'</h4>'+nested(p,'criteria')+table(['criterion','expected','comparator','denominator','scope'],p.criteria.map(c=>[esc(c.label),esc(c.expected),esc(c.comparator),esc(c.denominator)||t('none'),t(c.scope)+(c.reason?'<p>'+esc(c.reason)+'</p>':'')])):'')+'</section>';
  const assessment=(a,editable=false)=>{

@@ -15,6 +15,7 @@ import {recordMediaControls} from './record-media-values-ui.js';
 import {recordMediaActions} from './record-media-actions.js';
 import {recordFigureActions} from './record-figure-actions.js';
 import {recordTagActions} from './record-tag-actions.js';
+import {attemptInputChecks} from './attempt-input-check.js';
 import {recordEditingView} from './record-editing-view.js';
 import {publicationAvailability,publicationChoices} from './record-publication-controls.js';
 import {focusElement} from './focus-management.js';
@@ -31,8 +32,9 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
  const sectionActions=recordSectionActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,edit:editWriting,render,report});
  const mediaActions=recordMediaActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,attachments:Math.max(0,position)};await load();},render,report});
  const figureCommands=recordFigureActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,figures:Math.max(0,position)};await load();},render,report});
+ const inputChecks=attemptInputChecks({api,esc,render});
  const tags=recordTagActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,tags:Math.max(0,position)};await load();},render,report});
- function clear(){sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};detailField='title';resultFigure=null;collectionFocus=null;pendingCollection=null;}
+ function clear(){inputChecks.clear();sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};detailField='title';resultFigure=null;collectionFocus=null;pendingCollection=null;}
  async function load(extra={},retry=false){
   const key=identity();if(!key)return;
   controller?.abort();const request=new AbortController();controller=request;busy=true;error=null;
@@ -85,7 +87,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   fieldsHtml.tags=recordHeaderControls('tags',reading.collections?.tags,esc,busy)+tags.view();
   fieldsHtml.attachments=mediaActions.add()+recordHeaderControls('attachments',reading.collections?.attachments,esc,busy)+recordMediaControls(record,esc,busy,mediaActions.controls,{assetUrl});
   }else{
-   fieldsHtml.attempt=attemptView(record.attempt,esc,{reference:attemptReference,window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy)});
+   fieldsHtml.attempt=attemptView(record.attempt,esc,{reference:attemptReference,window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy),inputCheck:inputChecks.view});
    fieldsHtml.results=(resultFigure?'<p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy):'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+'<div class="record-result-values">'+resultStatementsView(record.results,esc,{reference:resultReference,workspaceId:reading.workspaceId})+'</div>';
   }
   const sections=()=>'<section class="record-sections">'+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'>'+(editing?'<button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button>':'')+'</div>'+publicationChoices(s.share!==false,s.sharePdf===true,esc)+(editing?sectionActions.controls(s,reading.sections.offset+i,reading.sections.total):'')+renderProse(s.body,{figure})+'</section>').join('')+'</section>';
@@ -118,6 +120,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
    if(area){state.recordSection=null;focusElement(area);area.scrollIntoView({block:'start'});}return true;
   }
   if(await tags.action(control))return true;
+  if(await inputChecks.action(control))return true;
   if(await figureCommands.action(control))return true;
   if(await mediaActions.action(control))return true;
   if(await sectionActions.action(control))return true;
