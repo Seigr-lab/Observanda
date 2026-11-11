@@ -22,6 +22,7 @@ import {publicationCollectionKey,publicationCollectionRecords,publicationCollect
 import {bookText} from './web/book-messages.js';
 import {publicationText} from './web/publication-messages.js';
 import {placedFigures} from './web/book-selectors.js';
+import {figureDrawingLanguages,figureLanguageKey} from './website-figure-variants.js';
 import {attemptView} from './web/attempt-view.js';
 import {resultStatementsView,figureResultView} from './web/result-statements.js';
 export {publicProjection} from './publication-projection.js';
@@ -283,11 +284,23 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
       const stem=e.id+'-'+plot.id;
       files.set(`figures/${stem}.svg`,renderFigure(plot));
       // A website copy also carries the plot drawn for each other language.
-      const variants=(figureLanguages??[]).filter(language=>language!=='en').map(language=>{files.set(`figures/${stem}.${language}.svg`,renderFigure(plot,{locale:language}));return language+' ../figures/'+stem+'.'+language+'.svg';});
+      const drawings=figureDrawingLanguages(figureLanguages??[]),drawn=new Set();
+      const variants=plot.kind==='panels'?[]:[...drawings].filter(([language])=>language!=='en').map(([language,drawing])=>{
+        const name=drawing==='en'?`figures/${stem}.svg`:`figures/${stem}.${drawing}.svg`;
+        if(drawing!=='en'&&!drawn.has(drawing)){files.set(name,renderFigure(plot,{locale:drawing}));drawn.add(drawing);}
+        return language+' ../'+name;
+      });
       const variantAttribute=variants.length?` data-observanda-figure-variants="${esc(['en ../figures/'+stem+'.svg',...variants].join(' '))}"`:'';
       const data=e.figureDownloads?.includes(plot.id);
       if(data)files.set(`figures/${stem}.csv`,figureCSV(plot));
-      const visual=figureReadingView(plot.kind==='panels'?renderFigureView(plot):`<img src="../figures/${stem}.svg"${variantAttribute} alt="${esc(plot.title)}">`,plot.title);
+      // Panels stay inline; a website copy carries one hidden drawing per other
+      // number style, and the page shows the one for its language.
+      const panelView=()=>{
+        if(new Set(drawings.values()).size<2)return renderFigureView(plot);
+        const groups=new Map();for(const [language,drawing] of drawings)groups.set(drawing,[...(groups.get(drawing)??[]),language]);
+        return [...groups].map(([drawing,languages])=>'<div '+figureLanguageKey+'="'+esc(languages.join(' '))+'"'+(drawing==='en'?'':' hidden')+'>'+renderFigureView(plot,drawing==='en'?{}:{idPrefix:'reading-'+drawing,locale:drawing})+'</div>').join('');
+      };
+      const visual=figureReadingView(plot.kind==='panels'?panelView():`<img src="../figures/${stem}.svg"${variantAttribute} alt="${esc(plot.title)}">`,plot.title);
       const markup=`<figure id="record-figure-${plot.id}" tabindex="-1">${visual}<figcaption>${esc(plot.title)}${figureResultView(plot,e.results,esc,{publicView:true})}</figcaption>${data?`<details><summary data-observanda-label="publication:viewData">${esc(publicationText('viewData'))}</summary>${figureTable(plot)}</details>`:''}<a href="../figures/${stem}.svg" download data-observanda-label="publication:downloadSvg">${esc(publicationText('downloadSvg'))}</a>${data?` &middot; <a href="../figures/${stem}.csv" download data-observanda-label="publication:downloadCsv">${esc(publicationText('downloadCsv'))}</a>`:''}</figure>`;renderedFigures.set(plot.id,markup);if(!inline.has(plot.id))figure+=markup;
     }
     const media = e.attachments.map(attachment=>{const markup='<div id="record-figure-'+attachment.id+'" tabindex="-1">'+mediaMarkup(attachment,e,'../')+'</div>';renderedFigures.set(attachment.id,markup);return inline.has(attachment.id)?'':markup;}).join('');

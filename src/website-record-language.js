@@ -6,7 +6,7 @@ import {RECORD_TYPES,STATUSES} from './web/record-types.js';
 import {RELATION_TYPES} from './web/record-model.js';
 import {calendarDate} from './web/record-date.js';
 import {projectedDate} from './website-file-library-fields.js';
-import {figureVariantKey,figureVariants} from './website-figure-variants.js';
+import {figureVariantKey,figureVariants,figureLanguageKey} from './website-figure-variants.js';
 
 // Words around placed lab book material are site content: they follow the
 // page's own language, never the language of the private application. Only
@@ -108,6 +108,16 @@ export function localizedRecordPage(html){
    if(node.tagName==='img'&&attr(node,figureVariantKey)!==undefined){
     const variants=figureVariants(attr(node,figureVariantKey)),chosen=variants.get(resolveLanguage(language))??variants.get('en');
     if(chosen)setAttribute(node,'src',chosen);
+   }
+   // Inline panel drawings: only the page language's drawing is shown.
+   const drawing=attr(node,figureLanguageKey);
+   if(drawing!==undefined){
+    const page=resolveLanguage(language),siblings=(node.parentNode?.childNodes??[]).filter(child=>attr(child,figureLanguageKey)!==undefined);
+    const served=child=>attr(child,figureLanguageKey).split(/\s+/).includes(page);
+    const shown=siblings.some(served)?served(node):attr(node,figureLanguageKey).split(/\s+/).includes('en');
+    const loc=node.sourceCodeLocation,hiddenAt=loc?.attrs?.hidden;
+    if(shown&&hiddenAt)changes.push({start:hiddenAt.startOffset-1,end:hiddenAt.endOffset,text:''});
+    if(!shown&&!hiddenAt&&loc?.startTag)changes.push({start:loc.startTag.endOffset-1,end:loc.startTag.endOffset-1,text:' hidden'});
    }
    const field=attr(node,'data-feed-field');
    if(field==='type')term(node,'type');

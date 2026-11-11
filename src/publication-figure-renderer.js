@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {figureDrawingLanguages} from './website-figure-variants.js';
 import {serialize} from './storage-format.js';
 import {openPublicationFigure} from './publication-retained-figures.js';
 import {retainedFigureSVG} from './web/retained-figure-svg.js';
@@ -45,9 +46,12 @@ export async function* renderApprovedFigureContents(original,recordId,figure,{wr
  await writer.retain('figures/'+stem+'.svg',retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem}));
  // A website copy also retains the plot drawn for each other language.
  const variants=[];
- for(const language of languages.filter(language=>language!=='en')){
-  await writer.retain('figures/'+stem+'.'+language+'.svg',retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem,locale:language}));
-  variants.push(language+' ../figures/'+stem+'.'+language+'.svg');
+ const drawings=figureDrawingLanguages(languages),drawn=new Set();
+ for(const [language,drawing] of drawings){
+  if(language==='en')continue;
+  const name=drawing==='en'?'figures/'+stem+'.svg':'figures/'+stem+'.'+drawing+'.svg';
+  if(drawing!=='en'&&!drawn.has(drawing)){await writer.retain(name,retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem,locale:drawing}));drawn.add(drawing);}
+  variants.push(language+' ../'+name);
  }
  const variantAttribute=variants.length?' data-observanda-figure-variants="'+esc(['en ../figures/'+stem+'.svg',...variants].join(' '))+'"':'';
  if(data)await writer.retain('figures/'+stem+'.csv',retainedFigureCSV(reader,{signal}));signal?.throwIfAborted();

@@ -6,7 +6,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateDetachedRecords} from '../src/model.js';
 import {publicProjection} from '../src/publication-projection.js';
 import {renderPublication} from '../src/publication.js';
-import {figureVariants,figureVariantLanguages,mapFigureVariants} from '../src/website-figure-variants.js';
+import {figureVariants,figureVariantLanguages,mapFigureVariants,figureDrawingLanguages} from '../src/website-figure-variants.js';
+import {createComposition} from '../src/web/figure-composition.js';
 import {displayPlacement,sourceFragmentAtPage} from '../src/website-entry-display.js';
 import {feedContentAtPage} from '../src/website-feed-template.js';
 import {localizedRecordPage} from '../src/website-record-language.js';
@@ -31,9 +32,11 @@ test('a website copy draws a plot once per language and the page shows the drawi
  validateDetachedRecords([record]);
  const output=renderPublication(publicProjection(book),{figureLanguages:figureVariantLanguages});
  const stem=record.id+'-'+plot.id;
- for(const language of ['ca','es','nb','nn'])assert.ok(output.files.has('figures/'+stem+'.'+language+'.svg'),language);
+ for(const language of ['ca','es','nb'])assert.ok(output.files.has('figures/'+stem+'.'+language+'.svg'),language);
+ // Bokmål and Nynorsk write numbers alike and share one drawing.
+ assert.ok(!output.files.has('figures/'+stem+'.nn.svg'));
  const html=output.files.get('entries/'+record.id+'.html');
- assert.match(html,new RegExp('<img src="../figures/'+stem+'.svg" data-observanda-figure-variants="en ../figures/'+stem+'.svg ca ../figures/'+stem+'.ca.svg es ../figures/'+stem+'.es.svg nb ../figures/'+stem+'.nb.svg nn ../figures/'+stem+'.nn.svg"'));
+ assert.match(html,new RegExp('<img src="../figures/'+stem+'.svg" data-observanda-figure-variants="en ../figures/'+stem+'.svg ca ../figures/'+stem+'.ca.svg es ../figures/'+stem+'.es.svg nb ../figures/'+stem+'.nb.svg nn ../figures/'+stem+'.nb.svg"'));
  // Without languages (the generated site and PDF) nothing changes.
  assert.doesNotMatch(renderPublication(publicProjection(book)).files.get('entries/'+record.id+'.html'),/data-observanda-figure-variants/);
 });
@@ -84,4 +87,23 @@ test('converting an entry for websites maps every drawing to a public asset, and
  for(const url of variants.values()){assert.match(url,/^assets\/[a-f0-9]{64}\.svg$/);assert.ok(paths.has(url),url);}
  const pdf=await convertPublicationRecord(workspace,metadata,record,{target:'pdf'});
  if(pdf.visible)assert.doesNotMatch(pdf.html,/data-observanda-figure-variants/);
+});
+
+test('languages that write numbers alike share a drawing, and panels carry one inline drawing per number style',()=>{
+ assert.deepEqual(Object.fromEntries(figureDrawingLanguages(figureVariantLanguages)),{en:'en',ca:'ca',es:'es',nb:'nb',nn:'nb'});
+ const book=upgradeNotebook(sampleNotebook()),record=book.entries.find(e=>e.share);
+ const panel=title=>{const f=createFigure();f.title=title;f.series[0].points=[1200.5,3400.25].map((y,x)=>({x,y,error:.25}));return f;};
+ const figure=createComposition([panel('Hive A'),panel('Hive B')]);figure.title='Mite loads';
+ record.figures=[figure];record.sections=[];record.body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Counts.'}]}]};
+ validateDetachedRecords([record]);
+ const html=renderPublication(publicProjection(book),{figureLanguages:figureVariantLanguages}).files.get('entries/'+record.id+'.html');
+ const groups=[...html.matchAll(/<div data-observanda-figure-language="([^"]+)"( hidden)?>/g)].map(m=>[m[1],Boolean(m[2])]);
+ assert.deepEqual(groups,[['en',false],['ca',true],['es',true],['nb nn',true]]);
+ const article=html.slice(html.indexOf('<article'),html.indexOf('</article>')+10);
+ const page=lang=>'<!doctype html><html lang="'+lang+'"><body><main><section data-observanda-source="'+hash('a')+'" data-observanda-source-revision="'+hash('b')+'">'+article+'</section></main></body></html>';
+ const shown=value=>[...localizedRecordPage(value).matchAll(/<div data-observanda-figure-language="([^"]+)"( hidden)?>/g)].filter(m=>!m[2]).map(m=>m[1]);
+ assert.deepEqual(shown(page('nn')),['nb nn']);assert.deepEqual(shown(page('ca')),['ca']);assert.deepEqual(shown(page('de')),['en']);
+ const nynorsk=localizedRecordPage(page('nn'));assert.equal(localizedRecordPage(nynorsk),nynorsk);
+ assert.deepEqual(shown(nynorsk.replace('lang="nn"','lang="en"')),['en']);
+ assert.doesNotMatch(renderPublication(publicProjection(book)).files.get('entries/'+record.id+'.html'),/data-observanda-figure-language/);
 });
