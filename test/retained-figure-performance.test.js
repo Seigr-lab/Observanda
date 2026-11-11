@@ -26,7 +26,7 @@ test('retained figures are saved and drawn for the website in near-linear time',
   measured[count]={retain,draw};t.diagnostic(`${count} points: retain ${Math.round(retain)} ms, website drawing ${Math.round(draw)} ms`);
  }
  // A 400-point figure fits the block caches; a 4000-point one is read and
- // written block by block. Drawing stays within thirty times; saving also pays
- // its read-only coordinate pass and bounded write batches (before: 78x).
- for(const [step,bound] of [['draw',30],['retain',60]])assert.ok(measured[4000][step]<measured[400][step]*bound,step+' grew '+(measured[4000][step]/measured[400][step]).toFixed(1)+'x for 10x points');
+ // written in batches of 32 blocks. Both stay within thirty times (saving was
+ // 78x before batched reads in the writer's coordinate pass).
+ for(const [step,bound] of [['draw',30],['retain',30]])assert.ok(measured[4000][step]<measured[400][step]*bound,step+' grew '+(measured[4000][step]/measured[400][step]).toFixed(1)+'x for 10x points');
 });

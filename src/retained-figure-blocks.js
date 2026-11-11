@@ -32,13 +32,16 @@ export function retainedFigureBlockChildren(kind,node){
 export class RetainedFigureBlocks{
  constructor(workspace,{write,signal,readOnly=false}={}){this.workspace=workspace;this.write=write??(operation=>operation());this.signal=signal;this.readOnly=readOnly;this.cache=new Map();this.bytes=0;this.pending=new Map();this.pendingBytes=0;}
  tree(){return new RecordValueTree(this);}
- async readSnapshot(operation){this.check();const read=async()=>{this.snapshots=(this.snapshots??0)+1;try{const result=await operation();this.check();return result;}finally{this.snapshots--;}};return typeof this.workspace.catalogue==='function'?this.workspace.catalogue(read):read();}
- // Within a read snapshot, load up to 32 uncached blocks in one
- // catalogue round trip; the following reads still authenticate every block.
+ async readSnapshot(operation){this.check();const read=async()=>{const result=await operation();this.check();return result;};return typeof this.workspace.catalogue==='function'?this.workspace.catalogue(read):read();}
+ // Load up to 32 uncached blocks per round trip into the block cache, in a
+ // read snapshot or a writer transaction; each block is authenticated again.
  async prefetch(kind,revisions){
-  if(!this.snapshots||typeof this.workspace.catalogue!=='function')return;
-  const ids=[...new Set(revisions)].map(revision=>retainedFigureBlockPath(kind,revision)).filter(key=>!this.pending.has(key)&&!this.cache.has(key)).map(key=>'metadata:'+key);
-  for(let at=0;at<ids.length;at+=32){this.check();const batch=ids.slice(at,at+32);await this.workspace.catalogue(store=>store.prefetchObjects?.(batch));}
+  if(typeof this.workspace.readMetadataMany!=='function')return;
+  const wanted=[...new Set(revisions)].map(revision=>[retainedFigureBlockPath(kind,revision),revision]).filter(([key])=>!this.pending.has(key)&&!this.cache.has(key));
+  for(let at=0;at<wanted.length;at+=32){
+   this.check();const batch=wanted.slice(at,at+32),texts=await this.workspace.readMetadataMany(batch.map(([key])=>key),65536);this.check();
+   batch.forEach(([key,revision],i)=>{if(typeof texts[i]!=='string')return;this.decode(texts[i],revision);this.keep(key,texts[i]);});
+  }
  }
  check(){this.signal?.throwIfAborted();}
  decode(text,revision){if(typeof text!=='string'||Buffer.byteLength(text)>65536||digest(text)!==revision)fail();let node;try{node=JSON.parse(text);}catch{fail();}if(serialize(node)!==text)fail();return node;}

@@ -563,8 +563,8 @@ export class ResearchCatalogue{
   }
   return {items,next};
  }
- async objectValue(id,expected){
-  const batch=metadataBatchIndex(this),load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=batch?await batch.objectRow(id):this.readCache?await this.readCache.row('object:'+id,load):await load();
+ async objectValue(id,expected,preloaded){
+  const batch=metadataBatchIndex(this),load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=preloaded!==undefined?preloaded:batch?await batch.objectRow(id):this.readCache?await this.readCache.row('object:'+id,load):await load();
   if(!!expected!==!!row)fail();if(!row)return null;
   const cached=cachedMaterialText(this,id,expected.revision);if(cached)return cached;
   const decoded=this.decode('object',id,row.payload),value=await resolveMetadataValue(this,id,expected.revision,decoded);
@@ -576,6 +576,18 @@ export class ResearchCatalogue{
   const find=()=>index.find(head,id);
   const expected=this.readCache&&!metadataBatchIndex(this)?await this.readCache.proof('object:'+id,async()=>(await find())?.revision??''):null;
   return this.objectValue(id,expected===null?await find():expected?{id,revision:expected}:null);
+ }
+ // Read up to 32 objects with one batched index walk and one row query, also
+ // inside a writer transaction. Every value is authenticated as object() does;
+ // a metadata batch or read cache keeps its own per-object path.
+ async objects(ids){
+  if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id)||new Set(ids).size!==ids.length)throw new AppError('INVALID');
+  const values=new Map();
+  if(metadataBatchIndex(this)||this.readCache){await this.prefetchObjects(ids);for(const id of ids)values.set(id,await this.object(id));return values;}
+  const index=new ObjectIndex(this,{cacheReads:true,cacheSize:2048}),head=await index.head();await index.prefetchKeys(head,ids);
+  const rows=new Map((await this.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[])',ids)).map(row=>[row.id,row]));
+  for(const id of ids)values.set(id,await this.objectValue(id,await index.find(head,id),rows.get(id)??null));
+  return values;
  }
  async prefetchObjects(ids){
   if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id)||new Set(ids).size!==ids.length)throw new AppError('INVALID');

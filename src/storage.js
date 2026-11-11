@@ -147,6 +147,16 @@ export class Workspace {
     await assertRegular(path.dirname(file),{directory:true,missing:true});const stat=await assertRegular(file,{missing:true});
     if(!stat)return null;if(stat.size>limit+ENCRYPTION_OVERHEAD)throw new AppError('LIMIT');return this.readFile(file,'utf8');
   }
+  // Batched reads of up to 32 small metadata files, as readMetadata reads each.
+  async readMetadataMany(relatives,limit){
+    if(!Array.isArray(relatives)||relatives.length>32||new Set(relatives).size!==relatives.length)throw new AppError('INVALID');
+    for(const relative of relatives)this.metadataPath(relative);await this.requireCatalogueKey();
+    if(!(activeCatalogue(this)||await hasCatalogue(this.root))){const texts=[];for(const relative of relatives)texts.push(await this.readMetadata(relative,limit));return texts;}
+    return this.catalogue(async store=>{
+      const values=await store.objects(relatives.map(relative=>'metadata:'+relative));
+      return relatives.map(relative=>{const value=values.get('metadata:'+relative);if(value===null)return null;if(typeof value.text!=='string')throw new AppError('FORMAT');if(Buffer.byteLength(value.text)>limit)throw new AppError('LIMIT');return value.text;});
+    });
+  }
   async writeMetadata(relative,text){
     const file=this.metadataPath(relative);
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
