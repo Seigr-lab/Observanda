@@ -69,15 +69,29 @@ export function validateRetainedFigurePoint(point,header){
  if(header.x.scale==='log'&&xValue(point.x,header.x.kind)<=0||header.y.scale==='log'&&point.y!==null&&point.y<=0||header.kind==='heatmap'&&point.error!==null||header.markerArea&&point.y!==null&&(point.count==null||point.count*header.markerArea.unitArea>65536))invalid();
 }
 
+// Lookup keys are content hashes, so they arrive in random order. Indexed one
+// by one, every checkpoint rewrote a page for almost every new key once the
+// index outgrew a checkpoint; buffered keys are merged in order instead.
+const LOOKUP_BUFFER=16384;
 export class RetainedFigureCollections{
- constructor(blocks,{runs=false}={}){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections={};this.indexes={};this.runs=runs;this.run=null;}
+ constructor(blocks,{runs=false}={}){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections={};this.indexes={};this.runs=runs;this.run=null;this.lookups=new Map();this.buffered=0;}
  collection(name){return this.collections[name]??={count:0,root:null};}
  indexesFor(name){return this.indexes[name]??={keys:null,plots:null,series:null,lookup:null,coordinates:null};}
  roots(){return [...Object.values(this.collections).map(value=>value.root),...Object.values(this.indexes).flatMap(value=>Object.values(value))];}
  async checkpoint(){await this.flushRun();await this.index.flushRoots(this.roots());}
  async find(name,key,slot='keys'){
   if(name==='points'&&this.run){if(slot!=='lookup')await this.flushRun();else if(this.run.members.some(member=>member.lookup===key))return {id:key,buffered:true};}
+  const buffered=slot==='lookup'?this.lookups.get(name)?.get(key):undefined;if(buffered)return {id:key,revision:buffered};
   return this.index.find({root:this.indexesFor(name)[slot]},key);
+ }
+ // Merge each collection's buffered lookup keys in key order, rewriting each
+ // affected page once.
+ async mergeLookups(){
+  for(const [name,pending] of this.lookups){
+   const changes=[...pending].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([id,revision])=>({id,revision})),indexes=this.indexesFor(name);
+   indexes.lookup=await this.index.changeMany(indexes.lookup,changes,{signal:this.blocks.signal});
+  }
+  this.lookups.clear();this.buffered=0;
  }
  async indexMember(name,item,revision,{lookup=null,coordinate=null}={}){
   const collection=this.collection(name),indexes=this.indexesFor(name);
@@ -85,7 +99,7 @@ export class RetainedFigureCollections{
   indexes.keys=await this.index.change(indexes.keys,item.id,revision);
   if(item.plotId)indexes.plots=await this.index.change(indexes.plots,item.plotId+':'+ordinal(item.ordinal),revision);
   if(item.seriesId)indexes.series=await this.index.change(indexes.series,item.seriesId+':'+ordinal(item.position),revision);
-  if(lookup!==null)indexes.lookup=await this.index.change(indexes.lookup,lookup,revision);
+  if(lookup!==null){let pending=this.lookups.get(name);if(!pending)this.lookups.set(name,pending=new Map());if(!pending.has(lookup))this.buffered++;pending.set(lookup,revision);if(this.buffered>=LOOKUP_BUFFER)await this.mergeLookups();}
   if(coordinate!==null)indexes.coordinates=await this.index.change(indexes.coordinates,item.plotId+':'+numericKey(coordinate)+':'+ordinal(item.ordinal),revision);
  }
  async add(name,{id,plotId=null,seriesId=null,position,body,lookup=null,coordinate=null,categoryId=null,visiblePosition=null,bodyRoot=null,texts=null}){
@@ -111,7 +125,7 @@ export class RetainedFigureCollections{
   for(const {item,lookup,coordinate} of run.members)await this.indexMember('points',item,revision,{lookup,coordinate});
   if(indexCheckpointDue(this.index))await this.index.flushRoots(this.roots());
  }
- async manifests(){await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
+ async manifests(){await this.flushRun();await this.mergeLookups();await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
 }
 // Identities for newly written members. They keep the version-4 layout, but
 // their first 48 bits count up from a random start, so a writer appends to its
