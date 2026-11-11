@@ -174,7 +174,9 @@ async function assertMembers(f,result,count){
 test('plot member retention batches immutable children through the supplied writer before returning its final root',async t=>{
  const count=2049,f=meanFixture(count),preserved=await preserveEarlierMaterial(f),before=new Set(f.files.keys()),sequences=f.materials.sequences,{result,points}=await f.run();
  const batches=memberBatches(f);assert.ok(batches.length>1);assert.ok(batches.length<Math.ceil(count/64)/2,'member chunks must share bounded writer transactions');
- for(const batch of batches){assert.ok(batch.length<=32);assert.ok(batch.every(entry=>entry.name.startsWith(sequencePath)),'figure blocks keep their original writer');assert.ok(batch.reduce((n,entry)=>n+Buffer.byteLength(entry.text),0)<=256*1024);}
+ // Preparation writes group up to 128 objects (256 KiB) per writer transaction,
+ // still prefetching and writing them thirty-two at a time inside it.
+ for(const batch of batches){assert.ok(batch.length<=128);assert.ok(batch.every(entry=>entry.name.startsWith(sequencePath)),'figure blocks keep their original writer');assert.ok(batch.reduce((n,entry)=>n+Buffer.byteLength(entry.text),0)<=256*1024);}
  const authorized=new Set(f.retainedBatches.flat().map(entry=>entry.name));for(const key of f.files.keys())if(!before.has(key))assert.ok(authorized.has(key),'every retained object must use the supplied writer');
  assert.equal(f.materials.sequences,sequences,'staging must not replace the source owner');assert.equal(f.sourceReads(),Math.ceil(count/41));assert.equal(points.length,1);assert.equal(points[0].y,2);assert.deepEqual(points[0].source.members,{offset:0,count});
  await assertMembers(f,result,count);await preserved();t.diagnostic(JSON.stringify({members:count,memberChunks:Math.ceil(count/64),retainedTransactions:batches.length}));
@@ -191,7 +193,7 @@ test('plot member commits authenticate existing chunks and nodes, including raw 
 });
 
 test('middle and final plot member writes reject rollback and lost acknowledgements without exposing a result',async()=>{
- const count=2049,baseline=meanFixture(count),expected=(await baseline.run()).result,total=memberBatches(baseline).length;assert.ok(total>2);
+ const count=2049,baseline=meanFixture(count),expected=(await baseline.run()).result,total=memberBatches(baseline).length;assert.ok(total>1);
  for(const at of [Math.floor(total/2),total])for(const durable of [false,true]){
   const f=meanFixture(count),preserved=await preserveEarlierMaterial(f),reason=Error('Retained write interrupted');let writes=0,failed,returned=false;
   f.setRetainedFault(batch=>{if(batch.some(entry=>entry.name.startsWith(sequencePath))&&++writes===at){failed=batch;return {error:reason,durable};}});
