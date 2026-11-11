@@ -1,5 +1,7 @@
 import {t} from '../web/i18n/index.js';
-import {BOOK_BLOCKS,BOOK_TABLE_LIMITS,validBookBlock,renderBookBlock} from '../web/book-blocks.js';
+import {BOOK_BLOCKS,BOOK_TABLE_LIMITS,validBookBlock,renderBookBlock,citationDefaults} from '../web/book-blocks.js';
+import {parseCitationIdentifiers,citationIdentifierText} from '../web/citation-identifiers.js';
+import {dateParts,validRecordDate} from '../web/record-date.js';
 import {bookText} from '../web/book-messages.js';
 import {closeHistory} from 'prosemirror-history';
 import {NodeSelection} from 'prosemirror-state';
@@ -13,14 +15,14 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validation
  const input=(key,max=1000)=>label(key,`<input name="${key}" maxlength="${max}" value="${esc(attrs[key]??'')}">`);
  const area=(key,max=60000)=>label(key,`<textarea name="${key}" maxlength="${max}" rows="4">${esc(attrs[key]??'')}</textarea>`);
  const button=(key)=>`<button class="button" type="button" data-book-action="${key}">${esc(message(key))}</button>`;
- function fresh(kind){const base={version:1,id:crypto.randomUUID()};if(kind==='book_sketch')return newSketch(base.id);return {...base,...({book_table:{title:'',headers:['',''],rows:[['','']]},book_equation:{source:'',label:''},book_citation:{title:'',authors:'',issued:'',locator:'',url:''},book_figure:{figureId:figures()[0]?.id??'',alternative:''},book_preserved:{format:'',source:'',reason:''}}[kind])};}
- function collect(){for(const el of panel.querySelectorAll('[name]'))if(Object.hasOwn(attrs,el.name))attrs[el.name]=el.value;for(const el of panel.querySelectorAll('[data-cell]')){const [r,c]=el.dataset.cell.split(':').map(Number);if(r===-1)attrs.headers[c]=el.value;else attrs.rows[r][c]=el.value;}}
+ function fresh(kind){const base={version:1,id:crypto.randomUUID()};if(kind==='book_sketch')return newSketch(base.id);return {...base,...({book_table:{title:'',headers:['',''],rows:[['','']]},book_equation:{source:'',label:''},book_citation:{title:'',authors:'',issued:'',locator:'',url:'',...citationDefaults(),version:2},book_figure:{figureId:figures()[0]?.id??'',alternative:''},book_preserved:{format:'',source:'',reason:''}}[kind])};}
+ function collect(){for(const el of panel.querySelectorAll('[name]'))if(Object.hasOwn(attrs,el.name)&&!['date','identifiers'].includes(el.name))attrs[el.name]=el.value;if(type==='book_citation')collectCitation();for(const el of panel.querySelectorAll('[data-cell]')){const [r,c]=el.dataset.cell.split(':').map(Number);if(r===-1)attrs.headers[c]=el.value;else attrs.rows[r][c]=el.value;}}
  function paint(){
   sketch?.destroy();sketch=null;
   const fields=type==='book_table'?input('title',300)+'<p>'+esc(message('tableHint'))+'</p><div class="book-table-scroll"><table><thead><tr>'+attrs.headers.map((v,c)=>`<th><input data-cell="-1:${c}" aria-label="${esc(message('headers'))} ${c+1}" value="${esc(v)}"></th>`).join('')+'</tr></thead><tbody>'+attrs.rows.map((r,i)=>'<tr>'+r.map((v,c)=>`<td><textarea data-cell="${i}:${c}" aria-label="${esc(message('row'))} ${i+1}, ${c+1}">${esc(v)}</textarea></td>`).join('')+'</tr>').join('')+'</tbody></table></div><p role="status" data-cell-capacity></p><div class="inline-actions">'+['addRow','removeRow','addColumn','removeColumn'].map(button).join('')+'</div>':
    type==='book_sketch'?input('title',300)+area('description',20000)+'<div data-sketch-editor></div>':
    type==='book_equation'?'<p>'+esc(message('equationHint'))+'</p>'+area('source',4000)+input('label'):
-   type==='book_citation'?input('title')+input('authors',2000)+input('issued',200)+input('locator')+input('url',2000):
+   type==='book_citation'?citationFields():
    type==='book_figure'?label('figureId','<select name="figureId">'+figures().map(f=>`<option value="${esc(f.id)}"${attrs.figureId===f.id?' selected':''}>${esc(f.title||f.caption||f.alt||f.id)}</option>`).join('')+'</select>')+area('alternative',20000):'<p>'+esc(message('preservedHint'))+'</p>'+input('format',200)+area('source')+area('reason',2000);
   panel.innerHTML='<h3>'+esc(message(position===null?'insert':'edit'))+'</h3>'+label('kind','<select data-book-kind>'+BOOK_BLOCKS.map(v=>'<option value="'+v+'"'+(type===v?' selected':'')+'>'+esc(message(v.slice(5)==='preserved'?'preserved':v.slice(5)))+'</option>').join('')+'</select>')+fields+'<p role="alert" data-book-error></p><footer class="inline-actions">'+button('cancel')+button('apply')+'</footer>';
   if(type==='book_sketch')sketch=sketchEditor(panel.querySelector('[data-sketch-editor]'),attrs);
@@ -33,6 +35,29 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validation
    if(feedback.length)feedback.push(message('capacityTableRoom',{rows:BOOK_TABLE_LIMITS.rows-attrs.rows.length,columns:BOOK_TABLE_LIMITS.columns-attrs.headers.length}));
    panel.querySelector('[data-book-error]').textContent=feedback.join(' ');
   }
+ }
+ // Citations are saved as version 2: a date with its known precision,
+ // publisher, archive and checked identifiers. A version-1 citation keeps its
+ // text and is upgraded when the author applies a change.
+ function citationFields(){
+  const d=attrs.date?dateParts(attrs.date):null,kind=d?.kind??'none',value=d&&['day','month','year'].includes(kind)?d.value:'';
+  const option=(id,key)=>'<option value="'+id+'"'+(kind===id?' selected':'')+'>'+esc(message(key))+'</option>';
+  return input('title')+area('authors',2000).replace('rows="4"','rows="3"')+'<p class="muted">'+esc(message('citationAuthorsHint'))+'</p>'+
+   '<fieldset><legend>'+esc(message('citationDate'))+'</legend>'+label('citationDatePrecision','<select name="citationDatePrecision">'+option('none','citationDateNone')+option('day','citationDateDay')+option('month','citationDateMonth')+option('year','citationDateYear')+option('range','citationDateRange')+option('unknown','citationDateUnknown')+'</select>')+
+   label('citationDateValue','<input name="citationDateValue" maxlength="10" placeholder="YYYY-MM-DD" value="'+esc(value)+'">')+
+   label('citationDateFrom','<input name="citationDateFrom" type="date" value="'+esc(kind==='range'?d.from:'')+'">')+label('citationDateTo','<input name="citationDateTo" type="date" value="'+esc(kind==='range'?d.to:'')+'">')+
+   '<label class="checkbox"><input type="checkbox" name="citationDateEstimated"'+(d?.estimated?' checked':'')+'><span>'+esc(message('citationDateEstimated'))+'</span></label></fieldset>'+
+   input('issued',200)+input('publisher',500)+input('archive',500)+
+   label('identifiers','<textarea name="identifiers" maxlength="6000" rows="3" spellcheck="false">'+esc(citationIdentifierText(attrs.identifiers))+'</textarea>')+'<p class="muted">'+esc(message('citationIdentifiersHint'))+'</p>'+
+   input('locator')+input('url',2000);
+ }
+ let citationIssue='';
+ function collectCitation(){
+  const field=name=>panel.querySelector('[name="'+name+'"]'),kind=field('citationDatePrecision')?.value??'none',estimated=!!field('citationDateEstimated')?.checked;
+  const date=kind==='none'?null:kind==='unknown'?{kind}:kind==='range'?{kind,from:field('citationDateFrom').value,to:field('citationDateTo').value,estimated}:{kind,value:field('citationDateValue').value.trim(),estimated};
+  const parsed=parseCitationIdentifiers(field('identifiers')?.value);
+  Object.assign(attrs,{version:2,date:date&&date.kind==='day'&&!estimated?date.value:date,identifiers:parsed.identifiers});
+  citationIssue=parsed.invalid.length?message('citationIdentifierInvalid',{line:parsed.invalid[0]}):attrs.date!==null&&!validRecordDate(attrs.date)?message('citationDateInvalid'):'';
  }
  function close(){sketch?.destroy();sketch=null;panel?.close();panel?.remove();panel=null;view.focus();}
  function open({edit=false}={}){
@@ -59,6 +84,7 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validation
     if(type==='book_table'&&attrs.rows.some(row=>row.some(cell=>cell.length>BOOK_TABLE_LIMITS.cellCharacters))){
      panel.querySelector('[data-book-error]').textContent=message('capacityCell',{limit:BOOK_TABLE_LIMITS.cellCharacters});return;
     }
+    if(type==='book_citation'&&citationIssue){panel.querySelector('[data-book-error]').textContent=citationIssue;return;}
     if(!validBookBlock({type,attrs})){panel.querySelector('[data-book-error]').textContent=message('invalid');return;}
     const node=schema.nodes[type].create(attrs),tr=closeHistory(view.state.tr);
     if(position!==null)tr.replaceWith(position,position+view.state.doc.nodeAt(position).nodeSize,node);else if(selection.node)tr.insert(selection.to,node);else tr.setSelection(selection).replaceSelectionWith(node);

@@ -4,16 +4,30 @@ import {renderEquation} from './equation-runtime.js';
 import {validSketch,sketchTextContent} from './sketch-model.js';
 import {renderSketch} from './sketch-renderer.js';
 import {figureReadingView} from './figure-reading-view.js';
+import {validRecordDate,recordDateLabel} from './record-date.js';
+import {validCitationIdentifier,citationIdentifierURL} from './citation-identifiers.js';
 export const BOOK_BLOCKS=['book_table','book_equation','book_citation','book_figure','book_sketch','book_preserved'];
 export const BOOK_TABLE_LIMITS=Object.freeze({columns:20,rows:500,headerCharacters:500,cellCharacters:10000});
 const text=(v,max,required=false)=>typeof v==='string'&&v.length<=max&&(!required||v.trim())&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(v);
 const keys=(v,names)=>v&&Object.keys(v).sort().join()===names.sort().join();
 export const externalCitationURL=url=>{if(typeof url!=='string')return false;if(!url)return true;try{const u=new URL(url);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&url.length<=2000;}catch{return false;}};
+// Citations. Version 1 holds free text; version 2 adds a date with its known
+// precision (record date contract), publisher, archive or collection, and
+// checked identifiers (DOI, ISBN, ISSN, arXiv, handle). Editors keep the
+// version-2 attributes at their defaults on version-1 citations, so both
+// stay readable and valid.
+export const CITATION_FIELDS=['version','id','title','authors','issued','locator','url'],CITATION_DETAILS=['date','publisher','archive','identifiers'];
+export const citationDefaults=()=>({date:null,publisher:'',archive:'',identifiers:[]});
+function validCitation(a){
+ const common=text(a.title,1000,true)&&text(a.authors,2000)&&text(a.issued,200)&&text(a.locator,1000)&&externalCitationURL(a.url);
+ if(a.version===1)return common&&(keys(a,CITATION_FIELDS)||keys(a,[...CITATION_FIELDS,...CITATION_DETAILS])&&a.date===null&&a.publisher===''&&a.archive===''&&Array.isArray(a.identifiers)&&!a.identifiers.length);
+ return common&&keys(a,[...CITATION_FIELDS,...CITATION_DETAILS])&&(a.date===null||validRecordDate(a.date))&&text(a.publisher,500)&&text(a.archive,500)&&Array.isArray(a.identifiers)&&a.identifiers.length<=20&&a.identifiers.every(validCitationIdentifier)&&new Set(a.identifiers.map(item=>item.kind+':'+item.value)).size===a.identifiers.length;
+}
 export function validBookBlock(n){
- const a=n.attrs;if(!BOOK_BLOCKS.includes(n.type)||n.content?.length||n.marks?.length||!a||a.version!==1||!researchId(a.id))return false;
+ const a=n.attrs;if(!BOOK_BLOCKS.includes(n.type)||n.content?.length||n.marks?.length||!a||!(a.version===1||n.type==='book_citation'&&a.version===2)||!researchId(a.id))return false;
  if(n.type==='book_table')return keys(a,['version','id','title','headers','rows'])&&text(a.title,300,true)&&Array.isArray(a.headers)&&a.headers.length>0&&a.headers.length<=BOOK_TABLE_LIMITS.columns&&a.headers.every(h=>text(h,BOOK_TABLE_LIMITS.headerCharacters,true))&&Array.isArray(a.rows)&&a.rows.length>0&&a.rows.length<=BOOK_TABLE_LIMITS.rows&&a.rows.every(r=>Array.isArray(r)&&r.length===a.headers.length&&r.every(v=>text(v,BOOK_TABLE_LIMITS.cellCharacters)));
  if(n.type==='book_equation')return keys(a,['version','id','source','label'])&&text(a.source,4000,true)&&text(a.label,1000,true);
- if(n.type==='book_citation')return keys(a,['version','id','title','authors','issued','locator','url'])&&text(a.title,1000,true)&&text(a.authors,2000)&&text(a.issued,200)&&text(a.locator,1000)&&externalCitationURL(a.url);
+ if(n.type==='book_citation')return validCitation(a);
  if(n.type==='book_figure')return keys(a,['version','id','figureId','alternative'])&&researchId(a.figureId)&&text(a.alternative,20000,true);
  if(n.type==='book_sketch')return validSketch(a);
  return keys(a,['version','id','format','source','reason'])&&text(a.format,200,true)&&text(a.source,60000,true)&&text(a.reason,2000,true);
@@ -24,7 +38,11 @@ export function renderBookBlock(n,{esc,figure=()=>'',message=bookText}={}){
  if(n.type==='book_sketch')return `<figure class="book-sketch" id="${id}" tabindex="-1">${figureReadingView(renderSketch(a),a.title)}<figcaption>${esc(a.title)}</figcaption><p class="book-diagram-reading">${esc(a.description)}</p>${a.items.some(i=>i.kind==='text')?`<details><summary>${esc(message('sketchAnnotations'))}</summary><ul class="book-diagram-reading">${a.items.filter(i=>i.kind==='text').map(i=>'<li>'+esc(i.text)+'</li>').join('')}</ul></details>`:''}</figure>`;
  if(n.type==='book_table')return `<section class="book-table" id="${id}" tabindex="-1"><div class="book-table-scroll" tabindex="0" role="region" aria-label="${esc(a.title)}"><table><caption>${esc(a.title)}</caption><thead><tr>${a.headers.map(h=>'<th scope="col">'+esc(h)+'</th>').join('')}</tr></thead><tbody>${a.rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')}</tbody></table></div><details class="book-table-linear"><summary>${esc(message('tableReading'))}</summary><ol>${a.rows.map(r=>'<li><dl>'+r.map((v,i)=>'<div><dt>'+esc(a.headers[i])+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl></li>').join('')}</ol></details></section>`;
  if(n.type==='book_equation'){let math;try{math=renderEquation(a.source);}catch{math='<p role="status">'+esc(message('equationUnsupported'))+'</p>';}return `<figure class="book-equation" id="${id}" tabindex="-1"><div role="math" aria-label="${esc(a.label)}">${math}</div><figcaption>${esc(a.label)}</figcaption><details><summary>${esc(message('equationSource'))}</summary><pre><code>${esc(a.source)}</code></pre></details></figure>`;}
- if(n.type==='book_citation')return `<blockquote class="book-citation" id="${id}" tabindex="-1">${a.authors?esc(a.authors)+'. ':''}<cite>${a.url?'<a href="'+esc(a.url)+'" rel="noopener noreferrer">'+esc(a.title)+'</a>':esc(a.title)}</cite>${a.issued?' · '+esc(a.issued):''}${a.locator?' · '+esc(a.locator):''}</blockquote>`;
+ if(n.type==='book_citation'){
+  const authors=a.authors.split('\n').map(name=>name.trim()).filter(Boolean).join('; '),date=a.version===2&&a.date?recordDateLabel(a.date):'';
+  const identifiers=a.version===2?a.identifiers.map(item=>{const url=citationIdentifierURL(item),label=item.kind.toUpperCase()+' '+item.value;return url?'<a href="'+esc(url)+'" rel="noopener noreferrer">'+esc(label)+'</a>':esc(label);}):[];
+  return `<blockquote class="book-citation" id="${id}" tabindex="-1">${authors?esc(authors)+'. ':''}<cite>${a.url?'<a href="'+esc(a.url)+'" rel="noopener noreferrer">'+esc(a.title)+'</a>':esc(a.title)}</cite>${[date,a.issued,a.version===2?a.publisher:'',a.version===2?a.archive:'',a.locator].filter(Boolean).map(v=>' · '+esc(v)).join('')}${identifiers.length?' · '+identifiers.join(' · '):''}</blockquote>`;
+ }
  if(n.type==='book_figure')return `<div class="book-figure-placement" id="${id}">${figure(a.figureId)||'<p>'+esc(message('figureMissing'))+'</p>'}<ol class="book-diagram-reading">${a.alternative.split('\n').filter(s=>s.trim()).map(s=>'<li>'+esc(s)+'</li>').join('')}</ol></div>`;
  return `<section class="book-preserved" id="${id}" tabindex="-1"><p>${esc(message('preservation'))} ${esc(a.format)}</p><p>${esc(a.reason)}</p><pre><code>${esc(a.source)}</code></pre></section>`;
 }
