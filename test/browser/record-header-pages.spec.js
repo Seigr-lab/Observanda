@@ -32,7 +32,7 @@ test('reader collection windows are independent and late fields remain editable 
   await dialog.getByLabel('Value 12',{exact:true}).fill('9007199254740995');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(fields).toContainText('13–13 of 13');await expect(contributors).toContainText('5–8 of 13');await expect(page.locator('[data-record-detail-field]')).toHaveValue('template:v12');
   expect((await new RecordValues(f.workspace).read({workspaceId:book.id,recordId:record.id,field:'template:v12'})).value.value).toBe('9007199254740995');
-  await figures.getByLabel('Go to item',{exact:true}).fill('13');await figures.getByRole('button',{name:'Go',exact:true}).click();await expect(figures).toContainText('13–13 of 13');
+  await (await revealInEditor(page,figures,'Evidence and results')).getByLabel('Go to item',{exact:true}).fill('13');await figures.getByRole('button',{name:'Go',exact:true}).click();await expect(figures).toContainText('13–13 of 13');
   await expect(page.locator('#record-figure-'+record.figures[12].id)).toHaveCount(1);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);

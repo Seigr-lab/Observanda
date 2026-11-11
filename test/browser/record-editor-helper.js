@@ -14,7 +14,11 @@ export async function openEvidence(page){
 // opening its area through the editing navigation only when the control is hidden.
 export async function revealInEditor(page,control,area){
  const button=page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:area,exact:true});
- await expect(control.or(button).first()).toBeVisible();
+ // A record opened for reading shows Edit record instead of the editing navigation.
+ const edit=page.locator('main').getByRole('button',{name:'Edit record',exact:true});
+ await expect(control.or(button).or(edit).first()).toBeVisible();
+ if(await control.isVisible())return control;
+ if(!await button.isVisible()){await edit.click();await expect(button).toBeVisible();}
  if(!await control.isVisible())await button.click();
  return control;
 }
