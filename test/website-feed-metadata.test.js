@@ -29,7 +29,8 @@ test('retained entry styles share one public file while a footer actually presen
   // Model the CSS already stored by an earlier producer, including the record-
   // specific page rule. A real footer in the saved markup must retain it.
   const rule='[data-page="entry:'+record.id+'"] .site-footer{--footer-text-align:center}';
-  const css=converted.css.slice(0,-1)+rule+'\n}',html=converted.html+(hasFooter?'<div data-page="entry:'+record.id+'"><footer class="site-footer">Note</footer></div>':'');
+  // A website copy closes its scope and then its cascade layer.
+  const css=converted.css.slice(0,-3)+rule+'\n}\n}',html=converted.html+(hasFooter?'<div data-page="entry:'+record.id+'"><footer class="site-footer">Note</footer></div>':'');
   await store.putSource({sourceId,provenance,title:record.title,html,css,assets:converted.assets},{token:await store.beginSourceUpdate({sourceId,target:'website',provenance})});
  }
  await saveWebsiteFeed(store,id,{expectedRevision:start.site.revision,path:'index.html',heading:'Entries',template:'full',layout:'list',pageSize:1});

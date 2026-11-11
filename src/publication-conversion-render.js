@@ -124,10 +124,11 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  }
  // Restrict the renderer's composition styles to copied fragments. Its sample
  // page header, body typography and root variables must not restyle the website.
+ // The block rules stay last: a record's own footer rule is recognised there.
  // On a website the copy's renderer styles form one cascade layer: any rule of
  // the site itself (its stylesheet, theme, style book or tokens) wins over
  // them, and they only fill in what the site does not style.
- const scoped='@scope ([data-observanda-source]) {\n'+[candidate.styles.common,candidate.styles.rich,...candidate.styles.blocks,...(channel==='website'?[websiteRecordRules]:[])].join('\n')+'\n}';
+ const scoped='@scope ([data-observanda-source]) {\n'+[candidate.styles.common,...(channel==='website'?[websiteRecordRules]:[]),candidate.styles.rich,...candidate.styles.blocks].join('\n')+'\n}';
  let css=candidate.styles.fonts+'\n'+(channel==='website'?'@layer observanda-record {\n'+scoped+'\n}':scoped);for(const [name,replacement] of assetPaths)css=css.split(name).join(replacement);
  const title='<section data-observanda-part="title"><h2>'+escapeHTML(record.title)+'</h2></section>';
  if(channel==='website')await addPhotoRenditions(article,assets,signal);
