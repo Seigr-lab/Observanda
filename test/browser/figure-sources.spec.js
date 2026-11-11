@@ -36,6 +36,11 @@ test('copy a calculated plot into panels and inspect its exact source chain whil
   await page.reload();await expect(page.locator('.record-reader h1')).toHaveText(record.title);
   await page.evaluate(id=>location.hash='#/notebooks/'+id,record.notebookId);await page.getByRole('button',{name:'Read lab book',exact:true}).click();
   const reader=page.locator('[data-reading-record]');await expect(reader).toHaveCount(1);await expect(page.locator('[contenteditable=true]')).toHaveCount(0);
+  // The reader draws each retained figure inline and lists the composed figure's calculation source.
+  const drawings=reader.locator('[data-retained-figure-drawing] img'),composedDrawing=drawings.last();await expect(drawings).toHaveCount(2);await expect(composedDrawing).toHaveAttribute('alt','Linked source panels');
+  await composedDrawing.scrollIntoViewIfNeeded();await expect.poll(()=>composedDrawing.evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);
+  const sourceList=reader.locator('[data-retained-figure-sources]').last();await expect(sourceList).not.toHaveAttribute('aria-busy','true');await expect(sourceList.getByRole('button',{name:'Inspect calculation',exact:true})).toHaveCount(1);await expect(sourceList).toContainText(calculation.ref.revision.slice(0,12));
+  await sourceList.getByRole('button',{name:'Inspect calculation',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Calculated response',exact:true})).toBeVisible();await expect(dialog).toContainText(calculation.ref.revision);await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();
   // The lab book reader opens the multi-panel figure in its bounded retained-figure reader; each observation leads to its exact calculation source.
   await reader.locator('[data-action="material-retained-figure"]').last().click();await expect(dialog.getByRole('heading',{name:'Retained figure',exact:true})).toBeVisible();await expect(dialog.locator('[data-rf-position="panel"]')).toHaveAttribute('max','2');
   await dialog.getByRole('button',{name:'Inspect observation',exact:true}).first().click();await dialog.getByRole('button',{name:'Inspect source measurements',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Plot point',exact:true})).toBeVisible();
