@@ -64,5 +64,9 @@
  "moreProfileTypes":"More configured types",
  "removeTemplate":"Remove default template",
  "noTemplate":"No default template. Choose a starting template to create one.",
- "chooseMoreChoices":"Choose a value"
+ "chooseMoreChoices":"Choose a value",
+ "profileVersion":"{name}, version {version}",
+ "profileUpgrade":"Update to version {version}",
+ "profileUpgradeAdds":"Version {version} adds: {items}",
+ "profileUpgradeKeeps":"Your labels, order, removed items and existing records stay as they are."
 }

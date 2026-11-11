@@ -9,7 +9,8 @@ import {projectSettings} from './project-settings.js';
 import {newLabBookConfiguration,templateAvailable,templateChoices,starterTemplate,retainedTemplateAvailable} from './project-templates.js';
 import {isConfigurationReference} from './configuration-reference.js';
 import {enabledLabBookTypes} from './feature-modules.js';
-import {enableProfile} from './laboratory/catalog.js';
+import {enableProfile,profileById,profileUpgrade,upgradeProfile} from './laboratory/catalog.js';
+import {profileUpgradeItems} from './laboratory/profile-text.js';
 import {notebookDirectory,notebookTypes,notebookRoute} from './laboratory/notebook-model.js';
 import {configurationOf,validConfiguration} from './notebook-schema.js';
 import {locationName,recordsIn} from './workspace-structure.js';
@@ -69,6 +70,8 @@ export function projectNotebooksUI(services){
   <p class="muted">${text('records',{count:n.count})}</p><div class="lab-profile-tags" data-configuration-profiles="${n.id}">${n.types.map(t=>'<span>'+esc(t)+'</span>').join('')}</div>
   <div class="inline-actions"><button class="button" ${attrs(n.route)}>${text('openBook')}</button><button class="button" data-action="edit-notebook" data-id="${n.id}">${text('bookSettings')}</button></div></article>`;}
  const button=(label,command,attrs='',style='')=>`<button type="button" class="button ${style}" data-action="notebook-config-command" data-command="${command}" ${attrs}>${esc(label)}</button>`;
+ // A book adopts a newer profile version only on request, after seeing what it adds.
+ const upgradeOffer=(c,id)=>{const chosen=c.profiles.find(p=>p.id===id),profile=profileById(id);if(!chosen||!profile||chosen.version>=profile.version)return '';const items=profileUpgradeItems(profileUpgrade(profile,chosen.version));return `<p class="muted">${esc(t('configurationEditor','profileUpgradeAdds',{version:profile.version,items:items.join(', ')}))} ${esc(t('configurationEditor','profileUpgradeKeeps'))}</p>${button(t('configurationEditor','profileUpgrade',{version:profile.version}),'profile-upgrade',`data-id="${esc(id)}"`,'subtle')}`;};
  function draw(initial=false){
   const dialog=document.querySelector('#dialog'),scroll=dialog.querySelector('.notebook-config-scroll')?.scrollTop??0,focused=document.activeElement;
   const focusAttribute=['data-notebook-template','data-notebook-owner','data-notebook-profile','data-notebook-type','data-lab-field-prop'].find(key=>focused?.hasAttribute(key));
@@ -84,7 +87,7 @@ export function projectNotebooksUI(services){
    ${creationAccess?`<fieldset><legend>${esc(t('labBookDirectory','creationAccess'))}</legend><p>${esc(t('labBookDirectory',state.access?.deviceAvailable?'optionalPassword':'requiredPassword'))}</p>${field(t('labBookDirectory','creationUsername'),`<input name="bookUsername" autocomplete="username" maxlength="80" value="${esc(creationAccess.username)}">`)}${field(t('labBookDirectory','creationPassword'),`<input name="bookPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" ${state.access?.deviceAvailable?'':'required'} value="${esc(creationAccess.password)}">`)}${field(t('labBookDirectory','confirmPassword'),`<input name="bookConfirmPassword" type="password" autocomplete="new-password" maxlength="1024" value="${esc(creationAccess.confirmPassword)}">`)}</fieldset>`:''}
    <fieldset><legend>${esc(t('recordValues','publicationOutputs'))}</legend><label class="checkbox"><input name="pdfPublication" type="checkbox" ${editing.sharePdf===true?'checked':''}>${esc(t('recordValues','bookSharePdf'))}</label><label class="checkbox"><input name="publication" type="checkbox" ${editing.share!==false?'checked':''}>${esc(t('recordWriting','bookPublication'))}</label><p class="muted">${esc(t('recordWriting','bookPublicationHint'))}</p></fieldset>
    ${creating&&!templateLoading&&!templateError&&projectTemplate&&!available(projectTemplate)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():native()?configuration.view():`<fieldset class="notebook-profile-choices"><legend>${text('labBookTypes')}</legend>
-    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(labBookProfileLabel(p.id,p.label))}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
+    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(labBookProfileLabel(p.id,p.label))}</label>${upgradeOffer(c,p.id)}`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
    </fieldset>
    <div class="notebook-type-picker">${field(msg('recordType'),`<select data-notebook-type>${choices.map(s=>option(s.id,s.enabled?templateText(s.label):msg('removedLabel',{label:templateText(s.label)}),selected)).join('')}</select>`)}${button(msg('addType'),'section-add','','subtle')}</div>
    <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="${text('recordTypes')}"><div class="lab-type-list-heading"><strong>${text('recordTypes')}</strong>${button(msg('addType'),'section-add','','subtle')}</div>
@@ -165,6 +168,7 @@ export function projectNotebooksUI(services){
   if(a.action==='notebook-config-command'){
    capture();
    if(a.command==='select-type')selected=a.id;
+   else if(a.command==='profile-upgrade')upgradeProfile(editing.configuration,a.id);
    else {const result=sectionAction(editing.configuration,a.command,a);if(result?.added)selected=result.added;}
    draw();return true;
   }

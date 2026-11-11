@@ -1,0 +1,56 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {laboratoryProfiles,enableProfile,profileUpgrade,upgradeProfile} from '../src/web/laboratory/catalog.js';
+import {profileUpgradeItems} from '../src/web/laboratory/profile-text.js';
+import {validConfiguration} from '../src/web/notebook-schema.js';
+
+// A later version of an existing profile: one new section, one new field and one new choice.
+function nextVersion(){
+ const current=laboratoryProfiles.find(p=>p.id==='beekeeping'),next=structuredClone(current);next.version=current.version+1;
+ next.introduced.sections.harvest=next.version;
+ next.introduced.fields['inspection/next-visit']=next.version;
+ next.introduced.choices['colony/origin/Unknown']=next.version;
+ return {current,next};
+}
+
+test('shipped profiles describe every item with the version that introduced it',()=>{
+ for(const profile of laboratoryProfiles){
+  for(const s of profile.sections){
+   assert.ok(profile.introduced.sections[s.key]<=profile.version,profile.id+' '+s.key);
+   for(const f of s.fields){assert.ok(profile.introduced.fields[s.key+'/'+f.key]<=profile.version);for(const c of f.choices)assert.ok(profile.introduced.choices[s.key+'/'+f.key+'/'+c]<=profile.version);}
+  }
+  const plan=profileUpgrade(profile,profile.version);assert.deepEqual([plan.sections,plan.fields,plan.choices],[[],[],[]]);
+ }
+});
+
+test('an upgrade adds only newer items and keeps author edits, removals and order',()=>{
+ const {next}=nextVersion(),lab={profiles:[],sections:[]};
+ enableProfile(lab,'beekeeping',true);lab.profiles[0].version=1;
+ // What version 1 would have copied: without the items version 2 introduced.
+ lab.sections=lab.sections.filter(s=>s.key!=='harvest');
+ const inspection=lab.sections.find(s=>s.key==='inspection'),colony=lab.sections.find(s=>s.key==='colony'),origin=colony.fields.find(f=>f.key==='origin');
+ inspection.fields=inspection.fields.filter(f=>f.key!=='next-visit');origin.choices=origin.choices.filter(c=>c!=='Unknown');
+ // Author edits after adopting version 1.
+ inspection.label='Visit';inspection.fields=inspection.fields.filter(f=>f.key!=='weather');origin.choices=origin.choices.filter(c=>c!=='Package');
+ const monitoring=lab.sections.find(s=>s.key==='monitoring');monitoring.enabled=false;lab.sections.reverse();
+ const order=lab.sections.map(s=>s.id),before=structuredClone(lab);
+ const plan=profileUpgrade(next,1);
+ assert.deepEqual(plan.sections.map(s=>s.key),['harvest']);assert.deepEqual(plan.fields.map(f=>f.section+'/'+f.field.key),['inspection/next-visit']);assert.deepEqual(plan.choices,[{section:'colony',field:'origin',choice:'Unknown'}]);
+ assert.equal(profileUpgradeItems(plan).length,3);
+ assert.equal(upgradeProfile(lab,'beekeeping',next),true);
+ assert.ok(validConfiguration(lab));assert.equal(lab.profiles[0].version,2);
+ assert.deepEqual(lab.sections.slice(0,order.length).map(s=>s.id),order,'existing order is kept and new sections are appended');
+ assert.equal(lab.sections.at(-1).key,'harvest');
+ assert.equal(inspection.label,'Visit');assert.ok(!inspection.fields.some(f=>f.key==='weather'),'removed fields stay removed');
+ assert.equal(inspection.fields.at(-1).key,'next-visit');assert.ok(!origin.choices.includes('Package'));assert.equal(origin.choices.at(-1),'Unknown');
+ assert.equal(monitoring.enabled,false);
+ const after=structuredClone(lab);assert.equal(upgradeProfile(lab,'beekeeping',next),false);assert.deepEqual(lab,after);
+ assert.notDeepEqual(before,after);
+});
+
+test('a book without the profile, or already current, is never changed',()=>{
+ const {next}=nextVersion(),empty={profiles:[],sections:[]};
+ assert.equal(upgradeProfile(empty,'beekeeping',next),false);assert.deepEqual(empty,{profiles:[],sections:[]});
+ const current={profiles:[],sections:[]};enableProfile(current,'beekeeping',true);const copy=structuredClone(current);
+ assert.equal(upgradeProfile(current,'beekeeping'),false);assert.deepEqual(current,copy);
+});

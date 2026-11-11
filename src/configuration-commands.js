@@ -4,7 +4,7 @@
 import {randomUUID} from 'node:crypto';
 import {ConfigurationDocuments} from './configuration-documents.js';
 import {emptyConfiguration} from './web/notebook-schema.js';
-import {profileById} from './web/laboratory/catalog.js';
+import {profileById,profileUpgrade} from './web/laboratory/catalog.js';
 import {starterTemplate} from './web/project-templates.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -135,6 +135,20 @@ export class ConfigurationCommands{
      const chosen=await reader.item({collection:'profiles',key:profile.id}).catch(error=>{if(error.code==='NOT_FOUND')return null;throw error;});
      await apply([{type:chosen?'replace':'append',collection:'profiles',...(chosen?{key:profile.id}:{}),value:{id:profile.id,version:chosen?.value.version??profile.version,enabled:operation.enabled}}]);
      if(operation.enabled)for(const starter of profile.sections){const present=await reader.section({profileId:profile.id,key:starter.key}).catch(error=>{if(error.code==='NOT_FOUND')return null;throw error;});if(!present)await apply([{type:'append',collection:'sections',value:{...structuredClone(starter),id:randomUUID(),profileId:profile.id,enabled:true}}]);}
+    }else if(operation.type==='profile-upgrade'){
+     // The same additive upgrade as catalog.js upgradeProfile, applied row by row.
+     if(!exact(operation,['type','key']))invalid();const profile=profileById(operation.key);if(!profile)invalid();
+     const absent=error=>{if(error.code==='NOT_FOUND')return null;throw error;},chosen=await reader.item({collection:'profiles',key:profile.id}).catch(absent);if(!chosen)invalid();
+     if(chosen.value.version<profile.version){
+      const plan=profileUpgrade(profile,chosen.value.version),section=key=>reader.section({profileId:profile.id,key}).catch(absent);
+      for(const starter of plan.sections)if(!await section(starter.key))await apply([{type:'append',collection:'sections',value:{...structuredClone(starter),id:randomUUID(),profileId:profile.id,enabled:true}}]);
+      for(const {section:key,field} of plan.fields){const row=await section(key);if(row&&!await reader.item({collection:'fields',sectionId:row.key,key:field.key}).catch(absent))await apply([{type:'append',collection:'fields',sectionId:row.key,value:structuredClone(field)}]);}
+      for(const {section:key,field,choice} of plan.choices){
+       const row=await section(key),definition=row&&await reader.item({collection:'fields',sectionId:row.key,key:field}).catch(absent);
+       if(definition?.value.type==='select'&&!await reader.item({collection:'choices',sectionId:row.key,fieldKey:field,key:choice}).catch(absent))await apply([{type:'append',collection:'choices',sectionId:row.key,fieldKey:field,value:choice}]);
+      }
+      await apply([{type:'replace',collection:'profiles',key:profile.id,value:{...chosen.value,version:profile.version}}]);
+     }
     }else if(operation.type==='section-move'){if(!exact(operation,['type','key','direction'])||![-1,1].includes(operation.direction))invalid();await apply([{type:'move',collection:'sections',key:operation.key,direction:operation.direction}]);}
     else await apply([operation]);
    }

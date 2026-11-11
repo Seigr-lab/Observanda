@@ -64,5 +64,9 @@
   "moreProfileTypes": "Flere konfigurerte typer",
   "removeTemplate": "Fjern standardmal",
   "noTemplate": "Ingen standardmal. Velg en startmal for å opprette en.",
-  "chooseMoreChoices": "Velg en verdi"
+  "chooseMoreChoices": "Velg en verdi",
+ "profileVersion":"{name}, versjon {version}",
+ "profileUpgrade":"Oppdater til versjon {version}",
+ "profileUpgradeAdds":"Versjon {version} legger til: {items}",
+ "profileUpgradeKeeps":"Etikettene, rekkefølgen, fjernede elementer og eksisterende registreringer forblir som de er."
 }

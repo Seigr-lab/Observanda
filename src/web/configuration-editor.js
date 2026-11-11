@@ -5,7 +5,8 @@ import {setCustomFieldProperty} from './custom-field-numbers.js';
 import {customFieldText,templateText} from './custom-field-presentation.js';
 import {labBookProfileLabel} from './project-type-presentation.js';
 import {enabledLabBookTypes} from './feature-modules.js';
-import {profileById} from './laboratory/catalog.js';
+import {profileById,profileUpgrade} from './laboratory/catalog.js';
+import {profileUpgradeItems} from './laboratory/profile-text.js';
 import {t} from './i18n/index.js';
 
 const text=(key,args)=>t('configurationEditor',key,args);
@@ -68,10 +69,16 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  function pages(name,window){
   return '<nav class="inline-actions" aria-label="'+esc(text(name))+'"><span>'+esc(window.total?text('range',{first:window.offset+1,last:window.offset+window.rows.length,total:window.total}):text('empty'))+'</span>'+button('previous','page','data-collection="'+name+'" data-offset="'+Math.max(0,window.offset-pageSize)+'" '+(window.offset===0?'disabled':''))+button('next','page','data-collection="'+name+'" data-offset="'+(window.next??0)+'" '+(window.next===null?'disabled':''))+'</nav>';
  }
+ // A newer profile version is adopted only on request, after showing what it adds.
+ function upgradeView(row){
+  const profile=profileById(row.key);if(!profile||row.value.version>=profile.version)return '';
+  const items=profileUpgradeItems(profileUpgrade(profile,row.value.version));
+  return '<p class="muted" data-profile-upgrade="'+esc(row.key)+'">'+esc(text('profileUpgradeAdds',{version:profile.version,items:items.join(', ')}))+' '+esc(text('profileUpgradeKeeps'))+'</p>'+button('profileUpgrade','profile-upgrade','data-key="'+esc(row.key)+'"',text('profileUpgrade',{version:profile.version}));
+ }
  function profileView(){
   if(profileId)return '';
   const available=enabledLabBookTypes(state.dashboardSettings);
-  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(labBookProfileLabel(row.key))+'</label>').join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
+  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(text('profileVersion',{name:labBookProfileLabel(row.key),version:row.value.version}))+'</label>'+upgradeView(row)).join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
  }
  function definitionView(){
   if(!definition)return '<p>'+esc(text('selectField'))+'</p>';
@@ -129,6 +136,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
    if(kind==='field-remove')operation={type:'remove',collection:'fields',sectionId:section.key,key:definition.key};
    if(kind==='choice-add'){choice={key:null,value:''};choiceText=choiceBase='';return;}
    if(kind==='choice-remove'){if(choice.key!==null)operation={type:'remove',collection:'choices',sectionId:section.key,fieldKey:definition.key,key:choice.key};choice=null;choiceText=choiceBase='';}
+   if(kind==='profile-upgrade'&&profileById(key))operation={type:'profile-upgrade',key};
    if(kind==='profile-add'){const key=root()?.querySelector('[data-configuration-add-profile]')?.value;if(key)operation={type:'profile-enable',key,enabled:true};}
    if(!operation)return;
    await client.perform([operation]);await reload({signal});

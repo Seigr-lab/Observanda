@@ -64,5 +64,9 @@
   "moreProfileTypes": "Més tipus configurats",
   "removeTemplate": "Elimina la plantilla predeterminada",
   "noTemplate": "No hi ha cap plantilla predeterminada. Tria una plantilla inicial per crear-ne una.",
-  "chooseMoreChoices": "Tria un valor"
+  "chooseMoreChoices": "Tria un valor",
+ "profileVersion":"{name}, versió {version}",
+ "profileUpgrade":"Actualitza a la versió {version}",
+ "profileUpgradeAdds":"La versió {version} afegeix: {items}",
+ "profileUpgradeKeeps":"Les teves etiquetes, l'ordre, els elements eliminats i els registres existents es mantenen tal com són."
 }
