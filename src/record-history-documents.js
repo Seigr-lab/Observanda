@@ -54,6 +54,21 @@ export class RecordHistoryDocuments{
    }));
   });
  }
+ // One attachment exactly as an earlier version held it, resolved like the
+ // revision view resolves that version.
+ async attachment(command,attachmentId,{signal}={}){
+  if(!target(command)||!researchId(attachmentId))throw new AppError('INVALID');
+  return this.workspace.catalogue(async store=>{
+   const context=await this.context(store,command);if(!context)throw new AppError('RECORD_HISTORY_MISSING');
+   return withRecordDocument(store,context.old.id,context.old.revision,async document=>{
+    for await(const item of document.items(['attachments'])){
+     signal?.throwIfAborted();
+     if((await document.tree.selected(item.value,['id'])).value===attachmentId)return document.tree.read(item.value);
+    }
+    return null;
+   });
+  });
+ }
  async restore(command){
   if(!target(command)||!revisionId(command.expectedRevision))throw new AppError('INVALID');
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{

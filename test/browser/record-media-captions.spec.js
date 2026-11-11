@@ -8,7 +8,7 @@ import {WebsiteFileStore,websiteSourceId} from '../../src/website-file-store.js'
 
 const captions='WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nThe queen crosses the frame.\n\nnot a cue\n\n00:00:01.000 --> 00:00:02.000\nWorkers <b>follow</b>.\n';
 
-test('a video gets a caption track in the media dialog, plays it in the reader and on a published page',async({page})=>{
+test('a video gets a caption track in the media dialog, plays it in the reader, in an earlier version and on a published page',async({page})=>{
  test.setTimeout(150000);
  const f=await mediaValueFixture({count:3}),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -37,6 +37,20 @@ test('a video gets a caption track in the media dialog, plays it in the reader a
   expect(served.status).toBe(200);expect(served.type).toContain('text/vtt');
   // The unreadable cue is left out; markup is shown as text.
   expect(served.text).toBe('WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nThe queen crosses the frame.\n\n00:00:01.000 --> 00:00:02.000\nWorkers &lt;b&gt;follow&lt;/b&gt;.\n');
+  // A later correction leaves the earlier version playing its own captions.
+  const base=await f.values.read(f.target(video.id)),corrected='WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nCorrected wording.\n';
+  await f.save(base,{...base.value.value,captions:[{language:'en',label:'English',vtt:corrected}]});
+  await page.reload();
+  const fetchTrack=async locator=>{const url=await locator.getAttribute('src');return page.evaluate(async src=>(await (await fetch(src)).text()),url);};
+  expect(await fetchTrack(page.locator('video track[srclang="en"]').first())).toBe(corrected);
+  await page.getByRole('button',{name:'History',exact:true}).click();const history=page.locator('#dialog');
+  await expect(history.getByRole('heading',{name:'Record history',exact:true})).toBeVisible();
+  // Newest first: the second listed version is the one saved from the dialog above.
+  await history.locator('.record-history-list li').nth(1).getByRole('button',{name:'Review version',exact:true}).click();
+  const earlier=history.locator('video track[srclang="en"]').first();
+  await expect(earlier).toHaveAttribute('src',/[?&]revision=[a-f0-9]{64}/);
+  expect(await fetchTrack(earlier)).toContain('The queen crosses the frame.');
+  await history.getByRole('button',{name:'Close',exact:true}).click();
   // A published website page carries the same track beside the video.
   const read=await f.workspace.read(),record=read.book.entries.find(entry=>entry.id===f.record.id),book=read.book.notebooks.find(item=>item.id===record.notebookId);
   const project=read.book.projects.find(item=>item.id===book.projectId)??{id:book.projectId,title:'Project',share:true};

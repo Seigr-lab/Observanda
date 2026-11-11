@@ -1468,7 +1468,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(url.searchParams.has('context')&&url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          const text=await recordCaptionText(workspace,{recordId:url.searchParams.get('record'),attachmentId:captionRequest[1],language:captionRequest[2]},{signal:controller.signal});
+          const reference=url.searchParams.has('revision')?{revision:url.searchParams.get('revision'),source:{kind:url.searchParams.get('sourceKind'),...(url.searchParams.has('sourceId')?{id:url.searchParams.get('sourceId')}:{})}}:{};
+          const text=await recordCaptionText(workspace,{recordId:url.searchParams.get('record'),attachmentId:captionRequest[1],language:captionRequest[2],...reference},{signal:controller.signal});
           res.setHeader('Cache-Control','private, no-cache');return await serveContent(req,res,Buffer.from(text),'text/vtt; charset=utf-8');
         }finally{res.removeListener('close',abort);}
       }
