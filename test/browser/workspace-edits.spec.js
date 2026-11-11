@@ -11,6 +11,7 @@ import {workspaceSaveRequest} from '../../src/web/workspace-edits.js';
 import {recordRevisions} from '../../src/research.js';
 import {preferences,navigate} from './preferences-helper.js';
 import {task} from './composer-helper.js';
+import {openRecordActions,setRecordTitle} from './record-editing-helper.js';
 
 const click=(scope,name)=>scope.getByRole('button',{name,exact:true}).click();
 async function fixture(page,{formatVersion=21}={}){
@@ -22,6 +23,10 @@ async function fixture(page,{formatVersion=21}={}){
  page.on('request',r=>{if(r.method()==='POST'&&['/api/workspace/save','/api/notebook/save'].some(p=>r.url().endsWith(p)))requests.push({url:r.url(),data:r.postDataJSON()});});
  await page.goto(app.url);
  return {book,ws,app,errors,requests,async close(){await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
+}
+async function appLayout(page){
+ await preferences(page,'App appearance');const layout=page.locator('details[data-disclosure="app-layout"]');
+ if(!await layout.evaluate(node=>node.open))await layout.locator(':scope > summary').click();
 }
 async function save(page,name){
  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/workspace/save')&&r.request().method()==='POST');
@@ -35,14 +40,15 @@ test('encrypted general, appearance and SVG branding forms persist without resen
   await form.getByLabel('Workspace name',{exact:true}).fill('Creative research studio');
   await form.getByLabel('Workspace introduction',{exact:true}).fill('A place for field notes and sound');
   await save(page,'Save workspace');await expect(page.locator('.workspace-name')).toHaveText('Creative research studio');
-  await preferences(page,'Appearance');await page.getByLabel('Header alignment').selectOption('right');
+  await appLayout(page);await page.getByLabel('Header alignment').selectOption('right');
   await page.getByLabel('Logo and title order').selectOption('title-first');
-  await page.getByRole('button',{name:/Studio Spacious cards/}).click();await save(page,'Save appearance');
+  const interfaceSave=page.waitForResponse(r=>r.url().endsWith('/api/interface')&&r.request().method()==='POST');await click(page,'Save app settings');expect((await interfaceSave).ok()).toBe(true);
+  await preferences(page,'Appearance');await page.getByRole('button',{name:/Studio Spacious cards/}).click();await save(page,'Save appearance');
   await expect(page.locator('#save-status')).toHaveText('Saved');await click(page,'Logos & branding');
   await page.getByLabel('Add logo',{exact:true}).setInputFiles({name:'studio.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="teal"/></svg>')});
   await expect(page.locator('.logo-editor img')).toBeVisible();await expect(page.getByLabel('Add logo',{exact:true})).toBeEnabled();
   await save(page,'Save branding');await expect(page.locator('#save-status')).toHaveText('Saved');
-  await click(page,'Back to Appearance');await page.reload();await expect(page.getByLabel('Header alignment')).toHaveValue('right');
+  await click(page,'Back to Appearance');await page.reload();await appLayout(page);await expect(page.getByLabel('Header alignment')).toHaveValue('right');
   await expect(page.locator('.workspace-logo')).toBeVisible();const stored=(await f.ws.read()).book;
   expect(stored.title).toBe('Creative research studio');expect(stored.entries).toEqual(f.book.entries);
   expect(f.requests).toHaveLength(3);for(const r of f.requests){expect(r.url).toContain('/api/workspace/save');expect(r.data.changes).toEqual([]);expect(r.data.book).toBeUndefined();}
@@ -77,17 +83,19 @@ test('stale preferences retain the draft and record deletion uses an explicit se
  test.setTimeout(90000);const f=await fixture(page);
  try{
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='150%');
-  await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('My pending title');
+  await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('My pending title');await page.getByLabel('Workspace introduction',{exact:true}).fill('My pending introduction');
   const base=await f.ws.read(),draft=structuredClone(base.book);draft.description='Concurrent saved introduction';
   await new WorkspaceEdits(f.ws,{}).save({...workspaceSaveRequest(base.book,draft,recordRevisions(base.book)),baseEtag:base.etag});
   const waiting=page.waitForResponse(r=>r.url().endsWith('/api/workspace/save'));await click(page,'Save workspace');
   expect((await waiting).status()).toBe(409);await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('My pending title');
   expect((await f.ws.read()).book.description).toBe('Concurrent saved introduction');
-  await page.reload();await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue(f.book.title);
+  await page.reload();await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue(path.basename(f.ws.root));
   await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);
-  await expect(page.getByLabel('Record title',{exact:true})).toBeVisible();
-  page.once('dialog',dialog=>dialog.accept());
-  const removal=page.waitForResponse(r=>r.url().endsWith('/api/research/records/remove'));await click(page,'Remove record');
+  await expect(page.locator('main').getByRole('heading',{level:1,name:f.book.entries[0].title,exact:true})).toBeVisible();
+  const remove=page.locator('.record-toolbar').getByRole('button',{name:'Remove record',exact:true});await openRecordActions(page);
+  if(!await remove.isVisible()){await page.locator('main').getByRole('button',{name:'Edit record',exact:true}).click();await openRecordActions(page);}
+  await remove.click();const removing=page.getByRole('dialog',{name:'Remove record',exact:true});
+  const removal=page.waitForResponse(r=>r.url().endsWith('/api/research/records/remove'));await removing.getByRole('button',{name:'Remove record',exact:true}).click();
   const deleted=await(await removal).json();expect(deleted.recordScope.missing).toEqual([f.book.entries[0].id]);expect(deleted.book.entries).toEqual([]);
   await page.reload();expect((await f.ws.read()).book.entries.some(e=>e.id===f.book.entries[0].id)).toBe(false);expect(f.errors).toEqual([]);
  }finally{await f.close();}
@@ -97,18 +105,19 @@ test('creating and reopening a record retains a bounded selection across record-
  test.setTimeout(60000);const f=await fixture(page);
  try{
   await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);
-  await click(page,'New record');await click(page,'Create observation');
+  await click(page,'New record');const choices=page.locator('#dialog'),general=choices.locator('details').filter({hasText:'General record types'});
+  if(!await general.evaluate(element=>element.open))await choices.getByText('General record types',{exact:true}).click();await click(choices,'Create observation');
   await page.getByLabel('Record title',{exact:true}).fill('A first field observation');
-  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/research/records/save'));
+  const waiting=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/apply'));
   await click(page,'Save record');const response=await waiting;expect(response.ok()).toBe(true);
-  const data=await response.json();expect(data.recordPatch).toBeUndefined();expect(data.book.entries).toHaveLength(1);
-  expect(data.recordScope.ids).toEqual([data.book.entries[0].id]);await expect(page.locator('#save-status')).toHaveText('Saved');
+  const data=await response.json();expect(data.recordPatch).toBeUndefined();expect(data.book).toBeUndefined();expect(data.recordId).toBeTruthy();
+  await expect(page.locator('main').getByRole('heading',{level:1,name:'A first field observation',exact:true})).toBeVisible();
   expect((await f.ws.read()).book.entries).toHaveLength(f.book.entries.length+1);
-  await page.reload();await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('A first field observation');
-  await page.getByLabel('Record title',{exact:true}).fill('Reviewed field observation');
-  const again=page.waitForResponse(r=>r.url().endsWith('/api/research/records/save'));await click(page,'Save record');
-  const revised=await(await again).json();expect(revised.recordScope.ids).toEqual(data.recordScope.ids);expect(revised.book.entries).toHaveLength(1);expect(revised.recordPatch).toBeUndefined();
-  await expect(page.locator('#save-status')).toHaveText('Saved');expect((await f.ws.read()).book.entries.at(-1).title).toBe('Reviewed field observation');
+  await page.reload();await expect(page.locator('main').getByRole('heading',{level:1,name:'A first field observation',exact:true})).toBeVisible();
+  const edit=page.locator('main').getByRole('button',{name:'Edit record',exact:true});if(await edit.isVisible())await edit.click();
+  const again=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save'));await setRecordTitle(page,'Reviewed field observation');
+  const revised=await(await again).json();expect(revised.book).toBeUndefined();expect(revised.recordPatch).toBeUndefined();
+  expect((await f.ws.read()).book.entries.at(-1).title).toBe('Reviewed field observation');
   expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -117,7 +126,7 @@ test('an older catalogue saves its upgrade in place before using sparse authorin
  test.setTimeout(60000);const f=await fixture(page,{formatVersion:20});
  try{
   const initial=await f.ws.outline();expect(initial.metadata.formatVersion).toBe(20);
-  await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('Existing research studio');
+  await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('Existing research studio');await page.getByLabel('Workspace introduction',{exact:true}).fill('Upgraded in place');
   const waiting=page.waitForResponse(r=>r.url().endsWith('/api/notebook/save'));
   await click(page,'Save workspace');expect((await waiting).ok()).toBe(true);
   await expect(page.locator('.workspace-name')).toHaveText('Existing research studio');
