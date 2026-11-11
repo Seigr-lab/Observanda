@@ -28,7 +28,6 @@
   "removeType": "Eliminar tipo",
   "restoreType": "Restaurar tipo",
   "removed": "Eliminado",
-  "enabled": "Activado",
   "saving": "Guardando cambios…",
   "unsaved": "Cambios sin guardar",
   "saved": "No hay cambios sin guardar",
@@ -77,5 +76,7 @@
  "profileValueNone":"ninguno",
  "property.unit":"unidad",
  "property.format":"formato exacto",
- "property.uncertainty":"incertidumbre"
+ "property.uncertainty":"incertidumbre",
+ "addProfile":"Añadir tipo de cuaderno de laboratorio",
+ "profileToAdd":"Tipo de cuaderno de laboratorio para añadir"
 }

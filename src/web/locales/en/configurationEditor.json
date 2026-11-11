@@ -28,7 +28,6 @@
  "removeType":"Remove type",
  "restoreType":"Restore type",
  "removed":"Removed",
- "enabled":"Enabled",
  "saving":"Saving changes…",
  "unsaved":"Unsaved changes",
  "saved":"No unsaved changes",
@@ -77,5 +76,7 @@
  "profileValueNone":"none",
  "property.unit":"unit",
  "property.format":"exact format",
- "property.uncertainty":"uncertainty"
+ "property.uncertainty":"uncertainty",
+ "addProfile":"Add lab-book type",
+ "profileToAdd":"Lab-book type to add"
 }

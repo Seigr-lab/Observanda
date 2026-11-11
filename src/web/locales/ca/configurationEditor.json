@@ -28,7 +28,6 @@
   "removeType": "Elimina el tipus",
   "restoreType": "Restaura el tipus",
   "removed": "Eliminat",
-  "enabled": "Activat",
   "saving": "S'estan guardant els canvis…",
   "unsaved": "Canvis sense guardar",
   "saved": "No hi ha canvis sense guardar",
@@ -77,5 +76,7 @@
  "profileValueNone":"cap",
  "property.unit":"unitat",
  "property.format":"format exacte",
- "property.uncertainty":"incertesa"
+ "property.uncertainty":"incertesa",
+ "addProfile":"Afegeix el tipus de llibre de laboratori",
+ "profileToAdd":"Tipus de llibre de laboratori per afegir"
 }

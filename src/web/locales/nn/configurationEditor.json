@@ -28,7 +28,6 @@
   "removeType": "Fjern type",
   "restoreType": "Gjenopprett type",
   "removed": "Fjerna",
-  "enabled": "Aktivert",
   "saving": "Lagrar endringar…",
   "unsaved": "Ulagra endringar",
   "saved": "Ingen ulagra endringar",
@@ -77,5 +76,7 @@
  "profileValueNone":"ingen",
  "property.unit":"eining",
  "property.format":"eksakt format",
- "property.uncertainty":"usikkerheit"
+ "property.uncertainty":"usikkerheit",
+ "addProfile":"Legg til labbboktype",
+ "profileToAdd":"Labboktype som skal leggjast til"
 }

@@ -89,8 +89,9 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  }
  function profileView(){
   if(profileId)return '';
-  const available=enabledLabBookTypes(state.dashboardSettings);
-  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(labBookProfileLabel(row.key))+'</label>'+upgradeView(row)).join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
+  // Offer only enabled types this book does not use yet.
+  const available=enabledLabBookTypes(state.dashboardSettings).filter(profile=>!profiles.rows.some(row=>row.key===profile.id&&row.value.enabled));
+  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(labBookProfileLabel(row.key))+'</label>'+upgradeView(row)).join('')+pages('profiles',profiles)+(available.length?field(esc(text('profileToAdd')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('addProfile','profile-add'):'')+'</section>';
  }
  function definitionView(){
   if(!definition)return '<p>'+esc(text('selectField'))+'</p>';
@@ -128,6 +129,8 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  async function action(control){
   if(control.dataset.action!==actionName||!root()?.contains(control))return false;if(busy)return true;
   const {command:kind,key,collection,offset,direction}=control.dataset;
+  // Read the chosen type now: running the command redraws the editor and its list.
+  const adding=kind==='profile-add'?root()?.querySelector('[data-configuration-add-profile]')?.value??null:null;
   if(kind==='retry'){const operation=retry??(async signal=>{await flush();await reload({signal});});await run(operation);return true;}
   await run(async signal=>{
    await flush();
@@ -151,7 +154,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
    if(kind==='profile-upgrade-review'){await reviewUpgrade(key,signal);return;}
    if(kind==='profile-upgrade-cancel'){upgradeReview=null;return;}
    if(kind==='profile-upgrade'&&profileById(key)){operation={type:'profile-upgrade',key};upgradeReview=null;}
-   if(kind==='profile-add'){const key=root()?.querySelector('[data-configuration-add-profile]')?.value;if(key)operation={type:'profile-enable',key,enabled:true};}
+   if(kind==='profile-add'&&adding)operation={type:'profile-enable',key:adding,enabled:true};
    if(!operation)return;
    await client.perform([operation]);await reload({signal});
    if(added){if(kind==='section-add')await loadSection(added,{signal});else await loadField(added,{signal});}
