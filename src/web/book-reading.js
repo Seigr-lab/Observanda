@@ -1,6 +1,7 @@
 import {isRetainedFigure} from './retained-figure-model.js';
 import {allFigurePlots} from './figure-provenance.js';
 import {retainedFigureText} from './retained-figure-text.js';
+import './i18n/catalogues/figureDisplay.js';
 import {t,language} from './i18n/index.js';
 import {renderFigureView,figureTable} from './figure-renderer.js';
 import {figureResultView} from './result-statements.js';
