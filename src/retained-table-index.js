@@ -19,7 +19,9 @@ export class RetainedTableIndex{
  constructor(sequences,{namespace='table-nodes',allowSparseBranches=false}={}){this.namespace=namespace;this.allowSparseBranches=allowSparseBranches;this.sequences=sequences;this.pending=new Map();this.pendingBytes=0;this.cache=new Map();this.cacheBytes=0;}
  keep(ref,node){
   if(this.cache.has(ref.hash))return;const bytes=Buffer.byteLength(serialize(node));
-  while(this.cache.size>=256||this.cacheBytes+bytes>4*1024*1024){const first=this.cache.keys().next().value;if(first===undefined)return;this.cacheBytes-=this.cache.get(first).bytes;this.cache.delete(first);}
+  // A page holds up to 32 entries, so this bound covers the working pages of
+  // every index of a figure with tens of thousands of observations.
+  while(this.cache.size>=2048||this.cacheBytes+bytes>8*1024*1024){const first=this.cache.keys().next().value;if(first===undefined)return;this.cacheBytes-=this.cache.get(first).bytes;this.cache.delete(first);}
   this.cache.set(ref.hash,{node,bytes});this.cacheBytes+=bytes;
  }
  validate(node,ref){

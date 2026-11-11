@@ -99,9 +99,10 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
   // contract as publication capture; immutable blocks remain in its owner.
   let retained=figure;
   if(figure.kind!=='retained'){const author=new RetainedFigureAuthoring(storage,{signal});retained=await author.finish(await author.start(figure));}
-  const reader=await new RetainedFigureDocuments(storage,{readOnly:true,signal}).open(retained);
-  const writer={retain:async(name,chunks)=>retainedAssets.set(name,await bytes(chunks))};
-  figures.set(figure.id,await text(renderApprovedFigureContents(reader,record.id,figure,{writer,results:context.entries[0].results,signal,languages:channel==='website'?figureVariantLanguages:[]})));
+  // Every figure block is read inside one research snapshot: opening a
+  // snapshot per block made drawings cost tens of milliseconds per point.
+  const documents=new RetainedFigureDocuments(storage,{readOnly:true,signal}),writer={retain:async(name,chunks)=>retainedAssets.set(name,await bytes(chunks))};
+  figures.set(figure.id,await documents.blocks.readSnapshot(async()=>text(renderApprovedFigureContents(await documents.open(retained),record.id,figure,{writer,results:context.entries[0].results,signal,languages:channel==='website'?figureVariantLanguages:[]}))));
  }
  let materials;
  for(const statement of record.results?.statements??[])if(statement.table?.version===3){materials??=new ResearchMaterials(storage);tables.set(statement.id,fragments.add(()=>retainedTableHTML(materials,statement,{signal})));}

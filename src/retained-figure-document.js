@@ -102,7 +102,9 @@ export class RetainedFigureBuilder{
     if(visibility.size===512)visibility.delete(visibility.keys().next().value);visibility.set(id,visible);return visible;
    };
    for(let offset=start;offset<end;offset+=32)await this.blocks.readSnapshot(async()=>{
-   for(let at=offset;at<Math.min(end,offset+32);at++){this.blocks.check();const entry=await index.entryAt({root},at),member=await this.tree.read(entry.revision);if(!await isVisible(member.seriesId))continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
+   const entries=[];for(let at=offset;at<Math.min(end,offset+32);at++){this.blocks.check();entries.push(await index.entryAt({root},at));}
+   await this.blocks.prefetch('value',entries.map(entry=>entry.revision));const members=[];for(const entry of entries)members.push(await this.tree.read(entry.revision));await this.blocks.prefetch('value',members.map(member=>member.body));
+   for(const member of members){this.blocks.check();if(!await isVisible(member.seriesId))continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
    });
   }
   const annotations=this.presentation.collection('annotations'),aRoot=this.presentation.indexesFor('annotations').plots,aStart=await this.presentation.index.rank({root:aRoot},plot.id+':'),aEnd=await this.presentation.index.rank({root:aRoot},plot.id+':\uffff');
@@ -188,7 +190,16 @@ export class RetainedFigureReader{
  }
  async window(selection){
   if(!validRetainedFigureWindow(selection))throw new AppError('INVALID');const {offset=0,limit=16}=selection,scope=await this.scope(selection);if(offset>scope.total)throw new AppError('INVALID');const items=[];
-  for(let at=offset;at<Math.min(offset+limit,scope.total);at++){this.storage.check();const entry=await this.index.entryAt({root:scope.root},scope.start+at);if(!entry)fail();const item=await this.member(entry.revision,selection.collection);if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)fail();items.push(await this.expose(item));}
+  // Read members and bodies in batches: one round trip per batch instead of
+  // one per stored block keeps complete drawings linear in their points.
+  const end=Math.min(offset+limit,scope.total);
+  for(let from=offset;from<end;from+=32){
+   const entries=[];for(let at=from;at<Math.min(end,from+32);at++){this.storage.check();const entry=await this.index.entryAt({root:scope.root},scope.start+at);if(!entry)fail();entries.push(entry);}
+   await this.storage.prefetch?.('value',entries.map(entry=>entry.revision));
+   const members=[];for(const entry of entries){const item=await this.member(entry.revision,selection.collection);if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)fail();members.push(item);}
+   await this.storage.prefetch?.('value',members.map(item=>item.body));
+   for(const item of members)items.push(await this.expose(item));
+  }
   return {items,offset,total:scope.total,next:offset+items.length<scope.total?offset+items.length:null};
  }
  async item(selection){if(!validRetainedFigureItem(selection))throw new AppError('INVALID');const entry=await this.index.find({root:this.collection(selection.collection).indexes.keys},selection.id);if(!entry)return null;const item=await this.member(entry.revision,selection.collection);if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)return null;return this.expose(item);}
