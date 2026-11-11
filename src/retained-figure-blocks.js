@@ -48,7 +48,7 @@ export function retainedFigureBlockChildren(kind,node){
 // The enclosing admitted material/record supplies ownership. The adapter keeps
 // only immutable authenticated nodes, with a bounded cache and short writes.
 export class RetainedFigureBlocks{
- constructor(workspace,{write,signal,readOnly=false}={}){this.workspace=workspace;this.write=write??(operation=>operation());this.signal=signal;this.readOnly=readOnly;this.cache=new Map();this.bytes=0;this.pending=new Map();this.pendingBytes=0;}
+ constructor(workspace,{write,signal,readOnly=false}={}){this.workspace=workspace;this.sharedTransaction=write===undefined&&!readOnly;this.write=write??(operation=>operation());this.signal=signal;this.readOnly=readOnly;this.cache=new Map();this.bytes=0;this.pending=new Map();this.pendingBytes=0;}
  tree(){return new RecordValueTree(this);}
  async readSnapshot(operation){this.check();const read=async()=>{const result=await operation();this.check();return result;};return typeof this.workspace.catalogue==='function'?this.workspace.catalogue(read):read();}
  // Load up to 32 uncached blocks per round trip into the block cache, in a
@@ -62,6 +62,11 @@ export class RetainedFigureBlocks{
   }
  }
  check(){this.signal?.throwIfAborted();}
+ // A save that runs in one writer transaction shares one metadata index
+ // batch: block reads walk cached index paths instead of one query per
+ // branch, and the index persists every few hundred objects rather than
+ // after every block flush. Writers with their own transactions keep theirs.
+ withSharedMetadata(operation){return this.sharedTransaction&&typeof this.workspace.catalogue==='function'?withWorkspaceMetadataBatch(this.workspace,operation,{signal:this.signal}):operation();}
  decode(text,revision){if(typeof text!=='string'||Buffer.byteLength(text)>65536||digest(text)!==revision)fail();let node;try{node=JSON.parse(text);}catch{fail();}if(serialize(node)!==text)fail();return node;}
  keep(key,text){if(this.cache.has(key))return;const size=Buffer.byteLength(text);while(this.cache.size>=1024||this.bytes+size>1048576){const first=this.cache.keys().next().value;if(first===undefined)break;this.bytes-=Buffer.byteLength(this.cache.get(first));this.cache.delete(first);}this.cache.set(key,text);this.bytes+=size;}
  async read(kind,revision){

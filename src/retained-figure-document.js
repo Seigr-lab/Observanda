@@ -211,8 +211,10 @@ export class RetainedFigureDocuments{
  async bounded(root,texts){return new RetainedFigureReader(this.blocks,null,null).bounded(root,texts);}
  async retain(figure){
   if(figureIssues(figure,{retained:true,resourceErrors:true}).length)throw new AppError('MATERIAL_INVALID');const builder=this.builder(figure),plots=figure.kind==='panels'?figure.panels:[{id:figure.id,label:figure.title,figure}];
-  for(const panel of plots){await builder.addPlot(panel.figure,{id:panel.id,label:panel.label});for(const series of panel.figure.series){await builder.addSeries(series);for(const point of series.points)await builder.addPoint(point);}}
-  return builder.finish();
+  return this.blocks.withSharedMetadata(async()=>{
+   for(const panel of plots){await builder.addPlot(panel.figure,{id:panel.id,label:panel.label});for(const series of panel.figure.series){await builder.addSeries(series);for(const point of series.points)await builder.addPoint(point);}}
+   return builder.finish();
+  });
  }
  async open(value,{draft=false}={}){const figure=value?.document?value:null,document=figure?.document??value;if(figure&&!validRetainedFigure(figure,{draft})||!validRetainedFigureDocument(document,{draft}))throw new AppError('MATERIAL_INVALID');const reader=new RetainedFigureReader(this.blocks,document,figure);await reader.load();return reader;}
 }
