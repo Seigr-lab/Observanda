@@ -9,6 +9,7 @@ import {MediaImports} from '../../src/media-imports.js';
 import {MediaStore} from '../../src/media.js';
 import {DurableJobs} from '../../src/jobs.js';
 import {answerConfirmation} from './confirm-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('reader uploads and removes media with acknowledgement retries, retained originals and no full-record editor',async({page},info)=>{
  test.setTimeout(180000);const f=await mediaValueFixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),read=ResearchCatalogue.prototype.record;
@@ -18,7 +19,7 @@ test('reader uploads and removes media with acknowledgement retries, retained or
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
   let lost=false;await page.context().route('**/api/research/records/media',async route=>{if(lost)return route.continue();lost=true;await route.fetch();await route.abort('failed');});
-  await page.getByLabel('Add image, audio or video',{exact:true}).setInputFiles(f.files.audio.file);
+  await (await revealInEditor(page,page.getByLabel('Add image, audio or video',{exact:true}),'Evidence and results')).setInputFiles(f.files.audio.file);
   await expect(page.getByRole('button',{name:'Retry media change',exact:true})).toBeVisible({timeout:30000});
   await page.getByRole('button',{name:'Retry media change',exact:true}).click();await expect(page.getByRole('button',{name:'Retry media change',exact:true})).toHaveCount(0);
   const [received]=await imports.list(),id=received.id,block=page.locator('[data-record-media="'+id+'"]');
@@ -49,7 +50,7 @@ test('prepared uploads survive navigation and service restart, then attach to th
  MediaStore.prototype.prepare=async function(...args){entered=true;await wait;return prepare.apply(this,args);};
  const reader=new RecordContent(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true},imports=new MediaImports(f.workspace),other=f.book.entries[1].id;
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await page.getByLabel('Add image, audio or video',{exact:true}).setInputFiles(f.files.image.file);
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await (await revealInEditor(page,page.getByLabel('Add image, audio or video',{exact:true}),'Evidence and results')).setInputFiles(f.files.image.file);
   await expect.poll(()=>entered).toBe(true);await page.evaluate(id=>location.hash='#/records/'+id+'/read',other);await expect(page.getByRole('heading',{name:'Another record using the same media',exact:true})).toBeVisible();release();
   const [received]=await imports.list();await expect.poll(async()=>(await new DurableJobs(f.workspace,{}).read(received.id))?.state,{timeout:30000}).toBe('completed');
   expect((await reader.read(target)).header.attachments).toEqual([]);expect((await reader.read({...target,recordId:other})).header.attachments).toEqual([]);

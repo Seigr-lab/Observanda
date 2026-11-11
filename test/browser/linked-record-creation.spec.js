@@ -10,6 +10,7 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {readProgressStream} from '../../src/web/progress-stream.js';
 import {navigate,preferences} from './preferences-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 for(const templated of [false,true])test(`create ${templated?'a template inspection':'an ordinary linked record'} from a large source without loading its body`,async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(10000);const {book,hive,other}=beekeepingFixture();if(!templated)hive.template=null;
@@ -23,11 +24,11 @@ for(const templated of [false,true])test(`create ${templated?'a template inspect
   await page.goto(app.url);
   if(templated){await navigate(page,'Preferences');await preferences(page,'Templates');const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='save'&&r.ok());await page.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;}
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await expect(reader).toContainText(hive.title);
-  await page.getByRole('button',{name:'Add linked record',exact:true}).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(reader).toContainText(hive.title);expect(requests).toEqual([]);
-  await page.getByRole('button',{name:'Add linked record',exact:true}).click();await page.evaluate(id=>location.hash='#/records/'+id+'/read',other.id);await expect(dialog).not.toBeVisible();await expect(reader).toContainText(other.title);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(reader).toContainText(hive.title);expect(requests).toEqual([]);
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await page.evaluate(id=>location.hash='#/records/'+id+'/read',other.id);await expect(dialog).not.toBeVisible();await expect(reader).toContainText(other.title);
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');
   if(templated){await page.getByRole('button',{name:'New inspection',exact:true}).click();await expect(page.getByLabel('Queen observation',{exact:true})).toHaveValue('');}
-  else{await page.getByRole('button',{name:'Add linked record',exact:true}).click();await dialog.getByLabel('Record template').selectOption('type:note');await dialog.getByRole('button',{name:'Create record',exact:true}).click();}
+  else{await (await revealInEditor(page,page.getByRole('button',{name:'Add linked record',exact:true}),'Evidence and results')).click();await dialog.getByLabel('Record template').selectOption('type:note');await dialog.getByRole('button',{name:'Create record',exact:true}).click();}
   await page.getByLabel('Record title',{exact:true}).fill('New linked observation');expect(requests).toEqual([]);created=new URL(page.url()).hash.split('/')[2];expect(created).toBeTruthy();expect(book.entries.some(record=>record.id===created)).toBe(false);
   // Initial Save commits the durable checkpoint through a retained review plan.
   // Interrupt its apply request, then prove retry keeps that exact identity.

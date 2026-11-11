@@ -13,6 +13,7 @@ import {withRecordDocument} from '../../src/record-document.js';
 import {templateFrom} from '../../src/web/notebook-schema.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('selected configuration pages preserve late edits and create from the saved schema with exact Save retry',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -80,7 +81,7 @@ test('selected configuration pages preserve late edits and create from the saved
   await expect(page.locator('.record-editing h1')).toHaveText('Created from saved selected schema');expect(applied).toHaveLength(2);expect(applied[1]).toEqual(applied[0]);expect((await count()).count).toBe(2);
   await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Created from saved selected schema');
   await page.getByRole('button',{name:'Record details',exact:true}).click();
-  const navigation=page.locator('[data-record-collection=fields]');await navigation.locator('input').fill('25');await navigation.getByRole('button',{name:'Go',exact:true}).click();await page.locator('[data-record-detail-field]').selectOption('template:field_24');await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
+  const navigation=page.locator('[data-record-collection=fields]');await navigation.locator('input').fill('25');await navigation.getByRole('button',{name:'Go',exact:true}).click();await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('template:field_24');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();
   const selected=page.locator('dialog.record-writing[open]');await expect(selected.locator('[data-custom-choice-selected]')).toHaveValue('Saved late condition');await selected.locator('[data-custom-choice-page=next]').click();await selected.locator('[data-custom-choice-page=next]').click();await selected.getByRole('button',{name:'Condition choice 69',exact:true}).click();await selected.getByRole('button',{name:'Save changes',exact:true}).click();await expect(selected).not.toBeVisible();
   await fixture.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),created);await withRecordDocument(store,created,row.revision,async document=>{expect((await document.field(['template','values','field_24'])).value).toBe('Condition choice 69');expect((await document.field(['template','fields','24','choices','68'])).value).toBe('Saved late condition');});});
   expect((await new ResearchDrafts(fixture.workspace).list({workspaceId:book.id})).drafts).toEqual([]);

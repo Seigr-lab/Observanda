@@ -11,6 +11,7 @@ import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {attemptFixture} from '../fixtures/attempts.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('normal record reading pages stored sections without selection hydration and preserves editing',async({page},info)=>{
  test.setTimeout(120000);
@@ -50,7 +51,7 @@ test('normal record reading pages stored sections without selection hydration an
   await page.screenshot({path:info.outputPath('stored-section-reading.png')});
   await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.removeProperty('font-size'));
   await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();const edit=page.getByRole('dialog',{name:'Edit Record title',exact:true});
+  await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();const edit=page.getByRole('dialog',{name:'Edit Record title',exact:true});
   await edit.getByLabel('Record title',{exact:true}).fill('Amended title');
   await edit.getByRole('button',{name:'Save changes',exact:true}).click();await expect(edit).not.toBeVisible();
   await expect(page.locator('.record-reader h1')).toHaveText('Amended title');

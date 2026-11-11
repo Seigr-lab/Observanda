@@ -9,6 +9,7 @@ import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {RecordValues} from '../../src/record-values.js';
 import {encodeNumeralClipboard,decodeNumeralClipboard} from '../../src/web/numeral-clipboard.js';
+import {revealInEditor} from './record-editor-helper.js';
 const context={version:1,representation:'radix-fraction',radix:6};
 const encoded=spelling=>encodeNumeralClipboard({spelling,context});
 
@@ -45,7 +46,7 @@ test('native custom fields copy matching senary context, refuse mismatches and r
  test.setTimeout(120000);page.setDefaultTimeout(15000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-field-clipboard-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];
  record.template={id:randomUUID(),profileId:null,label:'Explicit measurements',description:'',fields:[{key:'counter',label:'Senary counter',type:'number',unit:'ticks',required:false,choices:[],numeric:context}],values:{counter:'-0015.30'}};
  const f=await encryptedFixture(directory,book),service=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'template:counter'},app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',error=>errors.push(error.message));
- const open=async()=>{await page.locator('[data-record-detail-field]').selectOption('template:counter');await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();};
+ const open=async()=>{await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('template:counter');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();};
  const dialog=page.locator('dialog[aria-labelledby="values-value-title"]'),value=dialog.locator('[data-custom-field-spelling]'),status=dialog.locator('[data-numeral-status]');
  try{
   await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.context().grantPermissions(['clipboard-read','clipboard-write']);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await open();

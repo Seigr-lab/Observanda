@@ -9,3 +9,12 @@ export async function openEvidence(page){
  if(!await open.isVisible())await area.click();
  await open.click();
 }
+
+// Other editor controls also live in collapsed groups. Returns the control once it is visible,
+// opening its area through the editing navigation only when the control is hidden.
+export async function revealInEditor(page,control,area){
+ const button=page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:area,exact:true});
+ await expect(control.or(button).first()).toBeVisible();
+ if(!await control.isVisible())await button.click();
+ return control;
+}

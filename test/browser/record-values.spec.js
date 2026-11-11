@@ -10,6 +10,7 @@ import {clearVault} from '../../src/encryption.js';
 import {RecordValues} from '../../src/record-values.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('reader details save and recover independently, preserve exact custom values and resolve same-field conflicts',async({page},info)=>{
  test.setTimeout(180000);
@@ -20,7 +21,7 @@ test('reader details save and recover independently, preserve exact custom value
  const read=ResearchCatalogue.prototype.record,errors=[],requests=[];ResearchCatalogue.prototype.record=()=>{throw Error('Detail editing reconstructed a whole record');};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);});
  const service=new RecordValues(f.workspace),target=field=>({workspaceId:book.id,recordId:record.id,field});
- const open=async field=>{await page.locator('[data-record-detail-field]').selectOption(field);await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();};
+ const open=async field=>{await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption(field);await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await expect(page.locator('[data-record-detail-field] option[value="type"]')).toHaveCount(0);

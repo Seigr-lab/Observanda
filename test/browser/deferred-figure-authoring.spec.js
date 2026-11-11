@@ -9,6 +9,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 for(const compiled of [false,true])test('figure authoring loads on demand and saves retained measurements '+(compiled?'compiled':'source'),async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(20000);
@@ -25,7 +26,7 @@ for(const compiled of [false,true])test('figure authoring loads on demand and sa
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
   await page.getByLabel('Record title',{exact:true}).fill('Retained deferred figure');
   if(!compiled){await page.getByRole('button',{name:'Retry figure editor',exact:true}).click();await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Retained deferred figure');}
-  await page.getByRole('button',{name:'Add figure',exact:true}).click();await page.getByRole('button',{name:'Add measurement',exact:true}).click();
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add figure',exact:true}),'Evidence and results')).click();await page.getByRole('button',{name:'Add measurement',exact:true}).click();
   await page.getByLabel('Coordinate 1',{exact:true}).fill('1');await page.getByLabel('Coordinate 2',{exact:true}).fill('2');
   await page.getByLabel('Value 1',{exact:true}).fill('3');await page.getByLabel('Value 2',{exact:true}).fill('8');
   await page.locator('.section-save [data-action=save]').click();

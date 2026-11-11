@@ -9,6 +9,7 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('copy a calculated plot into panels and inspect its exact source chain while reading the lab book',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -23,7 +24,7 @@ test('copy a calculated plot into panels and inspect its exact source chain whil
  const dialog=page.locator('#dialog'),editor=page.getByRole('dialog',{name:'Edit Figure',exact:true}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});page.on('request',r=>{if(new URL(r.url()).pathname==='/api/research/records/values/save')writes.push(r);});
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Add multi-panel figure',exact:true}).click();const compound=editor.locator('.figure-composition');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const compound=editor.locator('.figure-composition');
   await compound.getByLabel('Multi-panel title',{exact:true}).fill('Linked source panels');
   for(let i=0;i<2;i++){await compound.getByLabel('Editing panel',{exact:true}).selectOption({index:i});await compound.getByRole('button',{name:'Copy figure into panel',exact:true}).click();await picker.getByRole('button',{name:calculation.figure.title,exact:true}).click();await expect(compound.getByRole('button',{name:'Inspect calculation',exact:true})).toHaveCount(1);}
   await editor.getByRole('button',{name:'Save changes',exact:true}).click();await expect(editor).not.toBeVisible();

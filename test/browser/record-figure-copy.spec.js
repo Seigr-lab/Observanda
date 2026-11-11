@@ -6,6 +6,7 @@ import {testServer} from '../device-fixture.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {withRecordDocument} from '../../src/record-document.js';
 import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('multi-panel editing selects late saved plots, recovers copied results and retries a lost save once',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=ResearchCatalogue.prototype.record,errors=[],requests=[];
@@ -14,7 +15,7 @@ test('multi-panel editing selects late saved plots, recovers copied results and 
  const area=async value=>{await expect(editor.locator('[data-fe-part]')).toBeEnabled();await editor.locator('[data-fe-part]').selectOption(value);await expect(editor.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');};
  const copy=()=>editor.getByRole('button',{name:'Copy saved plot',exact:true}).click();
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Add multi-panel figure',exact:true}).click();await expect(editor.locator('[data-fe-value]')).toHaveValue('Data figure');await editor.locator('[data-fe-value]').fill('Recovered source comparison');await expect(editor.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();await expect(editor.locator('[data-fe-value]')).toHaveValue('Data figure');await editor.locator('[data-fe-value]').fill('Recovered source comparison');await expect(editor.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
   await copy();await expect(picker).toContainText('Figures 1\u20134 of 9');
   let interrupted=false;await page.context().route('**/api/research/records/values/figure-copy-choices',async route=>{if(!interrupted){interrupted=true;return route.abort('failed');}return route.continue();});
   await picker.getByRole('button',{name:'Next figures',exact:true}).click();await expect(picker.getByRole('alert')).not.toBeEmpty();await expect(picker.getByRole('button',{name:'Observation 0',exact:true})).toBeVisible();await picker.getByRole('button',{name:'Retry loading plots',exact:true}).click();await expect(picker).toContainText('Figures 5\u20138 of 9');await page.context().unroute('**/api/research/records/values/figure-copy-choices');

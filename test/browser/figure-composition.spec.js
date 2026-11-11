@@ -12,6 +12,7 @@ import {copyPlan,copyWorkspace} from '../../src/locations.js';
 import {Workspace} from '../../src/storage.js';
 import {buildPublication} from '../../src/publication.js';
 import {randomUUID} from 'node:crypto';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('author, annotate, compare, save and restore multi-panel figures through the app',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-panels-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0];
@@ -19,7 +20,7 @@ test('author, annotate, compare, save and restore multi-panel figures through th
  record.results={version:1,statements:[{id:randomUUID(),kind:'figure',figureId:record.figures[0].id,title:'Acquisition interpretation',text:'Two measurements in this acquisition.',limitations:'No claim about other apparatus states.',basis:'authored',source:null}]};
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'Add multi-panel figure',exact:true}).click();const compound=page.locator('.figure-composition');
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const compound=page.locator('.figure-composition');
   await compound.getByLabel('Multi-panel title',{exact:true}).fill('Linked acquisitions');await compound.getByLabel('Share coordinate range',{exact:true}).check();await compound.getByLabel('Share value range',{exact:true}).check();
   const panel=compound.locator('.figure-workbench'),annotations=panel.locator('.figure-annotations');await annotations.locator('summary').click();await annotations.getByRole('button',{name:'Add interval',exact:true}).click();
   await annotations.getByLabel('Annotation label',{exact:true}).fill('Acquisition window');await annotations.getByLabel('Position / interval start',{exact:true}).fill('0.25');await annotations.getByLabel('Interval end',{exact:true}).fill('0.75');

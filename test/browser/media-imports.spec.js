@@ -11,6 +11,7 @@ import {clearVault} from '../../src/encryption.js';
 import {MediaStore} from '../../src/media.js';
 import {MediaImports} from '../../src/media-imports.js';
 import {preferences} from './preferences-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 const bytes=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><!-- private source notes --><rect width="48" height="48" fill="teal"/></svg>');
 
 test('cancelled media survives restart, downloads intact, retries and attaches only when chosen',async({page})=>{
@@ -22,7 +23,7 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
-  await page.getByLabel('Add image, audio or video',{exact:true}).setInputFiles({name:'private-study.svg',mimeType:'image/svg+xml',buffer:bytes});
+  await (await revealInEditor(page,page.getByLabel('Add image, audio or video',{exact:true}),'Evidence and results')).setInputFiles({name:'private-study.svg',mimeType:'image/svg+xml',buffer:bytes});
   await expect(page.locator('#media-upload-status')).toContainText(/process|preparing/i,{timeout:15000});
   await page.getByRole('button',{name:'Media imports',exact:true}).click();const dialog=page.locator('#dialog');
   await expect(dialog).toContainText('private-study.svg');await expect(dialog).toContainText('running');

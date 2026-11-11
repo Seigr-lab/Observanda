@@ -11,6 +11,7 @@ import {testServer} from '../device-fixture.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {RecordValues} from '../../src/record-values.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 async function fixture(page){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edit-record-')),book=sampleNotebook(),active=book.entries[0];
@@ -28,7 +29,7 @@ async function fixture(page){
  };
 }
 const dialogFor=page=>page.getByRole('dialog',{name:'Edit Record title',exact:true});
-async function openTitle(page){await page.locator('[data-record-detail-field]').selectOption('title');await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();return dialogFor(page);}
+async function openTitle(page){await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('title');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();return dialogFor(page);}
 async function alterReply(route,change){
  const response=await route.fetch();
  if(response.headers()['content-type']?.includes('application/x-ndjson')){
