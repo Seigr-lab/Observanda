@@ -14,6 +14,18 @@ import {LiveAdmission,withLiveAdmission} from './live-admission.js';
 import {LiveIngress,readLiveBody} from './live-ingress.js';
 import {organizationTransaction} from './transaction.js';
 
+// Streamed responses are written in pieces of at least 16 KiB. Over TLS, a
+// response that receives hundreds of small writes in one turn of the event
+// loop can report backpressure and then never emit 'drain', so a figure export
+// stopped part way until the idle timeout closed the connection.
+const LIVE_STREAM_PIECE=16384;
+async function* livePieces(chunks){
+ let parts=[],bytes=0;
+ for await(const chunk of chunks){const piece=typeof chunk==='string'?Buffer.from(chunk,'utf8'):Buffer.from(chunk.buffer,chunk.byteOffset,chunk.byteLength);if(!piece.length)continue;parts.push(piece);bytes+=piece.length;if(bytes>=LIVE_STREAM_PIECE){yield Buffer.concat(parts,bytes);parts=[];bytes=0;}}
+ if(bytes)yield Buffer.concat(parts,bytes);
+}
+const liveStream=(chunks,res)=>pipeline(Readable.from(livePieces(chunks)),res);
+
 export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,advertise}){
  valid(['0.0.0.0','127.0.0.1','::','::1'].includes(host)&&Number.isInteger(port)&&port>=0&&port<=65535);
  const endpoint=liveEndpoint(advertise),identity=new OrganizationIdentity(device),research=new LiveResearch(workspace),authority=await research.access.organizations.load(),actor=research.access.organizations.principal(authority,await identity.public());
@@ -58,10 +70,10 @@ export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,adve
    return await withLiveAdmission(principal=>admission.consume(command.nonce,address,principal),async()=>{
    if(command.operation==='figure-export'){
     const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-    try{return await research.figure(signed.identity,command.scope,command.data,{signal:controller.signal,exporting:true,download:async({name,contentType,chunks})=>{res.writeHead(200,{'Content-Type':contentType,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name)});await pipeline(Readable.from(chunks),res);}});}finally{res.off('close',abort);}
+    try{return await research.figure(signed.identity,command.scope,command.data,{signal:controller.signal,exporting:true,download:async({name,contentType,chunks})=>{res.writeHead(200,{'Content-Type':contentType,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name)});await liveStream(chunks,res);}});}finally{res.off('close',abort);}
    }
    if(command.operation==='file'){
-    const file=await research.file(signed.identity,command.scope,command.data);res.writeHead(200,{'Content-Type':file.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Length':contentSize(file.content),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(file.name)});await pipeline(Readable.from(contentStream(file.content)),res);return;
+    const file=await research.file(signed.identity,command.scope,command.data);res.writeHead(200,{'Content-Type':file.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Length':contentSize(file.content),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(file.name)});await liveStream(contentStream(file.content),res);return;
    }
    return json(await research.dispatch(signed.identity,command.scope,command.operation,command.data));
    });
