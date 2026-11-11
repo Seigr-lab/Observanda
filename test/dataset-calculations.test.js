@@ -22,11 +22,15 @@ import {contentBuffer} from '../src/file-content.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {AnalysisPublicationReview} from '../src/analysis-publication-review.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
 const col=(name,representation='text',unit='')=>({...defaultColumn({label:name}),representation,unit});
 const constant=(constant,unit='')=>({constant,unit}),column=column=>({column});
 const condition=(left,operator,right)=>({left,operator,right});
 const step=(name,operation,left,right=null,unit='',test=null)=>({name,operation,left,right,unit,condition:test});
 const recipe=source=>({version:1,source,view:'observations',joins:[],steps:[],where:null,selectionReason:'',calibration:null,note:''});
+// Plots are retained figure documents; read their points through the retained reader.
+const plottedY=async(materials,figure)=>{const reader=await new RetainedFigureDocuments(materials.workspace,{readOnly:true}).open(figure),values=[];for await(const entry of reader.pointEntries())values.push(entry.value.y);return values;};
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calculations-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),recordId=(await f.workspace.read()).book.entries[0].id;
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
@@ -36,13 +40,13 @@ async function fixture(t){
 test('derived values feed figures and verified publication tables while revisions, original files and other columns stay private',async t=>{
  const f=await fixture(t),source=await f.dataset('key,ticks,private\na,3,PRIVATE_SENTINEL\nb,6,PRIVATE_SENTINEL',[col('key'),col('ticks','integer','ticks'),col('private')]),c=recipe(source);c.steps=[step('Duration','divide',column(1),constant('5','Hz'),'s')];
  const derived=await f.m.dataset({recordId:f.recordId,title:'PRIVATE_DERIVED',calculation:c}),selection={columns:[0,3],offset:0,count:20,includeExcluded:false},table=await retainedTable(f.m,{ref:derived,selection});assert.equal(table.rows[0].cells[1],'3/5');
- const figure=await f.m.plot({recordId:f.recordId,title:'Durations',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:3,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.equal(figure.figure.series[0].points[0].y,0.6);
+ const figure=await f.m.plot({recordId:f.recordId,title:'Durations',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:3,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.equal((await plottedY(f.m,figure.figure))[0],0.6);
  const snapshot=await f.workspace.read(),record=snapshot.book.entries.find(r=>r.id===f.recordId),result={id:randomUUID(),kind:'table',basis:'retained',source:derived,title:'Durations',text:'Exact durations calculated from retained counts.',limitations:'Synthetic source only.',table},next={...record,share:true,results:{version:1,statements:[result]}};
  const bad=structuredClone(next);bad.results.statements[0].table.rows[0].cells[1]='100';const records=new ResearchRecords(f.workspace,{});
  await assert.rejects(records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:bad}]}),{code:'DATASET_TABLE'});
  await records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:next}]});
- const candidate=await new PublicationJobs(f.workspace).inline({etag:(await f.workspace.outline()).etag}),html=(await contentBuffer(candidate.files.get('entries/'+record.id+'.html'))).toString();assert.match(html,/3\/5/);assert.match(html,/retained-result-table/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes('PRIVATE_DERIVED'));assert.ok(!html.includes(source.id));
- const prior=await f.m.read(derived),recipe2=structuredClone(c);recipe2.steps[0].right=constant('10','Hz');await f.m.dataset({recordId:f.recordId,title:prior.title,id:derived.id,expectedRevision:derived.revision,calculation:recipe2});await assert.rejects(new AnalysisPublicationReview(f.workspace).assert(candidate),{code:'ANALYSIS_REVIEW'});
+ const site=websiteWorkspace(f.workspace,null),candidate=await new PublicationJobs(site).inline(await site.outline()),html=(await contentBuffer(await candidate.files.get('entries/'+record.id+'.html'))).toString();assert.match(html,/3\/5/);assert.match(html,/retained-result-table/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes('PRIVATE_DERIVED'));assert.ok(!html.includes(source.id));
+ const prior=await f.m.read(derived),recipe2=structuredClone(c);recipe2.steps[0].right=constant('10','Hz');await f.m.dataset({recordId:f.recordId,title:prior.title,id:derived.id,expectedRevision:derived.revision,calculation:recipe2});await assert.rejects(new AnalysisPublicationReview(site).assert(candidate),{code:'ANALYSIS_REVIEW'});
  const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));assert.deepEqual(await retainedTable(restored,{ref:derived,selection}),table);await restored.verify();
 });
 test('paired calculations preserve exact counters, calibration, exclusions and inspectable input cells over bounded pages',async t=>{
@@ -75,7 +79,7 @@ test('typed constants retain their numeral context through calculation, recalcul
  const inspected=await f.m.measurements.inspect({ref:result,selector:{kind:'cell',page:0,row:1,column:2}});assert.deepEqual(inspected.exact,{numerator:'37',denominator:'6'});assert.equal(inspected.derivedSources[0].ref.id,source.id);
  const table=await retainedTable(f.m,{ref:result,selection:{columns:[0,2,3],offset:0,count:20,includeExcluded:false}});assert.equal(table.rows[1].cells[1],'37/6');
  const legacy=structuredClone(c);legacy.steps[0].right=constant('10');const next=await f.m.dataset({recordId:f.recordId,title:'Decimal reinterpretation explicitly revised',id:result.id,expectedRevision:result.revision,calculation:legacy});assert.equal((await f.m.datasetPage(next)).rows[0].cells[2],'16/1');assert.equal((await f.m.datasetPage(result)).rows[0].cells[2],'12/1');
- const numeric=await f.dataset('state,value\na,10\nb,20',[col('state'),{...col('value','radix'),radix:6}]);const plot=await f.m.plot({recordId:f.recordId,title:'Exact senary coordinates',dataset:numeric,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.deepEqual(plot.figure.series[0].points.map(p=>p.y),[6,12]);
+ const numeric=await f.dataset('state,value\na,10\nb,20',[col('state'),{...col('value','radix'),radix:6}]);const plot=await f.m.plot({recordId:f.recordId,title:'Exact senary coordinates',dataset:numeric,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'safe'}});assert.deepEqual(await plottedY(f.m,plot.figure),[6,12]);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'typed-restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));assert.deepEqual(await retainedTable(restored,{ref:result,selection:table.selection}),table);assert.deepEqual((await restored.read(result)).content.calculation,c);await restored.verify();
 });
 
