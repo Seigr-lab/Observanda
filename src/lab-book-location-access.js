@@ -71,7 +71,9 @@ export class LabBookLocationAccess{
  }
  async install(application,client){
   if(client!==this.client||application.closed)throw new AppError('ACCESS_DENIED');
-  const session=application.session(client),registry=await application.registry(),prepared=[];
+  // A document workspace has no project registry and no book grants to move;
+  // resolve the registry only when there are grants to install.
+  const session=application.session(client),registry=this.grants.size?await application.registry():null,prepared=[];
   try{
    for(const [id,grant] of this.grants){
     const owner=this.owners.get(id);if(!this.valid(owner)||grant.expires<=Date.now())continue;
