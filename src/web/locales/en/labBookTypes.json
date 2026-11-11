@@ -26,5 +26,7 @@
   "software-development.label": "Software development",
   "software-development.description": "Repositories, changes, builds, disk and container images, test runs and releases with exact identifiers and digests.",
   "music.label": "Music",
-  "music.description": "Works, sessions, takes, mixes, listening notes, performances, credits and release editions."
+  "music.description": "Works, sessions, takes, mixes, listening notes, performances, credits and release editions.",
+  "historical-research.label": "Historical & archival research",
+  "historical-research.description": "Sources, people, places and events, archive visits, transcriptions and interpretation with explicit uncertainty."
 }

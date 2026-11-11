@@ -26,5 +26,7 @@
   "software-development.label": "Programvareutvikling",
   "software-development.description": "Repositorium, endringar, bygg, disk- og containeravbildingar, testkøyringar og utgjevingar med eksakte identifikatorar og sjekksummar.",
   "music.label": "Musikk",
-  "music.description": "Verk, økter, opptak, miksar, lyttenotat, framføringar, kreditering og utgjevingsutgåver."
+  "music.description": "Verk, økter, opptak, miksar, lyttenotat, framføringar, kreditering og utgjevingsutgåver.",
+  "historical-research.label": "Historisk forsking og arkivforsking",
+  "historical-research.description": "Kjelder, personar, stader og hendingar, arkivbesøk, transkripsjonar og tolking med tydeleg usikkerheit."
 }

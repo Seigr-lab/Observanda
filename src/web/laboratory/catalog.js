@@ -12,8 +12,9 @@ import p7 from './profiles/crime-forensic.js';
 import arts from './profiles/arts-creative.js';
 import software from './profiles/software-development.js';
 import music from './profiles/music.js';
+import history from './profiles/historical-research.js';
 // One composition point. Profiles do not own persistence, editor, routing or permissions.
-export const laboratoryProfiles=Object.freeze([p0,p1,p2,p3,p4,p5,p6,p7,arts,physical,audio,beekeeping,software,music].sort((a,b)=>a.label.localeCompare(b.label,'en',{sensitivity:'base'})));
+export const laboratoryProfiles=Object.freeze([p0,p1,p2,p3,p4,p5,p6,p7,arts,physical,audio,beekeeping,software,music,history].sort((a,b)=>a.label.localeCompare(b.label,'en',{sensitivity:'base'})));
 export const profileById=id=>laboratoryProfiles.find(p=>p.id===id);
 export const sectionAvailable=(lab,section)=>section.enabled&&(!section.profileId||lab.profiles.some(p=>p.id===section.profileId&&p.enabled));
 export const availableSections=lab=>lab.sections.filter(s=>sectionAvailable(lab,s));

@@ -59,3 +59,9 @@ test('music tracks works, sessions, takes and release editions following the sha
  assert.deepEqual(work.fields.find(f=>f.key==='state').choices,['Idea','Work in progress','Session captured','Source retained','Edition selected']);
  assert.deepEqual(profileById('music').sections.find(s=>s.key==='take').fields.find(f=>f.key==='status').choices,['Kept','Alternate','Abandoned','Failed'],'failed and abandoned takes remain evidence');
 });
+
+test('historical research tracks sources, people, places and events and keeps stated text apart from readings',()=>{
+ const profile=tracks('historical-research',{subjects:['source','person','place','event'],primary:'examination',events:['visit','examination','analysis','correspondence'],
+  formats:{'source/reference':'identifier','source/identifier':'uri','source/copy-sha256':'sha-256','person/authority':'uri','place/gazetteer':'uri','visit/requests':'identifier','correspondence/reference':'identifier'}});
+ for(const key of ['source','event']){const fields=profile.sections.find(s=>s.key===key).fields;assert.equal(fields.find(f=>f.key==='date-stated').type,'text');assert.deepEqual(fields.find(f=>f.key==='certainty').choices,['Exact','Approximate','Inferred','Unknown']);}
+});
