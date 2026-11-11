@@ -7,6 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {journeyBook,block} from './book-fixture.js';
 import {researchReference} from '../src/web/research-reference.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
 import {buildPublication} from '../src/publication.js';
 import {contentBuffer} from '../src/file-content.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -57,9 +58,9 @@ test('retained card excerpts and book pages share public reference and inline fi
  const linked=record=>({type:'text',text:record.title,marks:[{type:'link',attrs:{href:researchReference({workspaceId:f.book.id,kind:'record',id:record.id}),title:'',target:'_self',nofollow:false}}]});
  f.concept.body.content.unshift(block('figure',{figureId:privateImage,alternative:'PRIVATE inline diagram narrative'}),{type:'paragraph',content:[linked(f.privateRecord),{type:'text',text:' then '},linked(f.method)]});
  const storage=await encryptedFixture(directory,f.book,{populate:workspace=>populateImageEvidence(workspace,[privateImage])});t.after(async()=>{await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
- const snapshot=await storage.workspace.outline(),actual=await new PublicationJobs(storage.workspace).inline({workspaceId:f.book.id,etag:snapshot.etag}),expected=buildPublication(f.book);
- for(const [name,value] of actual.files)if(name.endsWith('.html')){
+ const site=websiteWorkspace(storage.workspace,null),actual=await new PublicationJobs(site).inline(await site.outline()),expected=buildPublication(f.book);
+ for await(const [name,value] of actual.files)if(name.endsWith('.html')){
   const html=(await contentBuffer(value)).toString('utf8');assert.ok(!html.includes('PRIVATE'));assert.ok(!html.includes(privateImage));assert.ok(!html.includes(f.privateRecord.id));assert.equal(html,expected.files.get(name),name);
  }
- const project=(await contentBuffer(actual.files.get('projects/'+f.book.projects[0].id+'.html'))).toString('utf8');assert.ok(project.includes(f.method.title));
+ const project=(await contentBuffer(await actual.files.get('projects/'+f.book.projects[0].id+'.html'))).toString('utf8');assert.ok(project.includes(f.method.title));
 });
