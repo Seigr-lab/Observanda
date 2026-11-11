@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sense imatge de portada",
   "placementCoverPhoto": "Fotografia",
   "placementShowDate": "Mostra la data de l’entrada",
+  "placementLivePreview": "Previsualització en directe d’aquesta pàgina",
+  "placementPreviewLoading": "S’està actualitzant la previsualització…",
   "image": "Imatge",
   "video": "Vídeo o àudio",
   "sectionMargin": "Espai al voltant",

@@ -8,7 +8,7 @@ import {parse} from 'parse5';
 import {Workspace} from '../src/storage.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
-import {placementPresentationOptions,setPlacementPresentation} from '../src/website-file-placements.js';
+import {placementPresentationOptions,setPlacementPresentation,previewPlacementPresentation} from '../src/website-file-placements.js';
 import {presentRecordParts,recordPartGroups,recordPresentation,validRecordPresentation} from '../src/website-entry-display.js';
 import {entryCSS,entryStyleName,styledPageHTML} from '../src/website-entry-styles.js';
 import {validateWebsiteCSS} from '../src/website-file-policy.js';
@@ -74,6 +74,14 @@ test('a full copy keeps its chosen parts and layout through source updates and c
  assert.deepEqual(before.record,{groups:['title','details','outcome','body','sections','figures','media','tags'],hidden:[],layout:'article'});
  await assert.rejects(setPlacementPresentation(store,site,{...pin(),presentation:'full',hidden:['title','details','outcome','body','sections','figures','media','tags']}),{code:'INVALID'});
  await assert.rejects(async()=>setPlacementPresentation(store,site,{...pin(),presentation:'card',choice:'title',hidden:['tags']}),{code:'INVALID'});
+ // A preview shows the page as the choice would save it, and saves nothing.
+ const unsaved=await store.siteVersion(site);
+ const preview=await previewPlacementPresentation(store,site,{...pin(),presentation:'full',hidden:['tags','details'],layout:'split'});
+ assert.equal(await store.siteVersion(site),unsaved);assert.equal(preview.revision,unsaved);
+ assert.match(preview.html,/data-observanda-hide="details tags" data-observanda-layout="split"/);assert.doesNotMatch(preview.html,/<li>varroa<\/li>/);
+ assert.match(preview.html,/>Resultat<\/strong>/);assert.equal(preview.css.display,entryCSS);
+ assert.match((await previewPlacementPresentation(store,site,{...pin(),presentation:'full'})).html,/<li>varroa<\/li>/);
+ await assert.rejects(async()=>previewPlacementPresentation(store,site,{...pin(),presentation:'card',hidden:['tags']}),{code:'INVALID'});
  page=await setPlacementPresentation(store,site,{...pin(),presentation:'full',hidden:['tags','details'],layout:'split'});
  const copy=()=>[...descendants(parse(page.html))].find(n=>attr(n,'data-observanda-source')===sourceId);
  assert.deepEqual(recordPresentation(copy()),{hidden:['details','tags'],layout:'split'});

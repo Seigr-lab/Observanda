@@ -27,7 +27,7 @@ import {researchId} from './web/research-reference.js';
 import {componentOperation} from './website-component-storage.js';
 import {regionOperation} from './website-region-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
-import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementPresentationOptions,setPlacementPresentation} from './website-file-placements.js';
+import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementPresentationOptions,setPlacementPresentation,previewPlacementPresentation} from './website-file-placements.js';
 import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
 import {websitePictureUpload} from './website-picture-upload.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
@@ -337,6 +337,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='library/placements'){json(await websiteSourceUsage(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/presentation-options'){json(await placementPresentationOptions(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/present-placement'){json(await setPlacementPresentation(store,siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation==='library/presentation-preview'){json(await previewPlacementPresentation(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/move-placement'||operation==='library/remove-placement'){json(await changeWebsitePlacement(store,siteId,operation==='library/move-placement'?'move':'remove',{...options,expectedRevision,signal}));return true;}
   if(operation.startsWith('components/')){json(await componentOperation(store,operation.slice(11),siteId,{...options,expectedRevision,signal},true));return true;}
   if(operation==='open'){json(await store.open(siteId,{...options,signal}));return true;}

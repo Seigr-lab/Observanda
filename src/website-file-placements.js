@@ -12,6 +12,8 @@ import {siteHasPendingSources} from './website-feed-fence.js';
 import {feedUsageWindow,checkFeedUsageRoot} from './website-feed-usage-index.js';
 import {researchId} from './web/research-reference.js';
 import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode,recordPartGroups,recordPresentation,validRecordPresentation,cardCoverChoices,cardHasDate} from './website-entry-display.js';
+import {entryCSS,styledPageHTML} from './website-entry-styles.js';
+import {localizedRecordPage} from './website-record-language.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const owner=node=>attr(node,'data-observanda-source');
@@ -173,18 +175,21 @@ export function placementPresentationOptions(store,id,options){
   return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,record,card,revision:manifest.revision,sourceRevision:source.revision};
  },{signal});
 }
-export function setPlacementPresentation(store,id,options){
- const {presentation,choice=presentation==='card'?'title':null,hidden=[],layout='article',cover=null,date=false,signal}=options;
+function presentationRequest(options){
+ const {presentation,choice=presentation==='card'?'title':null,hidden=[],layout='article',cover=null,date=false}=options;
  if(cover!==null&&(presentation!=='card'||typeof cover!=='string')||typeof date!=='boolean'||date&&presentation!=='card')throw new AppError('INVALID');
  if(!['full','card','section'].includes(presentation)||presentation==='full'&&choice!==null)throw new AppError('INVALID');
  if(!validRecordPresentation({hidden,layout})||presentation!=='full'&&(hidden.length||layout!=='article'))throw new AppError('INVALID');
- return store.scope(async()=>{
+ return {presentation,choice,hidden,layout,cover,date};
+}
+// The saved page with the chosen presentation, or null when nothing changes.
+async function presentedPage(store,id,options,{presentation,choice,hidden,layout,cover,date}){
   const {manifest,page,source,node,slot,previous,html,original}=await selectedDisplay(store,id,options);
   const shown=previous?{hidden:[],layout:'article'}:recordPresentation(node),wanted={hidden:[...new Set(hidden)].sort(),layout};
   const groups=recordPartGroups(html);if(groups.length&&groups.every(group=>wanted.hidden.includes(group)))throw new AppError('INVALID');
   const covers=presentation==='card'&&(cover!==null||date)?entryDisplayChoices(html).card:null;
   if(cover!==null&&!covers.covers.has(cover)||date&&!covers.date)throw new AppError('NOT_FOUND');
-  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null)&&(presentation!=='full'||JSON.stringify(shown)===JSON.stringify(wanted))&&(presentation!=='card'||(previous?.cover??null)===cover&&(previous?.date===true)===date))return store.present(manifest,page.path,{signal});
+  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null)&&(presentation!=='full'||JSON.stringify(shown)===JSON.stringify(wanted))&&(presentation!=='card'||(previous?.cover??null)===cover&&(previous?.date===true)===date))return {manifest,page,source,original,unchanged:true};
   // An unchanged full copy keeps its saved parts; another display starts again
   // from the permitted source.
   const loc=node.sourceCodeLocation,current=!previous&&loc.startTag&&loc.endTag?original.slice(loc.startTag.endOffset,loc.endTag.startOffset):null;
@@ -198,11 +203,31 @@ export function setPlacementPresentation(store,id,options){
   const full=placements.some(p=>p.id===source.id&&!p.display&&!p.gallery&&!p.link);
   next=full?ensureStyle(next,page.path,source.id):removeStyle(next,page.path,source.id);
   validateWebsiteHTML(next,{file:page.path,scripts:await store.scripts(manifest.files)});
+  return {manifest,page,source,original,next,placements,entries};
+}
+export function setPlacementPresentation(store,id,options){
+ const wanted=presentationRequest(options),{signal}=options;
+ return store.scope(async()=>{
+  const {manifest,page,next,placements,entries,unchanged}=await presentedPage(store,id,options,wanted);
+  if(unchanged)return store.present(manifest,page.path,{signal});
   const pages=manifest.pages.map(p=>p===page?{...page,placements,entryDisplays:entries}:p);
   const files=await store.siteAssets(manifest.files.filter(f=>f.name!==page.path),manifest.sources,pages);
   files.push(await store.siteFile(id,page.path,next,{signal,draft:page.draft}));
   return store.present(await store.commit({...manifest,files,pages},{signal}),page.path,{signal});
  },{write:true,signal});
+}
+// The same page as a presentation would save it, without saving: the editor
+// shows it in an isolated preview frame with the copy's own stylesheet and
+// the entry display stylesheet, which the page may not link yet.
+export function previewPlacementPresentation(store,id,options){
+ const wanted=presentationRequest(options),{signal}=options;
+ return store.scope(async()=>{
+  const {manifest,page,source,original,next,unchanged}=await presentedPage(store,id,options,wanted);
+  const html=styledPageHTML(localizedRecordPage(unchanged?original:next),page.path).html;
+  const sourceCSS=source.css?.size?await store.readText(source.css,{signal}):'';
+  await store.current(id,manifest.revision);
+  return {html,css:{display:entryCSS,source:sourceCSS},path:page.path,revision:manifest.revision,sourceRevision:source.revision};
+ },{signal});
 }
 export function changeWebsitePlacement(store,id,operation,options){
  const {sourceId,sourceRevision,ordinal,path:pagePath,position,signal}=options;

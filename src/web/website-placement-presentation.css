@@ -16,6 +16,10 @@
 .website-presentation-parts label { display:flex; align-items:center; gap:.45rem; min-height:2rem; }
 .website-presentation-parts input { flex:none; width:1rem; height:1rem; margin:0; accent-color:var(--accent,#3455ad); }
 .website-presentation [data-presentation-record] > label,.website-presentation [data-presentation-card] > label:not(.website-presentation-check) { display:block; font-weight:600; }
+.website-presentation-live { margin-top:1rem; }
+.website-presentation-live h3 { margin:0 0 .4rem; font-size:1rem; }
+.website-presentation-live iframe { display:block; width:100%; height:min(22rem,45vh); border:1px solid var(--border,#b8c4d4); border-radius:.4rem; background:#fff; }
+.website-presentation-live iframe:focus-visible { outline:2px solid var(--accent,#3455ad); outline-offset:2px; }
 .website-presentation-check { display:flex; align-items:center; gap:.45rem; min-height:2rem; margin-top:.5rem; }
 @media (max-width:30rem) { .website-presentation-formats { grid-template-columns:1fr; } }
 .website-presentation-preview { margin:.65rem 0 0; padding:.7rem .85rem; background:var(--surface-raised,var(--surface,#fff)); border-inline-start:3px solid var(--border,#b8c4d4); }

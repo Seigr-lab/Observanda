@@ -1024,6 +1024,8 @@
   "placementNoCover": "Uten forsidebilde",
   "placementCoverPhoto": "Fotografi",
   "placementShowDate": "Vis datoen for oppføringen",
+  "placementLivePreview": "Direkte forhåndsvisning av denne siden",
+  "placementPreviewLoading": "Oppdaterer forhåndsvisningen …",
   "image": "Bilde",
   "video": "Video eller lyd",
   "sectionMargin": "Luft rundt",

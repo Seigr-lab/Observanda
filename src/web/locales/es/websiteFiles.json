@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sin imagen de portada",
   "placementCoverPhoto": "Fotografía",
   "placementShowDate": "Mostrar la fecha de la entrada",
+  "placementLivePreview": "Vista previa en directo de esta página",
+  "placementPreviewLoading": "Actualizando la vista previa…",
   "image": "Imagen",
   "video": "Vídeo o audio",
   "sectionMargin": "Espacio alrededor",

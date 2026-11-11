@@ -186,6 +186,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const placementDrag=websitePlacementDrag({site:()=>opened,available:()=>mode==='visual'&&!busy&&!stale,t:tr,
   place:selection=>void run(()=>insertContent('insert-source',selection)).catch(reason=>notify(reason.message,true))});
  const presentation=websitePlacementPresentation({t:tr,request,
+  page:()=>{const page=new URL(opened.path,directory());page.searchParams.set('canvas','1');return {page:page.href,css,stylesheet:canvasURL(opened.site.cssPath),url:name=>canvasURL(name)};},
   refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-presentation"]')?.focus();},
   onError:reason=>{if(['ACCESS_LOCKED','AUTH','CONFLICT','NOT_FOUND','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);}});
  const feeds=websiteFileFeeds({t:tr,request,refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-feeds"]')?.focus();},report:reason=>notify(reason.message||tr('failed'),true)});

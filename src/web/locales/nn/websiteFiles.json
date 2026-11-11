@@ -1024,6 +1024,8 @@
   "placementNoCover": "Utan framsidebilete",
   "placementCoverPhoto": "Fotografi",
   "placementShowDate": "Vis datoen for oppføringa",
+  "placementLivePreview": "Direkte førehandsvising av denne sida",
+  "placementPreviewLoading": "Oppdaterer førehandsvisinga …",
   "image": "Bilete",
   "video": "Video eller lyd",
   "sectionMargin": "Luft rundt",

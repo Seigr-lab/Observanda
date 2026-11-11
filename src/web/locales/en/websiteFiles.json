@@ -1024,6 +1024,8 @@
   "placementNoCover": "No cover image",
   "placementCoverPhoto": "Photograph",
   "placementShowDate": "Show the entry's date",
+  "placementLivePreview": "Live preview of this page",
+  "placementPreviewLoading": "Updating the preview…",
   "image": "Image",
   "video": "Video or audio",
   "sectionMargin": "Space around",

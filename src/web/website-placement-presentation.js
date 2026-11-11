@@ -3,22 +3,12 @@
 const marker='[data-observanda-source],[data-observanda-link]';
 const block='section[data-observanda-source]:not([data-observanda-view])';
 const pageSize=24;
-export function presentationBlock(node){
- const section=node?.closest(block);
- return section&&!section.parentElement?.closest(marker+',header,footer,nav,template,[hidden],[data-website-instance],[data-website-region],[data-website-menu],[data-record-id],[data-public-record],[data-website-feed]')&&!section.querySelector(marker+',[data-website-instance]')?section:null;
+import {loadWebsiteCanvas,applyCanvasCSS} from './website-html-document.js';
+// Request values for a presentation state; the same shape restores it.
+export function presentationValues({format,choice,hidden=[],layout='article',cover='',date=false}){
+ return {presentation:format,...(format==='full'?{hidden:[...hidden].sort(),layout}:{choice}),...(format==='card'?{cover:cover||null,date:Boolean(date)}:{})};
 }
-function occurrences(doc,selected){
- const counts=new Map(),rows=[];let initial=0;
- for(const node of doc.body.querySelectorAll(marker)){
-  const sourceId=node.dataset.observandaLink??node.dataset.observandaSource,ordinal=counts.get(sourceId)??0;
-  counts.set(sourceId,ordinal+1);
-  if(presentationBlock(node)!==node)continue;
-  if(node.contains(selected))initial=rows.length;
-  rows.push({node,sourceId,ordinal,sourceRevision:node.dataset.observandaSourceRevision});
- }
- return {rows,initial};
-}
-export function websitePlacementPresentation({t,request,refresh,onError}){
+export function websitePlacementPresentation({t,request,refresh,onError,page:frameSource=null}){
  let current=null;
  function close(){if(current){const {dialog}=current;current=null;dialog.close();}}
  async function revalidate(signal){
@@ -77,6 +67,40 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   dateLabel.className='website-presentation-check';
   const earlier=button(pages,t('prevPage'),()=>load(session.selected,offsets.at(-2)));
   const more=button(pages,t('nextPage'),()=>load(session.selected,session.data.next));
+  // A live preview: the page as this choice would save it, in an isolated
+  // frame with the page's own styles. Nothing is saved until Apply.
+  const live=add('section');live.className='website-presentation-live';
+  const liveHeading=add('h3',live,t('placementLivePreview'));liveHeading.id='website-presentation-live';live.setAttribute('aria-labelledby',liveHeading.id);
+  const frame=add('iframe',live);frame.title=t('placementLivePreview');frame.setAttribute('sandbox','allow-same-origin');frame.tabIndex=0;
+  const liveStatus=add('p',live);liveStatus.className='muted';liveStatus.setAttribute('aria-live','polite');
+  live.hidden=!frameSource;
+  let previewTimer=null,previewRequest=0,previewValue=null,frameReady=false;
+  function paintPreview(){
+   if(!previewValue||!frameReady||!frame.contentDocument)return;
+   const {html,css,sourceUrl,display}=previewValue,doc=frame.contentDocument,source=frameSource();
+   loadWebsiteCanvas(doc,html,source.css,source.stylesheet);
+   for(const [text,url] of [[css.display,display],[css.source,sourceUrl]]){const style=doc.createElement('style');style.dataset.observandaEditor='preview';applyCanvasCSS(style,text,url);doc.head.append(style);}
+   const {sourceId,ordinal}=rows[session.selected];let seen=0,target=null;
+   for(const node of doc.body.querySelectorAll(marker))if((node.dataset.observandaLink??node.dataset.observandaSource)===sourceId&&seen++===ordinal){target=node;break;}
+   target?.scrollIntoView({block:'start'});
+  }
+  frame.addEventListener('load',()=>{frameReady=true;paintPreview();});
+  function schedulePreview(){
+   if(!frameSource||!session.data)return;
+   clearTimeout(previewTimer);
+   const values=chosen();if(!values){liveStatus.textContent=t('placementChooseSection');return;}
+   previewTimer=setTimeout(async()=>{
+    const version=++previewRequest;liveStatus.textContent=t('placementPreviewLoading');
+    try{
+     const result=await request('library/presentation-preview',{...pin(),...values});
+     if(current!==session||version!==previewRequest)return;
+     const source=frameSource();
+     previewValue={...result,display:source.url('website-display.css'),sourceUrl:source.url('source-'+rows[session.selected].sourceId+'.css')};
+     liveStatus.textContent='';
+     if(!frame.getAttribute('src'))frame.src=source.page;else paintPreview();
+    }catch(error){if(version===previewRequest)liveStatus.textContent=error.message||t('failed');}
+   },250);
+  }
   const status=add('p');status.setAttribute('role','status');
   const footer=add('footer');footer.className='inline-actions';
   const cancel=button(footer,t('cancel'),close),apply=button(footer,t('placementApply'),save);
@@ -111,11 +135,15 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
    for(const group of groups){
     const label=add('label',partList),box=add('input',label);box.type='checkbox';box.value=group;box.checked=!hidden.has(group);
     box.dataset.presentationPart=group;add('span',label,t('placementPart_'+group));
-    box.onchange=()=>{if(box.checked)hidden.delete(group);else hidden.add(group);controls();};
+    box.onchange=()=>{if(box.checked)hidden.delete(group);else hidden.add(group);controls();schedulePreview();};
    }
-   layout.value=layoutKey;
+   layout.value=layoutKey;schedulePreview();
    cover.replaceChildren(new Option(t('placementNoCover'),''),...covers.map(item=>new Option(item.label||t('placementCoverPhoto'),item.key)));
    cover.value=covers.some(item=>item.key===coverKey)?coverKey:'';dateBox.checked=showDate;controls();
+  }
+  function chosen(){
+   if(formatKey!=='full'&&!desired)return null;
+   return presentationValues({format:formatKey,choice:desired,hidden:[...hidden].filter(group=>groups.includes(group)),layout:layoutKey,cover:coverKey,date:showDate});
   }
   function pin(){
    const {sourceId,ordinal,sourceRevision}=rows[session.selected];
@@ -149,16 +177,17 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   async function save(){
    if(apply.disabled)return;busy=saving=true;controls();
    try{
-    const result=await request('library/present-placement',{...pin(),presentation:formatKey,...(formatKey==='full'?{hidden:[...hidden].filter(group=>groups.includes(group)).sort(),layout:layoutKey}:{choice:desired}),...(formatKey==='card'?{cover:coverKey||null,date:showDate}:{})});
+    const values=chosen();
+    const result=await request('library/present-placement',{...pin(),...values});
     if(current!==session)return;close();refresh(result);
    }catch(error){fail(error);}
   }
   entry.onchange=()=>load(Number(entry.value));
   format.onchange=event=>{formatKey=event.target.value;desired=formatKey===saved?.format?saved.choice:formatKey==='card'?'title':'';showChoices();};
   choice.onchange=()=>{desired=choice.value;showChoices();};
-  layout.onchange=()=>{layoutKey=layout.value;controls();};
-  cover.onchange=()=>{coverKey=cover.value;controls();};
-  dateBox.onchange=()=>{showDate=dateBox.checked;controls();};
+  layout.onchange=()=>{layoutKey=layout.value;controls();schedulePreview();};
+  cover.onchange=()=>{coverKey=cover.value;controls();schedulePreview();};
+  dateBox.onchange=()=>{showDate=dateBox.checked;controls();schedulePreview();};
   dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
   dialog.addEventListener('close',()=>{if(current===session)current=null;dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
   document.body.append(dialog);dialog.showModal();
