@@ -11,6 +11,8 @@ import {sectionAction} from '../src/web/laboratory/section-editor.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost,moduleForEntity} from '../src/web/feature-modules.js';
 import {laboratoryProfiles,enableProfile,availableSections} from '../src/web/laboratory/catalog.js';
+// Lab book profile text is a deferred catalogue; these checks read profiles directly.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 test('combined lab submodules retain customized sections and saved evidence across configuration changes',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-labs-')),ws=new Workspace(root),book=createNotebook('Lab research');

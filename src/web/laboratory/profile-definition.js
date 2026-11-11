@@ -1,5 +1,5 @@
-import english from '../locales/en/labBookProfiles.json' with {type:'json'};
 import types from '../locales/en/labBookTypes.json' with {type:'json'};
+import {loadedMessages} from '../i18n/index.js';
 
 // A profile names its sections, fields, choices and units by catalogue key.
 // The English catalogue holds the canonical text that enabling a profile copies
@@ -7,7 +7,13 @@ import types from '../locales/en/labBookTypes.json' with {type:'json'};
 // interfaces translate it when they display it (profile-text.js). Released
 // English text is therefore part of the profile version: change it only in a
 // new version, never in place, or existing books stop recognizing it.
-const say=key=>{if(typeof english[key]!=='string')throw new TypeError('Missing lab book profile text: '+key);return english[key];};
+// The catalogue is a deferred namespace: the interface loads it before a lab book
+// or record draws (profile-text.js, prepareProfileText) and the server loads it
+// with the configuration commands, so a profile's text is read when first used.
+const say=key=>{
+ const english=loadedMessages('labBookProfiles');if(!english)throw new TypeError('Message namespace has not been loaded: labBookProfiles');
+ if(typeof english[key]!=='string')throw new TypeError('Missing lab book profile text: '+key);return english[key];
+};
 const since=value=>{if(!Number.isSafeInteger(value)||value<1)throw new TypeError('Invalid profile version');return value;};
 // A unit names a word that translates; symbols such as kg, % or °C stay literal.
 export const unit=id=>({unit:id});
@@ -32,6 +38,8 @@ export const section=(key,fields,{since:version=1}={})=>({key,fields,since:since
 // upgrade only ever adds that protection.
 export function defineProfile({id,version,icon,tracking=null,sections}){
  since(version);
+ // The structure is checked when the profile is defined; the text is composed on first use.
+ const compose=say=>{
  const introduced={sections:{},fields:{},choices:{},private:{}},history={};
  const unitText=measure=>typeof measure==='object'?say('units.'+measure.unit):measure;
  const within=value=>{if(value>version)throw new TypeError('Profile item is newer than its profile: '+id);return value;};
@@ -54,7 +62,11 @@ export function defineProfile({id,version,icon,tracking=null,sections}){
  });
  const keys=new Set(built.map(s=>s.key));
  if(tracking&&![...tracking.subjects,...tracking.events,tracking.primary].every(key=>keys.has(key)))throw new TypeError('Profile tracking names an unknown section: '+id);
+ return {sections:built,introduced,history,tracking:tracking&&{subjectLabel:say(id+'.tracking.subject'),primaryLabel:say(id+'.tracking.primary'),headings:Object.fromEntries(tracking.subjects.map(key=>[key,say(`${id}.tracking.history.${key}`)]))}};
+ };
+ compose(key=>key);
+ let composed=null;const text=()=>composed??=compose(say);
  return {id,version,label:types[id+'.label'],description:types[id+'.description'],icon,
-  tracking:tracking&&{...tracking,subjectLabel:say(id+'.tracking.subject'),primaryLabel:say(id+'.tracking.primary'),headings:Object.fromEntries(tracking.subjects.map(key=>[key,say(`${id}.tracking.history.${key}`)]))},
-  sections:built,introduced,history};
+  tracking:tracking&&{...tracking,get subjectLabel(){return text().tracking.subjectLabel;},get primaryLabel(){return text().tracking.primaryLabel;},get headings(){return text().tracking.headings;}},
+  get sections(){return text().sections;},get introduced(){return text().introduced;},get history(){return text().history;}};
 }

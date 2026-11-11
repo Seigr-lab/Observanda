@@ -6,6 +6,8 @@ import {laboratoryModules} from '../src/web/laboratory/modules.js';
 import {validConfiguration,templateFrom,validTemplate} from '../src/web/notebook-schema.js';
 import {fieldValueErrors} from '../src/web/custom-fields.js';
 import {activityContext,activitySubjects} from '../src/web/record-activity.js';
+// Lab book profile text is a deferred catalogue; these checks read profiles directly.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 const digest=length=>'0123456789abcdef'.repeat(8).slice(0,length);
 // One plausible value for every field, exact formats included.

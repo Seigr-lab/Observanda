@@ -5,6 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {ConfigurationDocuments} from './configuration-documents.js';
 import {emptyConfiguration} from './web/notebook-schema.js';
 import {profileById,profileUpgrade,profileUpgradeReview} from './web/laboratory/catalog.js';
+// Enabling and upgrading a profile copies its canonical text, so the server holds its catalogue.
+import './web/i18n/catalogues/labBookProfiles.js';
 import {starterTemplate} from './web/project-templates.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';

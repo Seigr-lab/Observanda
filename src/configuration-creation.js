@@ -6,6 +6,8 @@ import {validConfigurationOwner,validConfigurationReference,isConfigurationRefer
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {starterTemplate} from './web/project-templates.js';
+// A starter copies its profile's canonical text, so the server holds the profile catalogue.
+import './web/i18n/catalogues/labBookProfiles.js';
 import {emptyConfiguration} from './web/notebook-schema.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';

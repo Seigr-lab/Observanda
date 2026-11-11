@@ -199,6 +199,9 @@ export function registerCatalogue(namespace,messages){
  const translated=translator(messageLanguage(namespace),cache.get(current)[namespace]??messages,messages);
  english[namespace]=messages;translations[namespace]=translated;
 }
+// The English messages of a loaded namespace, for modules that recognize the
+// canonical text their data keeps (for example lab book profiles); null until loaded.
+export const loadedMessages=namespace=>Object.hasOwn(english,namespace)?english[namespace]:null;
 // Keep resource bursts small and wait for started requests to settle on error.
 // A retry must not overlap the unfinished work of a failed language choice.
 async function loadResources(names,load){

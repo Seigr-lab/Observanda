@@ -67,6 +67,7 @@ import {researchMaterialsUI} from './research-materials-loader.js';
 import {recordHistoryUI} from './record-history-ui.js';
 import {configurationOf,templateFrom} from './notebook-schema.js';
 import {availableSections} from './laboratory/catalog.js';
+import {prepareProfileText} from './laboratory/profile-text.js';
 import {templateText} from './custom-field-presentation.js';
 import {locationName} from './workspace-structure.js';
 import {recordFields,updateRecordField} from './record-fields-ui.js';
@@ -1431,7 +1432,8 @@ async function loadWorkspaceOwned(){
 }
 
 await startApplication({api,esc,show:content=>appShell.showStandalone(content),load:async()=>{
-  await languageControls.load();
+  // Lab book profile text is a deferred catalogue; it is ready before any lab book or record draws.
+  await Promise.all([languageControls.load(),prepareProfileText()]);
   await textControls.load();
   await loadWorkspace();
 }});

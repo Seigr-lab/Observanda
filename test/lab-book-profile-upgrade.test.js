@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {laboratoryProfiles,enableProfile,profileUpgrade,upgradeProfile} from '../src/web/laboratory/catalog.js';
 import {profileUpgradeItems} from '../src/web/laboratory/profile-text.js';
 import {validConfiguration} from '../src/web/notebook-schema.js';
+// Lab book profile text is a deferred catalogue; these checks read profiles directly.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 // A later version of an existing profile: one new section, one new field and one new choice.
 function nextVersion(){

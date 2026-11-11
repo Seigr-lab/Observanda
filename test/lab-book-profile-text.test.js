@@ -1,9 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {prepareLanguage,activateLanguage,t} from '../src/web/i18n/index.js';
+import {prepareLanguage,activateLanguage,t,loadedMessages} from '../src/web/i18n/index.js';
 import {laboratoryProfiles,enableProfile} from '../src/web/laboratory/catalog.js';
-import {profileText,storedChoices,trackingText,isProfileText} from '../src/web/laboratory/profile-text.js';
+import {profileText,storedChoices,trackingText,isProfileText,prepareProfileText} from '../src/web/laboratory/profile-text.js';
 import {customFieldLabel,customFieldValueText} from '../src/web/custom-field-presentation.js';
 import {validConfiguration} from '../src/web/notebook-schema.js';
 
@@ -26,6 +26,19 @@ function profileKeys(profile,english){
  if(profile.tracking)keys.push(`${profile.id}.tracking.subject`,`${profile.id}.tracking.primary`,...profile.tracking.subjects.map(key=>`${profile.id}.tracking.history.${key}`));
  return keys;
 }
+
+// The catalogue is deferred: nothing loads it until profile text is prepared.
+test('profile text waits for its deferred catalogue while English shows the stored text',async()=>{
+ const beekeeping=laboratoryProfiles.find(p=>p.id==='beekeeping'),english=await resource('en','labBookProfiles');
+ assert.equal(loadedMessages('labBookProfiles'),null);
+ assert.equal(beekeeping.tracking.primary,'inspection');assert.equal(beekeeping.label,t('labBookTypes','beekeeping.label'));
+ assert.equal(profileText(english['beekeeping.inspection.label']),english['beekeeping.inspection.label']);
+ assert.throws(()=>beekeeping.sections,/has not been loaded: labBookProfiles/);assert.throws(()=>beekeeping.tracking.subjectLabel,/has not been loaded/);
+ assert.throws(()=>isProfileText('Hive'),/has not been loaded/);assert.throws(()=>trackingText('beekeeping','primary'),/has not been loaded/);
+ await prepareProfileText();
+ assert.equal(beekeeping.sections.find(s=>s.key==='inspection').label,english['beekeeping.inspection.label']);
+ assert.equal(beekeeping.tracking.subjectLabel,english['beekeeping.tracking.subject']);assert.equal(trackingText('beekeeping','primary'),english['beekeeping.tracking.primary']);
+});
 
 test('every profile text comes from the catalogue, every catalogue entry is used and shared text translates consistently',async()=>{
  const english=await resource('en','labBookProfiles'),used=new Set();

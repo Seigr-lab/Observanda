@@ -7,6 +7,8 @@ import {sourcePublicationRecord} from '../src/web/source-publication-permissions
 import {laboratoryProfiles,enableProfile,upgradeProfile,profileUpgrade} from '../src/web/laboratory/catalog.js';
 import {profileUpgradeItems} from '../src/web/laboratory/profile-text.js';
 import {templateFrom,validConfiguration} from '../src/web/notebook-schema.js';
+// Lab book profile text is a deferred catalogue; these checks read profiles directly.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 const field=(key,extra={})=>({key,label:key,type:'text',unit:'',required:false,choices:[],...extra});
 

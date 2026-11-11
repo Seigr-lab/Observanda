@@ -16,6 +16,8 @@ import {ancestors,descendants,recordsIn} from '../src/web/workspace-structure.js
 import {notebookDirectory,notebookRecordScope} from '../src/web/laboratory/notebook-model.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {createModuleHost} from '../src/web/feature-modules.js';
+// Lab book profile text is a deferred catalogue; these checks read profiles directly.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 test('user-defined structure supports direct lab books, nested projects, moves and cycle rejection',()=>{
  let book=sampleNotebook(),root=book.projects[0],child={...root,id:randomUUID(),title:'Album',kind:'Release',parentId:root.id};
