@@ -56,7 +56,7 @@ test('large preview collections continue in place, preserve the page through the
   await expect(frame.locator('body')).toHaveCSS('--accent','#334455');
   await expect(page.getByLabel('Preview page',{exact:true})).toHaveValue(selected);
   await expect.poll(()=>frame.locator('.publication-card h2').allTextContents()).toEqual(titles);
-  await page.context().route('**/appearance-preview/**',route=>route.request().isNavigationRequest()?route.fulfill({status:503,json:{message:'Synthetic interrupted card page'}}):route.continue(),{times:1});
+  let interrupted=false;await page.context().route('**/appearance-preview/**',route=>{const {pathname}=new URL(route.request().url());if(interrupted||!pathname.startsWith('/appearance-preview/')||!pathname.endsWith('.html'))return route.continue();interrupted=true;return route.fulfill({status:503,json:{message:'Synthetic interrupted card page'}});});
   await frame.locator('[data-collection-next]').first().click();await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted card page');
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(frame.locator('[data-collection-previous]').first()).toBeVisible();
   await expect.poll(()=>frame.locator('.publication-card h2').allTextContents()).not.toEqual(titles);
