@@ -8,7 +8,7 @@ import {hasCatalogue} from './postgres.js';
 import {writeCatalogueRows,GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
 export {GROUPED_METADATA_OBJECTS};
 import {CatalogueReadCache} from './catalogue-read-cache.js';
-import {withCatalogueCacheBoundary} from './catalogue-context.js';
+import {withCatalogueCacheBoundary,catalogueContext,catalogueCacheEpoch} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
 export const withoutMetadataBatch=operation=>batches.exit(operation);
 // Call inside the workspace's writer lock. Legacy file workspaces keep their
@@ -34,9 +34,23 @@ export function metadataBatchIndex(store){
  const batch=batches.getStore();
  return batch?.store.db===store.db&&batch.store.workspace.root===store.workspace.root?batch:null;
 }
+// Object-index nodes are content addressed and authenticated on every use.
+// Successive batches of one writer scope and connection epoch (the same
+// transaction) share them, instead of reloading each path from the head; a
+// new transaction or cache boundary starts empty.
+const writerNodes=new WeakMap();
+function writerNodeCache(store){
+ const held=catalogueContext.getStore(),epoch=catalogueCacheEpoch(store.db);if(held?.db!==store.db||!epoch)return null;
+ let shared=writerNodes.get(held);if(shared?.epoch!==epoch){shared={epoch,cache:new Map(),cachedVersions:new Map(),nodeBytes:new WeakMap(),bytes:0};writerNodes.set(held,shared);}
+ return shared;
+}
+// Let an object index of this writer scope use the shared authenticated nodes.
+export function shareWriterNodes(index,store){
+ const shared=writerNodeCache(store);if(shared)Object.assign(index,{cache:shared.cache,cachedVersions:shared.cachedVersions,nodeBytes:shared.nodeBytes,cacheBytes:shared.bytes});return shared;
+}
 class MetadataBatchIndex extends ObjectIndex{
  encryptionKey(key){return this.objectReads.encryptionKey(key);}
- constructor(store){super(store,{cacheReads:true,cacheSize:16384});this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();this.missingObjects=new Set();}
+ constructor(store){super(store,{cacheReads:true,cacheSize:16384});this.shared=shareWriterNodes(this,store);this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();this.missingObjects=new Set();}
  async prefetchObjects(ids,{signal}={}){
   signal?.throwIfAborted();
   if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id))throw new AppError('INVALID');
@@ -83,7 +97,7 @@ class MetadataBatchIndex extends ObjectIndex{
  }
  async save(){await this.flushObjects();if(this.edits){await this.persist(this.current.root);this.edits=0;}}
  async checkCounts(head){await this.save();return super.checkCounts(head);}
- clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();this.missingObjects.clear();}
+ clear(){this.current=null;if(this.shared)this.shared.bytes=this.cacheBytes;else{this.cache.clear();this.cachedVersions.clear();}this.cacheBytes=0;this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();this.missingObjects.clear();}
 }
 export async function withMetadataBatch(store,operation,{prefetchIds=[],signal}={}){
  const invoke=async()=>{if(prefetchIds.length){const index=metadataBatchIndex(store);await index.prefetchKeys(await index.head(),prefetchIds,{signal});await index.prefetchObjects(prefetchIds,{signal});}return operation();};

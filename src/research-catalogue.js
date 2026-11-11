@@ -36,7 +36,7 @@ import {RecordHistoryIndex} from './record-history-index.js';
 import {retainedRecordDisplay} from './record-history-display.js';
 import {changedRetainedHistory} from './retained-record-history.js';
 import {ObjectIndex} from './object-index.js';
-import {metadataBatchIndex} from './metadata-batch.js';
+import {metadataBatchIndex,shareWriterNodes} from './metadata-batch.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {ModuleCatalogue} from './modules/catalogue.js';
@@ -584,10 +584,13 @@ export class ResearchCatalogue{
   if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id)||new Set(ids).size!==ids.length)throw new AppError('INVALID');
   const values=new Map();
   if(metadataBatchIndex(this)||this.readCache){await this.prefetchObjects(ids);for(const id of ids)values.set(id,await this.object(id));return values;}
-  const index=new ObjectIndex(this,{cacheReads:true,cacheSize:2048}),head=await index.head();await index.prefetchKeys(head,ids);
-  const rows=new Map((await this.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[])',ids)).map(row=>[row.id,row]));
-  for(const id of ids)values.set(id,await this.objectValue(id,await index.find(head,id),rows.get(id)??null));
-  return values;
+  const index=new ObjectIndex(this,{cacheReads:true,cacheSize:2048}),shared=shareWriterNodes(index,this);if(shared)index.cacheSize=16384;
+  try{
+   const head=await index.head();await index.prefetchKeys(head,ids);
+   const rows=new Map((await this.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[])',ids)).map(row=>[row.id,row]));
+   for(const id of ids)values.set(id,await this.objectValue(id,await index.find(head,id),rows.get(id)??null));
+   return values;
+  }finally{if(shared)shared.bytes=index.cacheBytes;}
  }
  async prefetchObjects(ids){
   if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id)||new Set(ids).size!==ids.length)throw new AppError('INVALID');
