@@ -68,5 +68,15 @@
  "profileVersion":"{name}, versjon {version}",
  "profileUpgrade":"Oppdater til versjon {version}",
  "profileUpgradeAdds":"Versjon {version} legg til: {items}",
- "profileUpgradeKeeps":"Etikettane, rekkjefølgja, fjerna element og eksisterande registreringar blir verande som dei er."
+ "profileUpgradeKeeps":"Etikettane, rekkjefølgja, fjerna element og eksisterande registreringar blir verande som dei er.",
+ "profileUpgradeChange":"{field}: {property} {from} → {to}",
+ "profileUpgradeKept":"{field}: verdien din for {property} ({current}) blir verande",
+ "profileUpgradeUpdates":"Oppdaterer felt du ikkje har endra:",
+ "profileUpgradeKeptHeading":"Held på dine eigne endringar:",
+ "profileUpgradeReview":"Sjå gjennom oppdateringa til versjon {version}",
+ "profileUpgradeApply":"Bruk oppdateringa til versjon {version}",
+ "profileValueNone":"ingen",
+ "property.unit":"eining",
+ "property.format":"eksakt format",
+ "property.uncertainty":"usikkerheit"
 }

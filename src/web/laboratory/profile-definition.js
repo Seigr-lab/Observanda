@@ -15,8 +15,9 @@ export const unit=id=>({unit:id});
 // exact format (custom-field-formats.js) for identifiers and digests; for
 // numbers, how the uncertainty is written (custom-field-uncertainty.js); and
 // private (true, or the version that made it private), for personal data or
-// precise locations that are never published.
-const field=(key,type,{unit:measure='',choices=[],format=null,uncertainty=null,private:hidden=false,since:version=1}={})=>({key,type,unit:measure,choices,format,uncertainty,hidden:hidden===true?version:hidden===false?null:since(hidden),since:since(version)});
+// precise locations that are never published; and was, the unit, format or
+// uncertainty a field had in earlier versions: [{until:1, unit:..., format:null}].
+const field=(key,type,{unit:measure='',choices=[],format=null,uncertainty=null,private:hidden=false,was=[],since:version=1}={})=>({key,type,unit:measure,choices,format,uncertainty,was,hidden:hidden===true?version:hidden===false?null:since(hidden),since:since(version)});
 export const text=(key,options)=>field(key,'text',options);
 export const date=(key,options)=>field(key,'date',options);
 export const number=(key,measure='',options={})=>field(key,'number',{...options,unit:measure});
@@ -31,7 +32,7 @@ export const section=(key,fields,{since:version=1}={})=>({key,fields,since:since
 // upgrade only ever adds that protection.
 export function defineProfile({id,version,icon,tracking=null,sections}){
  since(version);
- const introduced={sections:{},fields:{},choices:{},private:{}};
+ const introduced={sections:{},fields:{},choices:{},private:{}},history={};
  const unitText=measure=>typeof measure==='object'?say('units.'+measure.unit):measure;
  const within=value=>{if(value>version)throw new TypeError('Profile item is newer than its profile: '+id);return value;};
  const built=sections.map(s=>{
@@ -39,6 +40,10 @@ export function defineProfile({id,version,icon,tracking=null,sections}){
   return {key:s.key,label:say(`${id}.${s.key}.label`),description:say(`${id}.${s.key}.description`),fields:s.fields.map(f=>{
    introduced.fields[s.key+'/'+f.key]=within(Math.max(f.since,s.since));
    if(f.hidden!==null)introduced.private[s.key+'/'+f.key]=within(Math.max(f.hidden,f.since,s.since));
+   if(f.was.length)history[s.key+'/'+f.key]=f.was.map(({until,...previous})=>{
+    if(Object.keys(previous).some(name=>!['unit','format','uncertainty'].includes(name)))throw new TypeError('Profile field history names an unsupported property: '+id);
+    return {until:within(since(until)),properties:Object.fromEntries(Object.entries(previous).map(([name,value])=>[name,name==='unit'?unitText(value??''):value]))};
+   });
    const choices=f.choices.map(choice=>{
     const item=typeof choice==='string'?{id:choice,since:1}:choice,value=say(`${id}.${s.key}.choices.${f.key}.${item.id}`);
     introduced.choices[s.key+'/'+f.key+'/'+value]=within(Math.max(since(item.since),f.since,s.since));
@@ -51,5 +56,5 @@ export function defineProfile({id,version,icon,tracking=null,sections}){
  if(tracking&&![...tracking.subjects,...tracking.events,tracking.primary].every(key=>keys.has(key)))throw new TypeError('Profile tracking names an unknown section: '+id);
  return {id,version,label:types[id+'.label'],description:types[id+'.description'],icon,
   tracking:tracking&&{...tracking,subjectLabel:say(id+'.tracking.subject'),primaryLabel:say(id+'.tracking.primary'),headings:Object.fromEntries(tracking.subjects.map(key=>[key,say(`${id}.tracking.history.${key}`)]))},
-  sections:built,introduced};
+  sections:built,introduced,history};
 }

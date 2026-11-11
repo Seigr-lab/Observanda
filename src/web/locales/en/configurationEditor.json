@@ -68,5 +68,15 @@
  "profileVersion":"{name}, version {version}",
  "profileUpgrade":"Update to version {version}",
  "profileUpgradeAdds":"Version {version} adds: {items}",
- "profileUpgradeKeeps":"Your labels, order, removed items and existing records stay as they are."
+ "profileUpgradeKeeps":"Your labels, order, removed items and existing records stay as they are.",
+ "profileUpgradeChange":"{field}: {property} {from} → {to}",
+ "profileUpgradeKept":"{field}: your {property} ({current}) is kept",
+ "profileUpgradeUpdates":"Updates fields you have not changed:",
+ "profileUpgradeKeptHeading":"Keeps your own changes:",
+ "profileUpgradeReview":"Review update to version {version}",
+ "profileUpgradeApply":"Apply update to version {version}",
+ "profileValueNone":"none",
+ "property.unit":"unit",
+ "property.format":"exact format",
+ "property.uncertainty":"uncertainty"
 }

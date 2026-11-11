@@ -27,3 +27,15 @@ export const profileUpgradeItems=plan=>[
 ];
 const sectionLabel=(plan,key)=>plan.profile.sections.find(s=>s.key===key)?.label??key;
 const fieldLabel=(plan,section,key)=>plan.profile.sections.find(s=>s.key===section)?.fields.find(f=>f.key===key)?.label??key;
+// Property changes in display text (catalog.js profileUpgradeReview).
+const shownValue=(property,value)=>property==='unit'?(value?profileText(value):t('configurationEditor','profileValueNone')):t('customFields',property==='format'?'formats.'+(value??'free'):'uncertainties.'+(value??'none'));
+const changeField=(plan,change)=>profileText(fieldLabel(plan,change.section,change.field));
+export const profileUpgradeChangeText=(plan,change)=>t('configurationEditor','profileUpgradeChange',{field:changeField(plan,change),property:t('configurationEditor','property.'+change.property),from:shownValue(change.property,change.from),to:shownValue(change.property,change.to)});
+export const profileUpgradeKeptText=(plan,change)=>t('configurationEditor','profileUpgradeKept',{field:changeField(plan,change),property:t('configurationEditor','property.'+change.property),current:shownValue(change.property,change.current??null)});
+// The reviewable list shown before a book adopts a newer profile version.
+export function profileUpgradeSummary(plan,review,esc){
+ const items=profileUpgradeItems(plan),list=(heading,lines)=>lines.length?'<p>'+esc(heading)+'</p><ul>'+lines.map(line=>'<li>'+esc(line)+'</li>').join('')+'</ul>':'';
+ return '<div class="muted" data-profile-upgrade="'+esc(plan.profile.id)+'">'+(items.length?'<p>'+esc(t('configurationEditor','profileUpgradeAdds',{version:plan.to,items:items.join(', ')}))+'</p>':'')+
+  (review?list(t('configurationEditor','profileUpgradeUpdates'),review.apply.map(change=>profileUpgradeChangeText(plan,change)))+list(t('configurationEditor','profileUpgradeKeptHeading'),review.kept.map(change=>profileUpgradeKeptText(plan,change))):list(t('configurationEditor','profileUpgradeUpdates'),plan.changes.map(change=>profileUpgradeChangeText(plan,change))))+
+  '<p>'+esc(t('configurationEditor','profileUpgradeKeeps'))+'</p></div>';
+}

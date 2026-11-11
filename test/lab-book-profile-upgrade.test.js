@@ -68,3 +68,26 @@ test('a physical prototyping book from version 1 adopts version 2 without touchi
  assert.equal(bringUp.label,'Power-on test');assert.deepEqual(bringUp.fields.map(f=>f.key),profile.sections.find(s=>s.key==='bring-up').fields.map(f=>f.key));
  assert.deepEqual(record,before);assert.ok(validTemplate(record),'records keep the structure they were written with');
 });
+
+test('an upgrade updates unit, format and uncertainty only where the author left the shipped value',async()=>{
+ const {shippedProperties,profileUpgradeReview}=await import('../src/web/laboratory/catalog.js');
+ const {profileUpgradeSummary}=await import('../src/web/laboratory/profile-text.js');
+ const beekeeping=laboratoryProfiles.find(p=>p.id==='beekeeping'),lab={profiles:[],sections:[]};
+ assert.deepEqual(shippedProperties(beekeeping,'inspection','temperature',1),{unit:'°C',format:null,uncertainty:null});
+ assert.deepEqual(shippedProperties(beekeeping,'inspection','temperature',2),{unit:'°C',format:null,uncertainty:'absolute'});
+ enableProfile(lab,'beekeeping',true);lab.profiles[0].version=1;
+ const field=(section,key)=>lab.sections.find(s=>s.key===section).fields.find(f=>f.key===key);
+ for(const [section,key] of [['inspection','temperature'],['harvest','mass'],['harvest','moisture']])delete field(section,key).uncertainty;
+ field('harvest','moisture').uncertainty='interval';field('harvest','mass').type='text';delete field('harvest','mass').numeric;
+ const plan=profileUpgrade(beekeeping,1);
+ assert.deepEqual(plan.changes.map(c=>c.section+'/'+c.field+':'+c.property).sort(),['harvest/mass:uncertainty','harvest/moisture:uncertainty','inspection/temperature:uncertainty']);
+ const review=profileUpgradeReview(plan,(section,key)=>field(section,key));
+ assert.deepEqual(review.apply.map(c=>c.field),['temperature']);assert.deepEqual(review.kept.map(c=>c.field).sort(),['mass','moisture']);
+ const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const {profileUpgradeChangeText,profileUpgradeKeptText}=await import('../src/web/laboratory/profile-text.js'),html=profileUpgradeSummary(plan,review,esc);
+ for(const change of review.apply)assert.ok(html.includes(esc(profileUpgradeChangeText(plan,change))));
+ for(const change of review.kept)assert.ok(html.includes(esc(profileUpgradeKeptText(plan,change))));
+ assert.ok(upgradeProfile(lab,'beekeeping'));assert.ok(validConfiguration(lab));
+ assert.equal(field('inspection','temperature').uncertainty,'absolute');assert.equal(field('harvest','moisture').uncertainty,'interval');
+ assert.equal(field('harvest','mass').type,'text');assert.equal(Object.hasOwn(field('harvest','mass'),'uncertainty'),false,'a field whose type the author changed is left alone');
+});

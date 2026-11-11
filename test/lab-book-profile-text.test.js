@@ -53,7 +53,7 @@ test('books keep the canonical text while every interface language displays it t
   assert.equal(copied.label,inspection.label,'stored text never depends on the interface language');
   assert.equal(profileText(copied.label),t('labBookProfiles','beekeeping.inspection.label'));
   assert.equal(profileText(copied.description),t('labBookProfiles','beekeeping.inspection.description'));
-  assert.equal(customFieldLabel(temperature),t('labBookProfiles','beekeeping.inspection.fields.temperature')+' (°C)');
+  assert.equal(customFieldLabel(temperature),t('labBookProfiles','beekeeping.inspection.fields.temperature')+' (°C) · '+t('customFields','uncertainties.absolute'));
   assert.equal(customFieldLabel(frames),t('labBookProfiles','beekeeping.inspection.fields.bee-frames')+' ('+t('labBookProfiles','units.frame-equivalents')+')');
   assert.equal(customFieldValueText(queen,'Not seen'),t('labBookProfiles','beekeeping.inspection.choices.queen.not-seen'));
   assert.equal(customFieldValueText({type:'text'},'Not seen'),'Not seen','free text is never translated');

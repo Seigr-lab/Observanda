@@ -68,5 +68,15 @@
  "profileVersion":"{name}, versión {version}",
  "profileUpgrade":"Actualizar a la versión {version}",
  "profileUpgradeAdds":"La versión {version} añade: {items}",
- "profileUpgradeKeeps":"Tus etiquetas, el orden, los elementos eliminados y los registros existentes se mantienen tal como están."
+ "profileUpgradeKeeps":"Tus etiquetas, el orden, los elementos eliminados y los registros existentes se mantienen tal como están.",
+ "profileUpgradeChange":"{field}: {property} {from} → {to}",
+ "profileUpgradeKept":"{field}: se conserva tu valor de {property} ({current})",
+ "profileUpgradeUpdates":"Actualiza los campos que no has cambiado:",
+ "profileUpgradeKeptHeading":"Conserva tus propios cambios:",
+ "profileUpgradeReview":"Revisar la actualización a la versión {version}",
+ "profileUpgradeApply":"Aplicar la actualización a la versión {version}",
+ "profileValueNone":"ninguno",
+ "property.unit":"unidad",
+ "property.format":"formato exacto",
+ "property.uncertainty":"incertidumbre"
 }

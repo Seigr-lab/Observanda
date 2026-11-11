@@ -5,8 +5,8 @@ import {setCustomFieldProperty} from './custom-field-numbers.js';
 import {customFieldText,templateText} from './custom-field-presentation.js';
 import {labBookProfileLabel} from './project-type-presentation.js';
 import {enabledLabBookTypes} from './feature-modules.js';
-import {profileById,profileUpgrade} from './laboratory/catalog.js';
-import {profileUpgradeItems} from './laboratory/profile-text.js';
+import {profileById,profileUpgrade,profileUpgradeReview} from './laboratory/catalog.js';
+import {profileUpgradeSummary} from './laboratory/profile-text.js';
 import {t} from './i18n/index.js';
 
 const text=(key,args)=>t('configurationEditor',key,args);
@@ -16,7 +16,7 @@ const pageSize=20;
 // Interpretation properties a field no longer carries are removed from the stored field.
 const removedInterpretation=value=>{const remove=['numeric','format','uncertainty','private'].filter(name=>!Object.hasOwn(value,name));return remove.length?{remove}:{};};
 export function configurationEditor({state,api,esc,field,option,draw,onChange=()=>{},root=()=>document.querySelector('[data-configuration-editor]'),actionName='configuration-edit'}){
- let section=null,definition=null,choice=null,choiceText='',choiceBase='',profileId,sections=empty(),fields=empty(),choices=empty(),profiles=empty(),busy=false,error=null,epoch=0,controller=null,retry=null;
+ let section=null,definition=null,choice=null,choiceText='',choiceBase='',profileId,sections=empty(),fields=empty(),choices=empty(),profiles=empty(),busy=false,error=null,epoch=0,controller=null,retry=null,upgradeReview=null;
  const client=configurationDocumentClient({state,api,onChange:()=>{status();onChange();}});
  const dirty=()=>client.isDirty()||choiceText!==choiceBase;
  function status(){
@@ -72,8 +72,20 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  // A newer profile version is adopted only on request, after showing what it adds.
  function upgradeView(row){
   const profile=profileById(row.key);if(!profile||row.value.version>=profile.version)return '';
-  const items=profileUpgradeItems(profileUpgrade(profile,row.value.version));
-  return '<p class="muted" data-profile-upgrade="'+esc(row.key)+'">'+esc(text('profileUpgradeAdds',{version:profile.version,items:items.join(', ')}))+' '+esc(text('profileUpgradeKeeps'))+'</p>'+button('profileUpgrade','profile-upgrade','data-key="'+esc(row.key)+'"',text('profileUpgrade',{version:profile.version}));
+  const plan=profileUpgrade(profile,row.value.version),reviewed=upgradeReview?.key===row.key?upgradeReview.review:null;
+  if(!plan.changes.length||reviewed)return profileUpgradeSummary(plan,reviewed,esc)+button('profileUpgrade','profile-upgrade','data-key="'+esc(row.key)+'"',text(reviewed?'profileUpgradeApply':'profileUpgrade',{version:profile.version}))+(reviewed?button('cancel','profile-upgrade-cancel'):'');
+  return profileUpgradeSummary(plan,null,esc)+button('profileUpgradeReview','profile-upgrade-review','data-key="'+esc(row.key)+'"',text('profileUpgradeReview',{version:profile.version}));
+ }
+ // Reads the fields an update would change, to show which keep the author's values.
+ async function reviewUpgrade(key,signal){
+  const profile=profileById(key),chosen=profiles.rows.find(row=>row.key===key);if(!profile||!chosen)return;
+  const plan=profileUpgrade(profile,chosen.value.version),current=new Map(),absent=reason=>{if(reason.code==='NOT_FOUND')return null;throw reason;};
+  for(const change of plan.changes){
+   const row=await client.section({profileId:key,key:change.section},{signal}).catch(absent);
+   const field=row&&await client.item('fields',change.field,{sectionId:row.key,signal}).catch(absent);
+   if(field)current.set(change.section+'/'+change.field,field.value);
+  }
+  upgradeReview={key,review:profileUpgradeReview(plan,(section,field)=>current.get(section+'/'+field))};
  }
  function profileView(){
   if(profileId)return '';
@@ -136,7 +148,9 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
    if(kind==='field-remove')operation={type:'remove',collection:'fields',sectionId:section.key,key:definition.key};
    if(kind==='choice-add'){choice={key:null,value:''};choiceText=choiceBase='';return;}
    if(kind==='choice-remove'){if(choice.key!==null)operation={type:'remove',collection:'choices',sectionId:section.key,fieldKey:definition.key,key:choice.key};choice=null;choiceText=choiceBase='';}
-   if(kind==='profile-upgrade'&&profileById(key))operation={type:'profile-upgrade',key};
+   if(kind==='profile-upgrade-review'){await reviewUpgrade(key,signal);return;}
+   if(kind==='profile-upgrade-cancel'){upgradeReview=null;return;}
+   if(kind==='profile-upgrade'&&profileById(key)){operation={type:'profile-upgrade',key};upgradeReview=null;}
    if(kind==='profile-add'){const key=root()?.querySelector('[data-configuration-add-profile]')?.value;if(key)operation={type:'profile-enable',key,enabled:true};}
    if(!operation)return;
    await client.perform([operation]);await reload({signal});

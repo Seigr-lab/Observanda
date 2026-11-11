@@ -9,8 +9,8 @@ import {projectSettings} from './project-settings.js';
 import {newLabBookConfiguration,templateAvailable,templateChoices,starterTemplate,retainedTemplateAvailable} from './project-templates.js';
 import {isConfigurationReference} from './configuration-reference.js';
 import {enabledLabBookTypes} from './feature-modules.js';
-import {enableProfile,profileById,profileUpgrade,upgradeProfile} from './laboratory/catalog.js';
-import {profileUpgradeItems} from './laboratory/profile-text.js';
+import {enableProfile,profileById,profileUpgrade,profileUpgradeReview,upgradeProfile} from './laboratory/catalog.js';
+import {profileUpgradeSummary} from './laboratory/profile-text.js';
 import {notebookDirectory,notebookTypes,notebookRoute} from './laboratory/notebook-model.js';
 import {configurationOf,validConfiguration} from './notebook-schema.js';
 import {locationName,recordsIn} from './workspace-structure.js';
@@ -71,7 +71,7 @@ export function projectNotebooksUI(services){
   <div class="inline-actions"><button class="button" ${attrs(n.route)}>${text('openBook')}</button><button class="button" data-action="edit-notebook" data-id="${n.id}">${text('bookSettings')}</button></div></article>`;}
  const button=(label,command,attrs='',style='')=>`<button type="button" class="button ${style}" data-action="notebook-config-command" data-command="${command}" ${attrs}>${esc(label)}</button>`;
  // A book adopts a newer profile version only on request, after seeing what it adds.
- const upgradeOffer=(c,id)=>{const chosen=c.profiles.find(p=>p.id===id),profile=profileById(id);if(!chosen||!profile||chosen.version>=profile.version)return '';const items=profileUpgradeItems(profileUpgrade(profile,chosen.version));return `<p class="muted">${esc(t('configurationEditor','profileUpgradeAdds',{version:profile.version,items:items.join(', ')}))} ${esc(t('configurationEditor','profileUpgradeKeeps'))}</p>${button(t('configurationEditor','profileUpgrade',{version:profile.version}),'profile-upgrade',`data-id="${esc(id)}"`,'subtle')}`;};
+ const upgradeOffer=(c,id)=>{const chosen=c.profiles.find(p=>p.id===id),profile=profileById(id);if(!chosen||!profile||chosen.version>=profile.version)return '';const plan=profileUpgrade(profile,chosen.version),review=profileUpgradeReview(plan,(section,key)=>c.sections.find(s=>s.profileId===id&&s.key===section)?.fields.find(f=>f.key===key));return profileUpgradeSummary(plan,review,esc)+button(t('configurationEditor','profileUpgrade',{version:profile.version}),'profile-upgrade',`data-id="${esc(id)}"`,'subtle');};
  function draw(initial=false){
   const dialog=document.querySelector('#dialog'),scroll=dialog.querySelector('.notebook-config-scroll')?.scrollTop??0,focused=document.activeElement;
   const focusAttribute=['data-notebook-template','data-notebook-owner','data-notebook-profile','data-notebook-type','data-lab-field-prop'].find(key=>focused?.hasAttribute(key));

@@ -68,5 +68,15 @@
  "profileVersion":"{name}, versió {version}",
  "profileUpgrade":"Actualitza a la versió {version}",
  "profileUpgradeAdds":"La versió {version} afegeix: {items}",
- "profileUpgradeKeeps":"Les teves etiquetes, l'ordre, els elements eliminats i els registres existents es mantenen tal com són."
+ "profileUpgradeKeeps":"Les teves etiquetes, l'ordre, els elements eliminats i els registres existents es mantenen tal com són.",
+ "profileUpgradeChange":"{field}: {property} {from} → {to}",
+ "profileUpgradeKept":"{field}: es conserva el teu valor de {property} ({current})",
+ "profileUpgradeUpdates":"Actualitza els camps que no has canviat:",
+ "profileUpgradeKeptHeading":"Conserva els teus propis canvis:",
+ "profileUpgradeReview":"Revisa l'actualització a la versió {version}",
+ "profileUpgradeApply":"Aplica l'actualització a la versió {version}",
+ "profileValueNone":"cap",
+ "property.unit":"unitat",
+ "property.format":"format exacte",
+ "property.uncertainty":"incertesa"
 }

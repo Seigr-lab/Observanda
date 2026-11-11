@@ -9,7 +9,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
 import {ConfigurationCommands} from '../src/configuration-commands.js';
-import {laboratoryProfiles,enableProfile,profileById,upgradeProfile} from '../src/web/laboratory/catalog.js';
+import {laboratoryProfiles,enableProfile,profileById,upgradeProfile,shippedProperties} from '../src/web/laboratory/catalog.js';
 
 // Books that adopted an older version of each profile that has newer ones.
 const upgradable=laboratoryProfiles.filter(p=>p.version>1);
@@ -33,9 +33,12 @@ test('the configuration service upgrades a book exactly like the lab book editor
   for(const s of configuration.sections.filter(s=>s.profileId===profile.id)){
    s.fields=s.fields.filter(f=>profile.introduced.fields[s.key+'/'+f.key]===1);
    for(const f of s.fields)if((profile.introduced.private[s.key+'/'+f.key]??1)>1)delete f.private;
+   for(const f of s.fields){const shipped=shippedProperties(profile,s.key,f.key,1);f.unit=shipped.unit;for(const name of ['format','uncertainty'])if(shipped[name]===null)delete f[name];else f[name]=shipped[name];}
    for(const f of s.fields)f.choices=f.choices.filter(c=>profile.introduced.choices[s.key+'/'+f.key+'/'+c]===1);
   }
  }
+ // An author's own setting that version 2 would otherwise change.
+ configuration.sections.find(s=>s.profileId==='beekeeping'&&s.key==='harvest').fields.find(f=>f.key==='moisture').uncertainty='interval';
  const expected=structuredClone(configuration);for(const profile of upgradable)upgradeProfile(expected,profile.id);
  const {commands,owner,opened}=await fixture(t,configuration),base={...owner,configurationPin:opened.configurationPin};
  await assert.rejects(commands.change({...base,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'profile-upgrade',key:'unknown-profile'}]}),{code:'INVALID'});
@@ -48,8 +51,11 @@ test('the configuration service upgrades a book exactly like the lab book editor
  assert.deepEqual(sections.map(r=>(r.value.profileId??'')+':'+r.value.key),expected.sections.map(s=>(s.profileId??'')+':'+s.key));
  for(const row of sections){
   const want=expected.sections.find(s=>s.profileId===row.value.profileId&&s.key===row.value.key),fields=await rows(commands,base,changed.draft,'fields',{sectionId:row.key});
-  assert.deepEqual(fields.map(f=>[f.key,f.value.private===true]),want.fields.map(f=>[f.key,f.private===true]),row.value.key);
+  const shape=f=>[f.key,f.private===true,f.unit,f.format??null,f.uncertainty??null];
+  assert.deepEqual(fields.map(f=>shape({key:f.key,...f.value})),want.fields.map(shape),row.value.key);
   for(const field of fields.filter(f=>f.value.type==='select'))assert.deepEqual((await rows(commands,base,changed.draft,'choices',{sectionId:row.key,fieldKey:field.key})).map(c=>c.value),want.fields.find(f=>f.key===field.key).choices);
  }
+ const harvest=expected.sections.find(s=>s.profileId==='beekeeping'&&s.key==='harvest').fields;
+ assert.equal(harvest.find(f=>f.key==='moisture').uncertainty,'interval','the author setting is kept');assert.equal(harvest.find(f=>f.key==='mass').uncertainty,'absolute','an untouched field is updated');
  assert.ok(profileById('beekeeping'));
 });

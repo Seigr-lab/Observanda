@@ -4,7 +4,7 @@
 import {randomUUID} from 'node:crypto';
 import {ConfigurationDocuments} from './configuration-documents.js';
 import {emptyConfiguration} from './web/notebook-schema.js';
-import {profileById,profileUpgrade} from './web/laboratory/catalog.js';
+import {profileById,profileUpgrade,profileUpgradeReview} from './web/laboratory/catalog.js';
 import {starterTemplate} from './web/project-templates.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -148,6 +148,12 @@ export class ConfigurationCommands{
        if(definition?.value.type==='select'&&!await reader.item({collection:'choices',sectionId:row.key,fieldKey:field,key:choice}).catch(absent))await apply([{type:'append',collection:'choices',sectionId:row.key,fieldKey:field,value:choice}]);
       }
       for(const {section:key,field} of plan.private){const row=await section(key),definition=row&&await reader.item({collection:'fields',sectionId:row.key,key:field}).catch(absent);if(definition&&definition.value.private!==true)await apply([{type:'replace',collection:'fields',sectionId:row.key,key:field,value:{private:true}}]);}
+      const current=new Map();
+      for(const {section:key,field} of plan.changes){const row=await section(key),definition=row&&await reader.item({collection:'fields',sectionId:row.key,key:field}).catch(absent);if(definition)current.set(key+'/'+field,{sectionId:row.key,value:definition.value});}
+      for(const change of profileUpgradeReview(plan,(key,field)=>current.get(key+'/'+field)?.value).apply){
+       const {sectionId}=current.get(change.section+'/'+change.field);
+       await apply([change.property!=='unit'&&change.to===null?{type:'replace',collection:'fields',sectionId,key:change.field,value:{},remove:[change.property]}:{type:'replace',collection:'fields',sectionId,key:change.field,value:{[change.property]:change.to}}]);
+      }
       await apply([{type:'replace',collection:'profiles',key:profile.id,value:{...chosen.value,version:profile.version}}]);
      }
     }else if(operation.type==='section-move'){if(!exact(operation,['type','key','direction'])||![-1,1].includes(operation.direction))invalid();await apply([{type:'move',collection:'sections',key:operation.key,direction:operation.direction}]);}
