@@ -10,8 +10,10 @@ import {defaultBreakpoints} from './web/website-breakpoint-model.js';
 import {projectWebsiteBreakpoints} from './website-breakpoints.js';
 import {affectedComponents,componentDependencies,checkComponentSchema,migrateInstance} from './website-component-schema.js';
 import {componentCSS} from './website-component-styles.js';
+import {storedDesignStyle} from './website-page-designs.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const shown=row=>row.values??row.source??row.template;
 function value(manifest,kind){
  if(kind==='themeBook')return manifest.themeBook??{items:[],pages:{},folders:{}};
  if(kind==='styleBook'){const {fonts,...styles}=manifest.styleBook??newStyleBook();return styles;}
@@ -46,7 +48,7 @@ function changeRows(kind,from,to){
  const members=list=>new Map(list.map(row=>[row.id,row]));
  const before=members(kind==='themeBook'?from.items:from),after=members(kind==='themeBook'?to.items:to);
  const rows=[...new Set([...before.keys(),...after.keys()])].flatMap(id=>same(before.get(id),after.get(id))?[]:[{
-  name:after.get(id)?.name??before.get(id).name,before:before.has(id)?JSON.stringify(before.get(id).values??before.get(id).source):'',after:after.has(id)?JSON.stringify(after.get(id).values??after.get(id).source):''}]);
+  name:after.get(id)?.name??before.get(id).name,before:before.has(id)?JSON.stringify(shown(before.get(id))):'',after:after.has(id)?JSON.stringify(shown(after.get(id))):''}]);
  if(kind==='themeBook')for(const scope of ['pages','folders'])for(const path of new Set([...Object.keys(from[scope]),...Object.keys(to[scope])])){
   const a=from[scope][path],b=to[scope][path];
   if(a!==b)rows.push({name:path,before:before.get(a)?.name??'',after:after.get(b)?.name??''});
@@ -129,7 +131,13 @@ export function websiteVersionDesign(store,id,options,apply=false){
      return current.path;
     };
     if(kind==='themeBook'||kind==='styleBook')desired={...desired,pages:Object.fromEntries(Object.entries(desired.pages).map(([key,theme])=>[address(key),theme]))};
-    else desired=desired.map(d=>({...d,source:address(d.source)}));
+    else{
+     desired=desired.map(d=>d.template?d:{...d,source:address(d.source)});
+     // A stored design needs its private stylesheet, which a design restore does
+     // not bring back, and the components and page styles its template names.
+     const names=new Set(ctx.current.files.map(f=>f.name)),components=new Set((ctx.current.components??[]).map(c=>c.id)),tokens=new Set((ctx.current.styleBook?.tokens??[]).map(t=>t.id));
+     if(desired.some(d=>d.template&&(!names.has(storedDesignStyle(d.id))||d.template.components.some(id=>!components.has(id))||d.template.styleTokens.some(id=>!tokens.has(id))))&&status==='ready')status='resources';
+    }
    }
    rows=changeRows(kind,value(ctx.current,kind),desired);
    if(kind==='styleBook'){
@@ -151,6 +159,16 @@ export function websiteVersionDesign(store,id,options,apply=false){
   else{
    next={...ctx.current,[kind]:desired};
    if(kind==='appearance'&&desired===null)delete next.appearance;
+   if(kind==='pageDesigns'){
+    // Stored designs the restore leaves out take their stylesheet and pictures with them.
+    const kept=new Set(desired.filter(d=>d.template).map(d=>storedDesignStyle(d.id)));
+    const gone=new Set((ctx.current.pageDesigns??[]).filter(d=>d.template&&!kept.has(storedDesignStyle(d.id))).map(d=>storedDesignStyle(d.id)));
+    if(gone.size){
+     const pictureStyles=Object.fromEntries(Object.entries(ctx.current.pictureStyles??{}).filter(([name])=>!gone.has(name)));
+     const used=new Set([...ctx.current.pages.flatMap(p=>p.pictures??[]),...Object.values(pictureStyles).flat()]);
+     next={...next,pictureStyles,files:ctx.current.files.filter(f=>!gone.has(f.name)&&(!f.picture||used.has(f.name)))};
+    }
+   }
   }
   await store.assertSources(next);
   return store.present(await store.commit(next,{signal,versioning:{restoredFrom:version}}),path,{signal});

@@ -148,7 +148,8 @@ export function componentOperation(store,operation,id,options={},requireReview=f
    if(!visible)throw new AppError('NOT_FOUND');
    if(page.draft&&!main.draft)throw new AppError('WEBSITE_PUBLIC_COMPONENT');
    if(manifest.pages.some(owner=>owner.instances?.some(row=>row.component===component))||list(manifest).some(c=>c.slots?.some(s=>s.component===component))||
-    Object.values(manifest.regions?.slots??{}).some(row=>row.component===component)||manifest.regions?.overrides.some(row=>row.component===component))fail();
+    Object.values(manifest.regions?.slots??{}).some(row=>row.component===component)||manifest.regions?.overrides.some(row=>row.component===component)||
+    manifest.pageDesigns?.some(design=>design.template?.components.includes(component)))fail();
    const components=list(manifest).filter(row=>row.id!==component),kept=new Set([...manifest.pages.flatMap(p=>[...(p.pictures??[]),...(p.recordings??[])]),...Object.values(manifest.pictureStyles??{}).flat()]);
    const files=manifest.files.filter(file=>!file.picture&&!file.recording||kept.has(file.name));
    const candidate={...manifest,components,files};await store.assertSources(candidate);

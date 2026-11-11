@@ -1433,5 +1433,9 @@
   "starterCourse": "Kurs",
   "starterCourseText": "Ei oversikt, tre lenkja leksjonar med ei leksjonskolonne, og ressursar.",
   "starterLaboratory": "Laboratorium",
-  "starterLaboratoryText": "Nyleg arbeid, metodar, resultat og teamet."
+  "starterLaboratoryText": "Nyleg arbeid, metodar, resultat og teamet.",
+  "designKeep": "Behald uavhengig av denne sida",
+  "designKept": "Utforminga er halden og er ikkje lenger avhengig av sida si.",
+  "designStoredName": "{name} (halden)",
+  "designForgetStored": "Fjern halden utforming"
 }

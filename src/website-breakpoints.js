@@ -4,6 +4,7 @@ import {defaultBreakpoints,managedLayoutBlocks,rewriteLayoutRanges,validBreakpoi
 import {componentContext} from './website-component-storage.js';
 import {checkComponentInstances,pageComponentDocument,rewriteComponentInstances} from './website-file-component.js';
 import {componentDependencies} from './website-component-schema.js';
+import {storedDesignStyle} from './website-page-designs.js';
 
 const fail=code=>{throw new AppError(code);};
 const identity=range=>[range.id,range.min,range.max];
@@ -14,7 +15,9 @@ function needsRewrite(before,after){
 export async function projectWebsiteBreakpoints(store,manifest,ranges,{apply=false,includeDraft=false,signal}={}){
   const before=manifest.breakpoints??defaultBreakpoints();
   const files=[],sample=[];let changed=0,manual=0;
-  const rewrite=needsRewrite(before,ranges),sheets=new Set([manifest.cssPath,'draft-styles.css',...manifest.pages.map(p=>p.stylePath).filter(Boolean)]);
+  // Stored page designs keep their layout in private stylesheets of their own.
+  const stored=(manifest.pageDesigns??[]).filter(d=>d.template).map(d=>storedDesignStyle(d.id));
+  const rewrite=needsRewrite(before,ranges),sheets=new Set([manifest.cssPath,'draft-styles.css',...manifest.pages.map(p=>p.stylePath).filter(Boolean),...stored]);
   for(const file of manifest.files){
    signal?.throwIfAborted();
    if(!rewrite||!sheets.has(file.name)||file.sourceId||file.feedAsset||file.tokenSheet||file.tokenFont||file.hasResponsiveLayout===false){files.push(file);continue;}

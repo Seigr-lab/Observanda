@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {parse} from 'parse5';
+import {parse,parseFragment,serialize} from 'parse5';
 import {AppError} from './errors.js';
 import {attr} from './website-migration-views.js';
 import {websiteFileName,websiteHTMLByteLimit} from './website-file-policy.js';
@@ -37,20 +37,88 @@ function layoutStyle(raw=''){
 // Site regions are left out: a page made from a design receives its site's regions.
 const ownedMarker=name=>name.startsWith('data-observanda-')||name.startsWith('data-website-feed')||['hidden','data-public-record','data-record-id','data-feed-item','data-website-source-gallery','data-website-menu','data-image-gallery','data-website-region'].includes(name);
 const skipped=node=>node.attrs?.some(a=>ownedMarker(a.name)||a.name==='aria-hidden'&&a.value.toLowerCase()==='true'||a.name==='style'&&/(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|content-visibility\s*:\s*hidden)\b/i.test(a.value));
+// A design is live (generated from its source page) or stored (a portable
+// template kept with its own private stylesheet, independent of any page).
+export const storedDesignStyle=id=>'page-design-'+id+'.css';
+const classAttribute=value=>value===''||typeof value==='string'&&/^ class="[^"<>]*"$/.test(value);
+function validTemplate(item,files,manifest){
+ const t=item.template,css=files.get(storedDesignStyle(item.id));
+ if(!t||typeof t!=='object'||Array.isArray(t)||Object.keys(t).sort().join()!=='bodyClass,components,content,headingClass,rootClass,styleTokens')return false;
+ if(![t.bodyClass,t.rootClass,t.headingClass].every(classAttribute)||typeof t.content!=='string'||Buffer.byteLength(t.content)>websiteHTMLByteLimit)return false;
+ const components=new Set((manifest.components??[]).map(row=>row.id)),tokens=new Set((manifest.styleBook?.tokens??[]).map(row=>row.id));
+ if(!Array.isArray(t.components)||t.components.some(id=>!components.has(id))||!Array.isArray(t.styleTokens)||t.styleTokens.some(id=>!tokens.has(id)))return false;
+ return Boolean(css&&css.draft&&!css.sourceId&&!css.feedAsset);
+}
 export function validatePageDesigns(manifest){
  if(manifest.pageDesigns===undefined)return;
  if(!Array.isArray(manifest.pageDesigns))throw new AppError('FORMAT');
- const ids=new Set(),sources=new Set(),labels=new Set();
+ const ids=new Set(),sources=new Set(),labels=new Set(),files=new Map(manifest.files.map(file=>[file.name,file]));
  for(const item of manifest.pageDesigns){
-  if(!uuid(item?.id)||ids.has(item.id)||typeof item.name!=='string'||!item.name.trim()||item.name.length>160||labels.has(fold(item.name))||typeof item.source!=='string'||!item.source.endsWith('.html')||sources.has(item.source))throw new AppError('FORMAT');
-  websiteFileName(item.source);ids.add(item.id);sources.add(item.source);labels.add(fold(item.name));
+  if(!uuid(item?.id)||ids.has(item.id)||typeof item.name!=='string'||!item.name.trim()||item.name.length>160||labels.has(fold(item.name)))throw new AppError('FORMAT');
+  if(item.template!==undefined){if(item.source!==undefined||!validTemplate(item,files,manifest))throw new AppError('FORMAT');}
+  else{
+   if(typeof item.source!=='string'||!item.source.endsWith('.html')||sources.has(item.source))throw new AppError('FORMAT');
+   websiteFileName(item.source);sources.add(item.source);
+  }
+  ids.add(item.id);labels.add(fold(item.name));
  }
+}
+// A stored template written for the page that uses it: root-relative links are
+// rewritten from the destination's folder and themes the site no longer has
+// are left out.
+function instantiateTemplate(content,destination,themes){
+ const base=path.posix.dirname(destination),local=value=>base==='.'||!value||value.startsWith('#')||/^[a-z][a-z0-9+.-]*:/i.test(value)?value:path.posix.relative(base,value.split('#')[0])+(value.includes('#')?'#'+value.split('#').slice(1).join('#'):'');
+ const fragment=parseFragment(content),pending=[...fragment.childNodes];
+ while(pending.length){
+  const node=pending.pop();
+  if(node.attrs)node.attrs=node.attrs.filter(item=>item.name!=='data-website-theme'||themes.has(item.value));
+  for(const item of node.attrs??[]){
+   if(['href','src','poster'].includes(item.name))item.value=local(item.value);
+   if(item.name==='srcset')item.value=imageCandidates(item.value)?.map(({url,descriptor})=>local(url)+(descriptor?' '+descriptor:'')).join(', ')??item.value;
+  }
+  pending.push(...(node.childNodes??[]));
+ }
+ return serialize(fragment);
+}
+// The same template with the site identities it names replaced, for a copied
+// site or an imported design. Unknown identities are kept as they are.
+export function remappedTemplate(template,{components=new Map(),themes=new Map(),tokens=new Map(),classes=new Map()}={}){
+ const fragment=parseFragment(template.content),pending=[...fragment.childNodes];
+ while(pending.length){
+  const node=pending.pop();
+  for(const item of node.attrs??[]){
+   if(item.name==='data-website-design-component')item.value=components.get(item.value)??item.value;
+   else if(item.name==='data-website-theme')item.value=themes.get(item.value)??item.value;
+   else if(item.name==='class')item.value=item.value.split(/\s+/).filter(Boolean).map(name=>name.startsWith('ow-token-')&&classes.has(name.slice(9))?'ow-token-'+classes.get(name.slice(9)):name).join(' ');
+  }
+  pending.push(...(node.childNodes??[]));
+ }
+ const named=value=>value.replace(/ow-token-([0-9a-f-]{36})/g,(whole,id)=>classes.has(id)?'ow-token-'+classes.get(id):whole);
+ return {...template,bodyClass:named(template.bodyClass),rootClass:named(template.rootClass),headingClass:named(template.headingClass),content:serialize(fragment),
+  components:template.components.map(id=>components.get(id)??id),styleTokens:template.styleTokens.map(id=>tokens.get(id)??id)};
+}
+// The pictures a template needs, by site file name (template links are root-relative).
+function templatePictures(content,css,files){
+ const names=new Set(),pending=[...parseFragment(content).childNodes];
+ while(pending.length){
+  const node=pending.pop();
+  for(const item of node.attrs??[]){
+   const values=item.name==='src'||item.name==='poster'?[item.value]:item.name==='srcset'?(imageCandidates(item.value)??[]).map(c=>c.url):[];
+   for(const value of values)if(files.get(value)?.picture)names.add(value);
+  }
+  pending.push(...(node.childNodes??[]));
+ }
+ for(const match of css.matchAll(/url\(\s*['"]?([^'")\s]+)['"]?\s*\)/g))if(files.get(match[1])?.picture)names.add(match[1]);
+ return [...names];
 }
 function usable(files,page){
  const file=page&&files.get(page.path);
  return file&&!page.draft&&!file.draft&&!file.sourceId&&!file.feedPage;
 }
-function pageDesignHTML(manifest,owner,file,html,destination,title,language,labels,styles){
+// Builds a design from its source page. A portable design is written from the
+// site root and keeps components as placeholders, so it can be stored and used
+// anywhere later (see instantiateTemplate).
+function pageDesignParts(manifest,owner,file,html,destination,labels,styles,{portable=false}={}){
  const context=componentContext(manifest),instances=[],sourceInstances=new Map((owner.instances??[]).map(i=>[i.id,i]));
  const availableTokens=new Set((file.tokenUsage??[]).map(id=>'ow-token-'+id));
  const pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
@@ -96,6 +164,7 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   if(placed!==undefined){
    const row=sourceInstances.get(placed),definition=context.components.get(row?.component);
    if(!row||!definition||definition.draft)throw new AppError('CONFLICT');
+   if(portable)return '<div data-website-design-component="'+definition.id+'"></div>';
    const instance={id:randomUUID(),component:definition.id};instances.push(instance);
    return renderComponentInstance(definition,instance,{path:destination},context);
   }
@@ -161,28 +230,78 @@ function pageDesignHTML(manifest,owner,file,html,destination,title,language,labe
   const part=designNode(entry.node);if(typeof part==='string'){append(part);continue;}
   append(part.open);stack.push({start:chunks.length,close:part.close,sample:part.sample});queue(entry.node.childNodes??[]);
  }
- let starter=starterPage({title,language,stylesheet:path.posix.relative(outDir,manifest.cssPath)},esc);
- if(allowed){
-  const heading=root.childNodes.find(n=>n.tagName==='h1'&&!skipped(n));
-  starter=starter.replace('<body><main><h1>',()=>'<body'+designClass(body)+'><main'+(root===body?'':designClass(root))+'><h1'+(heading?designClass(heading):'')+'>');
+ const heading=allowed?root.childNodes.find(n=>n.tagName==='h1'&&!skipped(n)):null;
+ return {bodyClass:allowed?designClass(body):'',rootClass:allowed&&root!==body?designClass(root):'',headingClass:heading?designClass(heading):'',content:chunks.join(''),instances};
+}
+function assembleDesign(manifest,parts,destination,title,language){
+ const starter=starterPage({title,language,stylesheet:path.posix.relative(path.posix.dirname(destination),manifest.cssPath)},esc)
+  .replace('<body><main><h1>',()=>'<body'+parts.bodyClass+'><main'+parts.rootClass+'><h1'+parts.headingClass+'>');
+ return attachGalleryViewer(starter.replace('</main>',()=>parts.content+'</main>'),destination);
+}
+function pageDesignHTML(manifest,owner,file,html,destination,title,language,labels,styles){
+ const parts=pageDesignParts(manifest,owner,file,html,destination,labels,styles);
+ return {html:assembleDesign(manifest,parts,destination,title,language),instances:parts.instances};
+}
+// A live design reads its published source page and the stylesheets it uses.
+async function designSource(store,manifest,owner,files,signal){
+ const file=files.get(owner.path),css=files.get(manifest.cssPath);
+ if(!file||file.draft||!css||css.draft||css.sourceId)invalid();
+ const ownStyle=owner.stylePath?files.get(owner.stylePath):null;
+ const published=new Map((manifest.publicPageFiles??[]).map(row=>[row.file.name,row.file]));
+ const sourceCSS=await store.readText(published.get(css.name)??css,{signal})+(ownStyle?'\n'+await store.readText(published.get(ownStyle.name)??ownStyle,{signal}):'');
+ return {file,styles:designStyleCopies(sourceCSS,manifest.breakpoints)};
+}
+// A design in portable form: the template, its stylesheet and the site pictures
+// it uses. A stored design is read as kept; a live one is generated from its
+// published page. Callers hold the store scope.
+export async function portablePageDesign(store,manifest,design,labels,signal){
+ const files=new Map(manifest.files.map(f=>[f.name,f]));
+ if(design.template){
+  const sheet=files.get(storedDesignStyle(design.id));if(!sheet)throw new AppError('NOT_FOUND');
+  return {template:design.template,css:await store.readText(sheet,{signal}),pictures:[...(manifest.pictureStyles?.[storedDesignStyle(design.id)]??[])]};
  }
- return {html:attachGalleryViewer(starter.replace('</main>',()=>chunks.join('')+'</main>'),destination),instances};
+ const owner=manifest.pages.find(p=>p.path===design.source);
+ if(!usable(files,owner))throw new AppError('NOT_FOUND');
+ const {file,styles}=await designSource(store,manifest,owner,files,signal);
+ const parts=pageDesignParts(manifest,owner,file,await store.readText(file,{signal}),'index.html',labels,styles,{portable:true});
+ const css=styles.copiedRules(layoutClasses);
+ const template={bodyClass:parts.bodyClass,rootClass:parts.rootClass,headingClass:parts.headingClass,content:parts.content,
+  components:[...new Set([...parts.content.matchAll(/data-website-design-component="([^"]+)"/g)].map(m=>m[1]))],styleTokens:[...(manifest.styleBook?.pages[owner.path]??[])]};
+ return {template,css,pictures:templatePictures(parts.content,css,files)};
 }
 export function websitePageDesigns(store,siteId,options){
  const {action,expectedRevision,path:sourcePath,signal}=options;
- if(!/^[a-f0-9]{64}$/.test(expectedRevision??'')||!['list','name','forget','use'].includes(action))invalid();
+ if(!/^[a-f0-9]{64}$/.test(expectedRevision??'')||!['list','name','forget','use','keep'].includes(action))invalid();
  return store.scope(async()=>{
   const manifest=await store.current(siteId,expectedRevision),catalogue=manifest.pageDesigns??[],pages=new Map(manifest.pages.map(p=>[p.path,p])),files=new Map(manifest.files.map(f=>[f.name,f]));
   if(action==='list'){
    const {offset=0,query=''}=options;if(!Number.isSafeInteger(offset)||offset<0||typeof query!=='string'||query.length>160)invalid();
    const items=[];let total=0,local=null;
    for(const item of catalogue){
-    if(!usable(files,pages.get(item.source)))continue;
-    if(item.source===sourcePath)local=item;
+    if(!item.template&&!usable(files,pages.get(item.source)))continue;
+    // Rows carry what the chooser shows, never a stored template's content.
+    const row={id:item.id,name:item.name,...(item.template?{stored:true}:{source:item.source})};
+    if(!item.template&&item.source===sourcePath)local=row;
     if(!fold(item.name).includes(fold(query)))continue;
-    if(total>=offset&&items.length<windowSize)items.push(item);total++;
+    if(total>=offset&&items.length<windowSize)items.push(row);total++;
    }
    return {revision:manifest.revision,local,items,total,previous:Math.max(0,offset-windowSize),next:offset+items.length<total?offset+items.length:null};
+  }
+  const stored=catalogue.find(d=>d.template&&d.id===options.design);
+  if(action==='forget'&&stored){
+   // The template's private stylesheet and its picture group leave with it.
+   const name=storedDesignStyle(stored.id),pictureStyles={...manifest.pictureStyles};delete pictureStyles[name];
+   const kept=new Set([...manifest.pages.flatMap(p=>p.pictures??[]),...Object.values(pictureStyles).flat()]);
+   const changed=await store.commit({...manifest,pageDesigns:catalogue.filter(d=>d!==stored),pictureStyles,files:manifest.files.filter(f=>f.name!==name&&(!f.picture||kept.has(f.name)))},{signal});
+   return store.present(changed,sourcePath,{signal});
+  }
+  if(action==='keep'){
+   const design=catalogue.find(d=>d.id===options.design&&!d.template),owner=pages.get(design?.source);
+   if(!usable(files,owner))throw new AppError('NOT_FOUND');
+   const {template,css,pictures}=await portablePageDesign(store,manifest,design,options.labels,signal),name=storedDesignStyle(design.id);
+   const sheet=await store.siteFile(siteId,name,css,{draft:true,signal});
+   const candidate={...manifest,pageDesigns:catalogue.map(d=>d===design?{id:d.id,name:d.name,template}:d),files:[...manifest.files.filter(f=>f.name!==name),sheet],pictureStyles:{...manifest.pictureStyles,[name]:pictures}};
+   return store.present(await store.commit(candidate,{signal}),sourcePath,{signal});
   }
   if(action==='name'||action==='forget'){
    if(!usable(files,pages.get(sourcePath)))invalid();
@@ -194,16 +313,20 @@ export function websitePageDesigns(store,siteId,options){
    const changed=await store.commit({...manifest,pageDesigns:other},{signal});return store.present(changed,sourcePath,{signal});
   }
   const design=catalogue.find(d=>d.id===options.design),owner=pages.get(design?.source);
-  if(!usable(files,owner))throw new AppError('NOT_FOUND');
+  if(!design||!design.template&&!usable(files,owner))throw new AppError('NOT_FOUND');
   const out=websiteFileName(options.destination);
   if(!out.endsWith('.html')||manifest.files.some(f=>f.name.toLowerCase()===out.toLowerCase()))invalid();
-  const file=manifest.files.find(f=>f.name===owner.path),css=manifest.files.find(f=>f.name===manifest.cssPath);
-  if(!file||file.draft||!css||css.draft||css.sourceId)invalid();
   const title=named(options.title),language=typeof options.language==='string'&&options.language.length<=80?options.language:'en';
-  const ownStyle=owner.stylePath?files.get(owner.stylePath):null;
-  const published=new Map((manifest.publicPageFiles??[]).map(row=>[row.file.name,row.file]));
-  const sourceCSS=await store.readText(published.get(css.name)??css,{signal})+(ownStyle?'\n'+await store.readText(published.get(ownStyle.name)??ownStyle,{signal}):'');
-  const styles=designStyleCopies(sourceCSS,manifest.breakpoints);
+  if(design.template){
+   const t=design.template,context=componentContext(manifest),instances=[];
+   const content=instantiateTemplate(t.content,out,context.themes).replace(/<div data-website-design-component="([^"]+)"><\/div>/g,(_,id)=>{
+    const definition=context.components.get(id);if(!definition||definition.draft)throw new AppError('CONFLICT');
+    const instance={id:randomUUID(),component:id};instances.push(instance);return renderComponentInstance(definition,instance,{path:out},context);
+   });
+   const css=await store.readText(files.get(storedDesignStyle(design.id)),{signal});
+   return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{html:assembleDesign(manifest,{...t,content},out,title,language),instances,css,styleTokens:t.styleTokens});
+  }
+  const {file,styles}=await designSource(store,manifest,owner,files,signal);
   const generated=pageDesignHTML(manifest,owner,file,await store.readText(file,{signal}),out,title,language,options.labels,styles);
   return store.createPage(siteId,{expectedRevision,path:out,title,language,inclusion:options.inclusion,signal},{...generated,css:styles.copiedRules(layoutClasses),styleTokens:manifest.styleBook?.pages[owner.path]});
  },{write:action!=='list',signal});

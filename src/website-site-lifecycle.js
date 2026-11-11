@@ -9,6 +9,7 @@ import {componentContext} from './website-component-storage.js';
 import {copiedComponentHTML,copiedPageOwner,duplicateSitePage,duplicatedFeedIds} from './website-page-duplicate.js';
 import {movedWebsiteText} from './website-page-paths.js';
 import {duplicateWebsiteFeed} from './website-dynamic-feeds.js';
+import {remappedTemplate} from './website-page-designs.js';
 
 const idsFor=rows=>new Map((rows??[]).map(row=>[row.id,randomUUID()]));
 const assignments=(table,ids)=>Object.fromEntries(Object.entries(table).map(([name,id])=>[name,ids.get(id)]));
@@ -33,7 +34,9 @@ async function duplicateSite(store,source,options){
   const book=source.themeBook;
   candidate.themeBook={items:book.items.map(item=>({...item,id:ids.themes.get(item.id)})),pages:assignments(book.pages,ids.themes),folders:assignments(book.folders,ids.themes)};
  }
- if(source.pageDesigns)candidate.pageDesigns=source.pageDesigns.map(d=>({...d,id:randomUUID()}));
+ // A stored design keeps its id: its private stylesheet is copied under the same name.
+ // Its template names the copy's own components, themes and page styles.
+ if(source.pageDesigns)candidate.pageDesigns=source.pageDesigns.map(d=>d.template?{...d,template:remappedTemplate(d.template,{components:ids.components,themes:ids.themes,tokens:ids.tokens})}:{...d,id:randomUUID()});
  if(source.styleBook){
   const book=source.styleBook,remap=values=>values.map(id=>ids.tokens.get(id));
   const scopes=table=>Object.fromEntries(Object.entries(table).map(([name,list])=>[name,remap(list)]));

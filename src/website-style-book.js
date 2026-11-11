@@ -81,6 +81,8 @@ export async function websiteStyleBook(store,id,options){
   }else if(action==='remove'){
    if(!token)fail('NOT_FOUND');
    book.tokens=book.tokens.filter(t=>t.id!==token.id);book.site=book.site.filter(uid=>uid!==token.id);
+   // A stored page design stops assigning the removed style to the pages it makes.
+   if(manifest.pageDesigns)next.pageDesigns=manifest.pageDesigns.map(d=>d.template?.styleTokens.includes(token.id)?{...d,template:{...d.template,styleTokens:d.template.styleTokens.filter(uid=>uid!==token.id)}}:d);
    for(const table of [book.pages,book.folders])for(const [target,prior] of Object.entries(table)){
     const after=prior.filter(uid=>uid!==token.id);if(after.length)table[target]=after;else delete table[target];
    }

@@ -665,7 +665,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function formView(){
   if(form.type==='design'){
    const name=field('designName',form.name,'required maxlength="160"');
-   const remove=form.local?button('designForget','design-forget'):'';
+   const remove=form.local?button('designKeep','design-keep')+button('designForget','design-forget'):'';
    return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr('designManage'))+'</h2><code>'+esc(opened.path)+'</code><p>'+esc(tr('designHelp'))+'</p>'+name+'<div class="inline-actions"><button type="submit" class="button primary">'+esc(tr('designSave'))+'</button>'+remove+button('cancel','form-cancel')+'</div></form></section>';
   }
   const isPage=form.type==='page',label=isPage?'addPage':'create';
@@ -683,10 +683,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function pageDesignChoice(){
   if(!form.designs)return button('designChoose','design-choose')+'<p class="hint">'+esc(tr('designDiscover'))+'</p>';
   const {items,total,next,previous}=form.designs;
-  const options='<option value="">'+esc(tr('designBlank'))+'</option>'+items.map(item=>'<option value="'+esc(item.id)+'"'+(item.id===form.designId?' selected':'')+'>'+esc(item.name)+'</option>').join('');
+  const options='<option value="">'+esc(tr('designBlank'))+'</option>'+items.map(item=>'<option value="'+esc(item.id)+'"'+(item.id===form.designId?' selected':'')+'>'+esc(item.stored?tr('designStoredName',{name:item.name}):item.name)+'</option>').join('');
   const filter=total>8||form.designQuery?'<div class="website-page-design-search">'+field('designSearch',form.designQuery??'','maxlength="160"')+button('pickerFind','design-search')+'</div>':'';
   return '<fieldset><legend>'+esc(tr('designChoose'))+'</legend>'+filter+
-   '<label>'+esc(tr('designSelect'))+' <select data-website-file-field="designId">'+options+'</select></label>'+
+   '<label>'+esc(tr('designSelect'))+' <select data-website-file-field="designId">'+options+'</select></label>'+(items.find(item=>item.id===form.designId)?.stored?button('designForgetStored','design-forget-stored'):'')+
    '<p class="hint">'+esc(tr('designHelp'))+'</p>'+
    (total>items.length?'<p>'+esc(tr('componentResults',{first:form.designOffset+1,last:form.designOffset+items.length,total}))+'</p>':(!total?'<p>'+esc(tr('designDiscover'))+'</p>':''))+
    (form.designOffset?button('pickerPrevious','design-previous','data-offset="'+previous+'"'):'')+(next!==null?button('pickerNext','design-next','data-offset="'+next+'"'):'')+'</fieldset>';
@@ -940,6 +940,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     const offset=Number(element.dataset.offset??0);form.designs=await designs('list',{offset,query:form.designQuery});form.designOffset=offset;
     if(!form.designs.items.some(item=>item.id===form.designId))form.designId='';render();
    }
+   else if(operation==='design-keep'&&form?.type==='design'&&form.local){
+    const result=await designs('keep',{expectedRevision:form.revision,design:form.local.id,labels:{heading:tr('heading'),text:tr('paragraph'),image:tr('altText')}});adoptRelated(result);form=null;mode='pages';pagesPanel.open();notify(tr('designKept'));
+   }
+   else if(operation==='design-forget-stored'&&form?.type==='page'&&form.designId){
+    await designs('forget',{expectedRevision:form.designs.revision,design:form.designId});form.designId='';form.designs=await designs('list',{offset:0,query:form.designQuery});form.designOffset=0;render();
+   }
    else if(operation==='design-forget'&&form?.type==='design'&&form.local){
     const result=await designs('forget',{expectedRevision:form.revision});adoptRelated(result);form=null;mode='pages';pagesPanel.open();
    }
@@ -1082,7 +1088,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
      element.form.querySelector('[data-website-file-field="pagePath"]').value=form.path;
     }
    }else if(element.dataset.websiteFileField==='pagePath'){form.path=element.value;form.customPath=Boolean(form.path);}
-   else if(element.dataset.websiteFileField==='designId')form.designId=element.value;
+   else if(element.dataset.websiteFileField==='designId'){
+    const stored=id=>Boolean(form.designs?.items.find(item=>item.id===id)?.stored),before=stored(form.designId);
+    form.designId=element.value;if(stored(form.designId)!==before)render();
+   }
    else if(element.dataset.websiteFileField==='inclusion')form.inclusion=element.value;
    else if(element.dataset.websiteFileField==='designSearch')form.designQuery=element.value;
    return true;

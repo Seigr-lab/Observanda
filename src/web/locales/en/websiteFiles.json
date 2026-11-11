@@ -1433,5 +1433,9 @@
   "starterCourse": "Course",
   "starterCourseText": "An overview, three linked lessons with a lesson sidebar, and resources.",
   "starterLaboratory": "Laboratory",
-  "starterLaboratoryText": "Recent work, methods, results and the team."
+  "starterLaboratoryText": "Recent work, methods, results and the team.",
+  "designKeep": "Keep independent of this page",
+  "designKept": "The design is kept and no longer depends on its page.",
+  "designStoredName": "{name} (kept)",
+  "designForgetStored": "Remove kept design"
 }

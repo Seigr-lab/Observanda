@@ -1433,5 +1433,9 @@
   "starterCourse": "Curs",
   "starterCourseText": "Una presentació, tres lliçons enllaçades amb una barra lateral de lliçons i recursos.",
   "starterLaboratory": "Laboratori",
-  "starterLaboratoryText": "Treball recent, mètodes, resultats i l'equip."
+  "starterLaboratoryText": "Treball recent, mètodes, resultats i l'equip.",
+  "designKeep": "Conserva-la independent d'aquesta pàgina",
+  "designKept": "El disseny es conserva i ja no depèn de la seva pàgina.",
+  "designStoredName": "{name} (conservat)",
+  "designForgetStored": "Elimina el disseny conservat"
 }

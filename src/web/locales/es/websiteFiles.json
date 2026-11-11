@@ -1433,5 +1433,9 @@
   "starterCourse": "Curso",
   "starterCourseText": "Una presentación, tres lecciones enlazadas con una barra lateral de lecciones y recursos.",
   "starterLaboratory": "Laboratorio",
-  "starterLaboratoryText": "Trabajo reciente, métodos, resultados y el equipo."
+  "starterLaboratoryText": "Trabajo reciente, métodos, resultados y el equipo.",
+  "designKeep": "Conservar independiente de esta página",
+  "designKept": "El diseño se conserva y ya no depende de su página.",
+  "designStoredName": "{name} (conservado)",
+  "designForgetStored": "Eliminar el diseño conservado"
 }
