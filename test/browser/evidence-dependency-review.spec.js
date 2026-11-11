@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {openEvidence} from './record-editor-helper.js';
 
 async function fixture(page,{readonly=false,holdExtras=false}={}){
  await page.context().route('https://evidence-review.test/**',async route=>{
@@ -33,7 +34,7 @@ async function fixture(page,{readonly=false,holdExtras=false}={}){
   document.addEventListener('click',event=>{const control=event.target.closest('[data-action]');if(!control)return;event.preventDefault();void ui.action(control).catch(error=>errors.push(error.message));});
   document.querySelector('main').innerHTML=ui.view(record,{readonly});
  },{readonly,holdExtras});
- await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+ await openEvidence(page);
  await expect(page.locator('.material-list > li')).toHaveCount(20);
  await expect.poll(()=>page.evaluate(()=>requests.length)).toBe(1);
 }

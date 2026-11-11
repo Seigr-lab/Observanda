@@ -15,6 +15,7 @@ import {domainValuePage} from '../../src/measurement-domain-storage.js';
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author an explicit spectral grid, inspect paged pinned samples and preserve exact and approximate spectrum revisions',async({page},testInfo)=>{
  test.setTimeout(300000);page.setDefaultTimeout(15000);
@@ -28,7 +29,7 @@ test('author an explicit spectral grid, inspect paged pinned samples and preserv
   const payload=async response=>{const result=await response.json();return result.value??result;};
   const response=route=>page.waitForResponse(value=>value.url().endsWith('/'+route),{timeout:60000}),success=async pending=>{const result=await pending;expect(result.ok()).toBe(true);await result.finished();return result;},idle=()=>expect(form).toHaveAttribute('aria-busy','false');
   const dismiss=async()=>{if(await page.locator('#notice').isVisible())await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();};
-  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
+  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await openEvidence(page);await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
   const columns=async offset=>{await dialog.locator('[data-column-window][data-offset="'+offset+'"]').click();await expect(dialog.locator('[data-column-window-offset]')).toHaveValue(String(offset+1));await idle();};
   const scalarSet=async(key,spelling,representation='radix-fraction',radix='6')=>{await scalar(key).locator('[data-spectrum-representation]').selectOption(representation);if(['radix','radix-fraction'].includes(representation))await scalar(key).locator('[data-spectrum-radix]').fill(radix);await scalar(key).locator('[data-scalar-input]').fill(spelling);};
   const preview=async()=>{const pending=response('dataset-preview');await action('preview').click();await success(pending);await idle();};

@@ -8,6 +8,7 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('navigate retained table values, save a filtered view and return from an exact cell inspection with keyboard selection',async({page,context})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -27,7 +28,7 @@ test('navigate retained table values, save a filtered view and return from an ex
   await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:app.origin});
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog');
   await dialog.locator('.material-list li').filter({has:page.getByText('Survey readings',{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();
   const tools=dialog.getByRole('region',{name:'Table view'}),grid=dialog.getByRole('grid');

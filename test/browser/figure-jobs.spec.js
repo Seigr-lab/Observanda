@@ -7,6 +7,7 @@ import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not recorded'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 test('figure calculation survives a lost response, reload, cancellation and retry; coverage opens pinned rows',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(10000);
@@ -23,7 +24,7 @@ test('figure calculation survives a lost response, reload, cancellation and retr
  };
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.locator('.material-list li').filter({hasText:'Listening observations'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Create reproducible figure'}).click();
   await dialog.getByLabel('Title',{exact:true}).fill('Median listening level');
@@ -46,7 +47,7 @@ test('figure calculation survives a lost response, reload, cancellation and retr
   expect(attempts.length).toBe(2);expect(new Set(attempts).size).toBe(1);
   await page.context().unroute('**/api/research/materials/plot');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByText('Evidence preparation jobs',{exact:true}).click();
   await dialog.getByRole('button',{name:'Check calculation'}).click();
   await page.setViewportSize({width:390,height:844});

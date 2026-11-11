@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 // This explicitly selected capacity run prepares two complete native
 // materials. A routine browser run should not have to recreate a million rows.
@@ -35,7 +36,7 @@ test('locate a column among 3,210 and a known observation among one million phys
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,headless:true});
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog'),grid=dialog.getByRole('grid'),tools=dialog.getByRole('region',{name:'Table view'});
   const open=title=>dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();
   await open('Detector spectrum');await expect(grid).toBeVisible();

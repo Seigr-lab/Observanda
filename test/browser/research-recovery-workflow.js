@@ -10,6 +10,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {PublicationJobs} from '../../src/publication-jobs.js';
 import {contentBuffer} from '../../src/file-content.js';
 import {preferences} from './preferences-helper.js';
+import {openEvidence} from './record-editor-helper.js';
 
 // Continue the app-authored journey without the owner's device identity,
 // session cookies or key. Inspection uses only the exported recovery key.
@@ -30,7 +31,7 @@ export async function recoverResearch({browser,directory,root,recovery,before,ru
   await page.evaluate(id=>location.hash='#/records/'+id+'/read',runId);await expect(page.locator('.record-reader')).toContainText('Three records decoded');
   const dialog=page.locator('#dialog');await page.locator('.record-reader [data-action="attempt-open-ref"]').filter({hasText:'PRIVATE decoding method'}).first().click();
   await expect(dialog).toContainText('Compare the returned bytes with the declared reference.');await expect(dialog).not.toContainText('PRIVATE revised decoding method');await dialog.getByRole('button',{name:'Close',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await expect(dialog.locator('.material-file-summary')).toHaveCount(files.size);
+  await openEvidence(page);await expect(dialog.locator('.material-file-summary')).toHaveCount(files.size);
   for(const [name,bytes] of files){const downloading=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download '+name,exact:true}).click();expect(await readFile(await (await downloading).path())).toEqual(bytes);}
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await page.evaluate(()=>location.hash='#/publishing');await page.getByRole('button',{name:'Website preparations',exact:true}).click();
@@ -59,7 +60,7 @@ export async function recoverResearch({browser,directory,root,recovery,before,ru
   const retainedEdition=await new PublicationJobs(fresh).read(editionId);expect(retainedEdition.id).toBe(edition.id);for(const [name,content] of edition.files)expect(await contentBuffer(retainedEdition.files.get(name))).toEqual(await contentBuffer(content));
   await app.close();app=null;await context.clearCookies();await launch(successor);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(before.book.title);
-  await page.evaluate(id=>location.hash='#/records/'+id+'/read',runId);await expect(page.locator('.record-reader')).toContainText('Continued after independent-profile recovery');await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await page.evaluate(id=>location.hash='#/records/'+id+'/read',runId);await expect(page.locator('.record-reader')).toContainText('Continued after independent-profile recovery');await openEvidence(page);
   for(const [name,bytes] of files){const download=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download '+name,exact:true}).click();expect(await readFile(await (await download).path())).toEqual(bytes);}
   expect(errors).toEqual([]);
  }finally{await context.close();await app?.close();clearVault(vault);clearVault(freshVault);}

@@ -6,6 +6,7 @@ import {startServer} from '../../src/server.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {websiteWorkspace} from '../../src/website-workspace.js';
 import {PublicationJobs} from '../../src/publication-jobs.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('manual readiness selects project editions, exposes source receipts and detects new evidence without an importer',async({page},testInfo)=>{
  test.setTimeout(120000);let cleanup,releasePolicy;const f=await intakeFixture({after:fn=>{cleanup=fn;}}),sites=new WebsiteSites(f.ws),ids=[],projectId=f.book.notebooks.find(n=>n.id===f.record.notebookId).projectId;
@@ -16,7 +17,7 @@ test('manual readiness selects project editions, exposes source receipts and det
  }
  for(let index=0;index<21;index++)await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name:'Additional website '+index});
  const app=await startServer({root:f.ws.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),errors=[];page.on('pageerror',e=>errors.push(e.message));const dialog=page.locator('#dialog');
- const readiness=async()=>{await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Run readiness',exact:true})).toBeVisible();};
+ const readiness=async()=>{await openEvidence(page);await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Run readiness',exact:true})).toBeVisible();};
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,f.record.id);await readiness();
   await dialog.getByRole('button',{name:'Link receipt',exact:true}).click();
@@ -38,7 +39,7 @@ test('manual readiness selects project editions, exposes source receipts and det
   await dialog.getByText('Project completion policy',{exact:true}).click();await dialog.getByLabel('Validation',{exact:true}).check();await dialog.getByLabel('Publication edition',{exact:true}).check();await dialog.getByRole('button',{name:'Save completion policy',exact:true}).click();await expect(dialog.getByLabel('Validation',{exact:true})).not.toBeVisible();
   await dialog.getByRole('button',{name:'Back to evidence',exact:true}).click();await dialog.getByRole('button',{name:'Close',exact:true}).click();
   const progress=await openRecordDetail(page,'status');await progress.getByLabel('Progress',{exact:true}).selectOption('completed');await progress.getByRole('button',{name:'Save changes',exact:true}).click();await expect(progress).not.toBeVisible();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await dialog.getByRole('button',{name:'Import original file',exact:true}).click();await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'later-evidence.txt',mimeType:'text/plain',buffer:Buffer.from('PRIVATE later observation')});await dialog.getByRole('button',{name:'Import original',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();
+  await openEvidence(page);await dialog.getByRole('button',{name:'Import original file',exact:true}).click();await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'later-evidence.txt',mimeType:'text/plain',buffer:Buffer.from('PRIVATE later observation')});await dialog.getByRole('button',{name:'Import original',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();
   await expect(dialog).toContainText('Required completion receipts missing: Validation, Publication edition');await expect(dialog.getByText('Evidence has changed since this receipt was linked. It does not satisfy the current completion policy.',{exact:true})).toHaveCount(2);
   await page.setViewportSize({width:390,height:844});await dialog.getByText('Receipt details',{exact:true}).first().click();const bounds=await dialog.evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+2);await page.screenshot({path:testInfo.outputPath('readiness-phone.png')});
   // Returning to evidence while the policy response is delayed must not let

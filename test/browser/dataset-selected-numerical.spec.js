@@ -8,6 +8,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {selectedNumericalDataset} from '../fixtures/selected-numerical-dataset.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('select distant numerical columns, retain exact calculations and reopen the projection',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -15,7 +16,7 @@ test('select distant numerical columns, retain exact calculations and reopen the
  await materials.dataset({recordId:record.id,title:'Legacy wide recipe',calculation:{version:3,source:{...source,workspaceId:book.id},projection:[0],view:'observations',joins:[],steps:[],where:null,selectionReason:'',calibration:null,note:''}});
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog');
  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().endsWith('/calculation-schema'))requests.push(request.postDataJSON());});
- async function openSource(title='Wide numerical observations'){await page.goto(app.origin+'/#/records/'+record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();}
+ async function openSource(title='Wide numerical observations'){await page.goto(app.origin+'/#/records/'+record.id);await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();}
  try{
   await page.goto(app.url);await openSource('Legacy wide recipe');await dialog.getByRole('button',{name:'Reapply calculation recipe',exact:true}).click();await dialog.locator('[data-projection-column="0"]').uncheck();
   await expect(dialog.locator('[data-projection-column]:checked')).toHaveCount(0);await expect(dialog.locator('[data-projection-column]')).toHaveCount(16);

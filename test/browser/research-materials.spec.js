@@ -12,6 +12,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('creative run: pin method, retain source, declare columns, calculate, revise and inspect on narrow screens',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(10000);
@@ -27,7 +28,7 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   await dialog.getByRole('button',{name:/Listening method/}).click();
   await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
   const pinned=(await ws.read()).book.entries.find(e=>e.id===run.id).relations[0].target;expect(pinned.revision).toMatch(/^[a-f0-9]{64}$/);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'creative-takes.csv',mimeType:'text/csv',buffer:Buffer.from('Take,Level,Counter,Senary\nOne,0.2,18446744073709551615,15\nTwo,0.3,18446744073709551615,20\nThree,,18446744073709551615,21')});
   await dialog.getByLabel('Provenance / acquisition notes').fill('Private listening notes.');
@@ -72,7 +73,7 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   const store=new ResearchMaterials(ws),dataset=(await store.heads()).find(h=>h.kind==='dataset'),doc=await store.read(dataset);
   const columns=await store.datasetColumns(doc);columns[1].unit='relative amplitude';
   await store.dataset({id:doc.id,expectedRevision:dataset.revision,recordId:run.id,title:doc.title,artifact:doc.content.inputs[0],columns});
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await expect(dialog.getByText(/Newer or unavailable inputs/).first()).toBeVisible();
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
 
@@ -89,7 +90,7 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   await expect(dialog).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('button',{name:'Close',exact:true}).focus();await page.keyboard.press('Enter');
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await expect(dialog).toBeVisible();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await page.setViewportSize({width:720,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
@@ -119,12 +120,12 @@ test('verification can be reopened after reload, cancelled and retried without s
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
   await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
+  await openEvidence(page);await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   const bytes=Buffer.from('Take,Sound\nOne,quiet\n');await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'retained-take.csv',mimeType:'text/csv',buffer:bytes});
   await dialog.getByRole('button',{name:'Import original',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Verify original file'})).toBeVisible();
   await expect(dialog.getByRole('progressbar',{name:'Verification progress'})).toBeVisible();
   await dialog.getByRole('button',{name:'Back to evidence'}).click();await expect(dialog.getByRole('button',{name:'Check verification'})).toBeVisible();
-  await page.reload();await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Check verification'}).click();
+  await page.reload();await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();await openEvidence(page);await dialog.getByRole('button',{name:'Check verification'}).click();
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('button',{name:'Cancel verification'}).focus();await page.keyboard.press('Enter');await expect(dialog.getByText('Verification cancelled.',{exact:false})).toBeVisible();
   const store=new ResearchMaterials(workspace);expect((await store.verify()).receivedBytes).toBe(bytes.length);expect((await store.heads()).length).toBe(0);

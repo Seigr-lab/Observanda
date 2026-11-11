@@ -15,6 +15,7 @@ import {copyPlan,copyWorkspace,readPreference} from '../../src/locations.js';
 import {CATALOGUE_ARCHIVE} from '../../src/postgres.js';
 import {CATALOGUE_ACTIVATION} from '../../src/postgres-activation.js';
 import {preferences} from './preferences-helper.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('the app reopens an interrupted restore, backs up a killed upload and resumes the original',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(15000);
@@ -43,7 +44,7 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
   expect(await readPreference(preferencesFile)).toBe(destination);
   await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   await page.evaluate(id=>location.hash='#/records/'+id,book.entries[0].id);
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   await dialog.getByRole('button',{name:'Resume upload',exact:true}).click();
   await dialog.getByLabel('Select the same original file',{exact:true}).setInputFiles({name:session.name,mimeType:'application/octet-stream',buffer:bytes});
   const uploads=[];page.on('request',request=>{if(request.url().includes('/api/research/materials/chunk/'))uploads.push(new URL(request.url()).pathname);});

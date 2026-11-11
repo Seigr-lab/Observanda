@@ -6,6 +6,7 @@ import {RecordDocument} from '../../src/record-document.js';
 import {RecordValues} from '../../src/record-values.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {recordRevision} from '../../src/research.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('reader and historical views navigate run facts independently with correction and preparation context',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await attemptWindowFixture(),target={workspaceId:f.book.id,recordId:f.record.id},values=new RecordValues(f.workspace),original=RecordDocument.prototype.field;
@@ -24,7 +25,7 @@ test('reader and historical views navigate run facts independently with correcti
   await dialog.getByRole('combobox',{name:'Browse content',exact:true}).selectOption('assessments');await dialog.getByRole('spinbutton',{name:'Go to item',exact:true}).fill('12');await dialog.getByRole('button',{name:'Go',exact:true}).click();await expect(dialog).toContainText('Corrected assessment zero');await expect(dialog).toContainText('Preparation revision 7');
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
   // Open the evidence owner, then follow its retained-reference action.
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();
+  await openEvidence(page);await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();
   await page.evaluate(ref=>{const button=document.createElement('button');button.dataset.action='material-reference';button.dataset.ref=JSON.stringify(ref);button.textContent='Inspect retained source';document.querySelector('#dialog').append(button);},pinned);
   await page.getByRole('button',{name:'Inspect retained source',exact:true}).click();await expect(dialog.locator('.retained-record-reader')).toBeVisible();await dialog.getByRole('combobox',{name:'Navigate',exact:true}).selectOption('events');await dialog.getByRole('spinbutton',{name:'Go to item',exact:true}).fill('12');await dialog.getByRole('button',{name:'Go',exact:true}).click();await expect(dialog).toContainText('Corrected acquisition zero');expect(errors).toEqual([]);
  }finally{RecordDocument.prototype.field=original;await app.close();await f.close();}

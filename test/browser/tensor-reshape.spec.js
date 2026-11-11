@@ -13,6 +13,7 @@ import {domainValuePage,domainValueSupported} from '../../src/measurement-domain
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('explicitly declare an opaque tensor, regroup and calculate without changing earlier retained values',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -24,7 +25,7 @@ test('explicitly declare an opaque tensor, regroup and calculate without changin
   const legacy={...defaultDomain('vector'),codec:'observanda.tensor',namespace:'declared-component-space',shape:[2,3,7],component:{version:1,representation:'radix-fraction',radix:6}},raw=await m.dataset({recordId,title:'Declared coordinates',artifact:await m.finishImport(pending.id),columns:[{...defaultColumn({label:'Coordinates'}),representation:'domain',domain:legacy}]}),rawDoc=await m.read(raw),rawCell=(await m.retainedDatasetPage(rawDoc,0,{columns:[0]})).rows[0].cells[0];
   expect(domainValueSupported(rawCell)).toBe(false);
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});const dialog=page.locator('#dialog');
-  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
+  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await openEvidence(page);await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
   const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();},save=async()=>{await dialog.getByRole('button',{name:'Save edit',exact:true}).click();};
   await page.goto(app.url);await inspect('Declared coordinates');await dialog.getByRole('button',{name:'Edit schema & exclusions',exact:true}).click();const column=dialog.locator('[data-material-column="0"]');
   await expect(column.locator('[data-domain="codec"]')).toHaveValue('preserve');await column.locator('[data-domain="codec"]').selectOption('tensor');await column.locator('[data-domain="shape"]').fill('2, 3, 7');await column.locator('[data-domain="representation"]').selectOption('radix-fraction');await column.locator('[data-domain="radix"]').fill('6');await dialog.getByRole('button',{name:'Save dataset revision',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toBeVisible({timeout:45000});

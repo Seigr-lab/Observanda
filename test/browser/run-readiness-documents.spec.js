@@ -4,11 +4,12 @@ import {figureValueFixture} from '../record-figure-values-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('large-record reader links completion evidence and changes progress without loading a full editor',async({page})=>{
  test.setTimeout(120000);const f=await figureValueFixture({large:true}),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),read=ResearchCatalogue.prototype.record,owner=ResearchMaterials.prototype.owner,errors=[],requests=[];
  ResearchCatalogue.prototype.record=()=>{throw Error('Readiness reconstructed a record');};ResearchMaterials.prototype.owner=()=>{throw Error('Readiness reconstructed the owner');};page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);});
- const dialog=page.locator('#dialog'),open=async()=>{await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Run readiness',exact:true})).toBeVisible();};
+ const dialog=page.locator('#dialog'),open=async()=>{await openEvidence(page);await dialog.getByRole('button',{name:'Run readiness',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Run readiness',exact:true})).toBeVisible();};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await open();await dialog.getByRole('button',{name:'Link receipt',exact:true}).click();
   for(const [label,value] of [['Private source revision','Acquisition one'],['Source SHA-256','a'.repeat(64)],['Scope and verification statement','Exact source inspected; interpretation remains bounded.'],['Validation tool','Independent inspection'],['Tool version','1'],['Tool source SHA-256','b'.repeat(64)]])await dialog.getByLabel(label,{exact:true}).fill(value);

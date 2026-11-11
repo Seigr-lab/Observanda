@@ -13,6 +13,7 @@ import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {openEvidence} from './record-editor-helper.js';
 
 for(const count of [62,620])test('external analysis discovers and pins exact methods without loading a '+count+'-record workspace',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -29,7 +30,7 @@ for(const count of [62,620])test('external analysis discovers and pins exact met
  const dialog=page.locator('#dialog'),picker=dialog.locator('[data-method-picker]');let release;
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.getByText('Analysis, collections & verification',{exact:true}).click();await dialog.getByRole('button',{name:'Record external analysis',exact:true}).click();
   await dialog.getByLabel('Title',{exact:true}).fill('Retained listening comparison');await dialog.getByLabel('Tool / method',{exact:true}).fill('Listening review');await dialog.getByLabel('Tool version or source revision',{exact:true}).fill('revision one');
   await dialog.getByLabel('Parameters and procedure',{exact:true}).fill('Compare each take with the original room conditions.');
@@ -54,7 +55,7 @@ for(const count of [62,620])test('external analysis discovers and pins exact met
   expect(refs.map(({kind,id,revision,workspaceId})=>({kind,id,revision,...(workspaceId?{workspaceId}:{})}))).toEqual([input,{kind:'record',id:method.id,revision:recordRevision(changed),workspaceId:book.id}]);
   await dialog.locator('.material-list li').filter({hasText:'Retained listening comparison'}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.locator('#material-input-references').getByRole('button',{name:'Take 030',exact:true}).click();
   await expect(dialog).toContainText('Changed method before selection.');await expect(dialog).not.toContainText('Later method revision.');
-  await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByText('Analysis, collections & verification',{exact:true}).click();await dialog.getByRole('button',{name:'Record external analysis',exact:true}).click();
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();await openEvidence(page);await dialog.getByText('Analysis, collections & verification',{exact:true}).click();await dialog.getByRole('button',{name:'Record external analysis',exact:true}).click();
   await dialog.getByRole('button',{name:'Choose saved method / run',exact:true}).click();await expect(picker.locator('[data-action="research-target-choose"]')).toHaveCount(25);
   await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}),{times:1});
   await picker.getByRole('button',{name:'Next results',exact:true}).click();await expect(picker.getByRole('alert')).toContainText('Synthetic discovery interruption');await picker.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(picker.locator('[data-action="research-target-choose"]')).toHaveCount(25);

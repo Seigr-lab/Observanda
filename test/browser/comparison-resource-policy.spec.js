@@ -10,6 +10,7 @@ import {defaultDatasetResourcePolicy} from '../../src/web/dataset-resource-polic
 import {blankAnalysisMethod,blankAnalysisSource,addressedComparisonInputs} from '../../src/web/analysis-model.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('comparison editing retains declared limits and complete long values across saved revisions',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -24,7 +25,7 @@ test('comparison editing retains declared limits and complete long values across
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   const dialog=page.locator('#dialog');
-  const open=async()=>{await page.evaluate(id=>location.hash='#/records/'+id,recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Exact boundary comparison'}).getByRole('button',{name:'Inspect',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Exact boundary comparison',exact:true})).toBeVisible();};
+  const open=async()=>{await page.evaluate(id=>location.hash='#/records/'+id,recordId);await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Exact boundary comparison'}).getByRole('button',{name:'Inspect',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Exact boundary comparison',exact:true})).toBeVisible();};
   await open();await expect(dialog.locator('.comparison-value-preview').first()).toContainText('Value preview:');
   const disclosure=dialog.locator('details').filter({has:page.locator('summary').filter({hasText:'Show complete value ('+long.length+' characters)'})}).first();
   await disclosure.locator('summary').click();await expect(disclosure.getByRole('region',{name:'Complete retained value'})).toHaveText(long);

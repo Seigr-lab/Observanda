@@ -2,6 +2,7 @@ import {test,expect} from '@playwright/test';
 import path from 'node:path';
 import {comparisonFixture} from '../analysis-comparison-fixture.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('comparison contexts and retained observations page independently and survive source inspection',async({page},testInfo)=>{
  test.setTimeout(180000);const cleanup=[],f=await comparisonFixture({after:fn=>cleanup.push(fn)},{groups:25});let app;
@@ -10,7 +11,7 @@ test('comparison contexts and retained observations page independently and survi
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(f.directory,'preferences.json')});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,f.recordId);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.locator('.material-list li').filter({hasText:f.command.title}).getByRole('button',{name:'Inspect',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:f.command.title,exact:true})).toBeVisible();
   const groups=dialog.locator('[data-comparison-groups]');await groups.locator('summary').click();

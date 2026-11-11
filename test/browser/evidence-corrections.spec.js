@@ -9,13 +9,14 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {associateOriginal} from '../../src/evidence-associations.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('reviewed corrections update current evidence and keep removed associations readable and restorable',async({page})=>{
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-correction-ui-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),record=book.entries[2],bytes=Buffer.from('Synthetic exact disk bytes');
  const upload=await m.startImport({recordId:book.entries[0].id,name:'returned.img',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const source=await m.finishImport(upload.id),ref=await associateOriginal(m,{recordId:record.id,ref:source});
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,headless:true,port:0}),errors=[];
  try{
-  page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id);await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();const dialog=page.locator('#dialog');
+  page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id);await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Correct evidence association',exact:true}).click();
   await dialog.getByLabel('Evidence title',{exact:true}).fill('Verified current return');await dialog.getByLabel('Relative source path',{exact:true}).fill('window-37/returned.img');await dialog.getByLabel('Source role',{exact:true}).selectOption('current-return');await dialog.getByLabel('Reason for correction',{exact:true}).fill('Restore the source folder and role.');
   await dialog.getByRole('button',{name:'Review correction',exact:true}).click();await expect(dialog).toContainText('window-37/returned.img');await dialog.getByRole('button',{name:'Apply reviewed correction',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Verified current return',exact:true})).toBeVisible();

@@ -7,6 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('unfinished selections survive lost replies and reload, and completion attaches each pinned source once',async({page})=>{
  test.setTimeout(120000);
@@ -18,7 +19,7 @@ test('unfinished selections survive lost replies and reload, and completion atta
  page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog');
   await dialog.getByText('Analysis, collections & verification',{exact:true}).click();
   await dialog.getByRole('button',{name:'Create collection',exact:true}).click();
@@ -49,7 +50,7 @@ test('unfinished selections survive lost replies and reload, and completion atta
   const drafts=await materials.drafts.list(owner),draft=drafts.items[0];expect(drafts.items).toHaveLength(1);
   expect(await materials.current(draft.id)).toBeNull();
   // Closing the browser state loses the unsent selection but never calls it complete.
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByRole('button',{name:'Continue Listening session',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Retry saving selection',exact:true})).toHaveCount(0);
   await dialog.getByRole('button',{name:'Next inputs',exact:true}).focus();await page.keyboard.press('Enter');
@@ -102,7 +103,7 @@ test('external analysis saves exact input and output pages and preserves its too
  const app=await startServer({root:ws.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByText('Analysis, collections & verification',{exact:true}).click();
   await dialog.getByRole('button',{name:'Record external analysis',exact:true}).click();
   await dialog.getByLabel('Title',{exact:true}).fill('Compare recorded takes');

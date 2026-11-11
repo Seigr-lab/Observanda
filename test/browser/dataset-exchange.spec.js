@@ -9,6 +9,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {readDatasetExchange} from '../../src/dataset-exchange-reader.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('export selected fields and observations, download the checked archive and retire the prepared copies',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(20000);
@@ -24,7 +25,7 @@ test('export selected fields and observations, download the checked archive and 
   await m.dataset({recordId,title:'Retained survey counts',artifact,exclusions:{[artifact.id+':3']:'Instrument offline'}});
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,headless:true});await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog');
   await dialog.locator('.material-list li').filter({has:page.getByText('Retained survey counts',{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Export dataset',exact:true}).click();
@@ -49,7 +50,7 @@ test('export selected fields and observations, download the checked archive and 
   await page.goto(app.origin+'/#/records/'+book.entries[1].id);
   await expect(page.getByRole('heading',{name:book.entries[1].title,exact:true})).toBeVisible();
   if(!await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).isVisible())await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'dataset.jsonl',mimeType:'application/x-ndjson',buffer:Buffer.from(files['dataset.jsonl'])});
   await dialog.getByRole('button',{name:'Import original',exact:true}).click();

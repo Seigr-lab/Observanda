@@ -8,13 +8,14 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {packedSource,packedMapping} from '../fixtures/packed-dataset.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('packed-array controls prepare two full timing runs and reject truncated or misaligned ranges',async({page})=>{
  test.setTimeout(180000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-packed-ui-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),record=(await f.workspace.read()).book.entries[0],errors=[];page.on('pageerror',e=>errors.push(e.message));
  const bytes=Buffer.from(JSON.stringify(packedSource())),upload=await materials.startImport({recordId:record.id,name:'packed-runs.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);await materials.finishImport(upload.id);
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog');
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await openEvidence(page);await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();
   await dialog.getByLabel('Title',{exact:true}).fill('Two packed timing runs');await dialog.getByLabel('Source format').selectOption('json-nested');await dialog.getByLabel('Path to rows array').fill('/runs/*/acquisitions');
   await dialog.getByRole('button',{name:'Add lookup',exact:true}).click();const lookup=dialog.locator('.material-lookup');await lookup.getByLabel('Lookup name',{exact:true}).fill('timing');await lookup.getByLabel('Match acquisition and lookup rows').selectOption('position');await lookup.getByLabel('Lookup rows array path').fill('/runs/*/packed');
   await lookup.getByLabel('Extract fixed-width records from this array').check();await lookup.getByLabel('Offset (array elements, starting at zero)').fill('384');await lookup.getByLabel('Record width (array elements)').fill('6');await lookup.getByLabel('Record count per window').fill('3889');

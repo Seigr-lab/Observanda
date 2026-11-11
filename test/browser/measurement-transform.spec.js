@@ -9,6 +9,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {transformedPlotDataset,plotCounterOrigin} from '../fixtures/transformed-plot-dataset.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author exact plot origins and scales, reopen point errors and inspect their original cells',async({page},info)=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -17,7 +18,7 @@ test('author exact plot origins and scales, reopen point errors and inspect thei
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog'),errors=[],inspections=[];
  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().endsWith('/measurement-inspect'))inspections.push(request.postDataJSON());});
  const calculate=async()=>{const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/materials/plot'));await dialog.getByRole('button',{name:'Calculate & retain figure',exact:true}).click();const result=await response;expect(result.ok(),await result.text()).toBe(true);};
- const open=async title=>{await page.goto(app.origin+'/#/records/'+record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();};
+ const open=async title=>{await page.goto(app.origin+'/#/records/'+record.id);await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();};
  try{
   await page.goto(app.url);await open('Exact coordinate source');await dialog.getByRole('button',{name:'Create reproducible figure',exact:true}).click();
   const x=dialog.locator('[data-projection-axis="x"]'),y=dialog.locator('[data-projection-axis="y"]');await expect(x.locator('[data-projection-enabled]')).toBeDisabled();

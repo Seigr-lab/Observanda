@@ -8,6 +8,7 @@ import {startServer} from '../../src/server.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {executeMaterialRequest} from '../../src/material-requests.js';
 import {validateIntake} from '../../src/intake/contract.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('select a named target, build and download a manifest, stage ten files, review evidence and reuse the saved interpretation through the record',async({page})=>{
  test.setTimeout(220000);page.setDefaultTimeout(18000);
@@ -26,7 +27,7 @@ test('select a named target, build and download a manifest, stage ten files, rev
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id);
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Intake & readiness',exact:true}).click();
   await dialog.getByRole('button',{name:'Build a package from files'}).click();
@@ -48,7 +49,7 @@ test('select a named target, build and download a manifest, stage ten files, rev
   await dialog.getByRole('button',{name:'Save reusable adapter',exact:true}).click();
   await expect(dialog.locator('[data-build-status]')).toHaveText('Adapter saved.',{timeout:35000});
   await dialog.getByRole('button',{name:'Keep recovery copy and close'}).click();await expect(dialog).toBeHidden();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   await dialog.locator('[data-action="material-recovery-open"]').click();
   await expect(dialog.getByLabel('Package title')).toHaveValue('Reviewed logger exports');
   await expect(dialog.locator('[data-target]')).toContainText(selected.title);

@@ -11,6 +11,7 @@ import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {createRecoverySources,exerciseRecovery,recoveryStates} from '../fixtures/scientific-edit-recovery.js';
+import {openEvidence} from './record-editor-helper.js';
 
 let directory,f,app,scope,drafts,materials,sources;
 test.beforeAll(async()=>{
@@ -44,7 +45,7 @@ test('failed keep stays in the editor; an uncertain write followed by a newer ed
  const dialog=page.locator('#dialog'),guard=page.locator('#leave-dialog'),source=dialog.locator('#continuing-source');
  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+scope.recordId);
  await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
- await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+ await openEvidence(page);
  await dialog.locator('[data-action="material-continuing-home"]').click();
  await page.evaluate(()=>{
   const send=window.fetch.bind(window),fault=window.recoveryFault={mode:'lose',requests:[],acknowledged:null};
@@ -72,7 +73,7 @@ test('failed keep stays in the editor; an uncertain write followed by a newer ed
  expect(requests.at(-1)).toEqual({value:'later observation',expectedRevision:acknowledged.revision});
  const found=(await drafts.list(scope)).items.find(item=>item.id===acknowledged.id);
  expect((await drafts.read({...scope,id:found.id,expectedRevision:found.revision})).value.source).toBe('later observation');
- await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+ await openEvidence(page);
  await dialog.locator('[data-action="material-recovery-open"][data-id="'+found.id+'"]').click();
  await source.fill('unsaved correction');
  await page.evaluate(()=>{location.hash='#/tools';});await guard.getByRole('button',{name:'Discard changes'}).click();
@@ -80,7 +81,7 @@ test('failed keep stays in the editor; an uncertain write followed by a newer ed
  await expect(dialog).toBeHidden();
  await page.goto(app.origin+'/#/records/'+scope.recordId);
  await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
- await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+ await openEvidence(page);
  await dialog.locator('[data-action="material-continuing-home"]').click();
  await page.evaluate(()=>{window.recoveryFault.mode='full';});
  await source.fill('Never admitted');

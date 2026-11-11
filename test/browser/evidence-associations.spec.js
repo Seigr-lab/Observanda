@@ -9,6 +9,7 @@ import {upgradeNotebook} from '../../src/model.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('attach a stored disk image to another run from the reader and download from both records',async({page},info)=>{
  test.setTimeout(150000);page.setDefaultTimeout(15000);
@@ -18,7 +19,7 @@ test('attach a stored disk image to another run from the reader and download fro
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));const dialog=page.locator('#dialog');
  const bytes=Buffer.alloc(16*1024*1024+79,0xa7);bytes.write('Synthetic disk image');const name='prepared-image.img',hash=createHash('sha256').update(bytes).digest('hex');
- const open=async id=>{await page.evaluate(value=>location.hash='#/records/'+value+'/read',id);await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();};
+ const open=async id=>{await page.evaluate(value=>location.hash='#/records/'+value+'/read',id);await openEvidence(page);};
  try{
   await page.goto(app.url);await open(first.id);
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name,mimeType:'application/octet-stream',buffer:bytes});
@@ -54,7 +55,7 @@ test('select files across pages and resume attachment after a lost committed rep
  page.on('pageerror',e=>errors.push(e.message));const dialog=page.locator('#dialog'),picker=dialog.locator('#material-picker-reuse');
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',second.id);
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await dialog.getByRole('button',{name:'Attach existing originals',exact:true}).click();
+  await openEvidence(page);await dialog.getByRole('button',{name:'Attach existing originals',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Attach selected files',exact:true})).toBeDisabled();
   await expect(picker.getByRole('checkbox')).toHaveCount(20);
   await picker.getByRole('button',{name:'Select displayed sources',exact:true}).click();await expect(picker.locator('[data-selection]')).toContainText('20 selected');
@@ -72,7 +73,7 @@ test('select files across pages and resume attachment after a lost committed rep
   await dialog.getByRole('button',{name:'Attach selected files',exact:true}).click();
   await expect(dialog.locator('[data-association-error]')).not.toBeEmpty();await expect(dialog.getByRole('button',{name:'Continue attaching',exact:true})).toBeVisible();
   expect((await materials.associations.list({recordId:second.id})).items[0].attached).toBe(32);
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await page.reload();await openEvidence(page);
   await expect(dialog).toContainText('32 of 41 files attached');const completion=page.waitForResponse(r=>r.url().endsWith('/api/research/materials/association-step'));
   await dialog.getByRole('button',{name:'Continue attaching',exact:true}).click();expect((await (await completion).json()).state).toBe('completed');
   await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();await expect(dialog.getByRole('heading',{name:'Unfinished attachments',exact:true})).toHaveCount(0);

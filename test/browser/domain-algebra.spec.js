@@ -11,6 +11,7 @@ import {defaultDomain} from '../../src/web/measurement-domain-model.js';
 import {domainValuePage} from '../../src/measurement-domain-storage.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author exact vector arithmetic, recover refused shapes and retain independent revised results',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -21,7 +22,7 @@ test('author exact vector arithmetic, recover refused shapes and retain independ
   const source=await m.dataset({recordId,title:'Algebra operands',artifact:await m.finishImport(pending.id),columns:values.map((value,index)=>({...defaultColumn({label:['Left','Right','Wrong shape'][index]}),representation:'domain',domain:{...defaultDomain('vector'),namespace:'declared-coordinate-space',shape:[value.length],component:{version:1,representation:'radix-fraction',radix:6}}}))});
   const historicalGraph=await new CalculationGraphs(m).create({recordId,title:'Calculation graph',source,graphVersion:2});
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});
-  await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,recordId);await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.locator('.material-list li').filter({hasText:historicalGraph.revision.slice(0,12)}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Edit calculation graph',exact:true}).click();
   const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();},save=()=>dialog.getByRole('button',{name:'Save edit',exact:true}).click();
   for(let index=0;index<3;index++){await dialog.getByRole('button',{name:'Add column',exact:true}).click();await choose('binding',0);await dialog.locator('[data-graph-field="column"]').fill(String(index+1));await save();}
@@ -41,6 +42,6 @@ test('author exact vector arithmetic, recover refused shapes and retain independ
   await dialog.getByRole('button',{name:'Reapply calculation recipe',exact:true}).click();await dialog.getByRole('button',{name:'nodes (5)',exact:true}).click();await dialog.locator('[data-calculation-graph] ol li').nth(3).getByRole('button',{name:'Edit',exact:true}).click();await dialog.locator('[data-graph-field="operation"]').selectOption('subtract');await save();await expect(dialog.locator('[data-calculation-graph]')).toBeVisible();
   expect((await m.read(firstDoc.content.calculation.graph)).content.graphVersion).toBe(8);expect((await graphHead()).revision).not.toBe(firstDoc.content.calculation.graph.revision);expect(await exactVector(first)).toEqual(['7/1','1/1']);
   await dialog.getByRole('button',{name:'Retain dataset',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('25/4',{timeout:45000});const second=(await outputs()).find(item=>item.id!==first.id);expect(second).toBeTruthy();expect(await exactVector(second)).toEqual(['5/1','0/1']);expect(await exactVector(first)).toEqual(['7/1','1/1']);
-  expect((await m.current(source.id)).revision).toBe(source.revision);await page.reload();await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await expect(dialog.locator('.material-list li').filter({hasText:'Calculation graph result'})).toHaveCount(2);expect(errors).toEqual([]);
+  expect((await m.current(source.id)).revision).toBe(source.revision);await page.reload();await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await openEvidence(page);await expect(dialog.locator('.material-list li').filter({hasText:'Calculation graph result'})).toHaveCount(2);expect(errors).toEqual([]);
  }finally{await app?.close();await clearVault(f.vault);expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory).startsWith('observanda-domain-algebra-ui-')).toBeTruthy();await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

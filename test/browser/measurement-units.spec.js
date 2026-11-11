@@ -9,6 +9,7 @@ import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {exactUnitScalar} from '../../src/web/measurement-unit-model.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author explicit unit dimensions and native-base conversions across schema pages, retry a failed save and retain the same interpretation',async({page},testInfo)=>{
  test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-unit-ui-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),record=(await f.workspace.read()).book.entries[0];
@@ -16,7 +17,7 @@ test('author explicit unit dimensions and native-base conversions across schema 
  const original=Buffer.from(Array.from({length:18},(_,i)=>'Value '+i).join(',')+'\n'+Array.from({length:18},()=> '15.3').join(',')),artifact=await upload('native-values.csv',original),method=await upload('conversion-method.txt',Buffer.from('Exact declared conversion and independent calibration reference.'));
  const old=await m.dataset({recordId:record.id,title:'Native readings',artifact,columns:Array.from({length:18},(_,i)=>({...defaultColumn({label:'Value '+i}),representation:'radix-fraction',radix:6}))});
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),headless:true}),dialog=page.locator('#dialog'),errors=[];page.on('pageerror',e=>errors.push(e.message));
- const open=async()=>{await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Native readings'}).getByRole('button',{name:'Inspect',exact:true}).click();};
+ const open=async()=>{await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Native readings'}).getByRole('button',{name:'Inspect',exact:true}).click();};
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await open();await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();await dialog.getByRole('button',{name:'Next schema columns'}).click();
   let column=dialog.locator('[data-material-column="17"]');await column.locator('..').locator('summary').first().click();await column.getByLabel('Unit',{exact:true}).fill('ticks');await column.locator('summary').filter({hasText:'Quantity provenance'}).click();
@@ -32,7 +33,7 @@ test('author explicit unit dimensions and native-base conversions across schema 
   await dialog.getByRole('button',{name:'Save dataset revision'}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toBeVisible({timeout:30000});
   const current=await m.current(old.id),expected={version:1,kind:'absolute',dimensions:[{axis:'custom.counter',exponent:1}],scale:exactUnitScalar('0.1','radix-fraction',6),offset:exactUnitScalar('15.3','radix-fraction',6)};expect((await m.schemaPage(current,{offset:17})).items[0].quantity.unitDefinition).toEqual(expected);expect((await m.schemaPage(old,{offset:17})).items[0].quantity).toBeUndefined();
   await dialog.getByRole('button',{name:'Next columns',exact:true}).click();await dialog.getByRole('button',{name:/Inspect value: Value 17/}).click();await expect(dialog.locator('[data-retained-unit]')).toContainText('custom.counter^1');await expect(dialog.locator('[data-retained-unit]')).toContainText('0.1');await dialog.getByRole('button',{name:'Retain measurement or diagnostic'}).click();await dialog.getByLabel('Title',{exact:true}).fill('Typed native observation');await dialog.getByRole('button',{name:'Save retained measurement'}).click();await expect(dialog.getByRole('heading',{name:'Typed native observation',exact:true})).toBeVisible();await expect(dialog.locator('[data-retained-unit]')).toContainText('custom.counter^1');
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Typed native observation'}).getByRole('button',{name:'Inspect',exact:true}).click();await expect(dialog.locator('[data-retained-unit]')).toContainText('0.1');await expect(dialog).toContainText('15.3');
+  await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Typed native observation'}).getByRole('button',{name:'Inspect',exact:true}).click();await expect(dialog.locator('[data-retained-unit]')).toContainText('0.1');await expect(dialog).toContainText('15.3');
   const retained=(await m.heads()).find(v=>v.title==='Typed native observation'),doc=await m.read(retained);expect(doc.content.measurement.quantity.unitDefinition).toEqual(expected);expect(doc.content.measurement.quantity.conversion.revision).toBe(method.revision);expect(doc.content.measurement.quantity.calibration.revision).toBe(method.revision);expect(doc.content.measurement.value.spelling).toBe('15.3');expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

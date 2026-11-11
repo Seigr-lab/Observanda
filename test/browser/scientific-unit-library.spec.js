@@ -8,6 +8,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('choose standard temperature points and intervals, preview an exact conversion, then save and reuse an authored unit from the schema editor',async({page})=>{
  test.setTimeout(150000);page.setDefaultTimeout(15000);
@@ -20,7 +21,7 @@ test('choose standard temperature points and intervals, preview an exact convers
   const original=await materials.dataset({recordId,title:'Thermal observation',artifact,columns:[{...defaultColumn({label:'Reading'}),representation:'decimal'}]});
   app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),headless:true});
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
-  await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await page.getByRole('button',{name:'Evidence and results',exact:true}).click();await openEvidence(page);
   const dialog=page.locator('#dialog');
   await dialog.locator('.material-list li').filter({hasText:'Thermal observation'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();

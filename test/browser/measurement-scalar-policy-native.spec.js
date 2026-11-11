@@ -11,12 +11,13 @@ import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {resolveScalarDefinitions} from '../../src/measurement-scalar-storage.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author declaration-owned limits, preserve incomplete pages, reopen exact selected fields and retain a measurement and graph revision',async({page},testInfo)=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-scalar-ui-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),record=(await f.workspace.read()).book.entries[0],long='0'.repeat(9000)+'1',coverage=long+'/2',spelling='0'.repeat(9000)+'15.3';
  const csv=value=>'"'+value.replaceAll('"','""')+'"',bytes=Buffer.from(Array.from({length:18},(_,i)=>'Value '+i).join(',')+'\n'+Array.from({length:18},(_,i)=>i===16?csv(JSON.stringify([long,'2'])):'15.3').join(',')),upload=await m.startImport({recordId:record.id,name:'declared-values.csv',size:bytes.length});await m.appendImport(upload.id,0,[bytes]);const original=await m.dataset({recordId:record.id,title:'Declaration source',artifact:await m.finishImport(upload.id),columns:Array.from({length:18},(_,i)=>({...defaultColumn({label:'Value '+i}),representation:i===16?'text':'radix-fraction',radix:i===16?10:6}))});
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog'),errors=[];page.on('pageerror',error=>errors.push(error.message));
- const open=async title=>{await page.goto(app.origin+'/#/records/'+record.id);await page.reload();await expect(page.getByRole('button',{name:'Open evidence & analysis'})).toBeVisible();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();};
+ const open=async title=>{await page.goto(app.origin+'/#/records/'+record.id);await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true}).click();};
  const policy=async(root,kind)=>{const section=root.locator('[data-scalar-policy-for='+kind+']').first();await section.locator('summary').click();await section.locator('[data-scalar-policy-enabled]').check();await section.locator('[data-dataset-resource=maxScalarCharacters]').fill('20000');return section;};
  const expand=async(column,title)=>{await column.locator('summary').filter({hasText:title}).first().click();};
  try{

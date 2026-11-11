@@ -14,6 +14,7 @@ import {domainValuePage} from '../../src/measurement-domain-storage.js';
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('explicit axis order preserves exact components and earlier results through authoring and reopening',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -25,7 +26,7 @@ test('explicit axis order preserves exact components and earlier results through
   const source=await m.dataset({recordId,title:'Observed coordinates',artifact:await m.finishImport(upload.id),columns:[{...defaultColumn({label:'Coordinates'}),representation:'domain',unit:'declared units',domain:{...defaultDomain('tensor'),namespace:'declared-axis-space',shape:[2,3,2],component:{version:1,representation:'radix-fraction',radix:6}}}]});
   const historicalPolicy=defaultDatasetResourcePolicy(),historicalGraph=(await executeMaterialRequest(f.workspace,{material:'calculation-graph-create'},{recordId,title:'Calculation graph',source,graphVersion:10,policy:historicalPolicy})).ref;
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});const dialog=page.locator('#dialog');
-  const inspect=async reference=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:reference.revision.slice(0,12)}).getByRole('button',{name:'Inspect',exact:true}).click();};
+  const inspect=async reference=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:reference.revision.slice(0,12)}).getByRole('button',{name:'Inspect',exact:true}).click();};
   const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();},save=()=>dialog.getByRole('button',{name:'Save edit',exact:true}).click();
   await page.goto(app.url);await inspect(historicalGraph);await dialog.getByRole('button',{name:'Edit calculation graph',exact:true}).click();await dialog.locator('[data-action="material-calculation-graph-permute-upgrade"]').click();await dialog.locator('[data-dataset-resource="maxOperations"]').fill('48000');await dialog.locator('[data-action="material-calculation-graph-apply-permute-upgrade"]').click();await expect(dialog.getByRole('button',{name:'Add column',exact:true})).toBeVisible();expect((await m.read(await m.current(historicalGraph.id))).content.policy.resources.maxOperations).toBe(48000);expect((await m.read(historicalGraph)).content.policy).toEqual(historicalPolicy);
   await dialog.getByRole('button',{name:'Add column',exact:true}).click();await choose('binding',0);await save();await expect(dialog.getByRole('button',{name:'nodes (1)',exact:true})).toBeVisible();

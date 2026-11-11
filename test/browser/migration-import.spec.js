@@ -11,6 +11,7 @@ import {migrationFixture} from '../migration-fixture.js';
 import {navigate} from './preferences-helper.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {portableResearch} from '../fixtures/import-research.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('app stages, maps, resumes, applies and reverses a private external logbook',async({page})=>{
  test.setTimeout(150000);
@@ -57,7 +58,7 @@ test('app stages, maps, resumes, applies and reverses a private external logbook
   await evidence.getByRole('button',{name:'Repair reviewed associations',exact:true}).click();await expect(evidence).toContainText('Added 1 evidence associations');await expect(evidence).toContainText('Missing associations on this page: 0');expect((await f.workspace.read()).etag).toBe(after.etag);expect((await materials.list({recordId:imported.id,kind:'artifact'})).items).toHaveLength(1);
   await page.setViewportSize({width:390,height:844});await evidence.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('evidence-repair-phone.png')});await page.setViewportSize({width:1440,height:1000});
   await page.screenshot({path:test.info().outputPath('import-review-desktop.png')});
-  await row.getByRole('button',{name:'Open imported record',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await row.getByRole('button',{name:'Open imported record',exact:true}).click();await openEvidence(page);
   const materialDialog=page.getByRole('dialog'),evidenceFile=materialDialog.locator('.material-list > li').filter({hasText:'field/one.json'});await expect(evidenceFile).toHaveCount(1);await expect(evidenceFile).toContainText('SHA-256');
   const originalDownload=page.waitForEvent('download');await evidenceFile.getByRole('link',{name:'Download one.json',exact:true}).click();expect(await readFile(await (await originalDownload).path(),'utf8')).toContain('Two distant calls.');
   await materialDialog.getByRole('button',{name:'Close',exact:true}).click();await openRecordActions(page);await page.getByRole('button',{name:'Source provenance',exact:true}).click();

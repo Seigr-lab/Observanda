@@ -7,6 +7,7 @@ import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('nested dataset form combines visits and lookup values with explicit mapping controls',async({page})=>{
  test.setTimeout(90000);
@@ -15,7 +16,7 @@ test('nested dataset form combines visits and lookup values with explicit mappin
  const upload=await materials.startImport({recordId:record.id,name:'nested.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);await materials.finishImport(upload.id);
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog');
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await openEvidence(page);
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await dialog.getByLabel('Title',{exact:true}).fill('Joined acquisitions');
   await dialog.getByLabel('Source format').selectOption('json-nested');await dialog.getByLabel('Path to rows array').fill('/visits/*/rows');
   await dialog.getByRole('button',{name:'Add lookup',exact:true}).click();
@@ -46,7 +47,7 @@ test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained sche
  };
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();
   await dialog.getByLabel('Title',{exact:true}).fill('Hardware readings');
   await dialog.getByLabel('Source format').selectOption('json');
@@ -73,7 +74,7 @@ test('JSON mapping preview, cancel/reopen/retry, exact dataset and retained sche
   expect(attempts.length).toBe(2);expect(new Set(attempts).size).toBe(1);
   await page.context().unroute('**/api/research/materials/dataset');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByText('Evidence preparation jobs',{exact:true}).click();
   await dialog.getByRole('button',{name:'Check preparation'}).click();
   await dialog.getByRole('button',{name:'Cancel dataset preparation'}).focus();await page.keyboard.press('Enter');
@@ -108,7 +109,7 @@ test('wide dataset inspection and schema paging retain edits, exclusions and exa
  page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.locator('.material-list li').filter({hasText:'Wide readings'}).getByRole('button',{name:'Inspect',exact:true}).click();
   const table=dialog.getByRole('region',{name:'Dataset values'});
   await expect(table).toContainText('18446744073709551615');await expect(table.locator('thead th')).toHaveCount(18);
@@ -173,11 +174,11 @@ test('discovered wide JSON columns retain full values and original source inspec
  const upload=await materials.startImport({recordId:record.id,name:'wide.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);await materials.finishImport(upload.id);
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog'),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await openEvidence(page);
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await dialog.getByLabel('Title',{exact:true}).fill('Discovered wide values');await dialog.getByLabel('Source format').selectOption('json');await dialog.getByLabel('Path to rows array').fill('/rows');await dialog.getByLabel('Discover columns from each row').check();
   await dialog.getByRole('button',{name:'Preview mapping'}).click();await expect(dialog).toContainText('16 of 301 columns');
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('field0',{timeout:45000});
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Discovered wide values'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Discovered wide values'}).getByRole('button',{name:'Inspect',exact:true}).click();
   for(let offset=16;offset<=288;offset+=16){await dialog.getByRole('button',{name:'Next columns',exact:true}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('field'+offset);}
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('region',{name:'Dataset values'}).getByRole('button',{name:/field300/}).click();await expect(dialog.locator('pre')).toContainText('begin ');await dialog.getByRole('button',{name:'Next characters',exact:true}).click();await expect(dialog.locator('pre')).not.toContainText('begin ');

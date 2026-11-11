@@ -9,6 +9,7 @@ import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {retainDatasetOriginal} from '../fixtures/dataset-original.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('review twenty columns, cancel, retain the group, author a reusable profile and apply it to a reordered original through the ordinary record',async({page})=>{
  test.setTimeout(200000);page.setDefaultTimeout(18000);
@@ -27,7 +28,7 @@ test('review twenty columns, cancel, retain the group, author a reusable profile
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),headless:true});
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+recordId);
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
-  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog'),item=title=>dialog.locator('.material-list li').filter({hasText:title}).getByRole('button',{name:'Inspect',exact:true});
   const openTable=async()=>{await item('Instrument settings').click();await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();};
   const prepare=async()=>{

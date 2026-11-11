@@ -13,6 +13,7 @@ import {materialReference} from '../../src/web/material-reference.js';
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author exact-first Pearson groups, preserve actual cell precision and reopen pinned policies',async({page},testInfo)=>{
  test.setTimeout(300000);page.setDefaultTimeout(15000);
@@ -28,7 +29,7 @@ test('author exact-first Pearson groups, preserve actual cell precision and reop
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});
   const dialog=page.locator('#dialog'),form=dialog.locator('[data-aggregation-form]'),metric=dialog.locator('[data-aggregate-value="0"]'),input=key=>metric.locator('[data-aggregate="'+key+'"]'),precision=key=>metric.locator('[data-aggregate-correlation] [data-calculation-policy="'+key+'"]');
   const response=route=>page.waitForResponse(value=>value.url().endsWith('/'+route)),success=async waiting=>{const result=await waiting;expect(result.ok()).toBe(true);await result.finished();return result;};
-  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
+  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await openEvidence(page);await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
   const dismiss=async()=>{if(await page.locator('#notice').isVisible())await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();};
   const idle=()=>expect(form).toHaveAttribute('aria-busy','false');
   const columns=async offset=>{await dialog.locator('[data-column-window][data-offset="'+offset+'"]').click();await expect(dialog.locator('[data-column-window-offset]')).toHaveValue(String(offset+1));await idle();};

@@ -11,6 +11,7 @@ import {materialReference} from '../../src/web/material-reference.js';
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author paired covariance and fit coefficients, inspect both pinned readings and retain historical results',async({page},testInfo)=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);
@@ -23,7 +24,7 @@ test('author paired covariance and fit coefficients, inspect both pinned reading
   const pinnedSourcePage=await m.datasetPage(source,0);expect(pinnedSourcePage.page).toBe(0);expect(pinnedSourcePage.rows[0].cells[1]).toBe('0');expect(pinnedSourcePage.rows[0].cells[18]).toBe('1');
   const historical=await m.dataset({recordId,title:'Historical grouped mean',aggregation:{version:4,source,keys:[0],keySemantics:['lexical'],values:[{column:1,operation:'mean',name:'Mean X'}],missing:'skip',note:'Historical recipe remains available.',resourcePolicy:defaultDatasetResourcePolicy()}});
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});const dialog=page.locator('#dialog'),form=dialog.locator('[data-aggregation-form]'),metric=index=>dialog.locator('[data-aggregate-value="'+index+'"]'),input=(index,key)=>metric(index).locator('[data-aggregate="'+key+'"]');
-  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
+  const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+recordId);await openEvidence(page);await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
   const idle=async()=>expect(form).toHaveAttribute('aria-busy','false');
   const nextColumns=async offset=>{await dialog.locator('[data-column-window][data-offset="'+offset+'"]').click();await idle();await expect(dialog.locator('[data-column-window-offset]')).toHaveValue(String(offset+1));};
   const preview=async()=>{await dialog.getByRole('button',{name:'Preview grouped values',exact:true}).click();await idle();};

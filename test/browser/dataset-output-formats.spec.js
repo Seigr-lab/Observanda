@@ -8,6 +8,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('choose exact native result formats, correct a nonterminating request and publish a table with declared bases',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -24,7 +25,7 @@ test('choose exact native result formats, correct a nonterminating request and p
  async function graphConstant(spelling,representation='integer',radix=10){await graphTab('nodes');await graphAction('add','[data-kind="constant"]').click();await graphField('representation').selectOption(representation);if(['radix','radix-fraction'].includes(representation))await graphField('radix').fill(String(radix));await graphField('constant').fill(spelling);await graphAction('apply').click();await graphSaved();}
  try{
   await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Native readings'}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Aggregate into dataset',exact:true}).click();
+  await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Native readings'}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Aggregate into dataset',exact:true}).click();
   await dialog.getByLabel('Grouped dataset title').fill('Native mean');await dialog.locator('[data-group-key="0"]').check();await dialog.getByRole('button',{name:'Add aggregated value'}).click();const metric=dialog.locator('[data-aggregate-value="0"]');await metric.getByLabel('Input column',{exact:true}).selectOption('1');await metric.getByLabel('Output column name').fill('Mean');await metric.locator('[data-aggregate="operation"]').selectOption('mean');await metric.getByLabel('Result number format',{exact:true}).selectOption('decimal');
   await dialog.getByRole('button',{name:'Preview grouped values'}).click();await expect(page.getByText('A result cannot be written exactly in its selected number format.',{exact:false})).toBeVisible();await expect(metric.getByLabel('Output column name')).toHaveValue('Mean');
   await metric.getByLabel('Result number format',{exact:true}).selectOption('radix-fraction');await metric.getByLabel('Result numeral base (2–36)',{exact:true}).fill('6');await dialog.getByRole('button',{name:'Preview grouped values'}).click();await expect(dialog.locator('[data-aggregation-preview]')).toContainText('0.2');

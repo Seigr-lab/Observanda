@@ -14,6 +14,7 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {Workspace} from '../../src/storage.js';
 import {preferences} from './preferences-helper.js';
 import {recoverResearch} from './research-recovery-workflow.js';
+import {openEvidence} from './record-editor-helper.js';
 
 // All research mutations use the app. Service calls below only independently
 // inspect saved records, immutable revisions and the restored evidence chain.
@@ -36,7 +37,7 @@ test('ordinary next run connects preparation, native evidence, measurements, res
  const openRecord=async(id,title)=>{await page.evaluate(id=>location.hash='#/records/'+id,id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(title);};
  const save=async()=>{await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
  const addFact=async()=>{await form.getByRole('button',{name:'Add to record',exact:true}).click();await expect(dialog).not.toBeVisible();await save();};
- const evidence=async()=>{await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();};
+ const evidence=async()=>{await openEvidence(page);await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible();};
  const pickProvenance=async(root,key,ref,label)=>{const picker=root.locator('[data-provenance-reference="'+key+'"]');await picker.getByRole('button',{name:'Choose retained revision',exact:true}).click();await picker.getByLabel(label,{exact:true}).selectOption(reference(ref));await picker.getByRole('button',{name:'Use selected revision',exact:true}).click();};
  let runId;
  try{

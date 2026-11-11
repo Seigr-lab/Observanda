@@ -7,6 +7,7 @@ import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('positional preparation rejects a short schedule and then retains 432 aligned acquisitions through the UI',async({page})=>{
  test.setTimeout(120000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-positional-ui-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),record=(await f.workspace.read()).book.entries[0],errors=[];
@@ -15,7 +16,7 @@ test('positional preparation rejects a short schedule and then retains 432 align
  const bytes=Buffer.from(JSON.stringify(source)),upload=await materials.startImport({recordId:record.id,name:'parallel-windows.json',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);await materials.finishImport(upload.id);
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog');
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await dialog.getByLabel('Title',{exact:true}).fill('All windows aligned');await dialog.getByLabel('Source format').selectOption('json-nested');await dialog.getByLabel('Path to rows array').fill('/windows/*/acquisitions');
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await openEvidence(page);await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();await dialog.getByLabel('Title',{exact:true}).fill('All windows aligned');await dialog.getByLabel('Source format').selectOption('json-nested');await dialog.getByLabel('Path to rows array').fill('/windows/*/acquisitions');
   for(const [i,name] of ['controls','configuration','schedule'].entries()){
    await dialog.getByRole('button',{name:'Add lookup',exact:true}).click();const lookup=dialog.locator('.material-lookup').nth(i);await lookup.getByLabel('Lookup name',{exact:true}).fill(name);await lookup.getByLabel('Match acquisition and lookup rows').selectOption('position');await expect(lookup.getByLabel('Acquisition key path')).not.toBeVisible();await lookup.getByLabel('Lookup rows array path').fill('/windows/*/'+(name==='schedule'?'shortSchedule':name));
   }

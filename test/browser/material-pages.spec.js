@@ -7,6 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('evidence sources page, search and cross records without losing exact selections or draft fields',async({page})=>{
  test.setTimeout(120000);
@@ -17,7 +18,7 @@ test('evidence sources page, search and cross records without losing exact selec
  page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   const dialog=page.locator('#dialog');
   await expect(dialog.locator('.material-list > li')).toHaveCount(20);
   await expect(dialog.locator('[data-dependency-status="checked"]')).toHaveCount(20);

@@ -7,13 +7,14 @@ import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('a selection above ten thousand files reaches paged registration and recovers from an interrupted request',async({page})=>{
  test.setTimeout(120000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-intake-selection-count-')),f=await encryptedFixture(directory,sampleNotebook()),owner=(await f.workspace.read()).book.entries[0].id;
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[];
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import file set',exact:true}).click();await dialog.getByLabel('Collection title',{exact:true}).fill('Growing recording set');
   await dialog.getByLabel('Original files',{exact:true}).evaluate(input=>{const selection=new DataTransfer();for(let i=0;i<10017;i++)selection.items.add(new File([],'take-'+i+'.txt',{type:'text/plain'}));input.files=selection.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
   await page.context().route('**/api/research/materials/intake-selection-append',async route=>{requests.push(route.request().postDataJSON());await route.fetch();await route.abort('failed');});
@@ -36,7 +37,7 @@ test('folder selection retains paths, purpose and downloads in the evidence read
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import file set',exact:true}).click();
   await dialog.getByLabel('Collection title',{exact:true}).fill('Returned source tree');
   await dialog.getByLabel('Select source',{exact:true}).selectOption('folder');
@@ -44,7 +45,7 @@ test('folder selection retains paths, purpose and downloads in the evidence read
   await dialog.getByLabel('Original files',{exact:true}).setInputFiles(tree);
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Verify and attach file set'})).toBeEnabled({timeout:30000});
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByRole('button',{name:'Unfinished file sets',exact:true}).click();
   await dialog.getByRole('button',{name:'Continue Returned source tree',exact:true}).click();
   await expect(dialog.locator('#intake-files')).toHaveAttribute('webkitdirectory','');
@@ -69,7 +70,7 @@ test('file sets resume after lost upload replies and reload, then attach togethe
   ...Array.from({length:73},(_,i)=>({name:'field-note-'+String(i).padStart(2,'0')+'.txt',mimeType:'text/plain',buffer:Buffer.from('Field note '+i)}))];
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import file set',exact:true}).click();
   await dialog.getByLabel('Collection title',{exact:true}).fill('Private recording session');
   await dialog.getByLabel('Provenance / acquisition notes').fill('Private path E:\\private\\recordings');
@@ -82,7 +83,7 @@ test('file sets resume after lost upload replies and reload, then attach togethe
   await expect(dialog.getByRole('button',{name:'Upload selected files',exact:true})).toBeEnabled({timeout:30000});
   await expect(dialog.getByRole('button',{name:'Verify and attach file set'})).toBeDisabled();
   expect((await materials.overview(owner)).items).toHaveLength(0);const batches=await materials.intakes.list(owner);expect(batches.items).toHaveLength(1);
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByRole('button',{name:'Unfinished file sets',exact:true}).click();
   await dialog.getByRole('button',{name:'Continue Private recording session',exact:true}).click();
   await expect(dialog.locator('.intake-files > li')).toHaveCount(20);
@@ -120,7 +121,7 @@ test('single originals resume after a lost chunk reply, reject a changed prefix,
  const buffer=Buffer.alloc(9*1024*1024+47,0x71),file={name:'capture.raw',mimeType:'application/octet-stream',buffer},sizes=[];
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
+  await openEvidence(page);const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles(file);
   let lost=false;
@@ -135,7 +136,7 @@ test('single originals resume after a lost chunk reply, reject a changed prefix,
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles({...file,buffer:changed});
   await dialog.getByRole('button',{name:'Import original',exact:true}).click();
   await expect(dialog.locator('#material-progress')).toContainText('differs from the interrupted original');
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.reload();await openEvidence(page);
   await dialog.getByRole('button',{name:'Resume upload',exact:true}).click();
   await dialog.getByLabel('Select the same original file').setInputFiles({...file,buffer:changed});
   await dialog.getByRole('button',{name:'Resume import',exact:true}).click();

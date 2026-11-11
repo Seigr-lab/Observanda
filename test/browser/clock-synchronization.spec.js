@@ -12,6 +12,7 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {retainedTableHTML} from '../../src/publication-retained-tables.js';
 import {materialReference} from '../../src/web/material-reference.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('author paired clocks, correct invalid validity, retain explicit status and reopen the pinned calculation',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
@@ -22,7 +23,7 @@ test('author paired clocks, correct invalid validity, retain explicit status and
  // Match the browser's retained address, including the owning workspace namespace.
  const historicalGraph=await new CalculationGraphs(materials).create({recordId:record.id,title:'Calculation graph',source:{...source,workspaceId:book.id},graphVersion:2});
  const errors=[],app=await startServer({root:fixture.workspace.root,port:0,deviceStore:fixture.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog');page.on('pageerror',error=>errors.push(error.message));
- const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+record.id);await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
+ const inspect=async title=>{await page.keyboard.press('Escape');await page.goto(app.origin+'/#/records/'+record.id);await openEvidence(page);await dialog.locator('.material-list li').filter({has:page.getByText(title,{exact:true})}).getByRole('button',{name:'Inspect',exact:true}).click();};
  const option=async(id,title)=>{const select=dialog.locator('#'+id);await expect(select.locator('option').filter({hasText:title})).toHaveCount(1);await select.selectOption(await select.locator('option').filter({hasText:title}).getAttribute('value'));};
  const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();};
  try{

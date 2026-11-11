@@ -17,6 +17,7 @@ import {ResearchRecords} from '../../src/research.js';
 import {RecordWriting} from '../../src/record-writing.js';
 import {recordRevision} from '../../src/research.js';
 import {proseText} from '../../src/web/prose-model.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('project research routes preserve independent writing across reload and workspace navigation',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(10000);
@@ -46,7 +47,7 @@ test('project research routes preserve independent writing across reload and wor
   await dialog.locator('.ProseMirror').fill('Only Project A receives this writing.');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.locator('#main')).toContainText('Only Project A receives this writing.');
   expect(writes).toEqual(['/api/projects/'+a.id+'/research/records/writing/save']);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await openEvidence(page);
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   const original=Buffer.from('Time,Value\n0,1\n1,2\n');
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'project-observation.csv',mimeType:'text/csv',buffer:original});

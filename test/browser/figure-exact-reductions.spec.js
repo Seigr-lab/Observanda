@@ -7,6 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
+import {openEvidence} from './record-editor-helper.js';
 const column=(name,representation)=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 
 test('native figure authoring retains the exact difference of large counters and exposes its pinned source',async({page})=>{
@@ -17,7 +18,7 @@ test('native figure authoring retains the exact difference of large counters and
  await m.dataset({recordId,title:'Exact counter deltas',artifact,columns:[column('Take','text'),column('Delta','integer')]});
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,recordId);await openEvidence(page);
   const dialog=page.locator('#dialog');await dialog.locator('.material-list li').filter({hasText:'Exact counter deltas'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Create reproducible figure'}).click();await dialog.getByLabel('Title',{exact:true}).fill('Exact total delta');
   await dialog.getByLabel('Transformation').selectOption('sum');await dialog.getByLabel('Chart type').selectOption('bar');await dialog.locator('[data-material-value="1"]').check();
@@ -28,7 +29,7 @@ test('native figure authoring retains the exact difference of large counters and
   await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('9007199254740993');
   await dialog.getByRole('button',{name:'Back to evidence'}).click();await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Add retained figure to record'}).click();await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Exact total delta'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await expect(dialog).toContainText('Groups and summaries are calculated with exact rational values.');
   expect((await f.workspace.read()).book.entries.find(r=>r.id===recordId).figures.find(v=>v.id===doc.content.figure.id).series[0].points[0].y).toBe(1);expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

@@ -8,6 +8,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
+import {openEvidence} from './record-editor-helper.js';
 
 test('inspect native bytes, declare exact fractions and clock metadata, retain provenance and reopen after reload',async({page},testInfo)=>{
  test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-measurement-ui-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0];
@@ -20,7 +21,7 @@ test('inspect native bytes, declare exact fractions and clock metadata, retain p
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
-  await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Decoded observations'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Decoded observations'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();
   const counter=dialog.locator('[data-material-column="0"]');await counter.getByLabel('Representation',{exact:true}).selectOption('integer');
   await counter.locator('summary').filter({hasText:'Time metadata'}).click();await counter.getByLabel('Time meaning',{exact:true}).selectOption('counter');
@@ -39,7 +40,7 @@ test('inspect native bytes, declare exact fractions and clock metadata, retain p
   const conversion=dialog.locator('[data-provenance-reference="conversion"]');await conversion.getByRole('button',{name:'Choose retained revision'}).click();await conversion.getByLabel('Conversion reference',{exact:true}).selectOption('artifact:'+native.id+':'+native.revision);await conversion.getByRole('button',{name:'Use selected revision'}).click();
   await dialog.getByRole('button',{name:'Add contributing source'}).click();const selected=await materials.current(data.id);await dialog.getByLabel('Source',{exact:true}).selectOption('dataset:'+selected.id+':'+selected.revision);await dialog.getByLabel('Locator',{exact:true}).selectOption('cell');await dialog.getByLabel('Column (starting at 1)').fill('2');await dialog.getByRole('button',{name:'Add locator'}).click();await expect(dialog.getByLabel('Title',{exact:true})).toHaveValue('Native diagnostic');
   await dialog.getByRole('button',{name:'Save retained measurement'}).click();await expect(dialog.getByRole('heading',{name:'Native diagnostic',exact:true})).toBeVisible();
-  await expect(dialog).toContainText('Partial');await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Native diagnostic'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  await expect(dialog).toContainText('Partial');await page.reload();await openEvidence(page);await dialog.locator('.material-list li').filter({hasText:'Native diagnostic'}).getByRole('button',{name:'Inspect',exact:true}).click();
   await expect(dialog).toContainText('15.3');await expect(dialog).toContainText('recognition remains unresolved');
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();await page.screenshot({path:testInfo.outputPath('measurement-phone.png')});
   await dialog.getByRole('button',{name:'Inspect source',exact:true}).first().focus();await page.keyboard.press('Enter');await expect(dialog.getByRole('button',{name:'Download displayed byte slice'})).toBeVisible();
