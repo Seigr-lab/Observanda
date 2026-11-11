@@ -89,3 +89,13 @@ test('the saved source fragment keeps the values the library reads',()=>{
  const fields=websiteSearchFields(parseFragment(fragment));
  assert.equal(fields.recordType,'observation');assert.equal(fields.status,'in progress');assert.equal(fields.displayDate,'2026-03-01');
 });
+
+const profilesShipped=Object.hasOwn(JSON.parse(await readFile(new URL('../src/web/locales/catalogues.json',import.meta.url),'utf8')),'labBookProfiles');
+test('shipped lab book profile names follow the page language while edited names stay as written',{skip:!profilesShipped&&'the labBookProfiles catalogue is not registered in this tree'},async()=>{
+ const english=JSON.parse(await readFile(new URL('../src/web/locales/en/labBookProfiles.json',import.meta.url),'utf8'));
+ const catalan=JSON.parse(await readFile(new URL('../src/web/locales/ca/labBookProfiles.json',import.meta.url),'utf8'));
+ const [key,label]=Object.entries(english).find(([k,v])=>catalan[k]&&catalan[k]!==v&&!Object.values(english).slice(0,Object.keys(english).indexOf(k)).includes(v));
+ const html=localizedRecordPage(page('ca',placed('<article><section data-observanda-part="section:x"><h3 data-observanda-term="profile">'+esc(label)+'</h3></section><section><h3 data-observanda-term="profile">My own heading</h3></section></article>')));
+ assert.ok(html.includes('data-observanda-value="'+esc(label)+'">'+esc(catalan[key])+'</h3>'),key);
+ assert.match(html,/<h3 data-observanda-term="profile">My own heading<\/h3>/);
+});

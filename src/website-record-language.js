@@ -11,9 +11,16 @@ import {projectedDate} from './website-file-library-fields.js';
 // page's own language, never the language of the private application. Only
 // renderer labels and recognised record values are rewritten; authored text,
 // titles and template labels are never translated.
-const owned=['websiteRecordText','analyses','publication','recordEditors','recordDates','recordViews','online'];
+// Lab book profile text (section, field and record type names) is read from
+// the labBookProfiles catalogue once the catalogue registry lists it.
 const read=async(language,name)=>JSON.parse(await readFile(new URL('./web/locales/'+language+'/'+name+'.json',import.meta.url),'utf8'));
-const catalogues=new Map(await Promise.all(LANGUAGES.map(async({id})=>[id,Object.fromEntries(await Promise.all(owned.map(async name=>[name,await read(id,name)])))])));
+const registry=await read('.','catalogues');
+const owned=['websiteRecordText','analyses','publication','recordEditors','recordDates','recordViews','online','labBookProfiles'].filter(name=>Object.hasOwn(registry,name));
+const catalogues=new Map(await Promise.all(LANGUAGES.map(async({id})=>[id,Object.fromEntries(await Promise.all(owned.filter(name=>registry[name].includes(id)).map(async name=>[name,await read(id,name)])))])));
+// Records keep a profile's canonical English text. Text that still equals a
+// shipped default is shown in the page language; edited text stays as written.
+const profileKeys=new Map();
+for(const [key,value] of Object.entries(catalogues.get('en').labBookProfiles??{}))if(typeof value==='string'&&!profileKeys.has(value))profileKeys.set(value,key);
 const labelled=new Set(['websiteRecordText','analyses','publication']);
 const types=new Set(RECORD_TYPES.map(type=>type.id));
 const valueKey='data-observanda-value';
@@ -42,7 +49,8 @@ export function recordDateText(declared,message){
  return declared.estimated?dates('estimated',{date:label}):label;
 }
 function termText(kind,value,message){
- if(kind==='type')return types.has(value)?message('recordEditors','type_'+value+'_label'):null;
+ if(kind==='type')return types.has(value)?message('recordEditors','type_'+value+'_label'):termText('profile',value,message);
+ if(kind==='profile')return profileKeys.has(value)?message('labBookProfiles',profileKeys.get(value)):null;
  if(kind==='status')return STATUSES.includes(value)?message('recordViews','statusValues.'+value.replaceAll(' ','-')):null;
  if(kind==='relation'){const index=RELATION_TYPES.indexOf(value);return index<0?null:message('online','linkType'+index);}
  return null;
