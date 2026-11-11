@@ -5,7 +5,8 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {ObjectIndex} from './object-index.js';
 import {AppError} from './errors.js';
 import {hasCatalogue} from './postgres.js';
-import {writeCatalogueRows} from './catalogue-writes.js';
+import {writeCatalogueRows,GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
+export {GROUPED_METADATA_OBJECTS};
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 import {withCatalogueCacheBoundary} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
@@ -20,7 +21,6 @@ export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchId
 // One write contract for retained data: up to 128 objects share a single
 // authenticated checkpoint per writer transaction, and each group of 32 is
 // prefetched and written in turn inside it.
-export const GROUPED_METADATA_OBJECTS=128;
 export async function withGroupedMetadataBatch(workspace,items,{prefetchId,apply,signal}={}){
  if(!Array.isArray(items)||items.length>GROUPED_METADATA_OBJECTS||typeof prefetchId!=='function'||typeof apply!=='function')throw new AppError('INVALID');
  return withWorkspaceMetadataBatch(workspace,async()=>{

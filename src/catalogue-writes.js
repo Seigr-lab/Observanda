@@ -2,6 +2,10 @@
 // own the transaction; payloads and the roots that authenticate them commit
 // together. Table and column identifiers are fixed here, never user supplied.
 import {AppError} from './errors.js';
+// Retained data writers share up to this many objects under one authenticated
+// checkpoint (see withGroupedMetadataBatch). Kept here, free of other imports,
+// so writer modules can size their batches while catalogue modules load.
+export const GROUPED_METADATA_OBJECTS=128;
 export async function writeCatalogueRows(db,table,rows,{create=false}={}){
  const key=table==='state'?'slot':table==='objects'?'id':null;
  if(!key)throw new TypeError('Unsupported catalogue table');

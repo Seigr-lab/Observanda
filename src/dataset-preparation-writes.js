@@ -2,7 +2,8 @@
 // staging joins cell and plot-member roots into authorized transactions; no
 // reference escapes until all children and final roots have durably committed.
 import {MaterialSequence} from './material-sequence.js';
-import {withGroupedMetadataBatch,GROUPED_METADATA_OBJECTS} from './metadata-batch.js';
+import {withGroupedMetadataBatch} from './metadata-batch.js';
+import {GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 const MAX_BYTES=256*1024,MAX_OBJECTS=GROUPED_METADATA_OBJECTS;
