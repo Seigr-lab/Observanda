@@ -11,8 +11,9 @@ import {menuCSS,hasEditorMenu} from './website-menu-styles.js';
 // actually contains that class, or when the sheet is not in the generated form.
 export function retainedArticleCSS(css,recordId,html){
  if(!recordId||html.includes('site-footer')||!css.includes('@scope ([data-observanda-source])'))return css;
- const rule=/\n\[data-page="entry:([0-9a-f-]{36})"\] \.site-footer\{--footer-text-align:(?:start|center|end|left|right|justify)\}\n\}$/u.exec(css);
- return rule&&rule[1]===recordId?css.slice(0,rule.index)+'\n}':css;
+ // A website copy's rules end inside their cascade layer as well as the scope.
+ const rule=/\n\[data-page="entry:([0-9a-f-]{36})"\] \.site-footer\{--footer-text-align:(?:start|center|end|left|right|justify)\}\n\}(\n\})?$/u.exec(css);
+ return rule&&rule[1]===recordId?css.slice(0,rule.index)+'\n}'+(rule[2]??''):css;
 }
 
 // Zero-specificity defaults leave the site's typography, theme and authored

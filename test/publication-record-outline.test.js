@@ -40,3 +40,29 @@ test('a website copy nests its sections under the entry title while the PDF copy
  const pdf=await convertPublicationRecord(workspace,metadata,{...record,sharePdf:true,sections:[{...section,sharePdf:true}]},{target:'pdf'});
  if(pdf.visible)assert.ok(headings(pdf.html).some(n=>n.tagName==='h2'&&attr(n.parentNode,'data-observanda-part')==='section:'+section.id));
 });
+
+test('a website copy layers its renderer styles below the site and lets wide tables scroll',async t=>{
+ const {retainedArticleCSS}=await import('../src/website-entry-styles.js');
+ const {validateWebsiteCSS}=await import('../src/website-file-policy.js');
+ const {websiteRecordRules}=await import('../src/publication-conversion-render.js');
+ const root=await mkdtemp(path.join(os.tmpdir(),'publication-record-outline-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{
+  await closeIdleMutationFiles();if(path.dirname(root)!==path.resolve(os.tmpdir())||!path.basename(root).startsWith('publication-record-outline-'))throw Error('Unexpected fixture');
+  await rm(root,{recursive:true,force:true,maxRetries:12,retryDelay:150});
+ });
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});
+ const project={id:randomUUID(),title:'Apiary',share:true},book={id:randomUUID(),projectId:project.id,title:'Inspections',share:true,sharePdf:true};
+ const record={...sampleNotebook().entries[1],id:randomUUID(),notebookId:book.id,title:'Hive 4',share:true,sharePdf:true,body:'Brood frames inspected.',sections:[],attachments:[],figures:[],relations:[],contributors:[],tags:[]};
+ delete record.results;delete record.publication;delete record.attempt;delete record.template;
+ const metadata={id:workspace.vault.id,projects:[project],notebooks:[book]};
+ const website=await convertPublicationRecord(workspace,metadata,record,{target:'website'});
+ validateWebsiteCSS(website.css);
+ const layer=website.css.indexOf('@layer observanda-record {\n@scope ([data-observanda-source]) {');
+ assert.ok(layer>=0);assert.ok(website.css.trimEnd().endsWith('}\n}'));
+ assert.ok(website.css.includes(websiteRecordRules));
+ // No renderer rule escapes the layer.
+ assert.doesNotMatch(website.css.slice(0,layer),/\{[^}]*(?:color|font-size|margin)/);
+ assert.equal(retainedArticleCSS(website.css,record.id,website.html),website.css.replace(/\n\[data-page="entry:[0-9a-f-]{36}"\] \.site-footer\{[^}]*\}(?=\n\}\n\}$)/u,''));
+ const pdf=await convertPublicationRecord(workspace,metadata,record,{target:'pdf'});
+ if(pdf.visible)assert.ok(!pdf.css.includes('@layer observanda-record'));
+});

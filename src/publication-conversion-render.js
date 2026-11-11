@@ -54,6 +54,10 @@ export function annotatePublicationParts(article,record){
 // The website copy has its title as an h2 before the article. Every heading
 // inside the article moves one level down, so the record's sections, results
 // and related research form an outline under that title. h6 stays h6.
+// Wide result and data tables keep their natural column widths and scroll
+// inside their focusable region instead of squeezing every column.
+export const websiteRecordRules='.book-table-scroll>table{table-layout:auto;width:max-content;min-width:100%}.book-table-scroll :is(td,th){overflow-wrap:break-word}'+
+ ':is(.book-table-scroll,.table-scroll):focus-visible{outline:2px solid var(--accent,currentColor);outline-offset:2px}';
 export function nestRecordHeadings(article){
  for(const node of nodes(article)){
   const level=/^h([1-5])$/.exec(node.tagName)?.[1];
@@ -120,7 +124,11 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  }
  // Restrict the renderer's composition styles to copied fragments. Its sample
  // page header, body typography and root variables must not restyle the website.
- let css=candidate.styles.fonts+'\n@scope ([data-observanda-source]) {\n'+[candidate.styles.common,candidate.styles.rich,...candidate.styles.blocks].join('\n')+'\n}';for(const [name,replacement] of assetPaths)css=css.split(name).join(replacement);
+ // On a website the copy's renderer styles form one cascade layer: any rule of
+ // the site itself (its stylesheet, theme, style book or tokens) wins over
+ // them, and they only fill in what the site does not style.
+ const scoped='@scope ([data-observanda-source]) {\n'+[candidate.styles.common,candidate.styles.rich,...candidate.styles.blocks,...(channel==='website'?[websiteRecordRules]:[])].join('\n')+'\n}';
+ let css=candidate.styles.fonts+'\n'+(channel==='website'?'@layer observanda-record {\n'+scoped+'\n}':scoped);for(const [name,replacement] of assetPaths)css=css.split(name).join(replacement);
  const title='<section data-observanda-part="title"><h2>'+escapeHTML(record.title)+'</h2></section>';
  if(channel==='website')await addPhotoRenditions(article,assets,signal);
  const fragment=title+serializeOuter(article);
