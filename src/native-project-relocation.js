@@ -49,6 +49,7 @@ export class NativeProjectRelocation{
    }
    if(prior?.id===id&&prior.phase==='cancelled'&&prior.cancelReason==='volume')throw new AppError('STORAGE_RENAME_VOLUME');
    if(prior&&!['complete','cancelled','preparing','prepared'].includes(prior.phase))throw new AppError('CONFLICT');
+   const pending=prior?.id===id&&['preparing','prepared'].includes(prior.phase);
    if(prior&&['preparing','prepared'].includes(prior.phase)){await new NativeRelocationOwners(command,prior,storage.vault).discardPrepared();if(this.cross)await releaseIncomingProjectMove(command.targetRegistry,prior);}
    const current=await this.registry.state(command.projectId),entry=current.state==='active'?current.entry:null;
    if(!entry||entry.root!==storage.root||entry.vaultId!==storage.vault?.id||this.cross&&entry.parentId!==options.expectedParentId||!this.cross&&path.basename(entry.root)!==options.expectedName)throw new AppError('CONFLICT');
@@ -60,7 +61,7 @@ export class NativeProjectRelocation{
    const value={version:1,id,projectId:entry.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,source:relative(this.registry.workspace.root,source),destination:relative(this.cross?command.targetRegistry.workspace.root:this.registry.workspace.root,destination),identity:await projectMoveDirectory(source),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'preparing',...(!this.cross?{settings:options.settings??null}:{workspaceId:this.registry.workspaceId})};
    if(this.cross){value.placement={parentId:location.parentId,expectedParentId:entry.parentId};value.target={root:command.targetRegistry.workspace.root,workspaceId:command.targetRegistry.workspaceId,vaultId:command.targetRegistry.workspace.vault.id,identity:await projectMoveDirectory(command.targetRegistry.workspace.root),parentRelative:relative(command.targetRegistry.workspace.root,location.parent),parentIdentity:await projectMoveDirectory(location.parent)};await command.checkTarget(value);}
    else if(options.placement){value.placement=options.placement;value.placementParent={relative:relative(this.registry.workspace.root,location.parent),...await projectMoveDirectory(location.parent)};}
-   const selected=await NativeRelocationOwners.prepare(command,storage,value,{withProject,withBook,check});
+   const selected=await NativeRelocationOwners.prepare(command,storage,value,{withProject,withBook,check,discardRefused:!pending});
    if(this.cross){await admitNativeWorkspaceTree(command.targetRegistry,selected,{fresh:true});await reserveIncomingProjectMove(command.targetRegistry,value,{owners:selected.owners});}
    await checkpoint('prepared',value);return this.finish(value,storage.vault,{check,checkpoint});
   }));

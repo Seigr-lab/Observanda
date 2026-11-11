@@ -35,9 +35,9 @@ const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 import {validDatabaseRetention} from './workspace-database-retention.js';
 const fingerprint=async file=>digest(await readFile(file));
 const relative=(root,file)=>path.relative(root,file).split(path.sep).join('/');
-// A relocation that is still preparing, or whose refused preparation was
-// discarded with no retained owner, has not moved or fenced anything.
-export const relocationNotStarted=(value,id)=>!value||value.id!==id||value.phase==='preparing'||value.phase==='cancelled'&&value.ownerDirectoryVersion===2&&value.owners?.count===0;
+// A relocation whose refused preparation was discarded with no retained owner
+// has not moved or fenced anything.
+export const relocationNotStarted=(value,id)=>!value||value.id!==id||value.phase==='cancelled'&&value.ownerDirectoryVersion===2&&value.owners?.count===0;
 export const relocationOwnerRoot=(root,item)=>item.relative?nestedRenameRoot(root,item.relative):root;
 export const relocationOwnerId=item=>item.kind==='project'?item.projectId:item.labBookId;
 // Bound the traversal as well as the owner records. A declared database may
@@ -66,10 +66,11 @@ export class NativeRelocationOwners{
    const binding=await catalogueBinding(location),scope=this.command.scope(this.value),expected=root===scope.destination?item.destinationId??item.sourceId:item.sourceId;if(binding?.id!==expected||binding.placement!==item.kind||binding[item.kind==='project'?'projectId':'labBookId']!==relocationOwnerId(item))throw new AppError('DATABASE_LOCATION');if((await storage.outline()).metadata.id!==item.namespaceId)throw new AppError('DATABASE_LOCATION');return await operation(storage);
   }finally{if(item.relative)await clearVault(vault);}
  }
- static async prepare(command,storage,value,{withProject,withBook,check=async()=>{}}={}){
+ static async prepare(command,storage,value,{withProject,withBook,check=async()=>{},discardRefused=false}={}){
   const registry=command.registry;value.ownerDirectoryVersion=2;value.owners=new NativePortabilityCollection(null,randomUUID()).empty();value.ownerKeys=new NativePortabilityCollection(null,randomUUID()).empty();value.projectRegistryRevision=await registry.version();value.phase='preparing';await command.save(value);
-  // A refused preparation releases its journal at once. Left behind, it would
-  // reserve its parent's names and a later recovery would resume a refused move.
+  // A refused new preparation releases its journal at once. Left behind, it
+  // would reserve its parent's names and a later recovery would resume a
+  // refused move. A pending relocation keeps its journal until access allows it.
   try{
   // The preparing journal owns both UUID namespaces even if either commit is
   // acknowledged only after interruption. No recovery key precedes that journal.
@@ -116,7 +117,7 @@ export class NativeRelocationOwners{
    const ordered=async function*(){for(let item;(item=await proofs.take())!==undefined;)yield item;};value.owners=await createPortabilityCollection(registry.workspace,ordered(),{id:value.owners.id});value.ownerKeys=await createPortabilityCollection(storage,keys.items(),{id:value.ownerKeys.id});
   })));
   const selected=new NativeRelocationOwners(command,value,storage.vault);await verifyNativeRelocationOwners(registry,{...value,phase:'prepared'});await selected.current(storage.root);await assertNativeRelocationDatabases(storage.root,selected.owners);value.phase='prepared';await command.save(value);return selected;
-  }catch(error){if(value.phase==='preparing')await new NativeRelocationOwners(command,value,storage.vault).discardPrepared().catch(()=>{});throw error;}
+  }catch(error){if(discardRefused&&value.phase==='preparing')await new NativeRelocationOwners(command,value,storage.vault).discardPrepared().catch(()=>{});throw error;}
  }
  async current(root){
   const value=this.value;await this.registry.inspect(async view=>{let count=0;for await(const item of this.owners.entries({index:'project'})){
