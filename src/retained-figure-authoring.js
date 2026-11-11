@@ -3,7 +3,7 @@ import {derivedComputation} from './web/measurement-computation.js';
 // The authoring format is intentionally unreadable by ordinary exporters.
 import {randomUUID,createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {RetainedFigureDocuments,RetainedFigureCollections,figureValidationValue} from './retained-figure-document.js';
+import {RetainedFigureDocuments,RetainedFigureCollections,figureValidationValue,memberIdSequence} from './retained-figure-document.js';
 import {RetainedFigurePresentation,spliceFigureText} from './retained-figure-presentation.js';
 import {RecordDocument} from './record-document.js';
 import {indexCheckpointDue} from './retained-table-index.js';
@@ -77,7 +77,7 @@ class DraftEdit extends RetainedFigurePresentation{
   if(member.seriesId)indexes.series=await this.index.change(indexes.series,member.seriesId+':'+ordinal(member.position),revision);
   if(indexCheckpointDue(this.index))await this.checkpoint();return member;
  }
- async append(collection,value,{id=randomUUID(),plotId=null,seriesId=null,bodyRoot=null,texts=null}={}){
+ async append(collection,value,{id=(this.memberId??=memberIdSequence())(),plotId=null,seriesId=null,bodyRoot=null,texts=null}={}){
   const {body,index}=this.tables(collection),rows=body.collections[collection]??={count:0,root:null};index.collections[collection]??=emptyIndexes();
   if(await this.reader.item({collection,id}))invalid();
   const position=collection==='panels'?rows.count:collection==='points'?(await this.reader.scope({collection,seriesId})).total:plotId?(await this.reader.scope({collection,plotId})).total:rows.count;

@@ -1,5 +1,5 @@
 import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash,randomBytes} from 'node:crypto';
 import {validAuthoredPointOrigin} from './web/retained-figure-authoring-model.js';
 import {RecordDocument} from './record-document.js';
 import {recordTextJSON} from './record-string-stream.js';
@@ -60,6 +60,14 @@ export class RetainedFigureCollections{
  }
  async manifests(){await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
 }
+// Identities for newly written members. They keep the version-4 layout, but
+// their first 48 bits count up from a random start, so a writer appends to its
+// identity index instead of rewriting random pages at every checkpoint. The
+// remaining 74 bits stay random.
+export function memberIdSequence(){
+ let next=BigInt('0x'+randomBytes(4).toString('hex'))<<16n;
+ return ()=>{const counter=(next++).toString(16).padStart(12,'0'),random=randomBytes(8).toString('hex');return counter.slice(0,8)+'-'+counter.slice(8)+'-4'+random.slice(0,3)+'-'+'89ab'[randomBytes(1)[0]&3]+random.slice(3,6)+'-'+random.slice(6,16)+randomBytes(1).toString('hex');};
+}
 export class RetainedFigureBuilder{
  constructor(owner,header,{draft=false,retained=null}={}){this.draft=draft;this.retained=retained;this.owner=owner;this.blocks=owner.blocks;this.tree=this.blocks.tree();this.header=scalarHeader(header);validateHeader(this.header,{draft});this.source=header.source?structuredClone(header.source):null;this.data=new RetainedFigureCollections(this.blocks);this.presentation=new RetainedFigureCollections(this.blocks);this.plot=null;this.series=null;this.done=false;}
  async addPlot(figure,{id=figure.id,label=figure.title,retained=null}={}){
@@ -74,7 +82,7 @@ export class RetainedFigureBuilder{
   if(this.series.visible){this.series.visiblePosition=this.plot.domains.visibleSeriesCount++;this.plot.domains.maximumSeriesNameLength=Math.max(this.plot.domains.maximumSeriesNameLength,retained?.texts.name??series.name.length);}
   await this.presentation.add('series',{id:series.id,plotId:this.plot.id,position:this.series.position,visiblePosition:this.series.visiblePosition??null,body,lookup:nameKey,...(retained?{bodyRoot:retained.root,texts:retained.texts}:{})});
  }
- async addPoint(point,{id=randomUUID(),source=null,retained=null}={}){
+ async addPoint(point,{id=(this.memberId??=memberIdSequence())(),source=null,retained=null}={}){
   if(!this.series||this.done)throw new AppError('INVALID');const plot=this.plot,series=this.series;if(this.draft){if(figureIssues({...plot.header,series:[{id:series.id,name:'Draft',color:'#123456',points:[point]}]},{retained:true,draft:true,resourceErrors:true}).length)invalid();}else validateRetainedFigurePoint(point,plot.header);if(point.y!==null)series.complete++;const coordinate=xValue(point.x,plot.header.x.kind);
   if(!this.draft&&coordinate===null||point.y!==null&&(!Number.isFinite(point.y)||Math.abs(point.y)>1e100))throw new AppError('MATERIAL_INVALID');
   const categoryId=retained?.categoryId??identity(plot.id,point.x),lookup=plot.id+':'+series.id+':'+categoryId;if(!this.draft&&plot.header.kind==='heatmap'&&await this.data.find('points',lookup,'lookup'))invalid();

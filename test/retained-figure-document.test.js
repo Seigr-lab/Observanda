@@ -2,7 +2,8 @@ import {changeRetainedFigure} from '../src/retained-figure-presentation.js';
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {RetainedFigureDocuments,memberIdSequence} from '../src/retained-figure-document.js';
+import {researchId} from '../src/web/research-reference.js';
 import {createFigure,createSeries} from '../src/web/figure-model.js';
 import {createComposition} from '../src/web/figure-composition.js';
 import {defaultHeatmap} from '../src/web/figure-heatmap.js';
@@ -137,4 +138,9 @@ test('long projection spellings survive selected presentation and manual convers
  assert.deepEqual(changed.document.data,saved.document.data);const renamed=await documents.open(changed);assert.deepEqual((await json(renamed)).projection,figure.projection);await renamed.verify();
  const authoring=new RetainedFigureAuthoring(f.workspace),draft=await authoring.start(changed),finished=await authoring.finish(draft),complete=await documents.open(finished);await complete.verify();assert.deepEqual((await json(complete)).projection,figure.projection);assert.equal((await json(complete)).title,'Retitled exact projection');
  const extracted=await authoring.extract(finished,finished.id);assert.deepEqual((await json(await documents.open(extracted))).projection,figure.projection);
+});
+test('new member identities are valid, unique and ordered within one writer so its identity index grows at one edge',()=>{
+ const first=memberIdSequence(),second=memberIdSequence(),ids=Array.from({length:2000},()=>first());
+ assert.ok(ids.every(researchId));assert.deepEqual([...ids].sort(),ids);assert.equal(new Set(ids).size,ids.length);
+ const other=Array.from({length:2000},()=>second());assert.ok(other.every(researchId));assert.equal(new Set([...ids,...other]).size,4000);
 });

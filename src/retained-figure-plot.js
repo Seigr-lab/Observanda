@@ -135,7 +135,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
     if(mapping.xKind==='number'){const key='projected:'+point.x,prior=await work.get(key);if(prior!==undefined&&prior!==entry.exactX)collapsed=true;else if(prior===undefined)await work.put(key,entry.exactX);}
     if(!await work.add('seen:'+series+':'+JSON.stringify(point.x)))repeats++;if(point.y===null)gaps++;
     const current=xValue(point.x,mapping.xKind);if(mapping.xKind!=='category'&&previous!==null&&current<previous)backwards=true;previous=current;
-    if(Buffer.byteLength(JSON.stringify(receipt))>900000)fail('MATERIAL_ANALYSIS_LIMIT');await builder.addPoint(point,{id:randomUUID(),source:receipt});
+    if(Buffer.byteLength(JSON.stringify(receipt))>900000)fail('MATERIAL_ANALYSIS_LIMIT');await builder.addPoint(point,{source:receipt});
    }
   }
   const figure=await builder.finish(),warnings=[];
