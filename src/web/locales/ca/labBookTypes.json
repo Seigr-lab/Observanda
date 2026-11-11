@@ -24,5 +24,7 @@
   "research-development.label": "Recerca i desenvolupament",
   "research-development.description": "Preguntes, prototips, experiments i resultats reproduïbles.",
   "software-development.label": "Desenvolupament de programari",
-  "software-development.description": "Repositoris, canvis, compilacions, imatges de disc i de contenidor, execucions de proves i versions publicades amb identificadors i resums exactes."
+  "software-development.description": "Repositoris, canvis, compilacions, imatges de disc i de contenidor, execucions de proves i versions publicades amb identificadors i resums exactes.",
+  "music.label": "Música",
+  "music.description": "Obres, sessions, preses, mescles, notes d'escolta, actuacions, crèdits i edicions de llançament."
 }

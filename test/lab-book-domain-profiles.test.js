@@ -51,3 +51,11 @@ test('software development tracks repositories, builds, images and releases with
  const {book:value}=book('software-development'),build=value.entries.find(r=>r.template.label==='Build');
  assert.deepEqual(fieldValueErrors(build.template.fields,{...build.template.values,sha256:digest(63)}),['Artefact SHA-256']);
 });
+
+test('music tracks works, sessions, takes and release editions following the shared music model',()=>{
+ tracks('music',{subjects:['work','session','take','release'],primary:'session',events:['session','take','derivative','listening','performance','credits','release','reflection'],
+  formats:{'work/iswc':'identifier','take/file':'identifier','take/sha256':'sha-256','derivative/sha256':'sha-256','credits/isrc':'identifier','release/barcode':'identifier','release/master-sha256':'sha-256'}});
+ const work=profileById('music').sections.find(s=>s.key==='work');
+ assert.deepEqual(work.fields.find(f=>f.key==='state').choices,['Idea','Work in progress','Session captured','Source retained','Edition selected']);
+ assert.deepEqual(profileById('music').sections.find(s=>s.key==='take').fields.find(f=>f.key==='status').choices,['Kept','Alternate','Abandoned','Failed'],'failed and abandoned takes remain evidence');
+});

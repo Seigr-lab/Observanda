@@ -24,5 +24,7 @@
   "research-development.label": "Forskning og utvikling",
   "research-development.description": "Spørsmål, prototyper, forsøk og reproduserbare funn.",
   "software-development.label": "Programvareutvikling",
-  "software-development.description": "Repositorier, endringer, bygg, disk- og containeravbildninger, testkjøringer og utgivelser med eksakte identifikatorer og sjekksummer."
+  "software-development.description": "Repositorier, endringer, bygg, disk- og containeravbildninger, testkjøringer og utgivelser med eksakte identifikatorer og sjekksummer.",
+  "music.label": "Musikk",
+  "music.description": "Verk, økter, opptak, mikser, lyttenotater, fremføringer, kreditering og utgivelsesutgaver."
 }

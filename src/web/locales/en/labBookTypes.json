@@ -24,5 +24,7 @@
   "research-development.label": "Research & development",
   "research-development.description": "Questions, prototypes, experiments and reproducible findings.",
   "software-development.label": "Software development",
-  "software-development.description": "Repositories, changes, builds, disk and container images, test runs and releases with exact identifiers and digests."
+  "software-development.description": "Repositories, changes, builds, disk and container images, test runs and releases with exact identifiers and digests.",
+  "music.label": "Music",
+  "music.description": "Works, sessions, takes, mixes, listening notes, performances, credits and release editions."
 }
