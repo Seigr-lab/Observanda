@@ -1,4 +1,5 @@
 import {researchContext,ownedAssetURL} from './project-context.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {downloadSize} from './website-file.js';
 // Upload intents remain local to the open editor. Durable jobs never edit a record.
 import {t,language} from './i18n/index.js';
@@ -74,12 +75,13 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
    // Older unencrypted workspaces retain their existing immediate upload API.
    // All newly created workspaces use the durable encrypted path below.
    if(!state.storage.encrypted){
-    const response=await fetch(ownedAssetURL(state,'/api/media/'+kind)+(kind==='file'?'?name='+encodeURIComponent(file.name):''),{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId},body:file});
+    const response=await fetch(ownedAssetURL(state,'/api/media/'+kind)+(kind==='file'?'?name='+encodeURIComponent(file.name):''),{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId}),body:file});
     if(!response.ok)throw await response.json();const asset=await response.json();guard();busy(false);if(currentDestination(intent))await apply(intent,asset);return;
    }
    const session=resume??await call('start',{name:file.name,size:file.size,kind});guard();uploadId=session.id;
+   const credential=await sessionCredential();
    await new Promise((resolve,reject)=>{
-    const request=xhr=new XMLHttpRequest();request.open('POST',ownedAssetURL(state,endpoint+'receive/'+session.id));request.setRequestHeader('Content-Type','application/octet-stream');request.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);
+    const request=xhr=new XMLHttpRequest();request.open('POST',ownedAssetURL(state,endpoint+'receive/'+session.id));request.setRequestHeader('Content-Type','application/octet-stream');request.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);if(credential)request.setRequestHeader('X-Observanda-Session',credential);
     request.upload.onprogress=e=>status(tr('mediaUploadProgress',{done:e.loaded.toLocaleString(language()),total:file.size.toLocaleString(language())}),true);
     request.onload=()=>{try{const result=JSON.parse(request.responseText);request.status>=200&&request.status<300?resolve(result):reject(result);}catch{reject(Error(tr('mediaUploadInterrupted')));}};
     request.onerror=()=>reject(Error(tr('mediaUploadInterrupted')));

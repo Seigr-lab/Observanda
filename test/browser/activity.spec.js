@@ -105,7 +105,8 @@ test('queued and cancelled saves stay compact and never count as running work',a
   await page.goto(app.url);await preferences(page,'General');
   const read=await new RecordWriting(f.workspace).read({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null});
   await page.evaluate(async({destination,read})=>{
-   const storage=await(await fetch('/api/storage')).json(),headers={'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-View':location.hash,'X-Observanda-Wait':'1'};
+   // The application's own requests carry the session credential, as api() sends them.
+   const {sessionHeaders}=await import('/session-store.js'),storage=await(await fetch('/api/storage')).json(),headers=await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-View':location.hash,'X-Observanda-Wait':'1'});
    window.queuedSave=new AbortController();window.copyResponse=fetch('/api/storage/copy',{method:'POST',headers,body:JSON.stringify({path:destination,confirmed:true})});
    window.queueSave=()=>{window.saveResponse=fetch('/api/research/records/writing/save',{method:'POST',headers,signal:window.queuedSave.signal,body:JSON.stringify({workspaceId:read.workspaceId,recordId:read.recordId,sectionId:null,expectedRevision:read.revision,value:{body:'Not admitted'}})}).catch(error=>error.name);};
   },{destination,read});

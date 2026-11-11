@@ -13,6 +13,9 @@ self.addEventListener('message',event=>{
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(url.origin!==self.location.origin||url.pathname==='/api/session'||!/^\/(?:api|preview|appearance-preview)\//.test(url.pathname))return;
+ // The browser does not pass a page's abort to a worker's forwarded fetch. The application's own
+ // requests carry the credential and go straight to the server, so cancelling them reaches it.
+ if(url.pathname.startsWith('/api/')&&event.request.headers.has('X-Observanda-Session'))return;
  event.respondWith((async()=>{
   const credential=await(session??=browserSession()),headers=new Headers(event.request.headers);
   headers.delete('X-Observanda-Session');if(credential)headers.set('X-Observanda-Session',credential);

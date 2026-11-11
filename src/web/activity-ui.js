@@ -1,4 +1,5 @@
 import {activityOwner,activityViewMatches,activityResource,activityCommand} from './activity-owner.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {localizedText,onLanguageChange} from './i18n/index.js';
 import {updateText,updateAttribute,updateProperty,placeAt} from './progress-dom.js';
 import {operationProgress} from './operation-progress-ui.js';
@@ -126,7 +127,7 @@ export function activityUI({onChange=()=>{}}={}){
   if(pending)return pending;
   const epoch=generation;
   const request=(async()=>{
-   const response=await fetch('/api/activity',{cache:'no-store'});
+   const response=await fetch('/api/activity',{cache:'no-store',headers:await sessionHeaders()});
    if(!response.ok){if(epoch===generation&&[401,403].includes(response.status)){snapshot=null;clear(cards);clear(owned);host.hidden=true;}throw await response.json();}
    const next=await response.json();if(epoch!==generation)return next;snapshot=next;updateText(host.querySelector('[data-connection]'),'');render();onChange(next);return next;
   })().catch(error=>{if(epoch===generation)updateText(host.querySelector('[data-connection]'),text('connection'));throw error;}).finally(()=>{if(pending===request)pending=null;});
@@ -139,7 +140,7 @@ export function activityUI({onChange=()=>{}}={}){
  panel.addEventListener('click',event=>{if(event.target.closest('[data-owner]'))close();});
  panel.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();close();}});
  host.querySelector('[data-clear]').addEventListener('click',async()=>{
-  try{const response=await fetch('/api/activity/clear',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId},body:'{}'});if(!response.ok)throw await response.json();await refresh();}catch{updateText(host.querySelector('[data-connection]'),text('connection'));}
+  try{const response=await fetch('/api/activity/clear',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId}),body:'{}'});if(!response.ok)throw await response.json();await refresh();}catch{updateText(host.querySelector('[data-connection]'),text('connection'));}
  });
  const unsubscribe=onLanguageChange(render);
  return {open,refresh,bind,pause,storageBusy:()=>!!snapshot?.busy&&(!snapshot.readable||snapshot.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&active(entry))),start(){if(stopped){stopped=false;void poll(pollGeneration);}},hide(){generation++;host.hidden=true;panel.hidden=true;toggle.setAttribute('aria-expanded','false');clear(cards);clear(owned);snapshot=null;},stop(){pause();unsubscribe();clear(cards);clear(owned);host.remove();}};

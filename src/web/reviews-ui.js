@@ -1,4 +1,5 @@
 import {downloadResource} from './session-download.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {ux} from './experience-ui.js';
 import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {researchOwner,projectApiRoute,researchContext} from './project-context.js';
@@ -103,7 +104,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    if(form.id==='review-contact-form'){if(!contact)throw Error(tr('inspectFirst'));await call('contact',{contact,name:d.get('name'),verified:d.has('verified')});}
    if(form.id==='review-import-form'){
     const file=d.get('file');if(!file?.size)throw Error(tr('fileSize'));if((await file.slice(0,10).text())==='OBSSHARE1\n'){
-     const ctx=researchContext(state),controller=upload=new AbortController(),response=await fetch(url('receive',{workspaceId:state.book.id}),{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId},body:file,signal:controller.signal});const value=await response.json();if(!response.ok)throw Object.assign(Error(value.message??tr('importHelp')),value);if(ctx!==researchContext(state))throw Error(tr('workspaceChanged'));
+     const ctx=researchContext(state),controller=upload=new AbortController(),response=await fetch(url('receive',{workspaceId:state.book.id}),{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId}),body:file,signal:controller.signal});const value=await response.json();if(!response.ok)throw Object.assign(Error(value.message??tr('importHelp')),value);if(ctx!==researchContext(state))throw Error(tr('workspaceChanged'));
     }else await call('import',{file:await readFile(file)});
    }
    if(form.id==='review-request-form'){

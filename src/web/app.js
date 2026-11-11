@@ -1,4 +1,5 @@
 import {noticeLayout} from './notice-layout.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {confirmAction} from './confirm-action.js';
 import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {websiteEditingGuard} from './website-editing-guard.js';
@@ -239,7 +240,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   const receiptWrite=scopedWrite&&!validRecordSelection(selectionIds);
   if(scopedWrite)data={...data,...(receiptWrite?{receipt:true}:{recordIds:selectionIds})};
   const expectedSelection=route==='/api/workspace/read/selection'?data.ids:route==='/api/research/records/remove'?[data.recordId]:scopedWrite?selectionIds:null;
-  const headers={'X-Observanda-Wait':'1','X-Observanda-View':view,...(state.storage?.contextId?{'X-Observanda-Workspace':state.storage.contextId}:{})};
+  const headers=await sessionHeaders({'X-Observanda-Wait':'1','X-Observanda-View':view,...(state.storage?.contextId?{'X-Observanda-Workspace':state.storage.contextId}:{})});
   const pin=websitePin??data?.websitePin??data?.source?.websitePin??data?.command?.websitePin??state.websitePin;
   if(scopedWebsite&&pin){headers['X-Observanda-Website']=pin.websiteId??'default';headers['X-Observanda-Website-Pin']=JSON.stringify(pin);}
   const stop=structureStream?new AbortController():null;

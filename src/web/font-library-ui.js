@@ -1,4 +1,5 @@
 import {researchContext,ownedAssetURL} from './project-context.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {t} from './i18n/index.js';
 import {setCustomFonts,fontFamily,fontStack,fontLabel} from './font-catalogue.js';
 const message=(key,parameters)=>t('fonts',key,parameters);
@@ -14,7 +15,8 @@ export function fontLibraryUI({state,api,esc,render,notify}){
   const file=input.files[0];if(!file)return;if(file.size>8*1024*1024){input.value='';notify(message('sizeLimit'),true);return;}
   const context=researchContext(state),box=input.closest('.font-library'),progress=box.querySelector('.font-upload-progress'),embed=box.querySelector('[data-font-upload-embed]').checked;
   progress.hidden=false;input.disabled=true;const xhr=new XMLHttpRequest();upload=xhr;
-  try{await new Promise((resolve,reject)=>{xhr.open('POST',ownedAssetURL(state,'/api/fonts/import')+'?embed='+embed);xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);xhr.upload.onprogress=e=>{if(e.lengthComputable)progress.querySelector('progress').value=e.loaded/e.total*100;};xhr.upload.onload=()=>{progress.querySelector('[role=status]').textContent=message('checking');};xhr.onload=()=>{let result;try{result=JSON.parse(xhr.responseText);}catch{reject(Error(message('failed')));return;}xhr.status>=200&&xhr.status<300?resolve(result):reject(result);};xhr.onerror=()=>reject(Error(message('failed')));xhr.onabort=()=>reject({name:'AbortError'});xhr.send(file);});
+  const credential=await sessionCredential();
+  try{await new Promise((resolve,reject)=>{xhr.open('POST',ownedAssetURL(state,'/api/fonts/import')+'?embed='+embed);xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);if(credential)xhr.setRequestHeader('X-Observanda-Session',credential);xhr.upload.onprogress=e=>{if(e.lengthComputable)progress.querySelector('progress').value=e.loaded/e.total*100;};xhr.upload.onload=()=>{progress.querySelector('[role=status]').textContent=message('checking');};xhr.onload=()=>{let result;try{result=JSON.parse(xhr.responseText);}catch{reject(Error(message('failed')));return;}xhr.status>=200&&xhr.status<300?resolve(result):reject(result);};xhr.onerror=()=>reject(Error(message('failed')));xhr.onabort=()=>reject({name:'AbortError'});xhr.send(file);});
    if(researchContext(state)!==context)return;upload=null;await refresh();notify(message('added'));
   }catch(error){if(researchContext(state)===context)notify(error.name==='AbortError'?message('cancelled'):error.message,true);}
   finally{if(upload===xhr)upload=null;if(input.isConnected){input.disabled=false;input.value='';progress.hidden=true;}}

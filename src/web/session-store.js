@@ -19,3 +19,8 @@ export async function browserSession(value){
   transaction.onerror=transaction.onabort=()=>reject(transaction.error??Error('Browser session storage is unavailable.'));
  });
 }
+
+// The application's own requests carry the credential themselves. The session worker leaves
+// them to the browser, so cancelling one of them also cancels it on the server.
+export async function sessionCredential(){try{return await browserSession();}catch{return null;}}
+export async function sessionHeaders(headers={}){const credential=await sessionCredential();return credential?{...headers,'X-Observanda-Session':credential}:{...headers};}

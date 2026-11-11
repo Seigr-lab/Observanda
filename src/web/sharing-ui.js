@@ -1,4 +1,5 @@
 import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
+import {sessionHeaders,sessionCredential} from './session-store.js';
 import {t} from './i18n/index.js';
 import {recordRevisionView} from './record-revision-view.js';
 import {sharingFonts} from './sharing-fonts.js';
@@ -78,7 +79,7 @@ export async function sharingUI({state,api,esc,field,showDialog,notify,render,on
    let message='updated';
    if(kind==='grant'){const books=data.getAll('books'),projects=data.getAll('projects');if(!books.length&&!projects.length)throw Error(tr('scopeRequired'));const [recipientKind,recipientId]=data.get('recipient').split(':');await call('grant',{command:{workspaceId,expectedRevision:snapshot.revision,id:formElement.dataset.id??null,organizationId:formElement.elements.organization.value,scopes:[...projects.map(id=>({kind:'project',id})),...books.map(id=>({kind:'notebook',id}))],recipient:{kind:recipientKind,id:recipientId},role:data.get('role'),active:true}});}
    if(kind==='offer'){const file=data.get('contact');if(!file?.size||file.size>65536)throw Error(tr('invalidFile'));let contact;try{contact=JSON.parse(await file.text());}catch{throw Error(tr('invalidFile'));}await call('offer',{grantId:formElement.dataset.id,contact});message='ready';}
-   if(kind==='receive'){const response=await fetch('/api/sharing/receive',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':context},body:data.get('file')});const result=await response.json();if(!response.ok)throw result;if(!current())throw Error(tr('workspaceChanged'));message='received';}
+   if(kind==='receive'){const response=await fetch('/api/sharing/receive',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':context}),body:data.get('file')});const result=await response.json();if(!response.ok)throw result;if(!current())throw Error(tr('workspaceChanged'));message='received';}
    if(kind==='copy'){const result=await call('copy',{id:formElement.dataset.id,destination:data.get('destination')});close();notify(tr('created',{path:result.path}));return;}
    if(kind==='apply'){await call('apply',{reviewId:review.id,choices:review.rows.map(row=>({id:row.id,choice:data.get('choice-'+row.id)}))});message='accepted';}
    try{await refresh();if(kind==='grant')await onUpdated();busy=false;close();render();notify(tr(message));}catch{busy=false;close();notify(tr('savedRefreshFailed'),true);}
