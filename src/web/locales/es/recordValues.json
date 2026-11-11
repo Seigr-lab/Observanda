@@ -198,5 +198,15 @@
  "bookSharePdf": "Permitir la publicación en PDF de este cuaderno",
  "publicationParts": "Partes de la entrada",
  "publicationOutputs": "Visibilidad en sitios web y PDF",
- "publicationBookBlocked": "Excluida por la configuración del cuaderno"
+ "publicationBookBlocked": "Excluida por la configuración del cuaderno",
+  "mediaCaptionsHeading": "Subtítulos",
+  "mediaCaptionsHelp": "Añade un archivo de subtítulos WebVTT para cada idioma. Los subtítulos se publican con el vídeo en los sitios web.",
+  "mediaCaptionsNone": "Aún no hay subtítulos.",
+  "mediaCaptionLanguage": "Código de idioma (por ejemplo en, ca, nb)",
+  "mediaCaptionLabel": "Etiqueta que ven los lectores",
+  "mediaCaptionFile": "Archivo WebVTT",
+  "mediaCaptionRemove": "Eliminar {label}",
+  "mediaCaptionAdded": "Subtítulos añadidos: {label}",
+  "mediaCaptionInvalid": "Elige un código de idioma, una etiqueta y un archivo WebVTT válido. Cada idioma puede añadirse una vez, hasta cuatro pistas.",
+  "mediaCaptionTooLarge": "El archivo de subtítulos supera los 512 KB."
 }

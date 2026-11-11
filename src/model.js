@@ -1,4 +1,4 @@
-import {validMediaMetadata} from './web/record-media-value.js';
+import {validMediaMetadata,validMediaCaptions} from './web/record-media-value.js';
 import {validTemplateLink} from './web/website-template-inheritance.js';
 import {validPublicationPrivacy} from './web/record-publication-privacy.js';
 import {isConfigurationReference,validConfigurationReference} from './web/configuration-reference.js';
@@ -74,9 +74,9 @@ function checkRecords(book,records,unique,check){
       check(Array.isArray(e.sections) && (book.formatVersion>=21 || e.sections.length <= 30) && e.sections.every(s => keys(s, ['id', 'title', 'body',...(book.formatVersion>=21?['share','sharePdf'].filter(key=>Object.hasOwn(s??{},key)):[])]) && ['share','sharePdf'].every(key=>!Object.hasOwn(s,key)||typeof s[key]==='boolean') && unique(s) && text(s.title, 160, true) && (book.formatVersion>=14?validProse(s.body):text(s.body, 60000))), 'sections', e.id);
       const attachmentIds = new Set();
       check(Array.isArray(e.attachments) && (book.formatVersion>=21 || e.attachments.length <= 30) && e.attachments.every(a => {
-        if (!keys(a, ['id', 'kind', 'caption', 'alt', 'transcript', 'share',...(book.formatVersion>=21?['sharePdf','metadata'].filter(key=>Object.hasOwn(a??{},key)):[])]) || !id(a.id) || attachmentIds.has(a.id)) return false;
+        if (!keys(a, ['id', 'kind', 'caption', 'alt', 'transcript', 'share',...(book.formatVersion>=21?['sharePdf','metadata','captions'].filter(key=>Object.hasOwn(a??{},key)):[])]) || !id(a.id) || attachmentIds.has(a.id)) return false;
         attachmentIds.add(a.id);
-        return ['image', 'video', 'audio'].includes(a.kind) && text(a.caption, 1500) && text(a.alt, 1500) && text(a.transcript, 60000) && typeof a.share === 'boolean'&&(!Object.hasOwn(a,'sharePdf')||typeof a.sharePdf==='boolean')&&(!Object.hasOwn(a,'metadata')||validMediaMetadata(a.metadata));
+        return ['image', 'video', 'audio'].includes(a.kind) && text(a.caption, 1500) && text(a.alt, 1500) && text(a.transcript, 60000) && typeof a.share === 'boolean'&&(!Object.hasOwn(a,'sharePdf')||typeof a.sharePdf==='boolean')&&(!Object.hasOwn(a,'metadata')||validMediaMetadata(a.metadata))&&(!Object.hasOwn(a,'captions')||a.kind==='video'&&validMediaCaptions(a.captions));
       }), 'attachments', e.id);
     }
     if(book.formatVersion>=14)check(Array.isArray(e.figures)&&e.figures.every(f=>validFigure(f))&&new Set(figureTargets(e.figures).map(f=>f.id)).size===figureTargets(e.figures).length, 'figures', e.id);

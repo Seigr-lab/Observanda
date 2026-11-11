@@ -1,4 +1,4 @@
-import {validMediaMetadata} from './web/record-media-value.js';
+import {validMediaMetadata,validMediaCaptions} from './web/record-media-value.js';
 import {validRecordDate} from './web/record-date.js';
 import {validAttempt} from './web/attempt-model.js';
 import {validResultStatement} from './web/result-statements.js';
@@ -24,7 +24,7 @@ const fields={
 const collections={
  tags:text,
  sections:value=>keys(value,['id','title','body',...optionalFlag(value,'share'),...optionalFlag(value,'sharePdf')])&&['share','sharePdf'].every(key=>!Object.hasOwn(value,key)||flag(value[key]))&&researchId(value.id)&&text(value.title)&&validProse(value.body),
- attachments:value=>keys(value,['id','kind','caption','alt','transcript','share',...optionalFlag(value,'sharePdf'),...optionalFlag(value,'metadata')])&&(!Object.hasOwn(value,'sharePdf')||flag(value.sharePdf))&&(!Object.hasOwn(value,'metadata')||validMediaMetadata(value.metadata))&&researchId(value.id)&&['image','audio','video'].includes(value.kind)&&['caption','alt','transcript'].every(key=>text(value[key]))&&typeof value.share==='boolean',
+ attachments:value=>keys(value,['id','kind','caption','alt','transcript','share',...optionalFlag(value,'sharePdf'),...optionalFlag(value,'metadata'),...optionalFlag(value,'captions')])&&(!Object.hasOwn(value,'sharePdf')||flag(value.sharePdf))&&(!Object.hasOwn(value,'metadata')||validMediaMetadata(value.metadata))&&(!Object.hasOwn(value,'captions')||value.kind==='video'&&validMediaCaptions(value.captions))&&researchId(value.id)&&['image','audio','video'].includes(value.kind)&&['caption','alt','transcript'].every(key=>text(value[key]))&&typeof value.share==='boolean',
  figures:value=>validFigure(value,{draft:true}),
  contributors:value=>validContributors([value],{draft:true}),relations:value=>validRelations([value])
 };

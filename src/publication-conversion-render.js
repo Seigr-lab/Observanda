@@ -28,7 +28,7 @@ import {figureVariantKey,figureVariantLanguages,mapFigureVariants} from './websi
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
 const classes=node=>(attr(node,'class')??'').split(/\s+/);
 function* nodes(node){yield node;for(const child of node.childNodes??[])yield* nodes(child);}
-const mime=name=>({png:'image/png',svg:'image/svg+xml',mp4:'video/mp4',wav:'audio/wav',woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf',txt:'text/plain'})[name.split('.').at(-1)]??'application/octet-stream';
+const mime=name=>({png:'image/png',svg:'image/svg+xml',mp4:'video/mp4',wav:'audio/wav',woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf',txt:'text/plain',vtt:'text/vtt'})[name.split('.').at(-1)]??'application/octet-stream';
 const text=async iterable=>{let value='';for await(const chunk of iterable)value+=Buffer.isBuffer(chunk)?chunk.toString('utf8'):chunk;return value;};
 const bytes=async iterable=>{const chunks=[];for await(const chunk of iterable)chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));return Buffer.concat(chunks);};
 

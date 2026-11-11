@@ -198,5 +198,15 @@
  "bookSharePdf": "Tillat PDF-publisering frå denne labboka",
  "publicationParts": "Delar av oppføringa",
  "publicationOutputs": "Synlegheit på nettstader og i PDF",
- "publicationBookBlocked": "Halden tilbake av labboka"
+ "publicationBookBlocked": "Halden tilbake av labboka",
+  "mediaCaptionsHeading": "Teksting",
+  "mediaCaptionsHelp": "Legg til ei WebVTT-tekstfil for kvart språk. Tekstinga blir publisert med videoen på nettstader.",
+  "mediaCaptionsNone": "Inga teksting enno.",
+  "mediaCaptionLanguage": "Språkkode (til dømes en, ca, nb)",
+  "mediaCaptionLabel": "Etikett lesarane ser",
+  "mediaCaptionFile": "WebVTT-fil",
+  "mediaCaptionRemove": "Fjern {label}",
+  "mediaCaptionAdded": "Teksting lagd til: {label}",
+  "mediaCaptionInvalid": "Vel ein språkkode, ein etikett og ei gyldig WebVTT-fil. Kvart språk kan leggjast til éin gong, opptil fire spor.",
+  "mediaCaptionTooLarge": "Tekstfila er større enn 512 kB."
 }

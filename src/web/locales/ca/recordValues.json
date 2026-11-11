@@ -198,5 +198,15 @@
  "bookSharePdf": "Permet la publicació en PDF d’aquest quadern",
  "publicationParts": "Parts de l’entrada",
  "publicationOutputs": "Visibilitat al web i al PDF",
- "publicationBookBlocked": "Exclòs per la configuració del quadern"
+ "publicationBookBlocked": "Exclòs per la configuració del quadern",
+  "mediaCaptionsHeading": "Subtítols",
+  "mediaCaptionsHelp": "Afegeix un fitxer de subtítols WebVTT per a cada llengua. Els subtítols es publiquen amb el vídeo als llocs web.",
+  "mediaCaptionsNone": "Encara no hi ha subtítols.",
+  "mediaCaptionLanguage": "Codi de llengua (per exemple en, ca, nb)",
+  "mediaCaptionLabel": "Etiqueta que veuen els lectors",
+  "mediaCaptionFile": "Fitxer WebVTT",
+  "mediaCaptionRemove": "Elimina {label}",
+  "mediaCaptionAdded": "Subtítols afegits: {label}",
+  "mediaCaptionInvalid": "Tria un codi de llengua, una etiqueta i un fitxer WebVTT vàlid. Cada llengua es pot afegir una vegada, fins a quatre pistes.",
+  "mediaCaptionTooLarge": "El fitxer de subtítols supera els 512 kB."
 }

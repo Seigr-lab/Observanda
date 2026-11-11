@@ -16,9 +16,10 @@ export function publicMediaAttribution(metadata){
  const attribution={creator:value('creator',300),credit:value('credit',600),licence:value('licence',300)};
  return Object.values(attribution).some(Boolean)?attribution:null;
 }
-export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true).map(({metadata,...item})=>{
+// A published video's caption tracks are part of the video on a website.
+export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true).map(({metadata,captions,...item})=>{
  const attribution=target==='website'?publicMediaAttribution(metadata):null;
- return attribution?{...item,attribution}:item;
+ return {...item,...(attribution?{attribution}:{}),...(target==='website'&&item.kind==='video'&&Array.isArray(captions)&&captions.length?{captions:captions.map(({language,label,vtt})=>({language,label,vtt}))}:{})};
 });
 export function sourcePublicationRecord(record,target='website',retainedTargets=[]){
  const result={...record,sections:publicRecordSections(record,target),attachments:publicRecordAttachments(record,target)};

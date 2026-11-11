@@ -198,5 +198,15 @@
  "bookSharePdf": "Allow PDF publication from this lab book",
  "publicationParts": "Entry parts",
  "publicationOutputs": "Website and PDF visibility",
- "publicationBookBlocked": "Withheld by lab book"
+ "publicationBookBlocked": "Withheld by lab book",
+  "mediaCaptionsHeading": "Captions",
+  "mediaCaptionsHelp": "Add a WebVTT caption file for each language. Captions are published with the video on websites.",
+  "mediaCaptionsNone": "No captions yet.",
+  "mediaCaptionLanguage": "Language code (for example en, ca, nb)",
+  "mediaCaptionLabel": "Label readers see",
+  "mediaCaptionFile": "WebVTT file",
+  "mediaCaptionRemove": "Remove {label}",
+  "mediaCaptionAdded": "Captions added: {label}",
+  "mediaCaptionInvalid": "Choose a language code, a label and a valid WebVTT file. Each language can be added once, up to four tracks.",
+  "mediaCaptionTooLarge": "The caption file is larger than 512 KB."
 }

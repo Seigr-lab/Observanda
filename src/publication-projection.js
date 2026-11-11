@@ -95,7 +95,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
     }),
     logos: logosFor(book, 'entry:' + e.id), tags: [...e.tags], occurredOn: structuredClone(e.occurredOn), status: e.status, outcome:e.outcome??'',
     sections: [...(e.template?.fields??[]).map(f=>({id:'field-'+f.key,title:customFieldLabel(f),body:String(e.template.values[f.key]??''),field:{type:f.type,value:e.template.values[f.key]??null}})),...e.sections.map(s => ({ id:s.id,title: s.title, body: recordText(s.body,e) }))],
-    attachments: e.attachments.filter(a => a.share===true).map(a => ({ id: a.id, kind: a.kind, caption: a.caption, alt: a.alt, transcript: a.transcript, ...(a.attribution?{attribution:{...a.attribution}}:{}) })),
+    attachments: e.attachments.filter(a => a.share===true).map(a => ({ id: a.id, kind: a.kind, caption: a.caption, alt: a.alt, transcript: a.transcript, ...(a.attribution?{attribution:{...a.attribution}}:{}), ...(a.captions?{captions:a.captions.map(track=>({...track}))}:{}) })),
     figures: e.figures.map(withoutFigureSources),
     figureDownloads:edition?.records.find(r=>r.id===e.id)?.figures.filter(f=>f.data).map(f=>f.id)??[],
     ...(e.results?{results:projectResults(e.results)}:{}),
