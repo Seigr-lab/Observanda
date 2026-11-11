@@ -7,7 +7,6 @@ import {figureTextChunks,escapeFigureText as esc} from './web/retained-figure-te
 import {figureResultView} from './web/result-statements.js';
 import {bookText} from './web/book-messages.js';
 import {publicationText} from './web/publication-messages.js';
-import compositionMessages from './web/locales/en/figureComposition.json' with {type:'json'};
 const fail=()=>{throw new AppError('JOB_DAMAGED');};
 const withoutSource=value=>{if(!value||typeof value!=='object')return value;const {source,...rest}=value;void source;return rest;};
 // Public plot values follow the existing inline projection: authored scientific
@@ -26,12 +25,13 @@ export function publicFigureReader(reader){
 }
 async function* resultLinks(reader,header,figure,results,signal){
  const root=results?.statements.some(value=>value.kind==='figure'&&value.figureId===figure.id);
- if(header.kind!=='panels'||root)yield figureResultView(figure,results,esc);
+ if(header.kind!=='panels'||root)yield figureResultView(figure,results,esc,{publicView:true});
  if(header.kind!=='panels')return;
  for await(const panel of reader.items({collection:'panels'})){
   signal?.throwIfAborted();const linked=results?.statements.some(value=>value.kind==='figure'&&value.figureId===panel.plotId);
-  if(linked){yield '<div class="figure-panel-results"><p>';for await(const text of figureTextChunks(reader,panel.value.label,{collection:'panels',id:panel.id,field:'label'}))yield esc(text);yield '</p>'+figureResultView({id:panel.plotId},results,esc)+'</div>';}
-  else if(!root){const [before,after]=compositionMessages.missingPanelResult.split('{panel}');yield '<p>'+esc(before);for await(const text of figureTextChunks(reader,panel.value.label,{collection:'panels',id:panel.id,field:'label'}))yield esc(text);yield esc(after)+'</p>';}
+  if(linked){yield '<div class="figure-panel-results"><p>';for await(const text of figureTextChunks(reader,panel.value.label,{collection:'panels',id:panel.id,field:'label'}))yield esc(text);yield '</p>'+figureResultView({id:panel.plotId},results,esc,{publicView:true})+'</div>';}
+  // A panel without a linked result gets no public note: asking for a
+  // supporting result is an authoring prompt for the lab book only.
  }
 }
 export async function* publicationFigureContents(input,recordId,figure,{writer,data=false,results,signal}={}){

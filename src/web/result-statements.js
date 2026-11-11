@@ -16,11 +16,13 @@ export function validResultStatement(s,{draft=false}={}){
  return measurementRef(s.source)&&(s.kind==='table'&&draft&&!table&&!selection?['analysis','dataset'].includes(s.source.kind):s.source.kind===(table||selection?'dataset':'analysis'));
 }
 export function validResults(v){return v&&Object.keys(v).sort().join()==='statements,version'&&v.version===1&&Array.isArray(v.statements)&&new Set(v.statements.map(s=>s?.id)).size===v.statements.length&&v.statements.every(s=>validResultStatement(s));}
-export function figureResultView(figure,results,esc){
+// Public pages show only the result links; the notes that ask the author to
+// link a result belong to the lab book and its editors.
+export function figureResultView(figure,results,esc,{publicView=false}={}){
  const targets=figureTargets([figure]),ids=new Set(targets.map(f=>f.id)),statements=results?.statements.filter(s=>s.kind==='figure'&&ids.has(s.figureId))??[];
- if(!statements.length)return '<p>'+esc(messages.figureUnlinked)+'</p>';
+ if(!statements.length)return publicView?'':'<p>'+esc(messages.figureUnlinked)+'</p>';
  const links='<p>'+statements.map(s=>'<a href="#result-'+esc(s.id)+'">'+esc(s.title)+' · '+esc(messages[s.basis])+(s.figureId!==figure.id?' · '+esc(targets.find(f=>f.id===s.figureId).title):'')+'</a>').join(' · ')+'</p>';
- const missing=figure.kind==='panels'&&!statements.some(s=>s.figureId===figure.id)?figure.panels.filter(p=>!statements.some(s=>s.figureId===p.figure.id)):[];
+ const missing=!publicView&&figure.kind==='panels'&&!statements.some(s=>s.figureId===figure.id)?figure.panels.filter(p=>!statements.some(s=>s.figureId===p.figure.id)):[];
  return links+missing.map(p=>'<p>'+esc(compositionMessages.missingPanelResult.replace('{panel}',()=>p.label))+'</p>').join('');
 }
 export const resultReferences=v=>(v?.statements??[]).flatMap(s=>s.source?[s.source]:[]);
