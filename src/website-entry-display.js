@@ -4,6 +4,7 @@ import {AppError} from './errors.js';
 import {attr,descendants,words} from './website-migration-views.js';
 import {researchId} from './web/research-reference.js';
 import {imageResourceURLs,mapImageCandidates} from './web/website-image-candidates.js';
+import {figureVariantKey,figureVariants,mapFigureVariants} from './website-figure-variants.js';
 
 export const displayId='data-observanda-display-id',displayMode='data-observanda-display';
 const part=node=>attr(node,'data-observanda-part');
@@ -20,7 +21,7 @@ export function sourceFragmentAtPage(html,page){
  const root=parseFragment(html,{sourceCodeLocationInfo:true}),patches=[];
  const relative=url=>url.startsWith('assets/')&&sourceAsset.test(url)?path.posix.relative(path.posix.dirname(page),url):url;
  for(const node of descendants(root))for(const attr of node.attrs??[]){
-  const next=attr.name==='srcset'?mapImageCandidates(attr.value,relative):['src','href','poster'].includes(attr.name)?relative(attr.value):attr.value;
+  const next=attr.name==='srcset'?mapImageCandidates(attr.value,relative):attr.name===figureVariantKey?mapFigureVariants(attr.value,relative):['src','href','poster'].includes(attr.name)?relative(attr.value):attr.value;
   if(next===attr.value)continue;
   const loc=node.sourceCodeLocation?.attrs?.[attr.name];
   if(loc)patches.push({start:loc.startOffset,end:loc.endOffset,value:attr.name+'="'+escaped(next)+'"'});
@@ -153,6 +154,8 @@ const recordAttributes=record=>{
 function placedAssets(node){
  const assets=new Set();for(const child of descendants(node))for(const a of child.attrs??[]){
   if(['src','href','poster','srcset'].includes(a.name))for(const url of imageResourceURLs(a.name,a.value)){const match=sourceAsset.exec(url);if(match)assets.add(match[1]);}
+  // Every language's drawing of a figure stays available to the page.
+  if(a.name===figureVariantKey)for(const url of figureVariants(a.value).values()){const match=sourceAsset.exec(url);if(match)assets.add(match[1]);}
  }
  return [...assets];
 }

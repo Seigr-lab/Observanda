@@ -14,7 +14,7 @@ import { AppError } from './errors.js';
 import {inspectFont} from './font-inspector.js';
 import {createHash} from 'node:crypto';
 const uuid = '[0-9a-f-]{36}';
-const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\.nojekyll|figures/${uuid}(?:-${uuid})?\\.(?:svg|csv)|(?:projects|notebooks|entries|pages)/${uuid}\\.html)$`);
+const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\.nojekyll|figures/${uuid}(?:-${uuid})?(?:\\.[a-z]{2,3})?\\.svg|figures/${uuid}(?:-${uuid})?\\.csv|(?:projects|notebooks|entries|pages)/${uuid}\\.html)$`);
 const mediaName = new RegExp(`^media/${uuid}\\.(png|wav|mp4)$`);
 const publicTextFile=name=>name==='browse.html'||feedFilePath(name)||textName.test(name)||legacyPagePath(name);
 const checkedFonts=new Map();

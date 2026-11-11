@@ -7,6 +7,7 @@ import {escapeWebsiteText} from './website-file-html.js';
 import {attr,descendants} from './website-migration-views.js';
 import {feedFields} from './web/website-feed-fields.js';
 import {mapImageCandidates} from './web/website-image-candidates.js';
+import {figureVariantKey,mapFigureVariants} from './website-figure-variants.js';
 
 const layoutElements=new Set(('article section div header footer aside h1 h2 h3 h4 h5 h6 p span strong em b i small mark sup sub time a '+
  'ul ol li dl dt dd blockquote pre code br hr details summary figure figcaption table caption thead tbody tfoot tr th td').split(' '));
@@ -42,6 +43,7 @@ export function feedContentAtPage(html,page,instance,{omitTitle=false,related}={
  const relative=url=>/^assets\/[a-f0-9]{64}\.[a-z0-9]+$/i.test(url)?path.posix.relative(path.posix.dirname(page),url):url;
  for(const node of descendants(root))for(const a of node.attrs??[]){
   if(a.name==='srcset')a.value=mapImageCandidates(a.value,relative);
+  else if(a.name===figureVariantKey)a.value=mapFigureVariants(a.value,relative);
   else if(['src','href','poster'].includes(a.name))a.value=relative(a.value);
  }
  return serialize(root);

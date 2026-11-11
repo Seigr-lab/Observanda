@@ -6,6 +6,7 @@ import {RECORD_TYPES,STATUSES} from './web/record-types.js';
 import {RELATION_TYPES} from './web/record-model.js';
 import {calendarDate} from './web/record-date.js';
 import {projectedDate} from './website-file-library-fields.js';
+import {figureVariantKey,figureVariants} from './website-figure-variants.js';
 
 // Words around placed lab book material are site content: they follow the
 // page's own language, never the language of the private application. Only
@@ -103,6 +104,11 @@ export function localizedRecordPage(html){
    if(part==='metadata')metadata(node);
    if(part==='contributors'&&node.tagName==='ul')setAttribute(node,'aria-label',message('websiteRecordText','contributors'));
    if(part==='tags'&&node.tagName==='ul')setAttribute(node,'aria-label',message('websiteRecordText','tags'));
+   // A plotted figure shows the drawing made for the page's language.
+   if(node.tagName==='img'&&attr(node,figureVariantKey)!==undefined){
+    const variants=figureVariants(attr(node,figureVariantKey)),chosen=variants.get(resolveLanguage(language))??variants.get('en');
+    if(chosen)setAttribute(node,'src',chosen);
+   }
    const field=attr(node,'data-feed-field');
    if(field==='type')term(node,'type');
    if(field==='date')date(node);

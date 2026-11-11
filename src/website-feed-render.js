@@ -9,6 +9,7 @@ import {readFeedSource,feedTemplateMetadata} from './website-feed-source.js';
 import {websiteHTMLByteLimit} from './website-file-policy.js';
 import {retainedArticleCSS} from './website-entry-styles.js';
 import {mapImageCandidates} from './web/website-image-candidates.js';
+import {figureVariantKey,mapFigureVariants} from './website-figure-variants.js';
 import en from './web/locales/en/websiteFeeds.json' with {type:'json'};
 import ca from './web/locales/ca/websiteFeeds.json' with {type:'json'};
 import es from './web/locales/es/websiteFeeds.json' with {type:'json'};
@@ -51,6 +52,7 @@ function memberAssets(markup,page,source){
  }
  for(const node of descendants(root))for(const a of node.attrs??[]){
   if(a.name==='srcset')a.value=mapImageCandidates(a.value,rewrite);
+  else if(a.name===figureVariantKey)a.value=mapFigureVariants(a.value,rewrite);
   else if(['src','href','poster'].includes(a.name))a.value=rewrite(a.value);
  }
  return {markup:serialize(root),used};
@@ -138,6 +140,7 @@ export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
    };
    for(const node of descendants(root))for(const a of node.attrs??[]){
     if(a.name==='srcset')a.value=mapImageCandidates(a.value,rewrite);
+    else if(a.name===figureVariantKey)a.value=mapFigureVariants(a.value,rewrite);
     else if(['src','href','poster'].includes(a.name))a.value=rewrite(a.value);
    }
    html=serialize(root);

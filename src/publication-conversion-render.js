@@ -23,6 +23,7 @@ import {retainedFigureTargets} from './retained-figure-targets.js';
 import {ResearchMaterials} from './research-materials.js';
 import {retainedTableHTML} from './publication-retained-tables.js';
 import {addPhotoRenditions} from './website-image-renditions.js';
+import {figureVariantKey,figureVariantLanguages,mapFigureVariants} from './website-figure-variants.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
 const classes=node=>(attr(node,'class')??'').split(/\s+/);
@@ -100,12 +101,12 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
   if(figure.kind!=='retained'){const author=new RetainedFigureAuthoring(storage,{signal});retained=await author.finish(await author.start(figure));}
   const reader=await new RetainedFigureDocuments(storage,{readOnly:true,signal}).open(retained);
   const writer={retain:async(name,chunks)=>retainedAssets.set(name,await bytes(chunks))};
-  figures.set(figure.id,await text(renderApprovedFigureContents(reader,record.id,figure,{writer,results:context.entries[0].results,signal})));
+  figures.set(figure.id,await text(renderApprovedFigureContents(reader,record.id,figure,{writer,results:context.entries[0].results,signal,languages:channel==='website'?figureVariantLanguages:[]})));
  }
  let materials;
  for(const statement of record.results?.statements??[])if(statement.table?.version===3){materials??=new ResearchMaterials(storage);tables.set(statement.id,fragments.add(()=>retainedTableHTML(materials,statement,{signal})));}
  const editionParts={navigation:()=>'',retainedFigure:(_recordId,id)=>{if(!figures.has(id))throw new AppError('MATERIAL_MISSING');return figures.get(id);},retainedTable:(_recordId,id)=>{if(!tables.has(id))throw new AppError('MATERIAL_MISSING');return tables.get(id);}};
- const candidate=renderPublication(context,{mediaFiles,fontFiles,editionParts,emitBrowse:false}),html=await text(fragments.expand(candidate.files.get('entries/'+record.id+'.html'))),document=parse(html);
+ const candidate=renderPublication(context,{mediaFiles,fontFiles,editionParts,emitBrowse:false,figureLanguages:channel==='website'?figureVariantLanguages:null}),html=await text(fragments.expand(candidate.files.get('entries/'+record.id+'.html'))),document=parse(html);
  const article=[...nodes(document)].find(node=>node.tagName==='article'&&classes(node).includes('record-page'));if(!article)throw new AppError('INVALID');
  annotatePublicationParts(article,record);
  if(channel==='website')nestRecordHeadings(article);
@@ -116,6 +117,9 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
   if(!/^[a-z0-9]+$/.test(extension))throw new AppError('INVALID');
   const destination='assets/'+hash+'.'+extension;assetPaths.set(name,destination);if(!assets.some(asset=>asset.path===destination))assets.push({path:destination,...(content instanceof FileContent?{content}:{bytes:content}),contentType:mime(name)});
  }
+ for(const node of nodes(article))for(const value of node.attrs??[])if(value.name===figureVariantKey)value.value=mapFigureVariants(value.value,url=>{
+  const replacement=assetPaths.get(path.posix.normalize(path.posix.join('entries',url)));if(!replacement)throw new AppError('MEDIA_MISSING');return replacement;
+ });
  for(const node of nodes(article))for(const value of node.attrs??[])if(['src','href','poster'].includes(value.name)&&!value.value.startsWith('#')&&!/^[a-z][a-z0-9+.-]*:/i.test(value.value)){
   const name=path.posix.normalize(path.posix.join('entries',value.value)),replacement=assetPaths.get(name);
   if(replacement)value.value=replacement;

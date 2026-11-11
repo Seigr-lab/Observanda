@@ -76,7 +76,7 @@ export function buildPublication(book, options = {}) {
 
 // Callers must supply the admitted projection, never raw workspace records.
 // A single-page candidate is design-only and cannot be exported or deployed.
-export function renderPublication(context, { blockedValues = [], mediaFiles = new Map(), fontFiles = new Map(), designTarget=null, workspaceContent=false, singlePage=false,emitBrowse=true,editionParts=null } = {}) {
+export function renderPublication(context, { blockedValues = [], mediaFiles = new Map(), fontFiles = new Map(), designTarget=null, workspaceContent=false, singlePage=false,emitBrowse=true,editionParts=null,figureLanguages=null } = {}) {
   const editionTarget=publicationPageTarget(context);
   if(editionParts&&!editionTarget)throw new AppError('INVALID');
   if(context.publicationCounts&&!editionTarget)throw new AppError('INVALID');
@@ -282,9 +282,12 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
       }
       const stem=e.id+'-'+plot.id;
       files.set(`figures/${stem}.svg`,renderFigure(plot));
+      // A website copy also carries the plot drawn for each other language.
+      const variants=(figureLanguages??[]).filter(language=>language!=='en').map(language=>{files.set(`figures/${stem}.${language}.svg`,renderFigure(plot,{locale:language}));return language+' ../figures/'+stem+'.'+language+'.svg';});
+      const variantAttribute=variants.length?` data-observanda-figure-variants="${esc(['en ../figures/'+stem+'.svg',...variants].join(' '))}"`:'';
       const data=e.figureDownloads?.includes(plot.id);
       if(data)files.set(`figures/${stem}.csv`,figureCSV(plot));
-      const visual=figureReadingView(plot.kind==='panels'?renderFigureView(plot):`<img src="../figures/${stem}.svg" alt="${esc(plot.title)}">`,plot.title);
+      const visual=figureReadingView(plot.kind==='panels'?renderFigureView(plot):`<img src="../figures/${stem}.svg"${variantAttribute} alt="${esc(plot.title)}">`,plot.title);
       const markup=`<figure id="record-figure-${plot.id}" tabindex="-1">${visual}<figcaption>${esc(plot.title)}${figureResultView(plot,e.results,esc,{publicView:true})}</figcaption>${data?`<details><summary data-observanda-label="publication:viewData">${esc(publicationText('viewData'))}</summary>${figureTable(plot)}</details>`:''}<a href="../figures/${stem}.svg" download data-observanda-label="publication:downloadSvg">${esc(publicationText('downloadSvg'))}</a>${data?` &middot; <a href="../figures/${stem}.csv" download data-observanda-label="publication:downloadCsv">${esc(publicationText('downloadCsv'))}</a>`:''}</figure>`;renderedFigures.set(plot.id,markup);if(!inline.has(plot.id))figure+=markup;
     }
     const media = e.attachments.map(attachment=>{const markup='<div id="record-figure-'+attachment.id+'" tabindex="-1">'+mediaMarkup(attachment,e,'../')+'</div>';renderedFigures.set(attachment.id,markup);return inline.has(attachment.id)?'':markup;}).join('');

@@ -40,12 +40,19 @@ export async function* publicationFigureContents(input,recordId,figure,{writer,d
  const original=await openPublicationFigure(input,recordId,figure.id,{signal});if(serialize(original.originalFigure??original.figure)!==serialize(figure))fail();
  yield* renderApprovedFigureContents(original,recordId,figure,{writer,data,results,signal});
 }
-export async function* renderApprovedFigureContents(original,recordId,figure,{writer,data=false,results,signal}={}){
+export async function* renderApprovedFigureContents(original,recordId,figure,{writer,data=false,results,signal,languages=[]}={}){
  const reader=publicFigureReader(original),{header}=await reader.header(),selection={collection:'header',id:header.id,field:'title'},stem=recordId+'-'+figure.id;
  await writer.retain('figures/'+stem+'.svg',retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem}));
+ // A website copy also retains the plot drawn for each other language.
+ const variants=[];
+ for(const language of languages.filter(language=>language!=='en')){
+  await writer.retain('figures/'+stem+'.'+language+'.svg',retainedFigureSVG(reader,{signal,idPrefix:'published-'+stem,locale:language}));
+  variants.push(language+' ../figures/'+stem+'.'+language+'.svg');
+ }
+ const variantAttribute=variants.length?' data-observanda-figure-variants="'+esc(['en ../figures/'+stem+'.svg',...variants].join(' '))+'"':'';
  if(data)await writer.retain('figures/'+stem+'.csv',retainedFigureCSV(reader,{signal}));signal?.throwIfAborted();
  const title=async function*(){for await(const chunk of figureTextChunks(reader,header.title,selection)){signal?.throwIfAborted();yield esc(chunk);}};
- yield '<div class="figure-reading-view"><label class="figure-reading-control"><input type="checkbox"> <span>'+esc(bookText('enlargeFigure'))+'</span></label><p class="figure-reading-hint">'+esc(bookText('panFigure'))+'</p><div class="figure-reading-viewport" role="region" aria-label="'+esc(bookText('figureViewport'))+' ';yield* title();yield '" tabindex="0"><img src="../figures/'+stem+'.svg" alt="';yield* title();yield '"></div></div><figcaption>';yield* title();yield* resultLinks(reader,header,figure,results,signal);yield '</figcaption>';
+ yield '<div class="figure-reading-view"><label class="figure-reading-control"><input type="checkbox"> <span>'+esc(bookText('enlargeFigure'))+'</span></label><p class="figure-reading-hint">'+esc(bookText('panFigure'))+'</p><div class="figure-reading-viewport" role="region" aria-label="'+esc(bookText('figureViewport'))+' ';yield* title();yield '" tabindex="0"><img src="../figures/'+stem+'.svg"'+variantAttribute+' alt="';yield* title();yield '"></div></div><figcaption>';yield* title();yield* resultLinks(reader,header,figure,results,signal);yield '</figcaption>';
  if(data){yield '<details><summary>'+esc(publicationText('viewData'))+'</summary>';yield* retainedFigureTable(reader,{signal});yield '</details>';}
  yield '<a href="../figures/'+stem+'.svg" download>'+esc(publicationText('downloadSvg'))+'</a>';
  if(data)yield ' &middot; <a href="../figures/'+stem+'.csv" download>'+esc(publicationText('downloadCsv'))+'</a>';
