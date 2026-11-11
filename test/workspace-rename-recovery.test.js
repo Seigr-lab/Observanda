@@ -30,13 +30,14 @@ test('failed physical rename remains authenticated and resumes without confusing
  const f=await fixture(t),source=f.workspace.root,name='Renamed workspace',destination=path.join(f.parent,name),before=await f.workspace.read(),app=await startServer({root:source,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(f.parent,'preferences.json')});t.after(()=>app.close());const a=await client(app),etag=(await a.call('/api/notebook')).value.etag;
  const rename=fs.rename,finish=WorkspaceRenames.prototype.finishLocked;let fail=true,held,release;
  const reached=new Promise(resolve=>held=resolve),gate=new Promise(resolve=>release=resolve);
- fs.rename=async(from,to)=>{if(from===source&&to===destination&&fail){fail=false;throw Object.assign(Error('Disposable rename fault'),{code:'EBUSY'});}return rename(from,to);};syncBuiltinESMExports();
+ // The folder stays busy through the product's own retries until the test resumes.
+ fs.rename=async(from,to)=>{if(from===source&&to===destination&&fail)throw Object.assign(Error('Disposable rename fault'),{code:'EBUSY'});return rename(from,to);};syncBuiltinESMExports();
  WorkspaceRenames.prototype.finishLocked=function(value,vault,options){return finish.call(this,value,vault,{...options,checkpoint:async(stage,receipt)=>{await options?.checkpoint?.(stage,receipt);if(value.source===source&&stage==='renamed'){held();await gate;}}});};
  try{
   const failed=await a.call('/api/storage/rename',{name,etag});assert.equal(failed.value.code,'IO',JSON.stringify(failed));
   const pending=await a.call('/api/storage');assert.equal(pending.status,200,JSON.stringify(pending));assert.equal(pending.value.rename.name,name);assert.equal(pending.value.available,false);assert.ok(await workspaceRename(source));
   assert.equal((await a.call('/api/storage/rename/resume',{id:randomUUID()})).value.code,'STORAGE_RENAME_STATE');
-  const resumed=a.call('/api/storage/rename/resume',{id:pending.value.rename.id});
+  fail=false;const resumed=a.call('/api/storage/rename/resume',{id:pending.value.rename.id});
   await Promise.race([reached,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Rename did not reach handoff')),45000);timer.unref();})]);
   await assert.rejects(fs.stat(source),{code:'ENOENT'});
   const access=await a.call('/api/access/status');assert.equal(access.status,200,JSON.stringify(access));assert.equal(access.value.encrypted,true);assert.equal(access.value.locked,false);
