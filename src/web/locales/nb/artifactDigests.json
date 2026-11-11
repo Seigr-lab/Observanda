@@ -1,0 +1,23 @@
+{
+ "heading": "Kontroller en sjekksum",
+ "help": "Beregner en sjekksum for den bevarte originalen, for eksempel for å sammenligne den med verdien som er publisert med en utgivelse eller arkivkopi. Hele filen leses; store filer tar litt tid.",
+ "algorithm": "Algoritme",
+ "weak": "eldre",
+ "expected": "Publisert sjekksum (valgfritt)",
+ "expectedHelp": "Lim inn den heksadesimale verdien eller en linje fra en sjekksumfil. La feltet stå tomt for bare å beregne.",
+ "expectedInvalid": "En {algorithm}-sjekksum har {length} heksadesimale tegn.",
+ "run": "Beregn og sammenlign",
+ "cancel": "Avbryt",
+ "reading": "Leser originalen …",
+ "progress": "Lest {done} av {total} byte",
+ "computed": "Sjekksummen er beregnet. Ingen publisert verdi ble oppgitt til sammenligning.",
+ "match": "Originalen samsvarer med den publiserte sjekksummen.",
+ "mismatch": "Originalen samsvarer ikke med den publiserte sjekksummen.",
+ "expectedValue": "Publisert verdi",
+ "retained": "Bevart original",
+ "retainedIntact": "{bytes} byte, uendret siden mottak (SHA-256 beregnet på nytt)",
+ "weakHelp": "SHA-1 og MD5 identifiserer en fil, men beviser ikke lenger at den ikke er endret med vilje. Bruk SHA-256 eller sterkere når utgiveren tilbyr det.",
+ "cancelled": "Beregningen er avbrutt.",
+ "damaged": "Den bevarte originalen samsvarer ikke lenger med sin registrerte SHA-256. Gjenopprett den fra en sikkerhetskopi før du bruker den.",
+ "invalid": "Sjekksummen kunne ikke beregnes."
+}

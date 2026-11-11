@@ -1,0 +1,23 @@
+{
+ "heading": "Verifica una suma de comprovació",
+ "help": "Calcula una suma de comprovació de l'original conservat, per exemple per comparar-la amb el valor publicat amb una versió o una còpia d'arxiu. Es llegeix tot el fitxer; els fitxers grans triguen una estona.",
+ "algorithm": "Algorisme",
+ "weak": "antic",
+ "expected": "Suma de comprovació publicada (opcional)",
+ "expectedHelp": "Enganxa el valor hexadecimal o una línia d'un fitxer de sumes. Deixa-ho buit per només calcular-la.",
+ "expectedInvalid": "Una suma {algorithm} té {length} caràcters hexadecimals.",
+ "run": "Calcula i compara",
+ "cancel": "Cancel·la",
+ "reading": "S'està llegint l'original…",
+ "progress": "Llegits {done} de {total} bytes",
+ "computed": "Suma calculada. No s'ha indicat cap valor publicat per comparar.",
+ "match": "L'original coincideix amb la suma publicada.",
+ "mismatch": "L'original no coincideix amb la suma publicada.",
+ "expectedValue": "Valor publicat",
+ "retained": "Original conservat",
+ "retainedIntact": "{bytes} bytes, sense canvis des de la incorporació (SHA-256 recalculat)",
+ "weakHelp": "SHA-1 i MD5 identifiquen un fitxer però ja no demostren que no s'hagi alterat deliberadament. Fes servir SHA-256 o un algorisme més fort quan l'editor l'ofereixi.",
+ "cancelled": "S'ha cancel·lat el càlcul.",
+ "damaged": "L'original conservat ja no coincideix amb el seu SHA-256 registrat. Restaura'l d'una còpia de seguretat abans de fer-lo servir.",
+ "invalid": "No s'ha pogut calcular la suma de comprovació."
+}

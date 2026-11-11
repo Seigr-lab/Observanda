@@ -52,6 +52,8 @@ define('dataset-profile-template',{write:false,limit:4096});
 define('dataset-schema-group-review',{write:false,limit:MAX_RECORD_COMMAND_BYTES});
 define('dataset-schema-group-columns',{write:false,limit:MAX_RECORD_COMMAND_BYTES});
 define('dependency-review',{write:false,progress:true});
+// Reads every byte of one original; streams progress for very large files.
+define('artifact-digest',{write:false,progress:true,limit:8192});
 define('original',{write:false,method:'GET',input:'path',schema:'artifact-id-and-revision',limit:0,download:true});
 define('chunks',{write:true,input:'stream',schema:'bounded-upload-frame-batch',limit:UPLOAD_BATCH_FRAMES*(FILE_CHUNK+UPLOAD_HEADER_BYTES+1)});
 define('chunk',{write:true,input:'stream',schema:'owned-upload-id-and-index',limit:FILE_CHUNK});

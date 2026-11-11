@@ -1,0 +1,23 @@
+{
+ "heading": "Kontroller ein sjekksum",
+ "help": "Reknar ut ein sjekksum for den bevarte originalen, til dømes for å samanlikne han med verdien som er publisert med ei utgjeving eller ein arkivkopi. Heile fila blir lesen; store filer tek litt tid.",
+ "algorithm": "Algoritme",
+ "weak": "eldre",
+ "expected": "Publisert sjekksum (valfritt)",
+ "expectedHelp": "Lim inn den heksadesimale verdien eller ei linje frå ei sjekksumfil. La feltet stå tomt for berre å rekne ut.",
+ "expectedInvalid": "Ein {algorithm}-sjekksum har {length} heksadesimale teikn.",
+ "run": "Rekn ut og samanlikn",
+ "cancel": "Avbryt",
+ "reading": "Les originalen …",
+ "progress": "Lese {done} av {total} byte",
+ "computed": "Sjekksummen er utrekna. Ingen publisert verdi vart oppgitt til samanlikning.",
+ "match": "Originalen samsvarer med den publiserte sjekksummen.",
+ "mismatch": "Originalen samsvarer ikkje med den publiserte sjekksummen.",
+ "expectedValue": "Publisert verdi",
+ "retained": "Bevart original",
+ "retainedIntact": "{bytes} byte, uendra sidan mottak (SHA-256 rekna ut på nytt)",
+ "weakHelp": "SHA-1 og MD5 identifiserer ei fil, men prov ikkje lenger at ho ikkje er endra med vilje. Bruk SHA-256 eller sterkare når utgjevaren tilbyr det.",
+ "cancelled": "Utrekninga er avbroten.",
+ "damaged": "Den bevarte originalen samsvarer ikkje lenger med den registrerte SHA-256-verdien sin. Gjenopprett han frå ein tryggingskopi før du brukar han.",
+ "invalid": "Sjekksummen kunne ikkje reknast ut."
+}

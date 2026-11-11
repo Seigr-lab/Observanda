@@ -1,0 +1,23 @@
+{
+ "heading": "Verify a checksum",
+ "help": "Computes a checksum of the retained original, for example to compare it with the value published with a release or archive copy. The file is read completely; large files take a while.",
+ "algorithm": "Algorithm",
+ "weak": "legacy",
+ "expected": "Published checksum (optional)",
+ "expectedHelp": "Paste the hexadecimal value, or a line from a checksum file. Leave empty to compute only.",
+ "expectedInvalid": "A {algorithm} checksum has {length} hexadecimal characters.",
+ "run": "Compute and compare",
+ "cancel": "Cancel",
+ "reading": "Reading the original…",
+ "progress": "Read {done} of {total} bytes",
+ "computed": "Checksum computed. No published value was given to compare.",
+ "match": "The original matches the published checksum.",
+ "mismatch": "The original does not match the published checksum.",
+ "expectedValue": "Published value",
+ "retained": "Retained original",
+ "retainedIntact": "{bytes} bytes, unchanged since intake (SHA-256 recomputed)",
+ "weakHelp": "SHA-1 and MD5 identify a file but no longer prove that it was not deliberately altered. Prefer SHA-256 or stronger when the publisher offers it.",
+ "cancelled": "Checksum cancelled.",
+ "damaged": "The retained original no longer matches its recorded SHA-256. Restore it from a backup before relying on it.",
+ "invalid": "The checksum could not be computed."
+}

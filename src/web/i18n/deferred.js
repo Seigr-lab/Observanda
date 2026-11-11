@@ -31,6 +31,7 @@ export const deferredCatalogues=Object.freeze({
  pdfEditor:()=>import('./catalogues/pdfEditor.js'),
  taskPrerequisites:()=>import('./catalogues/taskPrerequisites.js'),
  retainedSources:()=>import('./catalogues/retainedSources.js'),
+ artifactDigests:()=>import('./catalogues/artifactDigests.js'),
  recordReferences:()=>import('./catalogues/recordReferences.js'),
  measurementOutput:()=>import('./catalogues/measurementOutput.js'),
  websiteFeeds:()=>import('./catalogues/websiteFeeds.js'),

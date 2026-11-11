@@ -16,6 +16,7 @@ import {appendMaterialUploadBatch} from './material-upload-batch.js';
 import {comparisonDependencyReview} from './comparison-dependency-review.js';
 import {withComparisonInputs} from './comparison-request-inputs.js';
 import {retryComparison} from './comparison-job-admission.js';
+import {artifactDigest} from './artifact-digests.js';
 // Evidence commands are shared by workspace and selected-project HTTP adapters.
 // The caller supplies the authorized storage owner and its own durable job service.
 import {ResearchMaterials} from './research-materials.js';
@@ -68,6 +69,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));
  case 'download':{if(typeof download!=='function')throw new AppError('INVALID');return download(await materials.artifact(request.ref??data.ref));}
  case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
+ case 'artifact-digest':return artifactDigest(materials,data,{signal});
  case 'dependency-review':{
   if(!data||Object.keys(data).some(key=>!['recordId','refs'].includes(key)))throw new AppError('MATERIAL_INVALID');
   return materials.reviewDependencies(data.recordId,{refs:data.refs,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});

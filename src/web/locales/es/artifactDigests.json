@@ -1,0 +1,23 @@
+{
+ "heading": "Verificar una suma de comprobación",
+ "help": "Calcula una suma de comprobación del original conservado, por ejemplo para compararla con el valor publicado con una versión o una copia de archivo. Se lee el archivo completo; los archivos grandes tardan un rato.",
+ "algorithm": "Algoritmo",
+ "weak": "heredado",
+ "expected": "Suma de comprobación publicada (opcional)",
+ "expectedHelp": "Pega el valor hexadecimal o una línea de un archivo de sumas. Déjalo vacío para solo calcularla.",
+ "expectedInvalid": "Una suma {algorithm} tiene {length} caracteres hexadecimales.",
+ "run": "Calcular y comparar",
+ "cancel": "Cancelar",
+ "reading": "Leyendo el original…",
+ "progress": "Leídos {done} de {total} bytes",
+ "computed": "Suma calculada. No se indicó ningún valor publicado para comparar.",
+ "match": "El original coincide con la suma publicada.",
+ "mismatch": "El original no coincide con la suma publicada.",
+ "expectedValue": "Valor publicado",
+ "retained": "Original conservado",
+ "retainedIntact": "{bytes} bytes, sin cambios desde la incorporación (SHA-256 recalculado)",
+ "weakHelp": "SHA-1 y MD5 identifican un archivo pero ya no demuestran que no se haya alterado deliberadamente. Usa SHA-256 o un algoritmo más fuerte cuando el editor lo ofrezca.",
+ "cancelled": "Cálculo cancelado.",
+ "damaged": "El original conservado ya no coincide con su SHA-256 registrado. Restáuralo desde una copia de seguridad antes de usarlo.",
+ "invalid": "No se pudo calcular la suma de comprobación."
+}

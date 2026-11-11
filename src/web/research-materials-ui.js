@@ -79,6 +79,7 @@ import {evidenceCorrectionsUI} from './evidence-corrections-ui.js';
 import {allFigurePlots,withFigureSource} from './figure-provenance.js';
 import {retainedRecordUI} from './retained-record-ui.js';
 import {evidenceDependencyReview} from './evidence-dependency-review.js';
+import {artifactDigestUI} from './artifact-digest-ui.js';
 import {researchMaterialsLaunch} from './research-materials-launch.js';
 import {language as appLanguage} from './i18n/index.js';
 
@@ -99,7 +100,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const call=materialReferenceReader({api,local:(name,data,options)=>api(route(endpoint+name),data,{...options,owner:projectOwner}),onOwner:(result,name)=>{
   guard();if(['read','measurement-inspect'].includes(name)){readNamespace=result.namespaceId;referenceContext=referenceOrigin||!sameResearchOwner(result.labBookId?{projectId:result.projectId,labBookId:result.labBookId}:result.projectId,projectOwner);}
  }}),ref=materialReference;
- const dependencies=evidenceDependencyReview({call,esc});
+ const dependencies=evidenceDependencyReview({call,esc}),digests=artifactDigestUI({call,esc});
  window.addEventListener('hashchange',()=>dependencies.stop());
  const originalRoute=r=>materialOriginalRoute(r)??route(endpoint+'original/'+r.id+'/'+r.revision);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="material-${action}" ${extra}>${label}</button>`;
@@ -114,7 +115,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const recovery=scientificEditRecovery({esc,scope:()=>({workspaceId:state.book.id,recordId:owner,context:state.storage?.contextId}),request:(name,data)=>api(route(endpoint+name),data,{adopt:false,owner:projectOwner})});
  document.getElementById('dialog')?.addEventListener('close',()=>recovery.reset());
  let profiles=null;
- const stopWatching=()=>{profiles?.clean();dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
+ const stopWatching=()=>{profiles?.clean();dependencies.stop();digests.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  let cancelSchemaFind;
  document.getElementById('dialog')?.addEventListener('close',()=>cancelSchemaFind?.());
@@ -412,7 +413,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(opened.content.comparison)return comparisons.open(selectedRef,{restore:comparisonView});
   const correctionControls=await corrections.controls(opened,selectedRef);
   const status=opened.kind==='analysis'?await call('analysis-status',{ref:selectedRef}):null;guard();if(generation!==jobView)return;const c=opened.content;frame(opened.title,`<p>${esc(materialKind(opened.kind))} · ${selectedRef.revision} · ${esc(opened.createdAt)}</p>${opened.previous?button(esc(mt("previousRevision")),'previous'):''}${correctionControls}
-   ${opened.kind==='artifact'?`<dl>${materialSourceLocation(c,esc)}<dt>${esc(mt("originalBytes"))}</dt><dd>${c.size.toLocaleString(appLanguage())}</dd><dt>SHA-256</dt><dd class="material-hash">${c.sha256}</dd><dt>${esc(mt("provenance"))}</dt><dd>${esc(c.provenance)||esc(mt("notSupplied"))}</dd></dl>${button(esc(t("measurements","download")),'download')}`:''}
+   ${opened.kind==='artifact'?`<dl>${materialSourceLocation(c,esc)}<dt>${esc(mt("originalBytes"))}</dt><dd>${c.size.toLocaleString(appLanguage())}</dd><dt>SHA-256</dt><dd class="material-hash">${c.sha256}</dd><dt>${esc(mt("provenance"))}</dt><dd>${esc(c.provenance)||esc(mt("notSupplied"))}</dd></dl>${button(esc(t("measurements","download")),'download')}${referenceContext?'':digests.controls(selectedRef)}`:''}
    ${opened.kind==='artifact'&&!referenceContext?button(esc(measurementText('heading')),'measurement-from-artifact',`data-ref="${esc(JSON.stringify(selectedRef))}"`)+button(esc(exchangeText('importHeading')),'dataset-exchange-import')+button(esc(profileText('apply')),'dataset-profile-library'):''}
    ${c.tool==='Observanda dataset interpretation profile'&&c.version==='1'&&!referenceContext?button(esc(profileText('revise')),'dataset-profile-revise')+button(esc(profileText('apply')),'dataset-profile-apply'):''}
    ${calculatorRecipeView(c,esc,{button,readOnly:referenceContext})}${analysisChangesView(status,esc)}${c.method&&!['Observanda clock synchronization','Observanda coordinate frame transform'].includes(c.tool)?comparisons.methodView(c.method):''}
@@ -622,6 +623,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act==='home-extras-retry'){void loadHomeExtras();return true;}
   if(act==='dependencies-cancel'||act==='dependencies-retry'){dependencies.action(act);return true;}
   if(act==='dependencies-refresh'){guard();await home({fresh:true});return true;}
+  if(act==='digest-run'||act==='digest-cancel')return digests.action(act);
   dependencies.action('dependencies-cancel');
   if(act.startsWith('correction-'))return corrections.action(act,control);
   if(corrections.isBusy())return true;
