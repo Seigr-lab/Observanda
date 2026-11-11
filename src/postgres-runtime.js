@@ -256,9 +256,10 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   // WAL recovery on network storage can exceed a minute. Wait for readiness
   // before treating a healthy recovering server as a failed startup.
   const startupDeadline=performance.now()+900000;
-  // Under concurrent load pg_ctl occasionally reports a start that never
-  // launched the server: status then finds it stopped and the log is unchanged.
-  // Retry such a verified non-start on a fresh port; any other state is an error.
+  // A start that pg_ctl reports but never launched (status finds the cluster
+  // stopped, the log unchanged) is retried on a fresh port; any other state is
+  // an error. The guard's start output pipe removes the known cause, cmd.exe
+  // failing to redirect a shared NUL standard output to the server log.
   for(let attempt=1;;attempt++){
    config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
    mayBeRunning=true;

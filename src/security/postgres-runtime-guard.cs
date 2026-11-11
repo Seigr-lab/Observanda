@@ -256,11 +256,14 @@ namespace Observanda {
     SafeFileHandle captured=null,errorRead=null,errorWrite=null;FileStream capture=null;
     try{
      if(Flag(command,"capture")){captured=GuardOpen(guardRoot,".runtime-output-"+Guid.NewGuid().ToString("N"),false,2,7,null,0xC0170080);Delete(captured);if(!SetHandleInformation(captured.DangerousGetHandle(),1,1))throw new Win32Exception();capture=new FileStream(captured,FileAccess.ReadWrite,4096,false);}
-     // A diagnosed command writes its error output to a pipe that is only read,
-     // without waiting, after a failed exit. Descendants that keep the inherited
-     // end open cannot block the result, and a success discards the pipe.
+     // A diagnosed command writes its output and errors to a pipe that is only
+     // read, without waiting, after a failed exit. Descendants that keep the
+     // inherited end open cannot block the result, and a success discards it.
+     // pg_ctl start must not inherit the shared NUL handle as standard output:
+     // its cmd.exe log redirection then intermittently fails under load with
+     // "The handle could not be opened during redirection of handle 1".
      if(Flag(command,"diagnose")){if(!CreatePipe(out errorRead,out errorWrite,IntPtr.Zero,65536)||!SetHandleInformation(errorWrite.DangerousGetHandle(),1,1))throw new Win32Exception();}
-     var startup=new Startup{Size=(uint)Marshal.SizeOf(typeof(Startup)),Flags=0x100,Input=guardNull.DangerousGetHandle(),Output=captured==null?guardNull.DangerousGetHandle():captured.DangerousGetHandle(),Error=errorWrite==null?guardNull.DangerousGetHandle():errorWrite.DangerousGetHandle()};ProcessInfo process;
+     var startup=new Startup{Size=(uint)Marshal.SizeOf(typeof(Startup)),Flags=0x100,Input=guardNull.DangerousGetHandle(),Output=captured!=null?captured.DangerousGetHandle():errorWrite!=null?errorWrite.DangerousGetHandle():guardNull.DangerousGetHandle(),Error=errorWrite==null?guardNull.DangerousGetHandle():errorWrite.DangerousGetHandle()};ProcessInfo process;
      try{if(!CreateProcessW(executable,text,IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,guardPath,ref startup,out process))throw new Win32Exception();}finally{if(errorWrite!=null)errorWrite.Dispose();}
      try{if(!AssignProcessToJobObject(guardJob,process.Process))throw new Win32Exception();if(ResumeThread(process.Thread)==0xffffffff)throw new Win32Exception();guardChild=process.Process;}catch{TerminateProcess(process.Process,1);CloseHandle(process.Process);throw;}finally{CloseHandle(process.Thread);}
      var diagnosed=errorRead;guardThread=new Thread(()=>{uint code=1;string stdout="",stderr="";try{WaitForSingleObject(process.Process,0xffffffff);GetExitCodeProcess(process.Process,out code);if(capture!=null){byte[] bytes=new byte[8192];capture.Position=0;int count=capture.Read(bytes,0,bytes.Length);stdout=Encoding.UTF8.GetString(bytes,0,count);}
