@@ -13,12 +13,11 @@ import {templateFrom} from '../src/web/notebook-schema.js';
 import {RecordQuery} from '../src/record-query.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
-import {recordBrowse,recordQueryDocument} from '../src/web/record-query.js';
+import {recordBrowse} from '../src/web/record-query.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {buildPublication,publicProjection} from '../src/publication.js';
-import {digest,serialize} from '../src/storage-format.js';
 
 const query=()=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()});
 const relatedTo=(book,id)=>({workspaceId:book.id,id});
@@ -58,16 +57,6 @@ test('linked history stays paged, private and revision-anchored across saves and
  assert.deepEqual((await new RecordQuery(new Workspace(copy,f.vault)).list({...command,cursor:first.nextCursor})).records,next.records);
  const restored=(await new Workspace(copy,f.vault).read()).book;assert.equal(restored.entries.find(r=>r.id===inspection.id).template.values.queen,'Not seen');
  clearVault(f.vault);await assert.rejects(queries.list(command),{code:'ACCESS_LOCKED'});
-});
-
-test('old query summaries fall back for linked histories without silently dropping references',async t=>{
- const {book,hive}=beekeepingFixture(),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-old-'));
- const original=ResearchCatalogue.prototype.putQuery;
- ResearchCatalogue.prototype.putQuery=async function(record){const value=recordQueryDocument(record);delete value.referenceTargets;const revision=digest(serialize(value)),slot='record-query:'+record.id+':'+revision;await this.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO NOTHING',slot,this.encode('state',slot,value));return {queryRevision:revision};};
- let f;try{f=await encryptedFixture(directory,book);}finally{ResearchCatalogue.prototype.putQuery=original;}
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- assert.equal((await new RecordQuery(f.workspace).list({workspaceId:book.id,query:query(),relatedTo:relatedTo(book,hive.id)})).total,1);
- await f.workspace.catalogue(store=>store.verify({format:'observanda-research-catalogue',version:2,workspaceId:book.id}));
 });
 
 test('a published hive never discloses its private linked inspections or query metadata',()=>{

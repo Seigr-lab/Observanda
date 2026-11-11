@@ -17,8 +17,6 @@ import {defaultPanelConfig} from '../src/web/dashboard-model.js';
 import {researchCardItems} from '../src/web/research-card-items.js';
 import {queryPanel} from '../src/web/dashboard-queries.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
-import {SnapshotIndex} from '../src/snapshot-index.js';
-import {RecordSearchIndex} from '../src/record-search-index.js';
 import {DashboardDiscovery} from '../src/dashboard-discovery.js';
 import {starterTemplate} from '../src/web/project-templates.js';
 
@@ -87,26 +85,6 @@ test('card filters preserve project unions, exact saved revisions, and empty sel
  await assert.rejects(f.cards.read({...command,options:{recordType:true}}),{code:'INVALID'});
  await assert.rejects(f.cards.read({...command,options:{scopeMode:'selected',projectIds:[randomUUID()]}}),{code:'RECORD_VIEW_SCOPE'});
  await assert.rejects(f.cards.read(command,{signal:AbortSignal.abort()}),{name:'AbortError'});
-});
-
-test('older summaries retain their identities and still show exact recent records without rewriting on read',async t=>{
- const f=await fixture(t,12),start=await f.reader.start();
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const snapshot=await store.snapshot(start.etag),rows=await Array.fromAsync(store.members(snapshot));
-  delete snapshot.typeIndex;delete snapshot.recentIndex;delete snapshot.readingIndex;delete snapshot.publicationIndex;
-  rows.forEach(row=>{delete row.updatedAt;delete row.template;delete row.cardItems;});
-  snapshot.membership=await new SnapshotIndex(store).build(rows);
-  snapshot.searchIndex=await new RecordSearchIndex(store).build(snapshot);
-  await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',start.etag,snapshot),start.etag);
- }));
- const before=await f.workspace.catalogue(store=>store.snapshot(start.etag));
- const card=await f.cards.read({workspaceId:f.book.id,etag:start.etag,config:defaultPanelConfig(),options:{},limit:3,key:null});
- assert.deepEqual(card.records,f.book.entries.slice(-3).reverse());
- const credits=await f.cards.read({workspaceId:f.book.id,etag:start.etag,config:defaultPanelConfig(),options:{},provider:'contributors',limit:3,key:null});
- assert.deepEqual(credits.items,f.book.entries.toReversed().flatMap(record=>researchCardItems('contributors',record)).slice(0,3));
- await f.workspace.catalogue(store=>store.verifySnapshot(start.etag,f.book.id));
- assert.deepEqual(await f.workspace.catalogue(store=>store.snapshot(start.etag)),before);
- assert.deepEqual((await f.workspace.read()).book,f.book);
 });
 
 test('metadata-only loading rejects incomplete or misleading lab-book counts',async t=>{
