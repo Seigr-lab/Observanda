@@ -5,7 +5,7 @@ import {dashboardRecordIdentity,dashboardRecordAction,dashboardRecordData} from 
 import {ownedAssetURL} from './project-context.js';
 import {recentRecordOrder} from './query-order.js';
 import {recordDateLabel} from './record-date.js';
-import {dashboardScopeSettings,dashboardBookSettings} from './dashboard-scope.js';
+import {dashboardScopeSettings,dashboardBookSettings,dashboardBooks} from './dashboard-scope.js';
 import {dashboardRecordTypeChoices} from './dashboard-record-type-choices.js';
 import {locationName} from './workspace-structure.js';
 import {notebookDirectory} from './laboratory/notebook-model.js';
@@ -69,7 +69,12 @@ export function registerResearchData(registry,{section='all'}={}){
   });
  };
 
- add({id:'records',label:dt("recentRecords"),actions:()=>[{name:'new-entry',label:dt("newRecord")},{name:'entries',label:dt("allRecords")}],scope:'research',directory:true,defaultFields:['type','occurredOn','status'],
+ // A card scoped to exactly one lab book creates its new records in that book.
+ const creationBook=(c,panel={})=>{
+  try{const books=dashboardBooks(c.book,panel.options??{},panel.config??{}),mode=panel.options?.notebookMode??((panel.options?.notebookId??panel.config?.notebookId)?'selected':'all');return mode==='selected'&&books.length===1?{notebook:books[0].id}:undefined;}
+  catch{return undefined;}
+ };
+ add({id:'records',label:dt("recentRecords"),actions:(c,panel)=>[{name:'new-entry',label:dt("newRecord"),data:creationBook(c,panel)},{name:'entries',label:dt("allRecords")}],scope:'research',directory:true,defaultFields:['type','occurredOn','status'],
   items:(c,loaded,options={})=>{
    return entries(c).map(e=>({key:dashboardRecordIdentity(e),owner:e.owner,title:e.title,subtitle:e.owner?.notebookTitle??c.book.notebooks.find(n=>n.id===e.notebookId)?.title,data:{...dashboardRecordData(e),type:e.template?.label??e.type},action:recordAction(e)}));
   }});

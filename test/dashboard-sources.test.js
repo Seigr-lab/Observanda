@@ -64,6 +64,15 @@ test('research cards use the same union and lab-book subset; deleted selections 
  assert.deepEqual(s.registry.get('records').items(c,null,narrow).map(i=>i.title),['Record 1']);
  narrow.notebookIds=[s.book.notebooks[2].id];assert.throws(()=>s.registry.get('records').items(c,null,narrow),/moved/);
 });
+test('a records card scoped to one lab book creates its new records in that book',()=>{
+ const s=fixture(),c={book:s.book},records=s.registry.get('records'),create=panel=>records.actions(c,panel).find(a=>a.name==='new-entry');
+ const one={...s.selected,includeDescendants:false,notebookMode:'selected',notebookIds:[s.book.notebooks[1].id]};
+ assert.deepEqual(create({options:one,config:{}}).data,{notebook:s.book.notebooks[1].id});
+ assert.deepEqual(create({options:{},config:{notebookId:s.book.notebooks[1].id}}).data,{notebook:s.book.notebooks[1].id});
+ assert.equal(create({options:{...one,notebookIds:[s.book.notebooks[0].id,s.book.notebooks[1].id]},config:{}}).data,undefined);
+ assert.equal(create({options:s.selected,config:{}}).data,undefined);
+ assert.equal(create({options:{...one,notebookIds:[randomUUID()]},config:{}}).data,undefined);
+});
 test('research card loads reject missing or inconsistent navigation instead of stranding a visible page',async()=>{
  const f=fixture(),context={book:f.book,projectOwner:{projectId:f.book.projects[0].id,labBookId:f.book.notebooks[0].id},etag:'pinned',outline:true,recordLimit:2},options={};
  for(const id of ['records','contributors']){
