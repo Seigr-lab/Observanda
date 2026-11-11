@@ -86,7 +86,7 @@ class DraftEdit extends RetainedFigurePresentation{
  async rewrite(collection,{keep=()=>true,selected=null,other=null}={}){
   const prior=this.reader.collection(collection).collection,root=prior.root,total=prior.count,{body,index}=this.tables(collection);body.collections[collection]={count:0,root:null};index.collections[collection]=emptyIndexes();
   for(let at=0;at<total;at++){
-   this.check();const entry=await this.index.entryAt({root},at);let member=await this.reader.member(entry.revision,collection);if(!await keep(member))continue;
+   this.check();const entry=await this.index.entryAt({root},at);let member=await this.reader.member(entry.revision,collection,{slot:'collection',key:entry.id});if(!await keep(member))continue;
    if(other){if(member.id===selected.id)member=other;else if(member.id===other.id)member=selected;}
    await this.append(collection,null,{id:member.id,plotId:member.plotId,seriesId:member.seriesId,bodyRoot:member.body,texts:member.texts});
   }
@@ -110,7 +110,7 @@ class DraftEdit extends RetainedFigurePresentation{
    const scope=await this.reader.scope({collection:'panels'});
    if(!scope.total){if(operation.plotId||operation.id&&operation.id!==this.reader.figure.id)invalid();return {member:null,root:this.reader.presentation.header,path:[],texts:this.reader.presentation.headerTexts,global:true};}
    if((await this.tree.selected(this.reader.presentation.header,['kind'])).value!=='panels'){
-    if(scope.total!==1)missing();const entry=await this.index.entryAt({root:scope.root},scope.start),panel=await this.reader.member(entry.revision,'panels');
+    if(scope.total!==1)missing();const entry=await this.index.entryAt({root:scope.root},scope.start),panel=await this.reader.member(entry.revision,'panels',{slot:'plots',key:entry.id});
     if(operation.plotId&&operation.plotId!==panel.plotId||operation.id&&![this.reader.figure.id,panel.plotId].includes(operation.id))invalid();
     // The selected record keeps its wrapper ID when a different plot is
     // imported. Resolve that one indexed plot and preserve the effective
@@ -173,7 +173,7 @@ class DraftEdit extends RetainedFigurePresentation{
   const selected=await this.member(collection,operation.id,operation.plotId);
   if(operation.type==='move'){
    const scope=await this.reader.scope({collection,...(collection==='points'?{seriesId:selected.seriesId}:collection==='panels'?{}:{plotId:selected.plotId})}),position=collection==='panels'?selected.ordinal:selected.position,next=position+operation.direction;
-   if(next<0||next>=scope.total)return;const entry=await this.index.entryAt({root:scope.root},scope.start+next),other=await this.reader.member(entry.revision,collection);if(collection==='points')await this.callouts(selected,{other});await this.rewrite(collection,{selected,other});return;
+   if(next<0||next>=scope.total)return;const entry=await this.index.entryAt({root:scope.root},scope.start+next),other=await this.reader.member(entry.revision,collection,{slot:collection==='points'?'series':collection==='panels'?'collection':'plots',key:entry.id});if(collection==='points')await this.callouts(selected,{other});await this.rewrite(collection,{selected,other});return;
   }
   await this.callouts(selected,{remove:true});await this.rewrite(collection,{keep:member=>member.id!==selected.id});
   if(collection==='series')await this.rewrite('points',{keep:member=>member.seriesId!==selected.id});
@@ -260,7 +260,7 @@ export class RetainedFigureAuthoring{
     const indexes=indices.collections[collection];if(Object.keys(indexes).sort().join()!==Object.keys(emptyIndexes()).sort().join()||indexes.lookup!==null||indexes.coordinates!==null)missing();
     let count=0,plots=0,series=0;
     for await(const entry of reader.index.entries({root:rows.root})){
-     this.signal?.throwIfAborted();const member=await reader.member(entry.revision,collection);if(member.ordinal!==count||entry.id!==ordinal(count++))missing();
+     this.signal?.throwIfAborted();const member=await reader.member(entry.revision,collection,{slot:'collection',key:entry.id});if(member.ordinal!==count||entry.id!==ordinal(count++))missing();
      const expected={keys:member.id};if(member.plotId){plots++;expected.plots=member.plotId+':'+ordinal(member.ordinal);if(collection!=='panels')await reader.panelMember(member.plotId);}if(member.seriesId){series++;expected.series=member.seriesId+':'+ordinal(member.position);const parent=await reader.item({collection:'series',id:member.seriesId,plotId:member.plotId});if(!parent)missing();}
      for(const [slot,key]of Object.entries(expected))if((await reader.index.find({root:indexes[slot]},key))?.revision!==entry.revision)missing();
      const value=await validateTextMap(reader,member.body,member.texts);structuralMember(member,value);

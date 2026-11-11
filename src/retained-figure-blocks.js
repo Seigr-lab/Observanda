@@ -5,10 +5,26 @@ import {validTableRef} from './retained-table-index.js';
 import {retainRecordOwnerMetadata} from './record-owner-resources.js';
 import {withWorkspaceMetadataBatch,withGroupedMetadataBatch} from './metadata-batch.js';
 import {GROUPED_METADATA_OBJECTS} from './catalogue-writes.js';
+import {researchId} from './web/research-reference.js';
 const prefix='.observanda/materials/figures';
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
 export function retainedFigureBlockPath(kind,revision){if(!['value','index'].includes(kind)||!hash(revision))throw new AppError('INVALID');return prefix+'/'+kind+'/'+revision+'.json';}
+// A member run stores an ordered run of one series' point members in one
+// block. Each member is today's member object; an inline point body travels
+// inside the run as `value` and keeps its own content address (`body`).
+export const MEMBER_RUN_MEMBERS=128,MEMBER_RUN_BYTES=24*1024;
+const naturalNumber=value=>Number.isSafeInteger(value)&&value>=0;
+export function memberRunMembers(node){
+ if(node?.type!=='member-run'||node.version!==1||node.collection!=='points'||Object.keys(node).sort().join()!=='collection,members,plotId,seriesId,type,version'||!researchId(node.plotId)||!researchId(node.seriesId)||!Array.isArray(node.members)||!node.members.length||node.members.length>MEMBER_RUN_MEMBERS)fail();
+ return node.members.map(entry=>{
+  const keys=Object.keys(entry??{});
+  if(!entry||typeof entry!=='object'||keys.some(key=>!['id','position','ordinal','categoryId','body','texts','value'].includes(key))||!researchId(entry.id)||!naturalNumber(entry.position)||!naturalNumber(entry.ordinal)||entry.categoryId!==undefined&&!researchId(entry.categoryId)||!hash(entry.body)||!entry.texts||typeof entry.texts!=='object'||Array.isArray(entry.texts))fail();
+  const text=Object.hasOwn(entry,'value')?serialize({type:'inline',value:entry.value}):null;if(text!==null&&digest(text)!==entry.body)fail();
+  const member={format:'figure-member',version:1,collection:'points',id:entry.id,plotId:node.plotId,seriesId:node.seriesId,position:entry.position,ordinal:entry.ordinal,...(entry.categoryId?{categoryId:entry.categoryId}:{}),body:entry.body,texts:entry.texts};
+  return {member,text};
+ });
+}
 export function retainedFigureBlockChildren(kind,node){
  const children=[];
  const index=ref=>{if(ref!==null&&!validTableRef(ref))fail();if(ref)children.push({kind:'index',revision:ref.hash});};
@@ -19,6 +35,7 @@ export function retainedFigureBlockChildren(kind,node){
   else fail();
  }else if(['array','keyed-array','object','string','joined-string'].includes(node?.type))index(node.root);
  else if(['item','property'].includes(node?.type))value(node.value);
+ else if(node?.type==='member-run'){for(const {member,text} of memberRunMembers(node))if(text===null)value(member.body);}
  else if(node?.type==='inline'){
   const body=node.value;
   if(body?.format==='figure-data')for(const collection of Object.values(body.collections))index(collection.root);
@@ -47,7 +64,21 @@ export class RetainedFigureBlocks{
  check(){this.signal?.throwIfAborted();}
  decode(text,revision){if(typeof text!=='string'||Buffer.byteLength(text)>65536||digest(text)!==revision)fail();let node;try{node=JSON.parse(text);}catch{fail();}if(serialize(node)!==text)fail();return node;}
  keep(key,text){if(this.cache.has(key))return;const size=Buffer.byteLength(text);while(this.cache.size>=1024||this.bytes+size>1048576){const first=this.cache.keys().next().value;if(first===undefined)break;this.bytes-=Buffer.byteLength(this.cache.get(first));this.cache.delete(first);}this.cache.set(key,text);this.bytes+=size;}
- async read(kind,revision){this.check();const key=retainedFigureBlockPath(kind,revision),text=this.pending.get(key)?.text??this.cache.get(key)??await this.workspace.readMetadata(key,65536);this.check();const node=this.decode(text,revision);this.keep(key,text);return node;}
+ async read(kind,revision){
+  this.check();const key=retainedFigureBlockPath(kind,revision);let text=this.pending.get(key)?.text??this.cache.get(key)??await this.workspace.readMetadata(key,65536);this.check();
+  // An embedded point body is stored only inside its member run.
+  if((text===null||text===undefined)&&kind==='value'&&this.embedded?.has(revision)){await this.memberRun(this.embedded.get(revision));text=this.cache.get(key);}
+  const node=this.decode(text,revision);this.keep(key,text);return node;
+ }
+ // Read a member run and make its embedded bodies readable by their own
+ // content addresses for later value reads.
+ async memberRun(revision){
+  const node=await this.read('value',revision),members=memberRunMembers(node);this.embed(revision,members);return {node,members};
+ }
+ embed(revision,members){
+  this.embedded??=new Map();
+  for(const {member,text} of members){if(text===null)continue;this.keep(retainedFigureBlockPath('value',member.body),text);this.embedded.delete(member.body);this.embedded.set(member.body,revision);if(this.embedded.size>131072)this.embedded.delete(this.embedded.keys().next().value);}
+ }
  async put(kind,node){
   this.check();if(this.readOnly)throw new AppError('INVALID');const text=serialize(node),bytes=Buffer.byteLength(text);if(bytes>65536)throw new AppError('LIMIT');const revision=digest(text),key=retainedFigureBlockPath(kind,revision);
   if(this.pending.has(key)||this.cache.has(key))return revision;

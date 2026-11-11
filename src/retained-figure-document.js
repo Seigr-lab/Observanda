@@ -7,7 +7,7 @@ import {sameAxisProjection} from './web/figure-projection-display.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {RetainedTableIndex,validTableRef,indexCheckpointDue} from './retained-table-index.js';
-import {RetainedFigureBlocks} from './retained-figure-blocks.js';
+import {RetainedFigureBlocks,memberRunMembers} from './retained-figure-blocks.js';
 import {validRetainedFigure,validRetainedFigureDocument,validRetainedFigureWindow,validRetainedFigureItem,RETAINED_FIGURE_WINDOW} from './web/retained-figure-model.js';
 import {xValue,figureIssues} from './web/figure-model.js';
 import {pointIntervals,intervalIssues,INTERVAL_FIELDS} from './web/figure-intervals.js';
@@ -25,6 +25,25 @@ const emptyExtent=()=>({min:null,max:null,positiveMin:null,positiveMax:null});
 const extent=(target,value)=>{if(typeof value!=='number'||!Number.isFinite(value))return;target.min=target.min===null?value:Math.min(target.min,value);target.max=target.max===null?value:Math.max(target.max,value);if(value>0){target.positiveMin=target.positiveMin===null?value:Math.min(target.positiveMin,value);target.positiveMax=target.positiveMax===null?value:Math.max(target.positiveMax,value);}};
 const numericKey=value=>{const bytes=Buffer.alloc(8);bytes.writeDoubleBE(Object.is(value,-0)?0:value);if(bytes[0]&128)for(let i=0;i<8;i++)bytes[i]^=255;else bytes[0]^=128;return bytes.toString('hex');};
 
+// Index entries locate one member. A member run holds several point members;
+// the entry's own key (ordinal, position, id or lookup) selects among them.
+export const scopeSlot=selection=>selection.seriesId?'series':selection.plotId?'plots':'collection';
+const ordinalOf=value=>/^\d{16}$/.test(value??'')?Number(value):fail();
+function selectRunMember(members,select){
+ if(typeof select?.key!=='string')fail();const {slot,key}=select,parts=key.split(':');let found;
+ if(slot==='keys')found=members.find(m=>m.id===key);
+ else if(slot==='collection'){const n=ordinalOf(key);found=members.find(m=>m.ordinal===n);}
+ else if(slot==='plots'){const n=ordinalOf(parts[1]);found=members.find(m=>m.plotId===parts[0]&&m.ordinal===n);}
+ else if(slot==='series'){const n=ordinalOf(parts[1]);found=members.find(m=>m.seriesId===parts[0]&&m.position===n);}
+ else if(slot==='coordinates'){const n=ordinalOf(parts[2]);found=members.find(m=>m.plotId===parts[0]&&m.ordinal===n);}
+ else if(slot==='lookup')found=members.findLast(m=>m.plotId===parts[0]&&m.seriesId===parts[1]&&m.categoryId===parts[2]);
+ if(!found)fail();return found;
+}
+export async function retainedMember(blocks,revision,collection,select=null){
+ const block=await blocks.read('value',revision);
+ if(block?.type!=='member-run')return blocks.tree().read(revision);
+ if(collection!=='points')fail();const members=memberRunMembers(block);blocks.embed(revision,members);return structuredClone(selectRunMember(members.map(item=>item.member),select));
+}
 export const figureValidationValue=value=>value?.format==='figure-text'?'Retained text':Array.isArray(value)?value.map(figureValidationValue):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,child])=>[key,figureValidationValue(child)])):value;
 const invalid=()=>{throw new AppError('MATERIAL_INVALID');};
 const sample=header=>({x:header.x?.kind==='number'?1:header.x?.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})});
@@ -111,14 +130,14 @@ export class RetainedFigureBuilder{
    };
    for(let offset=start;offset<end;offset+=32)await this.blocks.readSnapshot(async()=>{
    const entries=[];for(let at=offset;at<Math.min(end,offset+32);at++){this.blocks.check();entries.push(await index.entryAt({root},at));}
-   await this.blocks.prefetch('value',entries.map(entry=>entry.revision));const members=[];for(const entry of entries)members.push(await this.tree.read(entry.revision));await this.blocks.prefetch('value',members.map(member=>member.body));
+   await this.blocks.prefetch('value',entries.map(entry=>entry.revision));const members=[];for(const entry of entries)members.push(await retainedMember(this.blocks,entry.revision,'points',{slot:'coordinates',key:entry.id}));await this.blocks.prefetch('value',members.map(member=>member.body));
    for(const member of members){this.blocks.check();if(!await isVisible(member.seriesId))continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
    });
   }
   const annotations=this.presentation.collection('annotations'),aRoot=this.presentation.indexesFor('annotations').plots,aStart=await this.presentation.index.rank({root:aRoot},plot.id+':'),aEnd=await this.presentation.index.rank({root:aRoot},plot.id+':\uffff');
   for(let at=aStart;!this.draft&&at<aEnd;at++){
    const entry=await this.presentation.index.entryAt({root:aRoot},at),member=await this.tree.read(entry.revision),annotation=figureValidationValue(await this.owner.bounded(member.body,member.texts));let check=annotation,series=[];
-   if(annotation.kind==='callout'){const selected=await this.data.index.find({root:this.data.indexesFor('points').series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!selected)invalid();const point=await this.tree.read(selected.revision);if(point.plotId!==plot.id)invalid();series=[{id:annotation.seriesId,points:[figureValidationValue(await this.owner.bounded(point.body,point.texts))]}];check={...annotation,pointIndex:0};}
+   if(annotation.kind==='callout'){const selected=await this.data.index.find({root:this.data.indexesFor('points').series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!selected)invalid();const point=await retainedMember(this.blocks,selected.revision,'points',{slot:'series',key:selected.id});if(point.plotId!==plot.id)invalid();series=[{id:annotation.seriesId,points:[figureValidationValue(await this.owner.bounded(point.body,point.texts))]}];check={...annotation,pointIndex:0};}
    if(annotationIssues({...plot.header,series,annotations:[check]},xValue,{retained:true}).length)invalid();
   }
   void annotations;
@@ -164,7 +183,7 @@ export class RetainedFigureReader{
   const {collection,indexes}=this.collection(selection.collection);let root=collection.root,start=0,total=collection.count;
   const id=selection.seriesId??selection.plotId;if(id){root=selection.seriesId?indexes.series:indexes.plots;const prefix=id+':';start=await this.index.rank({root},prefix);total=await this.index.rank({root},prefix+'\uffff')-start;}return {root,start,total};
  }
- async member(revision,collection){const item=await this.tree.read(revision);if(!researchId(item?.id)||item.plotId!==null&&!researchId(item.plotId)||item.seriesId!==null&&!researchId(item.seriesId)||item.categoryId!==undefined&&!researchId(item.categoryId)||item.visiblePosition!==undefined&&(!Number.isSafeInteger(item.visiblePosition)||item.visiblePosition<0)||item?.format!=='figure-member'||item.version!==1||item.collection!==collection||!Number.isSafeInteger(item.position)||item.position<0||!Number.isSafeInteger(item.ordinal)||item.ordinal<0)fail();return item;}
+ async member(revision,collection,select=null){const item=await retainedMember(this.storage,revision,collection,select);if(!researchId(item?.id)||item.plotId!==null&&!researchId(item.plotId)||item.seriesId!==null&&!researchId(item.seriesId)||item.categoryId!==undefined&&!researchId(item.categoryId)||item.visiblePosition!==undefined&&(!Number.isSafeInteger(item.visiblePosition)||item.visiblePosition<0)||item?.format!=='figure-member'||item.version!==1||item.collection!==collection||!Number.isSafeInteger(item.position)||item.position<0||!Number.isSafeInteger(item.ordinal)||item.ordinal<0)fail();return item;}
  async bounded(revision,texts,path=''){
   const node=await this.tree.node(revision);
   const clip=(value,at)=>{if(typeof value==='string'&&value.length>1024)return {format:'figure-text',version:1,preview:value.slice(0,512),characters:value.length};if(Array.isArray(value))return value.map((child,i)=>clip(child,at?at+'.'+i:String(i)));if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,child])=>[key,clip(child,at?at+'.'+key:key)]));return value;};
@@ -193,7 +212,7 @@ export class RetainedFigureReader{
  }
  async expose(item){const {format,version,collection,ordinal,body,texts,...result}=item;result.value=await this.bounded(body,texts);if(collection==='points')result.globalOrdinal=ordinal;if(collection==='series'){const {root,start,total}=await this.scope({collection:'points',seriesId:item.id});void root;void start;result.points=total;}if(collection==='points'&&item.categoryId){result.categoryPosition=await this.categoryPosition({plotId:item.plotId,categoryId:item.categoryId});}return result;}
  async header({plotId}={}){
-  if(plotId){const scope=await this.scope({collection:'panels',plotId});if(scope.total!==1)fail();const entry=await this.index.entryAt({root:scope.root},scope.start),member=await this.member(entry.revision,'panels'),body=await this.bounded(member.body,member.texts);const title=this.figure&&(await this.tree.selected(this.presentation.header,['kind'])).value!=='panels'?this.figure.title:body.header.title;return {header:{...body.header,title,plotId},counts:{...this.document.counts,series:(await this.scope({collection:'series',plotId})).total,points:(await this.scope({collection:'points',plotId})).total},document:this.document,domains:body.domains};}
+  if(plotId){const scope=await this.scope({collection:'panels',plotId});if(scope.total!==1)fail();const entry=await this.index.entryAt({root:scope.root},scope.start),member=await this.member(entry.revision,'panels',{slot:'plots',key:entry.id}),body=await this.bounded(member.body,member.texts);const title=this.figure&&(await this.tree.selected(this.presentation.header,['kind'])).value!=='panels'?this.figure.title:body.header.title;return {header:{...body.header,title,plotId},counts:{...this.document.counts,series:(await this.scope({collection:'series',plotId})).total,points:(await this.scope({collection:'points',plotId})).total},document:this.document,domains:body.domains};}
   const header=await this.bounded(this.presentation.header,this.presentation.headerTexts);if(this.figure?.source)header.source=structuredClone(this.figure.source);if(header.kind!=='panels'){const panels=await this.window({collection:'panels',limit:1});if(!panels.items.length&&this.document.format==='figure-authoring')return {header,counts:this.document.counts,document:this.document};if(panels.items.length!==1)fail();const result=await this.header({plotId:panels.items[0].plotId});if(this.figure?.source)result.header.source=structuredClone(this.figure.source);if(this.figure){result.header.id=this.figure.id;result.header.title=this.figure.title;}return result;}if(this.figure){header.id=this.figure.id;header.title=this.figure.title;}return {header,counts:this.document.counts,document:this.document};
  }
  async window(selection){
@@ -204,29 +223,29 @@ export class RetainedFigureReader{
   for(let from=offset;from<end;from+=32){
    const entries=[];for(let at=from;at<Math.min(end,from+32);at++){this.storage.check();const entry=await this.index.entryAt({root:scope.root},scope.start+at);if(!entry)fail();entries.push(entry);}
    await this.storage.prefetch?.('value',entries.map(entry=>entry.revision));
-   const members=[];for(const entry of entries){const item=await this.member(entry.revision,selection.collection);if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)fail();members.push(item);}
+   const members=[],slot=scopeSlot(selection);for(const entry of entries){const item=await this.member(entry.revision,selection.collection,{slot,key:entry.id});if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)fail();members.push(item);}
    await this.storage.prefetch?.('value',members.map(item=>item.body));
    for(const item of members)items.push(await this.expose(item));
   }
   return {items,offset,total:scope.total,next:offset+items.length<scope.total?offset+items.length:null};
  }
- async item(selection){if(!validRetainedFigureItem(selection))throw new AppError('INVALID');const entry=await this.index.find({root:this.collection(selection.collection).indexes.keys},selection.id);if(!entry)return null;const item=await this.member(entry.revision,selection.collection);if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)return null;return this.expose(item);}
+ async item(selection){if(!validRetainedFigureItem(selection))throw new AppError('INVALID');const entry=await this.index.find({root:this.collection(selection.collection).indexes.keys},selection.id);if(!entry)return null;const item=await this.member(entry.revision,selection.collection,{slot:'keys',key:entry.id});if(selection.plotId&&item.plotId!==selection.plotId||selection.seriesId&&item.seriesId!==selection.seriesId)return null;return this.expose(item);}
  async *items(selection){let offset=selection.offset??0;for(;;){const page=await this.window({...selection,offset,limit:RETAINED_FIGURE_WINDOW});yield* page.items;if(page.next===null)return;offset=page.next;}}
  async rawPoint({id,offset,seriesId}={}){
   let entry;if(id)entry=await this.index.find({root:this.collection('points').indexes.keys},id);else if(Number.isSafeInteger(offset)&&offset>=0)entry=await this.index.entryAt({root:this.collection('points').collection.root},offset);else throw new AppError('INVALID');
-  if(!entry)throw new AppError('INVALID');const member=await this.member(entry.revision,'points');if(seriesId&&member.seriesId!==seriesId)throw new AppError('INVALID');return {member,value:await this.tree.read(member.body)};
+  if(!entry)throw new AppError('INVALID');const member=await this.member(entry.revision,'points',{slot:id?'keys':'collection',key:entry.id});if(seriesId&&member.seriesId!==seriesId)throw new AppError('INVALID');return {member,value:await this.tree.read(member.body)};
  }
  async *pointEntries(selection={}){yield* this.items({collection:'points',...selection});}
  async categories(selection){return this.window({collection:'categories',...selection});}
  async categoryPosition({plotId,value,categoryId}){
   const key=plotId+':'+(categoryId??digest(serialize(value)));if(this.categoryCache.has(key))return this.categoryCache.get(key);
   const root=categoryId?this.collection('categories').indexes.keys:this.collection('categories').indexes.lookup,entry=await this.index.find({root},categoryId??key);if(!entry)return null;
-  const item=await this.member(entry.revision,'categories');if(item.plotId!==plotId)throw new AppError('INVALID');if(!categoryId&&(await this.tree.read(item.body))!==value)fail();
+  const item=await this.member(entry.revision,'categories',{slot:categoryId?'keys':'lookup',key:entry.id});if(item.plotId!==plotId)throw new AppError('INVALID');if(!categoryId&&(await this.tree.read(item.body))!==value)fail();
   if(this.categoryCache.size>=128)this.categoryCache.delete(this.categoryCache.keys().next().value);this.categoryCache.set(key,item.position);return item.position;
  }
  async pointAtCategory({plotId,seriesId,value,categoryId}){
   if(categoryId&&await this.categoryPosition({plotId,categoryId})===null)return null;const entry=await this.index.find({root:this.collection('points').indexes.lookup},plotId+':'+seriesId+':'+(categoryId??identity(plotId,value)));if(!entry)return null;
-  const item=await this.member(entry.revision,'points');if(item.plotId!==plotId||item.seriesId!==seriesId||categoryId&&item.categoryId!==categoryId)fail();if(!categoryId&&(await this.tree.selected(item.body,['x'])).value!==value)fail();return this.expose(item);
+  const item=await this.member(entry.revision,'points',{slot:'lookup',key:entry.id});if(item.plotId!==plotId||item.seriesId!==seriesId||categoryId&&item.categoryId!==categoryId)fail();if(!categoryId&&(await this.tree.selected(item.body,['x'])).value!==value)fail();return this.expose(item);
  }
 
  async cells(selection){
@@ -238,20 +257,20 @@ export class RetainedFigureReader{
  }
 
  async textTarget({collection,id,plotId,seriesId,field}){
-  if(collection==='header'){if(plotId||id!==this.figure?.id&&id!==(await this.tree.selected(this.presentation.header,['id'])).value){const scope=await this.scope({collection:'panels',plotId:plotId??id});if(scope.total!==1)throw new AppError('INVALID');const entry=await this.index.entryAt({root:scope.root},scope.start),member=await this.member(entry.revision,'panels');return {root:member.body,path:['header',...field.split('.')],total:member.texts['header.'+field]};}return {root:this.presentation.header,path:field.split('.'),total:this.presentation.headerTexts[field]};}
-  const entry=await this.index.find({root:this.collection(collection).indexes.keys},id);if(!entry)throw new AppError('INVALID');const member=await this.member(entry.revision,collection);if(collection==='categories'&&field==='value')field='';if(plotId&&member.plotId!==plotId||seriesId&&member.seriesId!==seriesId)throw new AppError('INVALID');return {root:member.body,path:field?field.split('.'):[],total:member.texts[field]};
+  if(collection==='header'){if(plotId||id!==this.figure?.id&&id!==(await this.tree.selected(this.presentation.header,['id'])).value){const scope=await this.scope({collection:'panels',plotId:plotId??id});if(scope.total!==1)throw new AppError('INVALID');const entry=await this.index.entryAt({root:scope.root},scope.start),member=await this.member(entry.revision,'panels',{slot:'plots',key:entry.id});return {root:member.body,path:['header',...field.split('.')],total:member.texts['header.'+field]};}return {root:this.presentation.header,path:field.split('.'),total:this.presentation.headerTexts[field]};}
+  const entry=await this.index.find({root:this.collection(collection).indexes.keys},id);if(!entry)throw new AppError('INVALID');const member=await this.member(entry.revision,collection,{slot:'keys',key:entry.id});if(collection==='categories'&&field==='value')field='';if(plotId&&member.plotId!==plotId||seriesId&&member.seriesId!==seriesId)throw new AppError('INVALID');return {root:member.body,path:field?field.split('.'):[],total:member.texts[field]};
  }
  async *textChunks(selection){const target=await this.textTarget(selection);if(!Number.isSafeInteger(target.total))throw new AppError('INVALID');yield* this.tree.text(target.root,target.path,{signal:this.storage.signal});}
  async text(selection){const {offset=0,limit=16384}=selection;if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>16384)throw new AppError('INVALID');const target=await this.textTarget(selection);if(!Number.isSafeInteger(target.total)||offset>target.total)throw new AppError('INVALID');let skipped=0,text='';for await(const chunk of this.tree.text(target.root,target.path,{signal:this.storage.signal})){const from=Math.max(0,offset-skipped);text+=chunk.slice(from,from+limit-text.length);skipped+=chunk.length;if(text.length===limit||skipped>=target.total)break;}return {text,offset,total:target.total,next:offset+text.length<target.total?offset+text.length:null};}
  async *valueJSON(root,path=[]){const target=await this.tree.select(root,path);if(!target)fail();if(target.inline)yield JSON.stringify(target.value);else yield* this.tree.json(target.revision,{canonical:false,signal:this.storage.signal});}
- async *memberRows(selection){const scope=await this.scope(selection);for(let at=0;at<scope.total;at++){this.storage.check();const entry=await this.index.entryAt({root:scope.root},scope.start+at);if(!entry)fail();yield await this.member(entry.revision,selection.collection);}}
+ async *memberRows(selection){const scope=await this.scope(selection),slot=scopeSlot(selection);for(let at=0;at<scope.total;at++){this.storage.check();const entry=await this.index.entryAt({root:scope.root},scope.start+at);if(!entry)fail();yield await this.member(entry.revision,selection.collection,{slot,key:entry.id});}}
  async *jsonObject(root,{path=[],skip=[],extra=[]}={}){
   const target=await this.tree.select(root,path);if(!target)fail();const names=target.inline?Object.keys(target.value):await this.tree.propertyNames(target.revision);yield '{';let count=0;
   for(const name of names){if(skip.includes(name))continue;if(count++)yield ',';yield JSON.stringify(name)+':';yield* this.valueJSON(root,[...path,name]);}
   for(const [name,parts] of extra){if(count++)yield ',';yield JSON.stringify(name)+':';yield* parts;}yield '}';
  }
  async *jsonArray(selection,render){yield '[';let count=0;for await(const member of this.memberRows(selection)){if(count++)yield ',';yield* render(member);}yield ']';}
- async panelMember(plotId){const scope=await this.scope({collection:'panels',plotId});if(scope.total!==1)fail();const entry=await this.index.entryAt({root:scope.root},scope.start);return this.member(entry.revision,'panels');}
+ async panelMember(plotId){const scope=await this.scope({collection:'panels',plotId});if(scope.total!==1)fail();const entry=await this.index.entryAt({root:scope.root},scope.start);return this.member(entry.revision,'panels',{slot:'plots',key:entry.id});}
  wrapperJSON(){
   if(!this.figure)return [];
   return [['id',[JSON.stringify(this.figure.id)]],['title',typeof this.figure.title==='string'?[JSON.stringify(this.figure.title)]:this.valueJSON(this.presentation.header,['title'])],...(this.figure.source?[['source',[JSON.stringify(this.figure.source)]]]:[])];
@@ -283,7 +302,7 @@ export class RetainedFigureReader{
     if(header.kind==='heatmap'||axis==='x'&&header.x.kind==='category')invalid();
     const label=await textHash(panel.body,['header',axis,'label']),hash=createHash('sha256'),index=this.presentationIndex.collections.ticks?.lookup,prefix=panel.plotId+':'+axis+':',start=await this.index.rank({root:index},prefix),end=await this.index.rank({root:index},prefix+'\uffff');
     for(let at=start;at<end;at++){
-     signal?.throwIfAborted();const entry=await this.index.entryAt({root:index},at),member=await this.member(entry.revision,'ticks'),value=(await this.tree.selected(member.body,['value'])).value;
+     signal?.throwIfAborted();const entry=await this.index.entryAt({root:index},at),member=await this.member(entry.revision,'ticks',{slot:'lookup',key:entry.id}),value=(await this.tree.selected(member.body,['value'])).value;
      if(member.plotId!==panel.plotId||(await this.tree.selected(member.body,['axis'])).value!==axis)fail();
      hash.update(JSON.stringify(value)+':'+await textHash(member.body,['label'])+';');
     }
@@ -318,18 +337,18 @@ export class RetainedFigureReader{
      if(name==='ticks')return member.plotId+':'+value.axis+':'+numericKey(value.value);return null;
     };
     for await(const entry of this.index.entries({root:collection.root})){
-     check();const member=await this.member(entry.revision,name),value=await this.tree.read(member.body);
+     check();const member=await this.member(entry.revision,name,{slot:'collection',key:entry.id}),value=await this.tree.read(member.body);
      if(entry.id!==ordinal(count)||member.ordinal!==count++||!same(member.texts,lengths(value)))fail();
      for(const slot of Object.keys(indexes)){
       const id=await expected(member,slot,value);if(id===null)continue;
       if(slot==='plots')plotCount++;if(slot==='series')seriesCount++;if(slot==='coordinates')coordinateCount++;if(slot==='lookup')lookupCount++;
       const found=await this.index.find({root:indexes[slot]},id);if(!found)fail();
-      if(slot==='lookup'&&name==='points'){const last=await this.member(found.revision,name);if(last.ordinal<member.ordinal||last.categoryId!==member.categoryId||last.seriesId!==member.seriesId)fail();}else if(found.revision!==entry.revision)fail();
+      if(slot==='lookup'&&name==='points'){const last=await this.member(found.revision,name,{slot,key:id});if(last.ordinal<member.ordinal||last.categoryId!==member.categoryId||last.seriesId!==member.seriesId)fail();}else if(found.revision!==entry.revision)fail();
      }
     }
     if(count!==collection.count||(indexes.plots?.count??0)!==plotCount||(indexes.series?.count??0)!==seriesCount||(indexes.coordinates?.count??0)!==coordinateCount||name!=='points'&&(indexes.lookup?.count??0)!==lookupCount)fail();
     for(const [slot,root]of Object.entries(indexes))for await(const entry of this.index.entries({root})){
-     check();const member=await this.member(entry.revision,name),stored=await this.index.find({root:collection.root},ordinal(member.ordinal));if(stored?.revision!==entry.revision||entry.id!==await expected(member,slot,await this.tree.read(member.body)))fail();
+     check();const member=await this.member(entry.revision,name,{slot,key:entry.id}),stored=await this.index.find({root:collection.root},ordinal(member.ordinal));if(stored?.revision!==entry.revision||entry.id!==await expected(member,slot,await this.tree.read(member.body)))fail();
     }
    }
   }
@@ -345,17 +364,17 @@ export class RetainedFigureReader{
      const intervals=pointIntervals(point);for(const x of intervals.x){extent(local.x,xValue(x,header.x.kind));if(visible)extent(domains.x,xValue(x,header.x.kind));}if(point.y!==null)for(const y of intervals.y){extent(local.y,y);if(visible)extent(domains.y,y);}
      if(visible&&header.x.kind==='category'){if(await this.categoryPosition({plotId:panel.plotId,categoryId:member.categoryId})===null)fail();domains.maximumCategoryLength=Math.max(domains.maximumCategoryLength,point.x.length);}
     }
-    if(!complete&&header.kind!=='heatmap')fail();pointCount+=count;const data=await this.index.find({root:this.dataIndex.collections.series.keys},series.id);if(!data)fail();const member=await this.member(data.revision,'series'),stored=await this.tree.read(member.body);if(member.plotId!==panel.plotId||!same(stored,{points:count,domains:local}))fail();
+    if(!complete&&header.kind!=='heatmap')fail();pointCount+=count;const data=await this.index.find({root:this.dataIndex.collections.series.keys},series.id);if(!data)fail();const member=await this.member(data.revision,'series',{slot:'keys',key:data.id}),stored=await this.tree.read(member.body);if(member.plotId!==panel.plotId||!same(stored,{points:count,domains:local}))fail();
    }
    for await(const tick of this.memberRows({collection:'ticks',plotId:panel.plotId})){const value=await this.tree.read(tick.body);if(!['x','y'].includes(value.axis)||axisControlIssues({...header[value.axis],ticks:[{value:value.value,label:value.label}]},{kind:header[value.axis].kind??'number',retained:true}).length)fail();extent(domains[value.axis],value.value);}
    const coordinateRoot=this.dataIndex.collections.points?.coordinates,prefix=panel.plotId+':',start=await this.index.rank({root:coordinateRoot},prefix),end=await this.index.rank({root:coordinateRoot},prefix+'\uffff');let previous=null,positive=null;
-   for(let at=start;at<end;at++){check();const entry=await this.index.entryAt({root:coordinateRoot},at),point=await this.member(entry.revision,'points'),series=await this.item({collection:'series',id:point.seriesId});if(!seriesStyle(series.value).visible)continue;const x=xValue((await this.tree.selected(point.body,['x'])).value,header.x.kind);if(previous!==null&&x>previous)domains.minimumXGap=domains.minimumXGap===null?x-previous:Math.min(domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);domains.minimumLogXGap=domains.minimumLogXGap===null?gap:Math.min(domains.minimumLogXGap,gap);}positive=x;}}
-   if(!same(domains,body.domains))fail();const plot=await this.index.find({root:this.dataIndex.collections.plots.keys},panel.plotId),stored=plot&&await this.member(plot.revision,'plots');if(!stored||!same(await this.tree.read(stored.body),{series:seriesCount,points:pointCount,xKind:header.x.kind}))fail();
+   for(let at=start;at<end;at++){check();const entry=await this.index.entryAt({root:coordinateRoot},at),point=await this.member(entry.revision,'points',{slot:'coordinates',key:entry.id}),series=await this.item({collection:'series',id:point.seriesId});if(!seriesStyle(series.value).visible)continue;const x=xValue((await this.tree.selected(point.body,['x'])).value,header.x.kind);if(previous!==null&&x>previous)domains.minimumXGap=domains.minimumXGap===null?x-previous:Math.min(domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);domains.minimumLogXGap=domains.minimumLogXGap===null?gap:Math.min(domains.minimumLogXGap,gap);}positive=x;}}
+   if(!same(domains,body.domains))fail();const plot=await this.index.find({root:this.dataIndex.collections.plots.keys},panel.plotId),stored=plot&&await this.member(plot.revision,'plots',{slot:'keys',key:plot.id});if(!stored||!same(await this.tree.read(stored.body),{series:seriesCount,points:pointCount,xKind:header.x.kind}))fail();
    for await(const member of this.memberRows({collection:'annotations',plotId:panel.plotId})){
-    const annotation=await this.tree.read(member.body);let value=annotation,series=[];if(annotation.kind==='callout'){const entry=await this.index.find({root:this.dataIndex.collections.points.series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!entry)fail();const point=await this.member(entry.revision,'points');if(point.plotId!==panel.plotId)fail();series=[{id:annotation.seriesId,points:[await this.tree.read(point.body)]}];value={...annotation,pointIndex:0};}if(annotationIssues({...header,series,annotations:[value]},xValue,{retained:true}).length)fail();
+    const annotation=await this.tree.read(member.body);let value=annotation,series=[];if(annotation.kind==='callout'){const entry=await this.index.find({root:this.dataIndex.collections.points.series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!entry)fail();const point=await this.member(entry.revision,'points',{slot:'series',key:entry.id});if(point.plotId!==panel.plotId)fail();series=[{id:annotation.seriesId,points:[await this.tree.read(point.body)]}];value={...annotation,pointIndex:0};}if(annotationIssues({...header,series,annotations:[value]},xValue,{retained:true}).length)fail();
    }
   }
-  for await(const block of this.blocks({signal})){if(block.kind==='value')await this.tree.node(block.revision);}
+  for await(const block of this.blocks({signal})){if(block.kind==='value'){if(block.node?.type==='member-run')memberRunMembers(block.node);else await this.tree.node(block.revision);}}
   return {...this.document.counts};
  }
  async *blocks(options={}){yield* this.storage.closure([this.document.data.root,this.document.data.index,this.document.presentation.root,this.document.presentation.index],options);}
