@@ -1420,5 +1420,18 @@
   "regionInvalidPadding": "Introdueix un espai interior de 0 a 80 píxels.",
   "regionNeedsPhoneTitle": "Introdueix el títol que mostren els telèfons per a una regió plegada.",
   "regionSave": "Actualitza les regions del lloc",
-  "regionSaved": "S'han actualitzat les regions del lloc."
+  "regionSaved": "S'han actualitzat les regions del lloc.",
+  "starterChoose": "Comença a partir de",
+  "starterBlank": "Lloc web en blanc",
+  "starterBlankText": "Una pàgina per construir lliurement.",
+  "starterJournal": "Diari de recerca",
+  "starterJournalText": "Inici amb els registres més recents, un arxiu i una pàgina de presentació.",
+  "starterPortfolio": "Portafoli de projectes",
+  "starterPortfolioText": "Treballs seleccionats en graella, una galeria i pàgines de presentació i contacte.",
+  "starterHandbook": "Manual o documentació",
+  "starterHandbookText": "Guies i procediments amb una barra lateral de continguts i un glossari.",
+  "starterCourse": "Curs",
+  "starterCourseText": "Una presentació, tres lliçons enllaçades amb una barra lateral de lliçons i recursos.",
+  "starterLaboratory": "Laboratori",
+  "starterLaboratoryText": "Treball recent, mètodes, resultats i l'equip."
 }

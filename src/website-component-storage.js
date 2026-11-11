@@ -67,6 +67,19 @@ export function retainComponentAssets(manifest){
 export function checkSavedComponents(manifest,page,html){
  if(page?.instances?.length||/data-website-instance/i.test(html))checkComponentInstances(html,page??{},componentContext(manifest));
 }
+// Define a main component from portable markup written in site-root
+// coordinates, without placing it on a page (used by website starters).
+export function defineComponent(store,id,{expectedRevision,name,html,signal}={}){
+ if(!revision(expectedRevision))fail();
+ return store.scope(async()=>{
+  const manifest=await store.current(id,expectedRevision),label=componentName(name);
+  if(list(manifest).some(item=>item.name.toLowerCase()===label.toLowerCase()))fail();
+  const definition={id:randomUUID(),name:label,...prepareComponent(html,'index.html',{...componentContext(manifest),draft:false})};
+  const candidate={...manifest,components:[...list(manifest),definition]};
+  await store.assertSources(candidate);
+  return {...await store.present(await store.commit(candidate,{signal}),'index.html',{signal}),componentId:definition.id};
+ },{write:true,signal});
+}
 export function componentOperation(store,operation,id,options={},requireReview=false){
  const {expectedRevision,path='index.html',name,instance,html,receivePictures,position,blockPath,query='',offset=0,signal}=options;let {component}=options;
  if(!revision(expectedRevision))fail();

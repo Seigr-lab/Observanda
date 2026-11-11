@@ -1420,5 +1420,18 @@
   "regionInvalidPadding": "Enter an inner spacing from 0 to 80 pixels.",
   "regionNeedsPhoneTitle": "Enter the title phones show for a collapsed region.",
   "regionSave": "Update site regions",
-  "regionSaved": "Site regions updated."
+  "regionSaved": "Site regions updated.",
+  "starterChoose": "Start from",
+  "starterBlank": "Blank website",
+  "starterBlankText": "One page to build on freely.",
+  "starterJournal": "Research journal",
+  "starterJournalText": "Home with your latest records, an archive and an about page.",
+  "starterPortfolio": "Project portfolio",
+  "starterPortfolioText": "Selected work in a grid, a gallery, about and contact pages.",
+  "starterHandbook": "Handbook or documentation",
+  "starterHandbookText": "Guides and procedures with a contents sidebar and a glossary.",
+  "starterCourse": "Course",
+  "starterCourseText": "An overview, three linked lessons with a lesson sidebar, and resources.",
+  "starterLaboratory": "Laboratory",
+  "starterLaboratoryText": "Recent work, methods, results and the team."
 }

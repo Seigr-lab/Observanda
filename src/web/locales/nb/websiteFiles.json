@@ -1420,5 +1420,18 @@
   "regionInvalidPadding": "Skriv inn en indre avstand fra 0 til 80 piksler.",
   "regionNeedsPhoneTitle": "Skriv inn tittelen telefoner viser for et skjult område.",
   "regionSave": "Oppdater nettstedsområdene",
-  "regionSaved": "Nettstedsområdene er oppdatert."
+  "regionSaved": "Nettstedsområdene er oppdatert.",
+  "starterChoose": "Start fra",
+  "starterBlank": "Tomt nettsted",
+  "starterBlankText": "Én side å bygge videre på fritt.",
+  "starterJournal": "Forskningsjournal",
+  "starterJournalText": "Forside med de nyeste registreringene, et arkiv og en om-side.",
+  "starterPortfolio": "Prosjektportefølje",
+  "starterPortfolioText": "Utvalgte arbeider i rutenett, et galleri, om- og kontaktsider.",
+  "starterHandbook": "Håndbok eller dokumentasjon",
+  "starterHandbookText": "Veiledninger og prosedyrer med en innholdskolonne og en ordliste.",
+  "starterCourse": "Kurs",
+  "starterCourseText": "En oversikt, tre lenkede leksjoner med en leksjonskolonne, og ressurser.",
+  "starterLaboratory": "Laboratorium",
+  "starterLaboratoryText": "Nylig arbeid, metoder, resultater og teamet."
 }

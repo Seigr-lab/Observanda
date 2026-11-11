@@ -671,8 +671,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
   const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
   const inclusion=isPage?'<label>'+esc(tr('pageInclusion'))+'<select data-website-file-field="inclusion"><option value="private">'+esc(tr('pagePrivate'))+'</option><option value="included"'+(form.inclusion==='included'?' selected':'')+'>'+esc(tr('pageIncludeNext'))+'</option></select></label>':'';
-  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+inclusion+'</div>'+(isPage?pageDesignChoice():'')+
+  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+inclusion+'</div>'+(isPage?pageDesignChoice():starterChoice())+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
+ }
+ // A new website starts from a purpose: its pages, menu, regions and record lists.
+ function starterChoice(){
+  const starters=['blank','journal','portfolio','handbook','course','laboratory'],key=id=>'starter'+id[0].toUpperCase()+id.slice(1);
+  return '<fieldset class="website-starters"><legend>'+esc(tr('starterChoose'))+'</legend>'+starters.map(id=>'<label class="website-starter"><input type="radio" name="website-starter" data-website-file-field="starter" value="'+id+'"'+(id==='blank'?' checked':'')+'><span><strong>'+esc(tr(key(id)))+'</strong><span class="hint">'+esc(tr(key(id)+'Text'))+'</span></span></label>').join('')+'</fieldset>';
  }
  function pageDesignChoice(){
   if(!form.designs)return button('designChoose','design-choose')+'<p class="hint">'+esc(tr('designDiscover'))+'</p>';
@@ -721,7 +726,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   visual?.destroy();visual=null;
   const designFilter=document.querySelector('[data-website-file-field="designSearch"]');
   if(designFilter)designFilter.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();designFilter.form.querySelector('[data-action="website-files-design-search"]').click();}};
-  for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions']){
+  for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
   hierarchy.bindHost(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
@@ -1093,7 +1098,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function submit(element){if(!element.matches('[data-website-files-form]'))return false;if(!element.reportValidity())return true;await run(async()=>{
   const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result;
-  if(form.type==='new')result=await request('create',{name:value('name'),language:document.documentElement.lang||'en'});
+  if(form.type==='new')result=await request('create',{name:value('name'),language:document.documentElement.lang||'en',starter:element.querySelector('[data-website-file-field="starter"]:checked')?.value??'blank'});
   else if(form.type==='design'){
    result=await designs('name',{expectedRevision:form.revision,name:value('designName')});adoptRelated(result);form=null;mode='pages';pagesPanel.open();return;
   }

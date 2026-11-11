@@ -1420,5 +1420,18 @@
   "regionInvalidPadding": "Introduce un espacio interior de 0 a 80 píxeles.",
   "regionNeedsPhoneTitle": "Introduce el título que muestran los teléfonos para una región plegada.",
   "regionSave": "Actualizar las regiones del sitio",
-  "regionSaved": "Regiones del sitio actualizadas."
+  "regionSaved": "Regiones del sitio actualizadas.",
+  "starterChoose": "Empezar desde",
+  "starterBlank": "Sitio web en blanco",
+  "starterBlankText": "Una página para construir libremente.",
+  "starterJournal": "Diario de investigación",
+  "starterJournalText": "Inicio con los registros más recientes, un archivo y una página de presentación.",
+  "starterPortfolio": "Portafolio de proyectos",
+  "starterPortfolioText": "Trabajos seleccionados en cuadrícula, una galería y páginas de presentación y contacto.",
+  "starterHandbook": "Manual o documentación",
+  "starterHandbookText": "Guías y procedimientos con una barra lateral de contenido y un glosario.",
+  "starterCourse": "Curso",
+  "starterCourseText": "Una presentación, tres lecciones enlazadas con una barra lateral de lecciones y recursos.",
+  "starterLaboratory": "Laboratorio",
+  "starterLaboratoryText": "Trabajo reciente, métodos, resultados y el equipo."
 }

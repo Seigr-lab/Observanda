@@ -1,0 +1,5 @@
+.website-starters { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr)); gap:.5rem; border:0; padding:0; margin:.75rem 0; }
+.website-starters > legend { font-weight:600; margin-bottom:.4rem; }
+.website-starter { display:flex; gap:.5rem; align-items:flex-start; padding:.6rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; cursor:pointer; }
+.website-starter:has(input:checked) { border-color:var(--accent,#2f5f9f); box-shadow:0 0 0 1px var(--accent,#2f5f9f); }
+.website-starter > span { display:grid; gap:.15rem; }

@@ -150,7 +150,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='library/validate'){json(await store.scope(()=>validateWebsiteLibraryRows(store,{...data,signal}),{signal}));return true;}
   if(operation==='library/preview'){json(await store.previewSource({...data,signal}));return true;}
   if(operation==='library/gallery-items'){json(await listGalleryItems(store,{...data,signal}));return true;}
-  if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,language:data.language,signal}));return true;}
+  if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,language:data.language,starter:data.starter,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
   if(!researchId(siteId))throw new AppError('INVALID');

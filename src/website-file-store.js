@@ -28,6 +28,8 @@ import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.
 import {REGION_FILES,placeSiteRegions,regionFiles} from './website-region-storage.js';
 import {REGION_SCRIPT} from './website-region-markup.js';
 import {checkRegions} from './website-region-model.js';
+import {STARTER_IDS,applyStarter,starterFiles,starterText} from './website-starters.js';
+import {websiteSiteLifecycle} from './website-site-lifecycle.js';
 import {escapeWebsiteText,websiteDocumentTitle,websiteSourcePlacements,websiteMarkerShape,insertWebsiteSources,updateWebsiteSource} from './website-file-html.js';
 import {assertPageDestination,websitePageIdentity} from './website-page-paths.js';
 import {indexWebsiteSource,searchWebsiteLibrary,previewWebsiteSource} from './website-file-library.js';
@@ -485,8 +487,21 @@ export class WebsiteFileStore{
   }while(cursor);
   return {items,next:null};
  },{signal});}
- create({id=randomUUID(),name,html,css,language,signal}={}){
+ async create({id=randomUUID(),name,html,css,language,starter,signal}={}){
   name=title(name);
+  if(starter!==undefined&&starter!=='blank'){
+   if(!STARTER_IDS.includes(starter)||html!=null||css!=null)throw new AppError('INVALID');
+   const text=await starterText(language),created=await this.importFiles(id,{name,files:starterFiles(starter,{name,language,text}),signal});
+   try{return await applyStarter(this,created,starter,{name,text,signal});}
+   catch(error){
+    // Never leave a half-made site in the list: archive it, keeping it restorable.
+    try{
+     const expectedRevision=await this.siteVersion(id),review=await websiteSiteLifecycle(this,id,{action:'archive',expectedRevision});
+     await websiteSiteLifecycle(this,id,{action:'archive',expectedRevision,reviewId:review.reviewId},true);
+    }catch{/* The original failure is the one the author needs to see. */}
+    throw error;
+   }
+  }
   css??=html==null?starterStyles:'';
   html??=starterPage({title:name,stylesheet:'style.css',language},escapeWebsiteText);
   return this.importFiles(id,{name,files:new Map([['index.html',html],['style.css',css]]),signal});
