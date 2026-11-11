@@ -40,7 +40,7 @@ function fixture(context){
  const project={id:projectId,title:'Project <authored> & 105₆',description:'Original',kind:'Beekeeping',tools:[],parentId:null};
  const book={id:bookId,projectId,title:'Book <authored> & 105₆',configuration:emptyConfiguration()};
  const state={book:{id:'00000000-0000-4000-8000-000000000003',title:'Workspace',projects:[project],notebooks:[book],entries:[]},storage:{contextId:'context'},dashboardSettings:settings};
- const elements={title:{value:project.title},description:{value:project.description},parentId:{value:''},customKind:{value:''},projectId:{value:projectId},publication:{checked:true}};
+ const elements={title:{value:project.title},description:{value:project.description},parentId:{value:''},customKind:{value:''},projectId:{value:projectId},publication:{checked:true},pdfPublication:{checked:false}};
  const form={id:'structure-project-form',elements,querySelector:selector=>selector==='.project-config-scroll'?{scrollTop:0}:null,removeAttribute(){},reportValidity:()=>true};
  const dialog={querySelector:()=>({focus(){},scrollTop:0}),close(){}};
  globalThis.document={querySelector:selector=>selector==='#dialog'?dialog:form,activeElement:null};

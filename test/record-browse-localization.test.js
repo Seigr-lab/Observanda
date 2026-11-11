@@ -21,7 +21,7 @@ test('record filters translate labels while retaining query values and custom do
   assert.ok(html.includes(esc(t('applicationTexts','browseHelp'))));
   assert.ok(html.includes(esc(t('recordValues','status_draft'))));
   assert.ok(html.includes('value="date-asc" selected'));assert.ok(html.includes('value="estimated" selected'));
-  assert.ok(html.includes('value="2026-01-01"'));assert.ok(html.includes('value="My &lt;tag&gt;"'));
+  assert.ok(html.includes('value="2026-01-01"'));assert.ok(html.includes('data-record-browse="tags"')&&html.includes('>My &lt;tag&gt;</textarea>'));
   assert.ok(html.includes(esc(labBookProfileLabel('beekeeping'))));
   assert.equal(recordDomainChoices(['custom-id']).at(-1).label,'custom-id');
   assert.deepEqual(state,original);
