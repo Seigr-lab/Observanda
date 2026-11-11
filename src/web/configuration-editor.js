@@ -90,7 +90,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  function profileView(){
   if(profileId)return '';
   const available=enabledLabBookTypes(state.dashboardSettings);
-  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(text('profileVersion',{name:labBookProfileLabel(row.key),version:row.value.version}))+'</label>'+upgradeView(row)).join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
+  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(labBookProfileLabel(row.key))+'</label>'+upgradeView(row)).join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
  }
  function definitionView(){
   if(!definition)return '<p>'+esc(text('selectField'))+'</p>';
