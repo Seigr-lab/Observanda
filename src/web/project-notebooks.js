@@ -57,7 +57,10 @@ export function projectNotebooksUI(services){
  }
  function templatePicker(){
   const settings=state.dashboardSettings,template=state.book.projects.find(p=>p.id===editing.projectId)?.labBookTemplate;
-  const profiles=enabledLabBookTypes(settings),saved=(native()?state.book.projects.filter(p=>available(p.labBookTemplate)).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title,template:p.labBookTemplate})):templateChoices(state.book,settings)).filter(p=>p.id!==editing.projectId||templateChoice==='project:'+p.id);
+  const local=native()?state.book.projects.filter(p=>available(p.labBookTemplate)).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title,template:p.labBookTemplate})):templateChoices(state.book,settings);
+  // Templates saved in other projects, each with its own store, come from the project directory.
+  const remote=native()?(services.projectDirectory?.entries()??[]).filter(entry=>entry.summary?.templateName&&!local.some(p=>p.id===entry.projectId)).map(entry=>({id:entry.projectId,label:entry.summary.templateName+' / '+entry.summary.title})):[];
+  const profiles=enabledLabBookTypes(settings),saved=[...local,...remote].filter(p=>p.id!==editing.projectId||templateChoice==='project:'+p.id);
   return field(msg('labBookTemplate'),`<select data-notebook-template ${templateLoading||templateError?'disabled':''}>
    ${available(template)?option('default',msg('projectDefault',{name:template.name}),templateChoice):''}
    ${option('blank',msg('blankBook'),templateChoice)}
@@ -212,7 +215,15 @@ export function projectNotebooksUI(services){
     if(creating){
      let source=null;
      if(templateChoice.startsWith('profile:'))source={profileId:templateChoice.slice(8)};
-     else if(templateChoice==='default'||templateChoice.startsWith('project:')){const projectId=templateChoice==='default'?value.projectId:templateChoice.slice(8);const result=await sourceReader.open({workspaceId:state.book.id,projectId,notebookId:null,slot:'labBookTemplate'},{saved:true});source=result.configurationPin;}
+     else if(templateChoice==='default'||templateChoice.startsWith('project:')){
+      const projectId=templateChoice==='default'?value.projectId:templateChoice.slice(8);
+      if(templateChoice==='default'||state.book.projects.some(project=>project.id===projectId)){const result=await sourceReader.open({workspaceId:state.book.id,projectId,notebookId:null,slot:'labBookTemplate'},{saved:true});source=result.configurationPin;}
+      else{
+       // Another project's template is read from that project's own store, unlocking it when needed.
+       const response=await services.accessProject(()=>api('/api/projects/'+projectId+'/workspace/read/start',{}, {adopt:false}));
+       const result=await services.accessProject(()=>sourceReader.open({workspaceId:response.metadata.id,projectId,notebookId:null,slot:'labBookTemplate'},{owner:projectId,saved:true}));source=result.configurationPin;
+      }
+     }
      selectedConfiguration={configurationSource:source};
     }else selectedConfiguration=await configuration.checkpoint();
    }
