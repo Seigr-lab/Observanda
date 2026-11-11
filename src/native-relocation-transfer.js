@@ -61,7 +61,10 @@ export class NativeRelocationTransfer{
    await persistRename(scope.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
   }
   if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
-  const ownerRelative=async relative=>{for(let prefix=path.posix.dirname(relative);prefix!=='.';prefix=path.posix.dirname(prefix))if(await this.owners.get(prefix))return relative.slice(prefix.length+1);return relative;};
+  // The owner journal is fixed during retirement; look each folder up once
+  // instead of once for every file beneath it.
+  const owned=new Map(),isOwner=prefix=>{if(!owned.has(prefix))owned.set(prefix,this.owners.get(prefix).then(Boolean));return owned.get(prefix);};
+  const ownerRelative=async relative=>{for(let prefix=path.posix.dirname(relative);prefix!=='.';prefix=path.posix.dirname(prefix))if(await isOwner(prefix))return relative.slice(prefix.length+1);return relative;};
   const removed=retirementCheck(()=>this.check(root));await this.command.registry.workspace.withCatalogueConnections(()=>removeRetiredProject({...scope,sourceDirectory:root.identity},{ownerRelative,verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check(root));await this.checkpoint('retire:'+stage,value,...args);}}));await this.checkpoint('source-removed',value);
  }
 }
