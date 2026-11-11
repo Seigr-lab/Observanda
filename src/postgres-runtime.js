@@ -190,6 +190,11 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
  const releaseCapacity=()=>{if(mayBeRunning)reservation?.uncertainExit();else{reservation?.release();if(verifiedCluster)budget.stopped(directory);}};
  const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await files.write(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
  const ctl=(args,options={})=>{const run=()=>guard.run(executable(config.bin,'pg_ctl'),['-D',data,...args],options);return args.includes('start')?diagnosticPhase('runtime-start',run):args.includes('status')?diagnosticPhase('runtime-status',run):run();};
+ // pg_ctl reports a failed stop when the server exited first, for example when
+ // its previous owner was terminated during the request. Only a server that
+ // pg_ctl still finds running (status exit 3 means stopped) is a failure.
+ const serverStopped=async()=>{try{await ctl(['status']);return false;}catch(status){if(status.exitCode===3)return true;throw status;}};
+ const stopServer=async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);}catch(error){if(error.code!=='DATABASE_INSTALL'||!await serverStopped().catch(()=>false))throw error;}};
  try{
   if(!stopOnly){reservation=budget.reserve('database',databaseMemoryReservation(sharedBuffers),{key:directory});mayBeRunning=reservation.uncertain;}
   if(workspace){
@@ -240,7 +245,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   // The deletion owner has already closed its managed instance. A live PID
   // seen by a newly acquired Windows guard could belong to another cluster.
   if(running&&windows&&stopOnly&&workspace?.deleteId)throw new AppError('DATABASE_RUNNING');
-  if(running){await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;}
+  if(running){await stopServer();mayBeRunning=false;}
   if(stopOnly){
    if(mayBeRunning&&statusExit===3&&workspace?.deleteId&&(await localStopWitness({guard,config,workspace,data,verify:true}))?.stopped)mayBeRunning=false;
    if(mayBeRunning)throw new AppError('DATABASE_RUNNING');budget.stopped(directory);config.running=false;await save();let closing;
@@ -276,10 +281,10 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
   const retireStorage=registerRuntimeStorage(env,directory);let closing;
-  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{retireStorage();try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
+  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{retireStorage();try{await stopServer();mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
  }catch(error){
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
-  if(verifiedCluster&&!stopOnly)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
+  if(verifiedCluster&&!stopOnly)await stopServer().then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
   try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);}
   if(error instanceof AppError)throw error;
   throw new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_RUNTIME');
