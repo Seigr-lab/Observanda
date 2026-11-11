@@ -27,5 +27,18 @@
  "types.number":"Number",
  "types.date":"Date",
  "types.boolean":"Yes / no",
- "types.select":"Choice"
+ "types.select":"Choice",
+ "textFormat":"Exact format",
+ "formats.free":"Free text",
+ "formats.identifier":"Identifier, kept exactly",
+ "formats.uri":"Address (URI)",
+ "formats.md5":"MD5 digest",
+ "formats.sha-1":"SHA-1 digest",
+ "formats.sha-256":"SHA-256 digest",
+ "formats.sha-384":"SHA-384 digest",
+ "formats.sha-512":"SHA-512 digest",
+ "formats.sha3-256":"SHA3-256 digest",
+ "formats.sha3-512":"SHA3-512 digest",
+ "formats.blake2b-512":"BLAKE2b-512 digest",
+ "formats.blake3":"BLAKE3 digest"
 }

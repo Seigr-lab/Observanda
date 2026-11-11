@@ -36,7 +36,7 @@ export async function configurationSourceRow(document,collection,path,position,c
  if(collection==='choices'){const node=await document.tree.node(source);if(node.type!=='inline')invalid();value=node.value;if(!validConfigurationChoice(value,{draft}))invalid();key=value;}
  else{
   const child=collection==='sections'?'fields':collection==='fields'?'choices':null;
-  value=await configurationObjectHeader(document,path,child?[child]:[],{signal,allowed:collection==='profiles'?['id','version','enabled']:collection==='sections'?['id','profileId','key','label','description','enabled']:['key','label','type','unit','required','numeric']});
+  value=await configurationObjectHeader(document,path,child?[child]:[],{signal,allowed:collection==='profiles'?['id','version','enabled']:collection==='sections'?['id','profileId','key','label','description','enabled']:['key','label','type','unit','required','numeric','format']});
   if(!(collection==='profiles'?validConfigurationProfile(value):collection==='sections'?validConfigurationSection(value,{draft}):validConfigurationField(value,{draft})))invalid();
   key=collection==='fields'?value.key:value.id;
   if(child)counts={[child]:await document.tree.arrayLength(document.root,[...path,child])};

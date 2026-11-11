@@ -1,5 +1,6 @@
 import {exactRational} from './measurement-model.js';
 import {NUMBER_REPRESENTATIONS,numeralUsesRadix,validNumeralContext} from './numeral-context.js';
+import {validTextFieldFormat} from './custom-field-formats.js';
 
 // An omitted context is the historical decimal interpretation. Context belongs
 // to each saved field definition, never to a workspace-wide display preference.
@@ -27,6 +28,11 @@ export function setCustomFieldProperty(field,key,value){
   if(!['text','number','boolean','date','select'].includes(value))return false;
   field.type=value;
   if(value==='number')field.numeric={...fieldNumberContext(field)};else delete field.numeric;
+  if(value!=='text')delete field.format;
+ }else if(key==='format'){
+  // An empty choice means free text; only text fields carry an exact format.
+  if(field.type!=='text'||value!==''&&!validTextFieldFormat(value))return false;
+  if(value)field.format=value;else delete field.format;
  }else if(['label','unit','required','choices'].includes(key))field[key]=value;
  else return false;
  return true;

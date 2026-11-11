@@ -1,4 +1,5 @@
 import {fieldNumberControls} from '../custom-field-number-controls.js';
+import {fieldTextFormatControls} from '../custom-field-format-controls.js';
 import {setCustomFieldProperty} from '../custom-field-numbers.js';
 import {customFieldText as tr,templateText} from '../custom-field-presentation.js';
 import {storedChoices} from './profile-text.js';
@@ -19,6 +20,7 @@ export function sectionDetails(s,i,c){
     <div class="lab-field-actions"><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="required" ${f.required?'checked':''}>${esc(tr('required'))}</label>${button(tr('remove'),'field-remove',`data-index="${i}" data-field="${j}" aria-label="${esc(tr('removeField',{label:templateText(f.label)}))}"`,'subtle')}</div>
    </div>
    ${fieldNumberControls(f,c,key=>`${attr} data-lab-field="${j}" data-lab-field-prop="${key}"`)}
+   ${fieldTextFormatControls(f,c,key=>`${attr} data-lab-field="${j}" data-lab-field-prop="${key}"`)}
    ${f.type==='select'?field(tr('choices'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="choices" rows="2">${esc(f.choices.map(templateText).join('\n'))}</textarea>`):''}
   </div>`).join('')||'<p class="muted">'+esc(tr('empty'))+'</p>'}</div>
  </div>`;

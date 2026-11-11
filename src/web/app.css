@@ -268,3 +268,5 @@ dialog:has(#edition-selection) .button{white-space:normal}
 
 .module-save:has(>.notice[data-notice-docked]),.section-save:has(>.notice[data-notice-docked]),.lab-type-settings>footer:has(>.notice[data-notice-docked]),.dialog-actions:has(>.notice[data-notice-docked]){flex-wrap:wrap}
 .notice[data-notice-docked]{position:static;inset:auto;transform:none;display:flex;flex-direction:column;flex-wrap:nowrap;gap:.4rem;flex:1 0 100%;width:100%;max-width:100%;min-height:0;margin-top:.75rem;box-shadow:none;overflow-wrap:anywhere}.notice[data-notice-docked] .notice-message{min-height:0;overflow:auto}.notice[data-notice-docked] button{flex:none;align-self:flex-start;margin-left:0;white-space:nowrap}
+/* Exact identifiers and digests read character by character. */
+input.exact-text{font-family:ui-monospace,monospace;font-size:.9rem;letter-spacing:0}

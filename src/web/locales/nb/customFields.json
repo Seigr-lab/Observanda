@@ -27,5 +27,18 @@
   "types.number": "Tall",
   "types.date": "Dato",
   "types.boolean": "Ja / nei",
-  "types.select": "Valg"
+  "types.select": "Valg",
+ "textFormat":"Eksakt format",
+ "formats.free":"Fritekst",
+ "formats.identifier":"Identifikator, lagret nøyaktig",
+ "formats.uri":"Adresse (URI)",
+ "formats.md5":"MD5-sjekksum",
+ "formats.sha-1":"SHA-1-sjekksum",
+ "formats.sha-256":"SHA-256-sjekksum",
+ "formats.sha-384":"SHA-384-sjekksum",
+ "formats.sha-512":"SHA-512-sjekksum",
+ "formats.sha3-256":"SHA3-256-sjekksum",
+ "formats.sha3-512":"SHA3-512-sjekksum",
+ "formats.blake2b-512":"BLAKE2b-512-sjekksum",
+ "formats.blake3":"BLAKE3-sjekksum"
 }

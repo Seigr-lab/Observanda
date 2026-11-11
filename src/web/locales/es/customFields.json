@@ -27,5 +27,18 @@
   "types.number": "Número",
   "types.date": "Fecha",
   "types.boolean": "Sí / no",
-  "types.select": "Opción"
+  "types.select": "Opción",
+ "textFormat":"Formato exacto",
+ "formats.free":"Texto libre",
+ "formats.identifier":"Identificador, conservado exactamente",
+ "formats.uri":"Dirección (URI)",
+ "formats.md5":"Resumen MD5",
+ "formats.sha-1":"Resumen SHA-1",
+ "formats.sha-256":"Resumen SHA-256",
+ "formats.sha-384":"Resumen SHA-384",
+ "formats.sha-512":"Resumen SHA-512",
+ "formats.sha3-256":"Resumen SHA3-256",
+ "formats.sha3-512":"Resumen SHA3-512",
+ "formats.blake2b-512":"Resumen BLAKE2b-512",
+ "formats.blake3":"Resumen BLAKE3"
 }

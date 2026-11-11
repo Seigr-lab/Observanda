@@ -160,7 +160,8 @@ export class ConfigurationDocuments{
     else{
      if(!operation.value||typeof operation.value!=='object'||Array.isArray(operation.value)||Object.keys(operation.value).some(name=>['fields','choices'].includes(name)))invalid();
      const value={...row.value,...operation.value};
-     if(operation.remove!==undefined){if(collection!=='fields'||!Array.isArray(operation.remove)||operation.remove.length!==1||operation.remove[0]!=='numeric'||Object.hasOwn(operation.value,'numeric'))invalid();delete value.numeric;}
+     // A field's interpretation properties are optional and removed when its type changes.
+     if(operation.remove!==undefined){if(collection!=='fields'||!Array.isArray(operation.remove)||!operation.remove.length||new Set(operation.remove).size!==operation.remove.length||operation.remove.some(name=>!['numeric','format'].includes(name)||Object.hasOwn(operation.value,name)))invalid();for(const name of operation.remove)delete value[name];}
      if(collection!=='fields'&&value.id!==row.value.id)invalid();
      if(!(collection==='profiles'?validConfigurationProfile(value):collection==='sections'?validConfigurationSection(value,{draft}):validConfigurationField(value,{draft})))invalid();
      if(collection==='sections'&&value.profileId!==null&&!await current.index.get({collection:'profiles',key:value.profileId},{signal}))invalid();
