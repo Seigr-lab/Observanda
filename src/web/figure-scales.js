@@ -39,13 +39,22 @@ export function figureTicks({min,max},log,count=5){
   for(let n=Math.ceil(Math.log10(min));n<=Math.floor(Math.log10(max));n++){
    const value=10**n;if(value>=min&&value<=max&&value!==values.at(-1))values.push(value);
   }
-  return values.length>1?values.filter((_,i)=>i%Math.max(1,Math.ceil(values.length/count))===0):[min,max];
+  if(values.length>2)return values.filter((_,i)=>i%Math.max(1,Math.ceil(values.length/count))===0);
+  // Spans of about a decade or less: label 1, 2 and 5 multiples, then plain
+  // steps inside the span, before falling back to the two bounds.
+  const mantissas=[1,2,5],within=[];
+  for(let n=Math.floor(Math.log10(min));n<=Math.ceil(Math.log10(max));n++)for(const m of mantissas){const value=Number((m+'e'+n));if(value>=min&&value<=max)within.push(value);}
+  if(within.length>=2&&within.length<=Math.max(3,count+1))return within;
+  if(within.length>count+1)return values.length>1?values:within.filter((_,i)=>i%Math.ceil(within.length/count)===0);
+  const linear=figureTicks({min,max},false,count).filter(value=>value>0);
+  return linear.length>1?linear:[min,max];
  }
  const rough=(max-min)/Math.max(2,count),power=10**Math.floor(Math.log10(rough)),scaled=rough/power;
  const step=(scaled<=1?1:scaled<=2?2:scaled<=5?5:10)*power;
- const values=[],first=Math.ceil(min/step);
+ const values=[],first=Math.ceil(min/step),places=Math.max(0,-Math.floor(Math.log10(step))+1);
  for(let i=0;i<40;i++){
-  const n=(first+i)*step;if(n>max)break;
+  // Multiply, then drop binary noise below the step (17×0.2 is 3.4, not 3.4000000000000004).
+  const raw=(first+i)*step,n=places<=100?Number(raw.toFixed(places)):raw;if(n>max)break;
   if(n>=min&&n!==values.at(-1))values.push(n);
  }
  return values.length>1?values:[min,max];
