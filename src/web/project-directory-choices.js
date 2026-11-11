@@ -1,4 +1,4 @@
-import {localizedText} from './i18n/index.js';
+import {localizedText,language} from './i18n/index.js';
 const text=localizedText('projectChoices');
 export function projectDirectoryChoices({state,api,esc,changed}){
  let generation=0,context=null,exclude=null;const pages=new Map(),known=new Map();
@@ -7,7 +7,7 @@ export function projectDirectoryChoices({state,api,esc,changed}){
  async function load(kind,{more=false,retry=true}={}){
   const value=page(kind),epoch=generation,request=++value.request;value.loading=true;value.error='';changed(kind);
   try{
-   const result=await api('/api/projects/choices',{kind,exclude,query:value.query,offset:more?value.items.length:0,limit:25,revision:more?value.revision:null},{adopt:false});
+   const result=await api('/api/projects/choices',{kind,exclude,query:value.query,offset:more?value.items.length:0,limit:25,revision:more?value.revision:null,locale:language()},{adopt:false});
    if(!current(epoch,value,request))return;
    value.items=more?[...value.items,...result.projects]:result.projects;for(const entry of value.items)known.set(entry.projectId,entry);value.total=result.total;value.revision=result.revision;value.loaded=true;
   }catch(error){if(!current(epoch,value,request))return;if(error.code==='CONFLICT'&&more&&retry){value.loading=false;return load(kind,{retry:false});}value.error=error.message??text('failed');}

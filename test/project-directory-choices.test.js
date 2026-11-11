@@ -17,7 +17,7 @@ function indexedRegistry(projects,{revision='first',onRead=()=>{},stats={}}={}){
  return {read(){assert.fail('Whole registry read');},directory(){assert.fail('Whole directory read');},inspect:async(use,{legacy=false}={})=>{
   onRead();return use({revision,legacy:legacy?inline:[],get:async id=>byId.has(id)?{state:'active',entry:byId.get(id)}:null,
    async page({index='label',offset=0,limit=50,prefix=''}){stats.pages=(stats.pages??0)+1;const all=entries(index).filter(row=>row.key.startsWith(prefix));return {items:all.slice(offset,offset+limit),total:all.length,next:null};},
-   async *entries({index}){for(const row of entries(index)){stats.streamed=(stats.streamed??0)+1;yield row;}},
+   async *entries({index,prefix=''}){for(const row of entries(index).filter(row=>row.key.startsWith(prefix))){stats.streamed=(stats.streamed??0)+1;yield row;}},
    async ancestors(id){stats.ancestors=(stats.ancestors??0)+1;const result=[],seen=new Set();for(let entry=byId.get(id);entry;entry=byId.get(entry.parentId)){if(seen.has(entry.projectId))throw {code:'FORMAT'};seen.add(entry.projectId);result.push(entry);}if(!result.length)throw {code:'NOT_FOUND'};return result;}
   });
  }};
@@ -77,4 +77,18 @@ test('nested listing counts only registered direct children and binds the comple
  await assert.rejects(projectDirectoryPage(registry,{offset:0,limit:10,revision:'changed',parentId:parent.projectId}),{code:'CONFLICT'});
  const choices=await query(registry,request({kind:'record-parents'}));assert.equal(choices.total,4);assert.equal(choices.projects.find(entry=>entry.projectId===root.projectId).legacy,true);
  const bookParents=await query(registry,request({kind:'book-parents'}));assert.equal(bookParents.total,3);assert.equal(bookParents.projects.some(entry=>entry.projectId===root.projectId),false);
+});
+
+// Record destinations show their project path, so the whole list and every page follow path order in
+// the interface language, even where a subproject's own title sorts before its parent's.
+test('record destinations are ordered by project path in the interface language across pages',async()=>{
+ const nature=row('Nature Archive'),moss=row('Moss'),projects=[nature,row('EP One',nature.projectId),row('Field Lab'),moss,row('Aardvark',moss.projectId),row('Ålesund'),row('Zebra')];
+ const registry=indexedRegistry(projects),stats={};
+ const titles=async(locale,input={})=>{const all=[];for(let offset=0;;offset+=2){const page=await query(registry,request({kind:'record-parents',locale,limit:2,offset,...input}));all.push(...page.projects.map(p=>[...p.ancestors,p.summary.title].join(' / ')));if(offset+2>=page.total)return all;}};
+ assert.deepEqual(await titles('en'),['Ålesund','Field Lab','Moss','Moss / Aardvark','Nature Archive','Nature Archive / EP One','Zebra']);
+ // Norwegian places Å after Z.
+ assert.deepEqual(await titles('nb'),['Field Lab','Moss','Moss / Aardvark','Nature Archive','Nature Archive / EP One','Zebra','Ålesund']);
+ assert.deepEqual(await titles('en',{query:'moss'}),['Moss','Moss / Aardvark']);
+ assert.deepEqual((await query(indexedRegistry(projects,{stats}),request({kind:'record-parents',locale:'en'}))).projects.length,7);assert.equal(stats.pages,undefined);
+ await assert.rejects(query(registry,request({kind:'record-parents',locale:'xx'})),{code:'INVALID'});
 });
