@@ -2,7 +2,7 @@
   "title": "Connexió amb GitHub",
   "loading": "S'estan comprovant les connexions amb GitHub d'aquest ordinador…",
   "description": "Inicia la sessió a GitHub amb un codi d'un sol ús. GitHub identificarà l'ajudant d'autorització com a Git Credential Manager.",
-  "privacy": "Les credencials estan protegides pel magatzem de credencials d'aquest ordinador. Només s'utilitzen per connectar amb GitHub i no s'inclouen a les còpies dels espais de treball ni als llocs web publicats.",
+  "privacy": "Les credencials estan protegides pel magatzem de credencials d'aquest ordinador. Només s'utilitzen per connectar amb GitHub, mai no s'envien a Seigr Lab, el desenvolupador d'Observanda, i no s'inclouen a les còpies dels espais de treball ni als llocs web publicats.",
   "permissions": "Git Credential Manager sol·licita accés a repositoris, fluxos de treball i gists. Pot ser que la teva organització requereixi una aprovació abans de tenir disponibles els seus repositoris.",
   "signIn": "Inicia la sessió amb GitHub",
   "another": "Inicia la sessió amb un altre compte",
