@@ -11,7 +11,7 @@ import {websiteFeedOccurrences} from './website-dynamic-feeds.js';
 import {siteHasPendingSources} from './website-feed-fence.js';
 import {feedUsageWindow,checkFeedUsageRoot} from './website-feed-usage-index.js';
 import {researchId} from './web/research-reference.js';
-import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode,recordPartGroups,recordPresentation,validRecordPresentation} from './website-entry-display.js';
+import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode,recordPartGroups,recordPresentation,validRecordPresentation,cardCoverChoices,cardHasDate} from './website-entry-display.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const owner=node=>attr(node,'data-observanda-source');
@@ -169,23 +169,27 @@ export function placementPresentationOptions(store,id,options){
   const current=choices.get(previous?.choice),unavailable=Boolean(previous&&previous.choice!=='title'&&(!current||previous.presentation==='card'&&!current.text));
   await requireSource(store,source.id,source.revision);await store.current(id,manifest.revision);
   const record={groups:recordPartGroups(html),...(previous?{hidden:[],layout:'article'}:recordPresentation(node))};
-  return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,record,revision:manifest.revision,sourceRevision:source.revision};
+  const card={covers:cardCoverChoices(choices),date:cardHasDate(choices),cover:previous?.presentation==='card'&&choices.card.covers.has(previous.cover)?previous.cover:null,showDate:previous?.presentation==='card'&&previous.date===true};
+  return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,record,card,revision:manifest.revision,sourceRevision:source.revision};
  },{signal});
 }
 export function setPlacementPresentation(store,id,options){
- const {presentation,choice=presentation==='card'?'title':null,hidden=[],layout='article',signal}=options;
+ const {presentation,choice=presentation==='card'?'title':null,hidden=[],layout='article',cover=null,date=false,signal}=options;
+ if(cover!==null&&(presentation!=='card'||typeof cover!=='string')||typeof date!=='boolean'||date&&presentation!=='card')throw new AppError('INVALID');
  if(!['full','card','section'].includes(presentation)||presentation==='full'&&choice!==null)throw new AppError('INVALID');
  if(!validRecordPresentation({hidden,layout})||presentation!=='full'&&(hidden.length||layout!=='article'))throw new AppError('INVALID');
  return store.scope(async()=>{
   const {manifest,page,source,node,slot,previous,html,original}=await selectedDisplay(store,id,options);
   const shown=previous?{hidden:[],layout:'article'}:recordPresentation(node),wanted={hidden:[...new Set(hidden)].sort(),layout};
   const groups=recordPartGroups(html);if(groups.length&&groups.every(group=>wanted.hidden.includes(group)))throw new AppError('INVALID');
-  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null)&&(presentation!=='full'||JSON.stringify(shown)===JSON.stringify(wanted)))return store.present(manifest,page.path,{signal});
+  const covers=presentation==='card'&&(cover!==null||date)?entryDisplayChoices(html).card:null;
+  if(cover!==null&&!covers.covers.has(cover)||date&&!covers.date)throw new AppError('NOT_FOUND');
+  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null)&&(presentation!=='full'||JSON.stringify(shown)===JSON.stringify(wanted))&&(presentation!=='card'||(previous?.cover??null)===cover&&(previous?.date===true)===date))return store.present(manifest,page.path,{signal});
   // An unchanged full copy keeps its saved parts; another display starts again
   // from the permitted source.
   const loc=node.sourceCodeLocation,current=!previous&&loc.startTag&&loc.endTag?original.slice(loc.startTag.endOffset,loc.endTag.startOffset):null;
   const record=presentation==='full'&&(wanted.hidden.length||layout!=='article'||!previous)?{...wanted,...(current===null?{}:{current})}:null;
-  const entries={...page.entryDisplays},key=slot??randomUUID(),display=presentation==='full'?null:{id:source.id,slot:key,presentation,choice};
+  const entries={...page.entryDisplays},key=slot??randomUUID(),display=presentation==='full'?null:{id:source.id,slot:key,presentation,choice,...(cover!==null?{cover}:{}),...(date?{date:true}:{})};
   if(display)entries[key]=display;else delete entries[key];
   const output=renderEntryPlacement(node,{id:source.id,revision:source.revision,title:source.title,visible:true,html,choices:display?entryDisplayChoices(html):null,page:page.path,display,requireChoice:true,record});
   const {startOffset,endOffset}=node.sourceCodeLocation;

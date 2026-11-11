@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {parseFragment,serializeOuter} from 'parse5';
 import {AppError} from './errors.js';
-import {attr,descendants} from './website-migration-views.js';
+import {attr,descendants,words} from './website-migration-views.js';
 import {researchId} from './web/research-reference.js';
 import {imageResourceURLs,mapImageCandidates} from './web/website-image-candidates.js';
 
@@ -73,7 +73,34 @@ export function entryDisplayChoices(html){
   }
   for(const child of node.childNodes??[])walk(child);
  }
- walk(parseFragment(html));return entries;
+ const root=parseFragment(html);walk(root);
+ // Card extras travel with the choices: the entry's own photographs that can
+ // be a cover, and its date as the converter wrote it.
+ Object.defineProperty(entries,'card',{value:cardExtras(root)});
+ return entries;
+}
+function cardExtras(root){
+ const covers=new Map();let date=null;
+ for(const node of descendants(root)){
+  if(concealed(node))continue;
+  const key=part(node);
+  if(key?.startsWith('media:')&&researchId(key.slice(6))&&!covers.has(key)){
+   const image=[...descendants(node)].find(child=>child.tagName==='img'&&sourceAsset.test(attr(child,'src')??''));
+   if(image){const caption=[...descendants(node)].find(child=>child.tagName==='figcaption');covers.set(key,{key,image,label:(caption?words(caption):attr(image,'alt')??'').replace(/\s+/gu,' ').trim()});}
+  }
+  if(key==='metadata'&&!date)date=(node.childNodes??[]).find(child=>child.tagName==='time'&&attr(child,'datetime')||child.tagName==='span'&&attr(child,'class')==='record-date')??null;
+ }
+ return {covers,date};
+}
+export const cardCoverChoices=choices=>[...(choices?.card?.covers.values()??[])].map(({key,label})=>({key,label:label.slice(0,120)}));
+export const cardHasDate=choices=>Boolean(choices?.card?.date);
+function coverHTML(item){
+ const allowed=['src','srcset','width','height','alt'];
+ return '<img class="website-entry-cover" loading="lazy" sizes="auto, (min-width: 40rem) 40rem, 100vw"'+item.image.attrs.filter(a=>allowed.includes(a.name)).map(a=>' '+a.name+'="'+escaped(a.value)+'"').join('')+'>';
+}
+function dateHTML(node){
+ const value=node.childNodes.map(child=>child.value??'').join('');
+ return '<p class="website-entry-date">'+(node.tagName==='time'?'<time datetime="'+escaped(attr(node,'datetime'))+'" data-observanda-term="date">':'<span class="record-date" data-observanda-term="date">')+escaped(value)+(node.tagName==='time'?'</time>':'</span>')+'</p>';
 }
 // A full copy keeps the converter's part order. Whole groups of parts can be
 // left out; standalone figures and media are separate from those placed
@@ -165,11 +192,14 @@ export function renderEntryPlacement(node,{id,revision,title,visible,html,choice
  }
  const {slot,presentation,choice}=display;
  if(!researchId(slot)||!['card','section'].includes(presentation)||!(presentation==='card'&&(choice==='title'||fields.has(choice))||sectionKey(choice)||presentation==='section'&&tableKey(choice)))throw new AppError('INVALID');
+ if(display.cover!==undefined&&(presentation!=='card'||typeof display.cover!=='string'||!display.cover.startsWith('media:')||!researchId(display.cover.slice(6)))||display.date!==undefined&&(presentation!=='card'||display.date!==true))throw new AppError('INVALID');
  const item=choices?.get(choice);
  if(requireChoice&&choice!=='title'&&(!item||presentation==='card'&&!item.text))throw new AppError('NOT_FOUND');
  let body='';
  if(visible){
-  body='<h2>'+escaped(title)+'</h2>';
+  // A chosen cover that is no longer permitted simply leaves the card.
+  const cover=display.cover&&choices?.card?.covers.get(display.cover),date=display.date&&choices?.card?.date;
+  body=(cover?sourceFragmentAtPage(coverHTML(cover),page):'')+'<h2>'+escaped(title)+'</h2>'+(date?dateHTML(date):'');
   if(item&&presentation==='section'){
    if(item.kind==='table'&&item.title)body+='<h3>'+escaped(item.title)+'</h3>';
    body+=sourceFragmentAtPage(sectionHTML(item,slot),page);

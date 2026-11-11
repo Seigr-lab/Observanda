@@ -22,6 +22,8 @@ export const entryCSS=`:where(.website-entry-card,.website-entry-section){box-si
 :where(.website-entry-card){padding:var(--card-padding,1.25rem);border:1px solid var(--page-border,currentColor);border-inline-start:.3rem solid var(--accent,currentColor);border-radius:var(--corner-radius,.45rem);background:var(--page-surface,transparent)}
 :where(.website-entry-card>h2,.website-entry-card>h3){margin-block:0 .5em;line-height:1.25}
 :where(.website-entry-card>p){margin-block:.5em 0}
+:where(.website-entry-card>.website-entry-cover){display:block;inline-size:100%;block-size:auto;aspect-ratio:3/2;object-fit:cover;border-radius:calc(var(--corner-radius,.45rem) * .75);margin-block:0 .85rem}
+:where(.website-entry-card>.website-entry-date){margin-block:-.25em .5em;color:var(--page-muted,inherit);font-size:.9em;font-variant-numeric:tabular-nums}
 :where(.website-entry-section){padding-block:.35rem}
 :where(.website-entry-section>h2){margin-block:0 .55em}
 :where(.website-entry-section img,.website-entry-section video){max-inline-size:100%;height:auto}

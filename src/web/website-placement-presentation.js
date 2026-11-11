@@ -70,23 +70,30 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   const partList=add('div',record);partList.className='website-presentation-parts';
   const layout=field('placementLayout','data-presentation-layout',record);
   for(const key of ['article','plain','compact','split'])layout.add(new Option(t('placementLayout_'+key),key));
+  // A card can show one of the entry's own photographs and its date.
+  const card=add('fieldset');card.dataset.presentationCard='';add('legend',card,t('placementCardDetails'));
+  const cover=field('placementCover','data-presentation-cover',card);
+  const dateLabel=add('label',card),dateBox=add('input',dateLabel);dateBox.type='checkbox';dateBox.dataset.presentationDate='';add('span',dateLabel,t('placementShowDate'));
+  dateLabel.className='website-presentation-check';
   const earlier=button(pages,t('prevPage'),()=>load(session.selected,offsets.at(-2)));
   const more=button(pages,t('nextPage'),()=>load(session.selected,session.data.next));
   const status=add('p');status.setAttribute('role','status');
   const footer=add('footer');footer.className='inline-actions';
   const cancel=button(footer,t('cancel'),close),apply=button(footer,t('placementApply'),save);
   apply.dataset.presentationApply='';apply.className='button primary';
-  let offsets=[],items=[],desired='',formatKey='full',busy=false,saving=false,saved=null,groups=[],hidden=new Set(),layoutKey='article';
+  let offsets=[],items=[],desired='',formatKey='full',busy=false,saving=false,saved=null,groups=[],hidden=new Set(),layoutKey='article',covers=[],dated=false,coverKey='',showDate=false;
   const sameParts=()=>saved&&layoutKey===saved.layout&&[...hidden].sort().join()===saved.hidden.join();
+  const sameCard=()=>saved&&coverKey===saved.cover&&showDate===saved.date;
   function controls(){
    const loaded=!!session.data;entry.disabled=busy||!rows.length;
    format.disabled=busy||!loaded;choice.disabled=busy||!loaded;
    content.hidden=formatKey==='full';preview.hidden=!description.textContent;
    record.hidden=formatKey!=='full'||!groups.length;record.disabled=busy||!loaded;
+   card.hidden=formatKey!=='card'||!covers.length&&!dated;card.disabled=busy||!loaded;cover.parentElement.hidden=!covers.length;dateLabel.hidden=!dated;
    pages.hidden=offsets.length<2&&session.data?.next==null;
    earlier.disabled=busy||offsets.length<2;more.disabled=busy||session.data?.next==null;
    prev.disabled=busy||session.selected<pageSize;next.disabled=busy||Math.floor(session.selected/pageSize)*pageSize+pageSize>=rows.length;
-   apply.disabled=busy||!loaded||(formatKey!=='full'&&!desired)||(formatKey===saved?.format&&desired===saved?.choice&&(formatKey!=='full'||sameParts()))||(formatKey==='full'&&groups.length>0&&hidden.size>=groups.length);
+   apply.disabled=busy||!loaded||(formatKey!=='full'&&!desired)||(formatKey===saved?.format&&desired===saved?.choice&&(formatKey!=='full'||sameParts())&&(formatKey!=='card'||sameCard()))||(formatKey==='full'&&groups.length>0&&hidden.size>=groups.length);
    cancel.disabled=saving;
   }
   function showChoices(){
@@ -106,7 +113,9 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
     box.dataset.presentationPart=group;add('span',label,t('placementPart_'+group));
     box.onchange=()=>{if(box.checked)hidden.delete(group);else hidden.add(group);controls();};
    }
-   layout.value=layoutKey;controls();
+   layout.value=layoutKey;
+   cover.replaceChildren(new Option(t('placementNoCover'),''),...covers.map(item=>new Option(item.label||t('placementCoverPhoto'),item.key)));
+   cover.value=covers.some(item=>item.key===coverKey)?coverKey:'';dateBox.checked=showDate;controls();
   }
   function pin(){
    const {sourceId,ordinal,sourceRevision}=rows[session.selected];
@@ -131,7 +140,8 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
     if(reset){
      formatKey=result.presentation;desired=formatKey==='full'||result.unavailable?'':result.choice??(formatKey==='card'?'title':'');
      groups=result.record?.groups??[];hidden=new Set(result.record?.hidden??[]);layoutKey=result.record?.layout??'article';
-     saved={format:formatKey,choice:desired,hidden:[...hidden].sort(),layout:layoutKey};
+     covers=result.card?.covers??[];dated=Boolean(result.card?.date);coverKey=result.card?.cover??'';showDate=Boolean(result.card?.showDate);
+     saved={format:formatKey,choice:desired,hidden:[...hidden].sort(),layout:layoutKey,cover:coverKey,date:showDate};
     }
     status.textContent=result.unavailable?t('placementUnavailable'):'';status.hidden=!status.textContent;busy=false;showChoices();
    }catch(error){fail(error);}
@@ -139,7 +149,7 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   async function save(){
    if(apply.disabled)return;busy=saving=true;controls();
    try{
-    const result=await request('library/present-placement',{...pin(),presentation:formatKey,...(formatKey==='full'?{hidden:[...hidden].filter(group=>groups.includes(group)).sort(),layout:layoutKey}:{choice:desired})});
+    const result=await request('library/present-placement',{...pin(),presentation:formatKey,...(formatKey==='full'?{hidden:[...hidden].filter(group=>groups.includes(group)).sort(),layout:layoutKey}:{choice:desired}),...(formatKey==='card'?{cover:coverKey||null,date:showDate}:{})});
     if(current!==session)return;close();refresh(result);
    }catch(error){fail(error);}
   }
@@ -147,11 +157,13 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   format.onchange=event=>{formatKey=event.target.value;desired=formatKey===saved?.format?saved.choice:formatKey==='card'?'title':'';showChoices();};
   choice.onchange=()=>{desired=choice.value;showChoices();};
   layout.onchange=()=>{layoutKey=layout.value;controls();};
+  cover.onchange=()=>{coverKey=cover.value;controls();};
+  dateBox.onchange=()=>{showDate=dateBox.checked;controls();};
   dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
   dialog.addEventListener('close',()=>{if(current===session)current=null;dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
   document.body.append(dialog);dialog.showModal();
   if(rows.length){await load(initial);if(current===session)entry.focus();}
-  else{entry.parentElement.hidden=format.hidden=content.hidden=record.hidden=navigation.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
+  else{entry.parentElement.hidden=format.hidden=content.hidden=record.hidden=card.hidden=navigation.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
  }
  return {open,close,revalidate};
 }

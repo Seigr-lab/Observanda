@@ -95,7 +95,7 @@ export function localizedRecordPage(html){
   if(inside&&node.tagName){
    const label=attr(node,'data-observanda-label'),[catalogue,key]=label?.split(':')??[];
    if(labelled.has(catalogue)&&key)setText(node,message(catalogue,key));
-   const named=attr(node,'data-observanda-term');if(named)term(node,named);
+   const named=attr(node,'data-observanda-term');if(named==='date')date(node);else if(named)term(node,named);
    // Accessible names of focusable regions, such as a scrolling data table.
    const aria=attr(node,'data-observanda-aria'),[ariaCatalogue,ariaKey]=aria?.split(':')??[];
    if(labelled.has(ariaCatalogue)&&ariaKey)setAttribute(node,'aria-label',message(ariaCatalogue,ariaKey));
