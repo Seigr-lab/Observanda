@@ -52,8 +52,8 @@ export async function* renderApprovedFigureContents(original,recordId,figure,{wr
  const variantAttribute=variants.length?' data-observanda-figure-variants="'+esc(['en ../figures/'+stem+'.svg',...variants].join(' '))+'"':'';
  if(data)await writer.retain('figures/'+stem+'.csv',retainedFigureCSV(reader,{signal}));signal?.throwIfAborted();
  const title=async function*(){for await(const chunk of figureTextChunks(reader,header.title,selection)){signal?.throwIfAborted();yield esc(chunk);}};
- yield '<div class="figure-reading-view"><label class="figure-reading-control"><input type="checkbox"> <span>'+esc(bookText('enlargeFigure'))+'</span></label><p class="figure-reading-hint">'+esc(bookText('panFigure'))+'</p><div class="figure-reading-viewport" role="region" aria-label="'+esc(bookText('figureViewport'))+' ';yield* title();yield '" tabindex="0"><img src="../figures/'+stem+'.svg"'+variantAttribute+' alt="';yield* title();yield '"></div></div><figcaption>';yield* title();yield* resultLinks(reader,header,figure,results,signal);yield '</figcaption>';
- if(data){yield '<details><summary>'+esc(publicationText('viewData'))+'</summary>';yield* retainedFigureTable(reader,{signal});yield '</details>';}
- yield '<a href="../figures/'+stem+'.svg" download>'+esc(publicationText('downloadSvg'))+'</a>';
- if(data)yield ' &middot; <a href="../figures/'+stem+'.csv" download>'+esc(publicationText('downloadCsv'))+'</a>';
+ yield '<div class="figure-reading-view"><label class="figure-reading-control"><input type="checkbox"> <span data-observanda-label="book:enlargeFigure">'+esc(bookText('enlargeFigure'))+'</span></label><p class="figure-reading-hint" data-observanda-label="book:panFigure">'+esc(bookText('panFigure'))+'</p><div class="figure-reading-viewport" role="region" aria-label="'+esc(bookText('figureViewport'))+' ';yield* title();yield '" tabindex="0"><img src="../figures/'+stem+'.svg"'+variantAttribute+' alt="';yield* title();yield '"></div></div><figcaption>';yield* title();yield* resultLinks(reader,header,figure,results,signal);yield '</figcaption>';
+ if(data){yield '<details><summary data-observanda-label="publication:viewData">'+esc(publicationText('viewData'))+'</summary>';yield* retainedFigureTable(reader,{signal});yield '</details>';}
+ yield '<a href="../figures/'+stem+'.svg" download data-observanda-label="publication:downloadSvg">'+esc(publicationText('downloadSvg'))+'</a>';
+ if(data)yield ' &middot; <a href="../figures/'+stem+'.csv" download data-observanda-label="publication:downloadCsv">'+esc(publicationText('downloadCsv'))+'</a>';
 }

@@ -10,6 +10,7 @@ import {figureVariants,figureVariantLanguages,mapFigureVariants} from '../src/we
 import {displayPlacement,sourceFragmentAtPage} from '../src/website-entry-display.js';
 import {feedContentAtPage} from '../src/website-feed-template.js';
 import {localizedRecordPage} from '../src/website-record-language.js';
+import {figureReadingView} from '../src/web/figure-reading-view.js';
 import {parseFragment} from 'parse5';
 
 const hash=n=>String(n).repeat(64).slice(0,64);
@@ -51,6 +52,15 @@ test('placed copies, displays and feeds carry every drawing and the localizer pi
  assert.match(catalan,new RegExp('<img src="../'+files[1][1]+'"'));
  assert.match(localizedRecordPage(catalan.replace('lang="ca"','lang="nn"')),new RegExp('<img src="../'+files[4][1]+'"'));
  assert.match(localizedRecordPage(page('de')),new RegExp('<img src="../'+files[0][1]+'"'));
+});
+
+test('figure reading controls on a placed copy are labelled in the page language',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const es=JSON.parse(await readFile(new URL('../src/web/locales/es/book.json',import.meta.url),'utf8'));
+ const view=figureReadingView('<img src="x.svg" alt="">','Mite load');
+ const page='<!doctype html><html lang="es"><body><main><section data-observanda-source="'+hash('a')+'" data-observanda-source-revision="'+hash('b')+'">'+view+'</section></main></body></html>';
+ const html=localizedRecordPage(page);
+ assert.ok(html.includes('data-observanda-label="book:enlargeFigure">'+es.enlargeFigure+'<'));
 });
 
 test('converting an entry for websites maps every drawing to a public asset, and PDF gets none',async t=>{
