@@ -399,7 +399,11 @@ export class RetainedFigureReader{
     const annotation=await this.tree.read(member.body);let value=annotation,series=[];if(annotation.kind==='callout'){const entry=await this.index.find({root:this.dataIndex.collections.points.series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!entry)fail();const point=await this.member(entry.revision,'points',{slot:'series',key:entry.id});if(point.plotId!==panel.plotId)fail();series=[{id:annotation.seriesId,points:[await this.tree.read(point.body)]}];value={...annotation,pointIndex:0};}if(annotationIssues({...header,series,annotations:[value]},xValue,{retained:true}).length)fail();
    }
   }
-  for await(const block of this.blocks({signal})){if(block.kind==='value'){if(block.node?.type==='member-run')memberRunMembers(block.node);else await this.tree.node(block.revision);}}
+  let runsAdmitted=false;
+  for await(const block of this.blocks({signal})){if(block.kind==='value'){if(block.node?.type==='member-run'){memberRunMembers(block.node);
+   // A catalogue holding member runs records them in its format generation.
+   if(!runsAdmitted&&typeof this.storage.workspace.storageKind==='function'&&await this.storage.workspace.storageKind()==='catalogue'){const {catalogueFormat,catalogueRequiresMemberRuns}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresMemberRuns(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}runsAdmitted=true;
+  }else await this.tree.node(block.revision);}}
   return {...this.document.counts};
  }
  async *blocks(options={}){yield* this.storage.closure([this.document.data.root,this.document.data.index,this.document.presentation.root,this.document.presentation.index],options);}

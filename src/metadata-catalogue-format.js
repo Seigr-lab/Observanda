@@ -1,6 +1,6 @@
 // Capability dispatch is loaded lazily by storage to avoid eager module cycles.
 // Reuse only these predicates and functions; every write checks its own database.
-import {requirePublicationOperations,requireScientificUnitLibrary} from './catalogue-format.js';
+import {requirePublicationOperations,requireScientificUnitLibrary,requireMemberRuns} from './catalogue-format.js';
 import {scientificUnitMetadata} from './scientific-unit-format.js';
 import {publicationOperationMetadataPath,publicationOperationMetadata} from './publication-operation-format.js';
 import {requirePagedResearchTables,requireReferencedCalculations,requireNativeNumericalModels,requireNativeClockModels,requireNativeDomainValues,requireClockDerivations,requireIntervalUncertainty,requireWindowCalculations,requireFigureProjectionPolicies,requireAxisPermutation,requireStatisticalUncertainty,requireMeasurementScalarPolicies,requireDatasetResourcePolicies,requireStructuredCalculator,requireApproximateCalculator,requirePairedStatistics,requireQuantileAggregation,requireWeightedFit,requireCoordinateAlignment,requireSpectralMethods,requireTopologyValues,requireSequenceValues,requireTensorValues,requireNumericalExecution,requireDatasetCusum,requireDatasetSpectra,requireComputedCells,requireCoordinateFrames,requireSegmentedClockSynchronization,requireClockSynchronization,requireDomainAlgebra,requireCalculatorDatasetResults,requireCalculationPolicies,requireReviewFigurePackages} from './catalogue-format.js';
@@ -73,6 +73,7 @@ export async function requireMetadataCatalogueFormat(db,relative,text){
    if(structuredCalculatorMetadata(relative,value)){await requireStructuredCalculator(db);}
    if(calculatorResultMetadata(relative,value)){await requireCalculatorDatasetResults(db);}
    if(datasetResourceMetadata(relative,value)){await requireDatasetResourcePolicies(db);}
+   if(/^\.observanda\/materials\/figures\/value\/[a-f0-9]{64}\.json$/.test(relative)&&value?.type==='member-run'){await requireMemberRuns(db);}
  }}
  if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
    if(checkpointHasStructuredCalculator(JSON.parse(text))){await requireStructuredCalculator(db);}
