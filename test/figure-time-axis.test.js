@@ -51,3 +51,11 @@ test('retained figure drawings step through calendar units with distinct labels'
  const labels=[...svg.matchAll(/2026-03-01 12:00:\d\d UTC/g)].map(m=>m[0]);
  assert.ok(labels.length>=2,svg.slice(0,400));assert.ok(new Set(labels).size>=2);
 });
+
+test('a narrow calendar axis keeps at least two labelled instants',()=>{
+ const a=Date.parse('2025-01-01T00:00:00.000Z'),b=Date.parse('2025-01-03T00:00:00.000Z'),pad=(b-a)*.05;
+ const ticks=figureDateTicks({min:a-pad,max:b+pad},2,'datetime');
+ assert.ok(ticks.length>=2,ticks.join());assert.deepEqual(ticks.slice(0,2).map(value=>figureDateLabel(value,'datetime')),['2025-01-01 00:00 UTC','2025-01-02 00:00 UTC']);
+ // Never finer than the chosen format: a date axis inside one day keeps its single middle value.
+ assert.equal(figureDateTicks({min:a+3600000,max:a+7200000},5,'date').length,1);
+});

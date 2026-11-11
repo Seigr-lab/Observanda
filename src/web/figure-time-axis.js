@@ -18,8 +18,14 @@ export function figureDateTicks(domain,count,format){
    if(value>=domain.min)result.push(value);
   }
  }else{
-  const step=steps.find(step=>step>=interval)??28*day;
-  for(let value=Math.ceil(domain.min/step)*step;value<=domain.max&&result.length<40;value+=step)result.push(value);
+  // A narrow axis must still show two labelled instants: use the next finer
+  // step when the chosen one leaves fewer, never finer than the format allows.
+  const minimum=minimumStep[format]??day;let index=steps.findIndex(step=>step>=interval);if(index<0)index=steps.length-1;
+  for(;;index--){
+   result.length=0;const step=steps[index];
+   for(let value=Math.ceil(domain.min/step)*step;value<=domain.max&&result.length<40;value+=step)result.push(value);
+   if(result.length>=2||index===0||steps[index-1]<minimum)break;
+  }
  }
  return result.length?result:[(domain.min+domain.max)/2];
 }
