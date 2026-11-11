@@ -1004,6 +1004,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
     if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
     if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
+    if(type==='image'){gallery.open(selected);mode='gallery';gallery.action('new-image',element);return;}
+    if(type==='video'){await save();await recordings.open(null);mode='media';render();return;}
     documentChange(doc=>{if(type==='columns'&&!css.includes('.website-columns{')){ensureStyle(doc);css+='\n.website-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}\n';}
     const node=createBlock(doc,type,tr);const at=blockAt(doc,selected);if(movable(at)&&main(doc).contains(at))at.after(node);else main(doc).append(node);});
    }

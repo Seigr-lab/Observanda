@@ -1,4 +1,6 @@
-export const blockTypes=['paragraph','heading','section','columns','quote','table','equationEdit','details','divider','actionLink','gallery'];
+// Image opens the picture tool with a one-picture figure; video opens the
+// recording tool. Both are placed and described in those tools.
+export const blockTypes=['paragraph','heading','section','columns','quote','table','equationEdit','details','divider','actionLink','image','video','gallery'];
 const sectionIdentity=()=>'ow-section-'+crypto.randomUUID();
 
 export function duplicateBlock(node){

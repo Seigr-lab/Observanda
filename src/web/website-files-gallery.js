@@ -78,9 +78,10 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
   const css=getCSS(),next=css+(css.includes(galleryGridCSS)?'':galleryGridCSS)+(css.includes(imageFrameCSS)?'':imageFrameCSS);
   if(next!==css)setCSS(next);
  }
- function create(){
+ function create({single=false}={}){
   const section=doc.createElement('section'),heading=doc.createElement('h2'),node=doc.createElement('div');
-  heading.textContent=t('gallery');node.className='site-gallery gallery-columns-3';section.append(heading,node);
+  // A single image is a one-column picture block without a gallery heading.
+  heading.textContent=t('gallery');node.className='site-gallery gallery-columns-'+(single?1:3);if(single)section.append(node);else section.append(heading,node);
   const target=createTarget?createTarget():doc.querySelector('main:not([hidden])')??doc.body;
   if(!target)throw Error(t('componentSelect'));
   target.append(section);prepareViewer(doc,node,path());index=galleryList(doc).indexOf(node);offset=0;layoutCSS();return node;
@@ -163,6 +164,7 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
    showOriginalImage(el,pending.get(name)?.blob??recoveredPicture(name)??new URL(src,url(path())).href,image.alt,t,'frameUploadNote');return;
   }
   if(op==='new'){checkpoint();create();update(doc);}
+  else if(op==='new-image'){checkpoint();create({single:true});update(doc);}
   else if(op==='prev'||op==='next'){offset=Math.max(0,offset+(op==='prev'?-pageSize:pageSize));}
   else{const items=current(),i=Number(el.dataset.imageIndex),item=items[i];if(!item)return;checkpoint();
    if(op==='remove')item.remove();else if(op==='up')items[i-1]?.before(item);else if(op==='down')items[i+1]?.after(item);

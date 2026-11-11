@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sense imatge de portada",
   "placementCoverPhoto": "Fotografia",
   "placementShowDate": "Mostra la data de l’entrada",
+  "image": "Imatge",
+  "video": "Vídeo o àudio",
   "sectionMargin": "Espai al voltant",
   "sectionOpacity": "Opacitat (de 0 a 1)",
   "sectionShadow": "Ombra",

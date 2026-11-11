@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyVisualStyle,visualStyleFields,writeVisualStyle,generatedAppearanceProperties} from '../src/web/website-files-visual-style.js';
+import {blockTypes} from '../src/web/website-files-blocks.js';
 import en from '../src/web/locales/en/websiteFiles.json' with {type:'json'};
 
 function fakeStyle(){
@@ -21,3 +22,7 @@ test('the block inspector offers space around, opacity and shadow as ordinary de
  assert.match(writeVisualStyle('',('ow-visual-'+'0'.repeat(8)+'-0000-4000-8000-'+'0'.repeat(12)),style),/margin: 24px; opacity: 0\.8; box-shadow: rgba\(0, 0, 0, 0\.16\) 0px 4px 12px 0px;/);
 });
 
+test('the block menu offers an image and a video next to the gallery, each labelled',()=>{
+ for(const key of ['image','video','gallery'])assert.ok(blockTypes.includes(key),key);
+ for(const key of blockTypes)assert.ok(en[key==='heading'?'addHeading':key==='paragraph'?'addText':key],key);
+});

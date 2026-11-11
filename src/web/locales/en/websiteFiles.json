@@ -1024,6 +1024,8 @@
   "placementNoCover": "No cover image",
   "placementCoverPhoto": "Photograph",
   "placementShowDate": "Show the entry's date",
+  "image": "Image",
+  "video": "Video or audio",
   "sectionMargin": "Space around",
   "sectionOpacity": "Opacity (0 to 1)",
   "sectionShadow": "Shadow",

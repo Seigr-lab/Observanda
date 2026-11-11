@@ -1024,6 +1024,8 @@
   "placementNoCover": "Sin imagen de portada",
   "placementCoverPhoto": "Fotografía",
   "placementShowDate": "Mostrar la fecha de la entrada",
+  "image": "Imagen",
+  "video": "Vídeo o audio",
   "sectionMargin": "Espacio alrededor",
   "sectionOpacity": "Opacidad (de 0 a 1)",
   "sectionShadow": "Sombra",
