@@ -104,3 +104,9 @@ test('clinical version 2 verifies methods and quality control and never publishe
  for(const [section,key] of [['requests','participant'],['requests','consent'],['reports','communicated-to']])assert.equal(field(section,key).private,true,section+'/'+key);
  assert.equal(field('quality','observed').uncertainty,'absolute');assert.equal(profile.introduced.sections.eqa,2);
 });
+
+test('computer and IT version 2 pins environments and data by digest and tracks operated systems',()=>{
+ const profile=tracks('computer-it',{subjects:['systems','datasets'],primary:'runs',events:['environments','runs','findings','change'],formats:{'environments/commit':'identifier','environments/image-sha256':'sha-256','environments/lock-sha256':'sha-256','datasets/identifier':'uri','datasets/sha256':'sha-256','runs/output-sha256':'sha-256','systems/hostname':'identifier'}});
+ assert.equal(profile.sections.find(s=>s.key==='runs').fields.find(f=>f.key==='value').uncertainty,'absolute');
+ assert.deepEqual(profile.sections.find(s=>s.key==='environments').fields.slice(0,2).map(f=>f.key),['field1','field2'],'version 1 fields keep their keys');
+});
