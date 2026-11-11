@@ -1026,6 +1026,7 @@
   "placementShowDate": "Mostra la data de l’entrada",
   "sectionOverlayColour": "Color de la capa sobre la imatge",
   "sectionOverlayStrength": "Intensitat de la capa (de 0 a 0,9)",
+  "sectionUploadPicture": "Puja una imatge…",
   "sectionBackgroundPicture": "Imatge de fons",
   "sectionNoPicture": "Sense imatge",
   "sectionPictureNumber": "Imatge {number} ({name})",

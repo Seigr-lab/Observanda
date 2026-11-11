@@ -1026,6 +1026,7 @@
   "placementShowDate": "Vis datoen for oppføringen",
   "sectionOverlayColour": "Farge på laget over bildet",
   "sectionOverlayStrength": "Styrke på laget (0 til 0,9)",
+  "sectionUploadPicture": "Last opp et bilde …",
   "sectionBackgroundPicture": "Bakgrunnsbilde",
   "sectionNoPicture": "Uten bilde",
   "sectionPictureNumber": "Bilde {number} ({name})",

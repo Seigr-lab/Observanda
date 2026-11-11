@@ -1,4 +1,4 @@
-import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, writeVisualStyle} from './website-files-visual-style.js';
+import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, writeVisualStyle, backgroundPictureValue} from './website-files-visual-style.js';
 import {websiteRichText} from './website-files-visual-rich.js';
 import {websiteTableTools} from './website-files-table.js';
 import {responsiveLayout} from './website-files-responsive.js';
@@ -76,7 +76,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css'}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -137,6 +137,22 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     control.dataset.visualProperty=field.name;controls.set(field.name,control);
     const unit=field.unit?' ('+field.unit+')':'';
     const label=labelled(t(field.label)+unit,control);grid.append(label);
+    // A new picture can be added here; it uses the gallery's picture copies.
+    if(field.name==='background-image'&&uploadPicture){
+     const input=make('input'),upload=make('button',t('sectionUploadPicture'));
+     input.type='file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.hidden=true;input.dataset.visualPictureUpload='';
+     upload.type='button';upload.className='button';upload.addEventListener('click',()=>input.click());
+     listen(input,'change',async()=>{
+      const file=input.files?.[0];input.value='';if(!file)return;
+      upload.disabled=true;
+      try{
+       const name=await uploadPicture(file),value=backgroundPictureValue(name,stylesheetPath);
+       if(![...control.options].some(o=>o.value===value))control.append(option(value,t('sectionPictureNumber',{number:control.options.length-1,name:name.slice(9,17)})));
+       control.value=value;touched.add(field.name);apply.disabled=false;
+      }finally{upload.disabled=false;upload.focus();}
+     });
+     label.after(upload,input);
+    }
     if(field.type==='color'){
       const value=make('small');value.id='website-paint-'+field.name;value.setAttribute('aria-hidden','true');control.setAttribute('aria-describedby',value.id);
       label.append(value);paintLabels.set(field.name,value);

@@ -132,7 +132,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
  });
  const recoveredPicture=name=>opened?recovery.restoreURL(name,directory(opened.assetStamp)):null;
- const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length)):null;};
+ const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length))??gallery.pendingURL(url.slice(base.length)):null;};
  const gallery=websiteFilesGallery({t:tr,esc,recoveredPicture,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=authoredHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
  const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,request,adopt:adoptRelated,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
  const lifecycle=websiteFilesLifecycle({active:()=>opened,esc,tr,render,request,close:()=>{mode='visual';render();},updated:async value=>{
@@ -764,7 +764,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const draft=sourcePane.accepted();loadWebsiteCanvas(doc,draft.html,draft.css,canvasURL(opened.site.cssPath),recoveredResource);frame.inert=!!busy||stale||sourcePane.pending;gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
-   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,
+   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,uploadPicture:file=>gallery.addPicture(file),
     menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
    getWidth:viewport.width,previewWidth:viewport.previewWidth,getRanges:()=>opened.site.breakpoints??defaultBreakpoints(),manageRanges:()=>void run(manageBreakpoints).catch(()=>{}),
    beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:canvasURL(opened.site.cssPath),getViewport:viewport.breakpoint,onSelect:item=>{

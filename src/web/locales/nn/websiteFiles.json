@@ -1026,6 +1026,7 @@
   "placementShowDate": "Vis datoen for oppføringa",
   "sectionOverlayColour": "Farge på laget over biletet",
   "sectionOverlayStrength": "Styrke på laget (0 til 0,9)",
+  "sectionUploadPicture": "Last opp eit bilete …",
   "sectionBackgroundPicture": "Bakgrunnsbilete",
   "sectionNoPicture": "Utan bilete",
   "sectionPictureNumber": "Bilete {number} ({name})",

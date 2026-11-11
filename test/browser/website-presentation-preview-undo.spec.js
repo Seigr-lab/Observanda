@@ -12,7 +12,7 @@ import {seedWebsitePickerCorpus} from '../helpers/website-picker-corpus.js';
 
 const pixel=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
 test.use({screenshot:'off',trace:'off',video:'off'});
-test('a presentation is previewed live, undone and redone, and a block takes a background picture visually',async({page})=>{
+test('a presentation is previewed live, undone and redone, and a block takes an uploaded background picture with overlay and shadow',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-presentation-undo-')),book=sampleNotebook();
  const database=process.env.OBSERVANDA_DATABASE_URL;book.entries=[];let app,fixture;
@@ -49,10 +49,27 @@ test('a presentation is previewed live, undone and redone, and a block takes a b
   const inspector=page.locator('.website-visual-style');
   await inspector.getByLabel('Background picture').selectOption({label:/^Picture 1/});
   await inspector.getByLabel('Picture size').selectOption('cover');
-  await inspector.getByLabel('Shadow').selectOption({label:'Dark overlay for light text'});
+  // An overlay and a drop shadow together on the same block.
+  await inspector.getByLabel('Overlay colour on the picture').fill('#102030');
+  await inspector.getByLabel('Overlay strength (0 to 0.9)').fill('0.5');
+  await inspector.getByLabel('Shadow').selectOption({label:'Medium'});
   await inspector.getByRole('button',{name:'Apply',exact:true}).click();
-  await expect(canvas.locator('section:has(h2:text("Welcome"))')).toHaveCSS('background-size','cover');
-  expect(await canvas.locator('section:has(h2:text("Welcome"))').evaluate(node=>getComputedStyle(node).backgroundImage)).toContain(picture);
+  const welcome=canvas.locator('section:has(h2:text("Welcome"))');
+  await expect(welcome).toHaveCSS('background-size','cover');
+  const painted=await welcome.evaluate(node=>{const style=getComputedStyle(node);return {image:style.backgroundImage,shadow:style.boxShadow,strength:style.getPropertyValue('--website-overlay-strength').trim()};});
+  expect(painted.image).toContain(picture);expect(painted.image).toContain('linear-gradient');expect(painted.shadow).not.toBe('none');expect(painted.strength).toBe('0.5');
+  // A new picture is uploaded from the inspector and chosen at once.
+  const upload=inspector.locator('input[data-visual-picture-upload]');
+  await upload.setInputFiles({name:'hive.png',mimeType:'image/png',buffer:pixel});
+  await expect(inspector.getByLabel('Background picture')).toHaveValue(/pictures\/[a-f0-9-]{36}\.png/);
+  await inspector.getByRole('button',{name:'Apply',exact:true}).click();
+  await page.getByRole('button',{name:'Save',exact:true}).click();
+  await expect(page.getByText('Saved',{exact:true})).toBeVisible();
+  const saved=await store.open(siteId);expect(saved.css).toMatch(/url\("pictures\/[a-f0-9-]{36}\.png"\)/);
+  const uploaded=/url\("(pictures\/[a-f0-9-]{36}\.png)"\)/.exec(saved.css.split('
+').filter(line=>!line.includes(picture)).join('
+'))?.[1];
+  expect(uploaded).toBeTruthy();expect((await store.scope(()=>store.raw(siteId))).files.some(file=>file.name===uploaded)).toBe(true);
  }finally{
   try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;}
   if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-presentation-undo-'))throw Error('Unexpected fixture directory');

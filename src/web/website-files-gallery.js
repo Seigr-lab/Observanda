@@ -172,13 +172,26 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
   }
   render();
  }
+ // A picture used only as a background is referenced from the stylesheet.
+ function cssPictures(){return new Set(Array.from((getCSS?.()??'').matchAll(/pictures\/[a-f0-9-]{36}\.png/g),match=>match[0]));}
  function body(data,ownerPath=data.path,document=read(),held=new Set()){
   if(!pending.size)return null;
-  const used=usedPictures(document,ownerPath);
+  const used=new Set([...usedPictures(document,ownerPath),...cssPictures()]);
   const pictures=[...pending.values()].filter(item=>used.has(item.name)&&!held.has(item.name));if(!pictures.length)return null;
   const control=new TextEncoder().encode(JSON.stringify({...data,pictures:pictures.map(({name,blob})=>({name,size:blob.size}))}));
   const size=new DataView(new ArrayBuffer(4));size.setUint32(0,control.length);return new Blob([size,control,...pictures.map(p=>p.blob)]);
  }
  function paint(canvas){for(const image of canvas.querySelectorAll('img[src]')){const src=image.getAttribute('src'),name=publicName(src,path()),preview=pending.get(name)?.preview??recoveredPicture(name);if(preview){image.dataset.observandaEditorImage=src;image.src=preview;if(image.hasAttribute('srcset')){image.dataset.observandaEditorSrcset=image.getAttribute('srcset');image.removeAttribute('srcset');}}}}
- return {open,view,bind,action,input,body,paint,reset,acknowledged,trimHistory,hasPending:name=>pending.has(name)};
+ // The block inspector adds a background picture through the same copies.
+ const objectURLs=new Map();
+ async function addPicture(file){
+  const variants=await displayCopy(file,t);for(const item of variants)pending.set(item.name,item);
+  return variants.at(-1).name;
+ }
+ function pendingURL(name){
+  const item=pending.get(name);if(!item)return null;
+  if(!objectURLs.has(name))objectURLs.set(name,URL.createObjectURL(item.blob));
+  return objectURLs.get(name);
+ }
+ return {open,view,bind,action,input,body,paint,reset,acknowledged,trimHistory,hasPending:name=>pending.has(name),addPicture,pendingURL};
 }
