@@ -4,7 +4,7 @@ import {registerHooks} from 'node:module';
 import {randomUUID} from 'node:crypto';
 import {catalogueContext} from '../src/catalogue-context.js';
 
-const names=['PublicationOperations','PagedResearchTables','ReferencedCalculations','NativeNumericalModels','NativeClockModels','NativeDomainValues','ClockDerivations','IntervalUncertainty','WindowCalculations','FigureProjectionPolicies','AxisPermutation','StatisticalUncertainty','MeasurementScalarPolicies','DatasetResourcePolicies','StructuredCalculator','ApproximateCalculator','PairedStatistics','QuantileAggregation','WeightedFit','CoordinateAlignment','SpectralMethods','TopologyValues','SequenceValues','TensorValues','NumericalExecution','DatasetCusum','DatasetSpectra','ComputedCells','CoordinateFrames','SegmentedClockSynchronization','ClockSynchronization','DomainAlgebra','CalculatorDatasetResults','CalculationPolicies','ReviewFigurePackages'];
+const names=['PublicationOperations','PagedResearchTables','ReferencedCalculations','NativeNumericalModels','NativeClockModels','NativeDomainValues','ClockDerivations','IntervalUncertainty','WindowCalculations','FigureProjectionPolicies','AxisPermutation','StatisticalUncertainty','MeasurementScalarPolicies','DatasetResourcePolicies','StructuredCalculator','ApproximateCalculator','PairedStatistics','QuantileAggregation','WeightedFit','CoordinateAlignment','SpectralMethods','TopologyValues','SequenceValues','TensorValues','NumericalExecution','DatasetCusum','DatasetSpectra','ComputedCells','CoordinateFrames','SegmentedClockSynchronization','ClockSynchronization','DomainAlgebra','CalculatorDatasetResults','CalculationPolicies','ReviewFigurePackages','ScientificUnitLibrary','MemberRuns'];
 const unique=randomUUID(),spy='metadataFormat_'+unique,dispatcherURL=new URL('../src/metadata-catalogue-format.js',import.meta.url).href+'?test='+unique,storageURL=new URL('../src/storage.js',import.meta.url).href+'?metadata-format-test='+unique,formatURL='metadata-format-spy:'+unique;
 let dispatcherResolutions=0;
 globalThis[spy]=(name,db)=>{db.calls.push(name);if(db.reject===name)throw db.failure;};
@@ -53,7 +53,9 @@ test('real metadata predicates preserve every admission family and overlapping r
   [chunk,{kind:'calculation-nodes',items:[{kind:'domain-arithmetic'}]},['ReferencedCalculations','DomainAlgebra']],
   [object,{content:{calculatorResult:{version:2}}},['StructuredCalculator','CalculatorDatasetResults']],
   [draft,{drafts:[{type:'calculation',operation:{values:{engine:4}}}]},['StructuredCalculator','CalculationPolicies']],
-  ['.observanda/reviews/parts/part.json',{},['ReviewFigurePackages']]
+  ['.observanda/reviews/parts/part.json',{},['ReviewFigurePackages']],
+  ['.observanda/materials/index/unit-definitions/definition.json',{},['ScientificUnitLibrary']],
+  ['.observanda/materials/figures/value/'+'b'.repeat(64)+'.json',{type:'member-run',version:1,collection:'points',members:[]},['MemberRuns']]
  ];
  for(const [relative,value,expected]of cases)await expect(relative,value,expected);
  assert.deepEqual([...admitted].sort(),names.slice().sort());
