@@ -44,3 +44,29 @@ test('a published video carries its captions as tracks on a website and none in 
  const published=output.files.get('media/'+attachment.id+'.ca.vtt');
  assert.match(published,/^WEBVTT/);assert.match(published,/&lt;b&gt;walks&lt;\/b&gt;/);
 });
+
+test('the lab book reader plays a video with its caption tracks from the owner media route',async()=>{
+ const {recordCaptionTracks,recordCaptionURL}=await import('../src/web/record-media-captions.js');
+ const {readableCaptions}=await import('../src/website-recordings.js');
+ const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const recordId=randomUUID(),attachment=video({captions:tracks}),owned=id=>'/api/media/'+id+'?owner=lab-book';
+ assert.equal(recordCaptionURL(owned,attachment.id,'ca',recordId),'/api/media/'+attachment.id+'/captions/ca?owner=lab-book&record='+recordId);
+ const html=recordCaptionTracks(attachment,{recordId,assetUrl:owned,esc});
+ assert.equal(html,'<track kind="captions" src="/api/media/'+attachment.id+'/captions/ca?owner=lab-book&amp;record='+recordId+'" srclang="ca" label="Català" default><track kind="captions" src="/api/media/'+attachment.id+'/captions/en?owner=lab-book&amp;record='+recordId+'" srclang="en" label="English">');
+ assert.equal(recordCaptionTracks({...attachment,kind:'audio'},{recordId,assetUrl:owned,esc}),'');
+ assert.equal(recordCaptionTracks(video(),{recordId,assetUrl:owned,esc}),'');
+ // Cues that cannot be read are left out; the rest of the track plays.
+ const mixed='WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOne\n\nno timing here\n\n00:00:03.000 --> 00:00:04.000\nTwo\n';
+ assert.equal(readableCaptions(mixed),'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOne\n\n00:00:03.000 --> 00:00:04.000\nTwo\n');
+ assert.equal(readableCaptions('not captions'),'WEBVTT\n');
+});
+
+test('a published track keeps its readable cues and drops the unreadable ones',()=>{
+ const mixed='WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOne\n\nno timing here\n';
+ const attachment=video({captions:[{language:'nb',label:'Norsk',vtt:mixed}]});
+ const book=upgradeNotebook(sampleNotebook()),entry=book.entries.find(e=>e.share);entry.attachments=[attachment];
+ const mp4=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(12)]);
+ const output=renderPublication(projectPublication(book,selectedContent(book)),{mediaFiles:new Map([[attachment.id,{kind:'video',extension:'mp4',bytes:mp4}]])});
+ assert.match(output.files.get('entries/'+entry.id+'.html'),/srclang="nb" label="Norsk" default>/);
+ assert.equal(output.files.get('media/'+attachment.id+'.nb.vtt'),'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOne\n');
+});

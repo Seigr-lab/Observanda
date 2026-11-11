@@ -1,4 +1,5 @@
 import {noticeLayout} from './notice-layout.js';
+import {recordCaptionTracks} from './record-media-captions.js';
 import {sessionHeaders,sessionCredential} from './session-store.js';
 import {confirmAction} from './confirm-action.js';
 import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
@@ -1309,15 +1310,15 @@ async function removeSelectedRecord(){
 }
 
 function renderSections(e) { return recordSections.view(e); }
-function mediaPlayer(a) {
-  return a.kind === 'image' ? `<img src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" alt="${esc(a.alt || a.caption)}">` : `<${a.kind} src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" controls preload="metadata" aria-label="${esc(a.caption || t('websiteMedia',a.kind))}"></${a.kind}>`;
+function mediaPlayer(a,recordId) {
+  return a.kind === 'image' ? `<img src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" alt="${esc(a.alt || a.caption)}">` : `<${a.kind} src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" controls preload="metadata" aria-label="${esc(a.caption || t('websiteMedia',a.kind))}">${recordCaptionTracks(a,{recordId,assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),esc})}</${a.kind}>`;
 }
 function uploadField(label, purpose, projectId = '') {
   const accept = purpose === 'attachment' ? 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff,audio/*,video/*,image/gif' : 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff';
   return field(label, `<input type="file" data-upload="${purpose}" data-project-id="${projectId}" accept="${accept}" ${uploading ? 'disabled' : ''}>`);
 }
 function renderMedia(e) {
-  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="sharePdf" ${a.sharePdf?'checked':''}>${esc(t('recordValues','sharePdf'))}</label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
+  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a,e.id)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="sharePdf" ${a.sharePdf?'checked':''}>${esc(t('recordValues','sharePdf'))}</label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
 }
 async function uploadMedia(input) { await mediaImports.upload(input); }
 async function applyMedia(intent,asset) {

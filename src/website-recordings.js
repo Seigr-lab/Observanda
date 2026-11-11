@@ -29,6 +29,15 @@ function time(text){
 }
 // Export timed text only. Strip document-level metadata, CSS and script-capable
 // markup. Spoken words and sound descriptions remain actual caption text.
+// Captions written by people: each cue that cannot be read is left out
+// instead of rejecting the whole track.
+export function readableCaptions(vtt){
+ try{return plainWebVTT(vtt);}catch{}
+ // Keep each cue that can be read on its own.
+ const blocks=String(vtt??'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').trim().split(/\n[ \t]*\n+/).slice(1),kept=[];
+ for(const block of blocks){try{const one=plainWebVTT('WEBVTT\n\n'+[...kept,block].join('\n\n'));if(one)kept.push(block);}catch{}}
+ try{return plainWebVTT('WEBVTT\n\n'+kept.join('\n\n'));}catch{return 'WEBVTT\n';}
+}
 export function plainWebVTT(input){
  if(typeof input!=='string'||Buffer.byteLength(input)>2*1024*1024||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(input))invalid();
  const blocks=input.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').trim().split(/\n[ \t]*\n+/);

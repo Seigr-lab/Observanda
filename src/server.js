@@ -135,6 +135,7 @@ import {RecordWriting} from './record-writing.js';
 import {RecordSectionCommands} from './record-section-commands.js';
 import {RecordMediaCommands} from './record-media-commands.js';
 import {mediaDetails,mediaThumbnail} from './media-details.js';
+import {recordCaptionText} from './record-media-caption-file.js';
 import {RecordFigureCommands} from './record-figure-commands.js';
 import {RecordTagCommands} from './record-tag-commands.js';
 import {RecordValues} from './record-values.js';
@@ -1459,6 +1460,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(mediaFacts[2]==='details')return json(await mediaDetails(media,mediaFacts[1],{signal:controller.signal}));
           const thumbnail=await mediaThumbnail(media,mediaFacts[1],Number(mediaFacts[3]),{signal:controller.signal});
           res.setHeader('Cache-Control','private, max-age=86400');return await serveContent(req,res,thumbnail.bytes,thumbnail.mime);
+        }finally{res.removeListener('close',abort);}
+      }
+      // A caption track of a lab book video, read from its record by the owner.
+      const captionRequest=/^\/api\/media\/([a-f0-9-]{36})\/captions\/([a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?)$/.exec(url.pathname);
+      if(req.method==='GET'&&captionRequest){
+        if(url.searchParams.has('context')&&url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+        try{
+          const text=await recordCaptionText(workspace,{recordId:url.searchParams.get('record'),attachmentId:captionRequest[1],language:captionRequest[2]},{signal:controller.signal});
+          res.setHeader('Cache-Control','private, no-cache');return await serveContent(req,res,Buffer.from(text),'text/vtt; charset=utf-8');
         }finally{res.removeListener('close',abort);}
       }
       const mediaRequest = /^\/api\/media\/([a-f0-9-]{36})$/.exec(url.pathname);
