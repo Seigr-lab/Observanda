@@ -14,6 +14,8 @@ import {validCalculation} from '../src/web/dataset-calculation-model.js';
 import {validAggregation} from '../src/web/dataset-aggregation-model.js';
 import {retainedTable} from '../src/retained-tables.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {contentBuffer} from '../src/file-content.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
@@ -30,6 +32,8 @@ async function fixture(t){
  return {...f,m,recordId,directory,dataset};
 }
 
+// Plots are retained figure documents; read their series and points through the retained reader.
+const plottedSeries=async(materials,figure)=>{const reader=await new RetainedFigureDocuments(materials.workspace,{readOnly:true}).open(figure),series=[];for await(const item of reader.items({collection:'series'})){const points=[];for await(const point of reader.pointEntries({seriesId:item.id}))points.push(point.value);series.push({id:item.id,points});}return series;};
 test('declared result formats survive grouped reduction, dependent calculations, source inspection, publication and recovery',async t=>{
  const f=await fixture(t),source=await f.dataset('State,Reading,Private\n'+Array.from({length:6},(_,i)=>'A,'+(i%2?'0.3':'0.1')+',PRIVATE_SENTINEL').join('\n')+'\nB,-0.3,PRIVATE_SENTINEL\nB,-0.1,PRIVATE_SENTINEL',[col('State'),col('Reading','radix-fraction',6),col('Private')]);
  const aggregation={version:1,source,keys:[0],values:[{column:1,operation:'median',name:'Median',output:senary},{column:1,operation:'count',name:'Count',output:output('radix',6)}],missing:'skip',note:'Exact medians and base-six counts.'};
@@ -48,8 +52,8 @@ test('declared result formats survive grouped reduction, dependent calculations,
  const bad=structuredClone(next);bad.results.statements[1].table.formats[1].radix=8;
  await assert.rejects(records.save({workspaceId,changes:[{id:record.id,expectedRevision:recordRevision(record),record:bad}]}),{code:'DATASET_TABLE'});
  await records.save({workspaceId,changes:[{id:record.id,expectedRevision:recordRevision(record),record:next}]});
- const publication=await new PublicationJobs(f.workspace).inline({etag:(await f.workspace.outline()).etag}),html=(await contentBuffer(publication.files.get('entries/'+record.id+'.html'))).toString();assert.match(html,/Adjusted \(base 6\)/);assert.match(html,/>-0\.2</);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes(source.id));
- const figure=await f.m.plot({recordId:f.recordId,title:'Native differences',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:3,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'approximate'}});assert.equal(figure.figure.series[0].points[0].y,0.5);assert.equal(figure.figure.series[0].points[1].y,-1/6);
+ const site=websiteWorkspace(f.workspace,null),publication=await new PublicationJobs(site).inline(await site.outline()),html=(await contentBuffer(await publication.files.get('entries/'+record.id+'.html'))).toString();assert.match(html,/Adjusted \(base 6\)/);assert.match(html,/>-0\.2</);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes(source.id));
+ const figure=await f.m.plot({recordId:f.recordId,title:'Native differences',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[{column:3,error:null}],group:null,operation:'raw',order:'source',kind:'bar',numericPolicy:'approximate'}});const series=await plottedSeries(f.m,figure.figure);assert.equal(series[0].points[0].y,0.5);assert.equal(series[0].points[1].y,-1/6);
  const revised=structuredClone(calculation);revised.steps[0].output=output('rational');const newRef=await f.m.dataset({recordId:f.recordId,id:derived.id,expectedRevision:derived.revision,title:'Recalculated fractions',calculation:revised});assert.equal((await f.m.datasetPage(newRef)).rows[0].cells[3],'1/2');assert.equal((await f.m.datasetPage(derived)).rows[0].cells[3],'0.3');assert.deepEqual((await f.m.read(derived)).content.calculation,calculation);
  const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));assert.deepEqual(await retainedTable(restored,{ref:derived,selection:table.selection}),table);assert.deepEqual((await restored.read(medians)).content.aggregation,aggregation);assert.deepEqual((await restored.measurements.inspect({ref:derived,selector:{kind:'cell',page:0,row:1,column:4}})).exact,inspection.exact);await restored.verify();
 });
