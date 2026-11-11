@@ -42,8 +42,10 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
    <ol class="run-list">${result.records.map(e=>`<li><a href="#/records/${e.id}/read" data-action="record-read-linked" data-id="${e.id}">${esc(e.title)}</a><span>${esc(recordDateLabel(e.occurredOn))} &middot; ${esc(templateText(e.template?.label)??recordTypeLabel(e.type))} &middot; ${esc(statusLabel(e.status))}</span>${(e.linkedBy??[]).map(l=>`<small>${esc(l.type)}${l.revision?' &middot; '+esc(tr(l.revision!==revisions()[record().id]?'activityRetainedDifferent':'activityRetained',{revision:l.revision.slice(0,10)})):''}</small>`).join('')}</li>`).join('')}</ol>
    <nav class="inline-actions" aria-label="${esc(tr('activityPages'))}">${button(tr('activityPrevious'),'previous',!result.previousCursor?'disabled':'')}${button(tr('activityNext'),'next',!result.nextCursor?'disabled':'')}${button(tr('activityRefresh'),'refresh')}</nav>`;
  }
+ // The record editor and the reader share one page; the record type's context redraws the section the way it was shown.
+ let shownReadonly=false;
  function view({readonly=false}={}){
-  sync();const e=record(),context=contextFor(e),templates=native()?[]:activityTemplates(state.book,e,state.dashboardSettings);
+  shownReadonly=readonly;sync();const e=record(),context=contextFor(e),templates=native()?[]:activityTemplates(state.book,e,state.dashboardSettings);
   const primary=native()?selectedPrimary:context.subject?templates.find(s=>s.profileId===e.template.profileId&&s.key===context.tracking.primary):null;
   const heading=context.subject?trackingHeading(context,e.template?.profileId):tr('activityLinked');
   const choose=readonly||!context.event?'':button(tr('activityChoose',{subject:trackingLabel(context,e.template?.profileId,'subjectLabel',tr('activitySubject')).toLocaleLowerCase()}),'subjects');
@@ -108,7 +110,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
     if(request!==contextGeneration)return;selectedSection=selected;selectedPrimary=primary;contextLoaded=true;contextError=null;if(context.subject)opened=true;
     if(opened&&!result&&!loading&&!error)void load();
    }catch(reason){if(request===contextGeneration&&reason.name!=='AbortError')contextError=reason;}
-   finally{if(request===contextGeneration){contextPending=null;const host=document.querySelector('.record-activity');if(active()&&host)host.outerHTML=view({readonly:state.page==='record-reader'});}}
+   finally{if(request===contextGeneration){contextPending=null;const host=document.querySelector('.record-activity');if(active()&&host)host.outerHTML=view({readonly:shownReadonly});}}
   })();return contextPending;
  }
  return {view,bind,action,stop,input:element=>typeChoices.input(element)||targets.input(element)};
