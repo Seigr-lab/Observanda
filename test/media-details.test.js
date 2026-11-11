@@ -5,10 +5,12 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {mediaValueFixture} from './record-media-values-fixture.js';
-import {mediaDetails} from '../src/media-details.js';
+import {mediaDetails,mediaThumbnail} from '../src/media-details.js';
+import {contentBuffer} from '../src/file-content.js';
 import {digest} from '../src/storage-format.js';
 
 const generate=(directory,name,args)=>{const file=path.join(directory,name);execFileSync('ffmpeg',['-v','error','-n',...args,file],{windowsHide:true,stdio:'pipe',timeout:30000});return readFile(file);};
+const bytesOf=async value=>Buffer.isBuffer(value)?value:contentBuffer(value,{maxBytes:value.size});
 
 test('intake stores technical details and the camera details of an original are offered unchanged',async t=>{
  const f=await mediaValueFixture({count:1});t.after(f.close);
@@ -27,3 +29,13 @@ test('intake stores technical details and the camera details of an original are 
  await assert.rejects(mediaDetails(f.media,randomUUID()),error=>!!error.code);
 });
 
+test('gallery thumbnails are reduced copies, cached and never larger than the display copy',async t=>{
+ const f=await mediaValueFixture({count:1});t.after(f.close);
+ const large=await f.media.import(await generate(f.directory,'large.png',['-f','lavfi','-i','color=c=blue:s=1200x800','-frames:v','1']),'image');
+ const first=await mediaThumbnail(f.media,large.id,320),bytes=await bytesOf(first.bytes);
+ assert.equal(first.width,320);assert.equal(first.height,213);assert.equal(bytes.readUInt32BE(16),320);assert.equal(bytes.readUInt32BE(20),213);
+ const second=await mediaThumbnail(f.media,large.id,320);assert.ok(!Buffer.isBuffer(second.bytes),'The second request reads the cached copy');assert.deepEqual(await bytesOf(second.bytes),bytes);
+ const small=f.record.attachments[0];const kept=await mediaThumbnail(f.media,small.id,160);assert.equal(kept.width,96);
+ await assert.rejects(mediaThumbnail(f.media,large.id,200),{code:'INVALID'});
+ const sound=await f.media.import(f.files.audio.bytes,'audio');await assert.rejects(mediaThumbnail(f.media,sound.id,160),{code:'INVALID'});
+});

@@ -30,3 +30,16 @@
 .record-reference-picker [data-reference-error]:empty{display:none}
 .record-reference-picker .button{white-space:normal;overflow-wrap:anywhere}
 @media print{.lab-book-reading-entry>header .inline-actions,.record-reading-modes{display:none}.lab-book-reading-entry{border:0;padding:0}}
+/* Record media gallery: reduced copies in a grid; a tile opens its display copy. */
+.record-media-gallery{list-style:none;margin:0;padding:0;display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(min(100%,13rem),1fr))}
+.record-media-tile figure{margin:0}
+.record-media-tile summary{list-style:none;cursor:zoom-in;border-radius:.25rem}
+.record-media-tile summary::-webkit-details-marker{display:none}
+.record-media-tile summary:focus-visible{outline:3px solid currentColor;outline-offset:2px}
+.record-media-tile summary img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:.25rem;background:#00000010}
+.record-media-tile:has(.record-media-open[open]){grid-column:1/-1}
+.record-media-open[open] summary{cursor:zoom-out}
+.record-media-full{display:block;max-width:100%;height:auto;margin-top:.5rem}
+.record-media-tile-audio,.record-media-tile-video{grid-column:1/-1}
+.record-media-tile audio,.record-media-tile video{max-width:100%}
+.record-media-credit{margin:.25rem 0 0;font-size:.875em}

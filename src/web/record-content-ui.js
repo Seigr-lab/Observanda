@@ -18,6 +18,7 @@ import {recordTagActions} from './record-tag-actions.js';
 import {recordEditingView} from './record-editing-view.js';
 import {publicationAvailability,publicationChoices} from './record-publication-controls.js';
 import {focusElement} from './focus-management.js';
+import {headerWindowSize} from './record-header-windows.js';
 import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 
 // Reading windows live outside editable workspace snapshots. Selected editing
@@ -128,7 +129,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   }
   if(control.dataset.action?.startsWith('content-collection-')){
    if(busy)return true;const name=control.dataset.collection,page=reading?.collections?.[name];if(!page)return true;
-   let position=page.offset+(control.dataset.action==='content-collection-previous'?-4:4);
+   const size=headerWindowSize(name);let position=page.offset+(control.dataset.action==='content-collection-previous'?-size:size);
    if(control.dataset.action==='content-collection-go'){const input=document.querySelector('[data-collection-position="'+name+'"]');if(!input.reportValidity())return true;position=Number(input.value)-1;}
    windows={...windows,[name]:Math.max(0,position)};collectionFocus={name,action:control.dataset.action};focus=null;state.recordSection=null;const task=load();render();await task;return true;
   }

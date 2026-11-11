@@ -8,6 +8,7 @@ import {AppError} from './errors.js';
 import {recordAttemptWindow} from './record-attempt-window.js';
 import {resultDocumentWindow,resultFigureCount} from './record-result-document.js';
 import {figureTargets} from './web/figure-composition.js';
+import {headerWindowSize} from './web/record-header-windows.js';
 const attemptCollections=['preparations','events','assessments'];
 export const recordHeaderCollections=['contributors','relations','figures','attachments','tags','fields','results',...attemptCollections];
 export const validHeaderWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.entries(value).every(([name,offset])=>(recordHeaderCollections.includes(name)||isPreparationWindow(name))&&Number.isSafeInteger(offset)&&offset>=0);
@@ -27,7 +28,7 @@ export async function recordReadingHeader(store,row,document,sections,{windows={
  if(header.id!==row.id||header.notebookId!==row.notebookId)throw new AppError('CATALOGUE_DAMAGED');
  const page=async(name,path)=>{
   const total=await document.tree.arrayLength(document.root,path),offset=Math.min(windows[name]??0,Math.max(0,total-1));
-  return document.tree.page(document.root,path,{offset,limit:4});
+  return document.tree.page(document.root,path,{offset,limit:headerWindowSize(name)});
  };
  // An unplaced figure anchor can name a late collection item directly. A prose
  // placement is resolved below and remains beside its original paragraph.

@@ -1,3 +1,4 @@
+import {headerWindowSize} from './record-header-windows.js';
 import './i18n/catalogues/recordReferences.js';
 import {projectApiRoute,researchOwner} from './project-context.js';
 import {materialReferenceReader} from './material-reference-requests.js';
@@ -78,7 +79,7 @@ export function retainedRecordUI({state,api,esc,showDialog}){
   if(action==='results-all'){s.resultFigure=null;s.collection='results';s.windows={...s.windows,results:0};s.focus='[data-retained-previous] .result-statements>section';void load(s);return;}
   if(action==='compare'||action==='refresh'){s.compare=true;s.currentSnapshotId=null;void load(s);return;}
   if(action==='retry'){void load(s,{anchor:s.anchor,current:s.anchorCurrent});return;}
-  const windows=[s.result.previous,s.result.current].filter(Boolean).map(page=>s.collection==='sections'?page.sections:page.collections[s.collection]);let offset=Math.max(0,...windows.map(page=>page?.offset??0))+(action==='previous'?-4:4);
+  const windows=[s.result.previous,s.result.current].filter(Boolean).map(page=>s.collection==='sections'?page.sections:page.collections[s.collection]);const size=s.collection==='sections'?4:headerWindowSize(s.collection);let offset=Math.max(0,...windows.map(page=>page?.offset??0))+(action==='previous'?-size:size);
   if(action==='go'){const input=dialog.querySelector('[data-retained-position]');if(!input.reportValidity())return;offset=Number(input.value)-1;}
   if(s.collection==='sections')s.offset=Math.max(0,offset);else s.windows={...s.windows,[s.collection]:Math.max(0,offset)};
   s.focus='[data-retained-action="'+action+'"]';void load(s);

@@ -37,7 +37,7 @@ test('a photograph records its creator, licence, capture date with uncertain pre
   await page.getByRole('button',{name:'Read record',exact:true}).click();
   const figure=page.locator('#record-figure-'+image.id);
   await expect(figure.locator('.record-media-credit')).toHaveText('By A. Recorder · Field survey team · CC BY 4.0 · 2026-05-02 06:41:07+02:00');
-  await expect(figure.locator('img')).toHaveAttribute('loading','lazy');
+  await expect(figure.locator('summary img')).toHaveAttribute('loading','lazy');await expect(figure.locator('summary img')).toHaveAttribute('src',new RegExp('/thumbnail-320$'));
   await figure.getByText('Source and capture',{exact:true}).click();
   await expect(figure.locator('.record-media-metadata')).toContainText('Private site 7');
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);

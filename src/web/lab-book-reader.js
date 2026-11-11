@@ -1,3 +1,4 @@
+import {headerWindowSize} from './record-header-windows.js';
 import {retainedTableAction} from './retained-table-reader.js';
 import {bindReadingTables} from './record-reading-tables.js';
 import {recordHeaderControls} from './record-header-controls.js';
@@ -33,7 +34,7 @@ export async function readBookWindow(api,command,{signal,onCommand=()=>{}}={}){
   }
   const sections=result.sections;
   if(result.header?.id!==command.recordId||!sections||![sections.offset,sections.total].every(n=>Number.isSafeInteger(n)&&n>=0)||!Array.isArray(sections.values)||sections.values.length>4||sections.offset+sections.values.length>sections.total||!result.collections)throw Error(text('incomplete'));
-  for(const page of Object.values(result.collections))if(!page||![page.offset,page.count,page.total].every(n=>Number.isSafeInteger(n)&&n>=0)||page.count>4||page.offset+page.count>page.total)throw Error(text('incomplete'));
+  for(const [name,page] of Object.entries(result.collections))if(!page||![page.offset,page.count,page.total].every(n=>Number.isSafeInteger(n)&&n>=0)||page.count>headerWindowSize(name)||page.offset+page.count>page.total)throw Error(text('incomplete'));
   return {...result,readingProjection:true};
  }
 }
@@ -106,7 +107,7 @@ export function bookReadingWindows({api,esc,records,active,decorate,assetUrl,wor
    await load(item,next,{focus:'results'});return true;
   }
   const collection=control.dataset.collection,page=collection==='sections'?item.sections:item.collections[collection];if(!page)return true;
-  let offset=page.offset+(operation==='previous'?-4:4);
+  const size=collection==='sections'?4:headerWindowSize(collection);let offset=page.offset+(operation==='previous'?-size:size);
   if(operation==='go'){const input=node(item.recordId).querySelector('[data-collection-position="'+collection+'"]');if(!input.reportValidity())return true;offset=Number(input.value)-1;}
   const next=command(item);if(collection==='sections')next.offset=Math.max(0,offset);else next.windows[collection]=Math.max(0,offset);
   await load(item,next,{focus:collection});return true;

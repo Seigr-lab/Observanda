@@ -7,7 +7,7 @@ import {RecordContent} from '../src/record-content.js';
 import {emptyMediaMetadata} from '../src/web/record-media-value.js';
 
 const ids=async f=>(await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true,windows:{attachments:0}})).header.attachments.map(item=>item.id);
-const all=async f=>{const reader=new RecordContent(f.workspace),result=[];for(let offset=0;;offset+=4){const page=await reader.read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true,windows:{attachments:offset}});result.push(...page.header.attachments);if(offset+4>=page.collections.attachments.total)return result;}};
+const all=async f=>{const reader=new RecordContent(f.workspace),result=[];for(let offset=0;;){const page=await reader.read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true,windows:{attachments:offset}});result.push(...page.header.attachments);offset+=page.header.attachments.length;if(offset>=page.collections.attachments.total)return result;}};
 
 test('gallery order moves one attachment, keeps every value and acknowledges a repeated move',async t=>{
  const f=await mediaValueFixture({count:9});t.after(f.close);

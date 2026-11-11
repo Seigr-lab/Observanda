@@ -30,7 +30,7 @@ test('media descriptions compose by attachment, retain old revisions and update 
  await f.save(first,a);const saved=await f.save(late,b);assert.deepEqual(await f.save(late,b),saved);await assert.rejects(f.save(first,{...a,caption:'Stale caption'}),{code:'RECORD_CHANGED'});
  assert.deepEqual((await f.values.read({...f.target(f.record.attachments[0].id),recordId:f.book.entries[1].id})).value,first.value);
  const reader=new RecordContent(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true};
- assert.deepEqual((await reader.read({...target,snapshotId:prior})).header.attachments,f.record.attachments.slice(0,4));
+ assert.deepEqual((await reader.read({...target,snapshotId:prior})).header.attachments,f.record.attachments.slice(0,24));
  assert.deepEqual((await reader.read({...target,windows:{attachments:8}})).header.attachments,[{...f.record.attachments[8],...b}]);
  const publication=structuredClone(f.book);publication.entries[0].share=true;
  await f.workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id),[query]=await Array.fromAsync(new RecordQueryDocuments(store).read([row],snapshot.metadata,{search:false,cards:true,publication:true,inventory:true}));assert.equal(query.publicationCard.attachments[0].caption,a.caption);assert.deepEqual(query.publication.attachments.map(item=>item.share),[true,false,false,false,false,false,false,false,true]);assert.deepEqual(query.editionInventory.choice.attachments,[f.record.attachments[0].id,f.record.attachments[8].id]);publication.entries[0].attachments=await withRecordDocument(store,row.id,row.revision,async document=>(await document.field(['attachments'])).value);await store.verifySnapshot(undefined,f.book.id);});
