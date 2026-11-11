@@ -11,6 +11,7 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {preferences} from './preferences-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 async function fixture(page){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-startup-pages-ui-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -27,8 +28,8 @@ page.on('pageerror',e=>errors.push(e.message));
  return {book,ws,app,errors,requests,fullReads,async close(){if(errors.length)console.error('Application load diagnostics:',JSON.stringify(errors));ResearchCatalogue.prototype.read=read;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const opened=async(page,f)=>{try{await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();}catch(error){throw Error(error.message+'\nApplication errors: '+JSON.stringify(f?.errors));}};
-const openComparison=async(page,f)=>{await page.goto(f.app.url,{waitUntil:'commit'});await opened(page,f);await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Take 0');await page.getByText('Organize runs or takes',{exact:true}).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();};
-const editable=async page=>expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Take 0');
+const openComparison=async(page,f)=>{await page.goto(f.app.url,{waitUntil:'commit'});await opened(page,f);await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await editable(page);await (await revealInEditor(page,page.getByText('Organize runs or takes',{exact:true}),'Activity and history')).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();};
+const editable=async page=>expect(page.locator('main').getByRole('heading',{level:1,name:'Take 0',exact:true})).toBeVisible();
 
 test('interrupted comparison load stays separate from an empty workspace and retries only the unfinished page',async({page})=>{
  test.setTimeout(90000);const f=await fixture(page);let pages=0;
