@@ -14,7 +14,7 @@ import {attemptView} from './attempt-view.js';
 import {resultStatementsView} from './result-statements.js';
 import {recordFigure,recordFigureRenderer} from './book-reading.js';
 import {placedFigures} from './book-selectors.js';
-import {customFieldLabel} from './custom-field-presentation.js';
+import {customFieldLabel,customFieldValueText,templateText} from './custom-field-presentation.js';
 
 const msg=(key,args)=>t('recordEditors',key,args);
 const fields=['title','type','status','outcome','occurredOn','body','sections','template','tags','contributors','relations','figures','attachments','notebookId','share','attempt','results'];
@@ -41,7 +41,7 @@ export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'
  if(key==='contributors')return list(v.map(p=>esc(p.name)+(p.role?' &middot; '+esc(p.role):'')));
  if(key==='relations')return list(v.map(r=>esc(r.type)+' &middot; '+esc(msg(r.target.revision?'revisionExactLink':'revisionCurrentLink',{label:r.label||msg('linkedItem'),...(r.target.revision?{revision:r.target.revision.slice(0,12)}:{})}))));
  if(key==='attachments')return recordMediaGallery(v.filter(a=>['image','audio','video'].includes(a.kind)&&!placedFigures(record).has(a.id)),esc,{assetUrl,player:a=>'<figure><'+(a.kind==='audio'?'audio':'video')+' src="'+esc(assetUrl(a.id))+'" controls preload="none" aria-label="'+esc(a.alt||a.caption||msg('media_'+a.kind))+'"></'+(a.kind==='audio'?'audio':'video')+'><figcaption>'+esc(a.caption)+mediaCreditLine(a.metadata,esc)+'</figcaption><div class="result-statement-text">'+esc(a.transcript)+'</div>'+mediaMetadataDetails(a.metadata,esc)+'</figure>'});
- if(key==='template')return v?'<p>'+esc(v.label)+'</p><dl>'+v.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+value(v.values[f.key],esc)+'</dd>').join('')+'</dl>':'<p>'+esc(msg('revisionNoFields'))+'</p>';
+ if(key==='template')return v?'<p>'+esc(templateText(v.label))+'</p><dl>'+v.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+value(customFieldValueText(f,v.values[f.key]),esc)+'</dd>').join('')+'</dl>':'<p>'+esc(msg('revisionNoFields'))+'</p>';
  return value(v,esc);
 }
 export function recordRevisionView(record,esc,{relations=true,anchors=false,sectionsHtml=null,fieldsHtml={},inlineRecord=record,attemptReference=null,attemptWindow=null,resultReference=null,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null,figureReference=null,retainedFigureAction=null}={}){

@@ -5,6 +5,7 @@ import {configurationOf} from '../notebook-schema.js';
 import {locationName} from '../workspace-structure.js';
 
 import {sectionDetails,sectionInput,sectionAction} from './section-editor.js';
+import {templateText} from '../custom-field-presentation.js';
 
 // A configuration draft is committed only through an explicit save.
 export async function recordTypeSettings(services,profile){
@@ -34,8 +35,8 @@ export async function recordTypeSettings(services,profile){
    if(!s.label.trim())return {id:s.id,message:t('projectEditors','typeNameRequired')};
    for(const f of s.fields){
     if(!f.label.trim())return {id:s.id,message:t('projectEditors','fieldLabelRequired')};
-    if(f.type==='select'&&!f.choices.length)return {id:s.id,message:t('projectEditors','choiceRequired',{label:f.label})};
-    if(new Set(f.choices).size!==f.choices.length)return {id:s.id,message:t('projectEditors','distinctChoices',{label:f.label})};
+    if(f.type==='select'&&!f.choices.length)return {id:s.id,message:t('projectEditors','choiceRequired',{label:templateText(f.label)})};
+    if(new Set(f.choices).size!==f.choices.length)return {id:s.id,message:t('projectEditors','distinctChoices',{label:templateText(f.label)})};
    }
   }
   return null;
@@ -47,7 +48,7 @@ export async function recordTypeSettings(services,profile){
   for(const command of ['save','cancel']){const control=document.querySelector('[data-type-controls="'+profile.id+'"] [data-command="'+command+'"]');if(control)control.disabled=!!pending||!isDirty();}
   for(const s of scoped()){
    const item=document.querySelector('[data-type-choice="'+s.id+'"]');
-   if(item){item.querySelector('[data-type-title]').textContent=s.label||t('projectEditors','unnamedType');item.querySelector('[data-type-modified]').hidden=!sectionChanged(s);}
+   if(item){item.querySelector('[data-type-title]').textContent=templateText(s.label)||t('projectEditors','unnamedType');item.querySelector('[data-type-modified]').hidden=!sectionChanged(s);}
   }
   changed?.();
  }
@@ -75,7 +76,7 @@ export async function recordTypeSettings(services,profile){
   selectAvailable();
   const types=scoped(),removed=types.filter(s=>!s.enabled),s=chosen(),index=draft.sections.indexOf(s);
   const active=types.filter(s=>s.enabled),position=active.indexOf(s);
-  const choice=item=>`<button type="button" class="lab-type-choice" data-action="module-settings-command" data-command="select-type" data-id="${item.id}" data-type-choice="${item.id}" aria-current="${item.id===selectedId?'true':'false'}"><span data-type-title>${esc(item.label||t('projectEditors','unnamedType'))}</span><small>${text('fields',{count:item.fields.length})}</small><span class="lab-type-modified" data-type-modified ${sectionChanged(item)?'':'hidden'}>${text('edited')}</span></button>`;
+  const choice=item=>`<button type="button" class="lab-type-choice" data-action="module-settings-command" data-command="select-type" data-id="${item.id}" data-type-choice="${item.id}" aria-current="${item.id===selectedId?'true':'false'}"><span data-type-title>${esc(templateText(item.label)||t('projectEditors','unnamedType'))}</span><small>${text('fields',{count:item.fields.length})}</small><span class="lab-type-modified" data-type-modified ${sectionChanged(item)?'':'hidden'}>${text('edited')}</span></button>`;
   return `<div class="lab-type-settings">
    <header><div><h3>${text('recordTypes')}</h3><p>${esc(entity.title)} · ${esc(state.book.title)}</p></div><p class="lab-type-hint">${text('editTypesHelp')}</p></header>
    <fieldset class="lab-type-draft" ${pending?'disabled':''}>

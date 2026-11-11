@@ -3,6 +3,7 @@ import {formatRecordTagList,parseRecordTagList} from './record-tags-model.js';
 import {STATUSES} from './record-types.js';
 import {onlineDetailFieldsFor,onlineDetails,sameDetail,templateDetailName} from './online-details-model.js';
 import {templateFieldInput,templateFieldLabel,templateInputValue} from './custom-field-input.js';
+import {templateText} from './custom-field-presentation.js';
 const tr=(key,values)=>t('online',key,values);
 const labels={title:'recordTitle',status:'progress',outcome:'outcome',tags:'tags'};
 
@@ -68,7 +69,7 @@ export function onlineRecordDetails({remote,esc,onChange,notify}){
   recordId=record.id;fields=onlineDetailFieldsFor(record);custom=new Map((record.template?.fields??[]).map(f=>[templateDetailName(f),f]));base=onlineDetails(record);latest=structuredClone(base);readOnly=role!=='editor';request=null;conflicts.clear();
   host.innerHTML='<form data-live-details><h4>'+esc(tr('detailsTitle'))+'</h4><div class="online-details-grid"><label class="field">'+esc(tr('recordTitle'))+'<input name="title" required maxlength="180"></label><label class="field">'+esc(tr('progress'))+'<select name="status" aria-label="'+esc(tr('progress'))+'">'+STATUSES.map(status=>'<option value="'+esc(status)+'">'+esc(tr('status_'+status))+'</option>').join('')+'</select></label><label class="field">'+esc(tr('outcome'))+'<textarea name="outcome" rows="2" maxlength="500"></textarea></label><label class="field">'+esc(tr('tags'))+'<textarea name="tags" aria-label="'+esc(tr('tags'))+'"></textarea><span class="muted">'+esc(tr('detailsTagsHelp'))+'</span></label></div><p class="muted">'+esc(tr(readOnly?'reader':'detailsHelp'))+'</p><p class="muted" data-publication-owner>'+esc(tr('publicationOwner'))+'</p><div data-detail-conflicts role="status"></div><p data-detail-status role="status"></p><div class="module-actions"><button type="submit" class="button">'+esc(tr('saveDetails'))+'</button>'+button('detailsDiscard','discard')+'</div></form>';
   form=host.querySelector('form');
-  if(custom.size){const section=document.createElement('section');section.innerHTML='<h4>'+esc(record.template.label)+'</h4>'+(record.template.description?'<p>'+esc(record.template.description)+'</p>':'')+'<div class="online-details-grid">'+[...custom].map(([name,f])=>'<label class="field">'+esc(templateFieldLabel(f))+templateFieldInput(f,base[name],{esc,attrs:'name="'+esc(name)+'"'})+'</label>').join('')+'</div>';form.querySelector('.online-details-grid').after(section);}
+  if(custom.size){const section=document.createElement('section');section.innerHTML='<h4>'+esc(templateText(record.template.label))+'</h4>'+(record.template.description?'<p>'+esc(templateText(record.template.description))+'</p>':'')+'<div class="online-details-grid">'+[...custom].map(([name,f])=>'<label class="field">'+esc(templateFieldLabel(f))+templateFieldInput(f,base[name],{esc,attrs:'name="'+esc(name)+'"'})+'</label>').join('')+'</div>';form.querySelector('.online-details-grid').after(section);}
   for(const name of fields)setValue(name,base[name]);controls();
   form.addEventListener('submit',event=>{event.preventDefault();event.stopPropagation();void save().catch(e=>notify(e.message,true));});
   form.addEventListener('input',()=>{form.querySelector('[data-detail-status]').textContent='';if(conflicts.size)drawConflicts();});

@@ -1,5 +1,6 @@
 import {t} from './i18n/index.js';
 import {recordTypeLabel as recordLabel} from './record-type-presentation.js';
+import {templateText} from './custom-field-presentation.js';
 import {recordDateLabel} from './record-date.js';
 import {ux} from './experience-ui.js';
 import {publicationAvailability} from './record-publication-controls.js';
@@ -9,7 +10,7 @@ import {publicationAvailability} from './record-publication-controls.js';
 export function recordEditingView({record,book,esc,status,busy,details,summary,sections,fields,activity,evidence,relations}){
  const text=key=>t('recordContent',key);
  const detailText=key=>t('recordValues',key),values=[
-  ['type',record.template?.label||recordLabel(record.type)],['status',detailText('status_'+record.status)],
+  ['type',templateText(record.template?.label)||recordLabel(record.type)],['status',detailText('status_'+record.status)],
   ['outcome',record.outcome||detailText('empty')],['occurredOn',recordDateLabel(record.occurredOn)]
  ];
  const edit=(name)=>'<button class="button subtle" type="button" data-action="record-value-edit" data-value-field="'+name+'">'+esc(ux('editField',{name:detailText(name)}))+'</button>';

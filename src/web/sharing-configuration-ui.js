@@ -1,6 +1,6 @@
 import {t} from './i18n/index.js';
-import {customFieldLabel} from './custom-field-presentation.js';
-import {profileById} from './laboratory/catalog.js';
+import {customFieldLabel,templateText} from './custom-field-presentation.js';
+import {labBookProfileLabel} from './project-type-presentation.js';
 const text=(key,args)=>t('configurationEditor',key,args),tr=key=>t('sharing',key),limit=20;
 const count=value=>Number.isSafeInteger(value)&&value>=0;
 const empty=()=>({rows:[],total:0,offset:0,next:null});
@@ -31,14 +31,14 @@ export function sharingConfigurationUI({load,esc,current=()=>true}){
     const region=node.querySelector('[data-sharing-config-region="'+name+'"]');if(!region)return;
     const slot=slots[name],result=slot.result;
     let prefix='<h5>'+esc(text(name))+(result?' ('+result.total+')':'')+'</h5>';
-    if(name==='fields')prefix+=section?'<h6>'+esc(section.value.label)+'</h6>'+(section.value.description?'<p>'+esc(section.value.description)+'</p>':''):'<p>'+esc(tr('configurationChooseType'))+'</p>';
+    if(name==='fields')prefix+=section?'<h6>'+esc(templateText(section.value.label))+'</h6>'+(section.value.description?'<p>'+esc(templateText(section.value.description))+'</p>':''):'<p>'+esc(tr('configurationChooseType'))+'</p>';
     if(name==='choices')prefix+=field?details(field.value):'<p>'+esc(tr('configurationChooseField'))+'</p>';
     let rows='';
     if(result){
      rows='<ul>'+result.rows.map(row=>{
       if(name==='choices')return '<li>'+esc(row.value)+'</li>';
-      if(name==='profiles')return '<li>'+esc(profileById(row.value.id)?.label??row.value.id)+' - '+esc(row.value.version)+' - '+esc(tr(row.value.enabled?'typeEnabled':'typeDisabled'))+'</li>';
-      const value=row.value,label=name==='sections'?value.label:customFieldLabel(value);
+      if(name==='profiles')return '<li>'+esc(labBookProfileLabel(row.value.id))+' - '+esc(row.value.version)+' - '+esc(tr(row.value.enabled?'typeEnabled':'typeDisabled'))+'</li>';
+      const value=row.value,label=name==='sections'?templateText(value.label):customFieldLabel(value);
       return '<li>'+button(label,name==='sections'?'section':'field','data-key="'+esc(row.key)+'"')+' - '+esc(name==='sections'?tr(value.enabled?'typeEnabled':'typeDisabled'):value.type)+(value.required?' - '+esc(tr('required')):'')+'</li>';
      }).join('')+'</ul>'+(result.rows.length?'':'<p>'+esc(text('empty'))+'</p>')+paging(name,result);
     }

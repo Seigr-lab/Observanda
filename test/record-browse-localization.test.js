@@ -41,8 +41,8 @@ test('linked history translates built-in names and tracking actions without rewr
  const ui=recordActivityUI({state,esc,field,showDialog:value=>{dialog=value;},api:async(path,data)=>{calls.push({path,data});return {workspaceId:'workspace',records,total:1,offset:0,nextCursor:null,previousCursor:null};},notify:()=>{},render:()=>{},dirty:()=>{},revisions:()=>({record:'new-revision-value'}),create:()=>{}});
  for(const locale of ['en','ca','es','nb','nn']){
   await load(locale);activateLanguage(locale);
-  const before=ui.view();assert.ok(before.includes(esc(t('applicationTexts','activityHiveHistory'))));
-  assert.ok(before.includes(esc(t('applicationTexts','activityNewInspection'))));
+  const before=ui.view();assert.ok(before.includes(esc(t('labBookProfiles','beekeeping.tracking.history.hive'))));
+  assert.ok(before.includes(esc(t('labBookProfiles','beekeeping.tracking.primary'))));
   await ui.action({dataset:{action:'record-activity-show'}});
   const html=ui.view();assert.ok(html.includes(esc(t('applicationTexts','activityRange',{first:1,last:1,count:1}))));
   assert.ok(html.includes(esc(t('recordEditors','type_observation_label'))));assert.ok(html.includes(esc(t('recordValues','status_draft'))));

@@ -1,24 +1,25 @@
 import {fieldNumberControls} from '../custom-field-number-controls.js';
 import {setCustomFieldProperty} from '../custom-field-numbers.js';
-import {customFieldText as tr} from '../custom-field-presentation.js';
+import {customFieldText as tr,templateText} from '../custom-field-presentation.js';
+import {storedChoices} from './profile-text.js';
 const fieldTypes=['text','number','date','boolean','select'];
 
 // The schema controls are shared by Preferences and the lab book editor.
 export function sectionDetails(s,i,c){
  const {field,esc,option,button}=c,attr=`data-lab-section="${i}"`;
  return `<div class="lab-schema-details">
-  ${field(tr('typeName'),`<textarea ${attr} data-lab-section-prop="label" rows="1" required maxlength="160">${esc(s.label)}</textarea>`)}
-  ${field(tr('guidance'),`<textarea ${attr} data-lab-section-prop="description" rows="2" maxlength="2000">${esc(s.description)}</textarea>`)}
+  ${field(tr('typeName'),`<textarea ${attr} data-lab-section-prop="label" rows="1" required maxlength="160">${esc(templateText(s.label))}</textarea>`)}
+  ${field(tr('guidance'),`<textarea ${attr} data-lab-section-prop="description" rows="2" maxlength="2000">${esc(templateText(s.description))}</textarea>`)}
   <div class="lab-fields-heading"><div><h4>${esc(tr('fields'))}</h4><p>${esc(tr('savedFields'))}</p></div>${button(tr('addField'),'field-add',`data-index="${i}"`)}</div>
   <div class="lab-schema-fields">${s.fields.map((f,j)=>`<div class="lab-field-config" data-field-key="${esc(f.key)}">
    <div class="lab-field-primary">
-    ${field(tr('label'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="label" rows="1" required maxlength="160">${esc(f.label)}</textarea>`)}
+    ${field(tr('label'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="label" rows="1" required maxlength="160">${esc(templateText(f.label))}</textarea>`)}
     ${field(tr('type'),`<select ${attr} data-lab-field="${j}" data-lab-field-prop="type">${fieldTypes.map(id=>option(id,tr('types.'+id),f.type)).join('')}</select>`)}
-    ${f.type==='number'?field(tr('unit'),`<input ${attr} data-lab-field="${j}" data-lab-field-prop="unit" maxlength="80" value="${esc(f.unit)}">`):''}
-    <div class="lab-field-actions"><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="required" ${f.required?'checked':''}>${esc(tr('required'))}</label>${button(tr('remove'),'field-remove',`data-index="${i}" data-field="${j}" aria-label="${esc(tr('removeField',{label:f.label}))}"`,'subtle')}</div>
+    ${f.type==='number'?field(tr('unit'),`<input ${attr} data-lab-field="${j}" data-lab-field-prop="unit" maxlength="80" value="${esc(templateText(f.unit))}">`):''}
+    <div class="lab-field-actions"><label class="checkbox"><input type="checkbox" ${attr} data-lab-field="${j}" data-lab-field-prop="required" ${f.required?'checked':''}>${esc(tr('required'))}</label>${button(tr('remove'),'field-remove',`data-index="${i}" data-field="${j}" aria-label="${esc(tr('removeField',{label:templateText(f.label)}))}"`,'subtle')}</div>
    </div>
    ${fieldNumberControls(f,c,key=>`${attr} data-lab-field="${j}" data-lab-field-prop="${key}"`)}
-   ${f.type==='select'?field(tr('choices'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="choices" rows="2">${esc(f.choices.join('\n'))}</textarea>`):''}
+   ${f.type==='select'?field(tr('choices'),`<textarea ${attr} data-lab-field="${j}" data-lab-field-prop="choices" rows="2">${esc(f.choices.map(templateText).join('\n'))}</textarea>`):''}
   </div>`).join('')||'<p class="muted">'+esc(tr('empty'))+'</p>'}</div>
  </div>`;
 }
@@ -28,7 +29,7 @@ export function sectionInput(el,lab){
  const s=lab.sections[Number(a.labSection)];if(!s)return false;
  if(a.labField!==undefined){
   const f=s.fields[Number(a.labField)],key=a.labFieldProp;
-  return setCustomFieldProperty(f,key,key==='required'?el.checked:key==='choices'?el.value.split('\n').map(v=>v.trim()).filter(Boolean):el.value);
+  return setCustomFieldProperty(f,key,key==='required'?el.checked:key==='choices'?storedChoices(el.value.split('\n').map(v=>v.trim()).filter(Boolean),f.choices):el.value);
  }else if(['label','description','enabled'].includes(a.labSectionProp))s[a.labSectionProp]=a.labSectionProp==='enabled'?el.checked:el.value;
  else return false;
  return true;

@@ -1,7 +1,8 @@
 import {configurationDocumentClient} from './configuration-document-client.js';
 import {fieldNumberControls} from './custom-field-number-controls.js';
 import {setCustomFieldProperty} from './custom-field-numbers.js';
-import {customFieldText} from './custom-field-presentation.js';
+import {customFieldText,templateText} from './custom-field-presentation.js';
+import {labBookProfileLabel} from './project-type-presentation.js';
 import {enabledLabBookTypes} from './feature-modules.js';
 import {profileById} from './laboratory/catalog.js';
 import {t} from './i18n/index.js';
@@ -67,25 +68,25 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
  function profileView(){
   if(profileId)return '';
   const available=enabledLabBookTypes(state.dashboardSettings);
-  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(profileById(row.key)?.label??row.key)+'</label>').join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,profile.label,available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
+  return '<section><h3>'+esc(text('profiles'))+'</h3>'+profiles.rows.map(row=>'<label class="checkbox"><input type="checkbox" data-configuration-profile="'+esc(row.key)+'" '+(row.value.enabled?'checked':'')+'>'+esc(labBookProfileLabel(row.key))+'</label>').join('')+pages('profiles',profiles)+(available.length?field(esc(text('profiles')),'<select data-configuration-add-profile>'+available.map(profile=>option(profile.id,labBookProfileLabel(profile.id),available[0].id)).join('')+'</select>')+button('enabled','profile-add'):'')+'</section>';
  }
  function definitionView(){
   if(!definition)return '<p>'+esc(text('selectField'))+'</p>';
   const value=definition.value,attr=key=>'data-configuration-field-prop="'+key+'"';
   return '<div class="lab-field-config" data-field-key="'+esc(definition.key)+'"><div class="lab-field-primary">'+
-   field(customFieldText('label'),'<textarea '+attr('label')+' required maxlength="160" rows="1">'+esc(value.label)+'</textarea>')+
+   field(customFieldText('label'),'<textarea '+attr('label')+' required maxlength="160" rows="1">'+esc(templateText(value.label))+'</textarea>')+
    field(customFieldText('type'),'<select '+attr('type')+'>'+['text','number','date','boolean','select'].map(type=>option(type,customFieldText('types.'+type),value.type)).join('')+'</select>')+
-   (value.type==='number'?field(customFieldText('unit'),'<input '+attr('unit')+' maxlength="80" value="'+esc(value.unit)+'">'):'')+
+   (value.type==='number'?field(customFieldText('unit'),'<input '+attr('unit')+' maxlength="80" value="'+esc(templateText(value.unit))+'">'):'')+
    '<label class="checkbox"><input type="checkbox" '+attr('required')+' '+(value.required?'checked':'')+'>'+esc(customFieldText('required'))+'</label>'+button('removeField','field-remove')+'</div>'+
-   fieldNumberControls(value,{field,option,esc},attr)+(value.type==='select'?'<section><h4>'+esc(text('choices'))+'</h4><div class="lab-type-list">'+choices.rows.map(row=>button('choiceValue','choice-select','data-key="'+esc(row.key)+'" aria-current="'+(choice?.key===row.key)+'"',row.value)).join('')+'</div>'+pages('choices',choices)+button('addChoice','choice-add')+(choice?field(esc(text('choiceValue')),'<input data-configuration-choice maxlength="160" required value="'+esc(choiceText)+'">')+button('save','choice-apply')+button('removeChoice','choice-remove'):'')+'</section>':'')+'</div>';
+   fieldNumberControls(value,{field,option,esc},attr)+(value.type==='select'?'<section><h4>'+esc(text('choices'))+'</h4><div class="lab-type-list">'+choices.rows.map(row=>button('choiceValue','choice-select','data-key="'+esc(row.key)+'" aria-current="'+(choice?.key===row.key)+'"',templateText(row.value))).join('')+'</div>'+pages('choices',choices)+button('addChoice','choice-add')+(choice?field(esc(text('choiceValue')),'<input data-configuration-choice maxlength="160" required value="'+esc(choiceText)+'">')+button('save','choice-apply')+button('removeChoice','choice-remove'):'')+'</section>':'')+'</div>';
  }
  function view(){
   const value=section?.value;
-  return '<div data-configuration-editor><fieldset class="project-config-fields" '+(busy?'disabled aria-busy="true"':'')+'>'+profileView()+'<div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="'+esc(text('sections'))+'"><div class="lab-type-list-heading"><strong>'+esc(text('sections'))+'</strong>'+button('addType','section-add')+'</div><div class="lab-type-list">'+sections.rows.map(row=>button('sections','section-select','data-key="'+esc(row.key)+'" aria-current="'+(section?.key===row.key)+'"',row.value.label+(row.value.enabled?'':' ('+text('removed')+')'))).join('')+'</div>'+pages('sections',sections)+'</aside><section class="lab-type-detail" aria-label="'+esc(text('sections'))+'">'+
+  return '<div data-configuration-editor><fieldset class="project-config-fields" '+(busy?'disabled aria-busy="true"':'')+'>'+profileView()+'<div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="'+esc(text('sections'))+'"><div class="lab-type-list-heading"><strong>'+esc(text('sections'))+'</strong>'+button('addType','section-add')+'</div><div class="lab-type-list">'+sections.rows.map(row=>button('sections','section-select','data-key="'+esc(row.key)+'" aria-current="'+(section?.key===row.key)+'"',templateText(row.value.label)+(row.value.enabled?'':' ('+text('removed')+')'))).join('')+'</div>'+pages('sections',sections)+'</aside><section class="lab-type-detail" aria-label="'+esc(text('sections'))+'">'+
    (value?'<div class="inline-actions">'+button('moveUp','section-move','data-direction="-1" '+(!value.enabled?'disabled':''))+button('moveDown','section-move','data-direction="1" '+(!value.enabled?'disabled':''))+button(value.enabled?'removeType':'restoreType','section-toggle')+'</div>'+
-    field(customFieldText('typeName'),'<textarea data-configuration-section-prop="label" required maxlength="160" rows="1">'+esc(value.label)+'</textarea>')+
-    field(customFieldText('guidance'),'<textarea data-configuration-section-prop="description" maxlength="2000" rows="2">'+esc(value.description)+'</textarea>')+
-    '<h4>'+esc(text('fields'))+'</h4><div class="lab-type-list">'+fields.rows.map(row=>button('fields','field-select','data-key="'+esc(row.key)+'" aria-current="'+(definition?.key===row.key)+'"',row.value.label)).join('')+'</div>'+pages('fields',fields)+button('addField','field-add')+definitionView():'<p>'+esc(text('selectType'))+'</p>')+
+    field(customFieldText('typeName'),'<textarea data-configuration-section-prop="label" required maxlength="160" rows="1">'+esc(templateText(value.label))+'</textarea>')+
+    field(customFieldText('guidance'),'<textarea data-configuration-section-prop="description" maxlength="2000" rows="2">'+esc(templateText(value.description))+'</textarea>')+
+    '<h4>'+esc(text('fields'))+'</h4><div class="lab-type-list">'+fields.rows.map(row=>button('fields','field-select','data-key="'+esc(row.key)+'" aria-current="'+(definition?.key===row.key)+'"',templateText(row.value.label))).join('')+'</div>'+pages('fields',fields)+button('addField','field-add')+definitionView():'<p>'+esc(text('selectType'))+'</p>')+
    '</section></div></fieldset><p role="status" data-configuration-status>'+esc(error?.message??client.error()?.message??text(busy?'loading':dirty()?'unsaved':'saved'))+'</p>'+((error||client.error())?button('retry','retry'):'')+'</div>';
  }
  function input(element){
@@ -111,7 +112,7 @@ export function configurationEditor({state,api,esc,field,option,draw,onChange=()
    if(kind==='section-select'){await loadSection(key,{signal});return;}
    if(kind==='field-select'){await loadField(key,{signal});return;}
    if(kind==='choice-apply'){choices=await client.window('choices',{sectionId:section.key,fieldKey:definition.key,offset:choices.offset,limit:pageSize,signal});return;}
-   if(kind==='choice-select'){choice=copy(choices.rows.find(row=>row.key===key));choiceText=choiceBase=choice.value;return;}
+   if(kind==='choice-select'){choice=copy(choices.rows.find(row=>row.key===key));choiceText=choiceBase=templateText(choice.value);return;}
    if(kind==='page'){
     const selectors=collection==='fields'?{sectionId:section.key}:collection==='choices'?{sectionId:section.key,fieldKey:definition.key}:collection==='sections'&&profileId?{profileId}:{};
     const result=await client.window(collection,{...selectors,offset:Number(offset),limit:pageSize,signal});

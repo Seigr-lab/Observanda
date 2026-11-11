@@ -67,6 +67,7 @@ import {researchMaterialsUI} from './research-materials-loader.js';
 import {recordHistoryUI} from './record-history-ui.js';
 import {configurationOf,templateFrom} from './notebook-schema.js';
 import {availableSections} from './laboratory/catalog.js';
+import {templateText} from './custom-field-presentation.js';
 import {locationName} from './workspace-structure.js';
 import {recordFields,updateRecordField} from './record-fields-ui.js';
 import {wireCustomFieldClipboard} from './custom-field-clipboard-ui.js';
@@ -904,8 +905,8 @@ function renderRecordTable(entries,{action='edit-entry'}={}) {
  if(!entries.length)return '<section class="workspace-empty"><h3>'+esc(appText('noRecords'))+'</h3><p>'+esc(appText('openBook'))+'</p></section>';
  return `<div class="table-scroll"><table class="records-table"><thead><tr><th>${esc(appText('record'))}</th><th>${esc(appText('type'))}</th><th>${esc(appText('locationBook'))}</th><th>${esc(appText('date'))}</th><th>${esc(appText('progressOutcome'))}</th><th>${esc(appText('website'))}</th></tr></thead><tbody>${entries.map(e=>{
   const n=state.book.notebooks.find(n=>n.id===e.notebookId);
-  if(e.owner){const owner=e.owner,recordLink=researchReference({workspaceId:owner.workspaceId,kind:'record',id:e.id}),bookLink=researchReference({workspaceId:owner.workspaceId,kind:'notebook',id:e.notebookId});return `<tr><td><a class="text-button" href="${esc(recordLink)}">${esc(e.title)}</a></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location">${owner.projectId?`<button class="text-button" data-action="open-project" data-id="${owner.projectId}">${esc(owner.projectTitle)}</button>`:esc(owner.projectTitle)}<a class="text-button" href="${esc(bookLink)}">${esc(owner.notebookTitle)}</a></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;}
-  return `<tr><td><button class="text-button" data-action="${action}" data-id="${e.id}">${esc(e.title)}</button></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location"><button class="text-button" data-action="open-project" data-id="${n?.projectId}">${esc(locationName(projectDirectoryUI.navigation(state.book),n?.projectId))}</button><button class="text-button" data-action="filter-notebook" data-id="${n?.id}">${esc(n?.title)}</button></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;
+  if(e.owner){const owner=e.owner,recordLink=researchReference({workspaceId:owner.workspaceId,kind:'record',id:e.id}),bookLink=researchReference({workspaceId:owner.workspaceId,kind:'notebook',id:e.notebookId});return `<tr><td><a class="text-button" href="${esc(recordLink)}">${esc(e.title)}</a></td><td>${esc(templateText(e.template?.label)??recordLabel(e.type))}</td><td class="record-location">${owner.projectId?`<button class="text-button" data-action="open-project" data-id="${owner.projectId}">${esc(owner.projectTitle)}</button>`:esc(owner.projectTitle)}<a class="text-button" href="${esc(bookLink)}">${esc(owner.notebookTitle)}</a></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;}
+  return `<tr><td><button class="text-button" data-action="${action}" data-id="${e.id}">${esc(e.title)}</button></td><td>${esc(templateText(e.template?.label)??recordLabel(e.type))}</td><td class="record-location"><button class="text-button" data-action="open-project" data-id="${n?.projectId}">${esc(locationName(projectDirectoryUI.navigation(state.book),n?.projectId))}</button><button class="text-button" data-action="filter-notebook" data-id="${n?.id}">${esc(n?.title)}</button></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 
@@ -925,7 +926,7 @@ function renderEditor() {
       ${publicationAvailability(e,notebook,esc,{draft:true})}
     </section><details class="record-edit-group" data-disclosure="draft-evidence"><summary>${esc(ux('evidence'))}</summary>${renderMedia(e)}${figures.view()}${materials.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordDetails.relations(e)}${connectedWork.view()}</details>
     <details class="record-edit-group" data-disclosure="draft-details"><summary>${esc(ux('details'))}</summary><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
-      ${e.template?'<p class="scope-kicker">'+esc(e.template.label)+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
+      ${e.template?'<p class="scope-kicker">'+esc(templateText(e.template.label))+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
       ${field(esc(appText('progress')),`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,LIFECYCLE_STATUSES.includes(status)?recordStatus(status):appText('legacyStatus',{status:recordStatus(status)}),e.status)).join('')}</select>`)}
       ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" maxlength="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`)}
       <p class="muted">${esc(appText('progressHelp'))}</p>
@@ -957,9 +958,9 @@ async function addEntry(type, notebookId,section=null,subject=null) {
   const occurredOn = [local.getFullYear(), String(local.getMonth() + 1).padStart(2, '0'), String(local.getDate()).padStart(2, '0')].join('-');
   const template = RECORD_TYPES.find(item => item.id === type);
   if (!template || !state.book.notebooks.some(n => n.id === notebookId)) return;
-  const e = { id: crypto.randomUUID(), notebookId, type, title: t('recordAuthoring','untitled',{type:(section?.label??template.label).toLowerCase()}), body: '', contributors: [], relations: [], tags: [], occurredOn, createdAt: now, updatedAt: now, share: false, figures: [], status: 'draft', sections: template.sections.map(title => ({ id: crypto.randomUUID(), title, body: '' })), attachments: [] };
+  const e = { id: crypto.randomUUID(), notebookId, type, title: t('recordAuthoring','untitled',{type:templateText(section?.label??template.label).toLocaleLowerCase()}), body: '', contributors: [], relations: [], tags: [], occurredOn, createdAt: now, updatedAt: now, share: false, figures: [], status: 'draft', sections: template.sections.map(title => ({ id: crypto.randomUUID(), title, body: '' })), attachments: [] };
   if(section&&!section.configurationPin)e.template=templateFrom(section);
-  if(subject){documentRecord(state.book.id,e,subject);e.title=t('recordAuthoring','subjectTitle',{type:section?.label??template.label,subject:subject.title,date:occurredOn}).slice(0,180);}
+  if(subject){documentRecord(state.book.id,e,subject);e.title=t('recordAuthoring','subjectTitle',{type:templateText(section?.label??template.label),subject:subject.title,date:occurredOn}).slice(0,180);}
   if(section?.configurationPin){openCreatedRecord(e,{selectedDraft:true});await configurationRecord.open(e,section);return;}
   openCreatedRecord(e);
 }

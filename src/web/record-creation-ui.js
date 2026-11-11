@@ -6,6 +6,7 @@ import {enabledModule} from './feature-modules.js';
 import {RECORD_TYPES} from './record-types.js';
 import {recordTypePresentation} from './record-type-presentation.js';
 import {t,messageLanguage} from './i18n/index.js';
+import {templateText} from './custom-field-presentation.js';
 
 export function recordCreationUI({state,api,notebooks,esc,showDialog,locationName,create}){
  const selected=configurationTypeChoices({state,api,esc,showDialog});
@@ -21,7 +22,7 @@ export function recordCreationUI({state,api,notebooks,esc,showDialog,locationNam
   }
   if(state.storage?.researchStorage==='catalogue')return selected.open(notebook,{title:t('recordAuthoring','newInBook',{title:notebook.title}),starters:true,onChoose:async choice=>{document.querySelector('#dialog').close();await create(choice.type,choice.notebookId,choice.section??null);}});
   const sections=availableSections(configurationOf(notebook)).filter(s=>!s.profileId||enabledModule(state.dashboardSettings,laboratoryModuleId(s.profileId)));
-  const choice=(value,attributes)=>`<button class="record-type-option" ${attributes} aria-label="${text('createType',{type:value.label.toLowerCase()})}"><strong>${esc(value.label)}</strong><span>${esc(value.description)}</span></button>`;
+  const choice=(value,attributes)=>`<button class="record-type-option" ${attributes} aria-label="${text('createType',{type:templateText(value.label).toLocaleLowerCase()})}"><strong>${esc(templateText(value.label))}</strong><span>${esc(templateText(value.description))}</span></button>`;
   showDialog(`<div lang="${lang}"><h2 id="dialog-title">${text('newInBook',{title:notebook.title})}</h2><input type="hidden" id="entry-notebook" value="${notebook.id}"><div class="record-type-grid">${sections.map(s=>choice(s,`data-action="choose-template" data-notebook="${notebook.id}" data-id="${s.id}"`)).join('')}</div><details ${sections.length?'':'open'}><summary>${text('generalTypes')}</summary><div class="record-type-grid">${RECORD_TYPES.map(type=>choice(recordTypePresentation(type),`data-action="choose-type" data-type="${type.id}"`)).join('')}</div></details><div class="inline-actions"><button type="button" class="button" data-action="starter-library" data-notebook="${notebook.id}">${esc(t('recordStarters','library'))}</button></div>${actions()}</div>`);
  }
  return {choose,action:selected.action,input:selected.input,stop:selected.stop};

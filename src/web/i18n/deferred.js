@@ -42,6 +42,7 @@ export const deferredCatalogues=Object.freeze({
  sketch:()=>import('./catalogues/sketch.js'),
  localIntake:()=>import('./catalogues/localIntake.js'),
  labBookData:()=>import('./catalogues/labBookData.js'),
+ labBookProfiles:()=>import('./catalogues/labBookProfiles.js'),
  websiteContent:()=>import('./catalogues/websiteContent.js'),
  moduleReferences:()=>import('./catalogues/moduleReferences.js'),
  moduleHistory:()=>import('./catalogues/moduleHistory.js'),

@@ -4,10 +4,13 @@ import {recordTypeLabel} from './record-type-presentation.js';
 import {STATUSES} from './record-types.js';
 const tr=(key,args)=>t('applicationTexts',key,args);
 const statusLabel=value=>STATUSES.includes(value)?t('recordValues','status_'+value):value;
-const trackingLabel=(context,profile,key,fallback)=>profile==='beekeeping'&&context.tracking?tr({subjectLabel:'activityHiveColony',primaryLabel:'activityNewInspection'}[key]):context.tracking?.[key]??fallback;
-const trackingHeading=(context,profile)=>profile==='beekeeping'&&['hive','colony'].includes(context.section?.key)?tr(context.section.key==='hive'?'activityHiveHistory':'activityColonyHistory'):context.tracking?.headings?.[context.section?.key]??tr('activityLinked');
+// Subject labels come from the profile that declares the tracking.
+const trackingLabel=(context,profile,key,fallback)=>context.tracking?trackingText(profile,key==='subjectLabel'?'subject':'primary'):fallback;
+const trackingHeading=(context,profile)=>context.tracking?.subjects.includes(context.section?.key)?trackingText(profile,'history',context.section.key):tr('activityLinked');
 import {enabledModule} from './feature-modules.js';
 import {laboratoryModuleId} from './laboratory/catalog.js';
+import {trackingText} from './laboratory/profile-text.js';
+import {templateText} from './custom-field-presentation.js';
 import {configurationDocumentClient} from './configuration-document-client.js';
 import {configurationTypeChoices} from './configuration-type-choices.js';
 import {activityContext,activityTemplates,activityChoices,documentRecord} from './record-activity.js';
@@ -36,7 +39,7 @@ export function recordActivityUI({state,api,esc,field,showDialog,notify,render,d
   if(error)return `<p role="alert">${esc(error.message)}</p>${button(tr('activityRetry'),'refresh')}`;
   if(loading||!result)return '<p role="status">'+esc(tr('activityLoading'))+'</p>';
   return `${result.changed?'<p role="status">'+esc(tr('activityChanged'))+'</p>':''}<p tabindex="-1" data-activity-status>${esc(result.total?tr('activityRange',{first:result.offset+1,last:result.offset+result.records.length,count:result.total}):tr('activityNone'))}</p>
-   <ol class="run-list">${result.records.map(e=>`<li><a href="#/records/${e.id}/read" data-action="record-read-linked" data-id="${e.id}">${esc(e.title)}</a><span>${esc(recordDateLabel(e.occurredOn))} &middot; ${esc(e.template?.label??recordTypeLabel(e.type))} &middot; ${esc(statusLabel(e.status))}</span>${(e.linkedBy??[]).map(l=>`<small>${esc(l.type)}${l.revision?' &middot; '+esc(tr(l.revision!==revisions()[record().id]?'activityRetainedDifferent':'activityRetained',{revision:l.revision.slice(0,10)})):''}</small>`).join('')}</li>`).join('')}</ol>
+   <ol class="run-list">${result.records.map(e=>`<li><a href="#/records/${e.id}/read" data-action="record-read-linked" data-id="${e.id}">${esc(e.title)}</a><span>${esc(recordDateLabel(e.occurredOn))} &middot; ${esc(templateText(e.template?.label)??recordTypeLabel(e.type))} &middot; ${esc(statusLabel(e.status))}</span>${(e.linkedBy??[]).map(l=>`<small>${esc(l.type)}${l.revision?' &middot; '+esc(tr(l.revision!==revisions()[record().id]?'activityRetainedDifferent':'activityRetained',{revision:l.revision.slice(0,10)})):''}</small>`).join('')}</li>`).join('')}</ol>
    <nav class="inline-actions" aria-label="${esc(tr('activityPages'))}">${button(tr('activityPrevious'),'previous',!result.previousCursor?'disabled':'')}${button(tr('activityNext'),'next',!result.nextCursor?'disabled':'')}${button(tr('activityRefresh'),'refresh')}</nav>`;
  }
  function view({readonly=false}={}){

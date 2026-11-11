@@ -3,6 +3,7 @@ import {profileById,availableSections,laboratoryModuleId} from './laboratory/cat
 import {configurationOf} from './notebook-schema.js';
 import {enabledModule} from './feature-modules.js';
 import {RECORD_TYPES} from './record-types.js';
+import {templateText} from './custom-field-presentation.js';
 
 // Subject histories use ordinary record relationships and saved record identities.
 // A profile can suggest actions without owning records or their persistence.
@@ -27,6 +28,6 @@ export function documentRecord(workspaceId,record,subject){
  return true;
 }
 export function activityChoices(book,record,settings){
- return [...activityTemplates(book,record,settings).map(section=>({value:'template:'+section.id,label:section.label,section,type:'note'})),
+ return [...activityTemplates(book,record,settings).map(section=>({value:'template:'+section.id,label:templateText(section.label),section,type:'note'})),
   ...RECORD_TYPES.map(t=>({value:'type:'+t.id,label:t.label,type:t.id,section:null}))];
 }

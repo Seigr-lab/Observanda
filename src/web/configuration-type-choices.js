@@ -3,6 +3,7 @@ import {enabledLabBookTypes} from './feature-modules.js';
 import {RECORD_TYPES} from './record-types.js';
 import {recordTypePresentation} from './record-type-presentation.js';
 import {t} from './i18n/index.js';
+import {templateText} from './custom-field-presentation.js';
 
 export function configurationTypeChoices({state,api,esc,showDialog}){
  let notebook=null,options=null,page=null,error=null,busy=false,controller=null,epoch=0,search='';
@@ -12,7 +13,7 @@ export function configurationTypeChoices({state,api,esc,showDialog}){
  function stop(){if(root())document.querySelector('#dialog').close();epoch++;controller?.abort();controller=null;client.stop();notebook=options=page=error=null;busy=false;search='';}
  function view(){
   const labels=page?.rows??[],orderedTypes=[...RECORD_TYPES.map(recordTypePresentation)].sort((a,b)=>['note','observation'].indexOf(a.id)<0?(['note','observation'].includes(b.id)?1:0):['note','observation'].indexOf(b.id)<0?-1:['note','observation'].indexOf(a.id)-['note','observation'].indexOf(b.id));
-  const custom=row=>'<button type="button" class="record-type-option" aria-label="'+esc(t('recordAuthoring','createType',{type:row.value.label.toLowerCase()}))+'" data-action="configuration-type-select" data-key="'+esc(row.key)+'" '+(busy?'disabled':'')+'><strong>'+esc(row.value.label)+'</strong><span>'+esc(row.value.description)+'</span></button>';
+  const custom=row=>'<button type="button" class="record-type-option" aria-label="'+esc(t('recordAuthoring','createType',{type:templateText(row.value.label).toLocaleLowerCase()}))+'" data-action="configuration-type-select" data-key="'+esc(row.key)+'" '+(busy?'disabled':'')+'><strong>'+esc(templateText(row.value.label))+'</strong><span>'+esc(templateText(row.value.description))+'</span></button>';
   return '<div data-configuration-type-choices="'+instance+'"><h2 id="dialog-title">'+esc(options.title)+'</h2>'+(options.description?'<p>'+esc(options.description)+'</p>':'')+
    (labels.length||search?'<label class="field">'+esc(text('search'))+'<input data-configuration-type-search maxlength="160" value="'+esc(search)+'"></label><div class="record-type-grid">'+labels.map(custom).join('')+'</div>':'')+
    (busy||error||page?.total||search?'<p role="status">'+esc(error?.message??(busy?text('loading'):page?.total?text('range',{first:page.offset+1,last:page.offset+page.rows.length,total:page.total}):text('noTypes')))+'</p>':'')+

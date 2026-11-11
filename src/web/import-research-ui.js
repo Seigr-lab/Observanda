@@ -1,7 +1,7 @@
 import {t} from './i18n/index.js';
 import {attemptView} from './attempt-view.js';
 import {resultStatementsView} from './result-statements.js';
-import {customFieldLabel} from './custom-field-presentation.js';
+import {customFieldLabel,customFieldValueText,templateText} from './custom-field-presentation.js';
 
 // The source adapter declares meaning. This UI selects and reviews a complete
 // declaration; it does not translate arbitrary metadata keys into findings.
@@ -26,6 +26,6 @@ export function importResearchPreview(record,esc){
  if(!record)return '';
  const message=(key,args)=>t('importResearch',key,args),reference=ref=>'<span>'+esc(ref.label??ref.kind)+' · <code>'+esc(ref.revision)+'</code></span>',template=record.template;
  return '<section class="import-research-preview" aria-label="'+esc(message('preview'))+'"><h3>'+esc(message('preview'))+'</h3><dl><dt>'+esc(message('progress'))+'</dt><dd>'+esc(message('status-'+record.status))+'</dd><dt>'+esc(message('outcome'))+'</dt><dd>'+esc(record.outcome??'')+'</dd></dl>'+
-  (template?'<h4>'+esc(template.label)+'</h4><p>'+esc(template.description)+'</p><dl>'+template.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+esc(template.values[f.key]??'')+'</dd>').join('')+'</dl>':'')+
+  (template?'<h4>'+esc(templateText(template.label))+'</h4><p>'+esc(templateText(template.description))+'</p><dl>'+template.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+esc(customFieldValueText(f,template.values[f.key])??'')+'</dd>').join('')+'</dl>':'')+
   attemptView(record.attempt,esc,{message:(key,args)=>t('attempts',key,args),reference})+resultStatementsView(record.results,esc,{message:key=>t('analyses',key),reference})+'</section>';
 }

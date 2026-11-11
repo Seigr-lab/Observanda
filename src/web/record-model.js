@@ -1,5 +1,6 @@
 import {workflowRole} from './record-workflow.js';
 import {RECORD_TYPES} from './record-types.js';
+import {templateText} from './custom-field-presentation.js';
 import {locationName} from './workspace-structure.js';
 import {upgradeFigure} from './figure-model.js';
 // Shared record metadata contract, independent of routes, storage and accounts.
@@ -44,4 +45,4 @@ export function targetRoute(target,book){
 
 // Saved template identity drives filters across record lists and dashboard sources.
 export const matchesRecordType=(record,filter)=>filter==='all'||(record.template?'template:'+record.template.id:record.type)===filter;
-export const recordTypeChoices=records=>[...RECORD_TYPES.map(t=>({value:t.id,label:t.label})),...[...new Map(records.filter(e=>e.template).map(e=>[e.template.id,e.template])).values()].map(t=>({value:'template:'+t.id,label:t.label}))];
+export const recordTypeChoices=records=>[...RECORD_TYPES.map(t=>({value:t.id,label:t.label})),...[...new Map(records.filter(e=>e.template).map(e=>[e.template.id,e.template])).values()].map(t=>({value:'template:'+t.id,label:templateText(t.label)}))];

@@ -1,6 +1,7 @@
 {
   "websiteFiles": ["en", "ca", "es", "nb", "nn"],
   "websiteStarters": ["en", "ca", "es", "nb", "nn"],
+  "labBookProfiles": ["en", "ca", "es", "nb", "nn"],
   "coordinateFrames": [
     "en",
     "ca",
