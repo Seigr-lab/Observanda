@@ -10,8 +10,8 @@ import {navigate,preferences} from './preferences-helper.js';
 import {editorTab,typeTools} from './composer-helper.js';
 import {woffFixture} from '../font-fixture.js';
 let app,root,errors;
-test.beforeEach(async({page})=>{root=await mkdtemp(path.join(os.tmpdir(),'observanda-font-ui-'));errors=[];page.on('pageerror',e=>errors.push(e.message));await new Workspace(root).create(upgradeNotebook(sampleNotebook()));app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await preferences(page,'Appearance');});
-test.afterEach(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
+test.beforeEach(async({page})=>{root=path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-font-ui-')),'workspace');errors=[];page.on('pageerror',e=>errors.push(e.message));await new Workspace(root).create(upgradeNotebook(sampleNotebook()));app=await startServer({root,preferencesFile:path.join(path.dirname(root),'preferences.json'),port:0});await page.goto(app.url);await preferences(page,'Appearance');});
+test.afterEach(async()=>{await app.close();await rm(path.dirname(root),{recursive:true,force:true});});
 async function choose(page,label,name){await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('option',{name,exact:true}).click();}
 test('uploaded OTF and compressed variable fonts render in the browser',async({page})=>{
  const sources=[{name:'source-serif.otf',mimeType:'font/otf',buffer:await readFile('test/fixtures/fonts/source-serif.otf')},{name:'dm-sans.woff2',mimeType:'font/woff2',buffer:await readFile('test/fixtures/fonts/dm-sans.woff2')},{name:'dm-sans.woff',mimeType:'font/woff',buffer:woffFixture(await readFile('src/fonts/dm-sans.ttf'))}];

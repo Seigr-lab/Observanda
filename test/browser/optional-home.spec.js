@@ -14,8 +14,8 @@ const frame=page=>page.frameLocator('#website-draft-preview');
 const createHome=page=>page.locator('.canvas-toolbar [data-action=website-create-home]');
 const save=async page=>{await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
 async function open(page,book){
- root=await mkdtemp(path.join(os.tmpdir(),'observanda-optional-home-'));await new Workspace(root).create(book);
- app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});
+ root=path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-optional-home-')),'workspace');await new Workspace(root).create(book);
+ app=await startServer({root,preferencesFile:path.join(path.dirname(root),'preferences.json'),port:0});
  errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(app.url);await navigate(page,'Website editor');
 }
 test.afterEach(async()=>{await app?.close();});

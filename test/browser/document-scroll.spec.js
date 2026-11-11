@@ -20,10 +20,10 @@ const noInnerScroll=async locator=>{
 };
 const noPanels=async page=>expect(await page.evaluate(()=>[...document.querySelectorAll('.website-controls,.website-canvas,.website-preview-panel,.dashboard-panel,.dashboard-panel>div,#main-navigation,.workspace-tree')].filter(el=>el.getClientRects().length&&el.scrollHeight>el.clientHeight+1&&/auto|scroll/.test(getComputedStyle(el).overflowY)).map(el=>el.className))).toEqual([]);
 test.beforeEach(async({page})=>{
- root=await mkdtemp(path.join(os.tmpdir(),'observanda-scroll-'));const book=sampleNotebook();
+ root=path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-scroll-')),'workspace');const book=sampleNotebook();
  book.title='Field studies';book.website.home.sections=[{id:randomUUID(),kind:'text',title:'Notes from the river',show:true,body:Array.from({length:9},(_,i)=>`Observation ${i+1}. The river changed after the rain. We recorded water levels, photographed the bank and compared notes from the same location.`).join('\n\n')},{id:randomUUID(),kind:'text',title:'Follow-up work',show:true,body:'Return after the next rainfall and compare the measurements.'}];
  book.entries=Array.from({length:12},(_,i)=>({...book.entries[0],id:randomUUID(),title:`River observation ${i+1}`,body:'A record of conditions along the river bank.',figures:[]}));
- await new Workspace(root).create(book);app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await mkdir('.local/screenshots',{recursive:true});
+ await new Workspace(root).create(book);app=await startServer({root,preferencesFile:path.join(path.dirname(root),'preferences.json'),port:0});await page.goto(app.url);await mkdir('.local/screenshots',{recursive:true});
 });
 test.afterEach(async()=>{await app?.close();app=null;});
 

@@ -11,7 +11,7 @@ let app,root,book;
 const frame=p=>p.frameLocator('#website-draft-preview');
 const save=async p=>{await p.getByRole('button',{name:'Save website',exact:true}).click();await expect(p.locator('#save-status')).toHaveText('Saved');};
 async function selectText(editor,text){await editor.evaluate((el,text)=>{const d=el.ownerDocument,walker=d.createTreeWalker(el,4);let node;while(node=walker.nextNode()){const start=node.textContent.indexOf(text);if(start!==-1){const range=d.createRange();range.setStart(node,start);range.setEnd(node,start+text.length);el.focus();d.getSelection().removeAllRanges();d.getSelection().addRange(range);d.dispatchEvent(new Event('selectionchange'));return;}}throw new Error('Text not found');},text);}
-test.beforeEach(async({page})=>{root=await mkdtemp(path.join(os.tmpdir(),'observanda-interaction-'));book=sampleNotebook();await new Workspace(root).create(book);app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);});
+test.beforeEach(async({page})=>{root=path.join(await mkdtemp(path.join(os.tmpdir(),'observanda-interaction-')),'workspace');book=sampleNotebook();await new Workspace(root).create(book);app=await startServer({root,preferencesFile:path.join(path.dirname(root),'preferences.json'),port:0});await page.goto(app.url);});
 test.afterEach(async()=>app.close());
 
 test('Menu opens and closes on every screen, carries the user choice and does not edit preferences or records',async({page})=>{
