@@ -13,7 +13,7 @@ test('both asymmetric intervals affect auto and shared ranges and survive all fi
 });
 test('intervals validate endpoints, absence, conflicts, calendar and logarithmic meaning',()=>{
  for(const mutate of [p=>p.xLower=11,p=>p.yUpper=19,p=>p.xUpper=null,p=>p.error=1,p=>p.y=null,p=>p.xLower=Infinity]){const f=plot();mutate(f.series[0].points[0]);assert.ok(figureIssues(f).length);}
- const f=plot();f.x.scale='log';f.series[0].points[0].xLower=0;assert.ok(figureIssues(f).length);f.x.scale='linear';f.x.kind='date';Object.assign(f.series[0].points[0],{x:'2026-10-08',xLower:'2026-10-07',xUpper:'2026-10-09'});assert.deepEqual(figureIssues(f),[]);assert.match(renderFigure(f),/figure-interval-x/);
+ const f=plot();f.x.scale='log';f.series[0].points[0].xLower=0;assert.deepEqual(figureIssues(f),[]);assert.match(renderFigure(f),/figure-interval-clipped/);f.series[0].points[0].xLower=11;assert.ok(figureIssues(f).length);f.series[0].points[0].xLower=0;f.x.scale='linear';f.x.kind='date';Object.assign(f.series[0].points[0],{x:'2026-10-08',xLower:'2026-10-07',xUpper:'2026-10-09'});assert.deepEqual(figureIssues(f),[]);assert.match(renderFigure(f),/figure-interval-x/);
 });
 test('mapped bounds remain row-specific and cannot become silently aggregated uncertainty',()=>{
  const table={columns:['x','y','xl','xu','yl','yu'].map((label,index)=>({label,index})),rows:[{line:2,cells:['10','20','7','14','18','25']}]},mapping={x:0,xKind:'number',values:[{column:1,error:null,xLower:2,xUpper:3,yLower:4,yUpper:5}],group:null,operation:'raw',kind:'scatter',mode:'replace',decimal:'.'};
