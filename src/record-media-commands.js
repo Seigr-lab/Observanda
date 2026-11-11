@@ -22,8 +22,8 @@ export class RecordMediaCommands{
   return {etag,snapshot,row,members,index};
  }
  async run(command){
-  const extra=command?.action==='attach'?[]:command?.action==='remove'?['expectedRevision']:null;
-  if(!extra||!exact(command,['workspaceId','recordId','mediaId','action',...extra])||![command.workspaceId,command.recordId,command.mediaId].every(researchId)||command.action==='remove'&&!revisionId(command.expectedRevision))throw new AppError('INVALID');
+  const extra=command?.action==='attach'?[]:command?.action==='remove'?['expectedRevision']:command?.action==='move'?['position']:null;
+  if(!extra||!exact(command,['workspaceId','recordId','mediaId','action',...extra])||![command.workspaceId,command.recordId,command.mediaId].every(researchId)||command.action==='remove'&&!revisionId(command.expectedRevision)||command.action==='move'&&(!Number.isSafeInteger(command.position)||command.position<0))throw new AppError('INVALID');
   const media=new MediaStore(this.workspace);
   // Verify a new prepared file before taking the writer lock. This streams its
   // bytes; long recordings do not block unrelated edits while being inspected.
@@ -33,6 +33,13 @@ export class RecordMediaCommands{
    const {etag,snapshot,row,members,index}=await this.select(store,command);
    const receipt=(version,member,position)=>({etag:version,saved:true,mediaId:command.mediaId,position,total:memberCollectionCount(member,'attachments')});
    if(command.action==='attach'&&index>=0||command.action==='remove'&&index<0)return receipt(etag,row,index);
+   // Gallery order: moving keeps the attachment value and every other one
+   // unchanged; repeating a completed move is acknowledged without a write.
+   if(command.action==='move'){
+    if(index<0)throw new AppError('MISSING');
+    if(command.position>=memberCollectionCount(row,'attachments'))throw new AppError('INVALID');
+    if(command.position===index)return receipt(etag,row,index);
+   }
    // An existing association was removed during preparation: ask the caller to
    // retry instead of accepting a file this command has not verified.
    if(command.action==='attach'){
@@ -45,6 +52,10 @@ export class RecordMediaCommands{
     if(command.action==='attach'){
      position=memberCollectionCount(row,'attachments');
      document=await original.splice(['attachments'],position,0,[{id:command.mediaId,kind:prepared.kind,caption:'',alt:'',transcript:'',share:false}]);
+    }else if(command.action==='move'){
+     const item=(await original.field(['attachments',String(index)])).value;
+     if(item?.id!==command.mediaId)throw new AppError('CATALOGUE_DAMAGED');
+     position=command.position;document=await (await original.splice(['attachments'],index,1,[])).splice(['attachments'],position,0,[item]);
     }else{
      const selected=await selectedRecordValue(original,'media:'+command.mediaId,{position:index});
      if(selected.revision!==command.expectedRevision)throw new AppError('RECORD_CHANGED');

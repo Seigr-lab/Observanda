@@ -7,7 +7,13 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
  function checkContext(){const next=state.access?.locked?null:JSON.stringify([state.storage?.contextId,state.book?.id]);if(next!==context){pending.clear();context=next;}}
  const waiting=()=>{checkContext();return current()&&pending.has(owner(current()));};
  const button=(label,action,id='',disabled=false)=>'<button type="button" class="button" data-action="stored-media-'+action+'" data-media="'+esc(id)+'"'+(saving||disabled?' disabled':'')+'>'+esc(label)+'</button>';
- const controls=item=>button(text('removeMedia'),'remove',item.id,waiting());
+ // Gallery order is the record's attachment order; positions count across pages.
+ function place(item){
+  const reading=current(),page=reading?.collections?.attachments,index=reading?.header.attachments.findIndex(value=>value.id===item.id)??-1;
+  return index<0?null:{position:(page?.offset??0)+index,total:page?.total??reading.header.attachments.length};
+ }
+ const move=(item,key,action,target,disabled)=>'<button type="button" class="button" data-action="stored-media-'+action+'" data-media="'+esc(item.id)+'" data-position="'+target+'" aria-label="'+esc(text(key+'Label',{label:item.caption||text('unnamedMedia')}))+'"'+(saving||disabled?' disabled':'')+'>'+esc(text(key))+'</button>';
+ const controls=item=>{const at=place(item);return (at?move(item,'moveMediaEarlier','earlier',at.position-1,waiting()||at.position===0)+move(item,'moveMediaLater','later',at.position+1,waiting()||at.position>=at.total-1):'')+button(text('removeMedia'),'remove',item.id,waiting());};
  const add=()=>'<div class="record-media-intake"><div class="field"><label for="record-media-upload">'+esc(text('addMedia'))+'</label><input id="record-media-upload" type="file" data-upload="record-attachment" accept="image/*,audio/*,video/*,.svg"'+(saving||waiting()?' disabled':'')+'></div><p class="muted">'+esc(text('addMediaHelp'))+'</p>'+(waiting()?'<p role="status">'+esc(text('mediaPending'))+'</p>'+button(text('retryMedia'),'retry'):'')+'</div>';
  async function execute(reading,command){
   const key=owner(reading),storageContext=state.storage?.contextId;
@@ -15,7 +21,7 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
   pending.set(key,command);saving=true;render();
   try{
    const result=await api('/api/research/records/media',command,{adopt:false});pending.delete(key);
-   if(owned()){await refresh();if(owned()&&command.action==='attach')await reveal(result.position);}
+   if(owned()){await refresh();if(owned()&&['attach','move'].includes(command.action))await reveal(result.position);}
    return result;
   }catch(error){if(['INVALID','MISSING','FORMAT','WORKSPACE_CHANGED','RECORD_CHANGED','INTAKE_COMPLETION','MEDIA_IN_USE','MEDIA_INVALID'].includes(error.code))pending.delete(key);throw error;}
   finally{saving=false;render();}
@@ -33,6 +39,10 @@ export function recordMediaActions({state,api,esc,current,refresh,reveal,render,
   if(waiting()&&action!=='retry')return true;
   try{
    if(action==='retry'){const command=pending.get(key);if(command)await execute(reading,command);}
+   else if(action==='earlier'||action==='later'){
+    const position=Number(control.dataset.position);if(!Number.isSafeInteger(position)||position<0)return true;
+    await execute(reading,{workspaceId:reading.workspaceId,recordId:reading.recordId,action:'move',mediaId:control.dataset.media,position});
+   }
    else if(action==='remove'){
     const id=control.dataset.media,item=reading.header.attachments.find(item=>item.id===id);if(!item)return true;
     // Read the selected value before asking for removal. Its own revision guards
