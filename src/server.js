@@ -300,7 +300,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    },{check})});
   };
   const stopWebsitePreparation=async ctx=>{await ctx.websitePreparation?.stop();delete ctx.websitePreparation;};
-  const stopWorkspaceJobs=async ctx=>{await stopWebsitePreparation(ctx);await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
+  const stopWorkspaceJobs=async ctx=>{await ctx.publicationConversion?.settled();await stopWebsitePreparation(ctx);await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
   const stopJobs=async ctx=>{await stopWebsitePreparation(ctx);await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
@@ -1207,7 +1207,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);
-        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,{...options,publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),withConfigurationSource:configurationSourceAccess(historyProjects,client,{check:req.checkWriter})}),json);
+        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,{...options,publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace),publicationBackground:true,withConfigurationSource:configurationSourceAccess(historyProjects,client,{check:req.checkWriter})}),json);
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await executeResearchRequest(workspace,url.pathname,data,{signal:controller.signal}));}finally{res.off('close',abort);}
       }

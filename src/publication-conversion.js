@@ -15,6 +15,10 @@ import {runWebsiteUpgrade} from './website-upgrade-lease.js';
 import {readFeedSource,writeLiveFeedSource,removeLiveFeedSource,releasePreviousFeedSource} from './website-feed-source.js';
 
 const channels=['website','pdf'];
+// Record content saves answer the author once the research write is durable.
+// Their website copies stay fenced (hidden from libraries, sites refuse to
+// publish) until the rebuild below commits or a later edit recovers it.
+const deferredRoutes=new Set(['/api/research/records/writing/save','/api/research/records/values/save','/api/research/records/sections','/api/research/records/figures','/api/research/records/media','/api/research/records/tags','/api/research/records/save']);
 const consentKey=target=>target==='pdf'?'sharePdf':'share';
 const domainFields=new Set(PUBLICATION_PARTS);
 const collectionAllowed=(value,target,collection)=>target==='pdf'?value===true:collection==='sections'?value!==false:value===true;
@@ -132,7 +136,9 @@ async function permittedOriginal(doc,target){
 
 const SEED_GROUP=16;
 export class PublicationConversion{
- constructor(workspace,{store=new WebsiteFileStore(workspace)}={}){this.files=store;}
+ constructor(workspace,{store=new WebsiteFileStore(workspace)}={}){this.files=store;this.rebuilds=new Set();}
+ // Wait for website copies still being rebuilt after answered saves.
+ async settled(){while(this.rebuilds.size)await Promise.allSettled([...this.rebuilds]);}
  deletionHooks(){return feedOwnerDeletionHooks(this.files);}
  // A physically relocated book is frozen until its journals admit the new
  // owner. Retire affected files before committing that owner's metadata. A
@@ -366,9 +372,22 @@ export class PublicationConversion{
    throw error;
   }
  }
- async mutate(storage,{route,data},operation){
+ async mutate(storage,{route,data},operation,{background=false}={}){
   const targets=commandTargets(route,data);if(!targets)return operation();
-  return this.withProducer(storage,()=>this.mutateTargets(storage,{route,data},targets,operation));
+  if(!background||!deferredRoutes.has(route))return this.withProducer(storage,()=>this.mutateTargets(storage,{route,data},targets,operation));
+  // The producer lease is held until the rebuild finishes, so the next edit
+  // of this owner waits for it; the author's request returns at the commit.
+  let committed=false,answer;const answered=new Promise(resolve=>answer=resolve);
+  const work=this.withProducer(storage,()=>this.mutateTargets(storage,{route,data},targets,operation,{committed:result=>{committed=true;answer(result);}}));
+  const rebuild=work.then(()=>{},async()=>{if(committed)await this.recover(storage,{route,data}).catch(()=>{});}).finally(()=>this.rebuilds.delete(rebuild));
+  this.rebuilds.add(rebuild);
+  return Promise.race([answered,work]);
+ }
+ // An interrupted rebuild leaves its fence pending. Changing nothing on the
+ // same targets resumes that fence with the current committed record.
+ recover(storage,{route,data}){
+  const targets=commandTargets(route,data);if(!targets)return;
+  return this.withProducer(storage,()=>this.mutateTargets(storage,{route,data},targets,async()=>undefined));
  }
  withProducer(storage,operation){
   const id=storage.vault?.id;if(!researchId(id))throw new AppError('ACCESS_LOCKED');
@@ -377,7 +396,7 @@ export class PublicationConversion{
   // between those two commits. Other research owners remain independent.
   return runWebsiteUpgrade(this.files,'publication-writer-'+id,operation,{shareResult:false});
  }
- async mutateTargets(storage,{route,data},targets,operation){
+ async mutateTargets(storage,{route,data},targets,operation,hooks={}){
   targets.tagsOnly=route==='/api/research/records/tags';
   const basis=targets.books.size&&['/api/workspace/notebook','/api/workspace/structure'].includes(route)?data.etag:null;
   if(targets.rehome)await storage.catalogue(async store=>{
@@ -385,10 +404,10 @@ export class PublicationConversion{
    const original=await store.snapshot(basis),index=new SnapshotIndex(store);
    for(const notebookId of targets.books)for await(const row of index.members(original.membership,{notebookId}))targets.records.set(row.id,targets.rehome);
   });
-  return this.change(storage,targets,data.workspaceId,operation,basis);
+  return this.change(storage,targets,data.workspaceId,operation,basis,hooks);
  }
  async mutateNotebook(storage,notebookId,operation){if(!researchId(notebookId))throw new AppError('INVALID');return this.withProducer(storage,()=>this.change(storage,{records:new Map(),books:new Set([notebookId])},null,operation));}
- async change(storage,targets,workspaceId,operation,basis){
+ async change(storage,targets,workspaceId,operation,basis,{committed}={}){
   targets={...targets,trackLive:!targets.tagsOnly};
   const selectedChannels=targets.liveOnly?['website']:channels;
   const deleting=state=>targets.removed?.has(state.provenance.recordId)||targets.removedBooks?.has(state.provenance.notebookId);
@@ -429,6 +448,7 @@ export class PublicationConversion{
   }}
   catch(error){await Promise.allSettled([...pending].filter(([,item])=>!item.prior.pending).map(([sourceId,{token}])=>this.files.cancelSourceUpdate({sourceId,token})));throw error;}
   let result,error;try{result=await operation();}catch(failure){error=failure;}
+  if(!error)committed?.(result);
   const after=await states(storage,targets,workspaceId,selectedChannels);
   for(const [id,value] of after)if(!pending.has(id)&&value.visible&&affected(value))throw new AppError('CONFLICT');
   for(const [id,{prior,token,state}] of pending){

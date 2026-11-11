@@ -50,6 +50,29 @@ test('eligible lab edits update saved live feed files and matching rules while a
  assert.equal((await store.open(created.site.id)).html,afterRestore.html);
 });
 
+test('a content save answers after its research write while the website copy stays fenced until rebuilt, and an interrupted rebuild recovers',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-background-')),book=sampleNotebook(),record=book.entries[2];
+ record.share=false;record.title='Before the storm';book.entries=[record];
+ const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
+ const store=new WebsiteFileStore(workspace),conversion=new PublicationConversion(workspace,{store}),target={workspaceId:book.id,recordId:record.id};
+ const value=async(field,value,options={})=>{const base=await executeResearchRequest(workspace,'/api/research/records/values/read',{...target,field});return executeResearchRequest(workspace,'/api/research/records/values/save',{...target,field,expectedRevision:base.revision,value:{value}},{publicationConversion:conversion,...options});};
+ await value('share',true);const source=await store.sourceForRecord({...target,target:'website'}),created=await store.create({name:'Storm notes'});
+ const placed=await store.insertSource(created.site.id,{sourceId:source.id,sourceRevision:source.revision,expectedRevision:created.site.revision});
+ const live=()=>store.scope(()=>readFeedSource(store,source.id)),fragment=source=>store.scope(()=>store.readText(source.html)),pending=async()=>(await store.sourceStatus(source.id)).pending;
+ const compose=conversion.composition,before=await live();let release;const held=new Promise(resolve=>release=resolve);
+ conversion.composition=async function(...args){await held;return compose.apply(this,args);};
+ // The author's save returns while the website rebuild still waits.
+ const saved=await value('title','During the storm',{publicationBackground:true});assert.equal(saved.saved,true);
+ assert.equal((await workspace.read()).book.entries[0].title,'During the storm');assert.ok(await pending());
+ await assert.rejects(async()=>store.save(created.site.id,{path:placed.path,expectedRevision:placed.site.revision,html:placed.html,css:placed.css}),{code:'CONFLICT'});
+ release();await conversion.settled();
+ const rebuilt=await live();assert.notEqual(rebuilt.revision,before.revision);assert.match(await fragment(rebuilt),/During the storm/);assert.ok(!await pending());
+ // A rebuild that stops after the research write keeps the copy fenced and is resumed with the committed record.
+ let interrupt=true;conversion.composition=async function(...args){if(interrupt){interrupt=false;throw Error('Interrupted website rebuild');}return compose.apply(this,args);};
+ await value('title','After the storm',{publicationBackground:true});await conversion.settled();
+ assert.equal(interrupt,false);assert.match(await fragment(await live()),/After the storm/);assert.ok(!await pending());
+});
+
 test('owner preparation catches up previously converted writing once, resuming an interrupted live-only write',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-history-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];record.share=false;record.body='Earlier saved writing.';
  const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
