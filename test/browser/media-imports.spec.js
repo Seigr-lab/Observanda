@@ -25,23 +25,24 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
   await (await revealInEditor(page,page.getByLabel('Add image, audio or video',{exact:true}),'Evidence and results')).setInputFiles({name:'private-study.svg',mimeType:'image/svg+xml',buffer:bytes});
   await expect(page.locator('#media-upload-status')).toContainText(/process|preparing/i,{timeout:15000});
-  await page.getByRole('button',{name:'Media imports',exact:true}).click();const dialog=page.locator('#dialog');
-  await expect(dialog).toContainText('private-study.svg');await expect(dialog).toContainText('running');
-  await dialog.getByRole('button',{name:'Cancel processing',exact:true}).click();await expect(dialog).toContainText('cancelled',{timeout:15000});
+  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
+  await expect(dialog).toContainText('private-study.svg');await expect(dialog).toContainText('Running');
+  await dialog.getByRole('button',{name:'Cancel processing',exact:true}).click();await expect(dialog).toContainText('Cancelled',{timeout:15000});
   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download original',exact:true}).click();const download=await downloadEvent;expect(await readFile(await download.path())).toEqual(bytes);
   const url=await dialog.getByRole('link',{name:'Download original'}).getAttribute('href');expect((await fetch(new URL(url,app.url))).ok).toBe(false);
   const wrong=await sessionRequest(page,'get',new URL(url.replace(/context=[^&]+/,'context=wrong'),app.url).href);expect((await wrong.json()).code).toBe('WORKSPACE_CHANGED');
   await app.close();app=await startServer(options);await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
-  await page.getByRole('button',{name:'Media imports',exact:true}).click();await expect(dialog).toContainText('cancelled');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();await expect(dialog).toContainText('Cancelled');
   await dialog.getByRole('button',{name:'Retry processing',exact:true}).click();await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});
   expect((await f.workspace.read()).book.entries[0].attachments).toEqual([]);
   await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(dialog).not.toBeVisible();
   const media=page.locator('[data-record-media] img');await expect(media).toHaveCount(1);await expect(media).toBeVisible();
   expect((await f.workspace.read()).book.entries[0].attachments).toHaveLength(1);expect((await new MediaImports(f.workspace).list())).toHaveLength(1);
-  await page.getByRole('button',{name:'Edit record',exact:true}).click();
+  // Attaching media may already have opened the editor.
+  const editRecord=page.getByRole('button',{name:'Edit record',exact:true});if(await editRecord.isVisible())await editRecord.click();
   await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();await expect(media).toBeVisible();
   await page.getByRole('button',{name:'Read record',exact:true}).click();await page.reload();
-  await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);await expect(media).toHaveCount(1);await expect(media).toBeVisible();expect(errors).toEqual([]);
+  await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);const reading=page.locator('.record-reader figure img');await expect(reading).toHaveCount(1);await expect(reading).toBeVisible();expect(errors).toEqual([]);
  }finally{MediaStore.prototype.prepare=prepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
@@ -55,7 +56,7 @@ test('durable SVG branding upload adds a draft, persists on Save and can be insp
   await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();await expect(page.locator('.logo-editor img')).toBeVisible();
   await page.setViewportSize({width:390,height:844});const open=page.getByRole('button',{name:'Media imports',exact:true});await open.focus();await page.keyboard.press('Enter');
-  const dialog=page.locator('#dialog');await expect(dialog).toContainText('completed');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  const dialog=page.locator('#dialog');await expect(dialog).toContainText('Completed');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:test.info().outputPath('media-imports-narrow.png')});
   await dialog.getByRole('button',{name:'Close',exact:true}).focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
@@ -69,7 +70,7 @@ test('an interrupted upload can be reselected and used in the website editor wit
  try{
   const {navigate}=await import('./preferences-helper.js'),{editorTab}=await import('./composer-helper.js');
   await page.goto(app.url);await navigate(page,'Website editor');await editorTab(page,'Media');
-  await page.getByRole('button',{name:'Media imports',exact:true}).click();const dialog=page.locator('#dialog');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
   await expect(dialog).toContainText('Upload interrupted');await dialog.getByLabel('Reselect original file',{exact:true}).setInputFiles({name:'reselect.svg',mimeType:'image/svg+xml',buffer:bytes});
   await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});
   await expect(dialog.getByRole('button',{name:'Cancel upload',exact:true})).toHaveCount(0);
@@ -77,7 +78,7 @@ test('an interrupted upload can be reselected and used in the website editor wit
   await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(page.locator('.website-media-library img')).toHaveCount(1);
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();await editorTab(page,'Media');await expect(page.locator('.website-media-library img')).toHaveCount(1);
-  await page.getByRole('button',{name:'Media imports',exact:true}).click();await dialog.getByRole('button',{name:'Use media',exact:true}).click();
+  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();await dialog.getByRole('button',{name:'Use media',exact:true}).click();
   await expect(page.locator('.website-media-library img')).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();await expect(page.locator('#save-status')).toHaveText('Saved');
   expect((await f.workspace.read()).book.website.assets).toHaveLength(1);
@@ -91,7 +92,7 @@ test('older imports remain selectable with keyboard paging while processing comp
  for(let i=0;i<23;i++){const session=await imports.start({name:'study-'+String(i).padStart(2,'0')+'.svg',size:bytes.length,kind:'image'});if(i===0){oldest=session;await imports.receive(session.id,bytes);}}
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  try{
-  await page.goto(app.url);await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();await page.getByRole('button',{name:'Media imports',exact:true}).click();const dialog=page.locator('#dialog');
+  await page.goto(app.url);await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
   await expect(dialog.locator('[data-media-import-row]')).toHaveCount(20);await expect(dialog).toContainText('study-22.svg');await expect(dialog).not.toContainText('study-00.svg');
   const older=dialog.getByRole('button',{name:'Older imports'});await older.focus();await page.keyboard.press('Enter');await expect(dialog.locator('[data-media-import-row]')).toHaveCount(3);await expect(dialog).toContainText('Page 2');await expect(older).toBeDisabled();
   const row=dialog.locator('[data-media-import-row="'+oldest.id+'"]');await row.getByRole('button',{name:'Prepare media'}).click();await expect(row.getByRole('button',{name:'Use media'})).toBeVisible({timeout:15000});await expect(dialog).toContainText('Page 2');
