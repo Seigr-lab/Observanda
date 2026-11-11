@@ -52,7 +52,10 @@ export class NativeWorkspaceRename{
     for(let initial;(initial=await pending.take())!==undefined;){
      if(typeof withProject!=='function')throw new AppError('STORAGE_RENAME_PROJECTS');
      await withProject(initial.projectId,async project=>{
-      const entry=await registry.locate(initial.projectId);if(project.root!==entry.root||project.projectId!==entry.projectId||['namespaceId','vaultId','parentId'].some(key=>initial[key]!==entry[key]))throw new AppError('CONFLICT');
+      // An admitted callback may first finish this project's interrupted
+      // placement, so its parent and folder are read after admission. The
+      // completed directory is verified as a whole before the fence.
+      const entry=await registry.locate(initial.projectId);if(project.root!==entry.root||project.projectId!==entry.projectId||['namespaceId','vaultId'].some(key=>initial[key]!==entry[key]))throw new AppError('CONFLICT');
       const ready=new ProjectBookOwners(project),books=new LabBookRegistry(project);await ready.ready({renames:false});if(await books.version()==='new')await books.apply('new',[]);
       // Parent is enqueued before its books; its final directory revision is
       // captured after an admitted callback recovers an interrupted book rename.
