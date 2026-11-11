@@ -75,6 +75,54 @@ export function entryDisplayChoices(html){
  }
  walk(parseFragment(html));return entries;
 }
+// A full copy keeps the converter's part order. Whole groups of parts can be
+// left out; standalone figures and media are separate from those placed
+// inline in the writing, which stay with their paragraph.
+export const recordGroups=Object.freeze(['title','details','outcome','contributors','body','sections','figures','media','relations','tags','attempt','results']);
+export const recordLayouts=Object.freeze(['article','plain','compact','split']);
+const hideKey='data-observanda-hide',layoutKey='data-observanda-layout';
+const groupOf=key=>key==='title'?'title':key==='metadata'?'details':key.startsWith('section:')?'sections':key.startsWith('figure:')?'figures':key.startsWith('media:')?'media':recordGroups.includes(key)?key:null;
+function recordItems(html){
+ const root=parseFragment(html,{sourceCodeLocationInfo:true}),items=[],slice=node=>html.slice(node.sourceCodeLocation.startOffset,node.sourceCodeLocation.endOffset);
+ let article=null,articleStart=null;
+ for(const node of root.childNodes??[]){
+  if(!node.tagName||!node.sourceCodeLocation)continue;
+  if(node.tagName==='article'&&!article&&node.sourceCodeLocation.startTag){
+   article=node;const tag=node.sourceCodeLocation.startTag;articleStart=html.slice(tag.startOffset,tag.endOffset);
+   for(const child of node.childNodes??[])if(child.tagName&&child.sourceCodeLocation)items.push({key:part(child)??'',html:slice(child),article:true});
+  }else items.push({key:part(node)??'',html:slice(node),article:false});
+ }
+ return {items,articleStart};
+}
+export function recordPartGroups(html){
+ const present=new Set(recordItems(html).items.map(item=>groupOf(item.key)));
+ return recordGroups.filter(group=>present.has(group));
+}
+export function validRecordPresentation({hidden=[],layout='article'}={}){
+ return Array.isArray(hidden)&&hidden.every(group=>recordGroups.includes(group))&&new Set(hidden).size===hidden.length&&recordLayouts.includes(layout);
+}
+export function recordPresentation(node){
+ const hidden=(attr(node,hideKey)??'').split(/\s+/).filter(group=>recordGroups.includes(group)),layout=attr(node,layoutKey);
+ return {hidden:[...new Set(hidden)].sort(),layout:recordLayouts.includes(layout)?layout:'article'};
+}
+// Rebuild in the source's order. A part already on the page keeps its saved
+// markup; a part shown again comes from the current permitted source.
+export function presentRecordParts(current,source,hidden){
+ const hide=new Set(hidden),now=recordItems(current),next=recordItems(source),used=new Map();
+ const take=key=>{if(!key)return null;const n=used.get(key)??0;used.set(key,n+1);return now.items.filter(item=>item.key===key)[n]?.html??null;};
+ let html='',open=false;
+ for(const item of next.items){
+  if(item.article&&!open){html+=now.articleStart??next.articleStart;open=true;}
+  if(!item.article&&open){html+='</article>';open=false;}
+  const group=groupOf(item.key);if(group&&hide.has(group))continue;
+  html+=take(item.key)??item.html;
+ }
+ return open?html+'</article>':html;
+}
+const recordAttributes=record=>{
+ if(!record)return '';const hidden=[...new Set(record.hidden)].sort();
+ return (hidden.length?' '+hideKey+'="'+hidden.join(' ')+'"':'')+(record.layout&&record.layout!=='article'?' '+layoutKey+'="'+record.layout+'"':'');
+};
 export function displayPlacement(node){
  const id=attr(node,displayId),presentation=attr(node,displayMode);if(id===undefined&&presentation===undefined)return null;
  if(node.tagName!=='section'||!researchId(id)||!['card','section'].includes(presentation))throw new AppError('INVALID');
@@ -107,10 +155,14 @@ function sectionHTML(entry,id){
  }
  return serializeOuter(root);
 }
-export function renderEntryPlacement(node,{id,revision,title,visible,html,choices,page,display,requireChoice=false}){
+export function renderEntryPlacement(node,{id,revision,title,visible,html,choices,page,display,requireChoice=false,record=null}){
  const retained=node.attrs.filter(a=>['id','class','style'].includes(a.name)).map(a=>' '+a.name+'="'+escaped(a.value)+'"').join('');
  const start='<section'+retained+' data-observanda-source="'+id+'" data-observanda-source-revision="'+revision+'"';
- if(!display)return start+'>'+sourceFragmentAtPage(visible?html:'',page)+'</section>';
+ if(!display){
+  if(record&&!validRecordPresentation(record))throw new AppError('INVALID');
+  const fragment=sourceFragmentAtPage(visible?html:'',page);
+  return start+recordAttributes(record)+'>'+(record&&visible?presentRecordParts(record.current??fragment,fragment,record.hidden):fragment)+'</section>';
+ }
  const {slot,presentation,choice}=display;
  if(!researchId(slot)||!['card','section'].includes(presentation)||!(presentation==='card'&&(choice==='title'||fields.has(choice))||sectionKey(choice)||presentation==='section'&&tableKey(choice)))throw new AppError('INVALID');
  const item=choices?.get(choice);

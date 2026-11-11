@@ -1,7 +1,7 @@
 import {parse,parseFragment,serializeOuter} from 'parse5';
 import {createHash} from 'node:crypto';
 import {galleryItemPlacement,galleryKey,itemKey} from './website-source-gallery-items.js';
-import {displayId,displayMode,displayPlacement,renderEntryPlacement} from './website-entry-display.js';
+import {displayId,displayMode,displayPlacement,renderEntryPlacement,presentRecordParts,recordPresentation} from './website-entry-display.js';
 import {updateMigrationView} from './website-migration-views.js';
 import {linkPlacement,linkShape,linkSource,updateEntryLink} from './website-entry-links.js';
 import {AppError} from './errors.js';
@@ -117,7 +117,10 @@ export function updateWebsiteSource(html,{id,revision,previousHtml='',html:nextH
   if(attr(node,'data-observanda-view')){
    changes.push({start:loc.startOffset,end:loc.endOffset,text:updateMigrationView(node,{original:html.slice(loc.startOffset,loc.endOffset),previousHtml,html:nextHtml,visible,revision})});continue;
   }
-  const current=partTree(html.slice(bounds.start,bounds.end)),replacement=visible?mergeParts(current,previous,next,{root:true}):'';
+  const current=partTree(html.slice(bounds.start,bounds.end)),{hidden}=recordPresentation(node);
+  let replacement=visible?mergeParts(current,previous,next,{root:true}):'';
+  // Parts the author left out of this copy stay out when the source changes.
+  if(replacement&&hidden.length)replacement=presentRecordParts(replacement,replacement,hidden);
   const startTag=html.slice(loc.startOffset,bounds.start).replace(/(data-observanda-source-revision\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s>]+)/i,'$1"'+revision+'"');
   changes.push({start:loc.startOffset,end:bounds.end,text:startTag+replacement});
  }

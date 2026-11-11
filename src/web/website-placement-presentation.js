@@ -65,21 +65,28 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
   const preview=add('section',content),previewHeading=add('strong',preview,t('pickerPreview')),description=add('p',preview);
   preview.className='website-presentation-preview';previewHeading.id='website-presentation-preview';preview.setAttribute('aria-labelledby',previewHeading.id);
   const pages=add('div',content);pages.className='inline-actions';
+  // A full copy can leave out whole parts of the entry and choose a layout.
+  const record=add('fieldset');record.dataset.presentationRecord='';add('legend',record,t('placementParts'));
+  const partList=add('div',record);partList.className='website-presentation-parts';
+  const layout=field('placementLayout','data-presentation-layout',record);
+  for(const key of ['article','plain','compact','split'])layout.add(new Option(t('placementLayout_'+key),key));
   const earlier=button(pages,t('prevPage'),()=>load(session.selected,offsets.at(-2)));
   const more=button(pages,t('nextPage'),()=>load(session.selected,session.data.next));
   const status=add('p');status.setAttribute('role','status');
   const footer=add('footer');footer.className='inline-actions';
   const cancel=button(footer,t('cancel'),close),apply=button(footer,t('placementApply'),save);
   apply.dataset.presentationApply='';apply.className='button primary';
-  let offsets=[],items=[],desired='',formatKey='full',busy=false,saving=false,saved=null;
+  let offsets=[],items=[],desired='',formatKey='full',busy=false,saving=false,saved=null,groups=[],hidden=new Set(),layoutKey='article';
+  const sameParts=()=>saved&&layoutKey===saved.layout&&[...hidden].sort().join()===saved.hidden.join();
   function controls(){
    const loaded=!!session.data;entry.disabled=busy||!rows.length;
    format.disabled=busy||!loaded;choice.disabled=busy||!loaded;
    content.hidden=formatKey==='full';preview.hidden=!description.textContent;
+   record.hidden=formatKey!=='full'||!groups.length;record.disabled=busy||!loaded;
    pages.hidden=offsets.length<2&&session.data?.next==null;
    earlier.disabled=busy||offsets.length<2;more.disabled=busy||session.data?.next==null;
    prev.disabled=busy||session.selected<pageSize;next.disabled=busy||Math.floor(session.selected/pageSize)*pageSize+pageSize>=rows.length;
-   apply.disabled=busy||!loaded||(formatKey!=='full'&&!desired)||(formatKey===saved?.format&&desired===saved?.choice);
+   apply.disabled=busy||!loaded||(formatKey!=='full'&&!desired)||(formatKey===saved?.format&&desired===saved?.choice&&(formatKey!=='full'||sameParts()))||(formatKey==='full'&&groups.length>0&&hidden.size>=groups.length);
    cancel.disabled=saving;
   }
   function showChoices(){
@@ -92,7 +99,14 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
    }
    if(desired&&![...choice.options].some(o=>o.value===desired))choice.add(new Option(t('placementCurrent'),desired),0);
    if(!desired&&formatKey!=='full')choice.add(new Option(t('placementChooseSection'),''),0);
-   choice.value=desired;description.textContent=items.find(item=>item.key===desired)?.preview??'';controls();
+   choice.value=desired;description.textContent=items.find(item=>item.key===desired)?.preview??'';
+   partList.replaceChildren();
+   for(const group of groups){
+    const label=add('label',partList),box=add('input',label);box.type='checkbox';box.value=group;box.checked=!hidden.has(group);
+    box.dataset.presentationPart=group;add('span',label,t('placementPart_'+group));
+    box.onchange=()=>{if(box.checked)hidden.delete(group);else hidden.add(group);controls();};
+   }
+   layout.value=layoutKey;controls();
   }
   function pin(){
    const {sourceId,ordinal,sourceRevision}=rows[session.selected];
@@ -114,25 +128,30 @@ export function websitePlacementPresentation({t,request,refresh,onError}){
     if(result.revision!==site.revision||result.sourceRevision!==pin().sourceRevision)throw Error(t('changedPageAccess'));
     session.data=result;items=result.items;const found=offsets.indexOf(offset);
     offsets=reset?[offset]:found===-1?[...offsets,offset]:offsets.slice(0,found+1);
-    if(reset){formatKey=result.presentation;desired=formatKey==='full'||result.unavailable?'':result.choice??(formatKey==='card'?'title':'');saved={format:formatKey,choice:desired};}
+    if(reset){
+     formatKey=result.presentation;desired=formatKey==='full'||result.unavailable?'':result.choice??(formatKey==='card'?'title':'');
+     groups=result.record?.groups??[];hidden=new Set(result.record?.hidden??[]);layoutKey=result.record?.layout??'article';
+     saved={format:formatKey,choice:desired,hidden:[...hidden].sort(),layout:layoutKey};
+    }
     status.textContent=result.unavailable?t('placementUnavailable'):'';status.hidden=!status.textContent;busy=false;showChoices();
    }catch(error){fail(error);}
   }
   async function save(){
    if(apply.disabled)return;busy=saving=true;controls();
    try{
-    const result=await request('library/present-placement',{...pin(),presentation:formatKey,...(formatKey==='full'?{}:{choice:desired})});
+    const result=await request('library/present-placement',{...pin(),presentation:formatKey,...(formatKey==='full'?{hidden:[...hidden].filter(group=>groups.includes(group)).sort(),layout:layoutKey}:{choice:desired})});
     if(current!==session)return;close();refresh(result);
    }catch(error){fail(error);}
   }
   entry.onchange=()=>load(Number(entry.value));
   format.onchange=event=>{formatKey=event.target.value;desired=formatKey===saved?.format?saved.choice:formatKey==='card'?'title':'';showChoices();};
   choice.onchange=()=>{desired=choice.value;showChoices();};
+  layout.onchange=()=>{layoutKey=layout.value;controls();};
   dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
   dialog.addEventListener('close',()=>{if(current===session)current=null;dialog.remove();if(trigger?.isConnected)trigger.focus();},{once:true});
   document.body.append(dialog);dialog.showModal();
   if(rows.length){await load(initial);if(current===session)entry.focus();}
-  else{entry.parentElement.hidden=format.hidden=content.hidden=navigation.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
+  else{entry.parentElement.hidden=format.hidden=content.hidden=record.hidden=navigation.hidden=apply.hidden=true;status.textContent=t('placementEmpty');cancel.focus();}
  }
  return {open,close,revalidate};
 }

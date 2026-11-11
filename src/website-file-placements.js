@@ -11,7 +11,7 @@ import {websiteFeedOccurrences} from './website-dynamic-feeds.js';
 import {siteHasPendingSources} from './website-feed-fence.js';
 import {feedUsageWindow,checkFeedUsageRoot} from './website-feed-usage-index.js';
 import {researchId} from './web/research-reference.js';
-import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode} from './website-entry-display.js';
+import {entryDisplayChoices,renderEntryPlacement,displayId,displayMode,recordPartGroups,recordPresentation,validRecordPresentation} from './website-entry-display.js';
 
 const hex=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const owner=node=>attr(node,'data-observanda-source');
@@ -164,22 +164,30 @@ export function placementPresentationOptions(store,id,options){
  const {offset=0,limit=12,signal}=options;
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>40)throw new AppError('INVALID');
  return store.scope(async()=>{
-  const {manifest,previous,source,html}=await selectedDisplay(store,id,options),choices=entryDisplayChoices(html);
+  const {manifest,previous,source,html,node}=await selectedDisplay(store,id,options),choices=entryDisplayChoices(html);
   const items=[...choices.values()].slice(offset,offset+limit).map(({key,kind,title,text})=>({key,kind,title:title||null,preview:text.length>240?text.slice(0,239)+'…':text}));
   const current=choices.get(previous?.choice),unavailable=Boolean(previous&&previous.choice!=='title'&&(!current||previous.presentation==='card'&&!current.text));
   await requireSource(store,source.id,source.revision);await store.current(id,manifest.revision);
-  return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,revision:manifest.revision,sourceRevision:source.revision};
+  const record={groups:recordPartGroups(html),...(previous?{hidden:[],layout:'article'}:recordPresentation(node))};
+  return {presentation:previous?.presentation??'full',choice:unavailable?null:previous?.choice??null,unavailable,title:source.title,items,next:offset+limit<choices.size?offset+limit:null,record,revision:manifest.revision,sourceRevision:source.revision};
  },{signal});
 }
 export function setPlacementPresentation(store,id,options){
- const {presentation,choice=presentation==='card'?'title':null,signal}=options;
+ const {presentation,choice=presentation==='card'?'title':null,hidden=[],layout='article',signal}=options;
  if(!['full','card','section'].includes(presentation)||presentation==='full'&&choice!==null)throw new AppError('INVALID');
+ if(!validRecordPresentation({hidden,layout})||presentation!=='full'&&(hidden.length||layout!=='article'))throw new AppError('INVALID');
  return store.scope(async()=>{
   const {manifest,page,source,node,slot,previous,html,original}=await selectedDisplay(store,id,options);
-  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null))return store.present(manifest,page.path,{signal});
+  const shown=previous?{hidden:[],layout:'article'}:recordPresentation(node),wanted={hidden:[...new Set(hidden)].sort(),layout};
+  const groups=recordPartGroups(html);if(groups.length&&groups.every(group=>wanted.hidden.includes(group)))throw new AppError('INVALID');
+  if(presentation===(previous?.presentation??'full')&&choice===(previous?.choice??null)&&(presentation!=='full'||JSON.stringify(shown)===JSON.stringify(wanted)))return store.present(manifest,page.path,{signal});
+  // An unchanged full copy keeps its saved parts; another display starts again
+  // from the permitted source.
+  const loc=node.sourceCodeLocation,current=!previous&&loc.startTag&&loc.endTag?original.slice(loc.startTag.endOffset,loc.endTag.startOffset):null;
+  const record=presentation==='full'&&(wanted.hidden.length||layout!=='article'||!previous)?{...wanted,...(current===null?{}:{current})}:null;
   const entries={...page.entryDisplays},key=slot??randomUUID(),display=presentation==='full'?null:{id:source.id,slot:key,presentation,choice};
   if(display)entries[key]=display;else delete entries[key];
-  const output=renderEntryPlacement(node,{id:source.id,revision:source.revision,title:source.title,visible:true,html,choices:display?entryDisplayChoices(html):null,page:page.path,display,requireChoice:true});
+  const output=renderEntryPlacement(node,{id:source.id,revision:source.revision,title:source.title,visible:true,html,choices:display?entryDisplayChoices(html):null,page:page.path,display,requireChoice:true,record});
   const {startOffset,endOffset}=node.sourceCodeLocation;
   let next=original.slice(0,startOffset)+output+original.slice(endOffset);
   const placements=websiteSourcePlacements(next,page.placements);

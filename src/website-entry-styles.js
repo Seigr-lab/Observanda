@@ -25,15 +25,30 @@ export const entryCSS=`:where(.website-entry-card,.website-entry-section){box-si
 :where(.website-entry-section>h2){margin-block:0 .55em}
 :where(.website-entry-section img,.website-entry-section video){max-inline-size:100%;height:auto}
 @media print{:where(.website-entry-card){break-inside:avoid}}
+/* Record layouts chosen for a full copy. The copy's own stylesheet frames it as
+   an article; these rules use the site's tokens and outrank only that frame. */
+[data-observanda-layout] [data-observanda-part="outcome"]{margin-block:1rem;padding:.75rem 1rem;border-inline-start:.25rem solid var(--accent,currentColor);border-radius:var(--corner-radius,.4rem);background:color-mix(in srgb,var(--accent,currentColor) 7%,transparent)}
+[data-observanda-layout] [data-observanda-part="metadata"]>span:last-child:not(:first-child){border-color:var(--accent,currentColor);border-radius:999px}
+[data-observanda-layout] .record-page :is(img,video,svg){max-inline-size:100%;block-size:auto}
+[data-observanda-layout="plain"] .record-page{max-inline-size:none;padding:0;border:0;border-radius:0;background:none}
+[data-observanda-layout="compact"] .record-page{padding:clamp(.75rem,2.5vw,1.25rem)}
+[data-observanda-layout="compact"] .record-page section{margin-block-start:1.25rem}
+[data-observanda-layout="compact"] .record-page :is(.prose,figure){margin-block:.75rem}
+@media (min-width:64rem){
+[data-observanda-layout="split"] .record-page{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-auto-flow:row dense;column-gap:var(--card-gap,2rem);align-items:start;max-inline-size:none}
+[data-observanda-layout="split"] .record-page>*{grid-column:1;min-inline-size:0}
+[data-observanda-layout="split"] .record-page>:is([data-observanda-part^="figure:"],[data-observanda-part^="media:"]){grid-column:2;margin-block:0 var(--card-gap,1.5rem)}
+}
+@media print{[data-observanda-layout="split"] .record-page{display:block}}
 `+menuCSS;
 export const entryStyleHash=createHash('sha256').update(entryCSS).digest('hex');
 export const entryStyleName='website-display-'+entryStyleHash.slice(0,20)+'.css';
-const marker='data-website-entry-stylesheet';
+const marker='data-website-entry-stylesheet',layout='data-observanda-layout';
 export const usesEntryStyle=page=>Boolean(page?.placements.some(row=>row.display));
 export function styledPageHTML(html,page){
- if(!html.includes(displayId)&&!html.includes(marker)&&!html.includes('data-website-menu'))return {html,used:false,menu:false};
+ if(!html.includes(displayId)&&!html.includes(marker)&&!html.includes('data-website-menu')&&!html.includes(layout))return {html,used:false,menu:false};
  const nodes=[...descendants(parse(html,{sourceCodeLocationInfo:true}))];
- const menu=hasEditorMenu(nodes),used=menu||nodes.some(n=>n.tagName==='section'&&attr(n,displayId)!==undefined&&['card','section'].includes(attr(n,displayMode)));
+ const menu=hasEditorMenu(nodes),used=menu||nodes.some(n=>n.tagName==='section'&&(attr(n,displayId)!==undefined&&['card','section'].includes(attr(n,displayMode))||attr(n,'data-observanda-source')!==undefined&&attr(n,layout)!==undefined));
  const links=nodes.filter(n=>n.tagName==='link'&&attr(n,marker)!==undefined);
  const href=path.posix.relative(path.posix.dirname(page),entryStyleName);
  if(used&&links.length===1&&links[0].parentNode?.tagName==='head'&&attr(links[0],'href')===href&&attr(links[0],'rel')==='stylesheet'&&links[0].attrs.length===3)return {html,used,menu};
@@ -45,7 +60,9 @@ export function styledPageHTML(html,page){
 }
 export async function syncEntryStyles(store,manifest,signal){
  const files=new Map(manifest.files.map(f=>[f.name,f]));
- const pages=manifest.pages.filter(p=>usesEntryStyle(p)||files.get(p.path)?.editorMenu),managed=manifest.files.filter(f=>f.entryDisplaySheet);
+ // A page file records whether its saved HTML needed the sheet (a menu or a
+ // record layout), which the page manifest itself does not describe.
+ const pages=manifest.pages.filter(p=>usesEntryStyle(p)||files.get(p.path)?.editorMenu||files.get(p.path)?.entryStyle),managed=manifest.files.filter(f=>f.entryDisplaySheet);
  if(!pages.length&&!managed.length)return manifest;
  const draft=pages.every(p=>p.draft);
  const collision=files.get(entryStyleName);
