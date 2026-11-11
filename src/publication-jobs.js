@@ -148,7 +148,8 @@ export class PublicationJobs{
   try{
    const candidate=await this.prepare(job,{signal,progress});signal.throwIfAborted();
    await this.workspace.withLock(async()=>{signal.throwIfAborted();await this.commit(job,candidate);});committed=true;
-   return this.read(source.reviewId);
+   // Await inside try: a failed read must reach the caller while cleanup runs.
+   return await this.read(source.reviewId);
   }finally{
    const cleanup=async()=>{await this.clean(source.id,{only:job.lease.token});if(!committed)await this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,()=>removePublicationInput(this.workspace,source.id)));};
    if(await this.workspace.storageKind()==='catalogue')await publicationResearchWorkspace(this.workspace).withCatalogueConnections(cleanup);else await cleanup();
