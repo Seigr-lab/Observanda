@@ -10,6 +10,7 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {clearVault} from '../src/encryption.js';
 import {retainedTable} from '../src/retained-tables.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
@@ -28,6 +29,8 @@ async function fixture(t){
 }
 const inspect=(m,ref,column,offset=0)=>m.measurements.inspect({ref,selector:{kind:'cell',page:0,row:0,column}},{offset});
 
+// Plots are retained figure documents; read their series and points through the retained reader.
+const plottedSeries=async(materials,figure)=>{const reader=await new RetainedFigureDocuments(materials.workspace,{readOnly:true}).open(figure),series=[];for await(const item of reader.items({collection:'series'})){const points=[];for await(const point of reader.pointEntries({seriesId:item.id}))points.push(point.value);series.push({id:item.id,points});}return series;};
 test('aggregation checkpoint values cross metadata pages without changing Unicode or exact values',async t=>{
  const f=await fixture(t),id=randomUUID(),command={recordId:f.recordId,id},work=await new AggregationWork(f.m,command,{jobId:id}).open(1);
  const value={key:'Ω𐐷'.repeat(180000),cells:['9007199254740993','1/3'],members:{count:1}},state={groups:1,order:1,last:{page:0,row:0},phase:'input'};
@@ -116,12 +119,12 @@ test('reference readings become exact retained state medians reusable in four-ba
  const medians=await f.m.dataset(command),data=await f.m.datasetPage(medians);assert.equal(data.rows.length,6);assert.equal(data.rows[5].cells[1],'1065/2');
  const first=await inspect(f.m,medians,1);assert.deepEqual(first.aggregation.counts,{included:66,excluded:0,missing:0,total:66});assert.equal(first.aggregation.members.length,16);assert.equal(first.aggregation.next,16);assert.equal(first.original,null);
  const members=[];let offset=0;do{const page=await inspect(f.m,medians,1,offset);members.push(...page.aggregation.members);offset=page.next;}while(offset!==null);
- assert.equal(members.length,66);assert.equal(members.at(-1).value,'65');assert.deepEqual(members.at(-1).source,{ref:source,selector:{kind:'cell',page:0,row:65,column:1}});
+ assert.equal(members.length,66);assert.equal(members.at(-1).value,'65');assert.deepEqual(members.at(-1).source,{ref:source,selector:{kind:'cell',page:1,row:1,column:1}});assert.equal((await f.m.measurements.inspect(members.at(-1).source)).value.spelling,'65');
  assert.equal((await f.m.measurements.inspect(members[0].source)).original.ref.kind,'artifact');
  const bands=await f.dataset('State,A,B,C,D\n'+Array.from({length:6},(_,state)=>[state,...[40,50,60,70].map(v=>state*100+v)].join(',')).join('\n'),[col('State'),...['A','B','C','D'].map(n=>col(n,'integer','s'))]);
  const calculation={version:1,source:bands,view:'observations',joins:[{dataset:medians,keys:[{left:0,right:0}],where:null,unmatched:'error'}],steps:[1,2,3,4].map(i=>({name:'Difference '+i,operation:'subtract',left:{column:i},right:{column:6},unit:'s',condition:null})),where:null,selectionReason:'',calibration:null,note:'Subtract the retained state median from each of four calibration bands.'};
  const derived=await f.m.dataset({recordId:f.recordId,title:'Reference transfer',calculation}),table=await retainedTable(f.m,{ref:derived,selection:{columns:[0,7,8,9,10],offset:0,count:20,includeExcluded:false}});assert.deepEqual(table.rows[0].cells,['0','15/2','35/2','55/2','75/2']);
- const figure=await f.m.plot({recordId:f.recordId,title:'Four bands relative to reference',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[7,8,9,10].map(column=>({column,error:null})),group:null,operation:'raw',order:'source',kind:'line',numericPolicy:'safe'}});assert.equal(figure.figure.series.length,4);assert.equal(figure.figure.series[3].points[0].y,37.5);
+ const figure=await f.m.plot({recordId:f.recordId,title:'Four bands relative to reference',dataset:derived,base:createFigure(),mapping:{x:0,xKind:'category',values:[7,8,9,10].map(column=>({column,error:null})),group:null,operation:'raw',order:'source',kind:'line',numericPolicy:'safe'}});const series=await plottedSeries(f.m,figure.figure);assert.equal(series.length,4);assert.equal(series[3].points[0].y,37.5);
  const provenance=await inspect(f.m,derived,7);assert.ok(provenance.derivedSources.some(s=>s.ref.revision===medians.revision&&s.selector.column===1));
  // Reapply against a deliberately revised source; old calculations stay pinned.
  const sourcePage=await f.m.datasetPage(source),sourceDoc=await f.m.read(source),revisedSource=await f.m.dataset({recordId:f.recordId,title:sourceDoc.title,id:source.id,expectedRevision:source.revision,artifact:sourceDoc.content.inputs[0],baseDataset:source,exclusions:{[sourcePage.rows[0].id]:'Rejected reference reading'}});
