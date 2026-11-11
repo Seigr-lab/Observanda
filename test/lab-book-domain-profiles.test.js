@@ -97,3 +97,10 @@ test('biosafety version 2 tracks facilities and agents and never publishes the p
  for(const [section,key] of [['training','person'],['incidents','people'],['incidents','medical']])assert.equal(field(section,key).private,true,section+'/'+key);
  assert.equal(field('facilities','airflow').uncertainty,'absolute');
 });
+
+test('clinical version 2 verifies methods and quality control and never publishes participant data',()=>{
+ const profile=tracks('clinical-medical',{subjects:['methods'],primary:'quality',events:['quality','eqa','reports'],formats:{'methods/instrument':'identifier','quality/lot':'identifier','eqa/round':'identifier','reports/report-version':'identifier'}});
+ const field=(section,key)=>profile.sections.find(s=>s.key===section).fields.find(f=>f.key===key);
+ for(const [section,key] of [['requests','participant'],['requests','consent'],['reports','communicated-to']])assert.equal(field(section,key).private,true,section+'/'+key);
+ assert.equal(field('quality','observed').uncertainty,'absolute');assert.equal(profile.introduced.sections.eqa,2);
+});
