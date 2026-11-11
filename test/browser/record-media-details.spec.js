@@ -7,7 +7,7 @@ import {testServer} from '../device-fixture.js';
 
 // A JPEG whose EXIF block names the photographer (Artist "Maria").
 function withExif(jpeg){
- const block=Buffer.from('4d4d002a000000080001013b00020000000600000016000000004d6172696100','hex');
+ const block=Buffer.from('4d4d002a000000080001013b0002000000060000001a000000004d6172696100','hex');
  const app1=Buffer.concat([Buffer.from('Exif\0\0','latin1'),block]),length=Buffer.alloc(2);length.writeUInt16BE(app1.length+2);
  return Buffer.concat([jpeg.subarray(0,2),Buffer.from([0xff,0xe1]),length,app1,jpeg.subarray(2)]);
 }
