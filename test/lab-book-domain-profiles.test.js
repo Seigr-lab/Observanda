@@ -65,3 +65,11 @@ test('historical research tracks sources, people, places and events and keeps st
   formats:{'source/reference':'identifier','source/identifier':'uri','source/copy-sha256':'sha-256','person/authority':'uri','place/gazetteer':'uri','visit/requests':'identifier','correspondence/reference':'identifier'}});
  for(const key of ['source','event']){const fields=profile.sections.find(s=>s.key===key).fields;assert.equal(fields.find(f=>f.key==='date-stated').type,'text');assert.deepEqual(fields.find(f=>f.key==='certainty').choices,['Exact','Approximate','Inferred','Unknown']);}
 });
+
+test('physical prototyping version 2 tracks devices and serial-numbered units and records firmware exactly',()=>{
+ const profile=tracks('physical-prototyping',{subjects:['device','unit'],primary:'bring-up',events:['design','assembly','bring-up','rework','findings','firmware'],
+  formats:{'device/part-number':'identifier','device/revision':'identifier','device/design-sha256':'sha-256','unit/serial':'identifier','unit/firmware-sha256':'sha-256','firmware/commit':'identifier','firmware/image-sha256':'sha-256','bring-up/raw-data-sha256':'sha-256','design/design-sha256':'sha-256'}});
+ assert.equal(profile.version,2);
+ for(const key of ['device','unit','firmware'])assert.equal(profile.introduced.sections[key],2);
+ for(const key of ['design','assembly','bring-up','rework','findings'])assert.equal(profile.introduced.sections[key],1);
+});

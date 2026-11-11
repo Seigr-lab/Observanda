@@ -20,7 +20,7 @@
   "environmental-agricultural.label": "Medi ambient i agricultura",
   "environmental-agricultural.description": "Emplaçaments, campanyes de camp, sòl, aigua, cultius i observacions.",
   "physical-prototyping.label": "Prototipatge físic",
-  "physical-prototyping.description": "Dissenys, llistes de components, muntatges de PCB, mesures i retocs.",
+  "physical-prototyping.description": "Dispositius i unitats amb número de sèrie, dissenys, muntatges, microprogramari, mesures i reparacions.",
   "research-development.label": "Recerca i desenvolupament",
   "research-development.description": "Preguntes, prototips, experiments i resultats reproduïbles.",
   "software-development.label": "Desenvolupament de programari",

@@ -54,3 +54,17 @@ test('a book without the profile, or already current, is never changed',()=>{
  const current={profiles:[],sections:[]};enableProfile(current,'beekeeping',true);const copy=structuredClone(current);
  assert.equal(upgradeProfile(current,'beekeeping'),false);assert.deepEqual(current,copy);
 });
+
+test('a physical prototyping book from version 1 adopts version 2 without touching its records',async()=>{
+ const {templateFrom,validTemplate}=await import('../src/web/notebook-schema.js');
+ const profile=laboratoryProfiles.find(p=>p.id==='physical-prototyping'),lab={profiles:[],sections:[]};
+ enableProfile(lab,profile.id,true);lab.profiles[0].version=1;
+ lab.sections=lab.sections.filter(s=>profile.introduced.sections[s.key]===1);
+ for(const s of lab.sections)s.fields=s.fields.filter(f=>profile.introduced.fields[s.key+'/'+f.key]===1);
+ const bringUp=lab.sections.find(s=>s.key==='bring-up');bringUp.label='Power-on test';
+ const record=templateFrom(bringUp);record.values={field1:'Board 3'};const before=structuredClone(record);
+ assert.ok(upgradeProfile(lab,profile.id));assert.ok(validConfiguration(lab));
+ assert.deepEqual(lab.sections.map(s=>s.key),['design','assembly','bring-up','rework','findings','device','unit','firmware']);
+ assert.equal(bringUp.label,'Power-on test');assert.deepEqual(bringUp.fields.map(f=>f.key),profile.sections.find(s=>s.key==='bring-up').fields.map(f=>f.key));
+ assert.deepEqual(record,before);assert.ok(validTemplate(record),'records keep the structure they were written with');
+});

@@ -20,7 +20,7 @@
   "environmental-agricultural.label": "Medio ambiente y agricultura",
   "environmental-agricultural.description": "Emplazamientos, campañas de campo, suelo, agua, cultivos y observaciones.",
   "physical-prototyping.label": "Prototipado físico",
-  "physical-prototyping.description": "Diseños, listas de componentes, montajes de PCB, mediciones y retrabajos.",
+  "physical-prototyping.description": "Dispositivos y unidades con número de serie, diseños, montajes, firmware, mediciones y reparaciones.",
   "research-development.label": "Investigación y desarrollo",
   "research-development.description": "Preguntas, prototipos, experimentos y hallazgos reproducibles.",
   "software-development.label": "Desarrollo de software",
