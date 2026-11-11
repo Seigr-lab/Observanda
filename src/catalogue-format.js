@@ -3,7 +3,49 @@
 import {AppError} from './errors.js';
 import {waitForWriter} from './writer-wait.js';
 import {readCatalogueFormat} from './catalogue-format-read.js';
+import {CATALOGUE_EXTENSION_FEATURES} from './catalogue-extensions.js';
+// The last packed generation. Every released app refuses anything above it,
+// and no feature is ever packed above it: a further bit would exceed the
+// exactly representable integers of both the stored text and the reader.
 export const CATALOGUE_MAX_GENERATION=6755399441055865;
+// Catalogues that need a feature beyond the packed bits store this sentinel,
+// so released readers refuse them, with the packed base generation and the
+// admitted feature names beside it in catalogue_format.features.
+export const CATALOGUE_EXTENDED_GENERATION=CATALOGUE_MAX_GENERATION+1;
+const CATALOGUE_FORMAT_SQL='SELECT version FROM catalogue_format',CATALOGUE_FEATURES_SQL='SELECT features FROM catalogue_format',EXTENSION_LIMIT=1024;
+class ExtendedCatalogueGeneration{
+ constructor(base,extensions){this.base=base;this.extensions=Object.freeze(extensions);Object.freeze(this);}
+ // Ordering and serialization treat it as the sentinel, above every packed
+ // generation, so linear generation checks keep holding for these catalogues.
+ valueOf(){return CATALOGUE_EXTENDED_GENERATION;}
+ toJSON(){return CATALOGUE_EXTENDED_GENERATION;}
+}
+export const catalogueGenerationExtended=format=>format instanceof ExtendedCatalogueGeneration;
+const packedFeatureNames=()=>Object.keys(packedConfigurationFeatures(CATALOGUE_MAX_GENERATION));
+function extendedGeneration(base,names,unknown='INVALID'){
+ if(!Number.isSafeInteger(base)||!packedConfigurationFeatures(base)||!Array.isArray(names)||!names.length||names.length>EXTENSION_LIMIT)throw new AppError('INVALID');
+ const packed=packedFeatureNames();
+ for(let i=0;i<names.length;i++){const name=names[i];if(typeof name!=='string'||!/^[a-z][A-Za-z0-9]{0,63}$/.test(name)||packed.includes(name)||i&&!(names[i-1]<name))throw new AppError('INVALID');}
+ if(names.some(name=>!CATALOGUE_EXTENSION_FEATURES.includes(name)))throw new AppError(unknown);
+ return new ExtendedCatalogueGeneration(base,[...names]);
+}
+// The stored text is canonical: "<packed base>;<name>,<name>" with names in
+// ascending order. Names unknown to this app belong to a newer app.
+export function catalogueFeatureText(format){return format instanceof ExtendedCatalogueGeneration?format.base+';'+format.extensions.join(','):null;}
+export function parseCatalogueFeatureText(text){
+ const match=typeof text==='string'&&text.length<=65600?/^([1-9][0-9]{0,15});([A-Za-z0-9,]+)$/.exec(text):null;if(!match)throw new AppError('CATALOGUE_DAMAGED');
+ const base=Number(match[1]);if(String(base)!==match[1])throw new AppError('CATALOGUE_DAMAGED');
+ let format;try{format=extendedGeneration(base,match[2].split(','),'CATALOGUE_NEWER');}catch(error){if(error.code==='CATALOGUE_NEWER')throw error;throw new AppError('CATALOGUE_DAMAGED');}
+ if(catalogueFeatureText(format)!==text)throw new AppError('CATALOGUE_DAMAGED');return format;
+}
+export function sameCatalogueGeneration(a,b){return a instanceof ExtendedCatalogueGeneration||b instanceof ExtendedCatalogueGeneration?catalogueFeatureText(a)!==null&&catalogueFeatureText(a)===catalogueFeatureText(b):a===b;}
+// Archive inspection serves the format from a portable backup header.
+export function archivedCatalogueFormatRows(sql,header){
+ if(sql===CATALOGUE_FORMAT_SQL)return [{version:header?.catalogueVersion??3}];
+ if(sql===CATALOGUE_FEATURES_SQL&&typeof header?.catalogueFeatures==='string')return [{features:header.catalogueFeatures}];
+ return null;
+}
+export const catalogueFormatQueries=Object.freeze([CATALOGUE_FORMAT_SQL,CATALOGUE_FEATURES_SQL]);
 // New representations can be introduced with independent domain, settings
 // and website owners. Preserve their requirements in either upgrade order.
 export const catalogueRequiresDomains=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.owners??0)>=1||[22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49].includes(format);
@@ -24,9 +66,14 @@ function storedCatalogueGeneration(value){
 }
 export async function catalogueFormat(db){
  return readCatalogueFormat(db,async schema=>{
- const rows=await db.all('SELECT version FROM '+(schema?'"'+schema+'".':'')+'catalogue_format');
+ const table=(schema?'"'+schema+'".':'')+'catalogue_format',rows=await db.all('SELECT version FROM '+table);
  if(rows.length!==1)throw new AppError('CATALOGUE_DAMAGED');
  const format=storedCatalogueGeneration(rows[0].version);
+ if(format===CATALOGUE_EXTENDED_GENERATION){
+  let features;try{features=await db.all('SELECT features FROM '+table);}catch(error){if(error instanceof AppError)throw error;throw new AppError('CATALOGUE_DAMAGED');}
+  if(features.length!==1)throw new AppError('CATALOGUE_DAMAGED');return parseCatalogueFeatureText(features[0].features);
+ }
+ if(format>CATALOGUE_EXTENDED_GENERATION)throw new AppError('CATALOGUE_NEWER');
  if(![3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(format)&&!catalogueRequiresPublicationDocuments(format)&&!catalogueRequiresRecordOwnerTransfers(format)&&!catalogueRequiresConfigurationDocuments(format))throw new AppError('CATALOGUE_DAMAGED');
  return format;
  });
@@ -107,9 +154,39 @@ export async function requireRecordResultIndexes(db){
  return requireCatalogueFormat(db,catalogueRequiresSettings(previous)?28:catalogueRequiresDomains(previous)?27:26);
 }
 export async function requireFigureCopyDrafts(db){return requireCatalogueFormat(db,15);}
+// A required feature set is covered when every level is reached and every
+// required flag or extension is present. Linear generations precede them all.
+function catalogueCovers(current,required){
+ if(!(required instanceof ExtendedCatalogueGeneration)&&required<122)return current>=required;
+ const have=configurationCatalogueFeatures(current),need=configurationCatalogueFeatures(required);if(!have||!need)return false;
+ return Object.entries(need).every(([key,value])=>typeof value==='number'?(have[key]??0)>=value:value!==true||have[key]===true);
+}
+function mergedCatalogueGeneration(current,required){
+ const have=configurationCatalogueFeatures(current),need=configurationCatalogueFeatures(required);if(!have||!need)throw new AppError('CATALOGUE_DAMAGED');
+ const merged={...have};for(const [key,value] of Object.entries(need))merged[key]=typeof value==='number'?Math.max(have[key]??0,value):have[key]===true||value===true;
+ return configurationCatalogueGeneration(merged);
+}
+async function requireExtendedCatalogueFormat(db,current,required){
+ if(catalogueCovers(current,required))return;
+ const target=mergedCatalogueGeneration(current,required);if(!(target instanceof ExtendedCatalogueGeneration))throw new AppError('CATALOGUE_DAMAGED');
+ // The sentinel needs int8 and a widened bound. The feature column and its
+ // pairing with the sentinel are added in the same writer transaction.
+ const schema=await db.get("SELECT pg_catalog.format_type(a.atttypid,a.atttypmod) AS type,pg_catalog.pg_get_constraintdef(c.oid) AS definition FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_constraint c ON c.conrelid=a.attrelid AND c.conname='catalogue_format_version_check' WHERE a.attrelid='catalogue_format'::regclass AND a.attname='version' AND NOT a.attisdropped");
+ const bound=/^CHECKversion>=3ANDversion<=([0-9]+)$/.exec((schema?.definition??'').replace(/::bigint/g,'').replace(/[\s'()]/g,''));
+ if(schema?.type!=='bigint')await db.run('ALTER TABLE catalogue_format ALTER COLUMN version TYPE bigint');
+ if(!bound||Number(bound[1])<CATALOGUE_EXTENDED_GENERATION){
+  await db.run('ALTER TABLE catalogue_format DROP CONSTRAINT IF EXISTS catalogue_format_version_check');
+  await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND '+CATALOGUE_EXTENDED_GENERATION+')');
+ }
+ if(!await db.get("SELECT 1 AS present FROM pg_catalog.pg_attribute WHERE attrelid='catalogue_format'::regclass AND attname='features' AND NOT attisdropped"))
+  await db.run('ALTER TABLE catalogue_format ADD COLUMN features text, ADD CONSTRAINT catalogue_format_features_check CHECK((version='+CATALOGUE_EXTENDED_GENERATION+')=(features IS NOT NULL))');
+ await db.run('UPDATE catalogue_format SET version=$1,features=$2',CATALOGUE_EXTENDED_GENERATION,catalogueFeatureText(target));
+}
 async function requireCatalogueFormat(db,version){
+ const current=await catalogueFormat(db);
+ if(version instanceof ExtendedCatalogueGeneration||current instanceof ExtendedCatalogueGeneration){if(!(version instanceof ExtendedCatalogueGeneration)&&(!Number.isSafeInteger(version)||version<3||version>CATALOGUE_MAX_GENERATION))throw new AppError('CATALOGUE_DAMAGED');return requireExtendedCatalogueFormat(db,current,version);}
  if(!Number.isSafeInteger(version)||version<3||version>CATALOGUE_MAX_GENERATION)throw new AppError('CATALOGUE_DAMAGED');
- if(await catalogueFormat(db)>=version)return;
+ if(current>=version)return;
  // Keep historical int4 owners unchanged until an admitted generation needs
  // int8. The type, constraint and first new data share the writer transaction.
  // Already admitted bounds need only a row update. Repeating DDL here takes
@@ -148,7 +225,7 @@ function publicationUpgradeGeneration(format,changes){
  return publicationCatalogueGeneration({website:Math.max(previous.website,changes.website??0),staged:previous.staged||changes.staged===true,owners:Math.max(previous.owners,changes.owners??0)});
 }
 async function upgradePublicationCatalogue(db,changes){
- const format=await catalogueFormat(db),next=publicationUpgradeGeneration(format,changes);if(next===null)return false;if(next===format)return true;
+ const format=await catalogueFormat(db),next=publicationUpgradeGeneration(format,changes);if(next===null)return false;if(sameCatalogueGeneration(next,format))return true;
  // Independent site writers can add different features concurrently. Read
  // the combined requirement again after owning the format row, so neither
  // writer can replace the other's flags with its earlier snapshot.
@@ -213,11 +290,22 @@ export async function restoreRecordOwnerTransferCatalogueFormat(db,format){
 // additionally require publication permissions, paged website source choices
 // and nested preparation collections before an older app can open the catalogue.
 export function configurationCatalogueFeatures(format){
+ if(format instanceof ExtendedCatalogueGeneration)return {...packedConfigurationFeatures(format.base),...Object.fromEntries(format.extensions.map(name=>[name,true]))};
+ return packedConfigurationFeatures(format);
+}
+function packedConfigurationFeatures(format){
  if(!Number.isSafeInteger(format)||format<122||format>CATALOGUE_MAX_GENERATION)return null;
  const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...((format-122)%192>=96?{permissions:true}:{}),...((format-122)%384>=192?{sourceSelections:true}:{}),...((format-122)%768>=384?{nestedAttempts:true}:{}),...((format-122)%1536>=768?{ownerDirectories:true}:{}),...((format-122)%3072>=1536?{portability:true}:{}),...((format-122)%6144>=3072?{templateInheritance:true}:{}),...((format-122)%12288>=6144?{pagedResearchTables:true}:{}),...((format-122)%24576>=12288?{nativeNumericalModels:true}:{}),...((format-122)%49152>=24576?{nativeClockModels:true}:{}),...((format-122)%98304>=49152?{retainedFigures:true}:{}),...((format-122)%196608>=98304?{referencedCalculations:true}:{}),...((format-122)%393216>=196608?{reviewFigurePackages:true}:{}),...((format-122)%786432>=393216?{nativeDomainValues:true}:{}),...((format-122)%1572864>=786432?{calculationPolicies:true}:{}),...((format-122)%3145728>=1572864?{clockDerivations:true}:{}),...((format-122)%6291456>=3145728?{figureAuthoring:true}:{}),...((format-122)%12582912>=6291456?{intervalUncertainty:true}:{}),...((format-122)%25165824>=12582912?{datasetResourcePolicies:true}:{}),...((format-122)%50331648>=25165824?{windowCalculations:true}:{}),...((format-122)%100663296>=50331648?{figureProjectionPolicies:true}:{}),...((format-122)%201326592>=100663296?{calculatorDatasetResults:true}:{}),...((format-122)%402653184>=201326592?{measurementScalarPolicies:true}:{}),...((format-122)%805306368>=402653184?{domainAlgebra:true}:{}),...((format-122)%1610612736>=805306368?{structuredCalculator:true}:{}),...((format-122)%3221225472>=1610612736?{approximateCalculator:true}:{}),...((format-122)%6442450944>=3221225472?{clockSynchronization:true}:{}),...((format-122)%12884901888>=6442450944?{tensorValues:true}:{}),...((format-122)%25769803776>=12884901888?{quantileAggregation:true}:{}),...((format-122)%51539607552>=25769803776?{axisPermutation:true}:{}),...((format-122)%103079215104>=51539607552?{pairedStatistics:true}:{}),...((format-122)%206158430208>=103079215104?{statisticalUncertainty:true}:{}),...((format-122)%412316860416>=206158430208?{segmentedClockSynchronization:true}:{}),...((format-122)%824633720832>=412316860416?{coordinateFrames:true}:{}),...((format-122)%1649267441664>=824633720832?{computedCells:true}:{}),...((format-122)%3298534883328>=1649267441664?{datasetSpectra:true}:{}),...((format-122)%6597069766656>=3298534883328?{numericalExecution:true}:{}),...((format-122)%13194139533312>=6597069766656?{datasetCusum:true}:{}),...((format-122)%26388279066624>=13194139533312?{sequenceValues:true}:{}),...((format-122)%52776558133248>=26388279066624?{topologyValues:true}:{}),...((format-122)%105553116266496>=52776558133248?{spectralMethods:true}:{}),...((format-122)%211106232532992>=105553116266496?{coordinateAlignment:true}:{}),...((format-122)%422212465065984>=211106232532992?{weightedFit:true}:{}),...((format-122)%844424930131968>=422212465065984?{publicationOperations:true}:{}),...((format-122)%1688849860263936>=844424930131968?{semanticRecordStyles:true}:{}),...((format-122)%3377699720527872>=1688849860263936?{scientificUnitLibrary:true}:{}),...(format>=3377699720527994?{memberRuns:true}:{})};
 }
 export const catalogueRequiresConfigurationDocuments=format=>configurationCatalogueFeatures(format)!==null;
-export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false,ownerDirectories=false,portability=false,templateInheritance=false,pagedResearchTables=false,nativeNumericalModels=false,nativeClockModels=false,retainedFigures=false,referencedCalculations=false,reviewFigurePackages=false,nativeDomainValues=false,calculationPolicies=false,clockDerivations=false,figureAuthoring=false,intervalUncertainty=false,datasetResourcePolicies=false,windowCalculations=false,figureProjectionPolicies=false,calculatorDatasetResults=false,measurementScalarPolicies=false,domainAlgebra=false,structuredCalculator=false,approximateCalculator=false,clockSynchronization=false,tensorValues=false,quantileAggregation=false,axisPermutation=false,pairedStatistics=false,statisticalUncertainty=false,segmentedClockSynchronization=false,coordinateFrames=false,computedCells=false,datasetSpectra=false,numericalExecution=false,datasetCusum=false,sequenceValues=false,topologyValues=false,spectralMethods=false,coordinateAlignment=false,weightedFit=false,publicationOperations=false,semanticRecordStyles=false,scientificUnitLibrary=false,memberRuns=false}){
+// Registered extension names set to true make the generation extended.
+export function configurationCatalogueGeneration(features){
+ const base=packedConfigurationGeneration(features);
+ for(const name of CATALOGUE_EXTENSION_FEATURES)if(Object.hasOwn(features,name)&&typeof features[name]!=='boolean')throw new AppError('INVALID');
+ const names=CATALOGUE_EXTENSION_FEATURES.filter(name=>features[name]===true).sort();
+ return names.length?extendedGeneration(base,names):base;
+}
+function packedConfigurationGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false,ownerDirectories=false,portability=false,templateInheritance=false,pagedResearchTables=false,nativeNumericalModels=false,nativeClockModels=false,retainedFigures=false,referencedCalculations=false,reviewFigurePackages=false,nativeDomainValues=false,calculationPolicies=false,clockDerivations=false,figureAuthoring=false,intervalUncertainty=false,datasetResourcePolicies=false,windowCalculations=false,figureProjectionPolicies=false,calculatorDatasetResults=false,measurementScalarPolicies=false,domainAlgebra=false,structuredCalculator=false,approximateCalculator=false,clockSynchronization=false,tensorValues=false,quantileAggregation=false,axisPermutation=false,pairedStatistics=false,statisticalUncertainty=false,segmentedClockSynchronization=false,coordinateFrames=false,computedCells=false,datasetSpectra=false,numericalExecution=false,datasetCusum=false,sequenceValues=false,topologyValues=false,spectralMethods=false,coordinateAlignment=false,weightedFit=false,publicationOperations=false,semanticRecordStyles=false,scientificUnitLibrary=false,memberRuns=false}){
  if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean'||typeof sourceSelections!=='boolean'||typeof nestedAttempts!=='boolean'||typeof ownerDirectories!=='boolean'||typeof portability!=='boolean'||typeof templateInheritance!=='boolean'||typeof pagedResearchTables!=='boolean'||typeof nativeNumericalModels!=='boolean'||typeof nativeClockModels!=='boolean'||typeof retainedFigures!=='boolean'||typeof referencedCalculations!=='boolean'||typeof reviewFigurePackages!=='boolean'||typeof nativeDomainValues!=='boolean'||typeof calculationPolicies!=='boolean'||typeof clockDerivations!=='boolean'||typeof figureAuthoring!=='boolean'||typeof intervalUncertainty!=='boolean'||typeof datasetResourcePolicies!=='boolean'||typeof windowCalculations!=='boolean'||typeof figureProjectionPolicies!=='boolean'||typeof calculatorDatasetResults!=='boolean'||typeof measurementScalarPolicies!=='boolean'||typeof domainAlgebra!=='boolean'||typeof structuredCalculator!=='boolean'||typeof approximateCalculator!=='boolean'||typeof clockSynchronization!=='boolean'||typeof tensorValues!=='boolean'||typeof quantileAggregation!=='boolean'||typeof axisPermutation!=='boolean'||typeof pairedStatistics!=='boolean'||typeof statisticalUncertainty!=='boolean'||typeof segmentedClockSynchronization!=='boolean'||typeof coordinateFrames!=='boolean'||typeof computedCells!=='boolean'||typeof datasetSpectra!=='boolean'||typeof numericalExecution!=='boolean'||typeof datasetCusum!=='boolean'||typeof sequenceValues!=='boolean'||typeof topologyValues!=='boolean'||typeof spectralMethods!=='boolean'||typeof coordinateAlignment!=='boolean'||typeof weightedFit!=='boolean'||typeof publicationOperations!=='boolean'||typeof semanticRecordStyles!=='boolean'||typeof scientificUnitLibrary!=='boolean'||typeof memberRuns!=='boolean')throw new AppError('INVALID');
  return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0)+(sourceSelections?192:0)+(nestedAttempts?384:0)+(ownerDirectories?768:0)+(portability?1536:0)+(templateInheritance?3072:0)+(pagedResearchTables?6144:0)+(nativeNumericalModels?12288:0)+(nativeClockModels?24576:0)+(retainedFigures?49152:0)+(referencedCalculations?98304:0)+(reviewFigurePackages?196608:0)+(nativeDomainValues?393216:0)+(calculationPolicies?786432:0)+(clockDerivations?1572864:0)+(figureAuthoring?3145728:0)+(intervalUncertainty?6291456:0)+(datasetResourcePolicies?12582912:0)+(windowCalculations?25165824:0)+(figureProjectionPolicies?50331648:0)+(calculatorDatasetResults?100663296:0)+(measurementScalarPolicies?201326592:0)+(domainAlgebra?402653184:0)+(structuredCalculator?805306368:0)+(approximateCalculator?1610612736:0)+(clockSynchronization?3221225472:0)+(tensorValues?6442450944:0)+(quantileAggregation?12884901888:0)+(axisPermutation?25769803776:0)+(pairedStatistics?51539607552:0)+(statisticalUncertainty?103079215104:0)+(segmentedClockSynchronization?206158430208:0)+(coordinateFrames?412316860416:0)+(computedCells?824633720832:0)+(datasetSpectra?1649267441664:0)+(numericalExecution?3298534883328:0)+(datasetCusum?6597069766656:0)+(sequenceValues?13194139533312:0)+(topologyValues?26388279066624:0)+(spectralMethods?52776558133248:0)+(coordinateAlignment?105553116266496:0)+(weightedFit?211106232532992:0)+(publicationOperations?422212465065984:0)+(semanticRecordStyles?844424930131968:0)+(scientificUnitLibrary?1688849860263936:0)+(memberRuns?3377699720527872:0);
 }
@@ -232,7 +320,8 @@ export async function restoreConfigurationCatalogueFormat(db,format){
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
  if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
  if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);if(features.sourceSelections)await requireWebsiteSourceSelections(db);if(features.nestedAttempts)await requireNestedAttemptCollections(db);if(features.ownerDirectories)await requireOwnerDirectories(db);if(features.portability)await requirePortabilityCollections(db);if(features.templateInheritance)await requireCatalogueFormat(db,configurationCatalogueGeneration({...configurationCatalogueFeatures(await catalogueFormat(db)),templateInheritance:true}));if(features.pagedResearchTables)await requirePagedResearchTables(db);if(features.nativeNumericalModels)await requireNativeNumericalModels(db);if(features.nativeClockModels)await requireNativeClockModels(db);if(features.retainedFigures)await requireRetainedFigures(db);if(features.referencedCalculations)await requireReferencedCalculations(db);if(features.reviewFigurePackages)await requireReviewFigurePackages(db);if(features.nativeDomainValues)await requireNativeDomainValues(db);if(features.calculationPolicies)await requireCalculationPolicies(db);if(features.clockDerivations)await requireClockDerivations(db);if(features.figureAuthoring)await requireFigureAuthoring(db);if(features.intervalUncertainty)await requireIntervalUncertainty(db);if(features.datasetResourcePolicies)await requireDatasetResourcePolicies(db);if(features.windowCalculations)await requireWindowCalculations(db);if(features.figureProjectionPolicies)await requireFigureProjectionPolicies(db);if(features.calculatorDatasetResults)await requireCalculatorDatasetResults(db);if(features.measurementScalarPolicies)await requireMeasurementScalarPolicies(db);if(features.domainAlgebra)await requireDomainAlgebra(db);if(features.structuredCalculator)await requireStructuredCalculator(db);if(features.approximateCalculator)await requireApproximateCalculator(db);if(features.clockSynchronization)await requireClockSynchronization(db);if(features.tensorValues)await requireTensorValues(db);if(features.quantileAggregation)await requireQuantileAggregation(db);if(features.axisPermutation)await requireAxisPermutation(db);if(features.pairedStatistics)await requirePairedStatistics(db);if(features.statisticalUncertainty)await requireStatisticalUncertainty(db);if(features.segmentedClockSynchronization)await requireSegmentedClockSynchronization(db);if(features.coordinateFrames)await requireCoordinateFrames(db);if(features.computedCells)await requireComputedCells(db);if(features.datasetSpectra)await requireDatasetSpectra(db);if(features.numericalExecution)await requireNumericalExecution(db);if(features.datasetCusum)await requireDatasetCusum(db);if(features.sequenceValues)await requireSequenceValues(db);if(features.topologyValues)await requireTopologyValues(db);if(features.spectralMethods)await requireSpectralMethods(db);if(features.coordinateAlignment)await requireCoordinateAlignment(db);if(features.weightedFit)await requireWeightedFit(db);if(features.publicationOperations)await requirePublicationOperations(db);if(features.semanticRecordStyles)await requireSemanticRecordStyles(db);if(features.scientificUnitLibrary)await requireScientificUnitLibrary(db);if(features.memberRuns)await requireMemberRuns(db);
- if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
+ for(const name of CATALOGUE_EXTENSION_FEATURES)if(features[name]===true)await requireCatalogueExtension(db,name);
+ if(!sameCatalogueGeneration(await catalogueFormat(db),format))throw new AppError('CATALOGUE_DAMAGED');
 }
 
 export const catalogueRequiresSourcePublicationControls=format=>configurationCatalogueFeatures(format)?.permissions===true;
@@ -619,4 +708,16 @@ export async function requireScientificUnitLibrary(db){
  await requireNativeNumericalModels(db);
  const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.scientificUnitLibrary)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,scientificUnitLibrary:true}));
+}
+
+// A feature beyond the packed bits. Its own writer first requires any
+// prerequisite features, then admits its registered name here.
+export const catalogueRequiresExtension=(format,name)=>CATALOGUE_EXTENSION_FEATURES.includes(name)&&configurationCatalogueFeatures(format)?.[name]===true;
+export async function requireCatalogueExtension(db,name){
+ if(!CATALOGUE_EXTENSION_FEATURES.includes(name))throw new AppError('INVALID');
+ if(catalogueRequiresExtension(await catalogueFormat(db),name))return;
+ try{await db.run('LOCK TABLE catalogue_format IN ACCESS EXCLUSIVE MODE NOWAIT');}catch(error){if(error.code==='55P03')throw new AppError('LOCKED');throw error;}
+ await requireConfigurationDocuments(db);
+ const features=configurationCatalogueFeatures(await catalogueFormat(db));
+ if(features[name]!==true)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,[name]:true}));
 }

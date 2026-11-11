@@ -139,6 +139,7 @@
   "DATABASE_TLS": "Las conexiones remotas de PostgreSQL requieren TLS con verificación de certificados. Establece OBSERVANDA_DATABASE_TLS=verify-full y, para una autoridad privada, OBSERVANDA_DATABASE_CA.",
   "DATABASE_UNAVAILABLE": "PostgreSQL no está disponible. Comprueba el servicio de base de datos y su configuración de conexión y reintenta. Los datos guardados no se han sustituido.",
   "CATALOGUE_DAMAGED": "No se ha podido verificar el catálogo de investigación. Sus archivos se han conservado. Restaura una copia verificada antes de continuar.",
+  "CATALOGUE_NEWER": "Este catálogo de investigación se guardó con una versión más reciente de Observanda. Sus archivos no se han modificado. Actualiza Observanda para abrirlo.",
   "RECORD_VIEW_FORMAT": "No se han podido leer las vistas guardadas de registros. Su archivo se ha conservado; restáuralo desde una copia de seguridad verificada.",
   "RECORD_VIEW_CHANGED": "Esta vista guardada ha cambiado en otra ventana. Tu formulario sigue aquí. Vuelve a abrir Vistas guardadas para revisar la versión más reciente antes de actualizarla.",
   "RECORD_VIEW_NAME": "Ya existe una vista con este nombre. Elige otro nombre.",

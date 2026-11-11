@@ -139,6 +139,7 @@
   "DATABASE_TLS": "Eksterne PostgreSQL-tilkoblinger krever sertifikatverifisert TLS. Sett OBSERVANDA_DATABASE_TLS=verify-full og, for en privat sertifikatutsteder, OBSERVANDA_DATABASE_CA.",
   "DATABASE_UNAVAILABLE": "PostgreSQL er utilgjengelig. Kontroller databasetjenesten og tilkoblingsinnstillingene, og prøv på nytt. De lagrede dataene er ikke erstattet.",
   "CATALOGUE_DAMAGED": "Forskningskatalogen kunne ikke verifiseres. Filene er bevart. Gjenopprett en verifisert kopi før du fortsetter.",
+  "CATALOGUE_NEWER": "Denne forskningskatalogen ble lagret av en nyere versjon av Observanda. Filene er uendret. Oppdater Observanda for å åpne den.",
   "RECORD_VIEW_FORMAT": "Lagrede oppføringsvisninger kunne ikke leses. Filen er bevart; gjenopprett den fra en verifisert sikkerhetskopi.",
   "RECORD_VIEW_CHANGED": "Denne lagrede visningen ble endret i et annet vindu. Skjemaet ditt er fortsatt her. Åpne Lagrede visninger igjen for å gjennomgå den nyeste versjonen før du oppdaterer den.",
   "RECORD_VIEW_NAME": "En visning med dette navnet finnes allerede. Velg et annet navn.",

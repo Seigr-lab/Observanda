@@ -7,7 +7,7 @@ import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
 import {digest,serialize} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
 import {projectDomainHandoff,projectDomainLock} from './project-domain-lock.js';
-import {catalogueFormat,configurationCatalogueFeatures} from './catalogue-format.js';
+import {catalogueFormat,configurationCatalogueFeatures,archivedCatalogueFormatRows} from './catalogue-format.js';
 import {inspectCatalogueArchive} from './postgres-archive.js';
 import {catalogueArchiveTables} from './postgres-archive-tables.js';
 import {CATALOGUE_ARCHIVE} from './postgres-activation.js';
@@ -110,10 +110,10 @@ export async function verifyPortabilityCollections(store){
 }
 export async function withArchivedPortabilityCollection(storage,archiveDigest,ref,operation){
  if(!validPortabilityCollection(ref))throw new AppError('STORAGE_COPY');return withScratch(async rows=>{
-  let format=null;await inspectCatalogueArchive(path.join(storage.root,CATALOGUE_ARCHIVE),catalogueArchiveTables,{
-   header:value=>{format=value.catalogueVersion??3;},async row(domain,table,values){if(domain===null&&table==='state'&&values[0].startsWith(prefix(ref.id))&&!await rows.add(values[0],values[1].toString('base64')))damaged();}
+  let header=null;await inspectCatalogueArchive(path.join(storage.root,CATALOGUE_ARCHIVE),catalogueArchiveTables,{
+   header:value=>{header=value;},async row(domain,table,values){if(domain===null&&table==='state'&&values[0].startsWith(prefix(ref.id))&&!await rows.add(values[0],values[1].toString('base64')))damaged();}
   },{expectedDigest:archiveDigest});
-  const db={async get(sql,slot){if(sql!=='SELECT payload FROM state WHERE slot=$1'||!slot.startsWith(prefix(ref.id)))damaged();const value=await rows.get(slot);return value===undefined?undefined:{payload:Buffer.from(value,'base64')};},async all(sql){if(sql!=='SELECT version FROM catalogue_format')damaged();return [{version:format}];}};
+  const db={async get(sql,slot){if(sql!=='SELECT payload FROM state WHERE slot=$1'||!slot.startsWith(prefix(ref.id)))damaged();const value=await rows.get(slot);return value===undefined?undefined:{payload:Buffer.from(value,'base64')};},async all(sql){const rows=archivedCatalogueFormatRows(sql,header);if(!rows)damaged();return rows;}};
   const archived={catalogue:operation=>operation(storage.catalogueStore(db))},collection=portabilityCollection(archived,ref);await collection.verify();return operation(collection);
  });
 }

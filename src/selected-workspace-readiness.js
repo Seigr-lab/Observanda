@@ -2,7 +2,7 @@ import {open,realpath} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {assertRegular,workspaceFile,Workspace} from './storage.js';
 import {catalogueBinding} from './postgres-activation.js';
-import {catalogueFormat} from './catalogue-format.js';
+import {catalogueFormat,catalogueFormatQueries} from './catalogue-format.js';
 import {ResearchCatalogue,isCatalogue} from './research-catalogue.js';
 import {assertCatalogueOwner,assertCatalogueEnvironment} from './project-catalogue-owner.js';
 import {unseal} from './encryption.js';
@@ -39,7 +39,7 @@ export async function selectedWorkspaceReadiness(workspace,client,{env,signal}){
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');transaction=true;
   await client.query('SET LOCAL search_path TO "obs_'+binding.id.replaceAll('-','')+'", pg_catalog');
   const db={
-   all:async sql=>{if(sql!=='SELECT version FROM catalogue_format')throw new AppError('INVALID');return (await client.query(sql+' LIMIT 2')).rows;},
+   all:async sql=>{if(!catalogueFormatQueries.includes(sql))throw new AppError('INVALID');return (await client.query(sql+' LIMIT 2')).rows;},
    get:async(sql,...values)=>{
     let query;
     if(sql==="SELECT payload FROM state WHERE slot='head'")query="FROM state WHERE slot='head'";

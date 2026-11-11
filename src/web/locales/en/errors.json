@@ -139,6 +139,7 @@
   "DATABASE_TLS": "Remote PostgreSQL connections require certificate-verified TLS. Set OBSERVANDA_DATABASE_TLS=verify-full and, for a private authority, OBSERVANDA_DATABASE_CA.",
   "DATABASE_UNAVAILABLE": "PostgreSQL is unavailable. Check the database service and its connection settings, then retry. Your saved data has not been replaced.",
   "CATALOGUE_DAMAGED": "The research catalogue could not be verified. Its files have been preserved. Restore a verified copy before continuing.",
+  "CATALOGUE_NEWER": "This research catalogue was saved by a newer version of Observanda. Its files are unchanged. Update Observanda to open it.",
   "RECORD_VIEW_FORMAT": "Saved record views could not be read. Their file has been preserved; restore it from a verified backup.",
   "RECORD_VIEW_CHANGED": "This saved view changed in another window. Your form is still here. Reopen Saved views to review the latest version before updating it.",
   "RECORD_VIEW_NAME": "A view with this name already exists. Choose a different name.",
