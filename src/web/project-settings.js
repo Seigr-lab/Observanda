@@ -219,7 +219,8 @@ export function projectSettings(services){
  }
  function input(el){
   if(!form()?.contains(el))return false;if(busy)return true;if(native()&&configuration.input(el))return true;if(directoryChoices.input(el))return true;if(el.hasAttribute('data-project-parent')){void changePlacement(el);return true;}capture();error='';
-  if(native()&&mode==='template'&&el.name==='templateName'){configuration.changedHeader('name',el.value);return true;}
+  // Before the template has opened, the typed name waits in the draft and is recorded once it opens.
+  if(native()&&mode==='template'&&el.name==='templateName'){if(configuration.descriptor())configuration.changedHeader('name',el.value);return true;}
   if(el.hasAttribute('data-project-type')){
    type=el.value;draft.kind=type==='none'?'Project':type==='custom'?'':projectTypeChoices(state.dashboardSettings).find(c=>c.id===type).label;
    if(!templateChosen){source=recommendedProfile(type,state.dashboardSettings)?type:'blank';void chooseSource('[data-project-type]');}
