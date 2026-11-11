@@ -16,6 +16,8 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 
 async function fixture(page,{figures=false,large=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-reader-')),book=upgradeNotebook(sampleNotebook()),base=book.entries[2];
+ // The workspace folder is named workspace; a matching title means opening it changes nothing.
+ book.title='workspace';
  book.entries=Array.from({length:7},(_,i)=>({...structuredClone(base),id:randomUUID(),title:'Reading '+i,body:'Complete observation '+i,sections:[],figures:[],attachments:[],relations:[],tags:['reading'],occurredOn:'2026-10-0'+(i+1)}));
  if(figures){
   const plot=createFigure();plot.x.min=0;plot.x.max=10;plot.y.min=0;plot.y.max=10;

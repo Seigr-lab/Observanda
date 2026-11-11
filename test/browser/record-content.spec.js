@@ -69,6 +69,8 @@ test('normal record reading pages stored sections without selection hydration an
 test('paged readers open exact methods and result evidence without entering editing or loading the record body',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reading-references-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0],method=book.entries[1];
+ // The workspace folder is named workspace; a matching title means opening it changes nothing.
+ book.title='workspace';
  record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Retained window '+i}));record.figures=[];record.attachments=[];
  method.body='Exact instructions used for this run';book.title='workspace';
  const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),records=new ResearchRecords(f.workspace,{}),bytes=Buffer.from('Exact captured observations 9007199254740993 / 3');

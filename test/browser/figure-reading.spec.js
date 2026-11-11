@@ -13,6 +13,8 @@ import {buildPublication} from '../../src/publication.js';
 
 function fixtureBook(){
  const book=upgradeNotebook(sampleNotebook()),record=book.entries[0],plot=createFigure();
+ // The workspace folder is named workspace; a matching title means opening it changes nothing.
+ book.title='workspace';
  plot.title='Close measurements';plot.x.label='Elapsed ratio';plot.y.label='Response ratio';plot.x.min=plot.y.min=1;plot.x.max=plot.y.max=1.000000004;
  plot.series[0].points=[{x:1,y:1,error:null},{x:1.000000002,y:1.000000002,error:1e-10},{x:1.000000004,y:1.000000004,error:null}];
  const panels=createComposition([plot,plot]);panels.title='Linked response comparison';panels.layout.linkX=panels.layout.linkY=true;
