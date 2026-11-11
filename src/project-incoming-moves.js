@@ -54,7 +54,9 @@ export async function reserveIncomingProjectMove(registry,value,{owners:nativeOw
 export async function releaseIncomingProjectMove(registry,value){
  const incoming=await read(registry,value.id);if(!incoming&&value.ownerDirectoryVersion===2)return;
  const ids=incoming?.version===2?(async function*(){for await(const owner of portabilityCollection(registry.workspace,incoming.owners).entries({index:'project'}))yield owner.projectId;})():value.entries.map(entry=>entry.projectId).sort();
- for await(const id of ids){const selected=file(registry,id,true);await withWriterLease(path.join(path.dirname(selected),id+'.lock'),async()=>{const prior=await read(registry,id,true);if(!prior)return;if(prior.id!==value.id||prior.sourceWorkspaceId!==value.workspaceId)throw new AppError('CONFLICT');await unlink(selected);});}
+ // A reservation refused before its first owner pointer has no pointer folder.
+ const owners=await assertRegular(path.join(registry.workspace.root,'.observanda/project-incoming-owners'),{directory:true,missing:true});
+ if(owners)for await(const id of ids){const selected=file(registry,id,true);await withWriterLease(path.join(path.dirname(selected),id+'.lock'),async()=>{const prior=await read(registry,id,true);if(!prior)return;if(prior.id!==value.id||prior.sourceWorkspaceId!==value.workspaceId)throw new AppError('CONFLICT');await unlink(selected);});}
  const selected=file(registry,value.id),prior=await read(registry,value.id);if(prior){if(prior.sourceWorkspaceId!==value.workspaceId)throw new AppError('CONFLICT');await unlink(selected);}
 }
 export async function assertIncomingProjectMovesSettled(registry,parents){
