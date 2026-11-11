@@ -114,5 +114,6 @@
   "removedTypesCount": "Tipos eliminados ({count})",
   "typesCount": "Tipos ({count})",
   "removedTypesHelp": "Los tipos eliminados no están disponibles para los registros nuevos. Los registros existentes se conservan.",
-  "addTypeFieldsHelp": "Añade un tipo de registro para definir su nombre y sus campos."
+  "addTypeFieldsHelp": "Añade un tipo de registro para definir su nombre y sus campos.",
+  "moreTypes": "Se incluyen más tipos de registro; abre Plantilla de cuaderno de laboratorio para verlos todos."
 }

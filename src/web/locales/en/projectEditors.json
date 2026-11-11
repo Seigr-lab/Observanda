@@ -114,5 +114,6 @@
   "removedTypesCount": "Removed types ({count})",
   "typesCount": "Types ({count})",
   "removedTypesHelp": "Removed types are unavailable for new records. Existing records are kept.",
-  "addTypeFieldsHelp": "Add a record type to define its name and fields."
+  "addTypeFieldsHelp": "Add a record type to define its name and fields.",
+  "moreTypes": "More record types are included; open Lab-book template to see them all."
 }

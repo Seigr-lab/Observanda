@@ -114,5 +114,6 @@
   "removedTypesCount": "Tipus eliminats ({count})",
   "typesCount": "Tipus ({count})",
   "removedTypesHelp": "Els tipus eliminats no estan disponibles per als registres nous. Els registres existents es conserven.",
-  "addTypeFieldsHelp": "Afegeix un tipus de registre per definir-ne el nom i els camps."
+  "addTypeFieldsHelp": "Afegeix un tipus de registre per definir-ne el nom i els camps.",
+  "moreTypes": "S'hi inclouen més tipus de registre; obre Plantilla de llibre de laboratori per veure'ls tots."
 }

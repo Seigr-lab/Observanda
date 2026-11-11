@@ -114,5 +114,6 @@
   "removedTypesCount": "Fjernede typer ({count})",
   "typesCount": "Typer ({count})",
   "removedTypesHelp": "Fjernede typer er ikke tilgjengelige for nye oppføringer. Eksisterende oppføringer beholdes.",
-  "addTypeFieldsHelp": "Legg til en oppføringstype for å angi navn og felter."
+  "addTypeFieldsHelp": "Legg til en oppføringstype for å angi navn og felter.",
+  "moreTypes": "Flere registreringstyper er med; åpne Labbokmal for å se alle."
 }
