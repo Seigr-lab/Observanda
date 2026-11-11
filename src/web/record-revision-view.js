@@ -7,6 +7,8 @@ import {renderProse} from './prose-model.js';
 import {STATUSES} from './record-types.js';
 import {recordTypeLabel} from './record-type-presentation.js';
 import {t} from './i18n/index.js';
+// Attempt facts in the reader's language.
+const attemptMessage=(key,args)=>t('attempts',key,args);
 import {revisionText} from './revision-model.js';
 import {attemptView} from './attempt-view.js';
 import {resultStatementsView} from './result-statements.js';
@@ -26,7 +28,7 @@ const value=(v,esc)=>v?.type==='doc'?renderProse(v):esc(typeof v==='object'?JSON
 export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null,figureReference=null,retainedFigureAction=null,figure=recordFigureRenderer(record,esc,{translate:t,assetUrl,figureSources,figureActions,figureResults,figureReference,retainedFigureAction})}={}){
  const prose=v=>renderProse(v,{figure});
  if(key==='results')return resultStatementsView(record.results,esc);
- if(key==='attempt')return attemptView(record.attempt,esc);
+ if(key==='attempt')return attemptView(record.attempt,esc,{message:attemptMessage});
  const v=record[key],list=items=>items.length?'<ul>'+items.map(item=>'<li>'+item+'</li>').join('')+'</ul>':'<p class="muted">'+esc(msg('revisionNone'))+'</p>';
  if(key==='body')return prose(v);
  if(key==='sections')return v.map(s=>'<section'+(anchors?' id="'+esc(sectionAnchor(s))+'"':'')+'><h2>'+esc(s.title)+'</h2>'+prose(s.body)+'</section>').join('')||'<p>'+esc(msg('revisionNoSections'))+'</p>';
@@ -48,7 +50,7 @@ export function recordRevisionView(record,esc,{relations=true,anchors=false,sect
  const figures=fieldView('figures'),details=['tags','contributors',...(relations?['relations']:[]),'attachments'].filter(k=>record[k]?.length||fieldsHtml[k]).map(k=>({key:k,html:fieldView(k)})).filter(v=>v.html);
  return '<article class="record-revision"><p class="scope-kicker">'+esc(typeName(record))+' &middot; '+esc(statusLabel(record.status))+' &middot; '+esc(recordDateLabel(record.occurredOn))+'</p>'+
   (record.outcome?'<p><strong>'+esc(msg('revisionOutcomeCaption'))+'</strong> '+esc(record.outcome)+'</p>':'')+'<div class="prose">'+recordRevisionField('body',record,esc,{anchors,figure})+(record.sections.length?(sectionsHtml?sectionsHtml(figure):recordRevisionField('sections',record,esc,{anchors,figure})):'' )+'</div>'+
-  (fieldsHtml.attempt??attemptView(record.attempt,esc,{reference:attemptReference,window:attemptWindow}))+(fieldsHtml.results??resultStatementsView(record.results,esc,{reference:resultReference}))+(record.template?'<section><h3>'+esc(fieldLabel('template'))+'</h3>'+fieldView('template')+'</section>':'')+
+  (fieldsHtml.attempt??attemptView(record.attempt,esc,{message:attemptMessage,reference:attemptReference,window:attemptWindow}))+(fieldsHtml.results??resultStatementsView(record.results,esc,{reference:resultReference}))+(record.template?'<section><h3>'+esc(fieldLabel('template'))+'</h3>'+fieldView('template')+'</section>':'')+
   (figures?'<section><h3>'+esc(fieldLabel('figures'))+'</h3>'+figures+'</section>':'')+
   details.map(({key,html})=>'<section><h3>'+esc(fieldLabel(key))+'</h3>'+html+'</section>').join('')+'</article>';
 }

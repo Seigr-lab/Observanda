@@ -62,7 +62,7 @@ export function bookReadingEntry(value,esc,options={}){
   for(const name of Object.keys(value.collections))if(!name.startsWith('preparation:')&&!['relations','preparations','events','assessments','results'].includes(name)){
    const key=name==='fields'?'template':name;fieldsHtml[key]=value.collections[name].total?controls(name)+recordRevisionField(key,record,esc,{assetUrl,figureResults,figureReference}):'';
   }
-  fieldsHtml.attempt=attemptView(record.attempt,esc,{reference,window:value.attemptWindow,navigation:controls});
+  fieldsHtml.attempt=attemptView(record.attempt,esc,{message:(key,args)=>t('attempts',key,args),reference,window:value.attemptWindow,navigation:controls});
   fieldsHtml.results=(value.resultWindow?.figureId?'<p>'+esc(contentText('resultsForFigure'))+'</p>'+windowButton('allResults','results-all',esc,busy):'')+controls('results')+resultStatementsView(record.results,esc,{reference,workspaceId:value.workspaceId??options.workspaceId});
   selectedOptions={inlineRecord,fieldsHtml,figureResults,attemptWindow:value.attemptWindow,sectionsHtml:figure=>sectionControls(value.sections,esc,busy)+recordRevisionField('sections',record,esc,{anchors:true,figure})};
  }

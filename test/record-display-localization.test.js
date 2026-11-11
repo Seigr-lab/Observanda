@@ -80,3 +80,14 @@ test('record type value controls preserve keys and localize date validation with
   assert.deepEqual(invalid,before);assert.deepEqual(draft,{value:'run'});
  }
 });
+
+test('attempt facts in revision views follow the reader language',async context=>{
+ context.after(()=>activateLanguage('en'));
+ const preparation={id:'00000000-0000-4000-8000-000000000001',supersedes:null,recordedAt:'2026-11-11T10:00:00.000Z',reason:'',applicability:'Bench run',basedOn:null,protocols:[],conditions:[],inputs:[],observations:[{id:'00000000-0000-4000-8000-000000000002',label:'Observed'}],criteria:[]};
+ const value={...record(),attempt:{version:1,preparations:[preparation],events:[],assessments:[]}};
+ for(const locale of locales){
+  await load(locale);activateLanguage(locale);
+  const html=recordRevisionField('attempt',value,esc);
+  assert.ok(html.includes(esc(t('attempts','observations'))),locale);
+ }
+});
