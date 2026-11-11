@@ -74,13 +74,32 @@ export function readDelimitedTable(source, {delimiter = 'auto', header = true, p
   return {columns, rows: parsed, delimiter, header};
 }
 
-// Deliberately reject formulas, hexadecimal, Infinity and ambiguous grouping.
-// Decimal convention is explicit; blank values remain missing, never zero.
-export function tableNumber(value, decimal = '.') {
+// Thousands separators follow the chosen decimal mark, never the reader's
+// language, so a saved mapping reads the same values on every computer:
+// with "." decimals "1,234.5"; with "," decimals "1.234,5"; spaces (including
+// no-break and narrow no-break spaces) and apostrophes with either. Groups
+// must be exactly three digits, so "1,5" or "1.50" is never read as grouped.
+const GROUPS = {'.': [',', "'", ' ', '\u00a0', '\u202f'], ',': ['.', "'", ' ', '\u00a0', '\u202f']};
+export function tableNumberText(value, decimal = '.') {
   const source = String(value ?? '').trim();
   if (!source) return null;
-  const normalized = decimal === ',' ? source.replace(',', '.') : source;
-  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) return NaN;
+  const marks = GROUPS[decimal === ',' ? ',' : '.'];
+  const group = [...source].find(c => marks.includes(c));
+  let text = source;
+  if (group !== undefined) {
+    const escaped = group === '.' ? '\\.' : group, point = decimal === ',' ? ',' : '\\.';
+    if (!new RegExp('^[+-]?\\d{1,3}(?:' + escaped + '\\d{3})+(?:' + point + '\\d*)?(?:e[+-]?\\d+)?$', 'i').test(source)) return undefined;
+    text = source.split(group).join('');
+  }
+  const normalized = decimal === ',' ? text.replace(',', '.') : text;
+  return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized) ? normalized : undefined;
+}
+// Deliberately reject formulas, hexadecimal and Infinity. Decimal convention
+// is explicit; blank values remain missing, never zero.
+export function tableNumber(value, decimal = '.') {
+  const normalized = tableNumberText(value, decimal);
+  if (normalized === null) return null;
+  if (normalized === undefined) return NaN;
   const result = Number(normalized);
   return Number.isFinite(result) && Math.abs(result) <= 1e100 ? result : NaN;
 }

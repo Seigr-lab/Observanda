@@ -1,12 +1,15 @@
 import {plotNumericalOperation,plotRational,plotRationalText,isResourceFailure} from './plot-resource-policy.js';
 // Shared exact arithmetic for inline previews and retained plot production.
 import {exactRational} from './measurement-model.js';
+import {tableNumberText} from './tabular-data.js';
 import {rationalText} from './dataset-calculation-model.js';
 import {rationalProjection,safeRationalProjection} from './measurement-projection.js';
 import {projectTransformedValue} from './measurement-transform.js';
 export function exactFigureValue(raw,column,{parseNumber,decimal='.',budget}={}){
  const value=String(raw??'').trim();if(!value)return null;
- const exact=parseNumber?parseNumber(value,column,budget):exactRational(decimal===','?value.replace(',','.'):value,'decimal',10,budget);return budget?plotRationalText(exact,budget):rationalText(exact);
+ // Grouped thousands are removed before exact parsing; no digit is lost.
+ const plain=parseNumber?null:tableNumberText(value,decimal);
+ const exact=parseNumber?parseNumber(value,column,budget):exactRational(plain??(decimal===','?value.replace(',','.'):value),'decimal',10,budget);return budget?plotRationalText(exact,budget):rationalText(exact);
 }
 export function projectFigureValue(value,mapping,{axis='y',delta=false,forceSafe=false,transformed=true,budget}={}){
  if(value===null)return {coordinate:null,rounded:false};
