@@ -22,6 +22,7 @@ import nbErrors from './web/locales/nb/errors.json' with {type:'json'};
 import nnErrors from './web/locales/nn/errors.json' with {type:'json'};
 
 export const feedMarker='data-website-feed';
+export const feedCardFields=Object.freeze(['date','type','excerpt']);
 export const maxPageBytes=websiteHTMLByteLimit;
 export const digest=value=>createHash('sha256').update(value).digest('hex');
 export const feedCSS=`:where(.website-feed){margin-block:var(--section-space,2rem);color:inherit}
@@ -33,6 +34,8 @@ export const feedCSS=`:where(.website-feed){margin-block:var(--section-space,2re
 :where(.website-feed-figure-grid > *){min-inline-size:0;max-inline-size:100%}
 :where(.website-feed[data-template="card"] .website-feed-item){padding:var(--card-padding,1rem);border:1px solid var(--page-border,currentColor);border-radius:var(--corner-radius,.4rem);background:var(--page-surface,transparent)}
 :where(.website-feed-item>:first-child){margin-block-start:0}
+:where(.website-feed-card-meta){display:flex;flex-wrap:wrap;gap:.25rem .75rem;margin-block:-.25em .5em;color:var(--page-muted,inherit);font-size:.9em}
+:where(.website-feed-card-excerpt){margin-block:.25em 0}
 :where(.website-feed-nav){display:flex;gap:1rem;flex-wrap:wrap;justify-content:space-between;margin-block:1rem}
 :where(.website-feed-nav a:focus-visible){outline:2px solid var(--accent,currentColor);outline-offset:2px}
 `;
@@ -57,6 +60,13 @@ function memberAssets(markup,page,source){
  }
  return {markup:serialize(root),used};
 }
+// The page localizer gives the date and type the page language.
+function cardDetails(feed,row){
+ const fields=new Set(feed.template==='card'?feed.cardFields??[]:[]),meta=[];
+ if(fields.has('type')&&row.recordType)meta.push('<span data-feed-field="type">'+esc(row.recordType)+'</span>');
+ if(fields.has('date')&&row.displayDate)meta.push('<span data-feed-field="date">'+esc(row.displayDate)+'</span>');
+ return (meta.length?'<p class="website-feed-card-meta">'+meta.join(' ')+'</p>':'')+(fields.has('excerpt')&&row.preview?'<p class="website-feed-card-excerpt">'+esc(row.preview)+'</p>':'');
+}
 export function makeFeedRenderer(feed,pending,siteId,draft,shared){
  const custom=feed.template==='custom'?compileWebsiteFeedTemplate(feed.itemHTML):null;
  const withContent=feed.template==='full'||custom?.needsContent,admittedRows=new WeakMap(),styles=new Map();
@@ -78,7 +88,7 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
   const instance=feed.id+'-'+member.id;
   const html=withContent?shared?.html??await store.readText(source.html,{signal}):'';
   if(withContent&&shared)shared.html=html;
-  let markup=custom?custom.render({row,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(row.title)+'</h3>';
+  let markup=custom?custom.render({row,html,page,instance,maxBytes:maxPageBytes}):feed.template==='full'?feedContentAtPage(html,page,instance):'<h3>'+esc(row.title)+'</h3>'+cardDetails(feed,row);
   if(Buffer.byteLength(markup)>maxPageBytes)throw new AppError('WEBSITE_FEED_CAPACITY');
   let used=new Map(),style=null,styleKey='';
   if(withContent){
@@ -111,7 +121,7 @@ export function makeFeedRenderer(feed,pending,siteId,draft,shared){
 // its own site refresh is still outstanding. Its last committed row and assets
 // remain valid in the fenced intermediate revision until its writer finishes.
 export function priorFeedRows(store,manifest,old,feed,hostHTML,signal){
- if(!old||old.unavailable||feed.template!==old.template||feed.itemHTML!==old.itemHTML)return async()=>null;
+ if(!old||old.unavailable||feed.template!==old.template||feed.itemHTML!==old.itemHTML||JSON.stringify(feed.cardFields??[])!==JSON.stringify(old.cardFields??[]))return async()=>null;
  const revisions=new Map(old.members.map(row=>[row.id,row.revision])),locations=new Map(),cache=new Map();
  for(const group of old.groups)for(const id of group.ids)locations.set(id,group);
  const files=new Map(manifest.files.map(f=>[f.name,f]));

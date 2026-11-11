@@ -13,7 +13,7 @@ const members=source=>source?[source.html,source.css,...source.assets,...(source
 const filesOf=source=>members(source).map(file=>file.blob);
 const table=prefix=>{if(!/^[0-9a-f]{2}$/.test(prefix))throw new AppError('INVALID');return root+'/feed-index/'+prefix+'.json';};
 export async function feedRowShard(store,prefix,signal){return await store.control(table(prefix),{missing:true,signal})??{};}
-export function feedTemplateMetadata({id,revision,title,displayDate,recordType,tags}){return {id,revision,title,displayDate,recordType,tags};}
+export function feedTemplateMetadata({id,revision,title,displayDate,recordType,tags,preview}){return {id,revision,title,displayDate,recordType,tags,...(typeof preview==='string'?{preview}:{})};}
 
 async function rowFor(store,source,base,html,context,signal){
  const parent=await indexedWebsiteRow(store,base,{signal});

@@ -61,6 +61,11 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const nav=el('div',presets);nav.className='inline-actions';
   const previous=btn(nav,'prevPage',()=>loadSearches(cursors.at(-2))),next=btn(nav,'nextPage',()=>loadSearches(after));
   const template=radios(editing,'feedTemplate',[['full','placementFull'],['card','placementCard'],['custom','feedCustom']]);
+  // What a card shows besides its title.
+  const cardBox=el('fieldset',editing);cardBox.dataset.feedCard='';el('legend',cardBox,t('feedCardShows'));
+  const cardChecks=new Map(['date','type','excerpt'].map(key=>{const label=el('label',cardBox),box=el('input',label);box.type='checkbox';box.value=key;box.dataset.feedCardField=key;el('span',label,t('feedCard_'+key));box.onchange=()=>{dirty=true;};return [key,box];}));
+  const cardFields=()=>[...cardChecks].filter(([,box])=>box.checked).map(([key])=>key);
+  const setCardFields=values=>{for(const [key,box] of cardChecks)box.checked=(values??[]).includes(key);};
   const custom=el('div',editing);custom.className='website-feed-custom';const item=feedItemEditor(custom,{t,changed:()=>{dirty=true;}});
   const paging=el('div',editing);paging.className='website-feed-paging';
   const layout=radios(paging,'feedLayout',[['list','feedList'],['grid','feedGrid']]);
@@ -73,7 +78,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   const remove=btn(actions,'feedRemove',()=>write(true));remove.classList.add('website-feed-remove');const cancelButton=btn(actions,'cancel',cancel);
   const apply=el('button',actions,t('feedSave'));apply.type='submit';apply.className='button primary';apply.dataset.feedApply='';
   let selected='',selectedCriteria=null,filterName='',cursors=[],after=null,dirty=false,loading=false,saving=false,searchEpoch=0;
-  dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get(),arrangement:item.draft()}:null;
+  dialog.authorDraft=()=>dirty&&!saving?{siteId:site.id,page,selected,heading:heading.value,scope:scope.value(),criteria:selectedCriteria,template:template.value(),layout:layout.value(),size:size.value,itemHTML:item.get(),arrangement:item.draft(),cardFields:cardFields()}:null;
   function showCriteria(){
    const labels={search:'pickerSearch',searchField:'pickerSearchField',filter:'pickerFilter',dateFrom:'pickerFromDate',dateTo:'pickerToDate',dateKnowledge:'pickerDate',recordType:'pickerType',status:'pickerStatus',tags:'pickerTags',projectId:'pickerProject',notebookId:'pickerBook',sort:'pickerSort',tagMode:'pickerTags'};
    summary.replaceChildren();
@@ -98,7 +103,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
   }
   direct.oninput=changeRule;
   function paint(){
-   custom.hidden=template.value()!=='custom';filters.hidden=scope.value()!=='filtered';
+   custom.hidden=template.value()!=='custom';cardBox.hidden=template.value()!=='card';filters.hidden=scope.value()!=='filtered';
    remove.hidden=!selected;remove.disabled=loading||saving;cancelButton.disabled=saving;apply.disabled=loading||saving||(!filters.hidden&&!selectedCriteria);
    nav.hidden=cursors.length<2&&after===null;previous.disabled=cursors.length<2;next.disabled=after===null;
    status.hidden=!status.textContent;
@@ -124,7 +129,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    const feed=id?(await request('feed/read',{...pin,feedId:id})).feed:null;
    if(current!==dialog)return;
    searchEpoch++;selected=id;list.value=id;selectedCriteria=hasFilter(feed?.criteria)?feed.criteria:null;filterName='';
-   heading.value=feed?.heading??'';scope.set(selectedCriteria?'filtered':'all');template.set(feed?.template??'full');layout.set(feed?.layout??'list');
+   heading.value=feed?.heading??'';scope.set(selectedCriteria?'filtered':'all');template.set(feed?.template??'full');layout.set(feed?.layout??'list');setCardFields(feed?.cardFields);
    capacity.hidden=feed?.unavailable!=='capacity';capacity.textContent=capacity.hidden?'':t('feedCapacity');
    size.value=String(feed?.pageSize??12);position.options[0].disabled=!id;position.value=id?'keep':'end';
    item.set(feed?.itemHTML);find.value='';cursors=[];after=null;saved.replaceChildren();dirty=false;fillRule();showCriteria();message();
@@ -137,6 +142,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
     if(scope.value()==='filtered'&&!selectedCriteria){message(t('feedChooseSearch'));return;}
     Object.assign(payload,{heading:heading.value.trim(),criteria:scope.value()==='filtered'?selectedCriteria:{},template:template.value(),layout:layout.value(),pageSize:size.valueAsNumber});
     if(payload.template==='custom')payload.itemHTML=item.forSave();
+    if(payload.template==='card')payload.cardFields=cardFields();
     if(position.value!=='keep')payload.position=['start','end'].includes(position.value)?position.value:{before:Number(position.value)};
    }
    saving=true;editing.disabled=list.disabled=true;paint();
@@ -165,7 +171,7 @@ export function websiteFileFeeds({t,request,refresh,report}){
    const restore=pending&&await confirmAction(t('feedRestoreDraft'),{action:'restore'});if(pending)recovery=null;
    await choose(restore?(data.feeds.some(f=>f.id===pending.selected)?pending.selected:''):feedId??'');
    if(restore&&current===dialog){
-    heading.value=pending.heading;scope.set(pending.scope);selectedCriteria=pending.criteria;template.set(pending.template);layout.set(pending.layout);
+    heading.value=pending.heading;scope.set(pending.scope);selectedCriteria=pending.criteria;template.set(pending.template);layout.set(pending.layout);setCardFields(pending.cardFields);
     size.value=pending.size;item.set(pending.itemHTML,pending.arrangement);dirty=true;fillRule();if(pending.scope==='filtered'&&presets.open)await loadSearches(null,true);
    }
   }catch(error){close();report(error);}finally{loading=false;editing.disabled=list.disabled=false;paint();if(current===dialog)(selected?list:heading).focus();}

@@ -9,7 +9,7 @@ import {websiteInsertionOffset} from './website-file-html.js';
 import {validateWebsiteHTML,websiteFileName} from './website-file-policy.js';
 import {normalizeFeedCriteria,enumerateFeedMembers,feedMemberForSource,compareFeedMembers} from './website-feed-query.js';
 import {changeGroups,initialGroups} from './website-feed-groups.js';
-import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName} from './website-feed-render.js';
+import {feedMarker,digest,maxPageBytes,feedCSS,feedStyle,feedSection,makeFeedRenderer,priorFeedRows,pageName,feedCardFields} from './website-feed-render.js';
 import {continuationShell} from './website-feed-shell.js';
 import {styledPageHTML} from './website-entry-styles.js';
 
@@ -19,8 +19,8 @@ const bucket=criteria=>criteria.notebookId?'book-'+criteria.notebookId:criteria.
 const buckets=site=>new Set((site?.feeds??[]).map(feed=>bucket(feed.criteria)));
 const bucketDir=key=>registry+'/scopes/'+key;
 function publicDefinition(feed){
- const {id,path,heading,criteria,layout,template,itemHTML,pageSize}=feed;
- return {id,path,heading,criteria,layout,template,...(template==='custom'?{itemHTML}:{}),pageSize,total:feed.members.length,pages:feed.groups.length,...(feed.unavailable?{unavailable:feed.unavailable}:{})};
+ const {id,path,heading,criteria,layout,template,itemHTML,pageSize,cardFields}=feed;
+ return {id,path,heading,criteria,layout,template,...(template==='custom'?{itemHTML}:{}),...(template==='card'&&cardFields?.length?{cardFields}:{}),pageSize,total:feed.members.length,pages:feed.groups.length,...(feed.unavailable?{unavailable:feed.unavailable}:{})};
 }
 function sitePage(manifest,path){
  websiteFileName(path);const page=manifest.pages.find(p=>p.path===path);if(!page)throw new AppError('NOT_FOUND');return page;
@@ -30,10 +30,12 @@ function selectedFeed(manifest,id,path){
  if(!feed)throw new AppError('NOT_FOUND');return feed;
 }
 function feedDefinition(options,id){
- const {path,heading,criteria={},template='full',layout='list',pageSize=12,itemHTML}=options;
+ const {path,heading,criteria={},template='full',layout='list',pageSize=12,itemHTML,cardFields=[]}=options;
+ // A card shows its title and, chosen visually, the date, type and a short excerpt.
+ if(!Array.isArray(cardFields)||cardFields.some(field=>!feedCardFields.includes(field))||new Set(cardFields).size!==cardFields.length||cardFields.length&&template!=='card')throw new AppError('INVALID');
  if(typeof heading!=='string'||!heading.trim()||heading.length>200||!['full','card','custom'].includes(template)||!['list','grid'].includes(layout)||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new AppError('INVALID');
  if(template!=='custom'&&itemHTML!==undefined&&itemHTML!==null&&itemHTML!=='')throw new AppError('INVALID');
- return {id,path,heading:heading.trim(),criteria:normalizeFeedCriteria(criteria),layout,template,...(template==='custom'?{itemHTML}:{}),pageSize};
+ return {id,path,heading:heading.trim(),criteria:normalizeFeedCriteria(criteria),layout,template,...(template==='custom'?{itemHTML}:{}),...(cardFields.length?{cardFields:feedCardFields.filter(field=>cardFields.includes(field))}:{}),pageSize};
 }
 function hostSlot(html,id,existing,position){
  const doc=parse(html,{sourceCodeLocationInfo:true}),nodes=[...descendants(doc)];
@@ -180,7 +182,7 @@ async function materialize(store,manifest,old,feed,groups,position,signal,shared
  if(feed){
   const {render}=renderer??makeFeedRenderer(feed,Boolean(shared),manifest.id,Boolean(page.draft),shared);
   const byId=new Map(feed.members.map(m=>[m.id,m])),priorRow=priorFeedRows(store,manifest,compatible,feed,original,signal);
-  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,pageStylesheet(manifest,page),page.draft,feed.unavailable]));
+  const templatePin=digest(JSON.stringify([feed.heading,feed.template,feed.itemHTML,feed.layout,feed.path,slot.language,pageStylesheet(manifest,page),page.draft,feed.unavailable,...(feed.cardFields?.length?[feed.cardFields]:[])]));
   let shell;
   for(let i=0;i<groups.length;i++){
    signal?.throwIfAborted();
