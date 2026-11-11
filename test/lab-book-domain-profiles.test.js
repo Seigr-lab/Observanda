@@ -83,3 +83,10 @@ test('environmental work logs sites, taxa and occurrences on the record date, ke
  assert.ok(occurrence.find(f=>f.key==='count-type').choices.includes('Looked for, not found'),'absence is recordable');
  for(const key of ['taxon','occurrence'])assert.equal(profile.introduced.sections[key],2);
 });
+
+test('analytical and quality control version 2 reports results with uncertainty and a decision rule',()=>{
+ const profile=tracks('analytical-qc',{subjects:['samples'],primary:'result',events:['runs','result','investigations'],formats:{'samples/sample-id':'identifier','methods/instrument':'identifier','runs/raw-data-sha256':'sha-256'}});
+ const value=profile.sections.find(s=>s.key==='result').fields.find(f=>f.key==='value');assert.equal(value.uncertainty,'absolute');
+ assert.deepEqual(fieldValueErrors([value],{value:'0.123 ± 0.004'}),[]);
+ assert.equal(profile.introduced.sections.result,2);assert.equal(profile.introduced.fields['samples/field1'],1);
+});
