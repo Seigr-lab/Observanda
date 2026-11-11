@@ -11,9 +11,10 @@ const say=key=>{if(typeof english[key]!=='string')throw new TypeError('Missing l
 const since=value=>{if(!Number.isSafeInteger(value)||value<1)throw new TypeError('Invalid profile version');return value;};
 // A unit names a word that translates; symbols such as kg, % or °C stay literal.
 export const unit=id=>({unit:id});
-// Options: since (the profile version that added the field) and, for text,
-// an exact format (custom-field-formats.js) for identifiers and digests.
-const field=(key,type,{unit:measure='',choices=[],format=null,since:version=1}={})=>({key,type,unit:measure,choices,format,since:since(version)});
+// Options: since (the profile version that added the field); for text, an
+// exact format (custom-field-formats.js) for identifiers and digests; for
+// numbers, how the uncertainty is written (custom-field-uncertainty.js).
+const field=(key,type,{unit:measure='',choices=[],format=null,uncertainty=null,since:version=1}={})=>({key,type,unit:measure,choices,format,uncertainty,since:since(version)});
 export const text=(key,options)=>field(key,'text',options);
 export const date=(key,options)=>field(key,'date',options);
 export const number=(key,measure='',options={})=>field(key,'number',{...options,unit:measure});
@@ -38,7 +39,7 @@ export function defineProfile({id,version,icon,tracking=null,sections}){
     introduced.choices[s.key+'/'+f.key+'/'+value]=within(Math.max(since(item.since),f.since,s.since));
     return value;
    });
-   return {key:f.key,label:say(`${id}.${s.key}.fields.${f.key}`),type:f.type,unit:unitText(f.unit),required:false,choices,...(f.format?{format:f.format}:{})};
+   return {key:f.key,label:say(`${id}.${s.key}.fields.${f.key}`),type:f.type,unit:unitText(f.unit),required:false,choices,...(f.format?{format:f.format}:{}),...(f.uncertainty?{uncertainty:f.uncertainty}:{})};
   })};
  });
  const keys=new Set(built.map(s=>s.key));

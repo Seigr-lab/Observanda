@@ -1,6 +1,7 @@
 import {exactRational} from './measurement-model.js';
 import {NUMBER_REPRESENTATIONS,numeralUsesRadix,validNumeralContext} from './numeral-context.js';
 import {validTextFieldFormat} from './custom-field-formats.js';
+import {validFieldUncertainty,readFieldUncertainty} from './custom-field-uncertainty.js';
 
 // An omitted context is the historical decimal interpretation. Context belongs
 // to each saved field definition, never to a workspace-wide display preference.
@@ -10,7 +11,7 @@ export const fieldNumberUsesRadix=numeralUsesRadix;
 export const validFieldNumberContext=validNumeralContext;
 export function validFieldNumber(field,value){
  const context=fieldNumberContext(field);if(!validFieldNumberContext(context))return false;
- try{exactRational(value,context.representation,context.radix);return true;}catch{return false;}
+ try{if(field.uncertainty)readFieldUncertainty(field.uncertainty,value,context.representation,context.radix);else exactRational(value,context.representation,context.radix);return true;}catch{return false;}
 }
 
 // Shared schema editor mutation; only schema controls may change interpretation.
@@ -29,6 +30,11 @@ export function setCustomFieldProperty(field,key,value){
   field.type=value;
   if(value==='number')field.numeric={...fieldNumberContext(field)};else delete field.numeric;
   if(value!=='text')delete field.format;
+  if(value!=='number')delete field.uncertainty;
+ }else if(key==='uncertainty'){
+  // An empty choice means no declared uncertainty; only number fields carry one.
+  if(field.type!=='number'||value!==''&&!validFieldUncertainty(value))return false;
+  if(value)field.uncertainty=value;else delete field.uncertainty;
  }else if(key==='format'){
   // An empty choice means free text; only text fields carry an exact format.
   if(field.type!=='text'||value!==''&&!validTextFieldFormat(value))return false;

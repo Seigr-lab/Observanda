@@ -14,7 +14,7 @@ const copy=value=>structuredClone(value);
 const empty=()=>({rows:[],total:0,offset:0,next:null});
 const pageSize=20;
 // Interpretation properties a field no longer carries are removed from the stored field.
-const removedInterpretation=value=>{const remove=['numeric','format'].filter(name=>!Object.hasOwn(value,name));return remove.length?{remove}:{};};
+const removedInterpretation=value=>{const remove=['numeric','format','uncertainty'].filter(name=>!Object.hasOwn(value,name));return remove.length?{remove}:{};};
 export function configurationEditor({state,api,esc,field,option,draw,onChange=()=>{},root=()=>document.querySelector('[data-configuration-editor]'),actionName='configuration-edit'}){
  let section=null,definition=null,choice=null,choiceText='',choiceBase='',profileId,sections=empty(),fields=empty(),choices=empty(),profiles=empty(),busy=false,error=null,epoch=0,controller=null,retry=null;
  const client=configurationDocumentClient({state,api,onChange:()=>{status();onChange();}});

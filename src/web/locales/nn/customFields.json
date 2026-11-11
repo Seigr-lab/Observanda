@@ -40,5 +40,13 @@
  "formats.sha3-256":"SHA3-256-sjekksum",
  "formats.sha3-512":"SHA3-512-sjekksum",
  "formats.blake2b-512":"BLAKE2b-512-sjekksum",
- "formats.blake3":"BLAKE3-sjekksum"
+ "formats.blake3":"BLAKE3-sjekksum",
+ "uncertainty":"Usikkerheit",
+ "uncertainties.none":"Ikkje oppgjeven",
+ "uncertainties.absolute":"± absolutt usikkerheit",
+ "uncertainties.relative":"± relativ usikkerheit (%)",
+ "uncertainties.interval":"Intervall [nedre, øvre]",
+ "uncertaintyExamples.absolute":"12.30 ± 0.05",
+ "uncertaintyExamples.relative":"12.30 ± 0.4 %",
+ "uncertaintyExamples.interval":"[12.25, 12.35]"
 }

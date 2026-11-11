@@ -8,7 +8,7 @@ export function validConfigurationSection(value,{draft=false}={}){
  return validConfiguration({profiles:value.profileId===null?[]:[{id:value.profileId,version:1,enabled:true}],sections:[{...value,label:draft&&!value.label.trim()?'Draft':value.label,fields:[]}]});
 }
 export function validConfigurationField(value,{draft=false}={}){
- if(!exact(value,['key','label','type','unit','required',...['numeric','format'].filter(name=>Object.hasOwn(value??{},name))])||typeof value.label!=='string')return false;
+ if(!exact(value,['key','label','type','unit','required',...['numeric','format','uncertainty'].filter(name=>Object.hasOwn(value??{},name))])||typeof value.label!=='string')return false;
  return validFields([{...value,label:draft&&!value.label.trim()?'Draft':value.label,choices:value.type==='select'?['Draft']:[]}]);
 }
 export const validConfigurationChoice=(value,{draft=false}={})=>draft&&value===''||fieldChoiceValid(value);

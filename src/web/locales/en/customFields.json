@@ -40,5 +40,13 @@
  "formats.sha3-256":"SHA3-256 digest",
  "formats.sha3-512":"SHA3-512 digest",
  "formats.blake2b-512":"BLAKE2b-512 digest",
- "formats.blake3":"BLAKE3 digest"
+ "formats.blake3":"BLAKE3 digest",
+ "uncertainty":"Uncertainty",
+ "uncertainties.none":"Not declared",
+ "uncertainties.absolute":"± absolute uncertainty",
+ "uncertainties.relative":"± relative uncertainty (%)",
+ "uncertainties.interval":"Interval [lower, upper]",
+ "uncertaintyExamples.absolute":"12.30 ± 0.05",
+ "uncertaintyExamples.relative":"12.30 ± 0.4 %",
+ "uncertaintyExamples.interval":"[12.25, 12.35]"
 }

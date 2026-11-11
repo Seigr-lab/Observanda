@@ -40,5 +40,13 @@
  "formats.sha3-256":"Resum SHA3-256",
  "formats.sha3-512":"Resum SHA3-512",
  "formats.blake2b-512":"Resum BLAKE2b-512",
- "formats.blake3":"Resum BLAKE3"
+ "formats.blake3":"Resum BLAKE3",
+ "uncertainty":"Incertesa",
+ "uncertainties.none":"No declarada",
+ "uncertainties.absolute":"± incertesa absoluta",
+ "uncertainties.relative":"± incertesa relativa (%)",
+ "uncertainties.interval":"Interval [inferior, superior]",
+ "uncertaintyExamples.absolute":"12.30 ± 0.05",
+ "uncertaintyExamples.relative":"12.30 ± 0.4 %",
+ "uncertaintyExamples.interval":"[12.25, 12.35]"
 }

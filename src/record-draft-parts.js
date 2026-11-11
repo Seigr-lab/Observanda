@@ -24,7 +24,7 @@ export async function* recordDraftParts(chunks,{signal}={}){
  const templatePath=path=>path.length>=3&&path[0]===0&&path[1]==='record'&&path[2]==='template'?path.slice(3).map(String):null;
  const templatePart=(path,type,value)=>({kind:'template',name:'template',path,type,...(type==='value'?{value}:{})});
  const templateContainer=(path,array)=>!path.length&&!array||path.length===1&&(path[0]==='fields'?array:path[0]==='values'&&!array)||path[0]==='fields'&&(path.length===2&&!array||path.length===3&&(path[2]==='choices'?array:path[2]==='numeric'&&!array));
- const templateScalar=path=>path.length===1&&['id','profileId','label','description'].includes(path[0])||path[0]==='values'&&path.length===2||path[0]==='fields'&&(path.length===3&&['key','label','type','unit','required','format'].includes(path[2])||path.length===4&&['choices','numeric'].includes(path[2]));
+ const templateScalar=path=>path.length===1&&['id','profileId','label','description'].includes(path[0])||path[0]==='values'&&path.length===2||path[0]==='fields'&&(path.length===3&&['key','label','type','unit','required','format','uncertainty'].includes(path[2])||path.length===4&&['choices','numeric'].includes(path[2]));
  const location=()=>{const parent=stack.at(-1);return parent?[...parent.path,parent.array?parent.count:parent.key]:[];};
  const finish=()=>{if(stack.at(-1)?.array)stack.at(-1).count++;};
  const part=path=>{
@@ -46,7 +46,7 @@ export async function* recordDraftParts(chunks,{signal}={}){
     const selected=templatePath(parent.path);if(selected){
      if(value.length>64)invalid();
      if(!selected.length&&!['id','profileId','label','description','fields','values'].includes(value))invalid();
-     if(selected[0]==='fields'&&selected.length===2&&!['key','label','type','unit','required','choices','numeric','format'].includes(value))invalid();
+     if(selected[0]==='fields'&&selected.length===2&&!['key','label','type','unit','required','choices','numeric','format','uncertainty'].includes(value))invalid();
      if(selected[0]==='fields'&&selected.length===3&&selected[2]==='numeric'&&!['version','representation','radix'].includes(value))invalid();
     }
     if(!capture){
