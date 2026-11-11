@@ -51,6 +51,17 @@ export function annotatePublicationParts(article,record){
  return article;
 }
 
+// The website copy has its title as an h2 before the article. Every heading
+// inside the article moves one level down, so the record's sections, results
+// and related research form an outline under that title. h6 stays h6.
+export function nestRecordHeadings(article){
+ for(const node of nodes(article)){
+  const level=/^h([1-5])$/.exec(node.tagName)?.[1];
+  if(level)node.tagName=node.nodeName='h'+(Number(level)+1);
+ }
+ return article;
+}
+
 // Called only by an explicit publication-visibility operation while its exact
 // research owner is available. The returned HTML and assets have no source I/O.
 export async function convertPublicationRecord(storage,metadata,original,{signal,target:channel='website'}={}){
@@ -93,6 +104,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  const candidate=renderPublication(context,{mediaFiles,fontFiles,editionParts,emitBrowse:false}),html=await text(fragments.expand(candidate.files.get('entries/'+record.id+'.html'))),document=parse(html);
  const article=[...nodes(document)].find(node=>node.tagName==='article'&&classes(node).includes('record-page'));if(!article)throw new AppError('INVALID');
  annotatePublicationParts(article,record);
+ if(channel==='website')nestRecordHeadings(article);
  const assetPaths=new Map(),assets=[];
  for(const [name,value] of [...candidate.files,...retainedAssets]){
   if(!/^(media|figures|fonts)\//.test(name))continue;signal?.throwIfAborted();
