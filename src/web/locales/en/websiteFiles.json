@@ -1464,10 +1464,10 @@
   "designKind_breakpoint": "Layout size",
   "designKind_component": "Component",
   "designKind_design": "Page design",
-  "designOmitted_recording": "uses a recording",
   "designOmitted_research": "uses lab book material",
   "designOmitted_dependency": "needs a part that was left out",
   "designOmitted_resource": "needs a file that is unavailable",
   "designPackageExport": "Preparing the design package",
-  "designPackageImport": "Importing the design"
+  "designPackageImport": "Importing the design",
+  "designOmitted_private": "is private and was not chosen"
 }

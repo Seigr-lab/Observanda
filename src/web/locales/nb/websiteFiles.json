@@ -1464,10 +1464,10 @@
   "designKind_breakpoint": "Layoutstørrelse",
   "designKind_component": "Komponent",
   "designKind_design": "Sidedesign",
-  "designOmitted_recording": "bruker et opptak",
   "designOmitted_research": "bruker materiale fra laboratoriebøker",
   "designOmitted_dependency": "trenger en del som ble utelatt",
   "designOmitted_resource": "trenger en fil som ikke er tilgjengelig",
   "designPackageExport": "Forbereder designpakken",
-  "designPackageImport": "Importerer designet"
+  "designPackageImport": "Importerer designet",
+  "designOmitted_private": "er privat og ble ikke valgt"
 }

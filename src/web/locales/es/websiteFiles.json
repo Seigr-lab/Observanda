@@ -1464,10 +1464,10 @@
   "designKind_breakpoint": "Tamaño de diseño",
   "designKind_component": "Componente",
   "designKind_design": "Diseño de página",
-  "designOmitted_recording": "usa una grabación",
   "designOmitted_research": "usa material del cuaderno de laboratorio",
   "designOmitted_dependency": "necesita una parte que quedó fuera",
   "designOmitted_resource": "necesita un archivo que no está disponible",
   "designPackageExport": "Preparando el paquete de diseño",
-  "designPackageImport": "Importando el diseño"
+  "designPackageImport": "Importando el diseño",
+  "designOmitted_private": "es privado y no se eligió"
 }

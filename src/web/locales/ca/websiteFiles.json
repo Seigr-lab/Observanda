@@ -1464,10 +1464,10 @@
   "designKind_breakpoint": "Mida de disseny",
   "designKind_component": "Component",
   "designKind_design": "Disseny de pàgina",
-  "designOmitted_recording": "utilitza un enregistrament",
   "designOmitted_research": "utilitza material del quadern de laboratori",
   "designOmitted_dependency": "necessita una part que ha quedat fora",
   "designOmitted_resource": "necessita un fitxer que no està disponible",
   "designPackageExport": "Preparant el paquet de disseny",
-  "designPackageImport": "Important el disseny"
+  "designPackageImport": "Important el disseny",
+  "designOmitted_private": "és privat i no s’ha triat"
 }

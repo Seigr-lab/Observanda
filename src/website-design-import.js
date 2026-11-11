@@ -5,7 +5,8 @@ import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {canonicalPNG} from './canonical-png.js';
 import {readDesignArchive} from './website-design-archive.js';
-import {designFormat,designVersion,designPicture,designResource,researchMarkup} from './website-design-package.js';
+import {designFormat,designVersion,designPicture,designRecording,designResource,researchMarkup} from './website-design-package.js';
+import {plainWebVTT,withPreparedRecording} from './website-recordings.js';
 import {validateWebsiteCSS,websiteFileName,websiteHTMLByteLimit,websiteLocalURL} from './website-file-policy.js';
 import {movedWebsiteText} from './website-page-paths.js';
 import {researchId} from './web/research-reference.js';
@@ -94,9 +95,10 @@ export function readDesignPackage(bytes,{blockedValues=[]}={}){
   designIds.add(d.id);return {id:d.id,name:d.name.trim(),template:t,css:utf8(member(d.stylesheet))};
  });
  const resources=list(design.resources,1500).map(r=>{
-  if(!object(r)||typeof r.name!=='string'||r.file!=='files/'+r.name||r.picture!==undefined&&r.picture!==true)bad();
-  if(r.picture?!designPicture.test(r.name):!designResource.test(r.name)||r.name.startsWith('pictures/'))bad();
-  return {name:r.name,picture:Boolean(r.picture),bytes:member(r.file)};
+  if(!object(r)||typeof r.name!=='string'||r.file!=='files/'+r.name||r.picture!==undefined&&r.picture!==true||r.recording!==undefined&&r.recording!==true||r.picture&&r.recording)bad();
+  if(r.label!==undefined&&(!r.recording||!text(r.label,200)))bad();
+  if(r.picture?!designPicture.test(r.name):r.recording?!designRecording.test(r.name):!designResource.test(r.name)||/^(?:pictures|recordings)\//.test(r.name))bad();
+  return {name:r.name,picture:Boolean(r.picture),recording:Boolean(r.recording),...(r.label?{label:r.label}:{}),bytes:member(r.file)};
  });
  for(const font of fonts)used.add('files/'+font.file);
  const omitted=list(design.omitted??[],2000).map(row=>{if(!object(row)||!text(row.kind,40)||!text(row.name,200)||!text(row.reason,40))bad();return {kind:row.kind,name:row.name,reason:row.reason};});
@@ -195,11 +197,34 @@ export async function applyWebsiteDesign(store,siteId,{expectedRevision,path:add
  if(!revision(expectedRevision))invalid();
  const pkg=readDesignPackage(bytes,{blockedValues}),choice=choices(pkg,options);
  if(reviewId!==reviewToken(siteId,expectedRevision,pkg))throw new AppError('CONFLICT');
+ // Audio and video go through the same preparation as an authored upload,
+ // outside the site writer so other edits continue during the conversion.
+ // Each display copy is written to the site and committed below with the rest.
+ await store.checkRevision(siteId,expectedRevision);
+ const prepared=new Map(),release=async()=>{
+  if(!prepared.size)return;
+  await store.scope(async()=>{const live=new Set((await store.raw(siteId)).files.map(f=>f.blob));for(const file of prepared.values())if(!live.has(file.blob))await store.discardStaged(file.blob);},{write:true});
+ };
+ try{
+  for(const r of pkg.resources){
+   if(!r.recording||r.name.endsWith('.vtt')||!pkg.components.some(c=>c.html.includes(r.name)))continue;
+   signal?.throwIfAborted();
+   const name='recordings/'+randomUUID()+path.posix.extname(r.name),isPublic=pkg.components.some(c=>!c.draft&&c.html.includes(r.name));
+   await withPreparedRecording(store,{name,size:r.bytes.length,bytes:async function*(){yield r.bytes;},signal},async upload=>{
+    const file=await store.scope(()=>store.siteFile(siteId,name,upload,{draft:!isPublic,signal}),{write:true,signal});
+    prepared.set(r.name,{...file,recording:true,...(r.label?{label:r.label}:{})});
+   });
+  }
+  return await importDesign(store,siteId,{expectedRevision,address,pkg,choice,prepared,blockedValues,signal});
+ }catch(error){await release();throw error;}
+}
+function importDesign(store,siteId,{expectedRevision,address,pkg,choice,prepared,blockedValues,signal}){
  return store.scope(async()=>{
   const manifest=await store.current(siteId,expectedRevision);
   if(!manifest.pages.some(p=>p.path===address))throw new AppError('NOT_FOUND');
   const planned=plan(manifest,pkg),{ids}=planned,priorBlobs=new Set(manifest.files.map(f=>f.blob)),staged=new Set();
-  const stage=file=>{if(!priorBlobs.has(file.blob))staged.add(file.blob);return file;};
+  const preparedBlobs=new Set([...prepared.values()].map(f=>f.blob));
+  const stage=file=>{if(!priorBlobs.has(file.blob)&&!preparedBlobs.has(file.blob))staged.add(file.blob);return file;};
   try{
    return await operationStage('designPackageImport',{unit:'files'},async()=>{
     const files=new Map(manifest.files.map(f=>[f.name,f])),taken=new Set(manifest.files.map(f=>f.name.toLowerCase()));
@@ -216,7 +241,16 @@ export async function applyWebsiteDesign(store,siteId,{expectedRevision,path:add
      signal?.throwIfAborted();
      const user=users.get(resource.name);
      if(!user.used){operationAdvance();continue;}
-     if(resource.picture){
+     if(resource.recording){
+      let file=prepared.get(resource.name);
+      if(!file){
+       // Captions are admitted as timed text only, as when an author adds them.
+       let vtt;try{vtt=plainWebVTT(resource.bytes.toString('utf8'));}catch{bad();}
+       const name='recordings/'+randomUUID()+'.vtt';
+       file={...await store.siteFile(siteId,name,{bytes:Buffer.from(vtt),contentType:'text/vtt; charset=utf-8'},{draft:!user.public,signal}),recording:true};
+      }
+      taken.add(file.name);files.set(file.name,stage(file));renamed.set(resource.name.toLowerCase(),file.name);
+     }else if(resource.picture){
       let content;try{content=canonicalPNG(resource.bytes).content;}catch{bad();}
       const name='pictures/'+randomUUID()+'.png';taken.add(name);
       files.set(name,stage({...await store.siteFile(siteId,name,content,{draft:!user.public,signal}),picture:true}));renamed.set(resource.name.toLowerCase(),name);

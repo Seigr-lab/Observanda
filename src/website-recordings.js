@@ -87,11 +87,21 @@ export async function saveRecordingUpload(store,upload,{signal,check,recoverInpu
  await store.checkRevision(data.siteId,data.expectedRevision);
  const save=async()=>{await check?.();return store.save(data.siteId,{expectedRevision:data.expectedRevision,path:data.path,html:data.html,css:data.css,historyKey:data.historyKey,recordings:uploads,signal});};
  if(!data.recording){for await(const _ of bytes())invalid();return save();}
- const {name,size,label}=data.recording,workspace=store.workspace,ext=resource.exec(name)[1],kind=ext==='wav'?'audio':'video';
+ const {name,size,label}=data.recording;
+ const recover=data.recoveredUpload?async()=>{if(!recoverInput)invalid();for await(const _ of bytes())invalid();return recoverInput(data.recoveredUpload);}:null;
+ return withPreparedRecording(store,{name,size,bytes:recover?null:bytes,recover,signal},async prepared=>{uploads.push({...prepared,label});return save();});
+}
+// Prepares one audio or video recording the way an authored upload is prepared:
+// the original is written to the private recording slot, converted to a
+// verified display copy without metadata, and handed to `use` as an upload
+// ({name, bytes, contentType}). The slot is cleared when `use` returns. The
+// slot is on the workspace volume and its native lease covers conversion and
+// recovery of an interrupted earlier upload; site reads, edits and permission
+// updates continue during the transcode.
+export async function withPreparedRecording(store,{name,size,bytes,recover,signal},use){
+ const ext=resource.exec(name)?.[1];if(!['wav','mp4'].includes(ext)||!Number.isSafeInteger(size)||size<=0)invalid();
+ const workspace=store.workspace,kind=ext==='wav'?'audio':'video';
  const {policy}=await new MediaPolicy(workspace).read();if(size>policy.maxUploadBytes)throw new AppError('MEDIA_LIMIT');
- // The private recording slot is on the selected workspace volume. Its native
- // lease covers conversion and recovery of a prior interrupted upload. Other
- // site reads, edits and permission updates continue during the transcode.
  return withNativeDestination(workspace.root,async scope=>{
   await scope.admit();await scope.ensure(stage);
   return scope.member(store.absolute(stage+'/writer'),async(parent,member)=>{
@@ -102,17 +112,14 @@ export async function saveRecordingUpload(store,upload,{signal,check,recoverInpu
     await clean();
     const input=store.absolute(stage+'/original'),output=store.absolute(stage+'/prepared');
     let source;
-    if(data.recoveredUpload){
-     if(!recoverInput)invalid();for await(const _ of bytes())invalid();
-     source=await recoverInput(data.recoveredUpload);
-    }else{
+    if(recover)source=await recover();
+    else{
      const original=await writeContent(workspace,input,bytes(),{exclusive:true,maxBytes:size,reserveBytes:policy.reserveBytes,signal});
      source=new FileContent(workspace,input,original.size,original.sha256);
     }
     if(source.size!==size)invalid();
     const result=await new MediaStore(workspace).prepare(source,kind,path.basename(name,'.'+ext),output,{policy,signal});
-    uploads.push({name,bytes:new FileContent(workspace,output,result.bytes,result.sha256),contentType:result.mime,label});
-    return await save();
+    return await use({name,bytes:new FileContent(workspace,output,result.bytes,result.sha256),contentType:result.mime});
    }finally{try{await clean();}finally{await lease.close();}}
   });
  });

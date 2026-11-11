@@ -22,6 +22,12 @@ import {BUNDLED_FONTS} from '../src/web/font-catalogue.js';
 import {defaultBreakpoints} from '../src/web/website-breakpoint-model.js';
 import {writeVisualStyle} from '../src/web/website-files-visual-style.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
+import {Readable} from 'node:stream';
+import {readdir} from 'node:fs/promises';
+import {mediaCapabilities} from '../src/media.js';
+import {contentBuffer} from '../src/file-content.js';
+import {readRecordingUpload,saveRecordingUpload} from '../src/website-recordings.js';
+import {mediaFixtures,PRIVATE_MARKER} from './media-fixtures.js';
 
 const wrap=(title,body)=>'<html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
 const labels={heading:'Heading',text:'New writing',image:'Site picture'};
@@ -146,4 +152,44 @@ test('malformed, foreign and unsafe packages are refused before the site changes
  await assert.rejects(applyWebsiteDesign(store,s.siteId,{expectedRevision:s.revision,bytes:zip(broken),reviewId:reviewed.reviewId,options:{}}),{code:'WEBSITE_DESIGN_PACKAGE'});
  assert.throws(()=>readDesignArchive(zip(valid),{archive:64*1024*1024,members:2,member:1024*1024,total:8*1024*1024}),{code:'LIMIT'});
  assert.equal((await raw(store,s.siteId)).revision,s.revision,'nothing was saved');
+});
+
+test('a component that plays a recording travels with its recording and captions, which arrive prepared like an upload',async t=>{
+ if(!(await mediaCapabilities()).available)return t.skip('Requires FFmpeg and FFprobe');
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-design-recording-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10});});
+ const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace),siteId=randomUUID(),fixtures=await mediaFixtures(root);
+ workspace.openCatalogue=workspace.catalogue=()=>assert.fail('A design read research');
+ let state=await store.importFiles(siteId,{name:'Acoustics',files:new Map([['index.html',wrap('Hum','<section><p>Hive sound</p></section>')],['style.css','main{padding:1rem}']]),draftFiles:new Map([['private.html',wrap('Notes','<aside><p>Unfinished legend</p></aside>')],['draft-styles.css','']])});
+ const cues=['WEBVTT','','00:00.000 --> 00:00.300','A tone',''].join(String.fromCharCode(10)),audio='recordings/'+randomUUID()+'.wav',track='recordings/'+randomUUID()+'.vtt';
+ const html=state.html.replace('</section>','<figure data-website-recording><audio controls preload="none" src="'+audio+'"><track src="'+track+'" kind="captions" srclang="en" label="English" default></audio></figure></section>');
+ const meta=Buffer.from(JSON.stringify({siteId,expectedRevision:state.site.revision,path:'index.html',html,css:state.css,tracks:[{name:track,text:cues}],recording:{name:audio,label:'Hive hum',size:fixtures.audio.bytes.length}})),length=Buffer.alloc(4);length.writeUInt32BE(meta.length);
+ state=await saveRecordingUpload(store,await readRecordingUpload(Readable.from([length,meta,fixtures.audio.bytes])));
+ state=await componentOperation(store,'create',siteId,{path:'index.html',expectedRevision:state.site.revision,blockPath:'0/1',name:'Players'});
+ state=await componentOperation(store,'create',siteId,{path:'private.html',expectedRevision:state.site.revision,blockPath:'0/1',name:'Private legend'});
+
+ const valid=readDesignArchive(await packageBytes((await exportWebsiteDesign(store,siteId,{expectedRevision:state.site.revision,labels})).members));
+ const pkg=readDesignPackage(await packageBytes(valid));
+ assert.deepEqual(pkg.components.map(c=>c.name),['Players']);
+ assert.deepEqual(pkg.omitted,[{kind:'component',name:'Private legend',reason:'private'}]);
+ assert.deepEqual(pkg.resources.filter(r=>r.recording).map(r=>[r.name,r.label]).sort(),[[audio,'Hive hum'],[track,undefined]].sort());
+
+ // The original upload, metadata included, takes the place of the display copy: import must prepare it again.
+ const planted=new Map(valid);planted.set('files/'+audio,fixtures.audio.bytes);
+ const bytes=Buffer.from(zipSync(Object.fromEntries([...planted].map(([name,value])=>[name,new Uint8Array(value)]))));
+ const blank=await blankSite(store);
+ const review=await reviewWebsiteDesign(store,blank.id,{expectedRevision:blank.revision,bytes});
+ assert.deepEqual(review.omitted,[{kind:'component',name:'Private legend',reason:'private'}]);
+ await applyWebsiteDesign(store,blank.id,{expectedRevision:blank.revision,bytes,reviewId:review.reviewId,options:{}});
+ const site=await raw(store,blank.id),main=site.components.find(c=>c.name==='Players');
+ assert.equal(main.recordings.length,2);
+ const files=new Map(site.files.map(f=>[f.name,f]));
+ const sound=main.recordings.find(f=>f.name.endsWith('.wav')),caption=main.recordings.find(f=>f.name.endsWith('.vtt'));
+ assert.notEqual(sound.name,audio);assert.notEqual(caption.name,track);
+ assert.ok(main.html.includes(sound.name)&&main.html.includes(caption.name));
+ assert.equal(files.get(sound.name).recording,true);assert.equal(files.get(sound.name).label,'Hive hum');assert.equal(files.get(sound.name).contentType,'audio/wav');
+ const copy=await contentBuffer(await store.file(blank.id,sound.name,{editor:true}).then(f=>f.content),{maxBytes:8*1024*1024});
+ assert.ok(copy.length);assert.equal(copy.includes(Buffer.from(PRIVATE_MARKER)),false,'the recording was prepared again, without its metadata');
+ assert.equal((await contentBuffer(await store.file(blank.id,caption.name,{editor:true}).then(f=>f.content),{maxBytes:8192})).toString(),cues);
+ assert.deepEqual(await readdir(path.join(root,'.observanda','website-files','recording-stage')),['writer']);
 });

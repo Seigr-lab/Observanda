@@ -6,6 +6,7 @@ import {portablePageDesign} from './website-page-designs.js';
 import {REGION_SLOTS} from './website-region-model.js';
 import {designMemberName} from './website-design-archive.js';
 import {assertPublicFields} from './privacy.js';
+import {websiteRecordingKind} from './website-recordings.js';
 import {operationAdvance,operationTotal} from './operation-progress.js';
 
 // A website design package carries how a site looks, never what it says: the
@@ -17,6 +18,7 @@ import {operationAdvance,operationTotal} from './operation-progress.js';
 export const designFormat='observanda-design',designVersion=1;
 export const designPicture=/^pictures\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.png$/;
 export const designResource=/\.(?:png|jpe?g|gif|webp|avif|woff2?|ttf|otf)$/i;
+export const designRecording=/^recordings\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.(?:wav|mp4|vtt)$/;
 export const researchMarkup=/data-observanda-|data-website-feed|data-website-source-gallery|data-website-entry-field|data-public-record|data-record-id/i;
 const invalid=()=>{throw new AppError('INVALID');};
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -26,32 +28,34 @@ export function exportWebsiteDesign(store,siteId,{expectedRevision,includeDrafts
  return store.scope(async()=>{
   const manifest=await store.current(siteId,expectedRevision),files=new Map(manifest.files.map(f=>[f.name,f]));
   const resources=new Map(),omitted=[],texts=new Map();
-  const exportable=(name,draft)=>{
+  // Recordings and their captions travel only with the components that play them.
+  const exportable=(name,draft,media=false)=>{
    const f=files.get(name);
-   if(!f||f.sourceId||f.feedAsset||f.feedPage||f.themeSheet||f.tokenSheet||f.tokenFont||f.recording||f.draft&&!draft&&!includeDrafts||!designMemberName('files/'+name))return null;
-   return (f.picture?designPicture.test(name):designResource.test(name)&&!name.startsWith('pictures/'))?f:null;
+   if(!f||f.sourceId||f.feedAsset||f.feedPage||f.themeSheet||f.tokenSheet||f.tokenFont||f.draft&&!draft&&!includeDrafts||!designMemberName('files/'+name))return null;
+   if(f.recording)return media&&designRecording.test(name)&&websiteRecordingKind(f)?f:null;
+   return (f.picture?designPicture.test(name):designResource.test(name)&&!name.startsWith('pictures/')&&!name.startsWith('recordings/'))?f:null;
   };
-  const take=(names,draft=false)=>{
-   const found=names.map(name=>exportable(name,draft));if(found.some(f=>!f))return false;
+  const take=(names,draft=false,media=false)=>{
+   const found=names.map(name=>exportable(name,draft,media));if(found.some(f=>!f))return false;
    for(const f of found)resources.set(f.name,f);return true;
   };
-  // Components, without those that hold recordings, research markup, private
-  // material not chosen or a nested component that cannot travel.
+  // Components with their pictures, recordings and captions; without those that
+  // hold research markup, private ones not chosen (named in the package so the
+  // importer knows they exist) or a nested component that cannot travel.
   const mains=manifest.components??[],kept=new Map();
   for(const main of mains){
-   if(main.draft&&!includeDrafts)continue;
-   if(main.recordings?.length){omitted.push({kind:'component',name:main.name,reason:'recording'});continue;}
-   if(researchMarkup.test(main.html)||main.pictures.some(p=>!exportable(p.name,main.draft))){omitted.push({kind:'component',name:main.name,reason:'research'});continue;}
+   if(main.draft&&!includeDrafts){omitted.push({kind:'component',name:main.name,reason:'private'});continue;}
+   if(researchMarkup.test(main.html)||main.pictures.some(p=>!exportable(p.name,main.draft))||(main.recordings??[]).some(r=>!exportable(r.name,main.draft,true))){omitted.push({kind:'component',name:main.name,reason:'research'});continue;}
    kept.set(main.id,main);
   }
   for(let changed=true;changed;){
    changed=false;
    for(const main of kept.values())if((main.slots??[]).some(s=>s.type==='component'&&!kept.has(s.component))){
-    kept.delete(main.id);changed=true;if(!main.draft)omitted.push({kind:'component',name:main.name,reason:'dependency'});
+    kept.delete(main.id);changed=true;omitted.push({kind:'component',name:main.name,reason:'dependency'});
    }
   }
   const components=[...kept.values()].map(main=>{
-   take(main.pictures.map(p=>p.name),main.draft);
+   take(main.pictures.map(p=>p.name),main.draft);take((main.recordings??[]).map(r=>r.name),main.draft,true);
    return {id:main.id,name:main.name,html:main.html,...(main.css?{css:main.css}:{}),...(main.slots?.length?{slots:main.slots}:{}),...(main.variants?.length?{variants:main.variants}:{}),...(main.draft?{draft:true}:{})};
   });
   // Page styles and the custom fonts they use, with their rights and notices.
@@ -95,12 +99,12 @@ export function exportWebsiteDesign(store,siteId,{expectedRevision,includeDrafts
   for(const slot of REGION_SLOTS){
    const entry=manifest.regions?.slots?.[slot];if(!entry)continue;
    if(kept.has(entry.component))regions[slot]={component:entry.component,settings:entry.settings};
-   else if(!mains.find(c=>c.id===entry.component)?.draft)omitted.push({kind:'region',name:slot,reason:'dependency'});
+   else omitted.push({kind:'region',name:slot,reason:'dependency'});
   }
   const design={format:designFormat,version:designVersion,name:manifest.name,created:new Date().toISOString(),
    stylesheet,breakpoints:manifest.breakpoints??null,themes:(manifest.themeBook?.items??[]).map(({id,name,values})=>({id,name,values})),
    styles,fonts,components,regions,pageDesigns,
-   resources:[...resources.values()].map(f=>({name:f.name,file:'files/'+f.name,...(f.picture?{picture:true}:{})})).sort((a,b)=>a.name<b.name?-1:1),omitted};
+   resources:[...resources.values()].map(f=>({name:f.name,file:'files/'+f.name,...(f.picture?{picture:true}:{}),...(f.recording?{recording:true,...(f.label?{label:f.label}:{})}:{})})).sort((a,b)=>a.name<b.name?-1:1),omitted};
   const json=JSON.stringify(design,null,1);
   // The canary: no research markup and no local paths or private values.
   for(const text of [json,...texts.values()])if(researchMarkup.test(text))throw new AppError('PRIVACY');
