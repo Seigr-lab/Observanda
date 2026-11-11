@@ -22,5 +22,7 @@
   "physical-prototyping.label": "Prototipatge físic",
   "physical-prototyping.description": "Dissenys, llistes de components, muntatges de PCB, mesures i retocs.",
   "research-development.label": "Recerca i desenvolupament",
-  "research-development.description": "Preguntes, prototips, experiments i resultats reproduïbles."
+  "research-development.description": "Preguntes, prototips, experiments i resultats reproduïbles.",
+  "software-development.label": "Desenvolupament de programari",
+  "software-development.description": "Repositoris, canvis, compilacions, imatges de disc i de contenidor, execucions de proves i versions publicades amb identificadors i resums exactes."
 }

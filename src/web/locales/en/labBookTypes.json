@@ -22,5 +22,7 @@
   "physical-prototyping.label": "Physical prototyping",
   "physical-prototyping.description": "Designs, component lists, PCB assemblies, measurements and rework.",
   "research-development.label": "Research & development",
-  "research-development.description": "Questions, prototypes, experiments and reproducible findings."
+  "research-development.description": "Questions, prototypes, experiments and reproducible findings.",
+  "software-development.label": "Software development",
+  "software-development.description": "Repositories, changes, builds, disk and container images, test runs and releases with exact identifiers and digests."
 }

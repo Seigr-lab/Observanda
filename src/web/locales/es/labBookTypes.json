@@ -22,5 +22,7 @@
   "physical-prototyping.label": "Prototipado físico",
   "physical-prototyping.description": "Diseños, listas de componentes, montajes de PCB, mediciones y retrabajos.",
   "research-development.label": "Investigación y desarrollo",
-  "research-development.description": "Preguntas, prototipos, experimentos y hallazgos reproducibles."
+  "research-development.description": "Preguntas, prototipos, experimentos y hallazgos reproducibles.",
+  "software-development.label": "Desarrollo de software",
+  "software-development.description": "Repositorios, cambios, compilaciones, imágenes de disco y de contenedor, ejecuciones de pruebas y versiones publicadas con identificadores y resúmenes exactos."
 }

@@ -22,5 +22,7 @@
   "physical-prototyping.label": "Fysisk prototyping",
   "physical-prototyping.description": "Utforminger, komponentlister, kretskortmontasjer, målinger og omarbeiding.",
   "research-development.label": "Forskning og utvikling",
-  "research-development.description": "Spørsmål, prototyper, forsøk og reproduserbare funn."
+  "research-development.description": "Spørsmål, prototyper, forsøk og reproduserbare funn.",
+  "software-development.label": "Programvareutvikling",
+  "software-development.description": "Repositorier, endringer, bygg, disk- og containeravbildninger, testkjøringer og utgivelser med eksakte identifikatorer og sjekksummer."
 }
