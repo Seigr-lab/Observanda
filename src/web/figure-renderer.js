@@ -2,7 +2,7 @@ import {modelMessages} from './model-messages.js';
 import displayMessages from './locales/en/figureDisplay.json' with {type:'json'};
 import {appendProjectionDescription,projectionTableDescription,projectionAxisLabel} from './figure-projection-display.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
-import {axisFraction,explicitAxisTicks,axisTickValues,customTickLayout,verticalTickHeight,renderCustomAxis,axisControlTable} from './figure-axis-controls.js';
+import {axisFraction,explicitAxisTicks,axisTickValues,customTickLayout,verticalTickHeight,renderCustomAxis,axisControlTable,figureTickMark} from './figure-axis-controls.js';
 import {areaMarker,markerAreaLegend} from './figure-marker-area.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
 import {INTERVAL_FIELDS,pointIntervals,renderIntervals,intervalHint} from './figure-intervals.js';
@@ -14,7 +14,7 @@ import {figureStyle,readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-
 import {renderAnnotations,renderAnnotationKey,annotationTable} from './figure-annotations.js';
 import {linkedPanelPlots} from './figure-composition.js';
 import {formatFigureNumber,figureTickLabels,figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
-import {figureDomain as domain,figureTicks as ticks,figureFraction as transform} from './figure-scales.js';
+import {figureDomain as domain,figureTicks as ticks,figureFraction as transform,figureMinorTicks} from './figure-scales.js';
 import {wrapFigureText,figureLegendLayout} from './figure-text-layout.js';
 import {figureDateTicks,figureDateLabel} from './figure-time-axis.js';
 export {formatFigureNumber} from './figure-number-labels.js';
@@ -142,8 +142,10 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,local
  for(const [i,value] of valueTicks.entries()){
   const position=horizontal?vx(value):vy(value),text=valueLabels[i];
   if(style.grid!=='none')graphic+=horizontal?`<line x1="${numeric(position)}" x2="${numeric(position)}" y1="${top}" y2="${top+plotH}" stroke="${style.gridColor}"/>`:`<line x1="${left}" x2="${left+plotW}" y1="${numeric(position)}" y2="${numeric(position)}" stroke="${style.gridColor}"/>`;
+  graphic+=figureTickMark(position,{bottom:horizontal,left,top,plotH,color:style.axisColor});
   graphic+=svgText(text,horizontal?position:left-12,horizontal?top+plotH+fontSize*1.6:position+fontSize*.35,{size:valueSize,complete:true,anchor:horizontal?(i===0?(figure.y.reversed?'end':'start'):i===valueTicks.length-1?(figure.y.reversed?'start':'end'):'middle'):'end',cls:'figure-value-tick'});
  }
+ if(!customY)for(const value of figureMinorTicks(yd,figure.y.scale==='log',valueTicks))graphic+=figureTickMark(horizontal?vx(value):vy(value),{bottom:horizontal,left,top,plotH,color:style.axisColor,minor:true});
  const projected=rotation?Math.abs(Math.cos(rotation*Math.PI/180))*labelWidth+Math.abs(Math.sin(rotation*Math.PI/180))*fontSize*1.4:Math.min(140,longest);
  const step=style.labelStep||Math.max(1,Math.ceil((horizontal?fontSize*2.8:projected+16)*categories.length/(horizontal?plotH:plotW)));
  const coordinateCount=Math.max(2,Math.floor((horizontal?plotH:plotW)/(figure.x.kind==='date'?fontSize*(['seconds','milliseconds'].includes(style.dateFormat)?17:12):fontSize*7)));
@@ -153,11 +155,13 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure',translate,local
  for(const [i,value] of coordTicks.entries()){
   const raw=figure.x.kind==='date'?new Date(value).toISOString():value,position=horizontal?cy(raw):cx(raw),text=numberAxis?numberAxis.labels[i]:coordinateLabel(value,figure,style);
   if(style.grid==='both')graphic+=horizontal?`<line x1="${left}" x2="${left+plotW}" y1="${numeric(position)}" y2="${numeric(position)}" stroke="${style.gridColor}"/>`:`<line x1="${numeric(position)}" x2="${numeric(position)}" y1="${top}" y2="${top+plotH}" stroke="${style.gridColor}"/>`;
+  graphic+=figureTickMark(position,{bottom:!horizontal,left,top,plotH,color:style.axisColor});
   graphic+=svgText(text,horizontal?left-12:position,horizontal?position:top+plotH+fontSize*1.6,{
     size:coordinateSize,complete:!!numberAxis,width:horizontal?left-28:category?rotation?labelWidth:Math.max(30,plotW*step/Math.max(1,categories.length)-8):plotW/Math.max(1,coordTicks.length)-6,
     lines:horizontal||category&&!rotation?2:1,anchor:horizontal||rotation?'end':numberAxis?(i===0?(figure.x.reversed?'end':'start'):i===coordTicks.length-1?(figure.x.reversed?'start':'end'):'middle'):'middle',rotation:horizontal?0:rotation,cls:'figure-coordinate-tick'
   });
  }
+ if(numberAxis&&!customX)for(const value of figureMinorTicks(xd,figure.x.scale==='log',coordTicks))graphic+=figureTickMark(horizontal?cy(value):cx(value),{bottom:!horizontal,left,top,plotH,color:style.axisColor,minor:true});
  if(customY)graphic+=renderCustomAxis(customY,{position:horizontal?vx:vy,left,top,plotW,plotH,horizontal,style,grid:style.grid!=='none',cls:'figure-value-tick',esc});
  if(customX)graphic+=renderCustomAxis(customX,{position:v=>(horizontal?cy:cx)(figure.x.kind==='date'?new Date(v).toISOString():v),left,top,plotW,plotH,horizontal:!horizontal,style,grid:style.grid==='both',cls:'figure-coordinate-tick',esc,labelValue:value=>figureCoordinateNumber(figure,'x',value)});
  const clip=idPrefix+'-plot-'+figure.id;

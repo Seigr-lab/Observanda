@@ -32,3 +32,9 @@ export function renderCustomAxis(ticks,{position,left,top,plotW,plotH,horizontal
  }return svg;
 }
 export function axisControlTable(f,esc,{translate}={}){const text=modelMessages('figureAxes',messages,translate);return ['x','y'].filter(k=>f[k].ticks?.length||f[k].reversed).map(k=>'<table class="figure-axis-settings-table"><caption>'+esc(f[k].label||text(k))+' · '+esc(text('direction'))+': '+esc(text(f[k].reversed?'reversed':'normal'))+'</caption><thead><tr><th>'+esc(text('value'))+'</th><th>'+esc(text('label'))+'</th></tr></thead><tbody>'+(f[k].ticks??[]).map(t=>'<tr><td>'+esc(figureCoordinateNumber(f,k,t.value))+'</td><td>'+esc(t.label)+'</td></tr>').join('')+'</tbody></table>').join('');}
+// Short marks outside the plot: labelled ticks are 6 px, minor ticks 3 px.
+// `bottom` marks the horizontal axis; otherwise the vertical axis on the left.
+export function figureTickMark(position,{bottom,left,top,plotH,color,minor=false}){
+ const length=minor?3:6,p=Math.round(position*1000)/1000;
+ return bottom?`<line class="${minor?'figure-minor-tick':'figure-tick-mark'}" x1="${p}" x2="${p}" y1="${top+plotH}" y2="${top+plotH+length}" stroke="${color}"/>`:`<line class="${minor?'figure-minor-tick':'figure-tick-mark'}" x1="${left-length}" x2="${left}" y1="${p}" y2="${p}" stroke="${color}"/>`;
+}

@@ -59,3 +59,15 @@ export function figureTicks({min,max},log,count=5){
  }
  return values.length>1?values:[min,max];
 }
+
+// Unlabelled 2-9 multiples between the decades of a logarithmic axis, so a
+// reader can place values between labelled ticks.
+export function figureMinorTicks({min,max},log,majors=[]){
+ if(!log||!(min>0)||!(max>min))return [];
+ const labelled=new Set(majors),values=[];
+ for(let n=Math.floor(Math.log10(min));n<=Math.ceil(Math.log10(max))&&values.length<400;n++)for(let m=2;m<=9;m++){
+  const value=Number(m+'e'+n);if(value>=min&&value<=max&&!labelled.has(value))values.push(value);
+ }
+ // Very wide axes would draw a solid band; keep the decade labels alone.
+ return values.length>8*12?[]:values;
+}

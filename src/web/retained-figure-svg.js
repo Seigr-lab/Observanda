@@ -5,9 +5,9 @@ import {retainedFigureWindow} from './retained-figure-window.js';
 // Complete retained-figure SVG output. Iteration is bounded independently of
 // point, series, panel and annotation counts; consumers must drain the stream.
 import {readerFigureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
-import {figureDomain,figureFraction,figureTicks} from './figure-scales.js';
+import {figureDomain,figureFraction,figureTicks,figureMinorTicks} from './figure-scales.js';
 import {figureDateTicks,figureDateLabel} from './figure-time-axis.js';
-import {axisFraction} from './figure-axis-controls.js';
+import {axisFraction,figureTickMark} from './figure-axis-controls.js';
 import {xValue} from './figure-model.js';
 import {figureDataNumber,figureCoordinateNumber,figureTickLabels} from './figure-number-labels.js';
 import {renderIntervals,intervalHint} from './figure-intervals.js';
@@ -166,13 +166,14 @@ async function* axes(reader,g){
   for(let i=0;i<values.length;i++){
    const raw=axis==='x'&&f.x.kind==='date'?new Date(values[i]).toISOString():values[i],pos=(axis==='x'?(horizontal?t.cy:t.cx):(horizontal?t.vx:t.vy))(raw);
    const label=labels[i];
-   yield* tickLine(g,pos,isHorizontal,axis);
+   yield* tickLine(g,pos,isHorizontal,axis);yield figureTickMark(pos,{bottom:isHorizontal,left,top,plotH,color:style.axisColor});
    const tickWidth=isHorizontal?plotW/Math.max(1,values.length):left-24;let tickSize=style.fontSize;
    // Generated numeric/date tokens must stay intact. Fit against the same
    // bounded line metric used by SVG text, without changing their spelling.
    while(await figureTextHeight(reader,label,null,tickWidth,tickSize)>tickSize*1.3)tickSize*=.9;
    yield* figureSVGText(reader,label,null,isHorizontal?pos:left-12,isHorizontal?top+plotH+style.fontSize*1.6:pos+tickSize*.35,{anchor:isHorizontal?(i===0?'start':i===values.length-1?'end':'middle'):'end',width:tickWidth,size:tickSize,cls:'figure-generated-tick-label'});
   }
+  if(!date)for(const value of figureMinorTicks(g[axis],f[axis].scale==='log',values))yield figureTickMark((axis==='x'?(horizontal?t.cy:t.cx):(horizontal?t.vx:t.vy))(value),{bottom:isHorizontal,left,top,plotH,color:style.axisColor,minor:true});
  }
  yield '<path d="M'+left+','+top+' V'+(top+plotH)+' H'+(left+plotW)+'" fill="none" stroke="'+style.axisColor+'"/>';
  for(const axis of ['x','y']){

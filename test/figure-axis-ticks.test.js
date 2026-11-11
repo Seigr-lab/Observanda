@@ -32,6 +32,18 @@ test('a log figure within one decade draws more than its two bounds',()=>{
  assert.ok(labels.length>=2,labels.join());assert.ok(labels.includes('5')||labels.includes('2'),labels.join());
 });
 
+test('axes draw a mark at every labelled tick and unlabelled 2-9 marks between log decades',async()=>{
+ const {figureMinorTicks}=await import('../src/web/figure-scales.js');
+ assert.deepEqual(figureMinorTicks({min:1,max:100},true,[1,10,100]),[2,3,4,5,6,7,8,9,20,30,40,50,60,70,80,90]);
+ assert.deepEqual(figureMinorTicks({min:0,max:1},false,[0,1]),[]);
+ assert.deepEqual(figureMinorTicks({min:1e-100,max:1e100},true,[]),[],'Very wide axes keep only labelled decades');
+ const f=createFigure();f.title='Gain';f.x.kind='number';f.y.scale='log';f.y.min=1;f.y.max=1000;
+ f.series[0].points=[{x:1,y:3,error:null},{x:2,y:300,error:null}];
+ const svg=renderFigure(f),labels=[...svg.matchAll(/class="figure-value-tick"/g)].length+[...svg.matchAll(/class="figure-coordinate-tick"/g)].length;
+ assert.equal((svg.match(/class="figure-tick-mark"/g)??[]).length,labels);
+ assert.ok((svg.match(/class="figure-minor-tick"/g)??[]).length>=16);
+});
+
 test('a log-axis uncertainty reaching zero or below is drawn clipped at the axis and kept exact',async()=>{
  const {figureIssues}=await import('../src/web/figure-model.js'),{RetainedFigureDocuments}=await import('../src/retained-figure-document.js'),{retainedFigureSVG}=await import('../src/web/retained-figure-svg.js');
  const f=createFigure();f.title='Low signal';f.kind='scatter';f.x.kind='number';f.y.scale='log';
