@@ -21,6 +21,18 @@ function churnPorts(){
  return {connections:()=>connections,stop:async()=>{stopped=true;await loop;await new Promise(resolve=>server.close(resolve));}};
 }
 
+test('concurrent managed clusters start and stop while local ports are in use',{timeout:900000},async t=>{
+ const root=await parent(t,'observanda-runtime-concurrency-'),clusters=Array.from({length:6},(_,index)=>path.join(root,'cluster-'+index)),churn=churnPorts(),failures=[];let attempts=0;
+ try{
+  for(let round=0;round<4;round++){
+   const services=await Promise.all(clusters.map(async directory=>{attempts++;try{return await startManagedPostgres({directory,env:environment()});}catch(error){failures.push({round,directory,phase:'start',code:error.code,log:await logTail(directory)});return null;}}));
+   await Promise.all(services.map(async(service,index)=>{if(!service)return;try{await service.close();}catch(error){failures.push({round,directory:clusters[index],phase:'stop',code:error.code,log:await logTail(clusters[index])});}}));
+  }
+ }finally{await churn.stop();}
+ t.diagnostic('cluster starts '+attempts+', failures '+failures.length+', loopback connections '+churn.connections());
+ assert.deepEqual(failures,[]);
+});
+
 test('a managed cluster whose server already exited still stops and restarts',{timeout:300000},async t=>{
  const root=await parent(t,'observanda-runtime-exited-'),directory=path.join(root,'cluster');
  for(let attempt=0;attempt<3;attempt++){

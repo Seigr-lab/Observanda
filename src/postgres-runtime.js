@@ -251,14 +251,20 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    if(mayBeRunning)throw new AppError('DATABASE_RUNNING');budget.stopped(directory);config.running=false;await save();let closing;
    return {managed:true,stopped:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{portableKey?.fill(0);await lease.close();})()};
   }
-  config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
   onProgress({stage:'start'});
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
   // WAL recovery on network storage can exceed a minute. Wait for readiness
   // before treating a healthy recovering server as a failed startup.
   const startupDeadline=performance.now()+900000;
-  mayBeRunning=true;
-  await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});
+  // Under concurrent load pg_ctl occasionally reports a start that never
+  // launched the server: status then finds it stopped and the log is unchanged.
+  // Retry such a verified non-start on a fresh port; any other state is an error.
+  for(let attempt=1;;attempt++){
+   config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
+   mayBeRunning=true;
+   try{await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});break;}
+   catch(error){if(error.code!=='DATABASE_INSTALL'||attempt>=3||signal?.aborted||!await serverStopped().catch(()=>false))throw error;mayBeRunning=false;await new Promise(resolve=>setTimeout(resolve,500*attempt));}
+  }
   const admin=await diagnosticPhase('runtime-connect',()=>connectManagedAdmin(config,{signal,deadline:startupDeadline}));
   try{
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
