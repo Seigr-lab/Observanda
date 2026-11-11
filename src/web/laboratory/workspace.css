@@ -99,7 +99,7 @@
 .notebook-config-form .dialog-actions{flex:none;border-top:1px solid var(--ui-border);padding:1rem 0 0;margin:0;gap:.6rem}
 .notebook-type-picker{display:none}
 .tree-project>.tree-project{margin-left:.8rem;border-left:1px solid var(--ui-border);padding-left:.5rem}
-@container lab-settings (max-width:740px){.notebook-type-picker{display:flex;align-items:end;gap:.5rem;margin-top:1rem}.notebook-type-picker .field{flex:1;min-width:0;margin:0}.notebook-type-picker .button{font-size:.8rem;white-space:normal}.notebook-config-form .lab-type-catalogue{display:none}}
+@container lab-settings (max-width:740px){.notebook-type-picker{display:flex;align-items:end;gap:.5rem;margin-top:1rem}.notebook-type-picker .field{flex:1;min-width:0;margin:0}.notebook-type-picker .button{font-size:.8rem;white-space:normal}.notebook-config-form .notebook-type-picker+.lab-type-layout .lab-type-catalogue{display:none}}
 @media(max-width:700px){#dialog:has(.notebook-config-form){width:calc(100vw - 24px);padding:1rem}.notebook-config-form{max-height:calc(100dvh - 4rem)}.notebook-config-form .form-grid{grid-template-columns:1fr}}
 /* Project details and reusable template authoring have separate forms. */
 #dialog:has(.project-config-form){width:min(760px,calc(100vw - 48px));max-width:none;max-height:calc(100dvh - 2rem);padding:1.5rem;overflow:hidden}
