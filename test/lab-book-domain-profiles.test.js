@@ -124,3 +124,13 @@ test('educational version 2 plans courses and sessions and never publishes learn
  for(const [section,key] of [['work','field2'],['work','support'],['feedback','feedback']])assert.equal(field(section,key).private,true,section+'/'+key);
  assert.equal(profile.introduced.private['work/field2'],2,'a released learner reference becomes private through the upgrade');
 });
+
+test('research and development version 2 records hypotheses, experiments with measured values and the materials and instruments used',()=>{
+ const profile=tracks('research-development',{subjects:['questions','materials','equipment'],primary:'experiments',events:['protocols','experiments','findings'],formats:{'protocols/protocol-id':'identifier','experiments/raw-data-sha256':'sha-256','materials/lot':'identifier','equipment/serial':'identifier'}});
+ assert.equal(profile.sections.find(s=>s.key==='experiments').fields.find(f=>f.key==='value').uncertainty,'absolute');
+ for(const key of ['materials','equipment'])assert.equal(profile.introduced.sections[key],2);
+});
+
+test('no lab book type is left as a skeleton of two fields per section',()=>{
+ for(const profile of laboratoryProfiles)assert.ok(profile.sections.reduce((sum,s)=>sum+s.fields.length,0)>profile.sections.length*2,profile.id);
+});
