@@ -1,5 +1,5 @@
 import {LAB_BOOK_ARCHIVE_IDENTITY} from './lab-book-archive.js';
-import {ownedStorageLeaseFile} from './owned-storage-control.js';
+import {ownedStorageLeaseFile,ownerNativeControl} from './owned-storage-control.js';
 import {PROJECT_ARCHIVE_IDENTITY} from './project-archive.js';
 // Retire only the selected owner. Nested child owners keep their original paths.
 import path from 'node:path';
@@ -30,7 +30,7 @@ async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDi
   if(await contains(relative)){if(!stat.isDirectory())throw new AppError('UNSAFE');return;}
   if(stat.isDirectory()){
    // An undeclared directory added after the snapshot cannot become move-owned.
-   if(nested&&marker&&!await protects(relative)&&!own.startsWith('.observanda/postgresql/')&&own!=='.observanda/postgresql'&&!await assertRegular(path.join(value.destination,relative),{directory:true,missing:true})){
+   if(nested&&marker&&!await protects(relative)&&!ownerNativeControl(own)&&!own.startsWith('.observanda/postgresql/')&&own!=='.observanda/postgresql'&&!await assertRegular(path.join(value.destination,relative),{directory:true,missing:true})){
     // Empty directories and lease-only directories carry no retained data.
     // Any untransferred content still prevents retirement.
     for await(const child of await opendir(file))if(!ownedStorageLeaseFile(path.posix.join(own,child.name)))throw new AppError('STORAGE_MOVE_CONTENTS');
@@ -42,7 +42,7 @@ async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDi
    // handles a crash between marker removal and the completed receipt.
    if(!marker)throw new AppError('STORAGE_MOVE_STATE');
    if(own===MOVE_SOURCE){const owner=relative.slice(0,-own.length).replace(/\/$/,''),fence=await moveSource(path.join(root,owner));if(fence?.id!==value.id||fence.destination!==path.join(value.destination,owner))throw new AppError('STORAGE_MOVE_STATE');}
-   const internal=own===MOVE_SOURCE||ownedStorageLeaseFile(own)||own.startsWith('.observanda/project-transfer-files/')||own.startsWith('.observanda/lab-book-transfer-files/')||own.startsWith('.observanda/postgresql/')||[PROJECT_ARCHIVE_IDENTITY,LAB_BOOK_ARCHIVE_IDENTITY,'.observanda/lab-book-transfer.lock','.observanda/lab-book-transfer.observanda','.observanda/lab-book-initialization.lock','.observanda/research.observanda','.observanda/write.lock','.observanda/project-retention.lock','.observanda/project-transfer.lock','.observanda/project-transfer.observanda','.observanda/project-initialization.lock'].includes(own)||isStorageTemporary(path.basename(relative));
+   const internal=own===MOVE_SOURCE||ownedStorageLeaseFile(own)||ownerNativeControl(own)||own.startsWith('.observanda/project-transfer-files/')||own.startsWith('.observanda/lab-book-transfer-files/')||own.startsWith('.observanda/postgresql/')||[PROJECT_ARCHIVE_IDENTITY,LAB_BOOK_ARCHIVE_IDENTITY,'.observanda/lab-book-transfer.lock','.observanda/lab-book-transfer.observanda','.observanda/lab-book-initialization.lock','.observanda/research.observanda','.observanda/write.lock','.observanda/project-retention.lock','.observanda/project-transfer.lock','.observanda/project-transfer.observanda','.observanda/project-initialization.lock'].includes(own)||isStorageTemporary(path.basename(relative));
    if((verify||nested)&&!internal&&await hashWorkspaceFile(file)!==await hashWorkspaceFile(path.join(value.destination,relative)))throw new AppError('STORAGE_COPY');
    operationItem(relative);await unlink(file);operationAdvance();await checkpoint('removed',relative);
   }

@@ -7,6 +7,10 @@ const projectCreationLease=/^\.observanda\/project-creation\/(?:owner-)?[a-f0-9-
 const projectRevisionLease=/^\.observanda\/project-owner-revisions\/[a-f0-9-]{36}\.obsv\.lock$/;
 const reviewLease=/^\.observanda\/reviews\/leases\/[a-f0-9-]{36}\.lock$/;
 export const ownedStorageLeaseFile=relative=>roots.has(relative)||bookLease.test(relative)||reviewLease.test(relative);
+// Native staging and query-cache controls are bound to the folder that holds
+// them. Inventories leave them out, so a copied owner never carries them.
+const nativeControlDirectories=['.observanda/staging-reservations','.observanda/query-cache'];
+export const ownerNativeControl=relative=>relative==='.observanda/.staging-reservations.lock'||nativeControlDirectories.some(directory=>relative===directory||relative.startsWith(directory+'/'));
 // Preserve the established inventory fingerprint. Fresh-key copying alone
 // omits these additional plaintext lease controls instead of decrypting them.
 export const workspaceOwnerLeaseFile=relative=>ownedStorageLeaseFile(relative)||relative==='.observanda/project-registry.lock'||projectLease.test(relative)||projectCreationLease.test(relative)||projectRevisionLease.test(relative);
