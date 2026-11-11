@@ -8,7 +8,7 @@ import {copyLabBookLocation,labBookTransferReceipt} from './lab-book-transfer.js
 import {catalogueBinding} from './postgres-activation.js';
 import {databaseRetention,validDatabaseRetention,verifyDatabaseRetention} from './workspace-database-retention.js';
 import {projectMoveDirectory,assertProjectMoveDirectory,ownedProjectFolder} from './project-move-boundaries.js';
-import {removeRetiredLabBook} from './owned-storage-retirement.js';
+import {removeRetiredLabBook,retirementCheck} from './owned-storage-retirement.js';
 import {assertRegular,atomicWrite,serialize} from './storage.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -80,7 +80,7 @@ export class LabBookRelocationTransfer{
     await persistRename(roots.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
    }
    if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
-   await removeRetiredLabBook({...value,...roots,sourceDirectory:value.identity},{verify:!this.fresh,checkpoint:async(stage,...args)=>{await this.check();await this.checkpoint('retire:'+stage,...args);}});
+   const removed=retirementCheck(()=>this.check());await removeRetiredLabBook({...value,...roots,sourceDirectory:value.identity},{verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check());await this.checkpoint('retire:'+stage,...args);}});
    await this.checkpoint('source-removed',value);
   });
  }

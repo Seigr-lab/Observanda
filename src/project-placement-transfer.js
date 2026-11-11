@@ -12,7 +12,7 @@ import {placementOwners} from './project-placement-transfer-state.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {databaseRetention,verifyDatabaseRetention} from './workspace-database-retention.js';
 import {projectMoveDirectory,assertProjectMoveDirectory,ownedProjectFolder} from './project-move-boundaries.js';
-import {removeRetiredProject} from './owned-storage-retirement.js';
+import {removeRetiredProject,retirementCheck} from './owned-storage-retirement.js';
 import {assertRegular,atomicWrite,serialize} from './storage.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -117,7 +117,7 @@ export class ProjectPlacementTransfer{
      await persistRename(scope.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
     }
     if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
-    await removeRetiredProject({...scope,sourceDirectory:rootOwner.sourceIdentity},{ownerDirectories:value.transfer.owners.map(item=>item.relative).filter(Boolean),verify:!this.fresh,checkpoint:async(stage,...args)=>{await this.check();await this.checkpoint('retire:'+stage,value,...args);}});await this.checkpoint('source-removed',value);
+    const removed=retirementCheck(()=>this.check());await removeRetiredProject({...scope,sourceDirectory:rootOwner.sourceIdentity},{ownerDirectories:value.transfer.owners.map(item=>item.relative).filter(Boolean),verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check());await this.checkpoint('retire:'+stage,value,...args);}});await this.checkpoint('source-removed',value);
    });
   });
  }

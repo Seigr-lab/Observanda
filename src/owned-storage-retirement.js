@@ -12,6 +12,10 @@ import {protectsDirectory,assertProjectMoveDirectory} from './project-move-bound
 import {operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
 const inside=(root,file)=>{const relative=path.relative(root,file);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
+// The retired source is fenced and holds only retained copies. Re-authorize at
+// most once per interval while its files are removed, so cancellation and
+// expiry still stop it without a full access check for every database file.
+export function retirementCheck(check,interval=1000){let last=0;return async(...args)=>{if(Date.now()-last<interval)return;await check(...args);last=Date.now();};}
 export const removeRetiredProject=(value,options)=>removeRetiredOwner(value,options);
 export const removeRetiredLabBook=(value,options)=>removeRetiredOwner(value,{...options,labBook:true});
 async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDirectories=[],ownerRelative=null,boundaryState=null}){

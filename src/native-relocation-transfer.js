@@ -13,7 +13,7 @@ import {projectMoveDirectory,assertProjectMoveDirectory} from './project-move-bo
 import {assertRegular,atomicWrite,digest,serialize,workspaceFile} from './storage.js';
 import {workspaceRename} from './workspace-rename-state.js';
 import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
-import {removeRetiredProject} from './owned-storage-retirement.js';
+import {removeRetiredProject,retirementCheck} from './owned-storage-retirement.js';
 import {relocationOwnerRoot,relocationOwnerId,assertNativeRelocationDatabases} from './native-relocation-owners.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
@@ -62,6 +62,6 @@ export class NativeRelocationTransfer{
   }
   if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
   const ownerRelative=async relative=>{for(let prefix=path.posix.dirname(relative);prefix!=='.';prefix=path.posix.dirname(prefix))if(await this.owners.get(prefix))return relative.slice(prefix.length+1);return relative;};
-  await this.command.registry.workspace.withCatalogueConnections(()=>removeRetiredProject({...scope,sourceDirectory:root.identity},{ownerRelative,verify:!this.fresh,checkpoint:async(stage,...args)=>{await this.check(root);await this.checkpoint('retire:'+stage,value,...args);}}));await this.checkpoint('source-removed',value);
+  const removed=retirementCheck(()=>this.check(root));await this.command.registry.workspace.withCatalogueConnections(()=>removeRetiredProject({...scope,sourceDirectory:root.identity},{ownerRelative,verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check(root));await this.checkpoint('retire:'+stage,value,...args);}}));await this.checkpoint('source-removed',value);
  }
 }
