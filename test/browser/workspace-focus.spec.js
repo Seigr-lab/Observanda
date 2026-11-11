@@ -52,7 +52,8 @@ test('website palettes leave app controls readable and app theme preferences sur
   await page.locator('.preferences-tabs [data-action="interface"]').click();
   await page.getByRole('dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
   await page.getByLabel('App theme',{exact:true}).selectOption('studio');
-  await page.getByRole('button',{name:'Save app settings',exact:true}).click();await page.reload();
+  const saved=page.waitForResponse(response=>response.url().endsWith('/api/interface')&&response.request().method()==='POST');
+  await page.getByRole('button',{name:'Save app settings',exact:true}).click();expect((await saved).ok()).toBe(true);await page.reload();
   await expect(page.getByLabel('App theme',{exact:true})).toHaveValue('studio');
   expect(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-background').trim())).toBe('#f1f6f4');
  }finally{
