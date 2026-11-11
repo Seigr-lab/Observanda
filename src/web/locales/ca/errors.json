@@ -460,5 +460,5 @@
   "ACCESS_SAVE_UNCERTAIN": "S'ha interromput el desament dels ajustos d'accés. Pot ser que les credencials noves ja estiguin actives. Torna a obrir l'espai de treball i prova primer les credencials noves.",
   "WEBSITE_APPROVAL_REQUIRED": "Aquest lloc web requereix una revisió aprovada de l’edició desada actual abans de publicar-lo. Sol·licita una revisió o demana a una persona revisora que l’aprovi.",
   "WEBSITE_DESIGN_PACKAGE": "Aquest fitxer no és un paquet de disseny de lloc web utilitzable. Torna a exportar el disseny i tria el fitxer nou.",
-  "WEBSITE_DESIGN_VERSION": "Aquest paquet de disseny s'ha fet amb una versió més nova d'Observanda. Actualitza Observanda per importar-lo."
+  "WEBSITE_DESIGN_VERSION": "Aquest paquet de disseny s’ha fet amb una versió més nova d’Observanda. Actualitza Observanda per importar-lo."
 }
