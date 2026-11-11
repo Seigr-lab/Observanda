@@ -3,7 +3,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
-import {RetainedTableIndex} from './retained-table-index.js';
+import {RetainedTableIndex,indexCheckpointDue} from './retained-table-index.js';
 import {RecordDocument} from './record-document.js';
 import {RecordSequenceBuilder} from './record-tree-values.js';
 import {recordTextJSON} from './record-string-stream.js';
@@ -69,7 +69,7 @@ export class RetainedFigurePresentation{
   if(member.plotId)indexes.plots=await this.index.change(indexes.plots,member.plotId+':'+ordinal(member.ordinal),revision);
   if(member.seriesId)indexes.series=await this.index.change(indexes.series,member.seriesId+':'+ordinal(member.position),revision);
   if(lookup!==null)indexes.lookup=await this.index.change(indexes.lookup,lookup,revision);
-  if(this.index.pending.size>=128||this.index.pendingBytes>=262144)await this.checkpoint();return member;
+  if(indexCheckpointDue(this.index))await this.checkpoint();return member;
  }
  async property(root,path,name,value){return (await new RecordDocument(this.blocks,root,{mutable:true}).property(path,name,value,{signal:this.signal})).root;}
  async target(operation){

@@ -6,7 +6,7 @@ import {recordTextJSON} from './record-string-stream.js';
 import {sameAxisProjection} from './web/figure-projection-display.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
-import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
+import {RetainedTableIndex,validTableRef,indexCheckpointDue} from './retained-table-index.js';
 import {RetainedFigureBlocks} from './retained-figure-blocks.js';
 import {validRetainedFigure,validRetainedFigureDocument,validRetainedFigureWindow,validRetainedFigureItem,RETAINED_FIGURE_WINDOW} from './web/retained-figure-model.js';
 import {xValue,figureIssues} from './web/figure-model.js';
@@ -56,7 +56,7 @@ export class RetainedFigureCollections{
   if(seriesId)indexes.series=await this.index.change(indexes.series,seriesId+':'+ordinal(item.position),revision);
   if(lookup!==null)indexes.lookup=await this.index.change(indexes.lookup,lookup,revision);
   if(coordinate!==null)indexes.coordinates=await this.index.change(indexes.coordinates,plotId+':'+numericKey(coordinate)+':'+ordinal(item.ordinal),revision);
-  if(this.index.pending.size>=128||this.index.pendingBytes>=262144)await this.checkpoint();return item;
+  if(indexCheckpointDue(this.index))await this.checkpoint();return item;
  }
  async manifests(){await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
 }

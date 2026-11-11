@@ -7,6 +7,10 @@ const digestValue=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const identifier=value=>typeof value==='string'&&value.length>0;
 const natural=value=>Number.isSafeInteger(value)&&value>0;
 const width=32;
+// Writers keep superseded copies of changed pages in memory and store only the
+// pages reachable at a checkpoint. Large checkpoints let consecutive edits of
+// one page collapse into a single stored page.
+export const indexCheckpointDue=index=>index.pending.size>=2048||index.pendingBytes>=4*1024*1024;
 export const validTableRef=ref=>ref===null||ref&&Object.keys(ref).sort().join()==='count,first,hash,height,last'&&digestValue(ref.hash)&&natural(ref.count)&&natural(ref.height)&&ref.height<=64&&identifier(ref.first)&&identifier(ref.last)&&ref.first<=ref.last;
 const describe=node=>node.entries?{count:node.entries.length,height:1,first:node.entries[0].id,last:node.entries.at(-1).id}:{count:node.children.reduce((sum,ref)=>sum+ref.count,0),height:node.children[0].height+1,first:node.children[0].first,last:node.children.at(-1).last};
 const lower=(items,key,value)=>{let start=0,end=items.length;while(start<end){const mid=Math.floor((start+end)/2);if(items[mid][key]<value)start=mid+1;else end=mid;}return start;};

@@ -6,6 +6,7 @@ import {AppError} from './errors.js';
 import {RetainedFigureDocuments,RetainedFigureCollections,figureValidationValue} from './retained-figure-document.js';
 import {RetainedFigurePresentation,spliceFigureText} from './retained-figure-presentation.js';
 import {RecordDocument} from './record-document.js';
+import {indexCheckpointDue} from './retained-table-index.js';
 import {recordTextJSON} from './record-string-stream.js';
 import {serialize, digest} from './storage-format.js';
 import {validRetainedFigure} from './web/retained-figure-model.js';
@@ -74,7 +75,7 @@ class DraftEdit extends RetainedFigurePresentation{
   const revision=await this.tree.retain(member);collection.root=await this.index.change(collection.root,ordinal(member.ordinal),revision);indexes.keys=await this.index.change(indexes.keys,member.id,revision);
   if(member.plotId)indexes.plots=await this.index.change(indexes.plots,member.plotId+':'+ordinal(member.ordinal),revision);
   if(member.seriesId)indexes.series=await this.index.change(indexes.series,member.seriesId+':'+ordinal(member.position),revision);
-  if(this.index.pending.size>=128||this.index.pendingBytes>=262144)await this.checkpoint();return member;
+  if(indexCheckpointDue(this.index))await this.checkpoint();return member;
  }
  async append(collection,value,{id=randomUUID(),plotId=null,seriesId=null,bodyRoot=null,texts=null}={}){
   const {body,index}=this.tables(collection),rows=body.collections[collection]??={count:0,root:null};index.collections[collection]??=emptyIndexes();
