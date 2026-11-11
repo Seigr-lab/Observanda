@@ -8,5 +8,7 @@
   "downloadRecording": "Last ned opptaket",
   "results": "Resultat",
   "mediaCreator": "Opphav",
-  "mediaLicence": "Lisens"
+  "mediaLicence": "Lisens",
+  "yes": "Ja",
+  "no": "Nei"
 }

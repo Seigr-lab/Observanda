@@ -8,5 +8,7 @@
   "downloadRecording": "Download the recording",
   "results": "Results",
   "mediaCreator": "Creator",
-  "mediaLicence": "Licence"
+  "mediaLicence": "Licence",
+  "yes": "Yes",
+  "no": "No"
 }

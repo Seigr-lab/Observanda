@@ -8,5 +8,7 @@
   "downloadRecording": "Descargar la grabación",
   "results": "Resultados",
   "mediaCreator": "Autoría",
-  "mediaLicence": "Licencia"
+  "mediaLicence": "Licencia",
+  "yes": "Sí",
+  "no": "No"
 }
