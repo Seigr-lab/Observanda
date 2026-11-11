@@ -13,6 +13,7 @@ import {workspaceRename} from './workspace-rename-state.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {researchId} from './web/research-reference.js';
+import {relocationNotStarted} from './native-relocation-owners.js';
 import {AppError} from './errors.js';
 const accessCodes=['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'];
 export class ProjectWorkspaceMoveApplication{
@@ -52,7 +53,7 @@ export class ProjectWorkspaceMoveApplication{
     await app.jobs.invalidateProject(projectId);return await owners.withScopedAccess(scoped=>command.run(storage,{...data,check:async owner=>{await current();await scoped.check(owner);},withParent,withProject:(id,use)=>scoped.withProject(id,use),withBook:(parent,id,use)=>scoped.withBook(parent,id,use)}));
    }catch(error){if(accessCodes.includes(error.code)){error.projectId??=projectId;error.projectName??=prior?path.posix.basename(prior.source):path.basename((await registry.locate(projectId)).root);}throw error;}
    finally{if(owners)await owners.close();await parentOwner?.close();await clearVault(vault);}
-  },{check}).catch(async error=>{const receipt=await readProjectWorkspaceMove(registry,projectId).catch(()=>undefined);if(receipt===null||receipt&&receipt.id!==data.id)error.operationNotStarted=true;throw error;});
+  },{check}).catch(async error=>{const receipt=await readProjectWorkspaceMove(registry,projectId).catch(()=>undefined);if(receipt!==undefined&&relocationNotStarted(receipt,data.id))error.operationNotStarted=true;throw error;});
  }
  async unlockRecovery(client,projectId,data,{check=async()=>{}}={}){
   const app=this.application,registry=await app.registry(),value=await readProjectWorkspaceMove(registry,projectId);if(!value||value.phase==='cancelled'||value.phase==='complete'&&value.released===true)return null;

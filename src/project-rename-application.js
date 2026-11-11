@@ -15,6 +15,7 @@ import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {researchId} from './web/research-reference.js';
+import {relocationNotStarted} from './native-relocation-owners.js';
 import {AppError} from './errors.js';
 export class ProjectRenameApplication{
  constructor(application){this.application=application;}
@@ -77,7 +78,7 @@ export class ProjectRenameApplication{
    await owners.withScopedAccess(async scoped=>{await this.withParent(client,placement.parentId,check,async current=>{await app.jobs.invalidateProject(projectId);await renames.run(storage,{id:data.id,name:path.basename(storage.root),expectedName:path.basename(storage.root),placement,check:async owner=>{await current();await scoped.check(owner);},...this.callbacks(scoped)});});await scoped.adoptProjectRename(renames);});return {project:await registry.locate(projectId)};
   }catch(error){
    const receipt=await new ProjectRenames(registry,projectId).read().catch(()=>undefined);
-   if(receipt===null||receipt&&receipt.id!==data.id)error.operationNotStarted=true;throw error;
+   if(receipt!==undefined&&relocationNotStarted(receipt,data.id))error.operationNotStarted=true;throw error;
   }finally{await owners.close();}
  }
  callbacks(owners){return {withProject:(id,use)=>owners.withProject(id,async storage=>{await this.application.jobs.invalidateProject(id);return use(storage);}),withBook:(project,id,use)=>owners.withBook(project,id,use)};}
