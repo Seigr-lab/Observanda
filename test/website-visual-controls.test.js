@@ -26,3 +26,17 @@ test('the block menu offers an image and a video next to the gallery, each label
  for(const key of ['image','video','gallery'])assert.ok(blockTypes.includes(key),key);
  for(const key of blockTypes)assert.ok(en[key==='heading'?'addHeading':key==='paragraph'?'addText':key],key);
 });
+
+test('a block or page can take a site picture as its background, sized, placed and overlaid visually',async()=>{
+ const {backgroundPictureValue}=await import('../src/web/website-files-visual-style.js');
+ const pictures=['pictures/11111111-1111-4111-8111-111111111111.png'];
+ assert.equal(backgroundPictureValue(pictures[0],'style.css'),'url("pictures/11111111-1111-4111-8111-111111111111.png")');
+ assert.equal(backgroundPictureValue(pictures[0],'notes/2026/style.css'),'url("../../pictures/11111111-1111-4111-8111-111111111111.png")');
+ const fields=visualStyleFields({fonts:[]},(key,args)=>(en[key]??key).replace(/\{(\w+)\}/g,(_,name)=>args?.[name]??''),{pictures,stylesheetPath:'notes/style.css'}),byName=new Map(fields.map(f=>[f.name,f]));
+ assert.deepEqual(byName.get('background-image').options,[['none','No picture'],['url("../pictures/11111111-1111-4111-8111-111111111111.png")','Picture 1 (11111111)']]);
+ for(const name of ['background-size','background-position','background-repeat'])assert.ok(byName.get(name).options.length>1,name);
+ assert.ok(byName.get('box-shadow').options.some(([value])=>value.endsWith('100vmax inset')));
+ for(const field of fields)assert.ok(en[field.label],field.label);
+ const style=fakeStyle();applyVisualStyle(style,[['background-image',byName.get('background-image').options[1][0]],['background-size','cover']]);
+ assert.deepEqual([...style.values.keys()],['background-image','background-size']);
+});

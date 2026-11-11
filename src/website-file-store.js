@@ -410,7 +410,7 @@ export class WebsiteFileStore{
   const active=manifest.pages.filter(p=>!p.archived),archivedPages=manifest.pages.length-active.length;
   const archived=archivedPages?new Set(manifest.pages.filter(p=>p.archived).map(p=>p.path)):null;
   const feeds=manifest.feeds?.length?websiteFeedPages(manifest).filter(p=>!archived?.has(p.ownerPage)):null;
-  return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:active.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(feeds?.length?{feedPages:feeds}:{}),...(archivedPages?{archivedPages}:{}),...(manifest.breakpoints?{breakpoints:manifest.breakpoints}:{}),cssPath:pageStylesheet(manifest,page)};
+  return {id:manifest.id,name:manifest.name,revision:manifest.revision,pages:active.map(({path,title,draft})=>({path,title,...(draft?{draft:true}:{})})),...(feeds?.length?{feedPages:feeds}:{}),...(archivedPages?{archivedPages}:{}),...(manifest.breakpoints?{breakpoints:manifest.breakpoints}:{}),cssPath:pageStylesheet(manifest,page),pictures:manifest.files.filter(file=>file.picture&&/^pictures\/[^/]+\.png$/.test(file.name)).map(file=>file.name).sort().slice(0,500)};
  }
  async commit(manifest,options={}){
   const {signal}=options;

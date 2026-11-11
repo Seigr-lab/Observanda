@@ -9,6 +9,10 @@ const properties = {
   'line-height': ['--line-height'],
   'letter-spacing': ['--letter-spacing'],
   padding: [],
+  'background-image': [],
+  'background-size': [],
+  'background-position': [],
+  'background-repeat': [],
   margin: [],
   opacity: [],
   'box-shadow': [],
@@ -54,7 +58,13 @@ export function writeVisualStyle(css, name, style) {
   return to<0?css+replacement:css.slice(0,from)+replacement+css.slice(to+1);
 }
 
-export function visualStyleFields(document, t) {
+// A site picture as a background, written relative to the stylesheet that
+// holds the rule, so the published site and the canvas resolve it alike.
+export function backgroundPictureValue(name, stylesheetPath) {
+  return 'url("' + '../'.repeat(stylesheetPath.split('/').length - 1) + name + '")';
+}
+
+export function visualStyleFields(document, t, {pictures = [], stylesheetPath = 'style.css'} = {}) {
   const fonts = [
     ['system-ui, sans-serif', t('sectionSans')], ['Georgia, serif', t('sectionSerif')], ['ui-monospace, monospace', t('sectionMono')]
   ];
@@ -76,10 +86,16 @@ export function visualStyleFields(document, t) {
     {name:'line-height', label:'sectionLineHeight', type:'number', min:0, step:'any'},
     {name:'letter-spacing', label:'sectionLetterSpacing', type:'number', step:'any', unit:'px'},
     {name:'padding', label:'sectionPadding', type:'number', min:0, step:'any', unit:'px'},
+    {name:'background-image', label:'sectionBackgroundPicture', options:[['none',t('sectionNoPicture')],...pictures.map((name,i)=>[backgroundPictureValue(name,stylesheetPath),t('sectionPictureNumber',{number:i+1,name:name.slice(9,17)})])]},
+    {name:'background-size', label:'sectionBackgroundSize', options:[['cover',t('sectionBackgroundCover')],['contain',t('sectionBackgroundContain')],['auto',t('sectionBackgroundNatural')]]},
+    {name:'background-position', label:'sectionBackgroundPosition', options:[['center center',t('sectionCenter')],['center top',t('sectionTop')],['center bottom',t('sectionBottom')],['left center',t('sectionLeft')],['right center',t('sectionRight')]]},
+    {name:'background-repeat', label:'sectionBackgroundRepeat', options:[['no-repeat',t('sectionRepeatOnce')],['repeat',t('sectionRepeatTile')]]},
     {name:'margin', label:'sectionMargin', type:'number', step:'any', unit:'px'},
     {name:'opacity', label:'sectionOpacity', type:'number', min:0, max:1, step:0.05},
     // Values in the browser's own serialization, so a saved shadow reads back.
-    {name:'box-shadow', label:'sectionShadow', options:[['none',t('sectionShadowNone')],['rgba(0, 0, 0, 0.12) 0px 1px 3px 0px',t('sectionShadowSoft')],['rgba(0, 0, 0, 0.16) 0px 4px 12px 0px',t('sectionShadowMedium')],['rgba(0, 0, 0, 0.22) 0px 12px 32px 0px',t('sectionShadowStrong')]]},
+    {name:'box-shadow', label:'sectionShadow', options:[['none',t('sectionShadowNone')],['rgba(0, 0, 0, 0.12) 0px 1px 3px 0px',t('sectionShadowSoft')],['rgba(0, 0, 0, 0.16) 0px 4px 12px 0px',t('sectionShadowMedium')],['rgba(0, 0, 0, 0.22) 0px 12px 32px 0px',t('sectionShadowStrong')],
+      // An inset overlay darkens or lightens a background picture behind the text.
+      ['rgba(0, 0, 0, 0.45) 0px 0px 0px 100vmax inset',t('sectionOverlayDark')],['rgba(255, 255, 255, 0.6) 0px 0px 0px 100vmax inset',t('sectionOverlayLight')]]},
     {name:'text-align', label:'sectionAlignment', options:[['start',t('sectionStart')],['center',t('sectionCenter')],['end',t('sectionEnd')],['justify',t('sectionJustify')]]}
   ];
 }

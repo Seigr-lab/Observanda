@@ -764,7 +764,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const draft=sourcePane.accepted();loadWebsiteCanvas(doc,draft.html,draft.css,canvasURL(opened.site.cssPath),recoveredResource);frame.inert=!!busy||stale||sourcePane.pending;gallery.paint(doc);editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
-   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,
+   visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,
     menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
    getWidth:viewport.width,previewWidth:viewport.previewWidth,getRanges:()=>opened.site.breakpoints??defaultBreakpoints(),manageRanges:()=>void run(manageBreakpoints).catch(()=>{}),
    beforeChange:()=>checkpoint(true),change:()=>canvasInput(doc),getCSS:()=>css,setCSS:value=>{css=value;changed();},stylesheet:canvasURL(opened.site.cssPath),getViewport:viewport.breakpoint,onSelect:item=>{

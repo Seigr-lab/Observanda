@@ -76,7 +76,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css'}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -113,7 +113,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
 
   let selected=null, hover=null, range=null, activePath=null, timer=0;
   const observer=new win.ResizeObserver(schedule);
-  const fields=visualStyleFields(document,t), controls=new Map(), paintLabels=new Map(), touched=new Set();
+  const fields=visualStyleFields(document,t,{pictures,stylesheetPath}), controls=new Map(), paintLabels=new Map(), touched=new Set();
   const form=make('form'); form.className='website-visual-style';
   // Other inspector tools (such as adding an annotation) validate their
   // own inputs. An empty field in a closed tool cannot block a style edit.
