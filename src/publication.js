@@ -191,8 +191,14 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
       if(viewer&&!href&&attachment.kind==='image')player='<a href="'+esc(src)+'" data-gallery-image aria-haspopup="dialog">'+player+'</a>';
       const selector=`[data-media-scope="${scope}"][data-media-id="${attachment.id}"]`;
       if(scope){blockRules.push(`${selector}{width:${display.width}%;margin-inline:auto}`);if(display.ratio!=='original')blockRules.push(`${selector} img,${selector} video{aspect-ratio:${{square:'1',landscape:'4/3',portrait:'3/4',wide:'16/9'}[display.ratio]};object-fit:${display.fit};width:100%}`);else blockRules.push(`${selector} img,${selector} video{aspect-ratio:auto;object-fit:${display.fit}}`);}
-      return `<figure class="media-figure${cover?' card-cover':''}" data-media-id="${attachment.id}" data-media-scope="${scope}">${player}${!cover&&attachment.caption?`<figcaption>${esc(attachment.caption)}</figcaption>`:''}${!cover&&attachment.transcript?`<details><summary data-observanda-label="websiteRecordText:transcript">Transcript and description</summary><div class="prose">${esc(attachment.transcript)}</div></details>`:''}</figure>`;
+      return `<figure class="media-figure${cover?' card-cover':''}" data-media-id="${attachment.id}" data-media-scope="${scope}">${player}${!cover&&(attachment.caption||attachment.attribution)?`<figcaption>${esc(attachment.caption??'')}${attachment.caption&&attachment.attribution?'<br>':''}${attachment.attribution?mediaCredit(attachment.attribution):''}</figcaption>`:''}${!cover&&attachment.transcript?`<details><summary data-observanda-label="websiteRecordText:transcript">Transcript and description</summary><div class="prose">${esc(attachment.transcript)}</div></details>`:''}</figure>`;
 
+  }
+  // Creator, credit and licence travel with a photograph or recording; the
+  // page localizer gives the two labels the page language.
+  function mediaCredit({creator='',credit='',licence=''}){
+    const parts=[creator&&'<span data-observanda-label="websiteRecordText:mediaCreator">Creator</span>: '+esc(creator),credit&&esc(credit),licence&&'<span data-observanda-label="websiteRecordText:mediaLicence">Licence</span>: '+esc(licence)].filter(Boolean);
+    return '<small class="media-provenance">'+parts.join(' &middot; ')+'</small>';
   }
   function homeSection(section,prefix='',target='home',source=context.website.home.sections,region='',collectionScope=region,feedPage=''){
     const selected=sectionItems(section,context,{region:collectionScope});

@@ -7,9 +7,19 @@ export const SOURCE_PUBLICATION_VERSION=1;
 export const sourceNotebookAllowed=(book,target='website')=>!!book&&(target==='website'?book.share!==false:target==='pdf'&&book.sharePdf===true);
 export const sourceRecordAllowed=(record,metadata,target='website')=>(target==='website'?record.share===true:target==='pdf'&&record.sharePdf===true)&&(!metadata||metadata.notebooks.some(book=>book.id===record.notebookId&&sourceNotebookAllowed(book,target)));
 export const publicRecordSections=(record,target='website')=>(record.sections??[]).filter(section=>target==='website'?section.share!==false:target==='pdf'&&section.sharePdf===true);
-// Source and capture details (creator, licence, private location) stay in the
-// lab book: no output receives them until it projects attribution explicitly.
-export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true).map(({metadata,...item})=>item);
+// Public credit for a photograph or recording on a website: creator, credit
+// line and licence only. Capture date and time, subject, location and archive
+// reference stay in the lab book; PDF output receives no media details.
+export function publicMediaAttribution(metadata){
+ if(!metadata||typeof metadata!=='object'||Array.isArray(metadata))return null;
+ const value=(key,max)=>typeof metadata[key]==='string'?metadata[key].trim().slice(0,max):'';
+ const attribution={creator:value('creator',300),credit:value('credit',600),licence:value('licence',300)};
+ return Object.values(attribution).some(Boolean)?attribution:null;
+}
+export const publicRecordAttachments=(record,target='website')=>(record.attachments??[]).filter(item=>target==='website'?item.share===true:target==='pdf'&&item.sharePdf===true).map(({metadata,...item})=>{
+ const attribution=target==='website'?publicMediaAttribution(metadata):null;
+ return attribution?{...item,attribution}:item;
+});
 export function sourcePublicationRecord(record,target='website',retainedTargets=[]){
  const result={...record,sections:publicRecordSections(record,target),attachments:publicRecordAttachments(record,target)};
  for(const key of ['body','outcome'])if(!publicationPartAllowed(record,key,target))result[key]='';

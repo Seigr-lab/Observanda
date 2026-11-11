@@ -6,5 +6,7 @@
   "transcript": "Transkripsjon og beskrivelse",
   "mediaUnsupported": "Denne nettleseren kan ikke spille av dette opptaket.",
   "downloadRecording": "Last ned opptaket",
-  "results": "Resultater"
+  "results": "Resultater",
+  "mediaCreator": "Opphav",
+  "mediaLicence": "Lisens"
 }

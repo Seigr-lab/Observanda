@@ -6,5 +6,7 @@
   "transcript": "Transcript and description",
   "mediaUnsupported": "This browser cannot play this recording.",
   "downloadRecording": "Download the recording",
-  "results": "Results"
+  "results": "Results",
+  "mediaCreator": "Creator",
+  "mediaLicence": "Licence"
 }

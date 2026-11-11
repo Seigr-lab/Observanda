@@ -6,5 +6,7 @@
   "transcript": "Transcripción y descripción",
   "mediaUnsupported": "Este navegador no puede reproducir esta grabación.",
   "downloadRecording": "Descargar la grabación",
-  "results": "Resultados"
+  "results": "Resultados",
+  "mediaCreator": "Autoría",
+  "mediaLicence": "Licencia"
 }

@@ -6,5 +6,7 @@
   "transcript": "Transcripció i descripció",
   "mediaUnsupported": "Aquest navegador no pot reproduir aquest enregistrament.",
   "downloadRecording": "Baixa l’enregistrament",
-  "results": "Resultats"
+  "results": "Resultats",
+  "mediaCreator": "Autoria",
+  "mediaLicence": "Llicència"
 }
