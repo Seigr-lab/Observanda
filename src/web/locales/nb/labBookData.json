@@ -7,5 +7,7 @@
   "recordType": "Oppføringstype",
   "date": "Oppføringsdato",
   "types": "Labboktyper",
-  "search": "Inneholder tekst"
+  "search": "Inneholder tekst",
+  "purposeBooks": "Laboratoriebøker etter type og sted",
+  "purposeRecords": "Oppføringer i laboratoriebøker etter type, dato og sted"
 }

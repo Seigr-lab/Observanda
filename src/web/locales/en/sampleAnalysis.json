@@ -131,5 +131,9 @@
   "datasetRow": "Row and value",
   "selectSourceFirst": "Choose an available source or cell.",
   "cellAddress": "Page {page}, row {row}, column {column}",
-  "invalidSourceReading": "Choose a numeric measurement or a scalar cell with an included, recorded value."
+  "invalidSourceReading": "Choose a numeric measurement or a scalar cell with an included, recorded value.",
+  "purposeSamples": "Samples, specimens and received material",
+  "purposeAnalyses": "Analyses, measurements, tests and their results",
+  "purposeEvents": "History of changes to samples and analyses",
+  "purposeOverview": "Number of samples and analyses"
 }

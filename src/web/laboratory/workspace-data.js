@@ -16,7 +16,7 @@ export function registerLabWorkspaceData(registry,{profile=null}={}){
  const text=key=>t('labBookData',key);
  const notebooks=(c,options)=>labDataNotebooks(dashboardBooks(c.book,options,c.legacyConfig),profile);
  for(const records of [false,true])registry.register({
-  id:prefix+(records?'-records':'-spaces'),label:(profile?profile.label+' / ':'')+text(records?'records':'books'),group:profile?.label??text('books'),icon:'laboratory',metadataOnly:true,defaultFields:records?['location','notebook','recordType','occurredOn']:['location','profiles'],
+  id:prefix+(records?'-records':'-spaces'),label:(profile?profile.label+' / ':'')+text(records?'records':'books'),group:profile?.label??text('books'),purpose:text(records?'purposeRecords':'purposeBooks'),icon:'laboratory',metadataOnly:true,defaultFields:records?['location','notebook','recordType','occurredOn']:['location','profiles'],
   ...dashboardRecordClient(prefix+(records?'-records':'-spaces'),{records,structure:!records}),
   fieldMetadata:{occurredOn:{label:text('date'),format:(v,{esc})=>esc(recordDateLabel(v))},location:{label:text('project')},notebook:{label:text('book')},recordType:{label:text('recordType')},profiles:{label:text('types')}},
   scoped:true,settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel),{key:'search',label:text('search'),type:'text'}],

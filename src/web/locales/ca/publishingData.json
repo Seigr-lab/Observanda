@@ -3,5 +3,7 @@
   "group": "Publicació",
   "website": "Lloc web",
   "content": "Contingut del lloc web",
-  "invalid": "No s'han pogut carregar els recomptes del lloc web. Torna a carregar la targeta."
+  "invalid": "No s'han pogut carregar els recomptes del lloc web. Torna a carregar la targeta.",
+  "purposePages": "Pàgines del lloc web i les seves introduccions",
+  "purposeWebsite": "Publicació del lloc web: projectes, registres i pàgines compartits"
 }

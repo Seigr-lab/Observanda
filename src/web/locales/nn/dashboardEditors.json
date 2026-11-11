@@ -206,5 +206,16 @@
   "caption": "Bilettekst",
   "role": "Rolle",
   "target": "Mål",
-  "unit": "Eining"
+  "unit": "Eining",
+  "purposeRecords": "Siste oppføringar, notat og observasjonar frå laboratoriebøker",
+  "purposeProjects": "Prosjekt, mapper og laboratoriebøkene i dei",
+  "purposeNotebooks": "Laboratoriebøker, notatbøker og journalar på tvers av prosjekt",
+  "purposeSections": "Seksjonar og skrive innhald i oppføringar",
+  "purposeContributors": "Personar, forfattarar og roller som vert krediterte i oppføringar",
+  "purposeRelations": "Lenker, sitat og referansar mellom oppføringar",
+  "purposeFigures": "Figurar, diagram, grafar og plotta data frå oppføringar",
+  "purposeFiles": "Nyleg lagde til filer, vedlegg og dokument",
+  "purposeMedia": "Bilete, foto, lyd, lydopptak, video og andre medium frå oppføringar",
+  "purposeWorkspace": "Tittel, skildring og tal på oppføringar i arbeidsområdet",
+  "purposeInventory": "Behaldning av materiale, utstyr, programvare og gjenstandar på kvar stad"
 }

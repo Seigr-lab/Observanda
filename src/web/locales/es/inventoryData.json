@@ -26,5 +26,10 @@
   "tagFilter": "Filtrar por etiquetas de recursos",
   "tagMode": "Coincidencia de etiquetas",
   "allTags": "Todas estas etiquetas",
-  "anyTags": "Cualquiera de estas etiquetas"
+  "anyTags": "Cualquiera de estas etiquetas",
+  "purposeBom": "Listas de materiales, piezas y montajes",
+  "purposeCategory": "Tipos de elementos de inventario y sus campos",
+  "purposeMovement": "Existencias añadidas, utilizadas o retiradas",
+  "purposeReservation": "Existencias reservadas para trabajo planificado",
+  "purposeTransfer": "Existencias trasladadas entre ubicaciones"
 }

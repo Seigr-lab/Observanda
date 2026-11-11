@@ -18,5 +18,9 @@
  "location":"Location",
  "resource":"Equipment",
  "notes":"Notes",
- "invalid":"The planning card could not be verified. Refresh the card and try again."
+ "invalid":"The planning card could not be verified. Refresh the card and try again.",
+ "purposeTask":"Tasks, to-dos, checklists and due dates",
+ "purposeCalendar":"Calendars of each location",
+ "purposeEvent":"Scheduled events, meetings and appointments",
+ "purposeBooking":"Equipment and resource bookings"
 }

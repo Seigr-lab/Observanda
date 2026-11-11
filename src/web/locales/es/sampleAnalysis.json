@@ -131,5 +131,9 @@
   "datasetRow": "Fila y valor",
   "selectSourceFirst": "Elija una fuente o celda disponible.",
   "cellAddress": "Página {page}, fila {row}, columna {column}",
-  "invalidSourceReading": "Elija una medición numérica o una celda escalar incluida con un valor registrado."
+  "invalidSourceReading": "Elija una medición numérica o una celda escalar incluida con un valor registrado.",
+  "purposeSamples": "Muestras, especímenes y material recibido",
+  "purposeAnalyses": "Análisis, mediciones, pruebas y sus resultados",
+  "purposeEvents": "Historial de cambios de muestras y análisis",
+  "purposeOverview": "Número de muestras y análisis"
 }

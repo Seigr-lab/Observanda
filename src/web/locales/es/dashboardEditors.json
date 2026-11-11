@@ -206,5 +206,16 @@
   "caption": "Pie",
   "role": "Rol",
   "target": "Destino",
-  "unit": "Unidad"
+  "unit": "Unidad",
+  "purposeRecords": "Últimos registros, entradas, notas y observaciones de los cuadernos de laboratorio",
+  "purposeProjects": "Proyectos, carpetas y los cuadernos de laboratorio que contienen",
+  "purposeNotebooks": "Cuadernos de laboratorio, libretas y diarios de todos los proyectos",
+  "purposeSections": "Secciones y contenido escrito de los registros",
+  "purposeContributors": "Personas, autores y funciones reconocidos en los registros",
+  "purposeRelations": "Enlaces, citas y referencias entre registros",
+  "purposeFigures": "Figuras, diagramas, gráficos y datos representados de los registros",
+  "purposeFiles": "Archivos, adjuntos y documentos añadidos recientemente",
+  "purposeMedia": "Imágenes, fotos, audio, grabaciones de sonido, vídeo y otros medios de los registros",
+  "purposeWorkspace": "Título, descripción y número de registros del espacio de trabajo",
+  "purposeInventory": "Existencias de materiales, equipos, software y objetos de cada ubicación"
 }

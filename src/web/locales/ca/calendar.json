@@ -63,5 +63,6 @@
   "sourceFailed": "{name}: {error}",
   "taskDeadlines": "Terminis de les tasques",
   "refreshFailed": "No s’ha pogut actualitzar el calendari.",
-  "sourceChanged": "Aquest origen ha canviat. Actualitza el calendari."
+  "sourceChanged": "Aquest origen ha canviat. Actualitza el calendari.",
+  "purposeCombined": "Agenda combinada d'esdeveniments, tasques i reserves amb data"
 }

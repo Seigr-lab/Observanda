@@ -18,5 +18,9 @@
   "location": "Ubicación",
   "resource": "Equipo",
   "notes": "Notas",
-  "invalid": "No se ha podido verificar la tarjeta de planificación. Actualízala y vuelve a intentarlo."
+  "invalid": "No se ha podido verificar la tarjeta de planificación. Actualízala y vuelve a intentarlo.",
+  "purposeTask": "Tareas, pendientes, listas de comprobación y fechas de vencimiento",
+  "purposeCalendar": "Calendarios de cada ubicación",
+  "purposeEvent": "Eventos, reuniones y citas programados",
+  "purposeBooking": "Reservas de equipos y recursos"
 }

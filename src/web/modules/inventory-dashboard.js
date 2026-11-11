@@ -38,7 +38,7 @@ const comparison=({item,esc,options,panelId})=>{
  return '<figure class="desk-inventory-chart"><div class="desk-inventory-plot" data-desk-figure="'+esc(item.key)+'">'+renderFigure(figure,{idPrefix:'inventory-'+panelId})+`</div><figcaption>${esc(dt("stockHelp"))}</figcaption></figure><details class="desk-inventory-values"><summary>${esc(dt("exactQuantities"))}</summary>`+holdingsTable(item,esc,options)+'</details>';
 };
 export function registerInventoryDashboard(registry){
- const presentation=()=>({label:dt('inventory'),group:dt('inventory'),
+ const presentation=()=>({label:dt('inventory'),group:dt('inventory'),purpose:dt('purposeInventory'),
   fieldMetadata:{kind:{label:dt('itemKind'),format:(value,{esc})=>esc(({material:'kindMaterial',equipment:'kindEquipment',software:'kindSoftware',object:'kindObject'})[value]?dt(({material:'kindMaterial',equipment:'kindEquipment',software:'kindSoftware',object:'kindObject'})[value]):value)},unit:{label:dt('unit')},physical:{label:dt("onHandSelection")},reserved:{label:dt("reservedSelection")},available:{label:dt("availableSelection")},owner:{label:dt("ownedBy")},used:{label:dt("usedSelectedBoms")},scrapped:{label:dt("scrappedSelectedBoms")}},
   views:[{id:'comparison',label:dt("projectComparison"),defaultFields:[],figure:({item,options})=>inventoryComparisonFigure(item,options),render:comparison},{id:'holdings',label:dt("holdingsTable"),defaultFields:[],render:({item,esc,options})=>holdingsTable(item,esc,options)}]
  });

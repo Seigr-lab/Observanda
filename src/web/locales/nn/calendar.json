@@ -63,5 +63,6 @@
   "sourceFailed": "{name}: {error}",
   "taskDeadlines": "Oppgåvefristar",
   "refreshFailed": "Kalenderen kunne ikkje oppdaterast.",
-  "sourceChanged": "Denne kjelda er endra. Oppdater kalenderen."
+  "sourceChanged": "Denne kjelda er endra. Oppdater kalenderen.",
+  "purposeCombined": "Samla agenda med daterte hendingar, oppgåver og bestillingar"
 }

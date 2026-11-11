@@ -3,5 +3,7 @@
   "group": "Publishing",
   "website": "Website",
   "content": "Website content",
-  "invalid": "The website counts could not be loaded. Retry the card."
+  "invalid": "The website counts could not be loaded. Retry the card.",
+  "purposePages": "Website pages and their introductions",
+  "purposeWebsite": "Website publishing: shared projects, records and pages"
 }

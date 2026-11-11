@@ -18,7 +18,7 @@ export function registerLaboratoryData(registry){
    const command={workspaceId:context.book.id,view:definition.view,...values};
    return validateSamplePage(await api('/api/laboratory/read/query',command,{adopt:false,signal}),command);
   };
-  registry.register({...definition,label:tr(definition.id==='lab-events'?'events':definition.id),group:tr('title'),icon:'laboratory',pageSize:25,scoped:true,metadataOnly:true,settings:(c,options,panel)=>dashboardCollection(c)?[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel)]:[],
+  registry.register({...definition,label:tr(definition.id==='lab-events'?'events':definition.id),group:tr('title'),purpose:tr(({samples:'purposeSamples',analyses:'purposeAnalyses','lab-events':'purposeEvents'})[definition.id]),icon:'laboratory',pageSize:25,scoped:true,metadataOnly:true,settings:(c,options,panel)=>dashboardCollection(c)?[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel)]:[],
    fieldMetadata:{owner:{label:tr('owner')}},
    loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor]),
    load:({api,context,options={},signal})=>dashboardCollection(context)?sampleCollectionQuery(api,context,definition.view,options,{},signal):query(api,context,{limit:context.recordLimit??7,key:context.recordKey??null,cursor:context.recordCursor??null},signal),
@@ -29,7 +29,7 @@ export function registerLaboratoryData(registry){
    items:(context,result)=>result.items.map(item=>({key:item.collectionKey??item.id,title:definition.title(item)||tr(definition.view==='events'?'events':definition.id),data:{...item,owner:item.owner?[item.owner.projectTitle,item.owner.notebookTitle].filter(Boolean).join(' / '):context.book.title},action:item.owner?sampleCollectionAction(item,definition.view):{name:'laboratory-samples'}}))
   });
  }
- registry.register({id:'laboratory',label:tr('overview'),group:tr('title'),icon:'laboratory',scoped:true,metadataOnly:true,settings:(c,options,panel)=>dashboardCollection(c)?[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel)]:[],
+ registry.register({id:'laboratory',label:tr('overview'),group:tr('title'),purpose:tr('purposeOverview'),icon:'laboratory',scoped:true,metadataOnly:true,settings:(c,options,panel)=>dashboardCollection(c)?[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel)]:[],
   load:async({api,context,options={},signal})=>{
    if(dashboardCollection(context))return sampleCollectionQuery(api,context,'samples',options,{mode:'counts',limit:1,key:null,cursor:null},signal);
    const command={workspaceId:context.book.id,view:'samples',limit:1};return validateSamplePage(await api('/api/laboratory/read/query',command,{adopt:false,signal}),command);

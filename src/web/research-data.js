@@ -45,7 +45,7 @@ export function registerResearchData(registry,{section='all'}={}){
   });
   const presentation=()=>{const fields={...metadata(),...(p.id==='workspace'?{entries:{label:t('labBookData','recordCount')}}:p.fieldMetadata)};return {
    label:dt(({records:'recentRecords',projects:'projects',notebooks:'labBooks',sections:'recordSections',contributors:'contributorCredits',relations:'researchLinks',figures:'figures',files:'recentFiles',media:'mediaCollection',workspace:'workspaceInformation'})[p.id]),
-   group:structural?dt('projects'):dt('labBooks'),fieldMetadata:fields,fields:(p.defaultFields??[]).map(key=>({key,...fields[key]})),
+   group:structural?dt('projects'):dt('labBooks'),purpose:dt(({records:'purposeRecords',projects:'purposeProjects',notebooks:'purposeNotebooks',sections:'purposeSections',contributors:'purposeContributors',relations:'purposeRelations',figures:'purposeFigures',files:'purposeFiles',media:'purposeMedia',workspace:'purposeWorkspace'})[p.id]),fieldMetadata:fields,fields:(p.defaultFields??[]).map(key=>({key,...fields[key]})),
    views:p.views?.map(v=>({...v,label:dt(({overview:'labBooks',chart:'chart',media:'media'})[v.id])}))};};
   registry.register({icon:'records',...p,...presentation(),presentation,
    scoped:Boolean(p.scope),

@@ -206,5 +206,16 @@
   "caption": "Bildetekst",
   "role": "Rolle",
   "target": "Mål",
-  "unit": "Enhet"
+  "unit": "Enhet",
+  "purposeRecords": "Siste oppføringer, notater og observasjoner fra laboratoriebøker",
+  "purposeProjects": "Prosjekter, mapper og laboratoriebøkene i dem",
+  "purposeNotebooks": "Laboratoriebøker, notatbøker og journaler på tvers av prosjekter",
+  "purposeSections": "Seksjoner og skrevet innhold i oppføringer",
+  "purposeContributors": "Personer, forfattere og roller som krediteres i oppføringer",
+  "purposeRelations": "Lenker, sitater og referanser mellom oppføringer",
+  "purposeFigures": "Figurer, diagrammer, grafer og plottede data fra oppføringer",
+  "purposeFiles": "Nylig lagt til filer, vedlegg og dokumenter",
+  "purposeMedia": "Bilder, foto, lyd, lydopptak, video og andre medier fra oppføringer",
+  "purposeWorkspace": "Tittel, beskrivelse og antall oppføringer i arbeidsområdet",
+  "purposeInventory": "Beholdning av materialer, utstyr, programvare og gjenstander på hvert sted"
 }

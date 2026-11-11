@@ -18,5 +18,9 @@
   "location": "Stad",
   "resource": "Utstyr",
   "notes": "Notat",
-  "invalid": "Planleggingskortet kunne ikkje stadfestast. Oppdater kortet og prøv på nytt."
+  "invalid": "Planleggingskortet kunne ikkje stadfestast. Oppdater kortet og prøv på nytt.",
+  "purposeTask": "Oppgåver, gjeremål, sjekklister og fristar",
+  "purposeCalendar": "Kalendrar for kvar stad",
+  "purposeEvent": "Planlagde hendingar, møte og avtalar",
+  "purposeBooking": "Bestillingar av utstyr og ressursar"
 }

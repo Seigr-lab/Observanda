@@ -26,5 +26,10 @@
   "tagFilter": "Filtrer etter ressursemneknaggar",
   "tagMode": "Samsvar for emneknaggar",
   "allTags": "Alle desse emneknaggane",
-  "anyTags": "Minst éin av desse emneknaggane"
+  "anyTags": "Minst éin av desse emneknaggane",
+  "purposeBom": "Stykklister, delar og bygg",
+  "purposeCategory": "Typar lagervarer og felta deira",
+  "purposeMovement": "Behaldning lagd til, brukt eller fjerna",
+  "purposeReservation": "Behaldning reservert for planlagt arbeid",
+  "purposeTransfer": "Behaldning flytta mellom stader"
 }

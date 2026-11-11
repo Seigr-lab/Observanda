@@ -26,5 +26,10 @@
   "tagFilter": "Filtrer etter ressursetiketter",
   "tagMode": "Etikettsamsvar",
   "allTags": "Alle disse etikettene",
-  "anyTags": "Minst én av disse etikettene"
+  "anyTags": "Minst én av disse etikettene",
+  "purposeBom": "Stykklister, deler og bygg",
+  "purposeCategory": "Typer lagervarer og feltene deres",
+  "purposeMovement": "Beholdning lagt til, brukt eller fjernet",
+  "purposeReservation": "Beholdning reservert for planlagt arbeid",
+  "purposeTransfer": "Beholdning flyttet mellom steder"
 }

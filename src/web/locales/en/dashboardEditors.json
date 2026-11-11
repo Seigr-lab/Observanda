@@ -206,5 +206,16 @@
   "caption": "Caption",
   "role": "Role",
   "target": "Target",
-  "unit": "Unit"
+  "unit": "Unit",
+  "purposeRecords": "Latest lab book records, entries, notes and observations",
+  "purposeProjects": "Projects, folders and the lab books inside them",
+  "purposeNotebooks": "Lab books, notebooks and journals across projects",
+  "purposeSections": "Sections and written content of records",
+  "purposeContributors": "People, authors and roles credited in records",
+  "purposeRelations": "Links, citations and references between records",
+  "purposeFigures": "Figures, charts, graphs and plotted data from records",
+  "purposeFiles": "Recently added files, attachments and documents",
+  "purposeMedia": "Images, photos, audio, sound recordings, video and other media from records",
+  "purposeWorkspace": "Workspace title, description and number of records",
+  "purposeInventory": "Stock of materials, equipment, software and objects held in each location"
 }

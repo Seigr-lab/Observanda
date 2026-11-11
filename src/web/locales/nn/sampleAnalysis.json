@@ -131,5 +131,9 @@
   "datasetRow": "Rad og verdi",
   "selectSourceFirst": "Vel ei tilgjengeleg kjelde eller celle.",
   "cellAddress": "Side {page}, rad {row}, kolonne {column}",
-  "invalidSourceReading": "Vel ei numerisk måling eller ei inkludert skalarcelle med ein registrert verdi."
+  "invalidSourceReading": "Vel ei numerisk måling eller ei inkludert skalarcelle med ein registrert verdi.",
+  "purposeSamples": "Prøver, prøveobjekt og motteke materiale",
+  "purposeAnalyses": "Analysar, målingar, testar og resultata deira",
+  "purposeEvents": "Historikk over endringar i prøver og analysar",
+  "purposeOverview": "Tal på prøver og analysar"
 }

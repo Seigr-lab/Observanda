@@ -10,7 +10,7 @@ const tr=(key,values)=>t('calendar',key,values);
 const range=()=>{const start=new Date(),end=new Date(start);end.setDate(end.getDate()+31);return {from:localDate(start),to:localDate(end),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone};};
 function checkSources(result){const failed=result.sourceErrors?.[0]??result.sources?.find(s=>s.error);if(failed)throw Error(tr('sourceFailed',{name:calendarSourceName(failed),error:calendarSourceError(failed)}));return result;}
 export function registerCombinedCalendar(registry){
- registry.register({id:'calendar-agenda',label:tr('combined'),group:tr('group'),presentation:()=>({label:tr('combined'),group:tr('group')}),icon:'records',metadataOnly:true,pageSize:25,scoped:true,defaultFields:['owner','calendar','startsAt','endsAt','location','status'],settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[])],
+ registry.register({id:'calendar-agenda',label:tr('combined'),group:tr('group'),purpose:tr('purposeCombined'),presentation:()=>({label:tr('combined'),group:tr('group'),purpose:tr('purposeCombined')}),icon:'records',metadataOnly:true,pageSize:25,scoped:true,defaultFields:['owner','calendar','startsAt','endsAt','location','status'],settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[])],
   loadKey:(c,options)=>JSON.stringify([c.book.id,c.etag,c.legacyConfig,options,c.recordLimit,c.recordKey,c.recordCursor,range()]),
   async load({api,context:c,options={},signal}){
    if(dashboardCollection(c))return checkSources(await calendarCollectionQuery(api,c,options,range(),{},signal));

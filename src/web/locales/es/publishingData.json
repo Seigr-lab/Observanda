@@ -3,5 +3,7 @@
   "group": "Publicación",
   "website": "Sitio web",
   "content": "Contenido del sitio web",
-  "invalid": "No se han podido cargar los recuentos del sitio web. Reintenta la tarjeta."
+  "invalid": "No se han podido cargar los recuentos del sitio web. Reintenta la tarjeta.",
+  "purposePages": "Páginas del sitio web y sus introducciones",
+  "purposeWebsite": "Publicación del sitio web: proyectos, registros y páginas compartidos"
 }

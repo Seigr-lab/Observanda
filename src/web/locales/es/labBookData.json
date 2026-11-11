@@ -7,5 +7,7 @@
   "recordType": "Tipo de registro",
   "date": "Fecha del registro",
   "types": "Tipos de cuadernos de laboratorio",
-  "search": "Contiene texto"
+  "search": "Contiene texto",
+  "purposeBooks": "Cuadernos de laboratorio por tipo y ubicación",
+  "purposeRecords": "Registros de los cuadernos de laboratorio por tipo, fecha y ubicación"
 }

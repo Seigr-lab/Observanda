@@ -1,6 +1,6 @@
 import {projectContextAPI} from './project-context.js';
 import {cardIcon} from './dashboard-cards.js';
-import {DISCOVERY_PAGE_SIZE as size,discoveryMatches,validDiscoveryPage} from './data-discovery.js';
+import {DISCOVERY_PAGE_SIZE as size,discoveryMatches,providerMatches,validDiscoveryPage} from './data-discovery.js';
 import {t,messageLanguage} from './i18n/index.js';
 
 // Discovery owns its search and bounded provider pages. Dashboard cards keep
@@ -44,7 +44,7 @@ export function dashboardLibraryUI({registry,context,session,api,esc,button,icon
   const addLocal=items=>{groups.push({start:total,total:items.length,items});total+=items.length;};
   for(const p of registry.all()){
    if(!['all','collections',p.id].includes(category))continue;
-   if(discoveryMatches({title:p.label,subtitle:p.group??''},search))addLocal([{source:{provider:p.id,key:null},label:p.label,description:p.group??'',icon:p.icon}]);
+   if(providerMatches(p,search))addLocal([{source:{provider:p.id,key:null},label:p.label,description:p.group??'',icon:p.icon}]);
    if(category==='collections')continue;
    // Totals are independent of the retained page. Never reset a provider to
    // its first page merely to count it while another page is displayed.

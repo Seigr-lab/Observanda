@@ -7,5 +7,7 @@
   "recordType": "Tipus de registre",
   "date": "Data del registre",
   "types": "Tipus de llibre de laboratori",
-  "search": "Conté el text"
+  "search": "Conté el text",
+  "purposeBooks": "Quaderns de laboratori per tipus i ubicació",
+  "purposeRecords": "Registres dels quaderns de laboratori per tipus, data i ubicació"
 }

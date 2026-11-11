@@ -6,6 +6,9 @@ import {dashboardScope,dashboardBooks,dashboardBookSettings} from '../src/web/da
 import {defaultDashboard,createPanel,upgradeDashboard,validDashboard} from '../src/web/dashboard-model.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {registerResearchData} from '../src/web/research-data.js';
+import {registerPublishingData} from '../src/web/publishing-data.js';
+import {registerLaboratoryData} from '../src/web/laboratory-data.js';
+import {providerMatches} from '../src/web/data-discovery.js';
 import {registerResources,registerPlanning} from '../src/web/modules/operations-data.js';
 import {inventoryComparisonFigure} from '../src/web/modules/inventory-dashboard.js';
 import {balance} from '../src/web/modules/quantities.js';
@@ -72,6 +75,14 @@ test('a records card scoped to one lab book creates its new records in that book
  assert.equal(create({options:{...one,notebookIds:[s.book.notebooks[0].id,s.book.notebooks[1].id]},config:{}}).data,undefined);
  assert.equal(create({options:s.selected,config:{}}).data,undefined);
  assert.equal(create({options:{...one,notebookIds:[randomUUID()]},config:{}}).data,undefined);
+});
+test('card discovery finds every card by the purpose it declares in the interface language',()=>{
+ const {registry}=fixture();registerPublishingData(registry);registerLaboratoryData(registry);
+ for(const provider of registry.all())assert.ok(typeof provider.purpose==='string'&&provider.purpose.length>0,provider.id);
+ const found=search=>registry.all().filter(p=>providerMatches(p,search)).map(p=>p.id);
+ assert.ok(found('audio').includes('media'));assert.ok(!found('audio').includes('records'));
+ assert.ok(found('Media collection').includes('media'));
+ assert.ok(found('bookings').includes('bookings'));
 });
 test('research card loads reject missing or inconsistent navigation instead of stranding a visible page',async()=>{
  const f=fixture(),context={book:f.book,projectOwner:{projectId:f.book.projects[0].id,labBookId:f.book.notebooks[0].id},etag:'pinned',outline:true,recordLimit:2},options={};

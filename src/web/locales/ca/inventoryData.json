@@ -26,5 +26,10 @@
   "tagFilter": "Filtra per etiquetes dels recursos",
   "tagMode": "Coincidència d'etiquetes",
   "allTags": "Totes aquestes etiquetes",
-  "anyTags": "Qualsevol d'aquestes etiquetes"
+  "anyTags": "Qualsevol d'aquestes etiquetes",
+  "purposeBom": "Llistes de materials, peces i muntatges",
+  "purposeCategory": "Tipus d'elements d'inventari i els seus camps",
+  "purposeMovement": "Existències afegides, utilitzades o retirades",
+  "purposeReservation": "Existències reservades per a feina planificada",
+  "purposeTransfer": "Existències traslladades entre ubicacions"
 }

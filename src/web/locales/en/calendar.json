@@ -63,5 +63,6 @@
   "sourceFailed": "{name}: {error}",
   "taskDeadlines": "Task deadlines",
   "refreshFailed": "Calendar could not refresh.",
-  "sourceChanged": "This source changed. Refresh the calendar."
+  "sourceChanged": "This source changed. Refresh the calendar.",
+  "purposeCombined": "Combined agenda of dated events, tasks and bookings"
 }

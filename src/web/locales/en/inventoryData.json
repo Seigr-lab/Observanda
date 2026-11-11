@@ -26,5 +26,10 @@
   "tagFilter": "Filter by resource tags",
   "tagMode": "Tag matching",
   "allTags": "All of these tags",
-  "anyTags": "Any of these tags"
+  "anyTags": "Any of these tags",
+  "purposeBom": "Bills of materials, parts and builds",
+  "purposeCategory": "Kinds of inventory items and their fields",
+  "purposeMovement": "Stock added, used or removed",
+  "purposeReservation": "Stock reserved for planned work",
+  "purposeTransfer": "Stock moved between locations"
 }

@@ -18,5 +18,9 @@
   "location": "Ubicació",
   "resource": "Equipament",
   "notes": "Notes",
-  "invalid": "No s'ha pogut verificar la targeta de planificació. Actualitza-la i torna-ho a provar."
+  "invalid": "No s'ha pogut verificar la targeta de planificació. Actualitza-la i torna-ho a provar.",
+  "purposeTask": "Tasques, pendents, llistes de comprovació i dates de venciment",
+  "purposeCalendar": "Calendaris de cada ubicació",
+  "purposeEvent": "Esdeveniments, reunions i cites programats",
+  "purposeBooking": "Reserves d'equips i recursos"
 }

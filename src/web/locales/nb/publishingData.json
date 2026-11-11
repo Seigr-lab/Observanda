@@ -3,5 +3,7 @@
   "group": "Publisering",
   "website": "Nettsted",
   "content": "Nettstedsinnhold",
-  "invalid": "Antallene for nettstedet kunne ikke lastes inn. Prøv kortet igjen."
+  "invalid": "Antallene for nettstedet kunne ikke lastes inn. Prøv kortet igjen.",
+  "purposePages": "Nettstedssider og introduksjonene deres",
+  "purposeWebsite": "Publisering av nettsted: delte prosjekter, oppføringer og sider"
 }

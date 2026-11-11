@@ -12,7 +12,7 @@ export function registerPlanningCards(registry){
   {id:'calendars',type:'calendar',fields:['owner','color']},
   {id:'calendar-events',type:'event',fields:['owner','startsAt','endsAt','location','status']},
   {id:'bookings',type:'booking',fields:['resource','startsAt','endsAt','status','notes']}
- ])registry.register({id,label:tr(type),group:tr('group'),icon:'records',scoped:true,metadataOnly:true,pageSize:25,defaultFields:fields,
+ ])registry.register({id,label:tr(type),group:tr('group'),purpose:tr(({task:'purposeTask',calendar:'purposeCalendar',event:'purposeEvent',booking:'purposeBooking'})[type]),icon:'records',scoped:true,metadataOnly:true,pageSize:25,defaultFields:fields,
   references:item=>[...(item.data.links??[]),...Object.values(item.data).flatMap(proseReferences).map(r=>({workspaceId:r.workspaceId,type:r.kind,id:r.id}))],
   fieldMetadata:Object.fromEntries(['owner','status','priority','dueOn','assignees','checklist','color','startsAt','endsAt','location','resource','notes'].map(key=>[key,{label:tr(key)}])),
   settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[]),{key:'search',label:tr('search'),type:'text'},{key:'status',label:tr('filterStatus'),type:'text'}],

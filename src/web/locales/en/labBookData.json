@@ -7,5 +7,7 @@
   "recordType": "Record type",
   "date": "Record date",
   "types": "Lab-book types",
-  "search": "Contains text"
+  "search": "Contains text",
+  "purposeBooks": "Lab books by type and location",
+  "purposeRecords": "Lab book records by type, date and location"
 }

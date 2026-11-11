@@ -63,5 +63,6 @@
   "sourceFailed": "{name}: {error}",
   "taskDeadlines": "Plazos de las tareas",
   "refreshFailed": "No se ha podido actualizar el calendario.",
-  "sourceChanged": "Este origen ha cambiado. Actualiza el calendario."
+  "sourceChanged": "Este origen ha cambiado. Actualiza el calendario.",
+  "purposeCombined": "Agenda combinada de eventos, tareas y reservas con fecha"
 }

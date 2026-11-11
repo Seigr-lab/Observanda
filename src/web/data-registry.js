@@ -5,6 +5,8 @@ import {proseText} from './prose-model.js';
 import {createDataLoadPool} from './data-load-pool.js';
 // Feature-owned data adapters; no dashboard feature list or domain switches.
 // An item is {key,title,subtitle?,data,action?:{name,id?},render?:({esc})=>HTML}.
+// An optional purpose describes, in the interface language, what the card
+// holds, so discovery finds it by what people look for, not only its name.
 // Providers expose authorized display data, never storage paths or credentials.
 // Optional discover({api,context,search,offset,limit,signal}) returns a bounded
 // {items:[{key,title,subtitle?}],total,offset} page, independently of card bodies.
@@ -21,7 +23,7 @@ export function createDataRegistry(){
    const value={...provider};
    // Display metadata may follow the current interface language. Keep the
    // registered object, query identity and data methods stable across renders.
-   if(typeof provider.presentation==='function')for(const key of ['label','group','fields','fieldMetadata','views']){
+   if(typeof provider.presentation==='function')for(const key of ['label','group','purpose','fields','fieldMetadata','views']){
     Object.defineProperty(value,key,{enumerable:true,get:()=>provider.presentation()[key]??provider[key]});
    }
    Object.freeze(value);providers.set(value.id,value);changed();

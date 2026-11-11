@@ -28,7 +28,7 @@ export function registerInventoryCards(registry){
   ['stock-movements','movement',['delta','unit','reason','updatedAt']],
   ['stock-reservations','reservation',['quantity','unit','reason','status']],
   ['stock-transfers','stock-transfer',['quantity','unit','reason','updatedAt']]
- ])registry.register({id,label:tr(type),group:tr('group'),icon:'projects',scoped:type!=='category',defaultFields:fields,
+ ])registry.register({id,label:tr(type),group:tr('group'),purpose:tr(({bom:'purposeBom',category:'purposeCategory',movement:'purposeMovement',reservation:'purposeReservation','stock-transfer':'purposeTransfer'})[type]),icon:'projects',scoped:type!=='category',defaultFields:fields,
   ...inventoryPageProvider(type),settings:(c,options={},panel)=>[...(type==='category'&&!dashboardCollection(c)?[]:dashboardScopeSettings(c,options,panel)),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[]),{key:'search',label:tr('search'),type:'text'},{key:'status',label:tr('status'),type:'text'}]
  });
 }

@@ -18,5 +18,9 @@
   "location": "Sted",
   "resource": "Utstyr",
   "notes": "Notater",
-  "invalid": "Planleggingskortet kunne ikke verifiseres. Oppdater kortet og prøv igjen."
+  "invalid": "Planleggingskortet kunne ikke verifiseres. Oppdater kortet og prøv igjen.",
+  "purposeTask": "Oppgaver, gjøremål, sjekklister og frister",
+  "purposeCalendar": "Kalendere for hvert sted",
+  "purposeEvent": "Planlagte hendelser, møter og avtaler",
+  "purposeBooking": "Bestillinger av utstyr og ressurser"
 }

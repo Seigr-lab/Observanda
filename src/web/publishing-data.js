@@ -3,8 +3,8 @@ import {emptyWebsiteSelection} from './website-selection.js';
 import {validWebsitePin,sameWebsitePin} from './website-pin.js';
 const tr=key=>t('publishingData',key);
 export function registerPublishingData(registry){
- registry.register({id:'pages',metadataOnly:true,label:tr('pages'),group:tr('group'),icon:'website',defaultFields:['intro','share'],items:c=>(c.book.pages??[]).map(p=>({key:p.id,title:p.title,data:p,action:{name:'website'}}))});
- registry.register({id:'website',metadataOnly:true,label:tr('website'),group:tr('group'),icon:'website',defaultFields:['projects','records','pages'],
+ registry.register({id:'pages',metadataOnly:true,label:tr('pages'),group:tr('group'),purpose:tr('purposePages'),icon:'website',defaultFields:['intro','share'],items:c=>(c.book.pages??[]).map(p=>({key:p.id,title:p.title,data:p,action:{name:'website'}}))});
+ registry.register({id:'website',metadataOnly:true,label:tr('website'),group:tr('group'),purpose:tr('purposeWebsite'),icon:'website',defaultFields:['projects','records','pages'],
   loadKey:c=>JSON.stringify([c.book.id,c.etag,Boolean(c.outline)]),
   load:async({context:c,api,signal})=>{
    if(!c.outline)return null;

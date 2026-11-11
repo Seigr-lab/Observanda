@@ -206,5 +206,16 @@
   "caption": "Llegenda",
   "role": "Rol",
   "target": "Destinació",
-  "unit": "Unitat"
+  "unit": "Unitat",
+  "purposeRecords": "Últims registres, entrades, notes i observacions dels quaderns de laboratori",
+  "purposeProjects": "Projectes, carpetes i els quaderns de laboratori que contenen",
+  "purposeNotebooks": "Quaderns de laboratori, llibretes i diaris de tots els projectes",
+  "purposeSections": "Seccions i contingut escrit dels registres",
+  "purposeContributors": "Persones, autors i rols reconeguts als registres",
+  "purposeRelations": "Enllaços, cites i referències entre registres",
+  "purposeFigures": "Figures, diagrames, gràfics i dades representades dels registres",
+  "purposeFiles": "Fitxers, adjunts i documents afegits recentment",
+  "purposeMedia": "Imatges, fotos, àudio, enregistraments de so, vídeo i altres mitjans dels registres",
+  "purposeWorkspace": "Títol, descripció i nombre de registres de l'espai de treball",
+  "purposeInventory": "Existències de materials, equips, programari i objectes de cada ubicació"
 }
