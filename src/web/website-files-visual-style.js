@@ -9,6 +9,9 @@ const properties = {
   'line-height': ['--line-height'],
   'letter-spacing': ['--letter-spacing'],
   padding: [],
+  margin: [],
+  opacity: [],
+  'box-shadow': [],
   'text-align': ['--section-heading-align', '--section-body-align', '--section-item-heading-align', '--section-details-align', '--section-caption-align', '--section-button-align']
 };
 const classFormat = /^ow-visual-[a-f0-9-]{36}$/;
@@ -73,6 +76,10 @@ export function visualStyleFields(document, t) {
     {name:'line-height', label:'sectionLineHeight', type:'number', min:0, step:'any'},
     {name:'letter-spacing', label:'sectionLetterSpacing', type:'number', step:'any', unit:'px'},
     {name:'padding', label:'sectionPadding', type:'number', min:0, step:'any', unit:'px'},
+    {name:'margin', label:'sectionMargin', type:'number', step:'any', unit:'px'},
+    {name:'opacity', label:'sectionOpacity', type:'number', min:0, max:1, step:0.05},
+    // Values in the browser's own serialization, so a saved shadow reads back.
+    {name:'box-shadow', label:'sectionShadow', options:[['none',t('sectionShadowNone')],['rgba(0, 0, 0, 0.12) 0px 1px 3px 0px',t('sectionShadowSoft')],['rgba(0, 0, 0, 0.16) 0px 4px 12px 0px',t('sectionShadowMedium')],['rgba(0, 0, 0, 0.22) 0px 12px 32px 0px',t('sectionShadowStrong')]]},
     {name:'text-align', label:'sectionAlignment', options:[['start',t('sectionStart')],['center',t('sectionCenter')],['end',t('sectionEnd')],['justify',t('sectionJustify')]]}
   ];
 }
