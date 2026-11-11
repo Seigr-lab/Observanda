@@ -79,8 +79,10 @@ test('historical comparisons keep each figure revision bound to its own clipping
    return {local:target?.ownerSVGElement===node.ownerSVGElement,unique:[...document.querySelectorAll('clipPath')].filter(el=>el.id===id).length};
   }));
   expect(clips.length).toBeGreaterThanOrEqual(3);for(const clip of clips){expect(clip.local).toBe(true);expect(clip.unique).toBe(1);}
-  const columns=dialog.locator('.record-revision-columns');await expect(columns.locator('.figure-reading-view').first().locator('.figure-value-tick').first()).toHaveAttribute('font-size','12');
-  await expect(columns.locator('>div').last().locator('.figure-reading-view').first().locator('.figure-value-tick').first()).toHaveAttribute('font-size','24');
+  // Each revision keeps its own figure style: the saved revision draws ticks at 24 px, the earlier one at 12 px.
+  const revisions=dialog.locator('article.record-revision');await expect(revisions.locator('.figure-reading-view .figure-value-tick').first()).toBeVisible();
+  const sizes=await revisions.evaluateAll(nodes=>nodes.map(node=>node.querySelector('.figure-reading-view .figure-value-tick')?.getAttribute('font-size')));
+  expect(sizes).toContain('12');expect(sizes).toContain('24');
   expect((await f.workspace.read()).etag).toBe(before.etag);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
