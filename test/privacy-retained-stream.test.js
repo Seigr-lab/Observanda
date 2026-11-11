@@ -46,7 +46,7 @@ test('normalization complexity fails explicitly without truncation or a document
  for(const bytes of [Buffer.from([0xff]),Buffer.from([0xed,0xa0,0x80]),Buffer.from([0xe2,0x82])])await assert.rejects(hasPrivateTextStream(source(bytes,1)),{code:'UNSAFE'});
 });
 test('retained admission authenticates bytes and keys before caching a streamed text file',async t=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-privacy-stream-')),vault={id:'synthetic',key:randomBytes(32)},workspace={vault,requireStorageKey:async()=>{if(!vault.key){const error=Error('locked');error.code='ACCESS_LOCKED';throw error;}},fileAAD:file=>path.basename(file)};
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-privacy-stream-')),vault={id:'synthetic',key:randomBytes(32)},workspace={root,vault,requireStorageKey:async()=>{if(!vault.key){const error=Error('locked');error.code='ACCESS_LOCKED';throw error;}},fileAAD:file=>path.basename(file)};
  t.after(async()=>{vault.key?.fill(0);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-privacy-stream-'));await rm(root,{recursive:true,force:true});});
  async function retained(name,text){const file=path.join(root,name),saved=await writeContent(workspace,file,source(text,29)());return new FileContent(workspace,file,saved.size,saved.sha256);}
  const safe=await retained('safe.blob','<p>\u00c5ngstr\u00f6m public observation \u{1f41d}.</p>');assert.equal(await admitRetainedPublicFile('index.html',safe,{type:'text'}),safe);assert.doesNotThrow(()=>assertPublicFiles(new Map([['index.html',safe]])));
