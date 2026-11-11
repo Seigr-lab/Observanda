@@ -67,7 +67,7 @@ test('card and metadata templates share index and fence reads but still reject r
  const controls=t.mock.method(store,'control',(file,options)=>{reads.push(file);return control(file,options);});
  const card=await save({template:'card'});assert.match(card.html,/Live tidal survey/);assert.match(card.html,/Unchanged observation/);assert.doesNotMatch(card.html,/Saved snapshot|Rich content only|low tide|Withheld title/);
  const itemHTML='<h3 data-feed-field="title"></h3><time data-feed-field="date"></time><p data-feed-field="type"></p><ul data-feed-field="tags"></ul>';
- const custom=await save({template:'custom',itemHTML});assert.match(custom.html,/<time[^>]*>2026-06-02<\/time>/);assert.match(custom.html,/<li>low tide<\/li>/);assert.match(custom.html,/>analysis<\/p>/);
+ const custom=await save({template:'custom',itemHTML});assert.match(custom.html,/<time[^>]*datetime="2026-06-02"[^>]*>June 2, 2026<\/time>/);assert.match(custom.html,/<li>low tide<\/li>/);assert.match(custom.html,/data-observanda-value="analysis">Analysis<\/p>/);
  assert.doesNotMatch(custom.html,/Rich content only|Saved snapshot|Withheld title/);
  // Two revision lookups, two start/end library stamps, one existing feed check.
  assert.ok(reads.filter(file=>file.endsWith('/pending.json')).length<=7);

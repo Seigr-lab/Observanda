@@ -35,6 +35,7 @@ export const deferredCatalogues=Object.freeze({
  recordReferences:()=>import('./catalogues/recordReferences.js'),
  measurementOutput:()=>import('./catalogues/measurementOutput.js'),
  websiteFeeds:()=>import('./catalogues/websiteFeeds.js'),
+ websiteRecordText:()=>import('./catalogues/websiteRecordText.js'),
  githubTransfer:()=>import('./catalogues/githubTransfer.js'),
  evidenceCorrections:()=>import('./catalogues/evidenceCorrections.js'),
  onlineEvidence:()=>import('./catalogues/onlineEvidence.js'),

@@ -21,7 +21,7 @@ const parsing=locales.map(locale=>({
  months:Array.from({length:12},(_,i)=>locale['month'+(i+1)].toLowerCase()),
  year:pattern(locale.year,{'{year}':'(?<year>\\d{4})'})
 }));
-function projectedDate(label){
+export function projectedDate(label){
  for(const language of parsing){
   if(label===language.unknown)return {kind:'unknown'};
   const estimate=language.estimate.exec(label),value=estimate?.groups.value??label,estimated=Boolean(estimate);

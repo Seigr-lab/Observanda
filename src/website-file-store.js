@@ -41,6 +41,7 @@ import {editHistory,editHistoryStamp,retainEditHistory,validateEditHistory} from
 import {sourceGalleryItems,refreshSourceGalleries} from './website-source-gallery-items.js';
 import {entryDisplayChoices,sourceFragmentAtPage as atPage} from './website-entry-display.js';
 import {entryCSS,entryStyleHash,entryStyleName,styledPageHTML,usesEntryStyle,syncEntryStyles} from './website-entry-styles.js';
+import {localizedRecordPage} from './website-record-language.js';
 import {fileHasEditorMenu} from './website-menu-styles.js';
 import {clearFeedSubscription,reflowFeedShell,refreshFeedSubscriptions,retainWebsiteFeedAssets,validateFeedFiles,websiteFeedPages,writeFeedSubscription} from './website-dynamic-feeds.js';
 import {releasePreviousFeedSource,synchronizeFeedSource} from './website-feed-source.js';
@@ -175,7 +176,7 @@ class RenderedWebsiteFile extends WebsiteFileContent{
    await this.store.current(this.siteId,this.revision);
    const raw=await this.store.readText(this.descriptor,{signal});
    const name=this.descriptor.name,value=this.blocked?publicText(raw,name,this.blocked):raw;
-   const bytes=Buffer.from(name.endsWith('.html')?styledPageHTML(value,name).html:value);
+   const bytes=Buffer.from(name.endsWith('.html')?styledPageHTML(localizedRecordPage(value),name).html:value);
    await this.store.current(this.siteId,this.revision);return bytes;
   },{signal});
  }
@@ -253,7 +254,7 @@ export class WebsiteFileStore{
  async siteFile(id,name,value,{draft,signal}={}){
   let used=false,editorMenu;
   if(name.endsWith('.html')&&typeof value==='string'){
-   const page=styledPageHTML(value,name);value=page.html;used=page.used;editorMenu=page.menu;
+   const page=styledPageHTML(localizedRecordPage(value),name);value=page.html;used=page.used;editorMenu=page.menu;
    if(Buffer.byteLength(value)>TEXT_LIMIT)throw new AppError('LIMIT');
   }
   const file=await this.descriptor(name,value,{signal,owner:siteOwner(id,draft)});
