@@ -8,7 +8,32 @@ import {loadWebsiteCanvas,applyCanvasCSS} from './website-html-document.js';
 export function presentationValues({format,choice,hidden=[],layout='article',cover='',date=false}){
  return {presentation:format,...(format==='full'?{hidden:[...hidden].sort(),layout}:{choice}),...(format==='card'?{cover:cover||null,date:Boolean(date)}:{})};
 }
-export function websitePlacementPresentation({t,request,refresh,onError,page:frameSource=null}){
+// The ordinal of a copy and its current source revision on a page, counted
+// like the saved file service counts occurrences.
+export function placementRevision(doc,sourceId,ordinal){
+ let seen=0;
+ for(const node of doc.body.querySelectorAll(marker)){
+  if((node.dataset.observandaLink??node.dataset.observandaSource)!==sourceId)continue;
+  if(seen++===ordinal)return node.dataset.observandaSourceRevision??null;
+ }
+ return null;
+}
+export function presentationBlock(node){
+ const section=node?.closest(block);
+ return section&&!section.parentElement?.closest(marker+',header,footer,nav,template,[hidden],[data-website-instance],[data-website-region],[data-website-menu],[data-record-id],[data-public-record],[data-website-feed]')&&!section.querySelector(marker+',[data-website-instance]')?section:null;
+}
+function occurrences(doc,selected){
+ const counts=new Map(),rows=[];let initial=0;
+ for(const node of doc.body.querySelectorAll(marker)){
+  const sourceId=node.dataset.observandaLink??node.dataset.observandaSource,ordinal=counts.get(sourceId)??0;
+  counts.set(sourceId,ordinal+1);
+  if(presentationBlock(node)!==node)continue;
+  if(node.contains(selected))initial=rows.length;
+  rows.push({node,sourceId,ordinal,sourceRevision:node.dataset.observandaSourceRevision});
+ }
+ return {rows,initial};
+}
+export function websitePlacementPresentation({t,request,refresh,onError,page:frameSource=null,onApplied=null}){
  let current=null;
  function close(){if(current){const {dialog}=current;current=null;dialog.close();}}
  async function revalidate(signal){
@@ -177,9 +202,11 @@ export function websitePlacementPresentation({t,request,refresh,onError,page:fra
   async function save(){
    if(apply.disabled)return;busy=saving=true;controls();
    try{
-    const values=chosen();
+    const values=chosen(),before=presentationValues(saved),{sourceId,ordinal}=rows[session.selected];
     const result=await request('library/present-placement',{...pin(),...values});
     if(current!==session)return;close();refresh(result);
+    // The change joins the page's undo history as a presentation step.
+    onApplied?.({sourceId,ordinal,before,after:values});
    }catch(error){fail(error);}
   }
   entry.onchange=()=>load(Number(entry.value));

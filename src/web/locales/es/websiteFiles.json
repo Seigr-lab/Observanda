@@ -1026,6 +1026,7 @@
   "placementShowDate": "Mostrar la fecha de la entrada",
   "placementLivePreview": "Vista previa en directo de esta página",
   "placementPreviewLoading": "Actualizando la vista previa…",
+  "historyPresentationUnavailable": "Esa copia de la entrada ya no está en esta página; no se puede deshacer el cambio de presentación.",
   "image": "Imagen",
   "video": "Vídeo o audio",
   "sectionMargin": "Espacio alrededor",

@@ -1026,6 +1026,7 @@
   "placementShowDate": "Mostra la data de l’entrada",
   "placementLivePreview": "Previsualització en directe d’aquesta pàgina",
   "placementPreviewLoading": "S’està actualitzant la previsualització…",
+  "historyPresentationUnavailable": "Aquesta còpia de l’entrada ja no és a la pàgina; no es pot desfer el canvi de presentació.",
   "image": "Imatge",
   "video": "Vídeo o àudio",
   "sectionMargin": "Espai al voltant",

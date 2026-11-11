@@ -1026,6 +1026,7 @@
   "placementShowDate": "Show the entry's date",
   "placementLivePreview": "Live preview of this page",
   "placementPreviewLoading": "Updating the preview…",
+  "historyPresentationUnavailable": "That entry copy is no longer on this page, so its presentation change cannot be undone.",
   "image": "Image",
   "video": "Video or audio",
   "sectionMargin": "Space around",

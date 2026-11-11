@@ -1026,6 +1026,7 @@
   "placementShowDate": "Vis datoen for oppføringa",
   "placementLivePreview": "Direkte førehandsvising av denne sida",
   "placementPreviewLoading": "Oppdaterer førehandsvisinga …",
+  "historyPresentationUnavailable": "Denne kopien av oppføringa er ikkje lenger på sida, så presentasjonsendringa kan ikkje angrast.",
   "image": "Bilete",
   "video": "Video eller lyd",
   "sectionMargin": "Luft rundt",

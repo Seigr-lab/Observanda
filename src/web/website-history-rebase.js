@@ -62,7 +62,10 @@ export function rebasePageHistory(stack,from,next){
  let before=from,onto=next,skipped=0,bytes=0;
  const result=[];
  for(let i=stack.length-1;i>=0;i--){
-  const entry=stack[i],merged=rebaseAuthoredPage(before,entry,onto);
+  const entry=stack[i];
+  // A presentation step names its copy and states; it holds no page text.
+  if(entry.presentation){result.push(entry);continue;}
+  const merged=rebaseAuthoredPage(before,entry,onto);
   if(merged===null)skipped++;
   else if(merged.html!==onto.html||merged.css!==onto.css){
    const size=merged.html.length+merged.css.length;if(result.length&&bytes+size>8*1024*1024){skipped+=i+1;break;}

@@ -37,7 +37,7 @@ import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
 import {websitePlacementDrag} from './website-files-placement-drag.js';
 import {websiteSourceGallery} from './website-files-source-gallery.js';
-import {presentationBlock,websitePlacementPresentation} from './website-placement-presentation.js';
+import {presentationBlock,websitePlacementPresentation,placementRevision} from './website-placement-presentation.js';
 import {websiteFileFeeds} from './website-file-feeds.js';
 import {reviewSavedWebsite} from './website-site-review.js';
 import {editWebsiteAppearance} from './website-files-appearance.js';
@@ -187,6 +187,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   place:selection=>void run(()=>insertContent('insert-source',selection)).catch(reason=>notify(reason.message,true))});
  const presentation=websitePlacementPresentation({t:tr,request,
   page:()=>{const page=new URL(opened.path,directory());page.searchParams.set('canvas','1');return {page:page.href,css,stylesheet:canvasURL(opened.site.cssPath),url:name=>canvasURL(name)};},
+  onApplied:change=>{undo.push({presentation:change,html:'',css:'',sourceStamp:opened.sourceStamp});redo=[];lastCheckpoint=0;render();},
   refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-presentation"]')?.focus();},
   onError:reason=>{if(['ACCESS_LOCKED','AUTH','CONFLICT','NOT_FOUND','WEBSITE_CHANGED','PUBLICATION_PERMISSIONS_CHANGED'].includes(reason.code))hideUnverifiedPage(true);else notify(reason.message||tr('failed'),true);}});
  const feeds=websiteFileFeeds({t:tr,request,refresh:value=>{adoptRelated(value);render();document.querySelector('[data-action="website-files-feeds"]')?.focus();},report:reason=>notify(reason.message||tr('failed'),true)});
@@ -906,6 +907,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation.startsWith('discovery-')&&mode==='discovery'){await discovery.action(operation.slice(10));render();discovery.focus();}
    else if(operation.startsWith('versions-')&&mode==='versions')await versions.action(operation.slice(9));
    else if(operation==='save'){await saveAuthoring();render();}
+   else if((operation==='undo'||operation==='redo')&&(operation==='undo'?undo:redo).at(-1)?.presentation){
+    // A presentation step is undone and redone by the server, since placed
+    // copies are protected from hand edits.
+    await save();const stack=operation==='undo'?undo:redo,entry=stack.at(-1),change=entry.presentation;
+    const sourceRevision=placementRevision(websiteHTML(html),change.sourceId,change.ordinal);
+    if(!sourceRevision){stack.pop();error=tr('historyPresentationUnavailable');paintStatus();render();return;}
+    const result=await request('library/present-placement',{siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,sourceId:change.sourceId,sourceRevision,ordinal:change.ordinal,...(operation==='undo'?change.before:change.after)},{signal:controller.signal});
+    stack.pop();adoptRelated(result);(operation==='undo'?redo:undo).push(entry);render();
+   }
    else if(operation==='undo'||operation==='redo'){
     const from=operation==='undo'?undo:redo,to=operation==='undo'?redo:undo;
     if(from.length){
