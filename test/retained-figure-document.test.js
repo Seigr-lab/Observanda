@@ -144,3 +144,20 @@ test('new member identities are valid, unique and ordered within one writer so i
  assert.ok(ids.every(researchId));assert.deepEqual([...ids].sort(),ids);assert.equal(new Set(ids).size,ids.length);
  const other=Array.from({length:2000},()=>second());assert.ok(other.every(researchId));assert.equal(new Set([...ids,...other]).size,4000);
 });
+test('saved series pack their points into member runs that read, verify, edit and keep history exactly',async()=>{
+ const f=fixture(),figure=createFigure();figure.series=[{...figure.series[0],points:Array.from({length:300},(_,i)=>({x:i,y:(i*7)%13,error:i%4?null:.5}))},{...createSeries('Second',1),points:Array.from({length:40},(_,i)=>({x:i+0.5,y:i,error:null}))}];
+ figure.annotations=[{id:randomUUID(),kind:'callout',label:'Peak',color:'#123456',opacity:.5,seriesId:figure.series[0].id,pointIndex:150,dx:10,dy:-10}];
+ const saved=await new RetainedFigureDocuments(f.workspace).retain(figure),values=[...f.files.keys()].filter(name=>name.includes('/figures/value/')).length;
+ // 340 points would need 680 member and body blocks one by one.
+ assert.ok(values<120,'points travel in member runs: '+values);
+ const reader=await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(saved);assert.deepEqual(await json(reader),figure);await reader.verify();
+ const page=await reader.window({collection:'points',seriesId:figure.series[0].id,offset:126,limit:5});assert.deepEqual(page.items.map(item=>item.value),figure.series[0].points.slice(126,131));
+ assert.deepEqual((await reader.item({collection:'points',id:page.items[2].id})).value,figure.series[0].points[128]);assert.deepEqual((await reader.rawPoint({offset:299})).value,figure.series[0].points[299]);
+ const all=await reader.window({collection:'points',offset:298,limit:4});assert.deepEqual(all.items.map(item=>item.value),[...figure.series[0].points.slice(298),...figure.series[1].points.slice(0,2)]);
+ // A one-point edit stores that point as a single member; the saved figure still reads what it held.
+ const owner=new RetainedFigureAuthoring(f.workspace);let draft=await owner.start(saved);
+ const target=(await (await owner.open(draft)).window({collection:'points',seriesId:figure.series[0].id,offset:200,limit:1})).items[0];
+ draft=await owner.change(draft,{type:'patch',collection:'points',plotId:figure.id,id:target.id,patch:{y:99}});const edited=await owner.finish(draft);
+ const changed=structuredClone(figure);changed.series[0].points[200].y=99;assert.deepEqual(await json(await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(edited)),changed);
+ assert.deepEqual(await json(await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(saved)),figure);await (await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(edited)).verify();
+});

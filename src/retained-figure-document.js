@@ -7,7 +7,7 @@ import {sameAxisProjection} from './web/figure-projection-display.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {RetainedTableIndex,validTableRef,indexCheckpointDue} from './retained-table-index.js';
-import {RetainedFigureBlocks,memberRunMembers} from './retained-figure-blocks.js';
+import {RetainedFigureBlocks,memberRunMembers,MEMBER_RUN_MEMBERS,MEMBER_RUN_BYTES} from './retained-figure-blocks.js';
 import {validRetainedFigure,validRetainedFigureDocument,validRetainedFigureWindow,validRetainedFigureItem,RETAINED_FIGURE_WINDOW} from './web/retained-figure-model.js';
 import {xValue,figureIssues} from './web/figure-model.js';
 import {pointIntervals,intervalIssues,INTERVAL_FIELDS} from './web/figure-intervals.js';
@@ -60,22 +60,47 @@ export function validateRetainedFigurePoint(point,header){
 }
 
 export class RetainedFigureCollections{
- constructor(blocks){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections={};this.indexes={};}
+ constructor(blocks,{runs=false}={}){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections={};this.indexes={};this.runs=runs;this.run=null;}
  collection(name){return this.collections[name]??={count:0,root:null};}
  indexesFor(name){return this.indexes[name]??={keys:null,plots:null,series:null,lookup:null,coordinates:null};}
  roots(){return [...Object.values(this.collections).map(value=>value.root),...Object.values(this.indexes).flatMap(value=>Object.values(value))];}
- async checkpoint(){await this.index.flushRoots(this.roots());}
- async find(name,key,slot='keys'){return this.index.find({root:this.indexesFor(name)[slot]},key);}
- async add(name,{id,plotId=null,seriesId=null,position,body,lookup=null,coordinate=null,categoryId=null,visiblePosition=null,bodyRoot=null,texts=null}){
-  this.blocks.check();const collection=this.collection(name),indexes=this.indexesFor(name);if(await this.find(name,id))throw new AppError('MATERIAL_INVALID');
-  const item={format:'figure-member',version:1,collection:name,id,plotId,seriesId,position:position??collection.count,ordinal:collection.count,...(categoryId?{categoryId}:{}),...(visiblePosition!==null?{visiblePosition}:{}),body:bodyRoot??await this.tree.retain(body),texts:texts??lengths(body)};
-  const revision=await this.tree.retain(item);collection.root=await this.index.change(collection.root,ordinal(collection.count++),revision);
-  indexes.keys=await this.index.change(indexes.keys,id,revision);
-  if(plotId)indexes.plots=await this.index.change(indexes.plots,plotId+':'+ordinal(item.ordinal),revision);
-  if(seriesId)indexes.series=await this.index.change(indexes.series,seriesId+':'+ordinal(item.position),revision);
+ async checkpoint(){await this.flushRun();await this.index.flushRoots(this.roots());}
+ async find(name,key,slot='keys'){
+  if(name==='points'&&this.run){if(slot!=='lookup')await this.flushRun();else if(this.run.members.some(member=>member.lookup===key))return {id:key,buffered:true};}
+  return this.index.find({root:this.indexesFor(name)[slot]},key);
+ }
+ async indexMember(name,item,revision,{lookup=null,coordinate=null}={}){
+  const collection=this.collection(name),indexes=this.indexesFor(name);
+  collection.root=await this.index.change(collection.root,ordinal(item.ordinal),revision);
+  indexes.keys=await this.index.change(indexes.keys,item.id,revision);
+  if(item.plotId)indexes.plots=await this.index.change(indexes.plots,item.plotId+':'+ordinal(item.ordinal),revision);
+  if(item.seriesId)indexes.series=await this.index.change(indexes.series,item.seriesId+':'+ordinal(item.position),revision);
   if(lookup!==null)indexes.lookup=await this.index.change(indexes.lookup,lookup,revision);
-  if(coordinate!==null)indexes.coordinates=await this.index.change(indexes.coordinates,plotId+':'+numericKey(coordinate)+':'+ordinal(item.ordinal),revision);
+  if(coordinate!==null)indexes.coordinates=await this.index.change(indexes.coordinates,item.plotId+':'+numericKey(coordinate)+':'+ordinal(item.ordinal),revision);
+ }
+ async add(name,{id,plotId=null,seriesId=null,position,body,lookup=null,coordinate=null,categoryId=null,visiblePosition=null,bodyRoot=null,texts=null}){
+  this.blocks.check();if(name!=='points')await this.flushRun();const collection=this.collection(name);if(this.run?.ids.has(id)||await this.index.find({root:this.indexesFor(name).keys},id))throw new AppError('MATERIAL_INVALID');
+  // Point bodies small enough to travel inline are written inside a member run.
+  const inline=this.runs&&name==='points'&&plotId&&seriesId&&!bodyRoot?serialize({type:'inline',value:body}):null,embed=inline!==null&&Buffer.byteLength(inline)<=2048;
+  const item={format:'figure-member',version:1,collection:name,id,plotId,seriesId,position:position??collection.count,ordinal:collection.count++,...(categoryId?{categoryId}:{}),...(visiblePosition!==null?{visiblePosition}:{}),body:embed?digest(inline):bodyRoot??await this.tree.retain(body),texts:texts??lengths(body)};
+  if(this.runs&&name==='points'&&plotId&&seriesId){
+   if(this.run&&(this.run.plotId!==plotId||this.run.seriesId!==seriesId))await this.flushRun();
+   const entry={id,position:item.position,ordinal:item.ordinal,...(categoryId?{categoryId}:{}),body:item.body,texts:item.texts,...(embed?{value:body}:{})},bytes=Buffer.byteLength(serialize(entry));
+   if(this.run&&this.run.bytes+bytes>MEMBER_RUN_BYTES)await this.flushRun();
+   this.run??={plotId,seriesId,members:[],ids:new Set(),bytes:0};this.run.members.push({entry,item,lookup,coordinate});this.run.ids.add(id);this.run.bytes+=bytes;
+   if(this.run.members.length===MEMBER_RUN_MEMBERS)await this.flushRun();return item;
+  }
+  const revision=await this.tree.retain(item);await this.indexMember(name,item,revision,{lookup,coordinate});
   if(indexCheckpointDue(this.index))await this.checkpoint();return item;
+ }
+ // Write the buffered run of one series' points as a single block, then index
+ // every member at that block exactly as single members are indexed.
+ async flushRun(){
+  const run=this.run;if(!run)return;this.run=null;
+  const node={type:'member-run',version:1,collection:'points',plotId:run.plotId,seriesId:run.seriesId,members:run.members.map(member=>member.entry)};
+  const revision=await this.blocks.put('value',node);this.blocks.embed(revision,memberRunMembers(node));
+  for(const {item,lookup,coordinate} of run.members)await this.indexMember('points',item,revision,{lookup,coordinate});
+  if(indexCheckpointDue(this.index))await this.index.flushRoots(this.roots());
  }
  async manifests(){await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
 }
@@ -88,7 +113,7 @@ export function memberIdSequence(){
  return ()=>{const counter=(next++).toString(16).padStart(12,'0'),random=randomBytes(8).toString('hex');return counter.slice(0,8)+'-'+counter.slice(8)+'-4'+random.slice(0,3)+'-'+'89ab'[randomBytes(1)[0]&3]+random.slice(3,6)+'-'+random.slice(6,16)+randomBytes(1).toString('hex');};
 }
 export class RetainedFigureBuilder{
- constructor(owner,header,{draft=false,retained=null}={}){this.draft=draft;this.retained=retained;this.owner=owner;this.blocks=owner.blocks;this.tree=this.blocks.tree();this.header=scalarHeader(header);validateHeader(this.header,{draft});this.source=header.source?structuredClone(header.source):null;this.data=new RetainedFigureCollections(this.blocks);this.presentation=new RetainedFigureCollections(this.blocks);this.plot=null;this.series=null;this.done=false;}
+ constructor(owner,header,{draft=false,retained=null}={}){this.draft=draft;this.retained=retained;this.owner=owner;this.blocks=owner.blocks;this.tree=this.blocks.tree();this.header=scalarHeader(header);validateHeader(this.header,{draft});this.source=header.source?structuredClone(header.source):null;this.data=new RetainedFigureCollections(this.blocks,{runs:!draft});this.presentation=new RetainedFigureCollections(this.blocks);this.plot=null;this.series=null;this.done=false;}
  async addPlot(figure,{id=figure.id,label=figure.title,retained=null}={}){
   if(this.done)throw new AppError('INVALID');await this.finishPlot();validateHeader(scalarHeader(figure),{draft:this.draft});
   this.plot={id:figure.id,panelId:id,label,retained,header:scalarHeader(figure),slots:{annotations:Object.hasOwn(figure,'annotations'),xTicks:Object.hasOwn(figure.x??{},'ticks'),yTicks:Object.hasOwn(figure.y??{},'ticks')},domains:{x:emptyExtent(),y:emptyExtent(),minimumXGap:null,minimumLogXGap:null,categoryCount:0,visibleSeriesCount:0,maximumCategoryLength:0,maximumSeriesNameLength:0},series:0,points:0};

@@ -81,9 +81,18 @@ export class RetainedFigureBlocks{
  }
  async put(kind,node){
   this.check();if(this.readOnly)throw new AppError('INVALID');const text=serialize(node),bytes=Buffer.byteLength(text);if(bytes>65536)throw new AppError('LIMIT');const revision=digest(text),key=retainedFigureBlockPath(kind,revision);
-  if(this.pending.has(key)||this.cache.has(key))return revision;
+  if(kind==='value')await this.storeEmbeddedBodies(node);
+  // A body known only from inside a member run is not stored by itself yet.
+  if(this.pending.has(key)||this.cache.has(key)&&!this.embedded?.has(revision))return revision;this.embedded?.delete(revision);
   if(this.pending.size>=GROUPED_METADATA_OBJECTS||this.pendingBytes+bytes>262144)await this.flush();
   this.pending.set(key,{kind,revision,text});this.pendingBytes+=bytes;return revision;
+ }
+ // Before a single member or another run refers to a body by its address, a
+ // body that so far travels only inside a member run is stored as its own block.
+ async storeEmbeddedBodies(node){
+  if(!this.embedded?.size)return;
+  const bodies=node?.type==='inline'&&node.value?.format==='figure-member'?[node.value.body]:node?.type==='member-run'?node.members.filter(entry=>!Object.hasOwn(entry,'value')).map(entry=>entry.body):[];
+  for(const body of bodies)if(hash(body)&&this.embedded.has(body))await this.put('value',await this.read('value',body));
  }
  async flush(){
   if(!this.pending.size)return;this.check();const batch=[...this.pending];
