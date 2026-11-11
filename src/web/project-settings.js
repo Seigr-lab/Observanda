@@ -78,7 +78,8 @@ export function projectSettings(services){
   if(!template)return '<p>'+text('blankHelp')+'</p>';
   const list=items=>'<p>'+text('includedTypes')+'</p><ul class="project-template-summary">'+items.map(([label,count])=>'<li><strong>'+esc(templateText(label))+'</strong><span>'+text('fields',{count})+'</span></li>').join('')+'</ul>';
   if(native()&&!template.configuration){
-   const saved=source==='current'&&savedTypes?.rows?list(savedTypes.rows.map(row=>[row.value.label,row.counts?.fields??0]))+(savedTypes.more?'<p>'+text('moreTypes')+'</p>':''):'';
+   const types=source==='current'?savedTypes:source.startsWith('project:')?remoteTemplates.get(source.slice(8))?.types:null;
+   const saved=types?.rows?list(types.rows.map(row=>[row.value.label,row.counts?.fields??0]))+(types.more?'<p>'+text('moreTypes')+'</p>':''):'';
    return '<p>'+esc(template.name)+'</p>'+saved+'<p>'+esc(t('configurationEditor','sourceHelp'))+'</p>';
   }
   const sections=template.configuration.sections.filter(s=>s.enabled);
@@ -200,7 +201,9 @@ export function projectSettings(services){
     if(!local){const response=await services.accessProject(()=>api('/api/projects/'+projectId+'/workspace/read/start',{}, {adopt:false}));workspaceId=response.metadata.id;owner=projectId;}
     const result=await services.accessProject(()=>sourceReader.open({workspaceId,projectId,notebookId:null,slot:'labBookTemplate'},owner===undefined?{saved:true}:{owner,saved:true}));
     if(draft?.id!==id||source!==choice)return;
-    remoteTemplates.set(projectId,{name:result.header.name,configurationPin:result.configurationPin});
+    // Its record types, to show what the chosen template includes.
+    const page=await services.accessProject(()=>sourceReader.window('sections',{offset:0,limit:32}));if(draft?.id!==id||source!==choice)return;
+    remoteTemplates.set(projectId,{name:result.header.name,configurationPin:result.configurationPin,types:{rows:page.rows.filter(row=>row.value.enabled),more:page.next!==null}});
     if(mode==='project'&&applySelection){templateChosen=true;await apply();}return;
    }
    const result=await services.accessProject(()=>api('/api/projects/'+choice.slice(8)+'/workspace/read/start',{}, {adopt:false}));
