@@ -99,3 +99,14 @@ test('shipped lab book profile names follow the page language while edited names
  assert.ok(html.includes('data-observanda-value="'+esc(label)+'">'+esc(catalan[key])+'</h3>'),key);
  assert.match(html,/<h3 data-observanda-term="profile">My own heading<\/h3>/);
 });
+
+test('a scrolling data table is named in the page language',async()=>{
+ const {retainedTableView}=await import('../src/web/retained-table-model.js');
+ const ca=JSON.parse(await readFile(new URL('../src/web/locales/ca/retainedTables.json',import.meta.url),'utf8'));
+ const table={version:2,headers:['Hive','Mites'],rows:[{cells:['4','3'],presence:['value','value']}],selection:{includeExcluded:false}};
+ const view=retainedTableView(table,esc);
+ assert.match(view,/data-observanda-aria="retainedTables:table"/);
+ const html=localizedRecordPage(page('ca',placed('<article>'+view+'</article>')));
+ assert.ok(html.includes('aria-label="'+esc(ca.table)+'" data-observanda-aria="retainedTables:table"'));
+ assert.equal(localizedRecordPage(html),html);
+});
