@@ -2,7 +2,7 @@ import {publicationChoices} from './record-publication-controls.js';
 import {recordRevisionField} from './record-revision-view.js';
 import {t} from './i18n/index.js';
 import {emptyMediaMetadata,MEDIA_METADATA_LIMITS,validMediaMetadata,validCaptureTime} from './record-media-value.js';
-import {mediaMetadataList} from './record-media-metadata.js';
+import {mediaMetadataList,mediaTechnicalList} from './record-media-metadata.js';
 import {recordDateFields,updateRecordDate} from './record-date-ui.js';
 import {dateParts,recordDateIssue} from './record-date.js';
 const text=(key,args)=>t('recordValues',key,args);
@@ -31,18 +31,46 @@ export function mediaMetadataIssue(metadata){
  if(metadata.capturedTime&&dateParts(metadata.capturedOn)?.kind!=='day')return text('mediaCaptureTimeNeedsDay');
  return text('mediaSourceInvalid');
 }
-export function recordMediaView({esc,field}){
- const option=(value,name,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(name)+'</option>',helpers={esc,field,option};
+// Camera details offered from the original: only empty fields are filled,
+// and only when the author asks; location stays a private field.
+export function captureMetadata(metadata,capture){
+ const next={...metadata};
+ if(!next.creator&&capture.creator)next.creator=capture.creator;
+ if(!next.credit&&capture.copyright)next.credit=capture.copyright;
+ if(!next.subject&&capture.description)next.subject=capture.description;
+ if(dateParts(next.capturedOn)?.kind==='unknown'&&capture.capturedOn){next.capturedOn=capture.capturedOn;next.capturedTime=capture.capturedTime;}
+ if(!next.location&&capture.latitude&&capture.longitude)next.location=capture.latitude+', '+capture.longitude+(capture.altitude?' ('+capture.altitude+' m)':'');
+ return next;
+}
+export function recordMediaView({esc,field,api}){
+ const option=(value,name,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(name)+'</option>',helpers={esc,field,option},facts=new Map();
+ const mediaId=base=>base?.field?.slice(6);
+ function factsView(id){
+  const details=facts.get(id);if(!details)return '';
+  const capture=details.capture,camera=capture?[['mediaCreator',capture.creator],['mediaCopyright',capture.copyright],['mediaCaptured',[capture.capturedOn,capture.capturedTime].filter(Boolean).join(' ')],['mediaCoordinates',capture.latitude&&capture.longitude?capture.latitude+', '+capture.longitude+(capture.altitude?' ('+capture.altitude+' m)':''):''],['mediaCamera',capture.camera]].filter(([,value])=>value):[];
+  return mediaTechnicalList(details.technical,esc)+(camera.length?'<section class="record-media-camera" data-media-camera><h4>'+esc(text('mediaCameraHeading'))+'</h4><dl>'+camera.map(([key,value])=>'<dt>'+esc(text(key))+'</dt><dd>'+esc(value)+'</dd>').join('')+'</dl><label class="checkbox"><input type="checkbox" data-media-capture-apply><span>'+esc(text('mediaCameraUse'))+'</span></label><p class="muted">'+esc(text('mediaCameraHelp'))+'</p></section>':'');
+ }
  return {
+  async prepare(base){
+   const id=mediaId(base);if(!id||facts.has(id)||typeof api!=='function')return;
+   // Details are optional: a missing tool or unreadable original leaves the editor usable.
+   try{facts.set(id,await api('/api/media/'+id+'/details',undefined,{adopt:false}));}catch{facts.set(id,null);}
+  },
   fields(base,value){
    const item=value.value;
    return '<p>'+esc(text('mediaHelp'))+'</p>'+field(esc(text('mediaCaption')),'<textarea data-media-detail="caption" rows="2" maxlength="1500">'+esc(item.caption)+'</textarea>')+
     field(esc(text(base.definition.mediaKind==='image'?'mediaAlt':'mediaDescription')),'<textarea data-media-detail="alt" rows="3" maxlength="1500">'+esc(item.alt)+'</textarea>')+
     field(esc(text('mediaTranscript')),'<textarea data-media-detail="transcript" rows="6" maxlength="60000">'+esc(item.transcript)+'</textarea>')+
-    metadataFields(item.metadata??emptyMediaMetadata(),helpers)+
+    factsView(mediaId(base))+metadataFields(item.metadata??emptyMediaMetadata(),helpers)+
     '<label class="checkbox"><input type="checkbox" data-media-detail="sharePdf"'+(item.sharePdf?' checked':'')+'>'+esc(text('sharePdf'))+'</label><label class="checkbox"><input type="checkbox" data-media-detail="share"'+(item.share?' checked':'')+'><span>'+esc(text('mediaShare'))+'</span></label><p class="muted">'+esc(text('mediaShareHelp'))+'</p>';
   },
   input(element,base,value){
+   if(element.hasAttribute('data-media-capture-apply')){
+    const capture=facts.get(mediaId(base))?.capture;if(!capture||!element.checked)return true;
+    value.value.metadata=captureMetadata(value.value.metadata??emptyMediaMetadata(),capture);
+    const group=element.closest('[data-writing-fields]')?.querySelector('[data-media-metadata-group]');if(group)group.outerHTML=metadataFields(value.value.metadata,helpers);
+    element.disabled=true;return true;
+   }
    const group=element.closest('[data-media-metadata-group]');
    if(group&&(element.dataset.mediaMetadata||element.dataset.recordDate)){
     // Details are stored only once the author fills one in.

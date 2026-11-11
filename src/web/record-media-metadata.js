@@ -1,4 +1,4 @@
-import {t} from './i18n/index.js';
+import {t,language} from './i18n/index.js';
 import {recordDateLabel,dateParts} from './record-date.js';
 import {validMediaMetadata} from './record-media-value.js';
 const text=(key,values)=>t('recordValues',key,values);
@@ -23,4 +23,20 @@ export function mediaMetadataList(metadata,esc){
 export function mediaMetadataDetails(metadata,esc){
  const list=mediaMetadataList(metadata,esc);
  return list?'<details class="record-media-provenance"><summary>'+esc(text('mediaSourceHeading'))+'</summary>'+list+'</details>':'';
+}
+// Technical facts probed from the original at intake (read-only).
+export function mediaTechnicalList(technical,esc){
+ if(!technical||typeof technical!=='object')return '';
+ const number=value=>typeof value==='number'?value.toLocaleString(language()):String(value);
+ const rows=[
+  ['mediaDuration',technical.durationSeconds&&text('mediaSeconds',{seconds:technical.durationSeconds})],
+  ['mediaSampleRate',Number.isSafeInteger(technical.sampleRate)&&text('mediaHertz',{rate:number(technical.sampleRate)})],
+  ['mediaChannels',Number.isSafeInteger(technical.channels)&&(number(technical.channels)+(technical.channelLayout?' ('+technical.channelLayout+')':''))],
+  ['mediaBitDepth',Number.isSafeInteger(technical.bitDepth)&&text('mediaBits',{bits:number(technical.bitDepth)})],
+  ['mediaSampleFormat',technical.sampleFormat],
+  ['mediaCodec',technical.audioCodec??technical.videoCodec??technical.codec],
+  ['mediaPixels',Number.isSafeInteger(technical.width)&&Number.isSafeInteger(technical.height)&&number(technical.width)+' × '+number(technical.height)],
+  ['mediaFrameRate',technical.frameRate]
+ ].filter(([,value])=>value);
+ return rows.length?'<dl class="record-media-technical" aria-label="'+esc(text('mediaTechnicalHeading'))+'">'+rows.map(([key,value])=>'<dt>'+esc(text(key))+'</dt><dd>'+esc(value)+'</dd>').join('')+'</dl>':'';
 }

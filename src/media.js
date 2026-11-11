@@ -132,6 +132,22 @@ function checkMetadata(info) {
   }
 }
 
+// Technical facts of the original as probed at intake: sample rate, channels,
+// bit depth and duration for sound; pixel size and frame rate for pictures.
+// Values keep ffprobe's exact decimal spelling; nothing is estimated.
+export function mediaTechnical(info,kind){
+  const sound=info.streams?.find(stream=>stream.codec_type==='audio'),visual=info.streams?.find(stream=>stream.codec_type==='video'&&!stream.disposition?.attached_pic);
+  const decimal=value=>typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value)?value:typeof value==='number'&&Number.isFinite(value)&&value>=0?String(value):null;
+  const word=value=>typeof value==='string'&&/^[\w.-]{1,40}$/.test(value)?value:null;
+  const bits=Number(sound?.bits_per_raw_sample||sound?.bits_per_sample||0);
+  const rate=value=>{const match=typeof value==='string'&&/^(\d+)\/(\d+)$/.exec(value);return match&&Number(match[2])?match[1]+'/'+match[2]:null;};
+  const technical={
+    ...(kind!=='image'?{durationSeconds:decimal(info.format?.duration)}:{}),
+    ...(sound?{sampleRate:Number.isSafeInteger(Number(sound.sample_rate))?Number(sound.sample_rate):null,channels:Number.isSafeInteger(sound.channels)?sound.channels:null,channelLayout:word(sound.channel_layout),bitDepth:Number.isSafeInteger(bits)&&bits>0?bits:null,sampleFormat:word(sound.sample_fmt),audioCodec:word(sound.codec_name)}:{}),
+    ...(visual?{width:visual.width,height:visual.height,...(kind==='video'?{frameRate:rate(visual.avg_frame_rate),videoCodec:word(visual.codec_name)}:{codec:word(visual.codec_name)})}:{})
+  };
+  return Object.fromEntries(Object.entries(technical).filter(([,value])=>value!==null&&value!==undefined));
+}
 export class MediaStore {
   constructor(root,vault=null) { this.workspace=root instanceof Workspace?root:new Workspace(root,vault); this.root=this.workspace.root; }
 
@@ -178,7 +194,8 @@ export class MediaStore {
       const preparedFile=new FileContent(this.workspace,output,copy.size,copy.sha256);
       const prepared=svg?null:await memoryInput(preparedFile,url=>probe(url,policy,signal));if(prepared){checkStreams(prepared,kind,policy);checkMetadata(prepared);}
       if(kind!=='image'&&Math.abs(Number(source.format.duration)-Number(prepared.format.duration))>0.5)throw new AppError('MEDIA_INVALID');
-      return {id,kind,extension:profile.extension,mime:profile.mime,bytes:copy.size,sha256:copy.sha256,originalBytes:sourceInfo.size,originalSha256:sourceInfo.sha256};
+      const technical=source?mediaTechnical(source,kind):null;
+      return {id,kind,extension:profile.extension,mime:profile.mime,bytes:copy.size,sha256:copy.sha256,originalBytes:sourceInfo.size,originalSha256:sourceInfo.sha256,...(technical?{technical}:{})};
   }
 
   async metadata(id) {

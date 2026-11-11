@@ -134,6 +134,7 @@ import {ResearchRecords,recordRevisions} from './research.js';
 import {RecordWriting} from './record-writing.js';
 import {RecordSectionCommands} from './record-section-commands.js';
 import {RecordMediaCommands} from './record-media-commands.js';
+import {mediaDetails} from './media-details.js';
 import {RecordFigureCommands} from './record-figure-commands.js';
 import {RecordTagCommands} from './record-tag-commands.js';
 import {RecordValues} from './record-values.js';
@@ -1446,6 +1447,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{req.once('end',()=>req.setTimeout(0));return json(await media.import(req,upload[1],{signal:controller.signal,name:url.searchParams.get('name')}),201);}finally{res.removeListener('close',abort);req.setTimeout(60000);}
         } finally { importing = false; }
+      }
+      // Technical and capture details of one media file.
+      const mediaFacts=/^\/api\/media\/([a-f0-9-]{36})\/(details)$/.exec(url.pathname);
+      if(req.method==='GET'&&mediaFacts){
+        if(url.searchParams.has('context')&&url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+        try{
+          return json(await mediaDetails(media,mediaFacts[1],{signal:controller.signal}));
+        }finally{res.removeListener('close',abort);}
       }
       const mediaRequest = /^\/api\/media\/([a-f0-9-]{36})$/.exec(url.pathname);
       if (req.method === 'GET' && mediaRequest) {

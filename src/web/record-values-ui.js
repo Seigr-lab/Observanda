@@ -31,7 +31,7 @@ export function recordValuesView(options,lifecycle){
  let retainedContributor=null;const media=recordMediaView(options),choices=customFieldChoices({api:options.api,esc,lifecycle});
  const display=base=>base.field==='type'?recordTypeLabel(base.value.value):base.field==='occurredOn'?recordDateLabel(base.value.value):base.field==='status'?text('status_'+base.value.value):base.value.value===null?text('empty'):typeof base.value.value==='boolean'?text(base.value.value?'yes':'no'):base.value.value;
  const relations=recordRelationView(options,lifecycle),figures=recordFigureView(options,lifecycle),attempts=recordAttemptView(options,lifecycle),results=recordResultView(options,lifecycle);return {
-  prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):figureValueId(base.field)?figures.prepare(base,value,input):undefined,
+  prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):figureValueId(base.field)?figures.prepare(base,value,input):mediaValueId(base.field)?media.prepare(base):undefined,
   initialize(base,value,input,changed){if(resultValueId(base.field))results.initialize(base,value,input,changed);else if(attemptValueField(base.field))attempts.initialize(base,value,input,changed);else if(figureValueId(base.field))figures.initialize(base,value,input,changed);},
   checkpoint:options=>figures.checkpoint(options),
   rebase(base,value){if(attemptValueField(base.field))attempts.rebase(base,value);},
