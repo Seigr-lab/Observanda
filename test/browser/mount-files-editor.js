@@ -5,7 +5,8 @@ const web=path.resolve('src/web');
 export async function mountFilesEditor(page,{resource=()=>'',hash='',httpOrigin}={}){
  const origin=httpOrigin??'https://website.test';
  const api=httpOrigin?`async(route,data,{signal,onProgress}={})=>{
-  const res=await fetch(route,{method:'POST',signal,headers:{'Content-Type':'application/json',...(onProgress?{Accept:'application/x-ndjson'}:{})},body:JSON.stringify(data??{})});
+  const binary=data instanceof Blob;
+  const res=await fetch(route,{method:'POST',signal,headers:{'Content-Type':binary?'application/octet-stream':'application/json',...(onProgress?{Accept:'application/x-ndjson'}:{})},body:binary?data:JSON.stringify(data??{})});
   if(!res.ok)throw await res.json();return onProgress?readProgressStream(res,onProgress):res.json();}`:
   `async(route,data)=>{const response=await window.filesAPI(route,data);if(response?.errorCode)throw Object.assign(Error(response.message),{code:response.errorCode});return response;}`;
  await page.context().route(origin+'/**',async route=>{

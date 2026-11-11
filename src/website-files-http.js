@@ -41,11 +41,29 @@ import {websiteReleaseOverview} from './website-release-overview.js';
 import {websiteDiscovery} from './website-discovery-settings.js';
 import {websiteReview,assertPublicationApproval} from './website-review.js';
 import {readVersionIndex} from './website-version-retention.js';
+import {exportWebsiteDesign} from './website-design-package.js';
+import {applyWebsiteDesign,reviewWebsiteDesign} from './website-design-import.js';
+import {designArchiveLimits,designPackageExtension,designPackageType} from './website-design-archive.js';
+import {zipStream} from './zip-stream.js';
+import {withOperationProgress} from './operation-progress.js';
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 
 const prefix='/api/website-files/';
 const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
+// A design upload is length-prefixed JSON followed by the package bytes.
+async function designUpload(req,signal){
+ const parts=[];let size=0;
+ for await(const chunk of req){signal?.throwIfAborted();size+=chunk.length;if(size>designArchiveLimits.archive+64*1024)throw new AppError('LIMIT');parts.push(chunk);}
+ const bytes=Buffer.concat(parts,size);if(bytes.length<4)throw new AppError('INVALID');
+ const length=bytes.readUInt32BE(0);if(!length||length>64*1024||4+length>bytes.length)throw new AppError('INVALID');
+ let data;try{data=JSON.parse(bytes.subarray(4,4+length).toString('utf8'));}catch{throw new AppError('INVALID');}
+ if(!data||typeof data!=='object'||Array.isArray(data)||!researchId(data.siteId))throw new AppError('INVALID');
+ return {data,bytes:bytes.subarray(4+length)};
+}
+const designFileName=name=>(name.normalize('NFKD').replace(/[^\w .-]+/g,'').replace(/\s+/g,' ').trim().slice(0,80)||'website')+designPackageExtension;
 async function sshReview(metadata,id,revision,etag){
  const value=JSON.parse(await metadata.readMetadata(sshReviewKey,8192));
  if(!value||value.id!==id||value.revision!==revision||value.configEtag!==etag)throw new AppError('PUBLISH_STALE');
@@ -110,6 +128,20 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
     await check();const candidate=await WebsiteFilesCandidate.open(store,siteId,expectedRevision,{blockedValues});await candidate.verify(options);return candidate.files;
    }));return true;
   }
+  if(req.method==='GET'&&operation==='designs/export'){
+   const siteId=url.searchParams.get('siteId'),expectedRevision=url.searchParams.get('revision');
+   if(!researchId(siteId)||!revision(expectedRevision))throw new AppError('INVALID');
+   const labels={heading:url.searchParams.get('heading'),text:url.searchParams.get('text'),image:url.searchParams.get('image')};
+   const activity=req.operationActivity?.(),socket=req.socket,timeout=socket.timeout;res.setTimeout(0);
+   try{
+    const result=await withOperationProgress(value=>activity?.progress(value),()=>operationStage('designPackageExport',{unit:'files'},()=>exportWebsiteDesign(store,siteId,{expectedRevision,includeDrafts:url.searchParams.get('drafts')==='1',labels,blockedValues,signal})));
+    await check();
+    res.writeHead(200,{'Content-Type':designPackageType,'Content-Disposition':'attachment; filename="'+designFileName(result.name)+'"','Cache-Control':'no-store'});
+    await pipeline(Readable.from(zipStream(result.members)),res,{signal});activity?.finish();
+   }catch(error){activity?.finish(signal.aborted?new AppError('WRITE_CANCELLED'):error);throw error;}
+   finally{if(!socket.destroyed)socket.setTimeout(timeout??60000);}
+   return true;
+  }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
   if(operation==='media/save'&&req.method==='POST'){
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
@@ -117,6 +149,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    json(await saveRecordingUpload(store,upload,{signal,check,recoverInput:ref=>websiteRecoveryInput(store,upload.data.siteId,{...ref,path:upload.data.path,slot:'upload',signal})}));return true;
   }
   if(req.method==='GET'&&!['session','preparation','list','library','pdf-version'].includes(operation))throw new AppError('NOT_FOUND');
+  if((operation==='designs/import/review'||operation==='designs/import/apply')&&req.method==='POST'){
+   if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
+   const apply=operation==='designs/import/apply';if(apply){onWrite();await check();}
+   const {data,bytes}=await designUpload(req,signal),request={expectedRevision:data.expectedRevision,path:data.path,options:data.options,reviewId:data.reviewId,bytes,blockedValues,signal};
+   if(!apply){json(await reviewWebsiteDesign(store,data.siteId,request));return true;}
+   await observed(()=>applyWebsiteDesign(store,data.siteId,request));return true;
+  }
   if(operation==='recovery/save-inputs'){
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
    await check();json(await writeRecordingDraft(store,req,{save:saveWebsiteRecovery,register:registerRecoveryWrite,finishDraft:finishRecoveryInputs},{signal}));return true;

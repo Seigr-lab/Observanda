@@ -458,5 +458,7 @@
   "PUBLISH_ARCHIVE_BRANCH": "La rama de archivo no está disponible o ha cambiado. Elige un nombre de rama sin utilizar y revisa de nuevo el repositorio. No se sobrescribirá ninguna rama existente.",
   "ACCESS_STATE_CHANGED": "Estos ajustes de acceso no constan en el historial de confianza de este dispositivo. Revisa e importa los ajustes de acceso actuales desde un dispositivo de confianza antes de abrir esta copia.",
   "ACCESS_SAVE_UNCERTAIN": "Se interrumpió el guardado de los ajustes de acceso. Puede que las nuevas credenciales ya estén activas. Vuelve a abrir el espacio de trabajo y prueba primero las nuevas credenciales.",
-  "WEBSITE_APPROVAL_REQUIRED": "Este sitio web requiere una revisión aprobada de la edición guardada actual antes de publicarse. Solicita una revisión o pide a una persona revisora que la apruebe."
+  "WEBSITE_APPROVAL_REQUIRED": "Este sitio web requiere una revisión aprobada de la edición guardada actual antes de publicarse. Solicita una revisión o pide a una persona revisora que la apruebe.",
+  "WEBSITE_DESIGN_PACKAGE": "Este archivo no es un paquete de diseño de sitio web utilizable. Vuelve a exportar el diseño y elige el archivo nuevo.",
+  "WEBSITE_DESIGN_VERSION": "Este paquete de diseño se creó con una versión más reciente de Observanda. Actualiza Observanda para importarlo."
 }

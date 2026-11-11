@@ -39,6 +39,33 @@ function summary(manifest,path){
  };
 }
 
+// Rewrites the pages whose resolved regions differ between two site states
+// (the saved `manifest` and `next`, with its new regions and components) and
+// returns `next` with those pages, their files and the managed region files.
+export async function placeChangedRegions(store,id,manifest,next,{signal,stage}={}){
+ checkRegionVisibility(next,manifest.pages);
+ const context=componentContext(next),scripts=new Set([...await store.scripts(manifest.files),REGION_SCRIPT]),files=new Map(next.files.map(file=>[file.name,file])),pages=[];
+ operationTotal(manifest.pages.length);
+ for(const page of manifest.pages){
+  signal?.throwIfAborted();
+  const before=resolveRegions(manifest,page.path),after=resolveRegions(next,page.path);
+  if(same(before,after)){pages.push(page);operationAdvance(1,stage);continue;}
+  const text=await store.readText(files.get(page.path),{signal});
+  checkComponentInstances(text,page,componentContext(manifest));
+  const placed=writePageRegions(text,page,after,context,randomUUID);
+  const pictures=new Set(),recordings=new Set();validateWebsiteHTML(placed.html,{file:page.path,scripts,pictures,recordings});
+  const changed={...page,pictures:[...pictures],recordings:[...recordings]};
+  if(placed.instances.length)changed.instances=placed.instances;else delete changed.instances;
+  checkComponentInstances(placed.html,changed,context);
+  files.set(page.path,await store.siteFile(id,page.path,placed.html,{draft:page.draft,signal}));pages.push(changed);
+  operationAdvance(1,stage);
+ }
+ const candidate={...next,pages};
+ for(const name of REGION_FILES)files.delete(name);
+ for(const file of await regionFiles(store,id,candidate,{signal}))files.set(file.name,file);
+ candidate.files=[...files.values()];
+ return candidate;
+}
 export function regionOperation(store,operation,id,options={}){
  const {expectedRevision,path='index.html',signal}=options;
  if(!revision(expectedRevision)||!['list','assign'].includes(operation))fail();
@@ -51,27 +78,7 @@ export function regionOperation(store,operation,id,options={}){
   if(scope==='page'&&!manifest.pages.some(page=>page.path===target))throw new AppError('NOT_FOUND');
   const regions=changeRegions(manifest,{slot,scope,path:target,component,settings}),next={...manifest,regions};
   if(!Object.keys(regions.slots).length&&!regions.overrides.length)delete next.regions;
-  checkRegionVisibility(next,manifest.pages);
-  const context=componentContext(next),scripts=new Set([...await store.scripts(manifest.files),REGION_SCRIPT]),files=new Map(manifest.files.map(file=>[file.name,file])),pages=[];
-  operationTotal(manifest.pages.length);
-  for(const page of manifest.pages){
-   signal?.throwIfAborted();
-   const before=resolveRegions(manifest,page.path),after=resolveRegions(next,page.path);
-   if(same(before,after)){pages.push(page);operationAdvance(1,'regionSave');continue;}
-   const text=await store.readText(files.get(page.path),{signal});
-   checkComponentInstances(text,page,componentContext(manifest));
-   const placed=writePageRegions(text,page,after,context,randomUUID);
-   const pictures=new Set(),recordings=new Set();validateWebsiteHTML(placed.html,{file:page.path,scripts,pictures,recordings});
-   const changed={...page,pictures:[...pictures],recordings:[...recordings]};
-   if(placed.instances.length)changed.instances=placed.instances;else delete changed.instances;
-   checkComponentInstances(placed.html,changed,context);
-   files.set(page.path,await store.siteFile(id,page.path,placed.html,{draft:page.draft,signal}));pages.push(changed);
-   operationAdvance(1,'regionSave');
-  }
-  const candidate={...next,pages};
-  for(const name of REGION_FILES)files.delete(name);
-  for(const file of await regionFiles(store,id,candidate,{signal}))files.set(file.name,file);
-  candidate.files=[...files.values()];
+  const candidate=await placeChangedRegions(store,id,manifest,next,{signal,stage:'regionSave'});
   await store.assertSources(candidate);
   return store.present(await store.commit(candidate,{signal}),path,{signal});
  },{write:operation!=='list',signal});

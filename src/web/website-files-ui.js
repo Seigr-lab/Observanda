@@ -32,6 +32,7 @@ import {websiteFilesDiscovery} from './website-files-discovery.js';
 import {websiteFilesReview} from './website-files-review.js';
 import {websiteFilesMenu} from './website-files-menu.js';
 import {websiteFilesRegions} from './website-files-regions.js';
+import {websiteFilesDesignExchange} from './website-files-design-exchange.js';
 import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
 import {websitePlacementDrag} from './website-files-placement-drag.js';
@@ -149,6 +150,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const versions=websiteFilesVersions({site:()=>opened,esc,tr,request,signal:()=>controller?.signal,render,run,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
+ const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
@@ -609,7 +611,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
   return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site')+button('versionsTitle','versions'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
-   extraTools('siteDesignTools',button('menu','menu')+button('regions','regions')+button('siteAppearance','appearance')+button('designThemes','themes')+button('styleLibrary','styles'))+
+   extraTools('siteDesignTools',button('menu','menu')+button('regions','regions')+button('siteAppearance','appearance')+button('designThemes','themes')+button('styleLibrary','styles')+button('designExchange','exchange'))+
    extraTools('siteReleaseTools',button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
  function unopenedView(){
@@ -627,8 +629,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const title=opened?.site.name??tr('title');
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
-  const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','regions','destination','folder'].includes(mode);
-  const currentTask=({menu:'menu',regions:'regions',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';
+  const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','regions','exchange','destination','folder'].includes(mode);
+  const currentTask=({menu:'menu',regions:'regions',exchange:'designExchange',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';
   const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
@@ -641,6 +643,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='destination')body=destinationView();
   else if(mode==='menu')body=menu.view();
   else if(mode==='regions')body=regions.view();
+  else if(mode==='exchange')body=exchange.view();
   else if(mode==='pages')body=pagesPanel.view();
   else if(mode==='versions')body=versions.view();
   else if(mode==='releases')body=releases.view();
@@ -733,6 +736,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   hierarchy.bindHost(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
+  if(mode==='exchange')exchange.bind();
   const preview=document.getElementById('website-files-preview');
   if(preview){
    const entry=trail[step]??{path:opened.path,hash:''};
@@ -956,6 +960,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation.startsWith('pages-'))await pagesPanel.handle(operation,element);
    else if(operation==='regions'){if(await beforeLeave(true)){await regions.open();mode='regions';render();}}
    else if(operation.startsWith('regions-'))await regions.handle(operation,element);
+   else if(operation==='exchange'){if(await beforeLeave(true)){exchange.reset();mode='exchange';render();}}
+   else if(operation.startsWith('exchange-'))await exchange.handle(operation,element);
    else if(operation==='menu')await openMenu(element.dataset.menuId||null);
    else if(operation.startsWith('menu-'))await menu.handle(operation,element);
    else if(operation.startsWith('picker-'))await picker.action(operation,element);
