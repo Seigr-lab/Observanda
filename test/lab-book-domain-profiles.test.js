@@ -134,3 +134,10 @@ test('research and development version 2 records hypotheses, experiments with me
 test('no lab book type is left as a skeleton of two fields per section',()=>{
  for(const profile of laboratoryProfiles)assert.ok(profile.sections.reduce((sum,s)=>sum+s.fields.length,0)>profile.sections.length*2,profile.id);
 });
+
+test('arts and audio software track works, collection items and plug-ins',()=>{
+ tracks('arts-creative',{subjects:['works','collections'],primary:'sessions',events:['studies','sessions','presentations','loans','reflection'],formats:{}});
+ const audio=tracks('audio-software',{subjects:['plugin'],primary:'host-test',events:['dsp','build','host-test','listening','release'],formats:{'plugin/identifier':'identifier','build/artefact-sha256':'sha-256','host-test/binary-sha256':'sha-256','release/release-sha256':'sha-256'}});
+ assert.equal(audio.version,2);assert.equal(audio.introduced.sections.plugin,2);
+ assert.ok(laboratoryProfiles.every(profile=>profile.tracking),'every lab book type tracks its subjects');
+});
