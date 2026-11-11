@@ -19,6 +19,8 @@ import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
 import {publicationDraftCommand} from './publication-fixture.js';
 import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 
 const column=(name,representation='text',extra={})=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''},...extra});
 const mapping={x:0,xKind:'category',values:[{column:2,error:null}],group:1,operation:'mean',kind:'bar',order:'source',mode:'replace',decimal:'.'};
@@ -138,21 +140,24 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  await assert.rejects(restored.artifact(tableArtifact),{code:'ENCRYPTION_DAMAGED'});
 });
 
-test('creative takes use the same references and datasets without hypotheses or pass/fail criteria',async()=>{
+test('creative takes use the same references and datasets without hypotheses or pass/fail criteria',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-takes-')),book=upgradeNotebook(sampleNotebook()),take=book.entries[2];
  take.type='run';take.title='Curtains closed â€” take 2';take.status='incomplete';take.sections=[{id:randomUUID(),title:'Observed deviations',body:'The final phrase was interrupted.'}];
- const ws=new Workspace(root);await ws.create(book);const store=new ResearchMaterials(ws);
+ // Evidence datasets live in the encrypted research catalogue every workspace now has.
+ const {workspace:ws,vault}=await encryptedFixture(root,book);t.after(()=>clearVault(vault));const store=new ResearchMaterials(ws);
  const original=await upload(store,take.id,'takes.tsv',Buffer.from('Take\tLevel\nFirst\t0.30\nSecond\t\n'));
  const data=await store.dataset({recordId:take.id,title:'Listening notes',artifact:original,columns:[column('Take'),column('Level','decimal')]});
  assert.equal((await store.datasetRows(data))[1].cells[1],'');
  const result=await store.plot({recordId:take.id,title:'Listening comparison',dataset:data,mapping:{...mapping,group:null,values:[{column:1,error:null}],operation:'raw'}});
- assert.equal(result.figure.series[0].points[1].y,null);
+ // Calculated plots are retained figure documents; read the stored observations.
+ const plotted=await new RetainedFigureDocuments(ws,{readOnly:true}).open(result.figure),points=(await plotted.window({collection:'points',limit:2})).items;
+ assert.equal(points.length,2);assert.equal(points[1].value.y,null);
  assert.equal((await ws.read()).book.entries.find(e=>e.id===take.id).status,'incomplete');
 });
 
-test('new reference semantics are version gated and invalid tables keep their originals',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-format-')),book=upgradeNotebook(sampleNotebook()),ws=new Workspace(root);
- await ws.create(book);const store=new ResearchMaterials(ws),record=book.entries[0],pinned=await store.pinRecord(record.id,recordRevision(record));
+test('new reference semantics are version gated and invalid tables keep their originals',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-format-')),book=upgradeNotebook(sampleNotebook()),{workspace:ws,vault}=await encryptedFixture(root,book);
+ t.after(()=>clearVault(vault));const store=new ResearchMaterials(ws),record=book.entries[0],pinned=await store.pinRecord(record.id,recordRevision(record));
  const older=structuredClone(book);older.formatVersion=16;older.entries[1].relations=[{id:randomUUID(),type:'Uses',target:{...pinned,workspaceId:book.id},label:'Retained'}];
  assert.throws(()=>validateNotebook(older),{code:'INVALID'});
  const bytes=Buffer.from([0xff,0xfe,0,0,60,115,99,114,105,112,116,62]),artifact=await upload(store,record.id,'opaque-script.html',bytes);
