@@ -2,7 +2,7 @@
   "title": "GitHub-tilkopling",
   "loading": "Kontrollerer GitHub-tilkoplingane på denne datamaskina…",
   "description": "Logg inn på GitHub med ein eingongskode. GitHub identifiserer autoriseringsverktøyet som Git Credential Manager.",
-  "privacy": "Påloggingsopplysningar blir verna av legitimasjonslageret på denne datamaskina. Dei blir ikkje sende til Seigr eller inkluderte i kopiar av arbeidsområdet eller publiserte nettstader.",
+  "privacy": "Påloggingsopplysningar blir verna av legitimasjonslageret på denne datamaskina. Dei blir berre brukte til å kople til GitHub og blir ikkje inkluderte i kopiar av arbeidsområdet eller publiserte nettstader.",
   "permissions": "Git Credential Manager ber om tilgang til repositorium, arbeidsflytar og gistar. Organisasjonen din kan krevje godkjenning før repositoria blir tilgjengelege.",
   "signIn": "Logg inn med GitHub",
   "another": "Logg inn med ein annan konto",

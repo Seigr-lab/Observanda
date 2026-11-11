@@ -2,7 +2,7 @@
   "title": "Conexión con GitHub",
   "loading": "Comprobando las conexiones de GitHub de este ordenador…",
   "description": "Inicia sesión en GitHub con un código de un solo uso. GitHub identificará el asistente de autorización como Git Credential Manager.",
-  "privacy": "Las credenciales están protegidas por el almacén de credenciales de este ordenador. No se envían a Seigr ni se incluyen en copias del espacio de trabajo o sitios web publicados.",
+  "privacy": "Las credenciales están protegidas por el almacén de credenciales de este ordenador. Solo se usan para conectar con GitHub y no se incluyen en copias del espacio de trabajo ni en sitios web publicados.",
   "permissions": "Git Credential Manager solicita acceso a repositorios, flujos de trabajo y gists. Tu organización puede requerir aprobación antes de que sus repositorios estén disponibles.",
   "signIn": "Iniciar sesión con GitHub",
   "another": "Iniciar sesión con otra cuenta",

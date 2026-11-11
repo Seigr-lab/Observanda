@@ -2,7 +2,7 @@
   "title": "GitHub connection",
   "loading": "Checking this computer’s GitHub connections…",
   "description": "Sign in on GitHub with a one-time code. GitHub will identify the authorization helper as Git Credential Manager.",
-  "privacy": "Credentials are protected by this computer’s credential store. They are not sent to Seigr or included in workspace copies or published websites.",
+  "privacy": "Credentials are protected by this computer’s credential store. They are used only to reach GitHub and are not included in workspace copies or published websites.",
   "permissions": "Git Credential Manager requests repository, workflow and gist access. Your organization may require approval before its repositories are available.",
   "signIn": "Sign in with GitHub",
   "another": "Sign in with another account",
