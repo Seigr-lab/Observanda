@@ -1,3 +1,5 @@
+import {qualityAssessment,qualityDay} from './resource-quality.js';
+import {qualityText,readinessText,retainedQualityText} from './resource-quality-presentation.js';
 import {m,inventoryLocation,statusLabel} from './editor-presentation.js';
 import {stockTracked,assetPlacement,inventoryLocations,inventoryOwner,inventoryQuantity,inventoryBOMUsage,inventoryScope} from './inventory-model.js';
 import {balance,compare,negate,add} from './quantities.js';
@@ -49,11 +51,11 @@ export function inventoryStockSection(c){
  const reservations=c.inventory?c.inventory.rows('reservations'):c.all('reservation').filter(e=>e.data.resourceId===d.id),events=c.inventory?c.inventory.rows('movements'):c.all().filter(e=>['movement','stock-transfer','asset-transfer'].includes(e.type)&&e.data.resourceId===d.id).toReversed();
  const operations=tracked?[['receive',m('receive')],['transfer',m('transferStock')],['consume',m('consume')],['reserve',m('reserve')],['adjust',m('reconcile')]]:[['assign',m('moveItem')]];
  return `<section class="module-block"><h2>${esc(tracked?m('stockAllocations'):m('placement'))}</h2><p>${esc(m('ownedBy',{owner:inventoryOwner(book,v.projectId)}))}</p>${inventoryCardFacts(resource,c)}${tracked&&(c.scopeId||!c.recursive)?inventoryBreakdown(resource,c):''}<div class="module-actions">${operations.map(([id,label])=>button(label,'stock-operation',`data-operation="${id}"`)).join('')}</div></section>
-  ${tracked?`<section class="module-block"><h2>${esc(m('reservations'))}</h2>${reservations.map(r=>`<article class="module-ledger"><div><strong>${esc(r.data.quantity+' '+v.unit)}</strong><p>${esc(r.data.reason)}</p><small>${esc(inventoryLocation(book,Object.hasOwn(r.data,'projectId')?r.data.projectId:v.projectId))} · ${esc(statusLabel(r.data.status))}</small></div>${(c.inventory?c.inventory.managed(r.id):c.all('bom').some(b=>b.data.allocations.some(a=>a.reservationId===r.id)))?c.links(r.data.links.filter(l=>l.type==='bom')):r.data.status==='active'?`<div class="module-actions">${button(m('consumeReserved'),'resolve-stock',`data-id="${r.id}" data-decision="consume"`)}${button(m('release'),'resolve-stock',`data-id="${r.id}" data-decision="release"`)}</div>`:''}</article>`).join('')||'<p>'+esc(m('noReservations'))+'</p>'}${c.inventory?.navigation('reservations')??''}</section>`:''}
+  ${tracked?`<section class="module-block"><h2>${esc(m('reservations'))}</h2>${reservations.map(r=>`<article class="module-ledger"><div><strong>${esc(r.data.quantity+' '+v.unit)}</strong><p>${esc(r.data.reason)}</p>${r.data.status==='active'&&v.quality?'<p>'+esc(qualityText('currentUse')+' · '+readinessText(qualityAssessment(v.quality,'use',qualityDay(new Date().toISOString())),v.quality))+'</p>':''}${r.data.qualityAtUse?'<details><summary>'+esc(qualityText('atReservation'))+'</summary><p>'+esc(retainedQualityText(r.data.qualityAtUse))+'</p></details>':''}<small>${esc(inventoryLocation(book,Object.hasOwn(r.data,'projectId')?r.data.projectId:v.projectId))} · ${esc(statusLabel(r.data.status))}</small></div>${(c.inventory?c.inventory.managed(r.id):c.all('bom').some(b=>b.data.allocations.some(a=>a.reservationId===r.id)))?c.links(r.data.links.filter(l=>l.type==='bom')):r.data.status==='active'?`<div class="module-actions">${button(m('consumeReserved'),'resolve-stock',`data-id="${r.id}" data-decision="consume"`)}${button(m('release'),'resolve-stock',`data-id="${r.id}" data-decision="release"`)}</div>`:''}</article>`).join('')||'<p>'+esc(m('noReservations'))+'</p>'}${c.inventory?.navigation('reservations')??''}</section>`:''}
   <section class="module-block"><h2>${esc(tracked?m('stockLedger'):m('placementHistory'))}</h2>${events.map(e=>{
    const v=e.data,transfer=e.type!=='movement',title=transfer?(e.type==='stock-transfer'?m('quantityTransferred',{quantity:v.quantity+' '+v.unit}):m('itemMoved')):v.delta+' '+v.unit;
    const location=transfer?inventoryLocation(book,v.fromProjectId)+' → '+inventoryLocation(book,v.toProjectId):inventoryLocation(book,Object.hasOwn(v,'projectId')?v.projectId:resource.data.projectId);
-   return `<article class="module-ledger"><div><strong>${esc(title)}</strong><p>${esc(location)}</p><p>${esc(v.reason)}</p>${c.links(v.links)}</div><time>${esc(new Date(e.createdAt).toLocaleString(appLanguage()))}</time></article>`;
+   return `<article class="module-ledger"><div><strong>${esc(title)}</strong><p>${esc(location)}</p><p>${esc(v.reason)}</p>${v.qualityAtUse?'<p>'+esc(retainedQualityText(v.qualityAtUse))+'</p>':''}${c.links(v.links)}</div><time>${esc(new Date(e.createdAt).toLocaleString(appLanguage()))}</time></article>`;
   }).join('')||'<p>'+esc(m('noMovements'))+'</p>'}${c.inventory?.navigation('movements')??''}</section>`;
 }
 export async function inventoryStockAction(name,node,c){
@@ -78,6 +80,7 @@ export async function inventoryStockSubmit(form,c){
  else{
   payload.projectId=placeId(values.projectId);
   if(op.kind==='reserve')payload.quantity=quantity;else payload.delta=op.kind==='consume'?negate(quantity):quantity;
+  if(r.data.quality&&payload.delta&&compare(payload.delta,'0')<0)payload.useKind=op.kind==='consume'?'used':'adjusted';
   if(op.kind!=='adjust'&&quantity.startsWith('-'))throw new Error(m('positiveQuantity'));
   await c.command(op.kind==='reserve'?'stock.reserve':'stock.move',payload);
  }

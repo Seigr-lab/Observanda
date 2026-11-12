@@ -5,6 +5,7 @@ import {inventoryOperationHash} from './inventory-operation-store.js';
 import {add,compare,negate} from './web/modules/quantities.js';
 import {requireValue} from './modules/validation.js';
 import {AppError} from './errors.js';
+import {observedResourceQuality} from './modules/resource-quality.js';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bomRef=intent=>({workspaceId:intent.workspaceId,type:'bom',id:intent.bomId});
 const participantIntent=(intent,p)=>({version:1,id:intent.id,role:'participant',workspaceId:p.workspaceId,bom:bomRef(intent),action:intent.action,planHash:inventoryOperationHash(intent),reservationOperationId:intent.reservationOperationId,lines:p.lines,at:intent.at});
@@ -19,27 +20,34 @@ export async function prepareInventoryParticipant(storage,namespace,intent,p,opt
   const {journal}=tx,plan=participantIntent(intent,p);await journal.once('intent',intent.id,plan);
   const terminal=await journal.read('receipt',intent.id);if(terminal)return {terminal:true,outcome:terminal.outcome};
   const retained=await journal.read('prepared',intent.id);if(retained)return retained;
-  let evidence=null;
+  let evidence=null;const usageQuality=[];
   if(intent.action==='reserve'){
-   const book=await tx.book(),written=await tx.event(phaseCommand(intent,namespace,'prepare'),async({get,put,source})=>{
+   const book=await tx.book(),written=await tx.event(phaseCommand(intent,namespace,'prepare'),async({get,put,source,now})=>{
     for(const line of p.lines){const r=await get(line.resourceId);requireValue(r?.type==='resource'&&r.revision===line.resourceRevision,'The stock item changed','MODULE_CHANGED');requireValue(r.data.kind==='material'&&r.data.unit===line.unit&&r.data.status==='available','The selected material is unavailable','STOCK_UNAVAILABLE');requireValue(line.sourceProjectId===null||book.projects.some(v=>v.id===line.sourceProjectId),'The stock placement changed','MODULE_CHANGED');}
     for(const line of p.lines){
      const balance=await source.balance(line.resourceId,new Set([line.sourceProjectId]));requireValue(compare(balance.available,line.quantity)>=0,'The location has insufficient available stock','STOCK_UNAVAILABLE');
      if(await get(line.reservationId))throw new AppError('MODULE_CHANGED');
-     await put('reservation',line.reservationId,{resourceId:line.resourceId,projectId:line.sourceProjectId,quantity:line.quantity,unit:line.unit,reason:'Reserved for linked bill of materials',status:'active',links:[bomRef(intent)],managed:{version:1,bom:bomRef(intent),operationId:intent.id,lineId:line.lineId,planHash:plan.planHash}});
-     const resource=await get(line.resourceId);await put('resource',resource.id,resource.data);
+     const resource=await get(line.resourceId);
+     await put('reservation',line.reservationId,{resourceId:line.resourceId,projectId:line.sourceProjectId,quantity:line.quantity,unit:line.unit,reason:'Reserved for linked bill of materials',status:'active',links:[bomRef(intent)],...observedResourceQuality(resource,'reserve',now),managed:{version:1,bom:bomRef(intent),operationId:intent.id,lineId:line.lineId,planHash:plan.planHash}});
+     await put('resource',resource.id,resource.data);
     }
    });evidence=written.evidence;
    for(const line of p.lines)await journal.write('live',line.reservationId,pointer(line.reservationId,intent.id));
   }else{
+   const observedAt=new Date().toISOString();
    for(const line of p.lines){
     const reservation=await tx.selected(line.reservationId);checkManaged(reservation,intent,line);
     const claim=await journal.read('claim',line.reservationId);if(claim&&claim.operationId!==intent.id)throw new AppError('INVENTORY_OPERATION_BUSY');
-    if(intent.action==='finish'&&compare(add(line.used,line.scrapped),'0')>0){const resource=await tx.selected(line.resourceId);requireValue(resource?.data.status==='available','The selected material is unavailable','STOCK_UNAVAILABLE');}
+    if(intent.action==='finish'&&compare(add(line.used,line.scrapped),'0')>0){
+     const resource=await tx.selected(line.resourceId);requireValue(resource?.data.status==='available','The selected material is unavailable','STOCK_UNAVAILABLE');
+     // Only actual use meets the lot's use rule; scrapping disposes of stock, like a reconciliation.
+     const {qualityAtUse}=compare(line.used,'0')>0?observedResourceQuality(resource,'use',observedAt):{};
+     if(qualityAtUse)usageQuality.push({lineId:line.lineId,qualityAtUse});
+    }
     await journal.write('claim',line.reservationId,pointer(line.reservationId,intent.id));
    }
   }
-  const prepared={version:1,id:intent.id,planHash:plan.planHash,evidence};await journal.once('prepared',intent.id,prepared);await journal.write('pending',intent.id,pointer(intent.id,intent.id));return prepared;
+  const prepared={version:1,id:intent.id,planHash:plan.planHash,evidence,...(usageQuality.length?{usageQuality}:{})};await journal.once('prepared',intent.id,prepared);await journal.write('pending',intent.id,pointer(intent.id,intent.id));return prepared;
  });
 }
 export async function applyInventoryParticipant(storage,namespace,intent,p,decision,options){
@@ -55,7 +63,8 @@ export async function applyInventoryParticipant(storage,namespace,intent,p,decis
      const finishing=intent.action==='finish'&&decision.outcome==='commit',used=finishing?line.used:'0',scrapped=finishing?line.scrapped:'0',total=add(used,scrapped),status=compare(total,'0')===0?'released':compare(total,line.quantity)===0?'consumed':'settled';
      const managed={...reservation.data.managed,...(intent.action!=='reserve'?{settlement:{operationId:intent.id,action:intent.action,decisionHash:inventoryOperationHash(decision),used,scrapped}}:{})};
      await put('reservation',reservation.id,{...reservation.data,status,managed});
-     for(const [kind,quantity] of [['used',used],['scrapped',scrapped]])if(compare(quantity,'0')>0)await put('movement',inventoryPhaseId(intent.id,namespace,kind+'/'+line.lineId),{resourceId:line.resourceId,projectId:line.sourceProjectId,delta:negate(quantity),unit:line.unit,reason:kind==='used'?'Used in linked bill of materials':'Scrapped in linked bill of materials',links:[bomRef(intent)],reservationId:reservation.id});
+     const qualityAtUse=prepared.usageQuality?.find(value=>value.lineId===line.lineId)?.qualityAtUse;
+     for(const [kind,quantity] of [['used',used],['scrapped',scrapped]])if(compare(quantity,'0')>0)await put('movement',inventoryPhaseId(intent.id,namespace,kind+'/'+line.lineId),{resourceId:line.resourceId,projectId:line.sourceProjectId,delta:negate(quantity),unit:line.unit,reason:kind==='used'?'Used in linked bill of materials':'Scrapped in linked bill of materials',links:[bomRef(intent)],reservationId:reservation.id,...(qualityAtUse&&kind==='used'?{qualityAtUse,useKind:kind}:{})});
      const resource=await get(line.resourceId);await put('resource',resource.id,resource.data);
     }
    });evidence=written.evidence;

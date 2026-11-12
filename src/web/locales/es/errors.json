@@ -463,6 +463,7 @@
   "PDF_TEMPLATE_COMPONENT": "Esta plantilla contiene un componente no admitido o una versión de fuente no disponible. Revisa el formato, las secciones y la tipografía antes de importarla.",
   "PDF_LIBRARY_NAME_USED": "Este nombre ya está en uso. Elige otro nombre para la colección o etiqueta.",
   "PDF_LIBRARY_GROUP_USED": "Este grupo contiene documentos. Quita los documentos del grupo antes de eliminarlo.",
+  "RESOURCE_QUALITY_BLOCK": "La regla de aptitud bloquea el lote o el equipo seleccionado.",
   "PDF_FONT_SUBSTITUTED": "Este objeto contiene texto que se imprime con una fuente de sustitución. Elige una fuente que incluya esos caracteres.",
   "PDF_UNMAPPED_GLYPH": "La tipografía impresa no puede representar algunos caracteres como texto Unicode que se pueda buscar en este perfil. Para el árabe, selecciona Scheherazade New en el texto afectado. También puedes elegir otra tipografía o el PDF estándar.",
   "WEBSITE_DESIGN_PACKAGE": "Este archivo no es un paquete de diseño de sitio web utilizable. Vuelve a exportar el diseño y elige el archivo nuevo.",

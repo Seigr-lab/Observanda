@@ -1,4 +1,6 @@
 import {validTaskDependencies,localTaskDependency,validTaskObservations,sameTaskObservations,taskPrerequisiteEffect} from '../web/task-prerequisite-model.js';
+import {observedResourceQuality,validObservedQuality} from './resource-quality.js';
+import {revisionText} from '../web/revision-model.js';
 import {ownedShape,checkOwner} from './ownership.js';
 import {planningConstraintTypes,validatePlanningSource} from './planning-constraints.js';
 import {prose} from './validation.js';
@@ -7,7 +9,7 @@ export function validateTask(d,{workspaceId,completion=true}={}){
  requireValue(ownedShape(d,['title','description','status','priority','dueOn','assignees','checklist','dependencies','links',...(Object.hasOwn(d,'prerequisiteObservations')?['prerequisiteObservations']:[])])&&text(d.title,240,true)&&prose(d.description,100000)&&['todo','doing','done','cancelled'].includes(d.status)&&['low','normal','high'].includes(d.priority)&&(d.dueOn===null||date(d.dueOn))&&Array.isArray(d.assignees)&&d.assignees.every(v=>text(v,160,true))&&unique(d.assignees)&&Array.isArray(d.checklist)&&d.checklist.every(c=>exact(c,['id','text','done'])&&uuid(c.id)&&text(c.text,2000,true)&&typeof c.done==='boolean')&&unique(d.checklist.map(c=>c.id))&&validTaskDependencies(d.dependencies,workspaceId)&&linksValid(d.links)&&(!completion||validTaskObservations(d,workspaceId)),'Task details');
 }
 export function validateBooking(d){
- requireValue(ownedShape(d,['title','resourceId','startsAt','endsAt','timeZone','places','kind','status','notes','links'])&&text(d.title,240,true)&&uuid(d.resourceId)&&instant(d.startsAt)&&instant(d.endsAt)&&d.startsAt<d.endsAt&&text(d.timeZone,80,true)&&Number.isSafeInteger(d.places)&&d.places>0&&['work','maintenance'].includes(d.kind)&&['confirmed','cancelled'].includes(d.status)&&prose(d.notes,100000)&&linksValid(d.links),'Booking details');
+ requireValue(ownedShape(d,['title','resourceId','startsAt','endsAt','timeZone','places','kind','status','notes','links',...(Object.hasOwn(d,'qualityAtReservation')?['qualityAtReservation']:[])])&&(!Object.hasOwn(d,'qualityAtReservation')||validObservedQuality(d.qualityAtReservation,d.resourceId)&&d.qualityAtReservation.workflow==='reserve')&&text(d.title,240,true)&&uuid(d.resourceId)&&instant(d.startsAt)&&instant(d.endsAt)&&d.startsAt<d.endsAt&&text(d.timeZone,80,true)&&Number.isSafeInteger(d.places)&&d.places>0&&['work','maintenance'].includes(d.kind)&&['confirmed','cancelled'].includes(d.status)&&prose(d.notes,100000)&&linksValid(d.links),'Booking details');
  try{new Intl.DateTimeFormat('en',{timeZone:d.timeZone});}catch{requireValue(false,'Time zone');}
 }
 export function validatePlanning(entities,{workspaceId}={}){
@@ -52,10 +54,14 @@ export const planningDefinitions={
    validateTask(data,{workspaceId:tx.book.id});tx.put('task',p.id,data);
   },
   async 'booking.save'(tx,p){
-   const old=saved(tx,p,'booking'),d=p.data;validateBooking(d);checkOwner(tx,d);await linkCheck(tx,d.links,old?.data.links);
+   const old=saved(tx,p,'booking'),{qualityAtReservation,...d}=p.data;
+   if(qualityAtReservation!==undefined)requireValue(old?.data.qualityAtReservation&&revisionText(qualityAtReservation)===revisionText(old.data.qualityAtReservation),'Reservation evidence is assigned by the equipment owner');
+   validateBooking(d);checkOwner(tx,d);await linkCheck(tx,d.links,old?.data.links);
    const r=tx.get(d.resourceId);requireValue(r?.type==='resource'&&r.data.kind==='equipment','Equipment');
    if(d.status==='confirmed')requireValue(r.data.status==='available','Equipment is on hold or retired','BOOKING_UNAVAILABLE');
-   tx.put('booking',p.id,d);
+   const sameBooking=old&&['resourceId','startsAt','endsAt','timeZone','kind'].every(key=>old.data[key]===d[key])&&(d.status==='cancelled'||old.data.status===d.status);
+   const snapshot=sameBooking?old.data.qualityAtReservation:d.kind==='work'&&d.status==='confirmed'?observedResourceQuality(r,'reserve',d.startsAt,d.timeZone).qualityAtUse:null;
+   tx.put('booking',p.id,{...d,...(snapshot?{qualityAtReservation:snapshot}:{})});
   }
  }
 };

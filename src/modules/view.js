@@ -6,6 +6,7 @@ export function moduleView(entity){
  const stock=['movement','reservation','stock-transfer','asset-transfer'].includes(entity.type);
  return {id:entity.id,type:entity.type,revision:entity.revision,createdAt:entity.createdAt,updatedAt:entity.updatedAt,openId:stock?d.resourceId:entity.id,openType:stock?'resource':entity.type,
   title:d.name??d.title??d.reason??entity.type,status:d.status??null,projectId:d.projectId??null,
+  ...(entity.type==='resource'&&d.quality?{qualityKind:d.quality.kind,lotNumber:d.quality.number??null}:{}),
   ...(entity.type==='resource'&&Object.hasOwn(d,'tags')?{tags:d.tags}:{}),
   description:proseText(d.description??d.notes??'').slice(0,240)};
 }

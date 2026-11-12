@@ -1,4 +1,5 @@
 import {hasStructuredCalculator} from '../structured-calculator-format.js';
+import {usesResourceQuality,assertResourceQualityFormat,requireResourceQualityFormat} from '../resource-quality-domain.js';
 import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies,catalogueRequiresStructuredCalculator,requireStructuredCalculator} from '../catalogue-format.js';
 import {hasCalculationPolicy} from '../web/tools/calculation-policy.js';
 import {resolveModuleEvent,resolveModuleEntity} from '../project-retired-modules.js';
@@ -35,7 +36,7 @@ export const moduleCurrentBytes=(workspaceId,revision,members)=>{
 };
 export class ModuleCatalogue{
  constructor(store){this.store=store;this.currentSizes=new WeakMap();this.membersIndex=new ModuleMemberIndex(store);}
- async checkPolicy(entity){if(hasStructuredCalculator(entity?.type,entity?.data)&&!catalogueRequiresStructuredCalculator(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
+ async checkPolicy(entity){if(usesResourceQuality(entity))await assertResourceQualityFormat(this.store);if(hasStructuredCalculator(entity?.type,entity?.data)&&!catalogueRequiresStructuredCalculator(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
  async head(workspaceId){
   const s=this.store,row=await moduleStateRow(s,'modules'),head=row?s.decode('state','modules',row.payload):{workspaceId,revision:0,entities:[]};
   const verify=async()=>{
@@ -192,6 +193,7 @@ export class ModuleCatalogue{
   await this.writeChanges(previous,values,event);
  }
  async writeChanges(previous,entities,event){
+  if(entities.some(usesResourceQuality))await requireResourceQualityFormat(this.store);
   await this.store.assertModuleWrite?.(entities,event);
   await assertProjectSourceModuleWrite(this,previous,entities);
   if(entities.some(entity=>hasStructuredCalculator(entity.type,entity.data)))await requireStructuredCalculator(this.store.catalogueDb??this.store.db);

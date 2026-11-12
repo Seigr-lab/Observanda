@@ -463,6 +463,7 @@
   "PDF_TEMPLATE_COMPONENT": "Malen inneholder en komponent som ikke støttes, eller en utilgjengelig skrifttypeversjon. Kontroller format, deler og skrifttype før import.",
   "PDF_LIBRARY_NAME_USED": "Navnet er allerede i bruk. Velg et annet navn for samlingen eller emneknaggen.",
   "PDF_LIBRARY_GROUP_USED": "Gruppen inneholder dokumenter. Fjern dokumentene fra gruppen før du sletter den.",
+  "RESOURCE_QUALITY_BLOCK": "Beredskapsregelen sperrer det valgte partiet eller utstyret.",
   "PDF_FONT_SUBSTITUTED": "Dette objektet inneholder tekst som skrives ut med en erstatningsskrift. Velg en skrifttype som dekker disse tegnene.",
   "PDF_UNMAPPED_GLYPH": "Skrifttypen kan ikke gjengi enkelte tegn som søkbar Unicode i denne profilen. For arabisk kan du velge Scheherazade New for den aktuelle teksten. Du kan også velge en annen skrifttype eller standard PDF.",
   "WEBSITE_DESIGN_PACKAGE": "Denne filen er ikke en brukbar designpakke for nettsteder. Eksporter designet på nytt og velg den nye filen.",

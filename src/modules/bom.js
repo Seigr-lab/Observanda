@@ -1,3 +1,4 @@
+import {observedResourceQuality} from './resource-quality.js';
 import {validBOMSource,verifyBOMSource} from '../bom-import.js';
 import {randomUUID} from 'node:crypto';
 import {exact,text,uuid,unique,linksValid,requireValue,saved} from './validation.js';
@@ -111,7 +112,7 @@ export const bomDefinitions={
     const status=compare(total,'0')===0?'released':compare(total,reservation.data.quantity)===0?'consumed':'settled';
     tx.put('reservation',reservation.id,{...reservation.data,status});
     for(const [key,label] of [['used','Used'],['scrapped','Scrapped']])if(compare(usage[key],'0')>0)
-     tx.put('movement',randomUUID(),{resourceId:r.id,projectId:line.sourceProjectId,delta:negate(usage[key]),unit:line.unit,reason:label+' in BOM: '+e.data.title+' / '+(line.references||line.value),links:links(tx,e),reservationId:reservation.id});
+     tx.put('movement',randomUUID(),{resourceId:r.id,projectId:line.sourceProjectId,delta:negate(usage[key]),unit:line.unit,reason:label+' in BOM: '+e.data.title+' / '+(line.references||line.value),links:links(tx,e),reservationId:reservation.id,...(r.data.quality&&key==='used'?{useKind:key,...observedResourceQuality(r,'use',tx.now)}:{})});
     tx.put('resource',r.id,r.data);
    }
    tx.put('bom',e.id,next);

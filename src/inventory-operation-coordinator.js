@@ -79,7 +79,7 @@ async function progress(storage,workspaceId,id,options,{abort=false}={}){
    let value=await read();if(value.status.decision)break;if(value.status.prepared.includes(p.workspaceId))continue;
    try{const prepared=await visit(p,(source,auth)=>prepareInventoryParticipant(source,p.workspaceId,intent,p,{...auth,signal:options.signal}));await options.checkpoint?.('source-prepared',{id,workspaceId:p.workspaceId});if(prepared.terminal){const latest=await read();if(prepared.outcome==='commit'){if(latest.status.decision!=='commit')throw new AppError('CATALOGUE_DAMAGED');break;}await choose('abort');break;}
     await mutate(async(tx,latest)=>{if(!latest.status.prepared.includes(p.workspaceId))await tx.journal.write('status',id,{...latest.status,prepared:[...latest.status.prepared,p.workspaceId],error:null});});await options.checkpoint?.('prepared',{id,workspaceId:p.workspaceId});
-   }catch(error){if(!['STOCK_UNAVAILABLE','MODULE_CHANGED','MODULE_FORMAT'].includes(error.code))throw error;await mutate(async(tx,latest)=>tx.journal.write('status',id,{...latest.status,error:errorSummary(error,currentOwner)}));await choose('abort');break;}
+   }catch(error){if(!['STOCK_UNAVAILABLE','RESOURCE_QUALITY_BLOCK','MODULE_CHANGED','MODULE_FORMAT'].includes(error.code))throw error;await mutate(async(tx,latest)=>tx.journal.write('status',id,{...latest.status,error:errorSummary(error,currentOwner)}));await choose('abort');break;}
   }
   let value=await read(),decision=value.status.decision?await local(storage,workspaceId,{check:options.check,signal:options.signal,write:false},tx=>tx.journal.read('decision',id)):await choose('commit');
   for(const p of intent.participants){value=await read();if(value.status.applied.includes(p.workspaceId))continue;

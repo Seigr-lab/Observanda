@@ -463,6 +463,7 @@
   "PDF_TEMPLATE_COMPONENT": "Aquesta plantilla conté un component no admès o una versió de lletra no disponible. Revisa el format, les seccions i la lletra abans d’importar-la.",
   "PDF_LIBRARY_NAME_USED": "Aquest nom ja està en ús. Tria un altre nom per a la col·lecció o l’etiqueta.",
   "PDF_LIBRARY_GROUP_USED": "El grup conté documents. Treu els documents del grup abans d’eliminar-lo.",
+  "RESOURCE_QUALITY_BLOCK": "La regla d’aptitud bloqueja el lot o l’equip seleccionat.",
   "PDF_FONT_SUBSTITUTED": "Aquest objecte conté text que s'imprimeix amb una tipografia de substitució. Tria una tipografia que inclogui aquests caràcters.",
   "PDF_UNMAPPED_GLYPH": "La lletra impresa no pot representar alguns caràcters com a text Unicode cercable amb aquest perfil. Per a l’àrab, tria Scheherazade New per al text afectat. També pots triar una altra lletra o el PDF estàndard.",
   "WEBSITE_DESIGN_PACKAGE": "Aquest fitxer no és un paquet de disseny de lloc web utilitzable. Torna a exportar el disseny i tria el fitxer nou.",

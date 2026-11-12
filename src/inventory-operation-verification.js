@@ -11,6 +11,7 @@ import {exact,uuid,instant,unique} from './modules/validation.js';
 import {serialize} from './storage-format.js';
 import {add,compare,negate} from './web/modules/quantities.js';
 import {AppError} from './errors.js';
+import {validObservedQuality} from './modules/resource-quality.js';
 const require=value=>{if(!value)throw new AppError('CATALOGUE_DAMAGED');};
 const same=(a,b)=>serialize(a)===serialize(b);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -48,7 +49,7 @@ export async function verifyInventoryOperations(context){
   const fragments=await identities.fragments(receipt),fragment=fragments.find(value=>value.domain===domain),position=receipt.fragments.find(value=>value.domain===domain);
   require(fragment&&position.ordinal===evidence.ordinal&&fragment.event.id===evidence.id&&moduleEventHash(fragment.event)===evidence.hash);return fragment.event;
  }
- async function phaseEvent(intent,evidence,phase){
+ async function phaseEvent(intent,evidence,phase,usageQuality=[]){
   const command={workspaceId:namespace,commandId:inventoryPhaseId(intent.id,namespace,phase),action:'inventory.bom.'+phase,payload:{operationId:intent.id,planHash:intent.planHash}};
   const original=await new InventoryOperationStore(await context.inspect('inventory')).read('intent',intent.reservationOperationId);require(original?.action==='reserve');
   const value=await event('inventory',evidence,command),changes=new Map(value.changes.map(entity=>[entity.id,entity])),expected=new Set();
@@ -61,7 +62,7 @@ export async function verifyInventoryOperations(context){
    else{
     const settlement=m.settlement;require(settlement?.operationId===intent.id&&settlement.action===intent.action&&settlement.decisionHash===inventoryOperationHash({version:1,id:intent.id,planHash:intent.planHash,outcome:'commit'})&&compare(settlement.used,line.used)===0&&compare(settlement.scrapped,line.scrapped)===0);
     const total=add(line.used,line.scrapped);require(d.status===(compare(total,'0')===0?'released':compare(total,line.quantity)===0?'consumed':'settled'));
-    for(const [kind,quantity] of [['used',line.used],['scrapped',line.scrapped]])if(compare(quantity,'0')>0){const id=inventoryPhaseId(intent.id,namespace,kind+'/'+line.lineId),movement=changes.get(id)?.data;expected.add(id);require(changes.get(id)?.type==='movement'&&movement.resourceId===line.resourceId&&movement.projectId===line.sourceProjectId&&movement.reservationId===line.reservationId&&movement.unit===line.unit&&compare(movement.delta,negate(quantity))===0);}
+    for(const [kind,quantity] of [['used',line.used],['scrapped',line.scrapped]])if(compare(quantity,'0')>0){const id=inventoryPhaseId(intent.id,namespace,kind+'/'+line.lineId),movement=changes.get(id)?.data;expected.add(id);require(changes.get(id)?.type==='movement'&&movement.resourceId===line.resourceId&&movement.projectId===line.sourceProjectId&&movement.reservationId===line.reservationId&&movement.unit===line.unit&&compare(movement.delta,negate(quantity))===0);const snapshot=kind==='used'?usageQuality.find(row=>row.lineId===line.lineId)?.qualityAtUse:null;require(same(movement.qualityAtUse??null,snapshot??null)&&(!snapshot||movement.useKind===kind));}
    }
   }
   require(expected.size===changes.size&&[...changes.keys()].every(id=>expected.has(id)));return value;
@@ -76,13 +77,21 @@ export async function verifyInventoryOperations(context){
    if(domain==='inventory'){
     require(!await journal.read('status',intent.id));
     if(intent.action!=='reserve')require((await journal.read('receipt',intent.reservationOperationId))?.outcome==='commit');
-    if(prepared){require(exact(prepared,['version','id','planHash','evidence'])&&prepared.planHash===intent.planHash);if(intent.action==='reserve')await phaseEvent(intent,prepared.evidence,'prepare');else require(prepared.evidence===null);}
+    if(prepared){
+     require(exact(prepared,['version','id','planHash','evidence',...(Object.hasOwn(prepared,'usageQuality')?['usageQuality']:[])])&&prepared.planHash===intent.planHash);
+     if(Object.hasOwn(prepared,'usageQuality')){
+      const rows=prepared.usageQuality;
+      require(intent.action==='finish'&&Array.isArray(rows)&&rows.length>0&&rows.length<=intent.lines.length&&unique(rows.map(row=>row?.lineId)));
+      for(const row of rows){const line=intent.lines.find(l=>l.lineId===row?.lineId);require(line&&exact(row,['lineId','qualityAtUse'])&&compare(line.used,'0')>0&&validObservedQuality(row.qualityAtUse,line.resourceId)&&row.qualityAtUse.workflow==='use');}
+     }
+     if(intent.action==='reserve')await phaseEvent(intent,prepared.evidence,'prepare');else require(prepared.evidence===null);
+    }
     require(!!pending===!!prepared&&!receipt||!pending&&!!receipt);
     if(pending)require(pointer(pending,intent.id,intent.id));
     if(receipt){
      require(exact(receipt,['version','id','outcome','value'])&&receipt.outcome===decision?.outcome);const value=receipt.value;
      require(value?.operationId===intent.id&&value.action===intent.action&&value.sourceWorkspaceId===namespace&&same(value.bom,intent.bom)&&value.planHash===intent.planHash&&value.decisionHash===inventoryOperationHash(decision)&&same(value.lines,intent.lines.map(({resourceRevision,...line})=>line)));
-     if(receipt.outcome==='commit'){require(prepared);validateBOMReceipt(value);await phaseEvent(intent,value.event,intent.action==='reserve'?'prepare':'commit');}
+     if(receipt.outcome==='commit'){require(prepared);validateBOMReceipt(value);await phaseEvent(intent,value.event,intent.action==='reserve'?'prepare':'commit',prepared.usageQuality);}
      else if(prepared&&intent.action==='reserve')await phaseEvent(intent,value.event,'abort');else require(value.event===null);
     }
     for(const line of intent.lines)if(prepared&&intent.action!=='reserve'&&!receipt)require(pointer(await journal.read('claim',line.reservationId),line.reservationId,intent.id));
