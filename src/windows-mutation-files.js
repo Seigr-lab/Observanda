@@ -3,7 +3,7 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {AppError} from './errors.js';
 import {mutationFilesClient} from './mutation-files-client.js';
-import {diagnosticCount} from './operational-diagnostics.js';
+import {diagnosticCount,nativeStorageError} from './operational-diagnostics.js';
 
 const codes=new Set(['INVALID','UNSAFE','CONFLICT','ENOENT','EEXIST','ENOSPC','ENOTEMPTY','EBUSY','EACCES','LOCAL_EXPORT_CHANGED','STORAGE_COPY']);
 const wireError=value=>{const code=codes.has(value)?value:'UNSAFE',error=new AppError(code);error.code=code;return error;};
@@ -50,6 +50,6 @@ export async function windowsMutationFiles(){
    return (await done).result;
   }finally{signal?.removeEventListener('abort',abort);}
  }
- const call=async(command,options)=>{const task=serial.then(()=>execute(command,options));serial=task.catch(()=>{});try{return await task;}catch(cause){if(!(cause instanceof AppError))throw cause;const error=new AppError(cause.code);error.code=cause.code;error.cause=cause;throw error;}};
+ const call=async(command,options)=>{const task=serial.then(()=>execute(command,options));serial=task.catch(()=>{});try{return await task;}catch(cause){if(!(cause instanceof AppError))throw cause;const error=new AppError(cause.code);error.code=cause.code;error.cause=cause;if(['EBUSY','EACCES'].includes(error.code))nativeStorageError(error,command.operation);throw error;}};
  return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),()=>closing??=(async()=>{await serial;child.stdin.end();await exited;})());
 }

@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
-const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped','unexpected-error']);
+const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped','unexpected-error','native-storage-error']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job','session-access','session-device','session-workers','workspace-identity','session-location']);
 for(const stage of ['startup-modules','runtime-permissions','runtime-version','runtime-status','runtime-start','runtime-connect','website-source-selections','website-source-owners','website-source-counts'])phases.add(stage);
 for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
@@ -34,7 +34,7 @@ const workCounters=new Set(['catalogueRowCacheHits','catalogueRowCacheMisses','c
 workCounters.add('windowCountSummaryMembers');
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes',...Object.values(measures).flat()]);
 for(const name of workCounters)counters.add(name);
-const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
+const systemCodes=new Set(['EACCES','EBUSY','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
 const codeOf=error=>{let code;try{code=error?.code;}catch{}return typeof code==='string'&&(Object.hasOwn(errors,code)||systemCodes.has(code))?code:'IO';};
 // An unexpected error is reported as IO to its caller. Diagnostics keep where
 // it came from: its built-in type and the application's own source positions,
@@ -57,6 +57,16 @@ export function unexpectedError(error){
  let type;try{type=error?.name;}catch{}
  diagnostic('unexpected-error',{error,errorType:type,origin:applicationFrames(error)});
 }
+// A native storage refusal (a file in use, access denied) reaches its caller
+// with the IO text. Keep the native operation's fixed name and the application
+// positions that requested it, so the holder can be traced; never the path.
+// Lease waits retry on a refusal; one entry per site and second is enough.
+const nativeStorageSites=new Map();
+export function nativeStorageError(error,operation){
+ const origin=applicationFrames(error),site=operation+' '+origin.join(' '),now=Date.now();
+ if(now-(nativeStorageSites.get(site)??-Infinity)<1000)return;nativeStorageSites.set(site,now);if(nativeStorageSites.size>256)nativeStorageSites.delete(nativeStorageSites.keys().next().value);
+ diagnostic('native-storage-error',{error,nativeOperation:operation,origin});
+}
 const correlation=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 
 // Deliberately no free-text field: error messages, paths, URLs, query strings,
@@ -69,7 +79,8 @@ export function diagnosticEvent(event,data={}){
  if(routes.has(data.route)||websiteRoutes.has(data.route))value.route=data.route;
  if(['GET','POST'].includes(data.method))value.method=data.method;
  if(data.error)value.code=codeOf(data.error);
- if(event==='unexpected-error'){
+ if(event==='native-storage-error'&&typeof data.nativeOperation==='string'&&/^[a-z][a-z-]{0,31}$/.test(data.nativeOperation))value.nativeOperation=data.nativeOperation;
+ if(['unexpected-error','native-storage-error'].includes(event)){
   if(errorTypes.has(data.errorType))value.errorType=data.errorType;
   if(Array.isArray(data.origin)){const origin=data.origin.filter(frame=>typeof frame==='string'&&applicationFrame.test(frame)).slice(0,maxFrames);if(origin.length)value.origin=origin;}
  }
