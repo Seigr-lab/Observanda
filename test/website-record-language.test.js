@@ -90,8 +90,7 @@ test('the saved source fragment keeps the values the library reads',()=>{
  assert.equal(fields.recordType,'observation');assert.equal(fields.status,'in progress');assert.equal(fields.displayDate,'2026-03-01');
 });
 
-const profilesShipped=Object.hasOwn(JSON.parse(await readFile(new URL('../src/web/locales/catalogues.json',import.meta.url),'utf8')),'labBookProfiles');
-test('shipped lab book profile names follow the page language while edited names stay as written',{skip:!profilesShipped&&'the labBookProfiles catalogue is not registered in this tree'},async()=>{
+test('shipped lab book profile names follow the page language while edited names stay as written',async()=>{
  const english=JSON.parse(await readFile(new URL('../src/web/locales/en/labBookProfiles.json',import.meta.url),'utf8'));
  const catalan=JSON.parse(await readFile(new URL('../src/web/locales/ca/labBookProfiles.json',import.meta.url),'utf8'));
  const [key,label]=Object.entries(english).find(([k,v])=>catalan[k]&&catalan[k]!==v&&!Object.values(english).slice(0,Object.keys(english).indexOf(k)).includes(v));
