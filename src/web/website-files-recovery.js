@@ -21,14 +21,20 @@ function acknowledged(row,expected){
 }
 export function websiteFilesRecovery({request,documentState,upload,restore,tr,esc,signal,now=()=>performance.now()}){
  let owner=null,offers=[],next=null,current=null,held=new Set(),heldInputs=new Set(),restored=new Set(),serial=0;
- let first=null,timer=null,flight=null,retry=null,epoch=0,ackSerial=-1,error='',focusId=null;
+ let first=null,timer=null,flight=null,retry=null,epoch=0,ackSerial=-1,error='',focusId=null,focusKey=null;
  const pin=row=>({siteId:row.owner.websiteId,path:row.documentKey,id:row.id,revision:row.revision});
  const ok=job=>job===epoch&&!signal()?.aborted;
  function reset(){
-  clearTimeout(timer);epoch++;timer=null;first=null;flight=retry=current=owner=null;held=new Set();heldInputs=new Set();restored=new Set();offers=[];next=null;error='';focusId=null;ackSerial=-1;serial=0;
+  clearTimeout(timer);epoch++;timer=null;first=null;flight=retry=current=owner=null;held=new Set();heldInputs=new Set();restored=new Set();offers=[];next=null;error='';focusId=focusKey=null;ackSerial=-1;serial=0;
  }
+ const focusSelector=element=>element.matches('[data-draft-id]')?'[data-draft-id="'+CSS.escape(element.dataset.draftId)+'"]':
+  element.dataset.action?'[data-action="'+CSS.escape(element.dataset.action)+'"]'+(element.dataset.recoveryId?'[data-recovery-id="'+CSS.escape(element.dataset.recoveryId)+'"]':''):null;
  function paint(){
   const node=document.querySelector('[data-website-recovery]');if(!node)return;
+  // Concurrent page reads and editor renders repaint the same offers: keep
+  // keyboard focus on the offer or control the author was on, unless focus
+  // has moved elsewhere, instead of dropping it with the replaced node.
+  const active=document.activeElement,keep=node.contains(active)?focusSelector(active):!active||active===document.body?focusKey:null;
   const status=error||(current&&serial===ackSerial?tr('recoveryAcknowledged',{time:new Date(current.updatedAt).toLocaleTimeString(appLanguage())}):'');
   node.innerHTML=(status?'<p role="status" title="'+esc(tr('recoveryWindow'))+'">'+esc(status)+'</p>':'')+(error&&owner?'<button type="button" class="button" data-action="website-files-recovery-retry">'+esc(tr('recoveryRetry'))+'</button>':'')+offers.map(row=>{
    const info=tr('recoveryFound',{time:new Date(row.updatedAt).toLocaleString(appLanguage()),revision:row.baseRevision.slice(0,12)});
@@ -38,6 +44,8 @@ export function websiteFilesRecovery({request,documentState,upload,restore,tr,es
     (row.capabilities.recover?'':'<p>'+esc(tr(row.state==='conflict'?'recoveryConflict':'recoveryUnavailable'))+'</p>')+'</section>';
   }).join('')+(next?'<button type="button" class="button" data-action="website-files-recovery-more">'+esc(tr('more'))+'</button>':'');
   if(focusId){const row=node.querySelector('[data-draft-id="'+CSS.escape(focusId)+'"]');if(row){row.focus();focusId=null;}}
+  else if(keep)node.querySelector(keep)?.focus();
+  focusKey=node.contains(document.activeElement)?focusSelector(document.activeElement):null;
  }
  async function select(siteId,path,focus=null){
   if(owner?.siteId!==siteId||owner?.path!==path){reset();owner={siteId,path,id:crypto.randomUUID()};}
