@@ -49,7 +49,11 @@ export class LocalExport {
  }
  async directory(value){
   const directory=await destinationDirectory(value),workspace=await destinationDirectory(this.workspace.root),application=fileURLToPath(new URL('..',import.meta.url));
-  if(within(workspace,directory)||within(directory,workspace)||within(application,directory)||within(directory,application)||path.resolve(os.homedir())===directory)throw new AppError('UNSAFE');
+  // A source checkout's git-ignored .local folder holds local working material
+  // (test runs, logs), not application files, so a destination strictly inside
+  // it is not part of the application. The folder itself stays protected.
+  const localArea=path.join(application,'.local'),applicationFiles=within(application,directory)&&!(directory!==localArea&&within(localArea,directory));
+  if(within(workspace,directory)||within(directory,workspace)||applicationFiles||within(directory,application)||path.resolve(os.homedir())===directory)throw new AppError('UNSAFE');
   return directory;
  }
  // A session lock lasts across short, separately durable journal transactions.
