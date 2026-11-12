@@ -31,6 +31,10 @@ export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,a
   try{const data=await api('/api/projects/'+entry.id+'/storage/details',{}, {adopt:false});if(version===entry.version){entry.data=data;entry.error='';}}
   catch(error){if(version===entry.version)entry.error=error.message??text('unavailable');}finally{entry.loading=false;if(version!==entry.version&&host(entry))void load(entry);else paint(entry);}
  }
+ function followRoot(entry){
+  const root=projectRoot(entry.id)??null;if(root===entry.root||!root&&!entry.root)return false;
+  entry.root=root;entry.version++;entry.data=null;entry.error='';return true;
+ }
  async function run(entry,kind,command,resume=false){
   if(entry.pending)return;entry.pending=true;entry.error='';paint(entry);const view=location.hash;
   try{await accessProject(()=>api('/api/projects/'+entry.id+'/storage/'+kind+(resume?'/resume':''),command,{adopt:false,view}));await load(entry);}
@@ -40,7 +44,10 @@ export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,a
  setInterval(()=>{for(const entry of entries.values())if(host(entry)&&!entry.pending&&(entry.data?.copy?.running||entry.data?.move?.running||entry.data?.export?.running))void load(entry);},1500);
  return {
   view(){const id=state.projectOwner?.projectId;return id&&id===state.project?'<section class="panel" data-project-storage="'+id+'"></section>'+placement.view(id)+accessSettings.view(id)+maintenance.view():'';},
-  bind(){maintenance.bind();const id=state.projectOwner?.projectId;if(!id)return;placement.bind(id);accessSettings.bind(id);const entry=current(id);if(!host(entry))return;const root=projectRoot(id);if(root&&root!==entry.root){entry.root=root;entry.version++;entry.data=null;entry.error='';}if(!entry.data&&!entry.loading&&!entry.error)void load(entry);else paint(entry);},
+  bind(){maintenance.bind();const id=state.projectOwner?.projectId;if(!id)return;placement.bind(id);accessSettings.bind(id);const entry=current(id);if(!host(entry))return;followRoot(entry);if(!entry.data&&!entry.loading&&!entry.error)void load(entry);else paint(entry);},
+  // A placement from the project's settings refreshes only the directory, not
+  // this page. Read the details again when the shown project's folder changed.
+  directoryChanged(){const id=state.projectOwner?.projectId;if(!id)return;const entry=current(id);if(!host(entry)||!followRoot(entry))return;if(entry.loading)return;void load(entry);},
   choiceAction:node=>placement.choiceAction(node),input:element=>placement.input(element),
   async action(node){
    if(await maintenance.action(node))return true;
