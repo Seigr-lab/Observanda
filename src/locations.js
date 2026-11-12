@@ -203,7 +203,8 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     if(catalogue&&reuseCatalogue){
       // A move keeps the installation's database. Verify that database against
       // the copied files below while the destination is still marked incomplete.
-      await publishCatalogueBinding(destination,(await catalogueBinding(plan.source)).id);
+      const binding=await catalogueBinding(plan.source);
+      await publishCatalogueBinding(destination,binding.id,{cluster:binding.cluster,installation:binding.placement==='installation'});
     }else if(catalogue){
       if(!recovery?.databaseReady)await backupCatalogue(plan.source,destination);
     }

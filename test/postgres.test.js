@@ -100,6 +100,10 @@ test('portable backup restores after the source database schema is gone and rest
  activation.mock.restore();assert.deepEqual(isolations,['repeatable read','repeatable read']);
  const a=JSON.parse(await readFile(path.join(backup,CATALOGUE_FILE))),b=JSON.parse(await readFile(path.join(second,CATALOGUE_FILE)));
  assert.notEqual(a.id,b.id);
+ // Activation publishes bindings that name the cluster holding both schemas.
+ const identified=await openCatalogue(backup);
+ try{const {id}=await identified.get('SELECT id::text AS id FROM obs_cluster.identity');assert.deepEqual([a.version,a.placement,a.cluster,b.version,b.placement,b.cluster],[5,'installation',id,5,'installation',id]);}
+ finally{await identified.close();}
  const next=structuredClone(before.book);next.entries[0].title='Restored edition only';await restored.save(next,before.etag);
  assert.deepEqual(await independent.read(),before);
 });

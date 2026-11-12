@@ -124,6 +124,8 @@
   "PROJECT_JOB_ACTIVE": "Encara s'està executant una tasca de publicació per a aquest projecte. Deixa que acabi abans de moure la base de dades del projecte.",
   "JOB_CANCELLED": "S'ha cancel·lat el processament. Els bytes originals rebuts s'han conservat per tornar-ho a provar.",
   "DATABASE_LOCATION": "El directori de la base de dades no correspon al seu propietari. Els fitxers de base de dades d'un espai de treball han de romandre dins d'aquell espai; les preferències de l'aplicació i els executables de PostgreSQL s'han d'emmagatzemar per separat.",
+  "CATALOGUE_BINDING_RETIRED": "La vinculació del catàleg d'aquesta carpeta és d'un format d'emmagatzematge anterior d'Observanda que no indica el seu clúster de base de dades. Els fitxers no s'han modificat. Converteix la carpeta al format d'emmagatzematge actual abans d'obrir-la.",
+  "DATABASE_CLUSTER_RETIRED": "Aquesta base de dades PostgreSQL es va crear amb un format d'emmagatzematge anterior d'Observanda sense identitat de clúster. Els fitxers no s'han modificat. Converteix la carpeta al format d'emmagatzematge actual abans d'obrir-la.",
   "DATABASE_LOCK_TOOLS": "Cal l'eina Perl del sistema macOS per protegir la titularitat de la base de dades gestionada. Restaura /usr/bin/perl o configura una base de dades PostgreSQL gestionada externament.",
   "DATABASE_PERMISSION": "El compte de base de dades d'Observanda necessita permisos CREATE i TEMPORARY a la seva base de dades PostgreSQL dedicada. No necessita privilegis de superusuari.",
   "DATABASE_CANCELLED": "S'ha cancel·lat la configuració de PostgreSQL. Reinicia Observanda per reprendre-la; s'han conservat els espais de treball existents.",

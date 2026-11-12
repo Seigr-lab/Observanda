@@ -5,7 +5,8 @@ import {dropProjectDomainSchemas} from './project-domain-schema.js';
 import {databaseRequestSignal,withDatabaseRequest} from './database-request-context.js';
 import {DatabaseAdmission} from './database-admission.js';
 import {checkServerIdentity} from 'node:tls';
-import {retainRuntimeEnvironment} from './database-runtime-environment.js';
+import {retainRuntimeEnvironment,runtimeStorageDirectory} from './database-runtime-environment.js';
+import {databaseClusterIdentity} from './database-cluster-identity.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
 import {diskCapacity} from './disk-capacity.js';
@@ -198,6 +199,10 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
    if(create&&existing)throw new AppError('EXISTS');
   }
   if(activation&&(create||existing&&activation.id!==existing.id||!existing&&!archived&&!restore))fail();
+  // A binding names the cluster that holds its schema. Another cluster, such
+  // as a different workspace's, never serves it; a new binding names this one.
+  const cluster=existing||!detached?await databaseClusterIdentity(client,{managed:!!runtimeStorageDirectory(env)}):null;
+  if(existing&&existing.cluster!==cluster)throw new AppError('CATALOGUE_UNAVAILABLE');
   db=new CatalogueConnection(client,existing?.id??activation?.id??randomUUID(),{temporary:detached&&!existing,env});
   const committed=existing||activation?await db.get('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1',db.schema):null;
   if(existing&&!committed)throw new AppError('CATALOGUE_UNAVAILABLE');
@@ -219,7 +224,7 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
    await db.run('COMMIT');
   }
   if(!detached){
-   if(!existing){await publishCatalogueBinding(root,db.id,{workspace:!!env.OBSERVANDA_WORKSPACE_DATABASE_ROOT,projectId,labBookId});published=true;}
+   if(!existing){await publishCatalogueBinding(root,db.id,{cluster,installation:projectId===undefined&&labBookId===undefined&&!env.OBSERVANDA_WORKSPACE_DATABASE_ROOT,projectId,labBookId});published=true;}
    if(!create&&(activation||archived))await finishCatalogueActivation(root);
   }
   return db;

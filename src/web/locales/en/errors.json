@@ -124,6 +124,8 @@
   "PROJECT_JOB_ACTIVE": "A publishing task is still running for this project. Let it finish before moving the project database.",
   "JOB_CANCELLED": "Processing was cancelled. Received original bytes were kept for retry.",
   "DATABASE_LOCATION": "The database directory does not match its owner. Workspace database files must stay inside that workspace; application preferences and PostgreSQL executables must be stored separately.",
+  "CATALOGUE_BINDING_RETIRED": "This folder's catalogue binding is from an earlier Observanda storage format that does not name its database cluster. Its files are unchanged. Convert the folder to the current storage format before opening it.",
+  "DATABASE_CLUSTER_RETIRED": "This PostgreSQL database was created by an earlier Observanda storage format without a cluster identity. Its files are unchanged. Convert the folder to the current storage format before opening it.",
   "DATABASE_LOCK_TOOLS": "The macOS system Perl tool is required to protect managed database ownership. Restore /usr/bin/perl or configure an externally managed PostgreSQL database.",
   "DATABASE_PERMISSION": "The Observanda database account needs CREATE and TEMPORARY permissions in its dedicated PostgreSQL database. It does not need superuser privileges.",
   "DATABASE_CANCELLED": "PostgreSQL setup was cancelled. Restart Observanda to resume setup; existing workspaces were preserved.",

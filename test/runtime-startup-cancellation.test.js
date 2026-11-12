@@ -50,7 +50,7 @@ test('an authenticated workspace wait can cancel without retiring the shared sta
 
 for(const kind of ['project','lab-book'])test(`${kind} catalogue cancellation drains the request and releases the late shared-start lease`,async t=>{
  const root=await directory(t),ownerId=randomUUID(),id=randomUUID(),vault={id:randomUUID(),key:randomBytes(32)};
- const options=kind==='project'?{projectId:id}:{labBookId:id};await publishCatalogueBinding(root,randomUUID(),options);
+ const options=kind==='project'?{projectId:id}:{labBookId:id};await publishCatalogueBinding(root,randomUUID(),{...options,cluster:randomUUID()});
  const owner=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId}),gate=deferred(),entered=deferred(),controller=new AbortController(),env={};let starts=0,shared,requestReleased=false;
  const pool=new ProjectRuntimePool({idleMs:60000,maxIdle:2,close:async()=>{}});
  const replacement={acquire(location,selected,key){
@@ -75,7 +75,7 @@ for(const kind of ['project','lab-book'])test(`${kind} catalogue cancellation dr
 
 test('a cancelled project startup failure releases the pending lease without a late rejection',async t=>{
  const root=await directory(t),id=randomUUID(),gate=deferred(),entered=deferred(),controller=new AbortController();
- await publishCatalogueBinding(root,randomUUID(),{projectId:id});
+ await publishCatalogueBinding(root,randomUUID(),{projectId:id,cluster:randomUUID()});
  const owner=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID()}),pool=new ProjectRuntimePool({close:async()=>{}});
  await owner.projects.close();owner.projects={acquire(location){entered.resolve();return pool.acquire(location,()=>gate.promise);},close:()=>pool.closeAll()};
  t.after(async()=>{gate.reject(Error('Startup failed'));await owner.close();});

@@ -47,6 +47,10 @@ async function fixture(t){
   async admin(operation,database='template1'){const config=await state();return usingClient({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database,connectionTimeoutMillis:5000},operation);}
  };
 }
+async function assertIdentity(f){
+ const {clusterId}=await f.state();assert.match(clusterId,/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);
+ assert.deepEqual(await f.app(async client=>(await client.query('SELECT format,id::text AS id FROM obs_cluster.identity')).rows),[{format:1,id:clusterId}]);
+}
 async function assertApplication(f){
  await f.app(async client=>{
   assert.deepEqual((await client.query("SELECT current_database() AS database,current_user AS role")).rows,[{database:'observanda',role:'observanda'}]);
@@ -77,6 +81,7 @@ test('fresh managed bootstrap reuses only the built-in database and retains appl
  await f.app(async client=>{await client.query('CREATE TABLE public.bootstrap_retained(value bytea)');await client.query("INSERT INTO public.bootstrap_retained VALUES(decode('00ff807f','hex'))");});
  await f.close();await f.start();assert.deepEqual(await f.admin(async client=>(await client.query(catalogueSQL)).rows),databases);
  assert.deepEqual(await f.app(async client=>(await client.query('SELECT value FROM public.bootstrap_retained')).rows),[{value:Buffer.from('00ff807f','hex')}]);
+ await assertIdentity(f);
 });
 
 for(const [step,statement] of [['rename',renameDatabase],['ownership',ownDatabase],['permissions',revokeDatabase]]){
@@ -97,7 +102,7 @@ for(const [step,statement] of [['rename',renameDatabase],['ownership',ownDatabas
   assert.equal(application.owner,step==='rename'?'observanda_admin':'observanda');assert.equal(application.public_access,step!=='permissions');
   await f.start();const recovered=await assertApplication(f);
   assert.deepEqual(recovered,interrupted.map(row=>row.datname==='observanda'?{...row,owner:'observanda',public_access:false}:row));
-  assert.equal((await f.state()).phase,'ready');
+  assert.equal((await f.state()).phase,'ready');await assertIdentity(f);
   await f.app(async client=>{await client.query('CREATE TABLE public.recovered(value integer)');await client.query('INSERT INTO public.recovered VALUES(37)');assert.deepEqual((await client.query('SELECT value FROM public.recovered')).rows,[{value:37}]);});
  });
 }

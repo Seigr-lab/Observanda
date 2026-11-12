@@ -23,7 +23,8 @@ export async function rememberWorkspaceLocation(file,root,details,{github,moving
    // Permission errors and disconnected mounts are not proof of a moved folder.
    let missing=false;const same=path.relative(item.path,root)==='';
    try{missing=!await assertRegular(item.path,{directory:true,missing:true});}catch{continue;}
-   if(!same&&!missing&&(await catalogueBinding(item.path))?.id===catalogueId)throw new AppError('STORAGE_LINKED_COPY');
+   // A folder with a retired binding cannot be a linked copy of a current one.
+   if(!same&&!missing&&(await catalogueBinding(item.path).catch(error=>{if(error.code==='CATALOGUE_BINDING_RETIRED')return null;throw error;}))?.id===catalogueId)throw new AppError('STORAGE_LINKED_COPY');
    if(missing||same)replacedPaths.push(item.path);
   }
  }

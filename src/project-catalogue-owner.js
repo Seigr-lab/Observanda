@@ -2,12 +2,13 @@ import {realpath} from 'node:fs/promises';
 import {AppError} from './errors.js';
 import {assertLabBookCatalogueOwner,assertLabBookCatalogueEnvironment} from './lab-book-catalogue-owner.js';
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
-export function projectCatalogueBinding(id,projectId){
- if(!uuid(id)||!uuid(projectId))throw new AppError('INVALID');
- return {format:'observanda-postgresql',version:3,id,placement:'project',projectId};
+// Version 6 names the PostgreSQL cluster that holds the project's schema.
+export function projectCatalogueBinding(id,projectId,cluster){
+ if(!uuid(id)||!uuid(projectId)||!uuid(cluster))throw new AppError('INVALID');
+ return {format:'observanda-postgresql',version:6,id,placement:'project',projectId,cluster};
 }
 export function validProjectCatalogueBinding(value){
- return value&&value.format==='observanda-postgresql'&&value.version===3&&value.placement==='project'&&uuid(value.id)&&uuid(value.projectId)&&Object.keys(value).sort().join()==='format,id,placement,projectId,version';
+ return Boolean(value&&value.format==='observanda-postgresql'&&value.version===6&&value.placement==='project'&&uuid(value.id)&&uuid(value.projectId)&&uuid(value.cluster)&&Object.keys(value).sort().join()==='cluster,format,id,placement,projectId,version');
 }
 export function assertCatalogueOwner(binding,projectId,labBookId){
  if(labBookId!==undefined){if(projectId!==undefined)throw new AppError('INVALID');return assertLabBookCatalogueOwner(binding,labBookId);}

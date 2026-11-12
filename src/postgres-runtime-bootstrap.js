@@ -1,6 +1,7 @@
 // Prepare the application role in a managed cluster. Fresh initdb output
 // already contains an empty database; reuse it instead of cloning another.
 import {AppError} from './errors.js';
+import {recordClusterIdentity} from './database-cluster-identity.js';
 export async function initializeManagedApplication(admin,config,{freshCluster=false}={}){
  if(config.phase!=='initializing'||!/^([a-f0-9]{64})$/.test(config.appPassword))throw new AppError('DATABASE_RUNTIME');
  if(!(await admin.query("SELECT 1 FROM pg_roles WHERE rolname='observanda'")).rowCount)await admin.query("CREATE ROLE observanda LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '"+config.appPassword+"'");
@@ -14,4 +15,11 @@ export async function initializeManagedApplication(admin,config,{freshCluster=fa
  // are set. Complete both before application readiness is published.
  await admin.query('ALTER DATABASE observanda OWNER TO observanda');
  await admin.query('REVOKE ALL ON DATABASE observanda FROM PUBLIC');
+}
+// The cluster identity lives in the application database, owned by the
+// administrator and readable by the application role. It is written while the
+// service state is still initializing, so readiness always implies identity.
+export async function initializeClusterIdentity(admin,config){
+ if(config.phase!=='initializing'||admin.connectionParameters?.database!=='observanda')throw new AppError('DATABASE_RUNTIME');
+ return recordClusterIdentity(admin,config.clusterId);
 }

@@ -37,12 +37,13 @@ export class WorkspaceDatabases{
   if(!vault?.key)return this.instances.cached(root,{signal});
   return this.instances.open(root,vault,{create:create||!binding,signal});
  }
- // A deletion may address an installation-wide catalogue from an older
- // version. Reopen that existing cluster only; never create its replacement.
+ // A deletion may address a catalogue in the installation-wide cluster
+ // ('installation' placement). Reopen that existing cluster only; never
+ // create its replacement.
  async deletionEnvironment(root,{vault}={}){
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
   const binding=await catalogueBinding(await realpath(root));
-  if(binding?.version!==1)return this.environment(root,{vault});
+  if(binding?.placement!=='installation')return this.environment(root,{vault});
   this.legacyStart??=(async()=>{
    const env={...this.env},service=await startManagedPostgres({directory:this.directory,env,signal:this.signal,onProgress:this.onProgress,existingOnly:true});
    return {env,service};

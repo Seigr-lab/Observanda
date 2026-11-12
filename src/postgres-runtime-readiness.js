@@ -4,12 +4,12 @@ import {Socket} from 'node:net';
 import {setTimeout as delay} from 'node:timers/promises';
 import {Client} from 'pg';
 import {AppError} from './errors.js';
-export async function connectManagedAdmin(config,{signal,deadline=performance.now()+30000}={}){
- if(!Number.isFinite(deadline))throw new AppError('INVALID');
+export async function connectManagedAdmin(config,{signal,deadline=performance.now()+30000,database='template1'}={}){
+ if(!Number.isFinite(deadline)||!['template1','observanda'].includes(database))throw new AppError('INVALID');
  for(;;){
   if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');
   const remaining=deadline-performance.now();if(remaining<=0)throw new AppError('DATABASE_RUNTIME');
-  const socket=new Socket(),client=new Client({stream:socket,host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:Math.max(1,Math.min(5000,Math.ceil(remaining)))});
+  const socket=new Socket(),client=new Client({stream:socket,host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database,connectionTimeoutMillis:Math.max(1,Math.min(5000,Math.ceil(remaining)))});
   client.on('error',()=>{});const abort=()=>socket.destroy(new AppError('DATABASE_CANCELLED'));
   signal?.addEventListener('abort',abort,{once:true});let connected=false;
   try{if(signal?.aborted)abort();await client.connect();if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');connected=true;return client;}

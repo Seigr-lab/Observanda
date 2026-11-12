@@ -80,7 +80,7 @@ export class OwnedStorageDeletions{
    if(inside(source,path.resolve(item.path)))throw new AppError('STORAGE_DELETE_CONTENTS');
    if(binding&&binding.placement!=='workspace'&&binding.placement!=='project'){
     // Known aliases of one older shared catalogue must be separated first.
-    let other;try{other=await this.binding(item.path);}catch(error){if(error.code!=='ENOENT')throw error;}
+    let other;try{other=await this.binding(item.path);}catch(error){if(error.code!=='ENOENT'&&error.code!=='CATALOGUE_BINDING_RETIRED')throw error;}
     if(other?.id===binding.id)throw new AppError('STORAGE_DELETE_SHARED');
    }
   }

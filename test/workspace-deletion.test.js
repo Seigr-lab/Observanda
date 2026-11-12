@@ -28,9 +28,9 @@ async function fixture(t,{owned=false}={}){
 }
 const interrupt=phase=>async stage=>{if(stage===phase)throw Error('interrupted '+phase);};
 
-test('deletes an older catalogue and evidence without touching another catalogue or copy',async t=>{
+test('deletes a catalogue on the configured database server and its evidence without touching another catalogue or copy',async t=>{
  const f=await fixture(t),other=await encryptedFixture(path.join(f.directory,'other'),sampleNotebook());t.after(()=>clearVault(other.vault));
- const before=await other.workspace.read(),binding=await catalogueBinding(f.workspace.root),alias=path.join(f.directory,'alias');await mkdir(path.join(alias,'.observanda'),{recursive:true});await publishCatalogueBinding(alias,binding.id);
+ const before=await other.workspace.read(),binding=await catalogueBinding(f.workspace.root),alias=path.join(f.directory,'alias');await mkdir(path.join(alias,'.observanda'),{recursive:true});assert.equal(binding.placement,'installation');await publishCatalogueBinding(alias,binding.id,{cluster:binding.cluster,installation:true});
  const plan=await f.deletions.review(f.workspace),progress=[];
  const result=await f.deletions.begin(f.workspace,plan,{onProgress:p=>progress.push(p)});
  assert.equal(result.complete,true);await assert.rejects(access(f.workspace.root),{code:'ENOENT'});
@@ -100,7 +100,7 @@ test('refuses stale reviews, unrelated files, linked files, shared aliases and p
  await assert.rejects(f.deletions.begin(f.workspace,plan),{code:'CONFLICT'});
  await writeFile(path.join(f.workspace.root,'unrelated.txt'),'not workspace data');await assert.rejects(f.deletions.review(f.workspace),{code:'STORAGE_DELETE_CONTENTS'});await rm(path.join(f.workspace.root,'unrelated.txt'));
  await assert.rejects(f.deletions.review(f.workspace,{protectedPaths:[path.join(f.workspace.root,'app')]}),{code:'STORAGE_DELETE_CONTENTS'});
- const alias=path.join(f.directory,'alias');await mkdir(path.join(alias,'.observanda'),{recursive:true});await publishCatalogueBinding(alias,plan.binding.id);
+ const alias=path.join(f.directory,'alias');await mkdir(path.join(alias,'.observanda'),{recursive:true});await publishCatalogueBinding(alias,plan.binding.id,{cluster:plan.binding.cluster,installation:plan.binding.placement==='installation'});
  await assert.rejects(f.deletions.review(f.workspace,{recent:[{path:alias}]}),{code:'STORAGE_DELETE_SHARED'});
  const external=path.join(f.directory,'external');await writeFile(external,'external');await link(external,path.join(f.workspace.root,'.observanda','linked'));
  await assert.rejects(f.deletions.begin(f.workspace,await f.deletions.review(f.workspace)),{code:'UNSAFE'});assert.equal(await readFile(external,'utf8'),'external');
@@ -127,6 +127,6 @@ test('final-marker interruption only removes empty directories, never new files'
 
 test('workspace deletion rejects a project binding before freezing any files',async t=>{
  const f=await fixture(t),review=await f.deletions.review(f.workspace);
- review.binding={format:'observanda-postgresql',version:3,id:randomUUID(),placement:'project',projectId:randomUUID()};
+ review.binding={format:'observanda-postgresql',version:6,id:randomUUID(),placement:'project',projectId:randomUUID(),cluster:randomUUID()};
  await assert.rejects(f.deletions.begin(f.workspace,review),{code:'DATABASE_LOCATION'});assert.equal(await workspaceDeletion(f.workspace.root),null);await access(f.workspace.root);
 });

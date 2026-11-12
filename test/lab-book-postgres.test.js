@@ -76,10 +76,10 @@ test('book shutdown waits for active leases and interrupted initialization can r
 });
 
 test('book catalogue bindings reject ambiguous identities and foreign environments',async t=>{
- const f=await fixture(t),a=await f.book('Binding Book'),id=randomUUID(),binding=labBookCatalogueBinding(id,a.id);
+ const f=await fixture(t),a=await f.book('Binding Book'),id=randomUUID(),binding=labBookCatalogueBinding(id,a.id,randomUUID());
  assert.equal(validLabBookCatalogueBinding(binding),true);assertLabBookCatalogueOwner(binding,a.id);
- for(const changed of [{...binding,projectId:randomUUID()},{...binding,placement:'project'},{...binding,version:3},{...binding,labBookId:randomUUID()}])await assert.rejects(async()=>assertLabBookCatalogueOwner(changed,a.id),{code:'DATABASE_LOCATION'});
- assert.throws(()=>labBookCatalogueBinding('../outside',a.id),{code:'INVALID'});
+ for(const changed of [{...binding,projectId:randomUUID()},{...binding,placement:'project'},{...binding,version:4},{...binding,version:6},{...binding,labBookId:randomUUID()},{...binding,cluster:'../outside'},(({cluster,...rest})=>rest)(binding)])await assert.rejects(async()=>assertLabBookCatalogueOwner(changed,a.id),{code:'DATABASE_LOCATION'});
+ assert.throws(()=>labBookCatalogueBinding('../outside',a.id,randomUUID()),{code:'INVALID'});assert.throws(()=>labBookCatalogueBinding(id,a.id),{code:'INVALID'});
  const env={OBSERVANDA_LAB_BOOK_DATABASE_ROOT:await realpath(a.root),OBSERVANDA_LAB_BOOK_ID:a.id};await assertLabBookCatalogueEnvironment(a.root,a.id,env);
  for(const changed of [{...env,OBSERVANDA_LAB_BOOK_ID:randomUUID()},{...env,OBSERVANDA_LAB_BOOK_DATABASE_ROOT:f.parent},{...env,OBSERVANDA_PROJECT_ID:randomUUID()},{...env,OBSERVANDA_WORKSPACE_DATABASE_ROOT:await realpath(a.root)}])await assert.rejects(assertLabBookCatalogueEnvironment(a.root,a.id,changed),{code:'DATABASE_LOCATION'});
 });

@@ -1,4 +1,5 @@
-import {initializeManagedApplication} from './postgres-runtime-bootstrap.js';
+import {initializeManagedApplication,initializeClusterIdentity} from './postgres-runtime-bootstrap.js';
+import {validClusterId} from './database-cluster-identity.js';
 import {diagnosticPhase} from './operational-diagnostics.js';
 import {connectManagedAdmin,verifyManagedApplication} from './postgres-runtime-readiness.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
@@ -11,7 +12,7 @@ import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
-import {createHash,randomBytes} from 'node:crypto';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {localStopWitness} from './postgres-stop-witness.js';
 import {pipeline} from 'node:stream/promises';
 import {Transform} from 'node:stream';
@@ -210,6 +211,9 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    let bytes=await files.read(stateFile);try{if(protector)bytes=await protector.unprotect(bytes);config=JSON.parse(bytes.toString());}finally{bytes.fill(0);}
    if(config.format!==1||![16,17,18].includes(config.major)||!['initializing','ready'].includes(config.phase)||!Number.isInteger(config.port)||config.port<1||config.port>65535||![config.adminPassword,config.appPassword].every(v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v))||!path.isAbsolute(config.bin))throw new AppError('DATABASE_RUNTIME');
    if(workspace&&(config.workspaceId!==workspace.vault.id||typeof config.running!=='boolean'||typeof config.ownerId!=='string'))throw new AppError('DATABASE_RUNTIME');
+   // Clusters made before cluster identities are converted outside the
+   // product. Refuse them before any process is stopped or started.
+   if(!validClusterId(config.clusterId))throw new AppError(config.clusterId===undefined?'DATABASE_CLUSTER_RETIRED':'DATABASE_RUNTIME');
    // Never stop a PostgreSQL process owned by another installation sharing
    // this folder. A clean shutdown makes an ordinary disk transfer portable.
    if(workspace&&config.running&&(config.ownerId!==workspace.ownerId||config.activeDirectory!==directory))throw new AppError('DATABASE_WORKSPACE_RUNNING');
@@ -221,7 +225,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
     runtime=await findPostgres(env,checkVersion);
     if(!runtime){if(!runtimeDirectory)throw new AppError('DATABASE_TOOLS');runtimeDirectory=path.resolve(runtimeDirectory);await outsideWorkspace(runtimeDirectory);await privateRoot(runtimeDirectory);runtime=await install(runtimeDirectory,{env,signal,onProgress,checkVersion});}
    }else runtime=await install(runtimeDirectory??directory,{env,signal,onProgress,checkVersion});
-   config={format:1,...runtime,phase:'initializing',port:await freePort(),adminPassword:randomBytes(32).toString('hex'),appPassword:randomBytes(32).toString('hex'),...(workspace?{workspaceId:workspace.vault.id,ownerId:workspace.ownerId,running:false,activeDirectory:null}:{})};await save();
+   config={format:1,...runtime,phase:'initializing',clusterId:randomUUID(),port:await freePort(),adminPassword:randomBytes(32).toString('hex'),appPassword:randomBytes(32).toString('hex'),...(workspace?{workspaceId:workspace.vault.id,ownerId:workspace.ownerId,running:false,activeDirectory:null}:{})};await save();
   }
   if(existingOnly&&config.phase!=='ready')throw new AppError('DATABASE_RUNTIME');
   const stage=path.join(directory,'cluster-staging');
@@ -270,6 +274,11 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   try{
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
   }finally{await admin.end();}
+  // The identity is committed before the ready phase is saved below.
+  if(config.phase==='initializing'){
+   const owner=await diagnosticPhase('runtime-connect',()=>connectManagedAdmin(config,{signal,deadline:startupDeadline,database:'observanda'}));
+   try{await initializeClusterIdentity(owner,config);}finally{await owner.end();}
+  }
   await verifyManagedApplication(config,{signal});
   if(workspace&&guard.stopWitness){
    const witness=await localStopWitness({guard,config,workspace,data}).catch(error=>{

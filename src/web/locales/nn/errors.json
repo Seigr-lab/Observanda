@@ -124,6 +124,8 @@
   "PROJECT_JOB_ACTIVE": "Ei publiseringsoppgåve køyrer framleis for dette prosjektet. La henne bli ferdig før du flyttar prosjektdatabasen.",
   "JOB_CANCELLED": "Handsaminga vart avbroten. Mottekne originalbyte er bevarte for eit nytt forsøk.",
   "DATABASE_LOCATION": "Databasemappa samsvarar ikkje med eigaren. Databasefiler for eit arbeidsområde må bli verande i arbeidsområdet; programinnstillingar og køyrbare PostgreSQL-filer må lagrast separat.",
+  "CATALOGUE_BINDING_RETIRED": "Katalogkoplinga i denne mappa er frå eit tidlegare lagringsformat i Observanda som ikkje oppgir databaseklynga. Filene er uendra. Konverter mappa til gjeldande lagringsformat før du opnar ho.",
+  "DATABASE_CLUSTER_RETIRED": "Denne PostgreSQL-databasen vart oppretta med eit tidlegare lagringsformat i Observanda utan klyngeidentitet. Filene er uendra. Konverter mappa til gjeldande lagringsformat før du opnar ho.",
   "DATABASE_LOCK_TOOLS": "Systemverktøyet Perl på macOS er påkravd for å verne eigarskapen til administrerte databasar. Gjenopprett /usr/bin/perl eller set opp ein eksternt administrert PostgreSQL-database.",
   "DATABASE_PERMISSION": "Observanda-databasekontoen treng CREATE- og TEMPORARY-løyve i den eigne PostgreSQL-databasen. Han treng ikkje superbrukarrettar.",
   "DATABASE_CANCELLED": "PostgreSQL-oppsettet vart avbrote. Start Observanda på nytt for å halde fram med oppsettet; eksisterande arbeidsområde er bevarte.",

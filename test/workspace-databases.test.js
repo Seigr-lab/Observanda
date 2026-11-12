@@ -25,10 +25,10 @@ test('normal workspace creation, editing and scratch queries use independent wor
 });
 
 
-test('managed storage refuses an obsolete shared binding without starting or modifying a database',async t=>{
+test('managed storage refuses a configured-server binding without starting or modifying a database',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-unsupported-owner-')),owner=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID()});
  t.after(async()=>{await owner.close();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- await mkdir(path.join(root,'.observanda'));await publishCatalogueBinding(root,randomUUID());const binding=await readFile(path.join(root,'.observanda/research.observanda'));
+ await mkdir(path.join(root,'.observanda'));await publishCatalogueBinding(root,randomUUID(),{cluster:randomUUID(),installation:true});const binding=await readFile(path.join(root,'.observanda/research.observanda'));
  await assert.rejects(owner.environment(root),{code:'ACCESS_UPGRADE'});await assert.rejects(owner.details({root}),{code:'ACCESS_UPGRADE'});
  assert.equal(owner.instances.instances.size,0);assert.equal(owner.projects.stats().open,0);
  assert.deepEqual(await readFile(path.join(root,'.observanda/research.observanda')),binding);assert.deepEqual(await readdir(root),['.observanda']);assert.deepEqual(await readdir(path.join(root,'.observanda')),['research.observanda']);

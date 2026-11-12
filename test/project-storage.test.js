@@ -33,7 +33,7 @@ async function fixture(t){
 test('project storage routes actual records, independent writes, history and reopen to its own catalogue',async t=>{
  const f=await fixture(t),a=await f.create('a'),b=await f.create('b'),ordinary=await encryptedFixture(path.join(f.parent,'ordinary'),sampleNotebook());f.vaults.push(ordinary.vault);
  const before=await a.storage.read(),other=await b.storage.read(),binding=await catalogueBinding(a.storage.root);
- assert.equal(binding.placement,'project');assert.equal(binding.version,3);assert.equal(binding.projectId,a.id);assert.equal((await catalogueBinding(ordinary.workspace.root)).placement,'workspace');
+ assert.equal(binding.placement,'project');assert.equal(binding.version,6);assert.match(binding.cluster,/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);assert.equal(binding.projectId,a.id);assert.equal((await catalogueBinding(ordinary.workspace.root)).placement,'workspace');
  let entered,release;const started=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);
  const pending=a.storage.withLock(async()=>{entered();await hold;await a.storage.catalogue(store=>store.putObject('metadata:.observanda/test.json',{text:'A committed'}));});
  await started;

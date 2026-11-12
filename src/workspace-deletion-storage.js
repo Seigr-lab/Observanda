@@ -1,4 +1,5 @@
-// Old catalogues can be deleted without adopting or upgrading their storage.
+// Catalogues on a configured PostgreSQL server ('installation' placement) and
+// unactivated archives can be deleted without adopting their storage.
 // Only deletion uses this adapter; ordinary workspace routing stays unchanged.
 import {Workspace} from './storage.js';
 import {catalogueBinding} from './postgres-activation.js';
@@ -14,7 +15,7 @@ class DeletionStorage extends Workspace{
 }
 export async function workspaceDeletionStorage(workspace){
  const binding=await catalogueBinding(workspace.root),provider=databaseProvider();
- if(binding?.version===1)return new DeletionStorage(workspace,await deletionDatabaseEnvironment(workspace.root,workspace.vault),true);
+ if(binding?.placement==='installation')return new DeletionStorage(workspace,await deletionDatabaseEnvironment(workspace.root,workspace.vault),true);
  if(!binding&&await hasCatalogue(workspace.root)&&provider?.archiveEnvironment)return new DeletionStorage(workspace,await provider.archiveEnvironment(workspace.root),true);
  return workspace;
 }

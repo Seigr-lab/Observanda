@@ -12,7 +12,7 @@ import {workspaceFolderName} from './workspace-names.js';
 import path from 'node:path';
 import {readFile} from 'node:fs/promises';
 import {OwnedStorageDeletions,ownedDeletionDirectory} from './owned-storage-deletion.js';
-import {catalogueBinding} from './postgres-activation.js';
+import {catalogueBinding,validWorkspaceCatalogueBinding} from './postgres-activation.js';
 import {openCatalogue} from './postgres.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {databaseConversionState} from './workspace-database-receipt.js';
@@ -68,7 +68,7 @@ export class WorkspaceDeletions extends OwnedStorageDeletions{
 
  async review(workspace,options){const plan=await super.review(await workspaceDeletionStorage(workspace),options);return {...plan,title:workspaceFolderName(plan.source)};}
  binding(root){return catalogueBinding(root);}
- validBinding(value){return value===null||/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value?.id??'')&&[1,2].includes(value?.version);}
+ validBinding(value){return value===null||validWorkspaceCatalogueBinding(value);}
  ready(workspace,binding){return readyForDeletion(workspace,binding);}
  async stopDatabase(root,value,vault,id,{checkpoint=async()=>{}}={}){
  if(value.binding?.placement==='workspace'){
