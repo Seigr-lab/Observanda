@@ -23,7 +23,13 @@ test('near-limit record checkpoints pin one base and survive concurrency, failed
  const start=performance.now(),saved=await drafts.write(command),elapsed=performance.now()-start;
  assert.deepEqual(reads,[]);assert.equal((await drafts.write(command)).revision,saved.revision);assert.deepEqual(reads,[]);
  const raw=await f.workspace.readMetadata('.observanda/drafts/'+command.id+'.json',MAX_BYTES);assert.ok(Buffer.byteLength(raw)>1.9*1024*1024);assert.ok(Buffer.byteLength(raw)<MAX_BYTES);assert.equal(JSON.parse(raw).changes[0].base,undefined);
- assert.equal((await drafts.list()).drafts.length,1);assert.deepEqual(reads,[]);
+ const ordinary=(await drafts.list()).drafts;assert.equal(ordinary.length,1);assert.equal(ordinary[0].recovery,undefined);
+ const [row]=(await drafts.list({includeRecovery:true})).drafts;
+ assert.deepEqual(row.recovery,{surface:'record',id:command.id,
+  owner:{workspaceId:book.id,projectId:null,labBookId:null,recordId:base.id},documentKey:base.id,
+  revision:saved.revision,baseRevision:recordRevision(base),updatedAt:row.updatedAt,state:'unchecked',
+  capabilities:{recover:false,compare:true,discard:true}});
+ assert.ok(Buffer.byteLength(JSON.stringify(row))<2048);assert.deepEqual(reads,[]);
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:{...base,title:'Concurrent saved title'}}]},{receipt:true});reads.length=0;
  const recovered=await drafts.read(command.id);assert.deepEqual(reads,[base.id]);assert.deepEqual(recovered.draft.changes[0].base,base);assert.equal(recovered.draft.changes[0].record.title,change.record.title);
  const put=ResearchCatalogue.prototype.putObject;t.mock.method(ResearchCatalogue.prototype,'putObject',function(id,...args){if(id.startsWith('metadata:.observanda/draft-list/'))throw Object.assign(Error('Synthetic disk full'),{code:'ENOSPC'});return put.call(this,id,...args);});

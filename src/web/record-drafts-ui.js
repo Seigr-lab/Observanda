@@ -162,5 +162,5 @@ export function recordDraftsUI({api,esc,snapshot,onChange,onReset,recover,recove
   // actually reached storage; beforeunload still protects unsaved research.
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
   window.addEventListener('online',()=>{if(failed)flush();});
-  return {start,schedule,flush,commit,acknowledge,hasPendingSave:()=>!!pendingSave,saveUncertain:()=>!!pendingSave?.applyAttempted,clear,banner,statusView,update,refresh:list.refresh,isRecovering:list.isBusy,close(){list.close();void start(null);},pause(){clearTimeout(timer);timer=null;status(text('paused'));}};
+  return {start,schedule,flush,commit,acknowledge,hasPendingSave:()=>!!pendingSave,saveUncertain:()=>!!pendingSave?.applyAttempted,clear,banner,statusView,update,show:list.show,refresh:list.refresh,isRecovering:list.isBusy,close(){list.close();void start(null);},pause(){clearTimeout(timer);timer=null;status(text('paused'));}};
 }

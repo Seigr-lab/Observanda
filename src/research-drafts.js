@@ -14,7 +14,7 @@ import {validPreparationEdit,attemptValueField} from './web/record-attempt-value
 import {projectRecordOwnerDraft} from './record-owner-drafts.js';
 import {upgradeRecord} from './web/record-model.js';
 import {validDraftRecord as record} from './record-draft-validation.js';
-import {ResearchDraftIndex,draftSummary,draftKey} from './research-draft-index.js';
+import {ResearchDraftIndex,draftSummary,draftKey,recordRecoverySummary} from './research-draft-index.js';
 import {digest,serialize} from './storage.js';
 import {MAX_RECORD_COMMAND_BYTES as MAX_BYTES} from './web/research-capacity.js';
 import {recordRevision} from './research.js';
@@ -94,11 +94,14 @@ export class ResearchDrafts {
     }
     return result;
   }
-  async list({workspaceId=null,cursor=null,excludeId=null,limit=10}={},{signal}={}){
-    if(workspaceId!==null&&!id(workspaceId)||excludeId!==null&&!id(excludeId)||!Number.isInteger(limit)||limit<1||limit>20||cursor!==null&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096))throw new AppError('INVALID');
+  async list({workspaceId=null,cursor=null,excludeId=null,limit=10,includeRecovery=false}={},{signal}={}){
+    if(typeof includeRecovery!=='boolean'||workspaceId!==null&&!id(workspaceId)||excludeId!==null&&!id(excludeId)||!Number.isInteger(limit)||limit<1||limit>20||cursor!==null&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096))throw new AppError('INVALID');
     signal?.throwIfAborted();const {metadata:book}=await this.workspace.outline();
     if(workspaceId!==null&&workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
-    if(await this.workspace.storageKind()==='catalogue')return this.index.page(book.id,{cursor,excludeId,limit},{signal});
+    const labBookId=this.workspace.labBookId??null;
+    const owner={projectId:this.workspace.projectId??(labBookId?book.projects[0].id:null),labBookId};
+    const presentSummary=includeRecovery?(result,sourceRevision)=>recordRecoverySummary(result,sourceRevision,owner):draftSummary;
+    if(await this.workspace.storageKind()==='catalogue')return this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
     // The old file representation has no authenticated index. Keep its
     // compatibility path bounded in body memory; current workspaces use PostgreSQL.
     let anchor={after:null,reverse:false};
@@ -109,7 +112,7 @@ export class ResearchDrafts {
     for await(const name of this.workspace.metadataNames('.observanda/drafts')){
       signal?.throwIfAborted();if(!/^[a-f0-9-]{36}\.json$/.test(name)||name.slice(0,-5)===excludeId)continue;
       const result=await this.read(name.slice(0,-5),{expand:false,header:true});if(!result||result.draft.workspaceId!==book.id)continue;
-      const {sourceRevision,workspaceId:owner,...item}=draftSummary(result,result.revision);void sourceRevision;void owner;
+      const {sourceRevision,workspaceId:namespace,...item}=presentSummary(result,result.revision);void sourceRevision;void namespace;
       const key=draftKey(item),direction=anchor.reverse?-1:1;
       if(anchor.after&&(anchor.reverse?key>=anchor.after:key<=anchor.after)){opposite=true;continue;}
       items.push(item);items.sort((a,b)=>(draftKey(a)<draftKey(b)?-1:1)*direction);if(items.length>limit){items.pop();more=true;}

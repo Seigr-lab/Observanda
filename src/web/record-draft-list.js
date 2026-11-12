@@ -3,7 +3,7 @@ import {readRecordCheckpoint} from './record-draft-transfer.js';
 import {recordDraftPreview} from './record-draft-preview.js';
 import {recordDraftRecords} from './record-draft-records.js';
 import {revisionId} from './revision-model.js';
-import {t} from './i18n/index.js';
+import {language,t} from './i18n/index.js';
 import {language as appLanguage} from './i18n/index.js';
 const text=(key,args)=>t('recordDrafts',key,args);
 const validItem=item=>item&&researchId(item.id)&&revisionId(item.revision)&&typeof item.updatedAt==='string'&&Number.isFinite(Date.parse(item.updatedAt))&&Number.isSafeInteger(item.count)&&item.count>0&&Array.isArray(item.titles)&&item.titles.length===Math.min(item.count,3)&&item.titles.every(title=>typeof title==='string'&&title.length<=160);
@@ -24,9 +24,17 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   dialog.innerHTML='<h2 id="draft-list-title" tabindex="-1">'+esc(text('title'))+'</h2><p>'+esc(text('description'))+'</p><div class="record-draft-rows">'+body+'</div>'+controls+'<p data-draft-error role="alert" hidden></p><div class="dialog-actions">'+button('close','close')+'</div>';
  }
  function renderPage(){
+  function savedVersion(item){
+   const detail=item.recovery;
+   if(!detail)return '';
+   if(detail.owner?.workspaceId!==owner.workspaceId||detail.id!==item.id||detail.revision!==item.revision||detail.surface!=='record')throw Error(text('invalidPage'));
+   const base=detail.baseRevision;
+   const version=base===null?text(item.count===1?'newRecordBase':'multipleBases'):text('savedVersion',{revision:base});
+   return '<details><summary>'+esc(text('recoveryDetails'))+'</summary><p>'+esc(version)+'</p><p>'+esc(text('checkOnReview'))+'</p></details>';
+  }
   const rows=page.drafts.map(item=>'<section class="record-draft-row"><h3>'+item.titles.map(title=>esc(title||text('untitled'))).join(' · ')+'</h3>'+
    (item.count>item.titles.length?'<p>'+esc(text('additional',{count:item.count-item.titles.length}))+'</p>':'')+
-   '<p>'+esc(text('checkpointedAt',{date:new Date(item.updatedAt).toLocaleString(appLanguage())}))+'</p><div class="inline-actions">'+button('review','review','data-id="'+item.id+'"')+button('discard','discard','data-id="'+item.id+'"')+'</div></section>').join('');
+   '<p>'+esc(text('checkpointedAt',{date:new Date(item.updatedAt).toLocaleString(language())}))+'</p>'+savedVersion(item)+'<div class="inline-actions">'+button('review','review','data-id="'+item.id+'"')+button('discard','discard','data-id="'+item.id+'"')+'</div></section>').join('');
   frame((rows||'<p role="status">'+esc(text('empty'))+'</p>')+'<p>'+esc(text('live'))+'</p>','<nav class="inline-actions" aria-label="'+esc(text('pages'))+'">'+button('previous','previous',page.previousCursor?'':'disabled')+button('next','next',page.nextCursor?'':'disabled')+button('refresh','refresh')+'</nav>');
  }
  async function load(next=null,{preview=false,focus=null}={}){
@@ -34,7 +42,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   if(!preview){cursor=next;frame('<p role="status">'+esc(text('loading'))+'</p>');}
   const limit=preview?1:10;
   try{
-   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:owner.id,limit},{adopt:false,signal:request.signal});
+   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:owner.id,limit,...(preview?{}:{includeRecovery:true})},{adopt:false,signal:request.signal});
    if(request.signal.aborted||!current(epoch,workspaceId))return;
    if(result?.workspaceId!==workspaceId||!Array.isArray(result.drafts)||result.drafts.length>limit||!result.drafts.every(validItem)||new Set(result.drafts.map(d=>d.id)).size!==result.drafts.length||result.drafts.some(d=>d.id===owner.id)||![result.previousCursor,result.nextCursor].every(v=>v===null||typeof v==='string'&&v.length>0&&v.length<=4096))throw Error(text('invalidPage'));
    available=Boolean(result.drafts.length||result.nextCursor||result.previousCursor);failed=false;
@@ -117,5 +125,5 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   }
  };
  document.addEventListener('click',event=>{if(event.target.closest('[data-record-drafts]'))void show();});
- return {reset,refresh,banner,close,isBusy:()=>busy};
+ return {reset,refresh,show,banner,close,isBusy:()=>busy};
 }

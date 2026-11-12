@@ -57,6 +57,12 @@ test('record owner transfer preserves selected checkpoints and corrections witho
  });
  const remaining=await drafts.read(id,{header:true,expand:false});assert.notEqual(remaining.revision,original.revision);assert.deepEqual(remaining.draft.changes.map(change=>change.record.id),[b.id]);
  assert.equal((await drafts.list({workspaceId:from.namespaceId})).drafts.find(item=>item.id===id).count,1);
+ const recovery=(await drafts.list({workspaceId:from.namespaceId,includeRecovery:true})).drafts.find(item=>item.id===id).recovery;
+ assert.deepEqual(recovery.owner,{...sourceOwner,recordId:b.id});
+ assert.equal(recovery.revision,remaining.revision);assert.equal(recovery.baseRevision,recordRevision(b));
+ const received=(await importedDrafts.list({workspaceId:to.namespaceId,includeRecovery:true})).drafts.find(item=>item.id===id).recovery;
+ assert.deepEqual(received.owner,{...targetOwner,recordId:a.id});
+ assert.equal(received.revision,imported.revision);assert.equal(received.baseRevision,recordRevision(a));
  await assert.rejects(drafts.write({id,workspaceId:from.namespaceId,expectedRevision:remaining.revision,changes:original.draft.changes}),{code:'RECORD_RELOCATED'});
  sibling=await review.prepare({workspaceId:from.namespaceId,id,expectedRevision:remaining.revision,position:0});assert.equal((await review.editRead({...request(sibling),field:'body'})).value.body,privateSibling+' corrected');await review.apply(request(sibling));assert.equal(await drafts.read(id,{header:true}),null);
  const importedReview=new RecordDraftReview(reopened,media);let moved=await importedReview.prepare({workspaceId:to.namespaceId,id,expectedRevision:imported.revision});assert.equal(moved.decided,2);assert.equal((await importedReview.editRead({...request(moved),field:'body'})).value.body,'Corrected checkpoint body');

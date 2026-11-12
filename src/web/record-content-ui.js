@@ -27,6 +27,7 @@ import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js'
 export function recordContentUI({state,api,esc,field,render,report,refresh,editWriting,tools=()=>'',before=()=>'',after=()=>'',links=()=>'',attemptReference=null,resultReference=null}){
  const assetUrl=id=>ownedAssetURL(state,'/api/media/'+id);
  const text=(key,args)=>t('recordContent',key,args);
+ let initialRead=null;
  let owner=null,reading=null,controller=null,busy=false,error=null,offset=0,search='',lastSearch=null,focus=null,lastAnchor=null,pending=null,progress=null,windows={},detailField='title',resultFigure=null,collectionFocus=null,pendingCollection=null;
  const identity=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable&&state.book?JSON.stringify([state.storage?.contextId,state.book.id,state.selected,state.etag]):null;
  const sectionActions=recordSectionActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,edit:editWriting,render,report});
@@ -100,7 +101,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   const key=identity();if(!key){clear();return;}
   if(key!==owner){
    const previous=owner&&JSON.parse(owner),current=JSON.parse(key),sameRecord=previous&&previous.slice(0,3).every((v,i)=>v===current[i]),anchor=state.recordSection??(sameRecord?reading?.sections.values[0]?.id:null);
-   const previousWindows=windows,previousDetail=detailField,previousFigure=resultFigure,previousOffset=offset;clear();if(sameRecord){windows=previousWindows;detailField=previousDetail;resultFigure=previousFigure;offset=previousOffset;}owner=key;lastAnchor=state.recordSection;void load(anchor?{anchor,...(resultStatementAnchor(anchor)?{resultFigure:null}:{})}:{});render();return;
+   const previousWindows=windows,previousDetail=detailField,previousFigure=resultFigure,previousOffset=offset;clear();if(sameRecord){windows=previousWindows;detailField=previousDetail;resultFigure=previousFigure;offset=previousOffset;}owner=key;lastAnchor=state.recordSection;initialRead=load(anchor?{anchor,...(resultStatementAnchor(anchor)?{resultFigure:null}:{})}:{});render();return;
   }
   if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor,...(resultStatementAnchor(lastAnchor)?{resultFigure:null}:{})});render();return;}
   if(busy)return;
@@ -147,7 +148,15 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   }else if(name!=='content-retry')extra={offset:Math.max(0,offset+(name==='content-previous'?-4:4))};
   collectionFocus=name==='content-retry'?pendingCollection:null;focus=!collectionFocus;state.recordSection=null;const task=load(extra,name==='content-retry');render();await task;return true;
  }
- return {view,bind,action,clear,async openAnchor(anchor){
+ async function whenReady(id){
+  const key=identity();
+  if(!key||key!==owner||state.selected!==id)return false;
+  await initialRead;
+  if(identity()!==key||owner!==key)return false;
+  if(!reading)throw Error(error||text('failed'));
+  return true;
+ }
+ return {view,bind,action,clear,whenReady,async openAnchor(anchor){
   if(!resultStatementAnchor(anchor)||!identity())return false;
   state.recordSection=anchor;lastAnchor=anchor;focus=null;collectionFocus=null;
   const task=load({anchor,resultFigure:null});render();await task;return true;

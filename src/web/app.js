@@ -83,6 +83,7 @@ import {researchTargets} from './research-target-presentation.js';
 import {applicationShell} from './application-shell.js';
 import {ux} from './experience-ui.js';
 import {toolDirectoryView,filterToolDirectory,discoverableTools} from './tool-directory-ui.js';
+import {recoveryCenter} from './recovery-center.js';
 import {workspaceNavigation} from './workspace-navigation.js';
 import {websiteSitesUI} from './website-sites-ui.js';
 import {activeWebsite,explicitWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
@@ -153,6 +154,28 @@ const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
 let websiteFiles=null,fileEditorEpoch=0;
+const recoveryHub=recoveryCenter({state,api,esc,notify,
+ showRecords:()=>recordDrafts.show(),
+ selectPublicationOwner:async(action,done)=>{
+  const enter=async projectId=>{await projectOwners.enter(projectId);state.page='tools';render();await done();};
+  if(action==='project')return recordDestination.open({projectOnly:true,selected:(projectId,_book,legacy)=>enter(legacy?null:projectId)});
+  await enter(action==='workspace'?null:state.projectOwner?.projectId??null);
+ },
+ openDocument:item=>rawAction({dataset:{action:'module-open-owned',workspaceId:item.owner.workspaceId,projectId:item.owner.projectId??'',moduleId:'pdf-editor',modulePath:item.owner.documentId}}),
+ chooseBook:done=>recordDestination.open({selected:async(projectId,labBookId,legacy)=>{
+  await projectOwners.enter(legacy?null:projectId,legacy?null:labBookId);
+  state.page='tools';render();await done();
+ }}),
+ openScience:async item=>{
+  await rawAction({dataset:{action:'edit-entry',id:item.owner.recordId}});
+  if(state.page==='record-reader'&&!await recordContent.whenReady(item.owner.recordId))return;
+  await materials.openRecovery(item);
+ },
+ openWebsite:async item=>{
+  await enterWebsiteFiles({hash:'#/websites/'+item.owner.websiteId+'/editor'});
+  if(state.access?.locked||state.fileError||!state.filesMode)return;
+  await websiteFiles.openRecovery(item);
+ }});
 const fileChanges=typeof BroadcastChannel==='function'?new BroadcastChannel('observanda-website-files'):null;
 if(fileChanges)fileChanges.onmessage=({data})=>{if(state.filesMode&&data?.type==='visibility'&&data.contextId===state.storage?.contextId)void websiteFiles?.checkVersion();};
 function sourceVisibilityWrite(route,data){
@@ -830,6 +853,7 @@ function releaseCompleteWorkspace(){
 }
 function render() {
   updateDocumentLanguage(document);
+  recoveryHub?.checkContext();
   if(state.filesMode&&!state.access?.locked){renderWebsiteFiles();return;}
   configurationRecord?.checkContext();
   runCreation.checkContext();
@@ -1010,6 +1034,7 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='open-recovery-center'){recoveryHub.show();return;}
   if(name==='context-help'){await taskHelp.open(button.dataset.topic,button);return;}
   if(name==='tool-return'&&toolOrigin?.context===state.storage?.contextId){const origin=toolOrigin;toolOrigin=null;history.pushState({...origin.history,observandaIndex:++routeIndex},'',origin.route);await restoreRoute();requestAnimationFrame(()=>window.scrollTo(0,origin.scroll));return;}
   if(name==='interface'||name==='tools'){if(name==='tools')rememberToolOrigin();state.page=name;render();return;}

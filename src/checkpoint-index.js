@@ -57,7 +57,7 @@ export class CheckpointIndex{
   let summary;try{summary=JSON.parse(raw);}catch{fail();}
   if(!this.validSummary(summary)||hash(summary)!==hash(expected))fail();
  }
- async page(workspaceId,{cursor=null,excludeId=null,limit=10,scope=''},{signal}={}){
+ async page(workspaceId,{cursor=null,excludeId=null,limit=10,scope=''},{signal,presentSummary=this.summary}={}){
   return this.workspace.catalogue(async store=>{
    if((await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const prefix=this.prefix+(scope?scope+'/':'');let anchor={after:null,reverse:false};
@@ -76,7 +76,7 @@ export class CheckpointIndex{
      if(!entry.id.endsWith('.json')||!researchId(id))fail();
      const result=await this.read(id);if(!result||result.draft.workspaceId!==workspaceId)fail();
      const displayed=this.present?await this.present(result):result;if(!displayed)continue;
-     const summary=this.summary(displayed,entry.revision);if(summary===null)continue;if(!this.validSummary(summary))fail();
+     const summary=presentSummary(displayed,entry.revision);if(summary===null)continue;if(!this.validSummary(summary))fail();
      if(this.scopeOf(summary)!==scope||summary.id===excludeId)continue;
      const key=checkpointKey(summary);if(first===null||key<first)first=key;if(last===null||key>last)last=key;
      if(anchor.after&&(anchor.reverse?key>=anchor.after:key<=anchor.after))continue;
@@ -89,7 +89,13 @@ export class CheckpointIndex{
     signal?.throwIfAborted();return {workspaceId,drafts:items,previousCursor:items.length&&(anchor.reverse?more:opposite)?encode(items[0],true):null,nextCursor:items.length&&(anchor.reverse?opposite:more)?encode(items.at(-1),false):null};
    }
    const rows=(reverse,after)=>reverse?index.reverseEntries(head,prefix,after===null?null:prefix+after):index.entries(head,prefix,after===null?null:prefix+after);
-   const display=async summary=>{if(!this.present)return summary;const raw=await this.read(summary.id);if(!raw||hash(this.summary(raw,summary.sourceRevision))!==hash(summary))fail();const result=await this.present(raw);return result?this.summary(result,summary.sourceRevision):null;};
+   const display=async summary=>{
+    if(!this.present)return summary;
+    const raw=await this.read(summary.id);
+    if(!raw||hash(this.summary(raw,summary.sourceRevision))!==hash(summary))fail();
+    const result=await this.present(raw);
+    return result?presentSummary(result,summary.sourceRevision):null;
+   };
    const items=[];let more=false;
    for await(const entry of rows(anchor.reverse,anchor.after)){
     signal?.throwIfAborted();
