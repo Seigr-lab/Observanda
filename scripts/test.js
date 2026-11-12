@@ -24,7 +24,9 @@ try{
  if(!env.OBSERVANDA_DATABASE_URL){
   temporaryRuntime=await mkdtemp(path.join(temporaryRoot,'observanda-postgres-test-'));directory=path.join(temporaryRuntime,'database');
   if(env.OBSERVANDA_TEST_POSTGRES_BIN)env.OBSERVANDA_POSTGRES_BIN=env.OBSERVANDA_TEST_POSTGRES_BIN;
-  service=await startManagedPostgres({directory,env,signal:controller.signal,onProgress:({stage,percent})=>{if(stage==='download'&&percent%10===0)console.log('Installing test PostgreSQL: '+percent+'%');}});
+  // The PostgreSQL runtime is unpacked once per checkout into .local/test-runtime
+  // and reused by every run; each run still gets its own fresh database.
+  service=await startManagedPostgres({directory,runtimeDirectory:await workDirectory('test-runtime'),env,signal:controller.signal,onProgress:({stage,percent})=>{if(stage==='download'&&percent%10===0)console.log('Installing test PostgreSQL: '+percent+'%');}});
   env.OBSERVANDA_TEST_POSTGRES_BIN=service.bin;
  }
  console.log('Testing with an isolated PostgreSQL database.');
