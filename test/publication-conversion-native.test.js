@@ -14,6 +14,40 @@ import {PublicationConversion} from '../src/publication-conversion.js';
 import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {recordRevision} from '../src/research.js';
 import {RecordContent} from '../src/record-content.js';
+import {retainedDraft} from './fixtures/record-draft-review.js';
+import {defaultPublicationPrivacy} from '../src/web/record-publication-privacy.js';
+
+test('first saves and recovered grants convert only approved parts and repair an interrupted publication',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-publication-')),book=sampleNotebook(),base=book.entries[2];
+ book.entries=[];Object.assign(book.notebooks.find(item=>item.id===base.notebookId),{share:true,sharePdf:true});
+ const {workspace,vault}=await encryptedFixture(directory,book);
+ t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const publicationConversion=new PublicationConversion(workspace),files=publicationConversion.files;
+ const run=(method,data)=>executeResearchRequest(workspace,'/api/research/drafts/review/'+method,data,{publicationConversion});
+ const draftCommand=async(previous,record)=>{
+  const checkpoint=await retainedDraft(workspace,book.id,previous,record),plan=await run('prepare',{id:checkpoint.draft.id,workspaceId:book.id,expectedRevision:checkpoint.revision});
+  return {id:plan.id,workspaceId:plan.workspaceId,expectedRevision:plan.revision};
+ };
+ const privacy=defaultPublicationPrivacy();privacy.website.body=false;privacy.pdf.body=false;
+ const record={...base,id:randomUUID(),title:'Reviewed field notes',body:'Private summary',sections:[
+  {id:randomUUID(),title:'Site result',body:'Website-only reading',share:true,sharePdf:false},
+  {id:randomUUID(),title:'Print result',body:'PDF-only reading',share:false,sharePdf:true},
+  {id:randomUUID(),title:'Private note',body:'Hidden reading',share:false,sharePdf:false}
+ ],figures:[],attachments:[],relations:[],share:true,sharePdf:false,publication:privacy};
+ const first=await draftCommand(null,record),lookup=target=>files.sourceForRecord({workspaceId:book.id,recordId:record.id,target});
+ const capture=publicationConversion.capture.bind(publicationConversion);
+ publicationConversion.capture=async()=>{throw Error('Interrupted after record save');};
+ await assert.rejects(run('apply',first),/Interrupted after record save/);publicationConversion.capture=capture;
+ assert.equal((await workspace.read()).book.entries.length,1);assert.equal((await files.library()).items.length,0);
+ const saved=await run('apply',first),site=await lookup('website');assert.equal(site.visible,true);assert.equal((await files.library({target:'pdf'})).items.length,0);
+ await assert.rejects(files.pdfSource((await lookup('pdf')).id),{code:'NOT_FOUND'});
+ assert.deepEqual(await run('apply',first),saved);assert.equal((await lookup('website')).revision,site.revision);
+ const html=(await files.getSource(site.id)).html;assert.match(html,/Website-only reading/);assert.doesNotMatch(html,/Private summary|PDF-only reading|Hidden reading/);
+ const prior=(await workspace.read()).book.entries[0],update=await draftCommand(prior,{...prior,share:false,sharePdf:true});
+ await run('apply',update);assert.equal((await lookup('website')).visible,false);const pdf=await files.pdfSource((await lookup('pdf')).id);
+ assert.equal(pdf.parts.body,null);assert.deepEqual(pdf.parts.sections.map(section=>section.title),['Print result']);
+ assert.match(JSON.stringify(pdf.parts),/PDF-only reading/);assert.doesNotMatch(JSON.stringify(pdf.parts),/Private summary|Website-only reading|Hidden reading/);
+});
 
 test('a whole-record tag save updates only the tags in both previously converted compositions',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-converted-tags-')),book=sampleNotebook(),record=book.entries[2];

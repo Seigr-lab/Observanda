@@ -148,13 +148,17 @@ export class RecordDraftReview{
    signal?.throwIfAborted();return {id:plan.draftId,workspaceId:plan.workspaceId,revision:plan.draftRevision,recordId:plan.recordId,title,body,sections};
   }));
  }
- async context(store,command,consume,{retryChoice=false}={}){
+ async selectedPlan(store,command,{retryChoice=false}={}){
   if(!command||!researchId(command.workspaceId)||!revisionId(command.id)||!revisionId(command.expectedRevision))invalid();
   if((await store.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const plan=await store.object(prefix+command.id);if(!plan)throw new AppError('DRAFT_CHANGED');this.validate(plan);
   if(plan.workspaceId!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');await verifyDraftPlanOrigin(store,plan);
   const stale=revision(plan)!==command.expectedRevision;
   if(stale&&!retryChoice)throw new AppError('DRAFT_CHANGED');
+  return {plan,stale};
+ }
+ async context(store,command,consume,options){
+  const {plan,stale}=await this.selectedPlan(store,command,options);
   return withRecordBlockStore(store,plan.notebookId,plan.generation,(blocks,owner)=>consume(plan,new RecordDocument(blocks,plan.roots.stored??plan.roots.mine,{mutable:owner===store}),stale));
  }
  async conflict(document,plan,position){
@@ -196,7 +200,14 @@ export class RecordDraftReview{
    const next={...plan,choices,decided:plan.decided+(before?0:1)};await store.putObject(prefix+plan.id,next);return this.summary(next);
   },{retryChoice:true})));
  }
- async apply(command){return this.workspace.withLock(()=>this.applyLocked(command));}
+ async apply(command,{publicationConversion}={}){
+  const save=()=>this.workspace.withLock(()=>this.applyLocked(command));
+  if(!publicationConversion)return save();
+  // First saves and recovered edits use the same reviewed plan. Derive the
+  // publication identity from that plan before taking the writer lease.
+  const {plan}=await this.workspace.catalogue(store=>this.selectedPlan(store,command));
+  return publicationConversion.mutateRecord(this.workspace,plan,save);
+ }
  async applyLocked(command){
   return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
    if(plan.saved)return plan.saved;

@@ -439,6 +439,10 @@ export class PublicationConversion{
   return this.change(storage,targets,data.workspaceId,operation,basis,hooks);
  }
  async mutateNotebook(storage,notebookId,operation){if(!researchId(notebookId))throw new AppError('INVALID');return this.withProducer(storage,()=>this.change(storage,{records:new Map(),books:new Set([notebookId])},null,operation));}
+ async mutateRecord(storage,{workspaceId,notebookId,recordId},operation){
+  if(![workspaceId,notebookId,recordId].every(researchId))throw new AppError('INVALID');
+  return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set()},workspaceId,operation));
+ }
  async change(storage,targets,workspaceId,operation,basis,{committed}={}){
   targets={...targets,trackLive:!targets.tagsOnly};
   const selectedChannels=targets.liveOnly?['website']:channels;
