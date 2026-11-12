@@ -38,7 +38,9 @@ import {checkpointHasCalculationPolicy} from './web/tools/calculation-policy.js'
 export async function requireMetadataCatalogueFormat(db,relative,text){
  if(publicationOperationMetadataPath(relative)&&publicationOperationMetadata(relative,JSON.parse(text)))await requirePublicationOperations(db);
  if(relative.startsWith('.observanda/materials/')||relative.startsWith('.observanda/jobs/')){
-   const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){await requirePagedResearchTables(db);}
+   // A damaged file (for example JSON null) declares no catalogue feature; its
+   // owner's own validation reports it instead of this check failing first.
+   const value=JSON.parse(text);if(value!==null&&typeof value==='object'){if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){await requirePagedResearchTables(db);}
    if(referencedCalculationMetadata(relative,value)){await requireReferencedCalculations(db);}
    if(nativeNumericalMetadata(relative,value)){await requireNativeNumericalModels(db);}
    if(nativeClockMetadata(relative,value)){await requireNativeClockModels(db);}
@@ -71,7 +73,7 @@ export async function requireMetadataCatalogueFormat(db,relative,text){
    if(structuredCalculatorMetadata(relative,value)){await requireStructuredCalculator(db);}
    if(calculatorResultMetadata(relative,value)){await requireCalculatorDatasetResults(db);}
    if(datasetResourceMetadata(relative,value)){await requireDatasetResourcePolicies(db);}
- }
+ }}
  if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
    if(checkpointHasStructuredCalculator(JSON.parse(text))){await requireStructuredCalculator(db);}
    if(checkpointHasCalculationPolicy(JSON.parse(text))){await requireCalculationPolicies(db);}
