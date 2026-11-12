@@ -12,7 +12,7 @@ import {runWebsiteUpgrade,upgradeControl,validateUpgradeState} from './website-u
 import {websiteWorkspace} from './website-workspace.js';
 import {PublicationJobs} from './publication-jobs.js';
 import {openPublicationInput} from './publication-input-reader.js';
-import {PublicationConversion} from './publication-conversion.js';
+import {PublicationConversion,holdPublicationWriters} from './publication-conversion.js';
 import {annotatePublicationParts} from './publication-conversion-render.js';
 import {readWebsiteDocumentRegistry} from './website-document-registry.js';
 import {contentBuffer,contentHash} from './file-content.js';
@@ -114,27 +114,42 @@ export async function convertExistingWebsite(workspace,store,{websiteId,sourceRe
  const existing=await alreadyImported(store,websiteId,signal);if(existing)return existing;
  return runWebsiteUpgrade(store,'site-'+(websiteId??'default'),async()=>{
   const previous=await alreadyImported(store,websiteId,signal);if(previous)return previous;
-  const saved=await workspace.catalogue(async catalogue=>{
+  const capture=()=>workspace.catalogue(async catalogue=>{
    const documents=new WebsiteDocumentStore(catalogue),registry=await documents.registry();
    if(!registry)throw new AppError('STORAGE_UPGRADE_REQUIRED');
    const selected=await documents.read(websiteId,{signal}),snapshot=await catalogue.snapshot(selected.researchSnapshotId);
    const websitePin={websiteId,websiteRevision:selected.websiteRevision,researchSnapshotId:selected.researchSnapshotId};
    return {siteId:websiteId??registry.defaultSiteId,metadata:websiteBook(snapshot.metadata,selected.site),websitePin,source:selected.site};
   });
-  const {siteId,metadata,websitePin,source}=saved,site=websiteWorkspace(workspace,websiteId);
+  const saved=await capture(),{siteId}=saved,site=websiteWorkspace(workspace,websiteId);
   if(websiteId===null)await store.scope(()=>store.writeControl(upgradeControl('default-site'),{id:siteId},{signal}),{write:true,signal});
   const duplicate=await alreadyImported(store,websiteId,signal);if(duplicate)return duplicate;
+  // Record saves of the seeded entries wait until these pages are imported.
+  return holdPublicationWriters(store,async()=>{
+  // A record save that fenced an entry before it was seeded runs first and
+  // moves the research head. The pages are then captured again from that head;
+  // the producer leases taken by the first seeding stay held, so it stays put.
+  for(let pinned=saved,attempt=1;;attempt++){
+  const {metadata,websitePin,source}=pinned;
   const material=authoredSiteOnly(source)?{files:await renderAuthoredSite(workspace,metadata,{blockedValues,signal})}:await researchWebsiteFiles(workspace,store,site,{metadata,websitePin,sourceReader,signal,blockedValues,progress});
   const draftFiles=await renderDraftPages(workspace,metadata,material.files,{edition:material.edition,bind:material.bind,signal});
   await progress?.('saving-files',0,material.files.size+draftFiles.size);
   const {migrateWebsitePublishingMetadata}=await import('./website-publishing-migration.js');
-  return store.scope(()=>site.withLock(async()=>{
+  const imported=await store.scope(()=>site.withLock(async()=>{
    await site.lockWebsite();
    const current=await new WebsiteSites(workspace).version(websiteId);
-   if(!sameWebsitePin(current.websitePin,websitePin))throw new AppError('CONFLICT');
+   if(!sameWebsitePin(current.websitePin,websitePin)){
+    const researchOnly=current.websitePin.websiteId===websitePin.websiteId&&current.websitePin.websiteRevision===websitePin.websiteRevision;
+    if(researchOnly&&attempt<3)return null;
+    throw new AppError('CONFLICT');
+   }
    await migrateWebsitePublishingMetadata(site,store,siteId,{signal});
    return store.importFiles(siteId,{name:source.name,files:material.files,draftFiles,signal,onFile:(done,total)=>progress?.('saving-files',done,total)});
   }),{write:true,signal});
+  if(imported)return imported;
+  signal?.throwIfAborted();pinned=await capture();
+  }
+  });
  },{signal});
 }
 

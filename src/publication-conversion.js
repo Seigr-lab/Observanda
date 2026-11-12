@@ -1,3 +1,4 @@
+import {AsyncResource,AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
@@ -135,6 +136,23 @@ async function permittedOriginal(doc,target){
 }
 
 const SEED_GROUP=16;
+// A website conversion binds its pages to the sources it seeds and imports them
+// later. Inside this scope each owner's producer lease, once taken, stays held
+// until the scope ends, so no record save can change a seeded source before the
+// pages bound to it are imported; the save runs after the import instead. The
+// leases are taken from the context that opened the scope, whose native
+// destination outlives them, and are released when the scope ends.
+const heldWriters=new AsyncLocalStorage();
+export async function holdPublicationWriters(store,operation){
+ const held={root:store.workspace.root,leases:new Map(),start:AsyncResource.bind(run=>run())};
+ try{return await heldWriters.run(held,operation);}
+ finally{await Promise.allSettled([...held.leases.values()].reverse().map(lease=>lease.release()));}
+}
+function heldWriterLease(files,name,signal,start){
+ let release,acquire;const released=new Promise(resolve=>{release=resolve;}),acquired=new Promise(resolve=>{acquire=resolve;});
+ const run=start(()=>runWebsiteUpgrade(files,name,()=>{acquire();return released;},{shareResult:false,signal}));
+ return {acquired:Promise.race([acquired,run]),release:()=>{release();return run;}};
+}
 export class PublicationConversion{
  constructor(workspace,{store=new WebsiteFileStore(workspace)}={}){this.files=store;this.rebuilds=new Set();}
  // Wait for website copies still being rebuilt after answered saves.
@@ -266,7 +284,16 @@ export class PublicationConversion{
   else if(state.disposition==='withdrawn')await this.capture(null,{sourceId,provenance:reserved.provenance,visible:false,revision:null,snapshotId:state.snapshotId},reserved.token);
   else{if(!reserved.pending)await this.files.cancelSourceUpdate({sourceId,token:reserved.token,signal});throw new AppError('RECORD_CHANGED');}
  }
- async seedWebsites(provenances,withOwner,{signal,onSource,refreshHistoricalLive=false}={}){
+ // A record save fences these sources under its owner's producer lease (change
+ // below). Seeding takes the same lease before it fences and before its research
+ // snapshot, so a save and a seed take turns: the seed reads the saved record
+ // and its committed source instead of meeting the save's fence. The lease is
+ // named by the owner storage's vault, which only the owner reader knows.
+ async seedWebsites(provenances,withOwner,options={}){
+  let owner;await withOwner(async(store,snapshot,{storage})=>{owner=storage;});
+  return this.withProducer(owner??{},()=>this.seedSources(provenances,withOwner,options),{signal:options.signal});
+ }
+ async seedSources(provenances,withOwner,{signal,onSource,refreshHistoricalLive=false}={}){
   const pending=new Map(),sources=new Map(),existing=[];
   try{
    // Fence before taking the research snapshot. One owner can contain many
@@ -389,12 +416,17 @@ export class PublicationConversion{
   const targets=commandTargets(route,data);if(!targets)return;
   return this.withProducer(storage,()=>this.mutateTargets(storage,{route,data},targets,async()=>undefined));
  }
- withProducer(storage,operation){
+ withProducer(storage,operation,{signal}={}){
   const id=storage.vault?.id;if(!researchId(id))throw new AppError('ACCESS_LOCKED');
+  const held=heldWriters.getStore(),name='publication-writer-'+id;
+  if(held?.root===this.files.workspace.root){
+   if(!held.leases.has(name))held.leases.set(name,heldWriterLease(this.files,name,signal,held.start));
+   return held.leases.get(name).acquired.then(()=>operation());
+  }
   // The research DB commit and the subsequent saved-file publication share
   // this owner lease. A second editor cannot supersede the first token
   // between those two commits. Other research owners remain independent.
-  return runWebsiteUpgrade(this.files,'publication-writer-'+id,operation,{shareResult:false});
+  return runWebsiteUpgrade(this.files,name,operation,{shareResult:false,signal});
  }
  async mutateTargets(storage,{route,data},targets,operation,hooks={}){
   targets.tagsOnly=route==='/api/research/records/tags';
