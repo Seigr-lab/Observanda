@@ -74,7 +74,7 @@ for(const count of [42,420])test('general and module preferences save metadata w
   const research=main.getByRole('switch',{name:'Enable Research & development',exact:true});if(!await research.isChecked())await research.check();
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();const types=main.locator('[data-module-settings-slot="laboratory-research-development"]');
   await types.getByLabel('Record type name',{exact:true}).fill('Research questions');
-  await page.context().route('**/api/workspace/structure',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic settings interruption'}}),{times:1});
+  await page.context().route('**/research/configurations/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic settings interruption'}}),{times:1});
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('Synthetic settings interruption');await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('No unsaved changes');
   await page.reload();await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
@@ -92,7 +92,7 @@ test('project pages keep accurate lab-book counts and scoped recent records with
   book.entries.forEach((record,i)=>{record.notebookId=book.notebooks[i%3].id;});
  }});let fail=true;
  try{
-  await page.context().route('**/api/workspace/read/dashboard',route=>{if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic project interruption'}});}return route.continue();});
+  await page.context().route('**/api/projects/dashboard-collection/records',route=>{if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic project interruption'}});}return route.continue();});
   await page.goto(f.app.url);await page.evaluate(()=>location.hash='#/projects');
   await expect(page.locator('.project-card')).toHaveCount(2);for(const node of await page.locator('.project-card').all())await expect(node).toContainText('140 records');
   expect(f.bodies).toHaveLength(0);
@@ -241,10 +241,10 @@ test('record lists query summaries, retain historical type choices, and open sel
   await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Lab type',{exact:true}).selectOption('computer-it');await expect(page.locator('#record-count')).toHaveText('1');
   await page.getByLabel('Lab type',{exact:true}).selectOption('all');await expect(page.locator('#record-count')).toHaveText('420');
   await page.getByLabel('Filter by record type',{exact:true}).selectOption({label:'Retired material study'});await expect(page.locator('#record-count')).toHaveText('1');
-  await page.getByRole('button',{name:'Take 0',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Take 0');
+  await page.locator('#entry-results').getByRole('link',{name:'Take 0',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Take 0');
   await setRecordTitle(page,'Reviewed material study');
-  await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.getByRole('button',{name:'Reviewed material study',exact:true})).toBeVisible();
-  f.requests.length=0;f.bodies.length=0;await page.reload();await expect(page.getByRole('button',{name:'Reviewed material study',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results').getByRole('link',{name:'Reviewed material study',exact:true})).toBeVisible();
+  f.requests.length=0;f.bodies.length=0;await page.reload();await expect(page.locator('#entry-results').getByRole('link',{name:'Reviewed material study',exact:true})).toBeVisible();
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toHaveLength(0);expect(f.bodies).toHaveLength(0);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -335,7 +335,7 @@ test('record type finder pages without accumulating options and saved views reso
  }});
  let fail=false,release,started;
  try{
-  await page.context().route('**/api/workspace/read/record-types',async route=>{
+  await page.context().route('**/api/projects/record-collection/types',async route=>{
    const command=route.request().postDataJSON();
    if(fail){fail=false;return route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic discovery interruption'}});}
    if(command.search==='delayed'){started?.();await new Promise(resolve=>{release=resolve;});try{await route.continue();}catch{}return;}
@@ -371,7 +371,7 @@ test('record type finder pages without accumulating options and saved views reso
   await expect(page.getByRole('button',{name:'Find record type',exact:true})).toBeFocused();
   await page.getByRole('button',{name:'Find record type',exact:true}).click();
   const waiting=new Promise(resolve=>{started=resolve;});await dialog.getByLabel('Search record types',{exact:true}).fill('delayed');await waiting;
-  const aborted=page.waitForEvent('requestfailed',{predicate:r=>r.url().endsWith('/record-types')});
+  const aborted=page.waitForEvent('requestfailed',{predicate:r=>r.url().endsWith('/record-collection/types')});
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await aborted;release();release=null;
   expect(f.bodies).toHaveLength(0);
   // A refresh can advance the list's snapshot while the outline is unchanged.
