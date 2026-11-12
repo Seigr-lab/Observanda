@@ -19,5 +19,6 @@
   "folderRequired": "Elige una carpeta para este proyecto.",
   "templateUnavailable": "Esta plantilla de proyecto no está disponible. Elige otra plantilla o activa sus tipos de cuadernos de laboratorio en Preferencias.",
   "placementFailed": "No se ha podido colocar el proyecto ahí.",
-  "creating": "Creando el proyecto…"
+  "creating": "Creando el proyecto…",
+  "hierarchy": "Jerarquía de proyectos"
 }

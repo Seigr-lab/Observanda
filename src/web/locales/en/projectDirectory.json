@@ -19,5 +19,6 @@
   "folderRequired": "Choose a folder for this project.",
   "templateUnavailable": "This project template is unavailable. Choose another template or enable its lab-book types in Preferences.",
   "placementFailed": "The project could not be placed there.",
-  "creating": "Creating project…"
+  "creating": "Creating project…",
+  "hierarchy": "Project hierarchy"
 }

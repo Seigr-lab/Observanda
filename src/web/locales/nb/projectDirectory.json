@@ -19,5 +19,6 @@
   "folderRequired": "Velg en mappe for dette prosjektet.",
   "templateUnavailable": "Denne prosjektmalen er utilgjengelig. Velg en annen mal, eller aktiver labboktypene under Innstillinger.",
   "placementFailed": "Prosjektet kunne ikke plasseres der.",
-  "creating": "Oppretter prosjekt…"
+  "creating": "Oppretter prosjekt…",
+  "hierarchy": "Prosjekthierarki"
 }

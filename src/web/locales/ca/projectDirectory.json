@@ -19,5 +19,6 @@
   "folderRequired": "Tria una carpeta per a aquest projecte.",
   "templateUnavailable": "Aquesta plantilla de projecte no està disponible. Tria una altra plantilla o activa els seus tipus de llibre de laboratori a Preferències.",
   "placementFailed": "No s'ha pogut col·locar el projecte aquí.",
-  "creating": "S'està creant el projecte…"
+  "creating": "S'està creant el projecte…",
+  "hierarchy": "Jerarquia de projectes"
 }

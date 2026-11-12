@@ -31,7 +31,7 @@ export function projectDirectory({state,api,esc,changed}){
  function navigation(book){const combined=new Map(book.projects.map(p=>[p.id,p]));for(const entry of entries()){const selected=!state.projectOwner?.labBookId&&state.projectOwner?.projectId===entry.projectId?state.book.projects.find(p=>p.id===entry.projectId):null;combined.set(entry.projectId,{...summary(entry),...selected,parentId:entry.parentId});}return {...book,projects:[...combined.values()]};}
  const parents=id=>ancestors(navigation(state.book),id).slice(0,-1);
  const ancestor=p=>'<span data-project-ancestor="'+p.id+'"> / <button class="text-button" data-action="open-project" data-id="'+p.id+'">'+esc(p.title)+'</button></span>';
- function trail(projectId,workspaceTitle){return '<nav class="location-trail" aria-label="Project hierarchy" data-project-trail="'+projectId+'"><button class="text-button" data-action="projects">'+esc(workspaceTitle)+'</button>'+parents(projectId).map(ancestor).join('')+'</nav>';}
+ function trail(projectId,workspaceTitle){return '<nav class="location-trail" aria-label="'+esc(text('hierarchy'))+'" data-project-trail="'+projectId+'"><button class="text-button" data-action="projects">'+esc(workspaceTitle)+'</button>'+parents(projectId).map(ancestor).join('')+'</nav>';}
  function paint(value){
   const document=globalThis.document;if(!document||!state.book||state.access?.locked||state.storageUnavailable)return;
   const focused=document.activeElement,host=document.querySelector('[data-project-directory="'+(value.parentId??'root')+'"]');

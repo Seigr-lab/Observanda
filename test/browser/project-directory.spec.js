@@ -24,7 +24,7 @@ test('normal project creation owns its database, directory and independently nav
   const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   await page.locator('#workspace-navigation [data-action=projects]').click();
   await page.locator('main').getByRole('button',{name:'New project',exact:true}).click();
-  const dialog=page.locator('#dialog');await dialog.getByLabel('Name',{exact:true}).fill('Field science');await dialog.getByLabel('Description',{exact:true}).fill('Portable authoring');
+  const dialog=page.locator('#dialog');await dialog.getByLabel('Name',{exact:true}).fill('Field science');await dialog.getByText('Optional project details and template',{exact:true}).click();await dialog.getByLabel('Description',{exact:true}).fill('Portable authoring');
   await expect(dialog.locator('[name=projectPath]')).toHaveCount(0);await dialog.getByRole('button',{name:'Create project',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('main h1')).toHaveText('Field science');
   const entry=(await registry.read()).value.projects[0];expect(entry.summary.title).toBe('Field science');expect(entry.root).toBe(path.join(f.workspace.root,'Field science'));expect((await f.workspace.outline()).metadata.projects).toHaveLength(0);
   const vault=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(vault);let project=new ProjectStorage(entry.root,entry.projectId,vault);expect((await project.outline()).metadata.projects[0].title).toBe('Field science');
@@ -53,8 +53,8 @@ test('document workspace navigation keeps embedded projects without polling cata
   page.on('pageerror',error=>failures.push(error.message));page.on('response',response=>{if(response.status()>=400)failures.push(response.url()+': '+response.status());});
   await page.goto(app.url);await navigate(page,'Projects');await expect(page.locator('.project-grid')).toContainText(book.projects[0].title);
   await page.locator('main').getByRole('button',{name:book.projects[0].title,exact:true}).click();await expect(page.locator('main h1')).toHaveText(book.projects[0].title);
-  await preferences(page,'Appearance');await expect(page.getByRole('heading',{name:'Appearance',exact:true})).toBeVisible();
-  await page.reload();await expect(page.getByRole('heading',{name:'Appearance',exact:true})).toBeVisible();await navigate(page,'Projects');await expect(page.locator('.project-grid')).toContainText(book.projects[0].title);
+  await preferences(page,'App appearance');await expect(page.getByRole('heading',{name:'App appearance',exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('heading',{name:'App appearance',exact:true})).toBeVisible();await navigate(page,'Projects');await expect(page.locator('.project-grid')).toContainText(book.projects[0].title);
   await page.getByRole('button',{name:'Dashboard',exact:true}).click();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(requests).toEqual([]);expect(failures).toEqual([]);
  }finally{await page.close();await app?.close();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-document-directory-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
