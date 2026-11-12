@@ -1,4 +1,5 @@
 import {applyVisualStyle, readVisualStyle, visualClass, visualStyleFields, writeVisualStyle, backgroundPictureValue} from './website-files-visual-style.js';
+import {applyCanvasCSS} from './website-html-document.js';
 import {websiteRichText} from './website-files-visual-rich.js';
 import {websiteTableTools} from './website-files-table.js';
 import {responsiveLayout} from './website-files-responsive.js';
@@ -76,7 +77,7 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
-export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null}) {
+export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null,resource=null}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
   const listen=(node,type,fn,opts={})=>node.addEventListener(type,fn,{...opts,signal});
@@ -359,7 +360,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
           document.head.append(link);change();
         }
       }
-      savedStyle.textContent=canvasCSS;setCSS(css);
+      // Pictures in the stylesheet resolve against the stylesheet, and one not
+      // saved yet is shown from its local copy.
+      if(stylesheet)applyCanvasCSS(savedStyle,canvasCSS,stylesheet,resource);else savedStyle.textContent=canvasCSS;setCSS(css);
     }
   }
   listen(form,'submit',event=>{event.preventDefault();commit(false);});

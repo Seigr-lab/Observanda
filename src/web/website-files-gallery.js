@@ -41,7 +41,8 @@ async function displayCopy(file,t){
 export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,render,run,notify,getCSS,setCSS,createTarget,recoveredPicture=()=>null}){
  let index=0,offset=0,doc=null,drag=null;
  const pending=new Map();
- const reset=()=>{pending.clear();doc=null;index=offset=0;};
+ const inspectorPictures=new Set();
+ const reset=()=>{pending.clear();inspectorPictures.clear();doc=null;index=offset=0;};
  function usedPictures(document,ownerPath){
   const used=new Set();
   for(const node of document.querySelectorAll('img[src],img[srcset],picture>source[srcset],a[href]')){
@@ -55,12 +56,15 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
  }
  function acknowledged(document,ownerPath){
   for(const name of usedPictures(document,ownerPath))pending.delete(name);
+  for(const name of cssPictures()){pending.delete(name);inspectorPictures.delete(name);}
  }
  function trimHistory(activeHTML,entries){
   if(!pending.size)return;
   const names=text=>text.matchAll(/pictures\/[a-f0-9-]{36}\.png/g);
-  const active=new Set(Array.from(names(activeHTML),match=>match[0])),kept=new Set();let bytes=0;
-  for(const {html} of entries)for(const [name] of names(html)){
+  // Pictures are used by the page or its stylesheet; one just added from the
+  // block inspector is kept until it is applied or the page is saved.
+  const active=new Set([...Array.from(names(activeHTML+'\n'+(getCSS?.()??'')),match=>match[0]),...inspectorPictures]),kept=new Set();let bytes=0;
+  for(const {html,css=''} of entries)for(const [name] of names(html+'\n'+css)){
    const item=pending.get(name);if(!item||active.has(name)||kept.has(name))continue;
    const size=item.blob.size+2*item.preview.length;
    if(kept.size<256&&size<=128*1024*1024-bytes){kept.add(name);bytes+=size;}
@@ -186,6 +190,7 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
  const objectURLs=new Map();
  async function addPicture(file){
   const variants=await displayCopy(file,t);for(const item of variants)pending.set(item.name,item);
+  inspectorPictures.add(variants.at(-1).name);
   return variants.at(-1).name;
  }
  function pendingURL(name){
