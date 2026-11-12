@@ -24,7 +24,8 @@ export function recordRemovalUI({state,api,esc,target,onRemoved,refresh,notify})
   if(session&&(session.context!==context()||state.access?.locked||state.storageUnavailable))close();
  }
  function open(){
-  checkContext();const value=target();if(!value||!revisionId(value.expectedRevision)||state.dirty)return;
+  checkContext();const value=target();if(!value||!revisionId(value.expectedRevision))return;
+  if(state.dirty){notify(text('otherDrafts'),true);return;}
   const retained=pending.get(key(value));session={...value,...retained,context:context(),busy:false};paint();dialog.showModal();
  }
  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
@@ -47,5 +48,6 @@ export function recordRemovalUI({state,api,esc,target,onRemoved,refresh,notify})
    }
   }finally{progress.close();if(active(s)){s.busy=false;paint();}}
  });
- return {open,checkContext,view:()=>'<button type="button" class="button danger" data-action="record-removal-open">'+esc(text('remove'))+'</button>'};
+ // The record's saved revision arrives with its content; until then removal has no reviewed target.
+ return {open,checkContext,view:()=>{const value=target();return '<button type="button" class="button danger" data-action="record-removal-open"'+(value&&revisionId(value.expectedRevision)?'':' disabled')+'>'+esc(text('remove'))+'</button>';}};
 }
