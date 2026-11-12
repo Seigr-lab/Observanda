@@ -27,10 +27,11 @@ export function configurationTypeChoices({state,api,esc,showDialog}){
   const request=++epoch;controller?.abort();controller=new AbortController();busy=true;error=null;paint();
   try{
    if(open)await client.open({workspaceId:state.book.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'},{signal:controller.signal,saved:true});
+   if(request!==epoch||!root())return;
    const result=await client.window('sections',{enabled:true,allowedProfiles:enabledLabBookTypes(state.dashboardSettings).map(profile=>profile.id),offset,limit:20,search,signal:controller.signal});
    if(request===epoch)page=result;
   }catch(reason){if(request===epoch&&reason.name!=='AbortError')error=reason;}
-  finally{if(request===epoch){busy=false;paint();}}
+  finally{if(request===epoch){busy=false;if(root())paint();else stop();}}
  }
  async function open(value,input){stop();notebook=value;options=input;await load(0,{open:true});}
  async function action(control){
