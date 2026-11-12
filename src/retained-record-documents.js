@@ -82,6 +82,8 @@ export class RetainedRecordDocuments{
   return this.withDocument(ref,async(document,row,store)=>{
    const workspaceId=(await store.snapshot()).metadata.id,total=await document.tree.arrayLength(document.root,['sections']);let at=Math.min(offset,Math.max(0,total-1)),found=null;
    const resultAnchor=resultAnchorId(anchor),figureId=resultAnchor?undefined:resultFigure;
+   // A result keeps its identity across revisions: following one from the
+   // current pane also brings the retained pane to the same statement.
    if(anchor&&!resultAnchor&&!anchorCurrent){
     const search=await searchRecordSections(store,{workspaceId,recordId:ref.id,anchor,cursor},{etag:ref.revision,total,signal,selected:async path=>(await document.field(path,{signal})).value,page:(offset,limit)=>document.tree.page(document.root,['sections'],{offset,limit})});
     if(search.nextCursor)return {ref,search};found=search.found;if(found!==null)at=found;
@@ -90,7 +92,7 @@ export class RetainedRecordDocuments{
    const latest=compare?await store.member(snapshot,ref.id):null;
    const requestedOffset=anchor&&!resultAnchor&&!anchorCurrent?at:offset,current=latest?await new RecordContent(this.workspace).read({workspaceId,recordId:ref.id,snapshotId:etag,offset:requestedOffset,pagedHeader:true,windows,...(anchorCurrent?{anchor,...(cursor?{cursor}:{})}:resultAnchor?{anchor}:{}),...(figureId?{resultFigure:figureId}:{})},{signal}):null;
    if(current?.search?.nextCursor)return {ref,search:current.search,currentSnapshotId:etag};
-   const sections=await document.tree.page(document.root,['sections'],{offset:at,limit:4}),header=await recordReadingHeader(store,row,document,sections.values,{windows,...(!anchorCurrent?{anchor}:{}),resultFigure:figureId,signal});
+   const sections=await document.tree.page(document.root,['sections'],{offset:at,limit:4}),header=await recordReadingHeader(store,row,document,sections.values,{windows,...(!anchorCurrent||resultAnchor?{anchor}:{}),resultFigure:figureId,signal});
    const previous={...header,sections,record:{...header.header,sections:sections.values}};
    signal?.throwIfAborted();return {ref,previous,current:current?{...current,record:{...current.header,sections:current.sections.values}}:null,currentSnapshotId:etag,offset:requestedOffset,found:anchorCurrent?current?.found??null:found};
   },{signal,history:true});
