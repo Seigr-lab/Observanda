@@ -1,5 +1,12 @@
 .record-writing{width:min(68rem,calc(100% - 2rem));max-width:none;max-height:calc(100dvh - 2rem);overflow:auto;overscroll-behavior:contain}
 .record-writing h2{margin-top:0}.record-writing>p{overflow-wrap:anywhere}
+.record-writing-focused[open]:has(.focused-writing-outline){width:min(82rem,calc(100% - 2rem));display:grid;grid-template-columns:clamp(11rem,20%,17rem) minmax(0,1fr);column-gap:1.5rem;align-content:start}
+.record-writing-focused>.focused-writing-outline{grid-column:1;grid-row:1 / span 10;align-self:start;min-width:0;border-inline-end:1px solid var(--ui-border);padding-inline-end:1rem}
+.record-writing-focused>:not(.focused-writing-outline){grid-column:2}
+.focused-writing-outline h3{margin-block-start:0}.focused-writing-outline ul{list-style:none;padding:0;margin:.5rem 0}
+.focused-writing-outline li button{width:100%;white-space:normal;overflow-wrap:anywhere;text-align:start;min-height:2.25rem;border-color:transparent;background:transparent}
+.focused-writing-outline button[aria-current]{border-inline-start:3px solid var(--accent);font-weight:700;background:var(--ui-surface)}
+.focused-writing-outline p{overflow-wrap:anywhere;font-size:.85rem}
 .publication-parts{border-collapse:collapse;width:min(100%,38rem);margin-block:1rem}
 .publication-parts caption{text-align:start;font-weight:600;padding-block-end:.5rem}
 .publication-parts th,.publication-parts td{padding:0 .65rem;border-bottom:1px solid var(--ui-border)}
@@ -37,11 +44,3 @@
 .record-draft-edit [data-checkpoint-fields] { display:block; }
 .record-draft-edit select { max-width:100%;min-width:0; }
 @media(max-width:700px){dialog.record-draft-edit{width:calc(100% - 16px);max-height:calc(100dvh - 16px);padding:12px}}
-
-.record-writing-focused[open]:has(.focused-writing-outline){width:min(82rem,calc(100% - 2rem));display:grid;grid-template-columns:clamp(11rem,20%,17rem) minmax(0,1fr);column-gap:1.5rem;align-content:start}
-.record-writing-focused>.focused-writing-outline{grid-column:1;grid-row:1 / span 10;align-self:start;min-width:0;border-inline-end:1px solid var(--ui-border);padding-inline-end:1rem}
-.record-writing-focused>:not(.focused-writing-outline){grid-column:2}
-.focused-writing-outline h3{margin-block-start:0}.focused-writing-outline ul{list-style:none;padding:0;margin:.5rem 0}
-.focused-writing-outline li button{width:100%;white-space:normal;overflow-wrap:anywhere;text-align:start;min-height:2.25rem;border-color:transparent;background:transparent}
-.focused-writing-outline button[aria-current]{border-inline-start:3px solid var(--accent);font-weight:700;background:var(--ui-surface)}
-.focused-writing-outline p{overflow-wrap:anywhere;font-size:.85rem}
