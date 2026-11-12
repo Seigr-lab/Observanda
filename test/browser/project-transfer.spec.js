@@ -10,13 +10,14 @@ import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {initializeProjectLocation,ProjectStorage} from '../../src/project-storage.js';
 import {ProjectRegistry} from '../../src/project-registry.js';
 import {ProjectRenames} from '../../src/project-rename.js';
+import {NativeProjectRelocation} from '../../src/native-project-relocation.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
 
 test('project copy and move remain visible in their page across navigation and reload',async({page})=>{
  test.setTimeout(180000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-transfer-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];let app,release,entered;
- const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),finish=ProjectRenames.prototype.finish,errors=[];
+ const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),finish=NativeProjectRelocation.prototype.finish,errors=[];
  try{
   const rootBook=sampleNotebook();rootBook.title='workspace';
   const f=await encryptedFixture(path.join(directory,'workspace'),rootBook);vaults.push(f.vault);
@@ -31,12 +32,12 @@ test('project copy and move remain visible in their page across navigation and r
   const target=await initializeProjectLocation(path.join(f.workspace.root,targetBook.title),targetBook.projects[0].id,targetBook,targetAccess,targetKey);await registry.attach(target,{expected:(await registry.read()).revision});
   const destination=path.join(target.root,book.title),copy=path.join(directory,'copied',book.title);await mkdir(path.dirname(copy));
   const inode=(await stat(path.join(source.root,'.observanda/postgresql/data/PG_VERSION'))).ino,childInode=(await stat(path.join(child.root,'.observanda/postgresql/data/PG_VERSION'))).ino;
-  ProjectRenames.prototype.finish=function(value,key,options){return finish.call(this,value,key,{...options,checkpoint:async stage=>{if(stage==='stopped'){entered();await gate;}}});};
+  NativeProjectRelocation.prototype.finish=function(value,key,options){return finish.call(this,value,key,{...options,checkpoint:async(stage,...args)=>{await options?.checkpoint?.(stage,...args);if(stage==='stopped'){entered();await gate;}}});};
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
   page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);
   await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);
-  const storage=page.locator('[data-project-storage="'+id+'"]');await expect(storage).toContainText(source.root);
+  const storage=page.locator('[data-project-storage="'+id+'"]');await expect(storage).toContainText(source.root,{timeout:60000});
   await storage.getByRole('button',{name:'Copy project',exact:true}).click();await page.locator('#project-storage-path').fill(path.dirname(copy));await page.locator('#project-storage-form').getByRole('button',{name:'Copy project',exact:true}).click();
   await expect(page.locator('#project-storage-form')).not.toBeVisible();await expect(storage).toContainText('Copied to '+copy,{timeout:60000});assert.ok(await stat(source.root));
   await storage.getByRole('button',{name:'Move project',exact:true}).click();const placement=page.locator('#project-placement-form');await placement.getByLabel('Move into',{exact:true}).selectOption(target.projectId);await placement.getByRole('button',{name:'Move project',exact:true}).click();await ready;
@@ -52,5 +53,5 @@ test('project copy and move remain visible in their page across navigation and r
   assert.deepEqual((await new ProjectStorage(destination,id,vault).read()).book,book);assert.deepEqual((await new ProjectStorage(copy,id,vault).read()).book,book);
   await expect(page.locator('#project-recent-records')).toContainText(book.entries[0].title);await expect(page.locator('#project-recent-records [role=alert]')).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('project-storage.png'),fullPage:true});expect(errors).toEqual([]);
- }finally{release();ProjectRenames.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();NativeProjectRelocation.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

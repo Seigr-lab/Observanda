@@ -14,6 +14,10 @@ import {Workspace} from '../../src/storage.js';
 import {openCatalogue} from '../../src/postgres.js';
 import {preferences,navigate} from './preferences-helper.js';
 
+// Accepted module changes wait in this computer's pending-settings store until
+// the workspace writer applies them; the Modules status shows only unsent edits.
+const retainedSettings=page=>page.evaluate(async()=>{const {contextId}=await(await fetch('/api/activity')).json();return (await(await fetch('/api/dashboard/pending',{headers:{'X-Observanda-Workspace':contextId}})).json()).pending;});
+
 test('module edits remain usable through copy, navigation, reload and verified destination activation',async({page})=>{
  test.setTimeout(120000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-ui-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'copied'),initial=await readWorkspaceDashboard(f.workspace);
@@ -24,9 +28,9 @@ test('module edits remain usable through copy, navigation, reload and verified d
   await page.evaluate(async destination=>{const storage=await(await fetch('/api/storage')).json();window.copying=fetch('/api/storage/copy',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,Accept:'application/x-ndjson'},body:JSON.stringify({path:destination,confirmed:true})}).then(r=>r.text());},destination);
   await expect(page.locator('.app-activity [data-toggle]')).toContainText('1 running');
   await preferences(page,'Modules');await page.getByRole('switch',{name:'Enable Planning',exact:true}).check();await page.getByRole('switch',{name:'Enable Inventory',exact:true}).check();
-  await expect(page.locator('#desk-save-state')).toHaveText('Saved');
-  await navigate(page,'Inventory');await expect(page.getByRole('heading',{name:path.basename(f.workspace.root)+' inventory',exact:true})).toBeVisible();await expect(page.locator('[data-module-items-status]')).toHaveText('No matching items.');
-  await navigate(page,'Dashboard');await navigate(page,'All records');await expect(page.locator('[data-action="browse-record"]').first()).toBeVisible();
+  await expect.poll(()=>retainedSettings(page)).toMatchObject({state:'waiting',settings:{enabledModules:expect.arrayContaining(['planning','resources'])}});await expect(page.locator('#desk-save-state')).toHaveText('');
+  await navigate(page,'Inventory');await expect(page.getByRole('heading',{name:path.basename(f.workspace.root)+' inventory',exact:true})).toBeVisible();await expect(page.locator('[data-module-items-status]')).toHaveText('No items yet. Create an item to get started.');
+  await navigate(page,'Dashboard');await navigate(page,'All records');await expect(page.locator('.records-table').getByRole('link',{name:'Watching a seed unfold',exact:true})).toBeVisible();
   await preferences(page,'General');await expect(page.getByRole('heading',{name:'Workspace details',exact:true})).toBeVisible();await preferences(page,'Modules');await expect(page.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();
   const independent=await page.evaluate(async()=>{const storage=await(await fetch('/api/writer-recovery')).json();return(await fetch('/api/interface',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({fontSize:18,lineHeight:1.7})})).status;});expect(independent).toBe(200);
   expect((await readWorkspaceDashboard(f.workspace)).etag).toBe(initial.etag);
@@ -48,7 +52,7 @@ test('module choices can be reversed with their toggles while the preferences wr
   await page.getByRole('switch',{name:'Enable Inventory',exact:true}).check();await expect(page.locator('#desk-save-state')).toContainText(/Saved|Saving/);
   await expect(page.getByRole('button',{name:'Discard pending changes',exact:true})).toBeHidden();
   await page.getByRole('switch',{name:'Enable Inventory',exact:true}).uncheck();
-  await holder.run('ROLLBACK');await expect(page.locator('#desk-save-state')).toHaveText('');expect((await readWorkspaceDashboard(f.workspace)).settings).toEqual(initial.settings);
+  await holder.run('ROLLBACK');await expect.poll(()=>retainedSettings(page),{timeout:15000}).toBeNull();await expect(page.locator('#desk-save-state')).toHaveText('');expect((await readWorkspaceDashboard(f.workspace)).settings).toEqual(initial.settings);
  }finally{await holder?.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
@@ -62,8 +66,8 @@ test('retained module settings survive a service restart before their writer bec
   await expect.poll(()=>page.evaluate(async()=>(await(await fetch('/api/dashboard/pending')).json()).pending?.settings.enabledModules??[])).toContain('resources');
   await app.close();app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
   await page.goto(app.url);await preferences(page,'Modules');await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
-  await expect(page.locator('#desk-save-state')).toContainText(/Saved|Saving/);
-  await holder.run('ROLLBACK');await expect(page.locator('#desk-save-state')).toHaveText('');
+  await expect.poll(()=>retainedSettings(page)).toMatchObject({state:expect.stringMatching(/^(waiting|saving)$/),settings:{enabledModules:expect.arrayContaining(['resources'])}});
+  await holder.run('ROLLBACK');await expect.poll(()=>retainedSettings(page),{timeout:15000}).toBeNull();await expect(page.locator('#desk-save-state')).toHaveText('');
   expect((await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('resources');
   await page.reload();await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
  }finally{await holder?.close();await app?.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
@@ -83,6 +87,7 @@ test('another window sees and reverses retained module changes through ordinary 
   await other.getByRole('switch',{name:'Enable Planning',exact:true}).uncheck();await holder.run('ROLLBACK');
   await expect(other.getByRole('switch',{name:'Enable Inventory',exact:true})).not.toBeChecked();
   await expect(page.getByRole('switch',{name:'Enable Inventory',exact:true})).not.toBeChecked();await expect(page.getByRole('switch',{name:'Enable Planning',exact:true})).not.toBeChecked();await expect(page.locator('#desk-save-state')).toHaveText('');
+  await expect.poll(()=>retainedSettings(page),{timeout:15000}).toBeNull();
   await holder.run('ROLLBACK');expect((await readWorkspaceDashboard(f.workspace)).settings.enabledModules).not.toContain('resources');
  }finally{await holder?.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

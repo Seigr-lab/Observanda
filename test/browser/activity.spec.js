@@ -10,7 +10,8 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {RecordWriting} from '../../src/record-writing.js';
 import {operationStage} from '../../src/operation-progress.js';
 import {AppError} from '../../src/errors.js';
-import {preferences,navigate} from './preferences-helper.js';
+import {preferences} from './preferences-helper.js';
+import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
 
 for(const kind of ['copy','record','failed-record'])test(`${kind} activity remains available after navigation and reload while the writer is busy`,async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -22,6 +23,15 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await preferences(page,'General');
+  // Signing in starts the workspace's own website preparation, a separate activity.
+  // Let it finish and clear it, so the panel below shows only the operation under test.
+  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(()=>page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations.filter(entry=>['running','queued'].includes(entry.state)).length),{timeout:30000}).toBe(0);
+  expect(await page.evaluate(async()=>{
+   const {sessionHeaders}=await import('/session-store.js'),snapshot=await(await fetch('/api/activity')).json();
+   await fetch('/api/activity/clear',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId}),body:'{}'});
+   return (await(await fetch('/api/activity')).json()).operations;
+  })).toEqual([]);
   const command=kind==='copy'?{path:destination,confirmed:true}:await new RecordWriting(f.workspace).read({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null});
   await page.evaluate(async({kind,command})=>{
    const status=await (await fetch('/api/storage')).json();
@@ -56,11 +66,14 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    await preferences(page,'Your profile');await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Profile during copy');
    await preferences(page,'Modules');await expect(page.locator('#notice.error')).toBeHidden();
    await preferences(page,'Help');await expect(page.locator('#notice.error')).toBeHidden();
-   const summary=page.waitForResponse(response=>response.url().endsWith('/api/website/research/summary'));
-   const preview=page.waitForResponse(response=>response.url().endsWith('/api/design-preview'));
-   await navigate(page,'Website editor');expect((await summary).status()).toBe(200);expect((await preview).status()).toBe(200);
+   // The website files editor refuses its session while the workspace writer copies,
+   // offers Retry and a way back, and leaves no activity of its own.
+   await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});const websiteEditor=page.locator('#main-navigation').getByRole('button',{name:'Website editor',exact:true});
+   if(!await websiteEditor.isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click();await websiteEditor.click();
+   const files=page.locator('#main[data-website-files-app]');await expect(files.getByRole('alert')).toHaveText('Another operation is currently using this writer.');await expect(files.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
    const activity=await page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations);
    expect(activity.map(entry=>entry.kind)).toEqual(['/api/storage/copy']);
+   await files.getByRole('button',{name:'Back to workspace',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
   }
   await preferences(page,kind==='copy'?'Storage & access':'General');
   const panel=page.locator('#app-activity-panel'),owned=page.locator('#main [data-owned-activity]');
