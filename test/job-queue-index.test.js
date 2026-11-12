@@ -71,3 +71,13 @@ test('indexed queue rejects a malformed header and a detached scheduling pointer
  await f.workspace.withLock(()=>f.workspace.writeMetadata(f.queue.membership.memberFile(intent.id),JSON.stringify({...member,ticket:member.ticket+1})));
  await assert.rejects(f.queue.claim(),{code:'JOB_DAMAGED'});assert.equal((await f.queue.read(intent.id)).state,'queued');
 });
+
+test('an active-job check can leave out job types its caller performs itself',async t=>{
+ const f=await fixture(t);
+ assert.equal(await f.queue.hasActive(null,{except:['publication.deploy']}),false);
+ await f.queue.enqueue(f.intent('publication.deploy'));
+ assert.equal(await f.queue.hasActive(),true);assert.equal(await f.queue.hasActive(null,{except:['publication.deploy']}),false);
+ assert.equal(await f.queue.hasActive(['publication.deploy']),true);assert.equal(await f.queue.hasActive(['publication.deploy'],{except:['publication.deploy']}),false);
+ await f.queue.enqueue(f.intent());
+ assert.equal(await f.queue.hasActive(null,{except:['publication.deploy']}),true);assert.equal(await f.queue.hasActive(null,{except:['work','publication.deploy']}),false);
+});

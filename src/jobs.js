@@ -33,7 +33,9 @@ export class DurableJobs{
   if(relocation){if(jobFingerprint(job)!==relocation.sourceRevision)throw new AppError('JOB_DAMAGED');return {...job,state:'relocated',lease:null,relocation};}
   return job;
  }
- async hasActive(types=null){return this.workspace.catalogue(()=>this.membership.has(types));}
+ // `except` leaves out job types that a caller performs itself (for example a
+ // queued cleanup that an explicit retry of the same cleanup supersedes).
+ async hasActive(types=null,{except=[]}={}){return this.workspace.catalogue(()=>this.membership.has(types,{except}));}
  async status(){return this.workspace.catalogue(()=>this.membership.status());}
  async write(job){
   await this.relocations.writable(job.id);

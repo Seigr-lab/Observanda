@@ -67,9 +67,11 @@ export class JobQueueIndex{
   const leased=await this.first('leases');if(leased&&leased.until<=now)return leased.id;
   const pending=await this.first('pending');if(!leased&&!pending)fail();return pending?.id??null;
  }
- async has(types=null){
-  const head=await this.head();if(head.legacy){if(!types)return head.legacy.length>0;for(const id of head.legacy){const job=await this.readJob(id);if(!job||!active(job))fail();if(types.includes(job.type))return true;}return false;}
-  if(!types)return head.count>0;for(const type of types)if(await this.typeCount(type))return true;return false;
+ async has(types=null,{except=[]}={}){
+  const head=await this.head(),excluded=new Set(except),counted=type=>(types?types.includes(type):true)&&!excluded.has(type);
+  if(head.legacy){if(!types&&!excluded.size)return head.legacy.length>0;for(const id of head.legacy){const job=await this.readJob(id);if(!job||!active(job))fail();if(counted(job.type))return true;}return false;}
+  if(!types){let count=head.count;for(const type of excluded)count-=await this.typeCount(type);return count>0;}
+  for(const type of types)if(counted(type)&&await this.typeCount(type))return true;return false;
  }
  async status(){const head=await this.head();return {active:head.legacy?.length??head.count};}
 }
