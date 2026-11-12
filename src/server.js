@@ -922,7 +922,13 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             return await storageResponse(req,res,async()=>{
              // Retain the verified receipt for a lost response. Opening the
              // destination here would consume its portable database archive.
-             if(!plan.completed){const destination=await withWorkspaceCopySession(historyProjects,client,copy=>copy.portable(plan));plan.completed={destination,files:plan.fileCount,bytes:plan.bytes,portable:true};plan.expires=Date.now()+10*60*1000;}
+             if(!plan.completed){
+              plan.completed=await withWorkspaceCopySession(historyProjects,client,async copy=>{
+               const destination=plan.completedDestination??=await copy.portable(plan);
+               return {...await completed(copy,destination),files:plan.fileCount,bytes:plan.bytes};
+              });
+              plan.expires=Date.now()+10*60*1000;
+             }
              return plan.completed;
             },json);
           }
