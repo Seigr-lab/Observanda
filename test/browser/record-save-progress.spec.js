@@ -17,9 +17,15 @@ test('new record save progress stays readable, preserves newer typing and closes
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-save-progress-ui-')),f=await encryptedFixture(directory,sampleNotebook()),book=(await f.workspace.read()).book;
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,headless:true,port:0});
- let release,fail=false;const gate=new Promise(resolve=>{release=resolve;}),remember=ResearchCatalogue.prototype.rememberHistory,errors=[];
+ let release,fail=false;const gate=new Promise(resolve=>{release=resolve;}),historyIndex=ResearchCatalogue.prototype.historyIndex,errors=[];
  page.on('pageerror',error=>errors.push(error.message));
- ResearchCatalogue.prototype.rememberHistory=async function(record,...args){if(record.title==='Submitted title')await gate;if(fail&&record.title==='Retry this title')throw new AppError('INVALID');if(record.title==='Retry this title')return operationStage('unrecognized-nested-stage',{},()=>remember.call(this,record,...args));return remember.call(this,record,...args);};
+ // A first save commits through the record draft review; hold its history entry, inside the
+ // "Writing records and history" stage, to observe a slow save.
+ ResearchCatalogue.prototype.historyIndex=function(...args){
+  const index=historyIndex.apply(this,args),append=index.append.bind(index);
+  index.append=async(entry,...rest)=>{const title=entry.view?.title;if(title==='Submitted title')await gate;if(fail&&title==='Retry this title')throw new AppError('INVALID');if(title==='Retry this title')return operationStage('unrecognized-nested-stage',{},()=>append(entry,...rest));return append(entry,...rest);};
+  return index;
+ };
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
@@ -41,7 +47,7 @@ test('new record save progress stays readable, preserves newer typing and closes
   expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');
   const failure=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Check these fields',exact:true})});await expect(failure).toBeVisible();await failure.getByRole('button',{name:'Back to workspace',exact:true}).click();
   fail=false;await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Retry this title');expect(errors).toEqual([]);
- }finally{release();ResearchCatalogue.prototype.rememberHistory=remember;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{release();ResearchCatalogue.prototype.historyIndex=historyIndex;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 
