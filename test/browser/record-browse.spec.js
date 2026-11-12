@@ -10,6 +10,7 @@ import {ResearchRecords,recordRevision} from '../../src/research.js';
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
+import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
 async function fixture(){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-browse-ui-')),book=upgradeNotebook(sampleNotebook()),source=book.entries[0];
  book.entries=Array.from({length:61},(_,i)=>({...source,id:randomUUID(),title:'Listening take '+String(i).padStart(2,'0'),figures:[],contributors:[],body:i%2?'Forest field recording':'Studio recording',sections:[],tags:[i%2?'field':'studio'],type:'note'}));
@@ -23,6 +24,9 @@ test('record pages combine filters, preserve page context and open current saved
  try{
   await page.goto(f.app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);
   await expect(page.locator('[data-record-list-status]')).toHaveText('Records 1-25 of 61');
+  // Signing in starts the workspace's website preparation, which holds the workspace writer.
+  // Let it finish before this test saves records directly through the workspace.
+  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
   await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Sort records',{exact:true}).selectOption('title');
   await expect(page.locator('.records-table tbody tr').first()).toContainText('Listening take 00');
   await page.getByRole('button',{name:'Next records',exact:true}).focus();await page.keyboard.press('Enter');

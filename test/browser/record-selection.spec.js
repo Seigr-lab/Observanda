@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {openRecordDetail,openRecordWriting} from './record-editing-helper.js';
+import {revealInEditor} from './record-editor-helper.js';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -31,7 +32,7 @@ test('relationship search pages summaries and exact method links survive later e
  try{
   await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);
   const titleEdit=await openRecordDetail(page);await titleEdit.getByLabel('Record title',{exact:true}).fill('Unfinished listening interpretation');await titleEdit.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(titleEdit).not.toBeVisible();
-  await page.getByRole('button',{name:'Add research link',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
   await dialog.getByLabel('Relationship purpose',{exact:true}).selectOption('uses-method');await expect(dialog.getByLabel('Version to choose')).toHaveValue('exact');await expect(dialog.getByLabel('Version to choose')).toBeDisabled();await dialog.getByRole('button',{name:'Choose target',exact:true}).click();
   await expect(choices).toHaveCount(25);await expect(choices.first()).toContainText('Observation 01');expect(bodies).toEqual([]);
   await dialog.getByRole('button',{name:'Next results',exact:true}).focus();await page.keyboard.press('Enter');await expect(choices.first()).toBeFocused();await expect(choices.first()).toContainText('Observation 26');
@@ -59,7 +60,7 @@ test('cancelled linking ignores late pin replies and malformed searches can be r
  const f=await fixture(),errors=[],fullReads=[];let release;
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/notebook'))fullReads.push(r.url());});
  try{
-  await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);await page.getByRole('button',{name:'Add research link',exact:true}).click();
+  await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();
   const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
   await dialog.getByLabel('Version to choose').selectOption('exact');await dialog.getByRole('button',{name:'Choose target',exact:true}).click();await expect(choices).toHaveCount(25);
   const gate=new Promise(resolve=>release=resolve);let started;const pending=new Promise(resolve=>started=resolve);
@@ -119,20 +120,22 @@ test('opening runs preserves a selected checkpoint and its conflict base without
   const original=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,title:'Other writer interpretation'}}]});
   const fullReads=[];page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/workspace/read/selection'))fullReads.push(r.url());});
   const request=page.waitForRequest(r=>r.url().endsWith('/api/research/records/runs'));
-  await page.getByText('Organize runs or takes',{exact:true}).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();
+  await (await revealInEditor(page,page.getByText('Organize runs or takes',{exact:true}),'Activity and history')).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();
   expect((await request).postDataJSON()).toMatchObject({workspaceId:f.book.id,recordId:f.book.entries[0].id});expect(fullReads).toEqual([]);
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
   await expect(title).toHaveValue('Local interpretation');await titleEdit.getByRole('button',{name:'Save changes',exact:true}).click();await expect(titleEdit.locator('.record-writing-conflict')).toContainText('Other writer interpretation');await expect(title).toHaveValue('Local interpretation');expect(fullReads).toEqual([]);expect(errors).toEqual([]);
  }finally{await f.close();}
 });
 
-test('an incomplete outline cannot fall back to loading all records when opening editing',async({page})=>{
+test('opening another record reuses the authenticated outline and never falls back to loading all records',async({page})=>{
  const f=await fixture(),fullReads=[];
  try{
   await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);
-  page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/workspace/read/selection'))fullReads.push(r.url());});
+  const starts=[];page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/workspace/read/selection'))fullReads.push(r.url());if(r.url().endsWith('/api/workspace/read/start'))starts.push(r.url());});
+  // Opening a record reuses the authenticated outline (selectRecord in app.js) instead of reading it again,
+  // so an incomplete outline response cannot reach this path; workspace-reader.test.js covers its rejection.
   await page.context().route('**/api/workspace/read/start',async route=>{const response=await route.fetch(),body=await response.json();delete body.notebookCounts;await route.fulfill({response,json:body});});
-  await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[1].id);await expect(page.locator('#notice')).toContainText('workspace response was incomplete');await expect(page.locator('.record-editing h1')).toHaveText('Observation 00');expect(fullReads).toEqual([]);
+  await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[1].id);await expect(page.locator('.record-editing h1')).toHaveText('Observation 01');expect(starts).toEqual([]);expect(fullReads).toEqual([]);
   await page.context().unroute('**/api/workspace/read/start');await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Observation 01');expect(fullReads).toEqual([]);
  }finally{await f.close();}
 });
