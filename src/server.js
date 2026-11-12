@@ -69,6 +69,7 @@ import {sharedReviewFigure} from './collaboration/review-figures.js';
 import {httpDrain} from './http-drain.js';
 import {storageResponse} from './storage-response.js';
 import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt} from './workspace-move.js';
+import {WORKSPACE_MOVE_CLEANUP_JOB} from './workspace-move-jobs.js';
 import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
 import {operationResponse} from './operation-response.js';
@@ -779,7 +780,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           // Independent project workers and grants remain available while a
           // workspace snapshot is copied. Activation revokes the old context.
           if(selectedContext.concurrentReads||['/api/storage/rename','/api/storage/rename/resume','/api/storage/delete/preview','/api/storage/delete'].includes(url.pathname))await stopWorkspaceJobs(selectedContext);else await stopJobs(selectedContext);
-          if(['/api/storage/rename','/api/storage/delete/preview','/api/storage/delete','/api/storage/delete/finish','/api/storage/copy/preview','/api/storage/copy','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable','/api/storage/move','/api/storage/move/finish'].includes(url.pathname)&&await context.jobs?.queue.hasActive())throw new AppError('JOB_BUSY');
+          if(['/api/storage/rename','/api/storage/delete/preview','/api/storage/delete','/api/storage/delete/finish','/api/storage/copy/preview','/api/storage/copy','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable','/api/storage/move','/api/storage/move/finish'].includes(url.pathname)&&await context.jobs?.queue.hasActive(null,{except:url.pathname==='/api/storage/move/finish'?[WORKSPACE_MOVE_CLEANUP_JOB]:[]}))throw new AppError('JOB_BUSY');
           if(url.pathname==='/api/storage/delete/finish'){
             if(data.confirmed!==true)throw new AppError('INVALID');
             return await storageResponse(req,res,async()=>{

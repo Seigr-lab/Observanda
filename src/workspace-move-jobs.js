@@ -4,7 +4,10 @@ import {finishWorkspaceProjectMove} from './workspace-project-move.js';
 import {readWorkspaceProjectMove} from './workspace-project-move-state.js';
 import {AppError} from './errors.js';
 
-const type='storage.move-cleanup';
+// An explicit retry of the original's removal performs this same cleanup under
+// the cleanup lease, so a queued automatic attempt never blocks it.
+export const WORKSPACE_MOVE_CLEANUP_JOB='storage.move-cleanup';
+const type=WORKSPACE_MOVE_CLEANUP_JOB;
 async function admitted(workspace,job){
  const receipt=await readMoveReceipt(workspace.root);
  if(!receipt||job.id!==receipt.id||job.scope!==workspace.vault?.id||job.input.moveId!==receipt.id||!await authorizedWorkspaceMove(workspace,receipt))throw new AppError('STORAGE_MOVE_STATE');
