@@ -129,6 +129,11 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,f
   const special=view?view.render({item,esc,context:context(),options:panel.options,panelId:panel.id}):'';
   return `<article class="desk-item">${heading}${item.subtitle?'<small>'+esc(item.subtitle)+'</small>':''}${special}<dl class="desk-fields">${fields.map(key=>`<div><dt>${esc(descriptors.find(f=>f.key===key)?.label??key)}</dt><dd>${(()=>{const field=descriptors.find(f=>f.key===key);return field?.format?field.format(item.data[key],{esc,context:context(),item}):displayValue(item.data[key],esc);})()}</dd></div>`).join('')}</dl></article>`;
  }
+ // Card filters live in its options; older cards kept them in config.
+ function narrowed(panel){
+  const value=key=>panel.options?.[key]??panel.config?.[key];
+  return Boolean(value('tag')||value('search')||['recordType','status'].some(key=>value(key)&&value(key)!=='all')||value('notebookMode')==='selected'||value('scopeMode')==='selected');
+ }
  function content(panel){
   try{
    const result=read(panel),actions=provider(panel)?.actions?.(context(),panel)??[];
@@ -139,7 +144,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,f
    if(result.status==='foreign')return `<p class="desk-empty">${esc(dt("foreignWorkspace"))}</p>`;
    if(result.status==='loading')return `<p class="desk-empty" role="status">${esc(dt("loadingData"))}</p>`;
    if(result.status==='error')return '<p class="desk-empty">'+esc(result.error?.message||dt("loadDataFailed"))+'</p>'+button(esc(dt("retry")),'dashboard-retry-data',`data-provider="${reference(panel).provider}"`);
-   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?esc(ux(Boolean(panel.config?.tag||panel.config?.recordType&&panel.config.recordType!=='all'||panel.config?.status&&panel.config.status!=='all')?'noMatches':'noItems')):esc(dt("itemUnavailable")))+'</p>'+footer;
+   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?esc(narrowed(panel)?dt('noMatches'):ux('noItems')):esc(dt("itemUnavailable")))+'</p>'+footer;
    return scope+result.items.slice(0,panel.count).map(item=>itemMarkup(item,panel)).join('')+(paging|| (result.items.length>panel.count?`<footer>${button(state.workspaceOutline&&result.data?.total!==undefined?esc(dt("showMore")):esc(dt('showMoreCount',{count:result.items.length-panel.count})),'dashboard-more',`data-id="${panel.id}"`)}</footer>`:''))+footer;
   }catch{return `<p class="desk-empty">${esc(dt("cardFailed"))}</p>`;}
  }
