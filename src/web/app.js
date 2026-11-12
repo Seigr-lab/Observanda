@@ -291,6 +291,9 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
     result={...receipt,...await readRecordSelection({workspaceId:result.book.id,ids:structureSelection,snapshotId:result.etag},{signal,committed:true})};
   }
   if(result.book&&result.etag){if(adopt)adoptSnapshot(result);else result.book=snapshotWorkspace(result.book);}return result;
+  // Storage metadata names the active context itself. A caller that establishes
+  // or reconciles that context reads it without adopting it into the view.
+  if(!adopt&&route==='/api/storage'&&data===undefined)return result;
 }
 const recordSelectionLoading=recordSelectionLoadUI({esc});
 const recordUpdatesLoading=recordSelectionLoadUI({esc,namespace:'recordUpdates'});
@@ -1394,7 +1397,7 @@ async function loadWorkspaceOwned(){
    appShell.showStandalone(`<main id="main" class="loading"><h1>${esc(t('activity','busy'))}</h1><p>${esc(t('activity','busyDetail'))}</p><div data-owned-activity data-all-activity="true"></div></main>`);
    activity.bind();return;
   }
-  state.storage=await api('/api/storage');state.storageUnavailable=state.storage.expectedExisting&&!state.storage.available;
+  state.storage=await api('/api/storage',undefined,{adopt:false});state.storageUnavailable=state.storage.expectedExisting&&!state.storage.available;
   if(state.storageUnavailable){if(location.hash==='#/workspaces')state.page='workspaces';render();return;}
   let result;
   document.querySelector('#dialog').close();
