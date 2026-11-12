@@ -7,8 +7,6 @@ import {moduleWorkbench} from '../src/web/module-workbench.js';
 import {moduleLabel,moduleLocationLabel} from '../src/web/module-presentation.js';
 import {FEATURE_MODULES} from '../src/web/feature-modules.js';
 import {lazyFeatureUI} from '../src/web/lazy-feature-ui.js';
-import {insertCanvasSections} from '../src/web/website-canvas-insert.js';
-import {newElement} from '../src/web/composition-tree.js';
 const locales=['en','ca','es','nb','nn'];
 const load=locale=>prepareLanguage(locale,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -58,9 +56,4 @@ test('disabled and unavailable module shells use current labels without changing
 test('lazy module loading and disabled errors translate before module code is loaded',async context=>{
  context.after(()=>activateLanguage('en'));const ui=lazyFeatureUI({enabled:()=>false,handles:()=>true,load:async()=>{assert.fail('Disabled module must not load');}});
  for(const locale of locales){await load(locale);activateLanguage(locale);assert.equal(ui.view(),'<p>'+esc(t('supportEditors','moduleOpening'))+'</p>');await assert.rejects(ui.ready(),{message:t('supportEditors','moduleEnableFirst')});}
-});
-test('temporary canvas preview uses a localized message and keeps authored section data',async context=>{
- context.after(()=>activateLanguage('en'));const section={...newElement('asset'),title:'Authored <title>'},before=structuredClone(section);let html='';
- const root={querySelector:()=>null,querySelectorAll:()=>[],append(){},ownerDocument:{createElement:()=>({set innerHTML(value){html=value;},content:{}})}};
- for(const locale of locales){await load(locale);activateLanguage(locale);assert.equal(insertCanvasSections(root,[section],[section],{esc}),true);assert.ok(html.includes(esc(t('websiteAuthoring','editorPreparingPreview'))));assert.ok(html.includes(esc(section.title)));assert.deepEqual(section,before);}
 });

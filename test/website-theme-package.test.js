@@ -8,7 +8,6 @@ import {startingAppearance} from '../src/web/themes.js';
 import {validWebsiteTheme,themeReferences,WEBSITE_THEME_MAGIC} from '../src/web/website-theme-model.js';
 import {websiteThemeRemapper,captureWebsiteTheme} from '../src/website-theme-package.js';
 import {WebsiteThemeResources} from '../src/website-theme-resources.js';
-import {websiteThemeUI} from '../src/web/website-theme-ui.js';
 const base=()=>({format:'observanda-website-theme',version:1,name:'Field design',appearance:{...startingAppearance('research'),font:'modern',headingFont:'editorial'},palette:{accent:'#123456'},typography:{font:'modern'},design:{width:1100,navigation:'top',heading:'split',contents:true,regions:{definitions:[],assignments:[]}},templates:[],presentation:{media:[],covers:[]},assets:[],fonts:[],resources:[]});
 const section=(id=randomUUID())=>({id,kind:'text',title:'Reading',show:true,body:'Authored reusable text'});
 const bytes=Buffer.alloc(1024*1024+19,0x71),sha256=createHash('sha256').update(bytes).digest('hex');
@@ -44,11 +43,4 @@ test('theme transport streams exact resources and refuses truncated, corrupt, ex
  for(const options of [{short:true},{extra:true},{body:Buffer.alloc(bytes.length,0)}])await assert.rejects(resources.receive(encoded(p,options),{}));
  const controller=new AbortController();async function* interrupted(){for await(const value of encoded(p)){if(value.length===65536)controller.abort();yield value;}}await assert.rejects(resources.receive(interrupted(),{},{signal:controller.signal}),{name:'AbortError'});
  assert.deepEqual(await readdir(path.join(resources.workspace.root,'.observanda','theme-exchange')),[]);
-});
-test('theme review ignores a response for an edited draft and invalidates changed export choices',async()=>{
- let revision=0,resolve,requested;const state={storage:{contextId:'context'},book:{id:randomUUID(),website:{templates:[],design:{}}}},pin={researchSnapshotId:'a'.repeat(64),websiteId:randomUUID(),websiteRevision:'b'.repeat(64)},documents={enabled:()=>true,snapshot:()=>String(revision),flush:async()=>{},descriptor:()=>({websitePin:pin,draft:null})},responses=[];
- const api=async(route,data)=>{if(route.endsWith('/discard')){responses.push(data);return {};}requested=data;return new Promise(r=>{resolve=r;});};
- const ui=websiteThemeUI({state,documents,api,esc:String,field:(a,b)=>b,notify:()=>{},render:()=>{}});ui.input({id:'website-theme-name',value:'One',dataset:{}});
- const action=ui.action({dataset:{action:'website-theme-prepare'}});while(!resolve)await new Promise(r=>setImmediate(r));revision++;resolve({ready:true,id:randomUUID(),sha256:'c'.repeat(64)});await action;assert.equal(ui.view().includes('Download theme'),false);assert.equal(responses.length,1);
- const second=ui.action({dataset:{action:'website-theme-prepare'}});resolve=null;while(!resolve)await new Promise(r=>setImmediate(r));resolve({ready:true,id:randomUUID(),sha256:'d'.repeat(64),name:'One',templates:[],regions:[],assets:0,fonts:0,links:[],systemFonts:[]});await second;assert.match(ui.view(),/Download theme/);ui.input({id:'website-theme-name',value:'Two',dataset:{}});assert.equal(ui.view().includes('Download theme'),false);assert.equal(requested.name,'One');ui.reset();
 });

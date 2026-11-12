@@ -6,8 +6,6 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {defaultFeed} from '../../src/web/website-feed-model.js';
 import {PublicationFeeds,PUBLIC_FEEDS_SCRIPT} from '../../src/publication-feeds.js';
-import {disposePublicFeeds,enhancePublicFeeds} from '../../src/web/public-feeds.js';
-import {reconcileCanvas} from '../../src/web/canvas-document.js';
 
 async function fixture(count=73,{feeds=1}={}){
  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -60,26 +58,6 @@ test('cursor feeds preserve the complete visible state when a replacement respon
   f.fault(null);await first.getByRole('button',{name:'Retry',exact:true}).click();await expect(first.locator('[data-feed-item]').first()).toHaveAttribute('data-feed-id','first-2');
   await expect(first).toHaveAttribute('aria-busy','false');await expect(first.getByRole('button',{name:'Retry',exact:true})).toBeHidden();expect(await snapshot(second)).toEqual(other);
   await first.getByRole('link',{name:'Previous entries',exact:true}).click();await expect.poll(()=>snapshot(first)).toEqual(initial);expect(errors).toEqual([]);
- }finally{await f.close();}
-});
-
-test('reconciling the same preview rebinds visible feed controls and cancels detached work',async({page})=>{
- const f=await fixture(23,{feeds:2}),errors=[];page.on('pageerror',error=>errors.push(error.message));
- try{
-  await page.goto(f.url);const feed=page.locator('[data-public-feed]').first(),items=feed.locator('[data-feed-item]');
-  await expect(feed.getByLabel('Search this feed',{exact:true})).toBeVisible();
-  const initial=await items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId));
-  f.candidate.files.set('feed-reconcile-test.js','window.replaceFeedPreview=html=>{('+disposePublicFeeds.toString()+')(document);const incoming=new DOMParser().parseFromString(html,"text/html");('+reconcileCanvas.toString()+')(document.body,incoming.body);('+enhancePublicFeeds.toString()+')(document,window,window.fetch.bind(window));};');
-  await page.addScriptTag({url:new URL('feed-reconcile-test.js',f.url).href});
-  let release;const held=new Promise(resolve=>{release=resolve;});
-  await page.context().route('**/feed-*.html',async route=>{await held;await route.continue().catch(()=>{});});
-  await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','true');
-  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));release();await page.context().unroute('**/feed-*.html');
-  await expect(feed.getByLabel('Search this feed',{exact:true})).toBeVisible();expect(await items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).toEqual(initial);
-  await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(items).toHaveCount(10);await expect.poll(()=>items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).not.toEqual(initial);
-  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));
-  await feed.getByLabel('Search this feed',{exact:true}).fill('Observation 022');await feed.getByRole('button',{name:'Apply filters',exact:true}).click();await expect(items).toHaveCount(1);await expect(items).toContainText('Observation 022');
-  await expect(page.locator('[data-public-feed]').nth(1).locator('[data-feed-item]')).toHaveCount(11);expect(errors).toEqual([]);
  }finally{await f.close();}
 });
 

@@ -1,6 +1,5 @@
 import {workspaceSnapshotRequest} from '../src/workspace-read-admission.js';
-import {canvasResourceURL} from '../src/web/website-canvas-resources.js';
-import {websiteContext,publicationPreviewUrl} from '../src/web/website-context.js';
+import {websiteContext} from '../src/web/website-context.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -46,13 +45,9 @@ test('website management leaves research ownership and keeps independent website
 });
 
 
-test('publication and canvas asset addresses preserve the project owner',()=>{
- const id=randomUUID(),asset=randomUUID(),edition='a'.repeat(64),state={storage:{contextId:'root'},projectOwner:{projectId:id},websiteId:randomUUID()},other={...state,projectOwner:{projectId:randomUUID()}};
+test('website contexts preserve the project owner',()=>{
+ const state={storage:{contextId:'root'},projectOwner:{projectId:randomUUID()},websiteId:randomUUID()},other={...state,projectOwner:{projectId:randomUUID()}};
  assert.notEqual(websiteContext(state),websiteContext(other));
- const base='http://localhost'+publicationPreviewUrl(state,edition,'entries/observation.html'),media='../media/'+asset+'.png';
- assert.equal(canvasResourceURL(media,base,'root'),'http://localhost/api/projects/'+id+'/media/'+asset+'?context=root');
- assert.equal(canvasResourceURL(media,'http://localhost/preview/'+edition+'/entries/observation.html','root'),'http://localhost/api/media/'+asset+'?context=root');
- assert.equal(canvasResourceURL('https://example.com/media/image.png',base,'root'),'https://example.com/media/image.png');
 });
 
 
@@ -91,8 +86,6 @@ test('lab-book context keeps routes, previews and deferred reads in the selected
  const hash=ownedRoute('#/records/'+randomUUID()+'/read',owner);assert.deepEqual(projectRoute(hash),{...owner,hash:'#'+hash.split('/books/'+labBookId)[1]});
  assert.notEqual(researchContext(state),researchContext({...state,projectOwner:{projectId,labBookId:other}}));
  assert.notEqual(websiteContext(state),websiteContext({...state,projectOwner:{projectId,labBookId:other}}));
- const edition='c'.repeat(64),asset=randomUUID(),base='http://localhost'+publicationPreviewUrl(state,edition,'entries/record.html');
- assert.equal(canvasResourceURL('../media/'+asset+'.png',base,'root'),'http://localhost'+prefix+'/media/'+asset+'?context=root');
  const calls=[],captured=projectContextAPI((route,data,options)=>calls.push(options.owner),state);state.projectOwner={projectId,labBookId:other};captured(route,{});assert.deepEqual(calls,[owner]);
  assert.deepEqual(researchOwner(state),{projectId,labBookId:other});
 });

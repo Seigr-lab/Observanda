@@ -378,7 +378,7 @@ function sectionActions(){
   if(state.page==='editor'&&state.recordReading)return '';
   const label={editor:appText('saveRecord'),website:appText('saveWebsite'),branding:t('branding','save'),appearance:t('appearance','saveAppearance')}[state.page];
   if(!label)return '';
-  return `<footer class="section-save" aria-label="${esc(label)}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">${esc(appText('discardChanges'))}</button><button class="button primary" data-action="save">${esc(label)}</button>${state.page==='website'?`<button class="button" data-action="website-preview">${icon('eye')}${esc(t('websiteEditor','readingPreview'))}</button><button class="button" data-action="preview">${esc(t('websiteEditor','prepareEdition'))}</button>${state.storage?.encrypted?'<button class="button" data-action="publication-jobs-list">'+esc(appText('websitePreparations'))+'</button>':''}`:''}</div></footer>`;
+  return `<footer class="section-save" aria-label="${esc(label)}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">${esc(appText('discardChanges'))}</button><button class="button primary" data-action="save">${esc(label)}</button></div></footer>`;
 }
 function changed(dirtyState){
   changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();
@@ -614,16 +614,11 @@ const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify}
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{designUI.applyToApp();updateSaveStatus();}});
 const shellMenu=shellNavigation();
 const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(['editor','record-reader'].includes(state.page)?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
-const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),onSave:()=>savePending().catch(report),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
-  if(websiteDocuments.enabled())return websiteDocuments.preview();
-  const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
-  return {websitePin:state.websitePin,...(command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book})};
- }}))});
 const connectedWork=moduleLinks({state,api,esc});
 const sites=websiteSitesUI({state,api,esc,field,showDialog,render,selection:websiteSelection,documents:websiteDocuments,beforeRename:operation=>leave.run(operation,{scope:'navigation'}),access:operation=>withProjectAccess(operation),enterOwner:(id,bookId)=>projectOwners.enter(id,bookId),
  rootSnapshot:()=>newWorkspaceReader().read({metadataOnly:true}),
  adopt:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.dirty=Boolean(result.websiteEditor?.draft?.dirty);},
- ready:async page=>{if(page==='website')await website.load();if(['publishing','integrations'].includes(page))await publishUI.load();}
+ ready:async page=>{if(['publishing','integrations'].includes(page))await publishUI.load();}
 });
 const bookStorage=labBookStorageUI({state,api,esc,field,showDialog,access:operation=>withProjectAccess(operation),moved:async(result,view,entry)=>{await labBookDirectoryUI.refresh(entry.projectId);await labBookDirectoryUI.refresh(result.projectId);if(location.hash===view)location.hash=ownedRoute('#/notebooks/'+result.book.labBookId,{projectId:result.projectId,labBookId:result.book.labBookId});}});
 const bookAccessSettings=labBookAccessSettingsUI({state,api,esc,field,enterProject:id=>projectOwners.enter(id),render});
@@ -694,7 +689,6 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
   if(scope==='all'&&modules.isDirty())await modules.save();
   if(scope==='all'&&dashboard.isDirty())await (guardScope==='navigation'?dashboard.saveNavigation():dashboard.save());
   if(scope==='all'&&userProfile.isDirty())await userProfile.save();
-  if(state.page==='website'&&scope==='all'){website.validate();for(const el of document.querySelectorAll('.website-controls input,.website-controls textarea'))if(!el.reportValidity())throw new Error(appText('requiredWebsite'));}
   if(scope==='all'&&state.page==='editor')recordDetails.validate();
   if(scope==='all'||forms.length)await save();
   const complete=pendingChanges(guardScope).labels.length===0;
@@ -778,8 +772,8 @@ async function action(button){
   const websiteEdit=websiteDocuments.enabled()&&websiteEditPages.has(state.page)&&!button.closest?.('#main-navigation')&&(['branding','website','appearance'].includes(name)||name==='site-view'&&websiteEditPages.has(button.dataset.page)||name==='branding-back'&&sameWebsiteEditRoute(brandingReturnRoute()));
   if(websiteEdit)return navigateWebsiteDraft(async()=>{
    if(name==='branding')return rawAction(button);
-   if(name==='branding-back'){const destination=resolveRoute(brandingReturnRoute(),state.book);if(destination.page==='website')await website.load();Object.assign(state,destination);render();return;}
-   const page=name==='site-view'?button.dataset.page:name;if(page==='website')await website.load();Object.assign(state,{page,project:null,notebook:'all',selected:null});render();
+   if(name==='branding-back'){const destination=resolveRoute(brandingReturnRoute(),state.book);Object.assign(state,destination);render();return;}
+   const page=name==='site-view'?button.dataset.page:name;Object.assign(state,{page,project:null,notebook:'all',selected:null});render();
   });
   if(name==='user-profile')return leave.run(()=>rawAction(button),{scope:'navigation'});
   if(name?.startsWith('starter-')&&!['starter-add','starter-remove','starter-up','starter-down'].includes(name))return leave.run(()=>rawAction(button));
@@ -860,7 +854,7 @@ function render() {
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
   accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
-  fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();website.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
+  fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
   // Only the publication review frame follows review choices; the website design preview shares its styling class.
   const reviewFrame=document.querySelector('iframe[data-publication-review]');
@@ -888,6 +882,7 @@ function renderPage(){
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
  case 'templates':content=dashboard.templates();break;
+  if(state.page==='website'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/editor':'#/website',replace:true}).catch(report);return;}
  case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
@@ -896,7 +891,6 @@ function renderPage(){
  case 'publishing':content=publishUI.view();break;
  case 'branding':content=branding.view();break;
  case 'projects':content=structureUI.overview();break;
- case 'website':content=website.view();break;
  case 'websites':content=sites.view();break;
  case 'record-reader':content=recordContent.view();break;
  case 'editor':content=renderEditor();break;
@@ -965,7 +959,7 @@ function restoreEditorScroll(){
   frame?.addEventListener('load',restore,{once:true});restore();
 }
 function showReview(preview){
- const path=state.page==='website'?website.currentPath():null;preview.returnTo=state.page==='website'?'website':'publishing';preview.currentPage=preview.pages.some(p=>p.path===path)?path:preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;state.page='review';render();void publishUI.ready().then(ui=>ui.restorePlan(preview)).catch(report);window.scrollTo(0,0);
+ preview.returnTo='publishing';preview.currentPage=preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;state.page='review';render();void publishUI.ready().then(ui=>ui.restorePlan(preview)).catch(report);window.scrollTo(0,0);
 }
 function renderReview() {
   return state.preview?publicationReviewView(state.preview,{esc,field,option,icon}):publishUI.view();
@@ -1091,13 +1085,12 @@ async function rawAction(button) {
   const outlineModuleAction=name==='laboratory-samples'||state.page==='laboratory'&&name?.startsWith('lab-')||name?.startsWith('review-')||name==='module-open'&&modules.supportsOutline(button.dataset.moduleId)||state.page==='module'&&modules.supportsOutline(state.moduleId)&&(name==='module-command'||['module-reference-','module-choice-','research-target-'].some(prefix=>name?.startsWith(prefix)));
   // Account controls operate on credentials and destination state, never on
   // research records. Keep them on the same bounded path as publishing.
-  const publicationAction=name?.startsWith('github-')||['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-links-')||name?.startsWith('research-target-')&&Boolean(document.querySelector('#dialog[open] #publication-links'))||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
+  const publicationAction=name?.startsWith('github-')||['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||name?.startsWith('publish-')||name?.startsWith('publication-links-')||name?.startsWith('research-target-')&&Boolean(document.querySelector('#dialog[open] #publication-links'))||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
   const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:moduleLabel(module)}));return;}
   if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null,{preferences:['appearance','integrations'].includes(name)&&Boolean(button.closest?.('.preferences-tabs')||button.dataset.preferences==='true')});
-  if(name==='website'||name==='preview'&&state.page==='website')await website.load();
 
   if(name==='preferences'){state.page='preferences';render();return;}
   if(await branding.action(button))return;
@@ -1111,7 +1104,7 @@ async function rawAction(button) {
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await designUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
   if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
-  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); if(state.page!=='website'||!complete)notify(complete?appText('changesSaved'):t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
+  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); notify(complete?appText('changesSaved'):t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
   if(name==='clear-record-filters'){state.search='';state.filter='all';state.recordBrowse=null;rememberFilters();render();$('#search')?.focus();return;}
   if (name === 'entries') { state.search='';state.filter='all';state.recordBrowse=null;state.page = 'entries'; state.project = null; state.notebook = 'all'; render(); }
   if (name === 'projects' || name === 'website') { $('#dialog').close(); const returning=state.page==='review'&&name==='website';state.page = name; state.project = null; state.notebook = 'all'; render();if(returning)restoreEditorScroll(); }
@@ -1160,23 +1153,6 @@ async function rawAction(button) {
       }finally{button.disabled=false;}
       return;
     }
-    if(!website.summary().canPublish){if(state.page!=='website'){state.page='website';render();}website.focusEmpty();return;}
-    if (uploading) return notify(publicationText('waitForMedia'), true);
-    designPreview.stop();
-    button.disabled = true;
-    try {
-      website.validate();
-      const revision=changeVersion;state.editorReturnScroll=window.scrollY;
-      const source=websiteDocuments.enabled()?{workspaceId:state.book.id,etag:state.etag,...await websiteDocuments.preview()}:(()=>{const book=draftWorkspace(state.book),command=state.workspaceOutline?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;return {websitePin:state.websitePin,...(command?{etag:state.etag,draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{etag:state.etag,book})};})();
-      const context=state.storage?.contextId,route=location.hash;
-      await editionSelection.open(source,async selected=>{
-        if(state.storage.encrypted){await publicationJobs.start(selected);return;}
-        const preview=await api('/api/preview',selected);
-        if(context!==state.storage?.contextId||route!==location.hash)return;
-        if(revision!==changeVersion){notify(publicationText('draftChanged'),true);return;}
-        showReview(preview);
-      });
-    } finally { button.disabled=false; }
   }
   if (name === 'export') {
     requireAnalysisEditionReview(state.preview);
@@ -1218,7 +1194,7 @@ document.addEventListener('input', event => {
   if(structureUI.notebooks.input(event.target))return;
   if(updateRecordDate(event.target,entry(),{field,option,esc})){dirtyRecord();return;}
   if(updateRecordField(event.target,entry())){dirtyRecord();return;}
-  if(sites.input(event.target)||migration.input(event.target)||reviews.input(event.target)||figures.input(event.target)||modules.input(event.target)||recordDetails.input(event.target)||recordActivity.input(event.target)||dashboard.input(event.target)||website.input(event.target))return;
+  if(sites.input(event.target)||migration.input(event.target)||reviews.input(event.target)||figures.input(event.target)||modules.input(event.target)||recordDetails.input(event.target)||recordActivity.input(event.target)||dashboard.input(event.target))return;
   if(storageControls.input(event.target))return;
   if(userProfile.input(event.target))return;
   const el = event.target;
@@ -1333,7 +1309,7 @@ async function applyMedia(intent,asset) {
   if (purpose === 'attachment') {
     const current=editableRecord(state.book,recordId);if(!current)throw Error(appText('reopenRecord'));
     if(!current.attachments.some(a=>a.id===asset.id))current.attachments.push({...asset,caption:'',alt:'',transcript:'',share:false});
-  } else if(['website','website-library','website-file','website-file-library'].includes(purpose)){await website.acceptAsset(asset,brandTarget);}
+  } else if(purpose?.startsWith('website')){throw Error(t('supportEditors','mediaDestinationChanged'));}
   else if(purpose==='branding'){
     branding.acceptAsset(brandTarget,asset);
   } else if(purpose==='site-logo'){
@@ -1473,7 +1449,7 @@ async function restoreRoute({websiteReady=false}={}){
   const request=++routeRestoreVersion;let requestedRoute=location.hash;const current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
   restoringRoute=true;
   try{
-    if(sameWebsiteEditRoute(requestedRoute)){if(!websiteReady)await websiteDocuments.flush();const destination=resolveRoute(requestedRoute,state.book);if(!websiteReady&&destination.page==='website')await website.load();if(!current())return;Object.assign(state,destination);render();return;}
+    if(sameWebsiteEditRoute(requestedRoute)){if(!websiteReady)await websiteDocuments.flush();const destination=resolveRoute(requestedRoute,state.book);if(!current())return;Object.assign(state,destination);render();return;}
     if(activeWebsite(state))await sites.exit();
     if(!current())return;
     try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
@@ -1491,7 +1467,6 @@ async function restoreRoute({websiteReady=false}={}){
       if(state.page==='entries'){const saved=history.state?.filterWorkspaceId===state.book.id?history.state:{};
        state.search=typeof saved.search==='string'?saved.search:'';state.filter=validViewFilter(saved.filter)?saved.filter:'all';state.recordBrowse=recordBrowse(saved.recordBrowse);}
       if(moduleForPage(state.page)&&!enabledModule(state.dashboardSettings,moduleForPage(state.page).id)){render();return;}
-      if(state.page==='website')await website.load();
       if(state.page==='review'&&state.reviewId){const preview=await publicationJobs.read(state.reviewId);preview.currentPage=preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;await (await publishUI.ready()).restorePlan(preview);}
       if(state.page==='laboratory'){if(state.labSampleRoute){await labUI.action({dataset:{action:'laboratory-samples'}});return;}state.page=moduleDestination('laboratory');history.replaceState(history.state,'',routeFor(state));}
       if(state.page==='integrations')await publishUI.load();
@@ -1516,6 +1491,6 @@ window.addEventListener('popstate',event=>{
     await travelHistory(-delta);
     if(historyBusy||leave.isActive())return;
     historyBusy=true;
-    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}const navigate=async()=>{if(sameWebsite&&resolveRoute(targetHash,state.book).page==='website')await website.load();const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute({websiteReady:sameWebsite});};if(sameWebsite)await navigateWebsiteDraft(navigate);else await leave.run(navigate,{scope:'navigation'});}finally{historyBusy=false;}
+    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}const navigate=async()=>{const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute({websiteReady:sameWebsite});};if(sameWebsite)await navigateWebsiteDraft(navigate);else await leave.run(navigate,{scope:'navigation'});}finally{historyBusy=false;}
   })().catch(report);
 });
