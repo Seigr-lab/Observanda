@@ -28,7 +28,7 @@ test('record save streams measured stages and a receipt only after durable commi
  const values=await events(response),progress=values.filter(v=>v.progress).map(v=>v.progress);
  for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])assert.ok(progress.some(p=>p.stage===stage),stage);
  assert.ok(progress.some(p=>p.stage==='write-record-blocks'&&p.completed>0&&p.unit==='blocks'));
- assert.ok(progress.some(p=>p.stage==='index-records'&&p.completed===5&&p.total===5));
+ assert.ok(progress.some(p=>p.stage==='index-records'&&p.completed===6&&p.total===6));
  assert.equal(values.filter(v=>v.result).length,1);assert.equal(values.filter(v=>v.error).length,0);
  const saved=await f.workspace.read();assert.equal(saved.etag,values.at(-1).result.recordReceipt.etag);assert.deepEqual(saved.book.entries[0].sections,f.record.sections);
  const changed={...saved.book.entries[0],title:'Ordinary JSON client'},plain=await f.request(f.command(changed,saved.book.entries[0]),{stream:false});
