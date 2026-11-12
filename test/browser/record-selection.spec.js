@@ -96,7 +96,7 @@ test('record bodies stay on demand while inline links search and page through su
   expect(await destinations.locator('strong').allTextContents()).not.toEqual(first);await expect(destinations.first()).toBeFocused();
   await dialog.getByRole('button',{name:'Previous destinations',exact:true}).click();await expect(destinations.locator('strong')).toHaveText(first);
   await page.context().route('**/api/research/records/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic destination failure'})}));
-  await dialog.getByLabel('Find link destination',{exact:true}).fill('Observation 60');await expect(dialog.getByRole('alert')).toHaveText('Synthetic destination failure');
+  await dialog.getByLabel('Find link destination',{exact:true}).fill('Observation 60');await expect(dialog.getByRole('alert')).toHaveText('Could not load destinations.');
   await page.context().unroute('**/api/research/records/query');await dialog.getByRole('button',{name:'Retry destinations',exact:true}).click();await expect(destinations).toHaveCount(1);
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await destinations.first().focus();await page.keyboard.press('Enter');await expect(dialog.getByRole('button',{name:'Apply link',exact:true})).toBeFocused();await page.keyboard.press('Enter');

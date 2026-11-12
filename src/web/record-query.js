@@ -16,9 +16,9 @@ export function recordBrowse(value={}) {
 export const browseTags=value=>[...new Set(parseRecordTagList(value.tags))];
 export const browseActive=value=>[value.journey&&value.journey!=='all',value.dateKnowledge!=='all',value.tags.trim(),value.from,value.to,value.domain!=='all',value.status!=='all',value.sort!=='date-desc'].filter(Boolean).length;
 export function browseIssue(value) {
- if(value.dateKnowledge==='unknown'&&(value.from||value.to))return 'Clear the date range to show records with unknown dates.';
- if([value.from,value.to].some(s=>s&&!calendarDate(s)))return 'Choose valid record dates.';
- return value.from&&value.to&&value.from>value.to?'The start date must be on or before the end date.':'';
+ if(value.dateKnowledge==='unknown'&&(value.from||value.to))return 'unknownDateRange';
+ if([value.from,value.to].some(s=>s&&!calendarDate(s)))return 'invalidRecordDate';
+ return value.from&&value.to&&value.from>value.to?'reversedDateRange':'';
 }
 // Shared semantics for local previews and encrypted catalogue queries.
 export const recordSearchText=e=>[e.title,proseText(e.body),e.outcome??'',...e.tags,...e.sections.flatMap(s=>[s.title,proseText(s.body)]),...e.contributors.flatMap(c=>[c.name,c.role]),e.template?.label??'',...Object.values(e.template?.values??{}),...(e.attempt?[attemptSearchText(e.attempt)]:[]),...(e.results?.statements??[]).flatMap(s=>[s.title,s.text,s.limitations])].join(' ').toLocaleLowerCase();

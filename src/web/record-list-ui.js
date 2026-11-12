@@ -25,7 +25,7 @@ export function recordListUI({state,api,esc,table,showDialog,chooseType,render,d
  function sync(){const scope=JSON.stringify([state.storage?.contextId,state.book?.id,state.etag,state.project,state.notebook]);if(scope!==typeScope){typeScope=scope;knownDomains.clear();}const next=queryKey();if(key!==next){stop();key=next;result=null;error=null;}}
  function count(){sync();return issue()?0:result?.total??'...';}
  function view(){
-  sync();if(issue())return `<p role="alert" class="record-filter-error">${esc(issue())}</p>`;
+  sync();const problem=issue();if(problem)return `<p role="alert" class="record-filter-error">${esc(text(problem))}</p>`;
   if(error)return `<section><p role="alert">${esc(error.message)}</p>${button(collectionAccessError(error)?'unlock':'refresh','refresh')}</section>`;
   if(loading||!result)return `<p role="status">${esc(text('loading'))}</p>`;
   const {counts,records,total,offset,nextCursor,changed}=result,b=recordBrowse(state.recordBrowse);

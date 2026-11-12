@@ -1,4 +1,7 @@
 {
+  "unknownDateRange": "Esborra l’interval de dates per veure els registres amb data desconeguda.",
+  "invalidRecordDate": "Tria dates vàlides.",
+  "reversedDateRange": "La data inicial ha de ser igual o anterior a la data final.",
   "refresh": "Actualitza els registres",
   "loading": "S'estan carregant els registres...",
   "range": "Registres {first}-{last} de {total}",

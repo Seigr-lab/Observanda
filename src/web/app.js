@@ -1439,7 +1439,8 @@ function editableLogos(target) {
 function markHistory(){history.replaceState({...history.state,observandaIndex:routeIndex},'',location.href);}
 function refreshRecordResults(){
  rememberFilters();$('#entry-results').innerHTML=renderEntryResults();$('#record-count').textContent=recordList.count();recordList.bind({delay:150});
- const count=browseActive(recordBrowse(state.recordBrowse));$('#record-filter-summary').textContent=appText('filters')+(count?' ('+count+')':'');
+ const count=browseActive(recordBrowse(state.recordBrowse));$('#record-filter-summary').textContent=ux('filters')+(count?' ('+count+')':'');
+ const clear=$('[data-clear-browse]');clear.hidden=!count;clear.querySelector('span').textContent='('+count+')';
 }
 function rememberFilters(){history.replaceState({...history.state,observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',location.href);}
 function syncRoute(){

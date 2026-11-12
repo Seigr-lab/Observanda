@@ -75,7 +75,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   const usage=measure(doc);return usage.valid?'':capacity.reason(usage.issue,accepted);
  }});
  const dragCopies=event=>event.ctrlKey||event.metaKey||event.altKey;let movingContent=false;
- view.setProps({dragCopies,handleDOMEvents:{...view.props.handleDOMEvents,drop:(v,event)=>{movingContent=!!v.dragging&&!dragCopies(event);queueMicrotask(()=>{movingContent=false;});return false;}},transformPasted:slice=>movingContent?slice:new Slice(copied(slice.content),slice.openStart,slice.openEnd),nodeViews:Object.fromEntries(BOOK_BLOCKS.map(type=>[type,bookNodeView({figures:getFigures,edit:()=>contentEditor.open({edit:true})})])),handlePaste:(v,event,slice)=>{
+ view.setProps({dragCopies,handleDOMEvents:{...view.props.handleDOMEvents,drop:(v,event)=>{movingContent=!!v.dragging&&!dragCopies(event);queueMicrotask(()=>{movingContent=false;});return false;}},transformPasted:slice=>movingContent?slice:new Slice(copied(slice.content),slice.openStart,slice.openEnd),nodeViews:Object.fromEntries(BOOK_BLOCKS.map(type=>[type,bookNodeView({message,figures:getFigures,edit:()=>contentEditor.open({edit:true})})])),handlePaste:(v,event,slice)=>{
   if(capacity.pending){onError(message('capacityPending'));return true;}
   const html=event.clipboardData?.getData('text/html')??'';
   const text=event.clipboardData?.getData('text/plain')??'';
@@ -121,7 +121,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   const request=++destinationRequest,panel=toolbar.querySelector('.rich-link-panel'),host=panel.querySelector('.text-link-targets'),query=panel.querySelector('[data-rich-search]').value.trim().toLowerCase();
   destinationController?.abort();const pending=new AbortController();destinationController=pending;destinationCursor=cursor;
   const abort=()=>pending.abort();controller.signal.addEventListener('abort',abort,{once:true});
-  host.setAttribute('aria-busy','true');host.textContent='Loading destinations...';
+  host.setAttribute('aria-busy','true');host.textContent=message('selectorLoading');
   const button=(label,key)=>{const b=host.ownerDocument.createElement('button');b.type='button';b.dataset.richPage=key;b.textContent=label;host.append(b);};
   try{
    const result=await getDestinations({query,cursor,signal:destinationController.signal});
@@ -132,13 +132,13 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
     const b=host.ownerDocument.createElement('button');b.type='button';b.dataset.richDestination=item.href;b.dataset.richLabel=item.label;
     const title=host.ownerDocument.createElement('strong'),context=host.ownerDocument.createElement('small');title.textContent=item.label;context.textContent=item.context??'';b.append(title,context);host.append(b);
    }
-   if(legacy&&items.length>shownDestinations){const more=host.ownerDocument.createElement('button');more.type='button';more.dataset.richMore='';more.textContent='Show more destinations ('+(items.length-shownDestinations)+' remaining)';host.append(more);}
-   if(!items.length){const empty=host.ownerDocument.createElement('p');empty.textContent='No matching destinations. You can paste a copied research reference below.';host.append(empty);}
-   if(result.previousCursor)button('Previous destinations','previous');if(result.nextCursor)button('Next destinations','next');
+   if(legacy&&items.length>shownDestinations){const more=host.ownerDocument.createElement('button');more.type='button';more.dataset.richMore='';more.textContent=message('editorMoreDestinations',{count:items.length-shownDestinations});host.append(more);}
+   if(!items.length){const empty=host.ownerDocument.createElement('p');empty.textContent=message('editorEmptyDestinations');host.append(empty);}
+   if(result.previousCursor)button(message('selectorPrevious'),'previous');if(result.nextCursor)button(message('selectorNext'),'next');
    if(focus)host.querySelector('button')?.focus();
   }catch(error){
    if(request!==destinationRequest||controller.signal.aborted||panel.hidden||!toolbar.isConnected||error.name==='AbortError')return;
-   host.replaceChildren();const message=host.ownerDocument.createElement('p');message.setAttribute('role','alert');message.textContent=error.message??'Could not load destinations.';host.append(message);button('Retry destinations','retry');if(focus)host.querySelector('button')?.focus();
+   host.replaceChildren();const notice=host.ownerDocument.createElement('p');notice.setAttribute('role','alert');notice.textContent=message('editorDestinationsFailed');host.append(notice);button(message('editorRetryDestinations'),'retry');if(focus)host.querySelector('button')?.focus();
   }finally{controller.signal.removeEventListener('abort',abort);if(request===destinationRequest)host.removeAttribute('aria-busy');}
  }
  let linkSelection=null;
@@ -160,7 +160,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   if(command==='link-apply'||command==='link-remove'){
    view.dispatch(closeHistory(view.state.tr));
    const panel=toolbar.querySelector('.rich-link-panel'),href=panel.querySelector('[name=href]'),label=panel.querySelector('[name=label]').value.trim(),range=linkSelection??linkRange();
-   href.setCustomValidity('');if(command==='link-apply'&&!safeRichLink(href.value)){href.setCustomValidity('Use a web address, email link, phone link or page destination.');href.reportValidity();return;}
+   href.setCustomValidity('');if(command==='link-apply'&&!safeRichLink(href.value)){href.setCustomValidity(message('editorInvalidLink'));href.reportValidity();return;}
    let tr=view.state.tr.removeMark(range.from,range.to,schema.marks.link);
    if(command==='link-apply'){const text=label||view.state.doc.textBetween(range.from,range.to,' ')||href.value;const replace=range.from===range.to||text!==view.state.doc.textBetween(range.from,range.to,' ');if(replace)tr=tr.insertText(text,range.from,range.to);const end=replace?range.from+text.length:range.to;tr=tr.addMark(range.from,end,schema.marks.link.create({href:href.value,title:panel.querySelector('[name=title]').value,target:panel.querySelector('[name=target]').value,nofollow:panel.querySelector('[name=nofollow]').checked})).setSelection(TextSelection.create(tr.doc,end));}
    view.dispatch(tr.scrollIntoView());panel.close();panel.hidden=true;view.focus();return;

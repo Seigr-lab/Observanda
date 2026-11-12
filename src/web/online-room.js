@@ -1,7 +1,7 @@
 import {t} from './i18n/index.js';
 import {mountRichText} from './vendor/rich-text-editor.js';
 import {setOnlineDetail} from './online-details-model.js';
-import {textTools} from './text-tools.js';
+import {textTools,editorBookText} from './text-tools.js';
 import {renderProse} from './prose-model.js';
 import {mountOnlineRecordReader} from './online-record-reader.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
@@ -50,7 +50,7 @@ export function onlineRoom({call,connectionId,context,esc,notify}){
   if(initial.role==='reader'){host.innerHTML='<p>'+esc(tr('reader'))+'</p><div class="prose">'+renderProse(initial.document)+'</div>';return;}
   host.innerHTML='<div class="document-field"><div class="document-tools">'+textTools({compact:true})+'</div><div class="document-content"></div></div>';
   applyRichTextStyles(document,initial.document);
-  editor=mountRichText({mount:host.querySelector('.document-content'),toolbar:host.querySelector('.document-tools'),label:tr('field'),section:{richText:initial.document},collaboration:{version:initial.version,clientId},onError:message=>notify(message,true),onChange:value=>{applyRichTextStyles(document,value);retain(value);status('saving');}});
+  editor=mountRichText({message:editorBookText,mount:host.querySelector('.document-content'),toolbar:host.querySelector('.document-tools'),label:tr('field'),section:{richText:initial.document},collaboration:{version:initial.version,clientId},onError:message=>notify(message,true),onChange:value=>{applyRichTextStyles(document,value);retain(value);status('saving');}});
  }
  async function tick(){
   if(closed||closing||running||!record||conflict)return;running=true;const current=generation;

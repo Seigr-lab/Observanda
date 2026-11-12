@@ -1,4 +1,7 @@
 {
+  "unknownDateRange": "Tøm datointervallet for å vise oppføringer med ukjent dato.",
+  "invalidRecordDate": "Velg gyldige datoer.",
+  "reversedDateRange": "Startdatoen må være på eller før sluttdatoen.",
   "refresh": "Oppdater oppføringer",
   "loading": "Laster inn oppføringer...",
   "range": "Oppføringer {first}-{last} av {total}",

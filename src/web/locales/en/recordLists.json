@@ -1,4 +1,7 @@
 {
+  "unknownDateRange": "Clear the date range to show records with unknown dates.",
+  "invalidRecordDate": "Choose valid record dates.",
+  "reversedDateRange": "The start date must be on or before the end date.",
   "refresh": "Refresh records",
   "loading": "Loading records...",
   "range": "Records {first}-{last} of {total}",

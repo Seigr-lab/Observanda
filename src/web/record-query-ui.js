@@ -16,7 +16,8 @@ export function recordBrowseFields(state,records,{esc,field,option,domains:known
  const domains=knownDomains??records.map(e=>e.template?.profileId);
 
  const sorting=field(esc(ux('sort')),`<select data-record-browse="sort">${[['date-desc',tr('browseNewest')],['date-asc',tr('browseOldest')],['title',tr('browseTitle')]].map(([id,label])=>option(id,label,b.sort)).join('')}</select>`);
- return `<p class="muted record-search-scope" id="record-search-scope">${esc(ux('scopeHelp'))}</p><div class="inline-actions record-sort-options">${sorting}${browseActive(b)?'<button type="button" class="button" data-action="clear-record-filters">'+esc(ux('clearFilters'))+' ('+browseActive(b)+')</button>':''}</div><details class="record-browse" ${browseActive(b)?'open':''}><summary id="record-filter-summary">${esc(ux('filters'))}${browseActive(b)?' ('+browseActive(b)+')':''}</summary>
+ const count=browseActive(b);
+ return `<p class="muted record-search-scope" id="record-search-scope">${esc(ux('scopeHelp'))}</p><div class="inline-actions record-sort-options">${sorting}<button type="button" class="button" data-action="clear-record-filters" data-clear-browse ${count?'':'hidden'}>${esc(ux('clearFilters'))} <span>(${count})</span></button></div><details class="record-browse" ${count?'open':''}><summary id="record-filter-summary">${esc(ux('filters'))}${count?' ('+count+')':''}</summary>
   <div class="record-browse-fields">
   ${field(esc(t('book','journey')),`<select data-record-browse="journey">${BOOK_JOURNEYS.map(j=>option(j,t('book',j),b.journey??'all')).join('')}</select>`)}
   ${field(esc(tr('tags')),`<textarea rows="1" data-record-browse="tags" maxlength="512" placeholder="${esc(tr('browseTagsPlaceholder'))}" aria-describedby="record-tags-help">${esc(b.tags)}</textarea>`)}

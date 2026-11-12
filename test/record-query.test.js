@@ -35,8 +35,9 @@ test('literal tag filters distinguish case and preserve commas, quotes and autho
  assert.deepEqual(find('" baseline "'),[' baseline ']);
 });
 test('invalid date ranges explain empty results and sorting remains deterministic',()=>{
- const book=queryFixture();assert.match(browseIssue(recordBrowse({from:'2026-02-30'})),/valid/);
- assert.match(browseIssue(recordBrowse({from:'2026-06-30',to:'2026-06-01'})),/start date/);
+ const book=queryFixture();assert.equal(browseIssue(recordBrowse({from:'2026-02-30'})),'invalidRecordDate');
+ assert.equal(browseIssue(recordBrowse({from:'2026-06-30',to:'2026-06-01'})),'reversedDateRange');
+ assert.equal(browseIssue(recordBrowse({dateKnowledge:'unknown',to:'2026-06-01'})),'unknownDateRange');
  assert.deepEqual(queryRecords(book.entries,{browse:{from:'2026-02-30'}}),[]);
  const a=queryRecords(book.entries,{browse:{sort:'title'}}).map(e=>e.id);
  const b=queryRecords([...book.entries].reverse(),{browse:{sort:'title'}}).map(e=>e.id);assert.deepEqual(a,b);
