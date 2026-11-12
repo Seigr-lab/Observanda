@@ -75,8 +75,8 @@ for(const count of [42,420])test('general and module preferences save metadata w
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();const types=main.locator('[data-module-settings-slot="laboratory-research-development"]');
   await types.getByLabel('Record type name',{exact:true}).fill('Research questions');
   await page.context().route('**/research/configurations/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic settings interruption'}}),{times:1});
-  await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('Synthetic settings interruption');await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
-  await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('No unsaved changes');
+  await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-settings-status]')).toHaveText('Synthetic settings interruption');await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
+  await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-settings-status]')).toHaveText('No unsaved changes');
   await page.reload();await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
   await main.getByRole('button',{name:'General',exact:true}).click();await expect(main.getByLabel('Workspace name',{exact:true})).toHaveValue('Research collective');await page.goBack();await expect(main.getByRole('group',{name:'Lab-book templates',exact:true})).toBeVisible();
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toHaveLength(0);expect(f.bodies).toHaveLength(0);expect(f.errors).toEqual([]);
