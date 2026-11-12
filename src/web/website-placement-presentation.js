@@ -60,7 +60,8 @@ export function websitePlacementPresentation({t,request,refresh,onError,page:fra
    const node=add('button',parent,label);node.className='button';node.type='button';node.addEventListener('click',action);return node;
   }
   function field(name,attr,parent=dialog){
-   const label=add('label',parent,t(name)),node=add('select',label);node.setAttribute(attr,'');return node;
+   // The select is named by its label alone, not also by its chosen option.
+   const label=add('label',parent,t(name)),node=add('select',label);node.setAttribute(attr,'');node.setAttribute('aria-label',t(name));return node;
   }
   const context=add('p',dialog,site.name+' · '+page),help=add('p',dialog,t('placementScope'));
   context.className=help.className='muted';
