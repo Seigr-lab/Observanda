@@ -130,6 +130,7 @@ async function permittedOriginal(doc,target){
  return record;
 }
 
+const SEED_GROUP=16;
 export class PublicationConversion{
  constructor(workspace,{store=new WebsiteFileStore(workspace)}={}){this.files=store;}
  deletionHooks(){return feedOwnerDeletionHooks(this.files);}
@@ -321,21 +322,33 @@ export class PublicationConversion{
       await onSource?.();
      }
     }
-    for(const [sourceId,{token,provenance}] of pending){
-     signal?.throwIfAborted();
-     const row=await store.member(snapshot,provenance.recordId),metadata=snapshot.metadata;
-     if(!row||metadata.id!==provenance.workspaceId)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-     const record=await withRecordDocument(store,row.id,row.revision,async doc=>{
-      const book=row.notebookId??(await doc.field(['notebookId'])).value;
-      if(book!==provenance.notebookId||!metadata.notebooks.some(item=>item.id===book&&item.projectId===provenance.projectId)||
-       !sourceRecordAllowed({id:row.id,notebookId:book,share:(await doc.field(['share'])).value},metadata,'website'))throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-      return permittedOriginal(doc,'website');
-     });
-     const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal});
-     if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-     const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
-     pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
-     await onSource?.();
+    // Convert a bounded group, then save its sources under one website writer scope:
+    // opening the website storage once per entry dominated seeding.
+    const entries=[...pending];
+    for(let start=0;start<entries.length;start+=SEED_GROUP){
+     const group=[];
+     for(const [sourceId,{token,provenance}] of entries.slice(start,start+SEED_GROUP)){
+      signal?.throwIfAborted();
+      const row=await store.member(snapshot,provenance.recordId),metadata=snapshot.metadata;
+      if(!row||metadata.id!==provenance.workspaceId)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      const record=await withRecordDocument(store,row.id,row.revision,async doc=>{
+       const book=row.notebookId??(await doc.field(['notebookId'])).value;
+       if(book!==provenance.notebookId||!metadata.notebooks.some(item=>item.id===book&&item.projectId===provenance.projectId)||
+        !sourceRecordAllowed({id:row.id,notebookId:book,share:(await doc.field(['share'])).value},metadata,'website'))throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+       return permittedOriginal(doc,'website');
+      });
+      const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal});
+      if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+      group.push({sourceId,token,provenance,row,metadata,record,output});
+     }
+     await this.files.scope(async()=>{
+      for(const {sourceId,token,provenance,row,metadata,record,output} of group){
+       signal?.throwIfAborted();
+       const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
+       pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
+       await onSource?.();
+      }
+     },{write:true,signal});
     }
    });
    return sources;
