@@ -46,7 +46,9 @@ test('an entry card shows a chosen cover photograph and the entry date in the pa
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();
   const saved=page.frameLocator('#website-files-preview');
   await expect(saved.locator('img.website-entry-cover')).toBeVisible();
-  expect(await saved.locator('img.website-entry-cover').evaluate(image=>image.naturalWidth)).toBeGreaterThan(0);
+  // The cover loads lazily; wait for the picture itself, then check it is the published file.
+  const coverImage=saved.locator('img.website-entry-cover');
+  await expect.poll(()=>coverImage.evaluate(image=>({width:image.naturalWidth,src:image.currentSrc}))).toMatchObject({width:1});
  }finally{
   try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;}
   if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-entry-card-'))throw Error('Unexpected fixture directory');
