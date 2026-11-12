@@ -16,13 +16,13 @@ import {figureVariantKey,figureVariants,figureLanguageKey} from './website-figur
 // the labBookProfiles catalogue once the catalogue registry lists it.
 const read=async(language,name)=>JSON.parse(await readFile(new URL('./web/locales/'+language+'/'+name+'.json',import.meta.url),'utf8'));
 const registry=await read('.','catalogues');
-const owned=['websiteRecordText','analyses','publication','recordEditors','recordDates','recordViews','online','retainedTables','book','labBookProfiles'].filter(name=>Object.hasOwn(registry,name));
+const owned=['websiteRecordText','analyses','publication','recordEditors','recordDates','recordViews','online','retainedTables','book','measurements','labBookProfiles'].filter(name=>Object.hasOwn(registry,name));
 const catalogues=new Map(await Promise.all(LANGUAGES.map(async({id})=>[id,Object.fromEntries(await Promise.all(owned.filter(name=>registry[name].includes(id)).map(async name=>[name,await read(id,name)])))])));
 // Records keep a profile's canonical English text. Text that still equals a
 // shipped default is shown in the page language; edited text stays as written.
 const profileKeys=new Map();
 for(const [key,value] of Object.entries(catalogues.get('en').labBookProfiles??{}))if(typeof value==='string'&&!profileKeys.has(value))profileKeys.set(value,key);
-const labelled=new Set(['websiteRecordText','analyses','publication','retainedTables','book']);
+const labelled=new Set(['websiteRecordText','analyses','publication','retainedTables','book','measurements']);
 const types=new Set(RECORD_TYPES.map(type=>type.id));
 const valueKey='data-observanda-value';
 const escapeText=value=>String(value).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -96,10 +96,19 @@ export function localizedRecordPage(html){
   if(inside&&node.tagName){
    const label=attr(node,'data-observanda-label'),[catalogue,key]=label?.split(':')??[];
    if(labelled.has(catalogue)&&key)setText(node,message(catalogue,key));
+   // A message with values: numbers are written in the page's locale.
+   const format=attr(node,'data-observanda-format'),[formatCatalogue,formatKey]=format?.split(':')??[];
+   if(labelled.has(formatCatalogue)&&formatKey){
+    let values=null;try{values=JSON.parse(attr(node,'data-observanda-args')??'{}');}catch{values=null;}
+    const template=message(formatCatalogue,formatKey),numbers=new Intl.NumberFormat(resolveLanguage(language));
+    if(template&&values&&typeof values==='object'&&!Array.isArray(values))setText(node,fill(template,Object.fromEntries(Object.entries(values).map(([name,value])=>[name,typeof value==='number'?numbers.format(value):String(value)]))));
+   }
    const named=attr(node,'data-observanda-term');if(named==='date')date(node);else if(named)term(node,named);
    // Accessible names of focusable regions, such as a scrolling data table.
    const aria=attr(node,'data-observanda-aria'),[ariaCatalogue,ariaKey]=aria?.split(':')??[];
-   if(labelled.has(ariaCatalogue)&&ariaKey)setAttribute(node,'aria-label',message(ariaCatalogue,ariaKey));
+   // A named region keeps its own name, such as a figure title, after the label.
+   const ariaSuffix=attr(node,'data-observanda-aria-suffix');
+   if(labelled.has(ariaCatalogue)&&ariaKey)setAttribute(node,'aria-label',message(ariaCatalogue,ariaKey)+(ariaSuffix?' '+ariaSuffix:''));
    const part=attr(node,'data-observanda-part');
    if(part==='metadata')metadata(node);
    if(part==='contributors'&&node.tagName==='ul')setAttribute(node,'aria-label',message('websiteRecordText','contributors'));

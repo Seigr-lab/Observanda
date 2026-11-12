@@ -10,5 +10,7 @@
   "mediaCreator": "Opphav",
   "mediaLicence": "Lisens",
   "yes": "Ja",
-  "no": "Nei"
+  "no": "Nei",
+  "tableWindow": "Rader {rowFrom}–{rowTo}; kolonner {columnFrom}–{columnTo}",
+  "recording": "Opptak"
 }

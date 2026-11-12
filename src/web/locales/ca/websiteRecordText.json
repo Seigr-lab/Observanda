@@ -10,5 +10,7 @@
   "mediaCreator": "Autoria",
   "mediaLicence": "Llicència",
   "yes": "Sí",
-  "no": "No"
+  "no": "No",
+  "tableWindow": "Files {rowFrom}–{rowTo}; columnes {columnFrom}–{columnTo}",
+  "recording": "Enregistrament"
 }

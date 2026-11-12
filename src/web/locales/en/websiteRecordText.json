@@ -10,5 +10,7 @@
   "mediaCreator": "Creator",
   "mediaLicence": "Licence",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "tableWindow": "Rows {rowFrom}–{rowTo}; columns {columnFrom}–{columnTo}",
+  "recording": "Recording"
 }

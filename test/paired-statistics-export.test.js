@@ -25,7 +25,7 @@ test('public paired statistics retain method and absence without leaking private
  const materials=fixture(),table=await retainedTable(materials,{ref,version:3,selection:{columns:'all',offset:0,count:null,includeExcluded:false}});let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
  for(const context of [/sample/i,/population/i,/slope/i,/intercept/i,/unweighted/i,/complete/i,/probability 1\/2/])assert.match(html,context);
  for(const value of ['2/1','4/3','1/1','0/1'])assert.ok(html.includes('<td>'+value+'</td>'));
- assert.match(html,/<td>Absent<\/td>/);for(const privateValue of [ref.id,materials.aggregation.source.id,'Private method note','resourcePolicy','pairedColumn'])assert.ok(!html.includes(privateValue));
+ assert.match(html,/<td><span data-observanda-label="retainedTables:absent">Absent<\/span><\/td>/);for(const privateValue of [ref.id,materials.aggregation.source.id,'Private method note','resourcePolicy','pairedColumn'])assert.ok(!html.includes(privateValue));
 });
 
 test('table readers and public export preserve declared unit coordinates and stream complete retained scales',async()=>{

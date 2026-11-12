@@ -10,5 +10,7 @@
   "mediaCreator": "Autoría",
   "mediaLicence": "Licencia",
   "yes": "Sí",
-  "no": "No"
+  "no": "No",
+  "tableWindow": "Filas {rowFrom}–{rowTo}; columnas {columnFrom}–{columnTo}",
+  "recording": "Grabación"
 }
