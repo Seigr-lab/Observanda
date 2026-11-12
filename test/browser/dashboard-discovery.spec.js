@@ -21,6 +21,14 @@ async function fixture(page,count=42){
  const original=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('request',request=>{if(request.url().includes('/api/workspace/read/')||request.url().includes('/dashboard-collection/'))requests.push({url:request.url(),data:request.postDataJSON()});});page.on('pageerror',error=>errors.push(error.message));
  await page.goto(app.url);
+ // Opening a workspace prepares its saved website once, reading the shared records it publishes.
+ // That is not the dashboard: wait for it to finish, then count only what the dashboard reads.
+ await expect.poll(()=>page.evaluate(async()=>{
+  const {sessionHeaders}=await import('/session-store.js'),storage=await (await fetch('/api/storage',{headers:await sessionHeaders()})).json();
+  const response=await fetch('/api/website-files/preparation',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId}),body:'{}'});
+  const {preparation}=await response.json();return preparation?.state==='ready'&&preparation.library?.state!=='preparing';
+ }),{timeout:60000}).toBe(true);
+ bodies.length=0;
  // Adding cards is part of the dashboard's Customize dashboard disclosure.
  await page.locator('details[data-disclosure="dashboard-customization"] > summary').click();await page.getByRole('button',{name:'+ Add cards',exact:true}).click();
  return {...f,book,app,requests,bodies,errors,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
@@ -62,15 +70,15 @@ test('card discovery retries failed or malformed pages and cancels obsolete sear
   await library.getByRole('combobox',{name:'Show'}).selectOption('contributors');await expect(library.locator('[data-discovery-page]')).toHaveText('1–12 of 43');
   await page.context().route('**/api/projects/dashboard-collection/discovery',route=>route.fulfill({status:503,json:{message:'Synthetic discovery interruption'}}));
   await library.getByRole('searchbox',{name:'Find data to display'}).fill('Artist');await expect(library.getByRole('alert')).toContainText('Synthetic discovery interruption');
-  await page.unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(12);
+  await page.context().unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(12);
   await page.context().route('**/api/projects/dashboard-collection/discovery',route=>{const command=route.request().postDataJSON();return route.fulfill({json:{...command,items:[{key:'bad'}],total:1}});});
   await library.getByRole('searchbox',{name:'Find data to display'}).fill('Artist 0');await expect(library.getByRole('alert')).toContainText('response was incomplete');
-  await page.unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(5);
+  await page.context().unrouteAll({behavior:'wait'});await library.getByRole('button',{name:'Retry card search'}).click();await expect(library.locator('.desk-library-item')).toHaveCount(5);
   let ready;const started=new Promise(resolve=>ready=resolve),gate=new Promise(resolve=>release=resolve);
   await page.context().route('**/api/projects/dashboard-collection/discovery',async route=>{const response=await route.fetch();ready();await gate;await route.fulfill({response});});
-  await library.getByRole('searchbox',{name:'Find data to display'}).fill('Study');await started;await library.getByRole('button',{name:'Close data library'}).click();release();await page.unrouteAll({behavior:'wait'});
+  await library.getByRole('searchbox',{name:'Find data to display'}).fill('Study');await started;await library.getByRole('button',{name:'Close data library'}).click();release();await page.context().unrouteAll({behavior:'wait'});
   await expect(library).toHaveCount(0);expect(f.requests.filter(r=>r.url.endsWith('/page'))).toEqual([]);expect(f.errors).toEqual([]);
- }finally{release?.();await page.unrouteAll({behavior:'wait'});await f.close();}
+ }finally{release?.();await page.context().unrouteAll({behavior:'wait'});await f.close();}
 });
 
 test('card search finds a card by what it holds, not only by its name',async({page})=>{
