@@ -70,7 +70,7 @@ export class WorkspaceProjectCopy {
     const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.read();if(retained?.version===4||!retained&&await this.source.storageKind()==='catalogue')return this.native.exportPortable(input);
     if(retained?.phase==='published'&&retained.plan.portable===true){
       await this.placements(destination,retained.directory.value.projects,{retained:true,version:retained.plan.projectPlacement??1});
-      if(await assertRegular(recovery.marker,{missing:true}))throw new AppError('STORAGE_INCOMPLETE');return destination;
+      await recovery.finishPublishedPortable(retained);return destination;
     }
     return this.copy(await this.plan(destination,{portable:true,inspect:false}));
   }

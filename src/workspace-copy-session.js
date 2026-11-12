@@ -14,17 +14,22 @@ export async function withWorkspaceCopySession(application,client,operation,opti
       encrypted:async(plan,grant,vault)=>{const destination=await bundle.encrypted(plan,grant,vault);await grants.seal(destination);return destination;},
       exportPortable:input=>bundle.exportPortable(input),
       portable:plan=>bundle.copy(plan,{activateCatalogue:false}),
+      portableCompletion:destination=>new WorkspaceCopyRecovery(application.workspace,destination).portableCompletion(),
       install:targetApplication=>access.install(targetApplication,client)
     });
   });
 }
 
-export async function checkWorkspaceCopyDestination(workspace,input){
+export async function checkWorkspaceCopyDestination(workspace,input,{portable=false}={}){
  const root=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(workspace,root);
  try{return await probeLocation(root);}
  catch(error){
   if(error.code!=='STORAGE_INCOMPLETE')throw error;
-  if(await recovery.plan())return {root,kind:'copy',resume:true};
+  const retained=await recovery.plan();
+  if(retained){
+   if(Boolean(retained.portable)!==portable||retained.encrypted)throw error;
+   return {root,kind:'copy',resume:true};
+  }
   if(await recovery.emptyPreparation())return {root,kind:'new',resume:true};
   throw error;
  }

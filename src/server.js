@@ -58,6 +58,9 @@ import {serviceHealth} from './service-health.js';
 import {UserProfile} from './user-profile.js';
 import {rememberWorkspaceLocation,rememberAuthenticatedLocation} from './workspace-reconnection.js';
 import {verifyPortableAccess} from './workspace-portability.js';
+import {PortableBackupHistory} from './portable-backup-history.js';
+import {portableRestoreRequest} from './portable-restore-requests.js';
+import {WorkspaceCopyRecovery} from './workspace-copy-recovery.js';
 import {organizationCommand,organizationErrorStatus} from './collaboration/local-commands.js';
 import {CollaborationRecovery} from './collaboration/identity-recovery.js';
 import {identityRecoveryCommand,identityRecoveryStatus} from './collaboration/identity-recovery-command.js';
@@ -476,6 +479,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
       let {workspace,publisher}=selectedContext;
       const {media,laboratory,candidates,designCandidates,appearancePreviews}=selectedContext;
+      if(req.method==='POST'&&['/api/workspaces/portable-restore/review','/api/workspaces/portable-restore/apply'].includes(url.pathname)){
+        const data=await body(req,32768);
+        if(context!==selectedContext||contextRequired&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        if(changing||loginBusy||selectedContext.restoringBackup||!selectedContext.readers.accepting)throw new AppError('LOCKED');
+        releaseRead=selectedContext.readers.enter();if(!releaseRead)throw new AppError('LOCKED');
+        if(workspace&&(await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+        selectedContext.restoringBackup=true;
+        try{return await storageResponse(req,res,({signal})=>portableRestoreRequest(url.pathname.split('/').at(-1),data,{client,context:selectedContext,deviceStore,preferencesFile,authenticate,signal}),json);}
+        finally{selectedContext.restoringBackup=false;}
+      }
       if(req.method==='POST'&&url.pathname.startsWith('/api/workspaces/delete/')){
         const operation=url.pathname.slice('/api/workspaces/delete/'.length),data=await body(req,16384);
         req.waitForWriter=false;req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);};await req.checkWriter();
@@ -764,10 +777,35 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname==='/api/storage/check'){
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
-        if(data.storageParent!==undefined&&data.path!==undefined||data.purpose!==undefined&&!['copy','move'].includes(data.purpose)||data.purpose!==undefined&&(!workspace||data.storageParent!==undefined))throw new AppError('INVALID');
+        if(data.storageParent!==undefined&&data.path!==undefined||data.purpose!==undefined&&!['copy','move','portable'].includes(data.purpose)||data.purpose!==undefined&&(!workspace||data.storageParent!==undefined))throw new AppError('INVALID');
         const input=data.storageParent===undefined?data.path:await namedWorkspaceLocation({parent:data.storageParent,name:data.name});
-        const result=data.purpose==='copy'?await checkWorkspaceCopyDestination(workspace,input):data.purpose==='move'?await checkWorkspaceMoveDestination(workspace,input):await probeLocation(input);
+        const result=['copy','portable'].includes(data.purpose)?await checkWorkspaceCopyDestination(workspace,input,{portable:data.purpose==='portable'}):data.purpose==='move'?await checkWorkspaceMoveDestination(workspace,input):await probeLocation(input);
         if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');return json(result);
+      }
+      if(req.method==='POST'&&['/api/storage/portable/status','/api/storage/portable/verify'].includes(url.pathname)){
+        const data=await body(req);
+        if(!workspace||context!==selectedContext||req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        if(changing||loginBusy||!selectedContext.readers.accepting)throw new AppError('LOCKED');
+        releaseRead=selectedContext.readers.enter();if(!releaseRead)throw new AppError('LOCKED');
+        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+        const history=new PortableBackupHistory(preferencesFile??deviceStore.file,workspace);
+        if(url.pathname.endsWith('/status')){
+          if(Object.keys(data).length)throw new AppError('INVALID');
+          return json(await history.read());
+        }
+        const {backup}=await history.read();
+        if(Object.keys(data).length!==1||!backup||data.id!==backup.id)throw new AppError('CONFLICT');
+        return await storageResponse(req,res,async({signal})=>{
+          if(selectedContext.checkingBackup)throw new AppError('LOCKED');
+          selectedContext.checkingBackup=true;
+          try{
+            let receipt;
+            try{receipt=await new WorkspaceCopyRecovery(workspace,backup.destination).verifyPortable(backup.id,{signal});}
+            catch(error){if(!signal?.aborted)await history.failed(backup.id);throw error;}
+            await history.remember(backup.destination,receipt);
+          }finally{selectedContext.checkingBackup=false;}
+          return history.read();
+        },json);
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/storage/')){
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
@@ -864,9 +902,21 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
            },json);
           }
           if(url.pathname==='/api/storage/portable'){
+            const history=new PortableBackupHistory(preferencesFile??deviceStore.file,workspace);
+            async function completed(copy,destination){
+              const receipt=await copy.portableCompletion(destination);
+              await history.remember(destination,receipt);
+              return {destination,portable:true,receipt};
+            }
             if(data.path!==undefined){
              if(data.confirmed!==true||data.id!==undefined)throw new AppError('INVALID');
-             return await storageResponse(req,res,async()=>{await verifyPortableAccess(context.root,data);const destination=await withWorkspaceCopySession(historyProjects,client,copy=>copy.exportPortable(data.path));return {destination,portable:true};},json);
+             return await storageResponse(req,res,async()=>{
+              await verifyPortableAccess(context.root,data);
+              return withWorkspaceCopySession(historyProjects,client,async copy=>{
+               const destination=await copy.exportPortable(data.path);
+               return completed(copy,destination);
+              });
+             },json);
             }
             const plan=plans.get(data.id);if(!plan?.portable||plan.expires<Date.now()||data.reviewed!==true)throw new AppError('STALE');
             return await storageResponse(req,res,async()=>{

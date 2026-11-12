@@ -39,6 +39,8 @@ export function storageUI({state,api,activity,writerRecovery,esc,field,save,rend
     if(name==='storage-writer-recovery'){await writerRecovery.check({force:true});return true;}
     if(await deletion.action(button))return true;
     if(name==='storage-portable-dialog'){if(await ready())portability.open();return true;}
+    if(name==='storage-portable-restore'){if(!state.storage?.available||await ready())portability.openRestore(button.dataset.source);return true;}
+    if(name==='storage-portable-status'||name==='storage-portable-verify'){await portability.history(button);return true;}
     if(await collaboration.action(button))return true;
     if(await security.action(button))return true;
     if(name==='storage-reset-dialog'){
@@ -73,7 +75,8 @@ export function storageUI({state,api,activity,writerRecovery,esc,field,save,rend
     if(await folders.action(button))return true;
     if(name==='storage-check'){
       const field=document.getElementById(button.dataset.target),form=field.closest('form'),creating=field.name==='storageParent';
-      const result=await api('/api/storage/check',creating?{storageParent:field.value,name:form.elements.title.value}:{path:field.value,...(['storage-copy-form','storage-move-form'].includes(form.id)?{purpose:form.id==='storage-move-form'?'move':'copy'}:{})});
+      const purpose={'storage-copy-form':'copy','storage-move-form':'move','storage-portable-form':'portable'}[form.id];
+      const result=await api('/api/storage/check',creating?{storageParent:field.value,name:form.elements.title.value}:{path:field.value,...(purpose?{purpose}:{})});
       if(!creating)field.value=result.root;
       field.closest('form').querySelector('.storage-check-result').textContent=result.resume?t('access',result.kind==='move'?'moveResumeReady':'copyResumeReady'):t('access','checkReady')+' '+t('access',result.kind==='workspace'?'checkWorkspace':result.kind==='occupied'?'checkOccupied':'checkEmpty');return true;
     }
@@ -84,6 +87,7 @@ export function storageUI({state,api,activity,writerRecovery,esc,field,save,rend
     if(await security.submit(form,data))return true;
     if(!form.id.startsWith('storage-'))return false;
     if(await folders.submit(form,data))return true;
+    if(form.id==='storage-portable-restore-form')return portability.submit(form,data);
     if(form.id==='storage-unlock-form'){await api('/api/access/unlock',{username:data.get('username')??'',password:data.get('password')??'',recovery:data.get('recovery')??''});state.access=await api('/api/access/status');if(state.book&&state.dirty)render();else await reload();notify(t('access','unlocked'));return true;}
     if(await deletion.submit(form,data))return true;
     if(!await ready())return true;

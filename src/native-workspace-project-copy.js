@@ -53,7 +53,7 @@ export class NativeWorkspaceProjectCopy{
  async exportPortable(input){
   const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.read();
   if(retained?.phase==='published'&&retained.plan.portable===true){
-   if(await assertRegular(recovery.marker,{missing:true}))throw new AppError('STORAGE_INCOMPLETE');
+   await recovery.finishPublishedPortable(retained);
    // The completed bundle owns the pinned directory too. Rebase its decoded
    // relative locations to the original source only for placement validation;
    // successful export recovery must not require the original source folder.

@@ -36,10 +36,11 @@ export async function withNativeTree(directory,operation,{missing=false}={}){
   finally{await root?.close();await parent.close();}
  });
 }
-export async function *nativeTreeFiles(root,relative=''){
+export async function *nativeTreeFiles(root,relative='',include=()=>true){
  for await(const entry of root.entries()){
   const name=relative+entry.name;
-  if(entry.directory){const child=await root.directory(entry.name);try{yield* nativeTreeFiles(child,name+'/');}finally{await child.close();}}
+  if(!include(name,entry))continue;
+  if(entry.directory){const child=await root.directory(entry.name);try{yield* nativeTreeFiles(child,name+'/',include);}finally{await child.close();}}
   else yield {name,...await root.stat(entry.name)};
  }
 }

@@ -33,6 +33,15 @@ import {catalogueBinding,publishCatalogueBinding} from './postgres-activation.js
 export const defaultLocation=()=>path.join(os.homedir(),'Observanda','notebooks','default');
 export const preferencesLocation=()=>path.join(os.homedir(),'.observanda','preferences.json');
 export {readPreferences,readPreference,rememberLocation,rememberInterface} from './preferences.js';
+export async function currentAccessReplacement(source,vault,{deviceStore}={}){
+  const current=await readAccess(source,{deviceStore});
+  if(current.value.formatVersion!==3)return null;
+  const original=await readAccess(source,{deviceStore:null});
+  if(keyringFingerprint(current.value)===keyringFingerprint(original.value))return null;
+  authenticateKeyring(current.value,vault);
+  authenticateKeyring(original.value,vault);
+  return Buffer.from(serialize(current.value));
+}
 export async function resolveLocation(input){
   if(typeof input!=='string'||!input.trim()||input.length>4096||/[\x00-\x1f]/.test(input)||!path.isAbsolute(input)||/^\\\\[?.]\\/.test(input))throw new AppError('STORAGE_PATH');
   const location=path.resolve(input.trim());if(location===path.parse(location).root)throw new AppError('STORAGE_PATH');
@@ -216,11 +225,8 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     // A recognized older backup uses current grants on this installation. Its
     // newly verified copy must carry those grants to a different installation,
     // instead of exporting the obsolete file that was copied and hashed above.
-    const effectiveAccess=await readAccess(plan.source),copiedAccess=await readAccess(destination,{deviceStore:null});
-    if(effectiveAccess.value.formatVersion===3&&keyringFingerprint(effectiveAccess.value)!==keyringFingerprint(copiedAccess.value)){
-      authenticateKeyring(effectiveAccess.value,vault);authenticateKeyring(copiedAccess.value,vault);
-      await atomicWrite(path.join(destination,'.observanda','access.json'),serialize(effectiveAccess.value));
-    }
+    const currentGrants=await currentAccessReplacement(plan.source,vault);
+    if(currentGrants)await atomicWrite(path.join(destination,'.observanda','access.json'),currentGrants);
     // Independent project owners copy after this workspace snapshot is closed.
     // Keep the destination incomplete until every required owner is ready.
     if(afterSnapshotVerified)await afterSnapshotVerified(destination);
