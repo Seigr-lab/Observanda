@@ -59,7 +59,7 @@ test('readiness rules on a lot and on equipment block consumption and work booki
   expect(lot.data.qualityAtUse.quality.number).toBe('LOT-42');expect(lot.data.qualityAtUse.issues).toEqual([]);
 
   // Equipment without a calibration certificate, blocked for work reservations.
-  await main.getByRole('button',{name:'Back to items',exact:true}).click();
+  await main.getByRole('button',{name:'Back to Items',exact:true}).click();
   await main.getByRole('button',{name:'New item',exact:true}).click();await main.getByLabel('Item name',{exact:true}).fill('Analytical balance');
   await main.getByLabel('Item kind',{exact:true}).selectOption('equipment');
   await main.getByRole('button',{name:'Track equipment calibration',exact:true}).click();

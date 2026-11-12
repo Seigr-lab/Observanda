@@ -187,7 +187,7 @@ test('equipment bookings record readiness at reservation and refuse blocked work
 
 test('local bills of materials record reservation and use readiness and stop at a blocked lot',async t=>{
  const s=await workspace(t),id=await s.create('Resistor reel','material',lot({number:'R-2026',retestOn:'2000-01-01'}));
- const bom=async(quantity='2')=>{const bomId=randomUUID(),line={...bomLine(),resourceId:id,value:'4k7 resistor',quantity};await s.cmd('bom.save',{id:bomId,expectedRevision:null,data:{...blankBOM(),title:'Synthetic board',recordId:s.book.entries[0].id,lines:[line]}});
+ const bom=async(quantity='2')=>{const bomId=randomUUID(),line={...bomLine(),resourceId:id,value:'4k7 resistor',unit:'mL',quantity};await s.cmd('bom.save',{id:bomId,expectedRevision:null,data:{...blankBOM(),title:'Synthetic board',recordId:s.book.entries[0].id,lines:[line]}});
   const b=await s.get(bomId);await s.cmd('bom.reserve',{id:bomId,expectedRevision:b.revision,resources:[{id,revision:(await s.get(id)).revision}]});return {bomId,line};};
  const first=await bom(),reserved=await s.get(first.bomId),reservation=await s.get(reserved.data.allocations[0].reservationId);
  assert.equal(reservation.data.qualityAtUse.workflow,'reserve');assert.deepEqual(reservation.data.qualityAtUse.issues,['retest']);
@@ -206,7 +206,7 @@ test('local bills of materials record reservation and use readiness and stop at 
  const disposed=await s.get(second.bomId),disposal=(await s.all()).filter(e=>e.type==='movement'&&e.data.reservationId===disposed.data.allocations[0].reservationId);
  assert.equal(disposed.data.status,'finished','A blocked lot can still be scrapped');assert.equal(disposal.length,1);assert.equal(disposal[0].data.delta,'-2');assert.equal(Object.hasOwn(disposal[0].data,'qualityAtUse'),false);
  await s.update(id,d=>({...d,quality:{...d.quality,policy:policy({reserve:'block'})}}));
- const draftId=randomUUID(),line={...bomLine(),resourceId:id,value:'4k7 resistor',quantity:'1'};
+ const draftId=randomUUID(),line={...bomLine(),resourceId:id,value:'4k7 resistor',unit:'mL',quantity:'1'};
  await s.cmd('bom.save',{id:draftId,expectedRevision:null,data:{...blankBOM(),title:'Blocked board',recordId:s.book.entries[0].id,lines:[line]}});
  await assert.rejects(s.cmd('bom.reserve',{id:draftId,expectedRevision:(await s.get(draftId)).revision,resources:[{id,revision:(await s.get(id)).revision}]}),blocked());
  assert.equal((await s.get(draftId)).data.status,'draft');
