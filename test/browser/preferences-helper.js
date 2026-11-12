@@ -9,17 +9,17 @@ export async function preferences(page, tab) {
 }
 export async function editWorkspace(page){await preferences(page,'General');}
 
-// Most authoring tests ask for the composer; Websites explicitly asks for its directory.
+// Website editor opens the website files editor as its own screen. It opens the
+// workspace's default website once saved-website preparation has produced it.
+// Returns the opened website's id, or null when the unsaved-changes guard asks first.
 export async function openDefaultWebsite(page){
- const guard=page.locator('#leave-dialog[open]'),directory=page.locator('[data-website-directory]');
- await expect(directory.or(guard)).toBeVisible();if(await guard.isVisible())return false;
- const status=directory.locator('[data-website-directory-status]');
- await expect(status).toHaveText(/^(?!Loading websites\.\.\.$).+/);
- if(await status.getAttribute('role')==='alert')throw new Error('Website directory failed to load: '+await status.textContent());
- const workspace=(await page.locator('.workspace-name').textContent()).trim();
- const card=directory.locator('[data-website-card$="/default"]').filter({has:page.locator('p.muted').filter({hasText:new RegExp('^'+workspace.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$')})});
- await expect(card).toHaveCount(1);await card.getByRole('button',{name:'Website editor',exact:true}).click();
- await expect(page.locator('.website-site-context')).toBeVisible();return true;
+ const guard=page.locator('#leave-dialog[open]'),files=page.locator('#main[data-website-files-app]');
+ await expect(files.or(guard)).toBeVisible();if(await guard.isVisible())return null;
+ await expect(files.locator('#website-files-canvas')).toBeVisible({timeout:60000});
+ await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
+ const id=/\/websites\/([a-f0-9-]{36})\/editor/.exec(page.url())?.[1];
+ if(!id)throw new Error('The website editor opened without a website route: '+page.url());
+ return id;
 }
 
 export async function navigate(page,name){

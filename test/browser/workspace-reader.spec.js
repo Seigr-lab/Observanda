@@ -28,7 +28,7 @@ page.on('pageerror',e=>errors.push(e.message));
  return {book,ws,app,errors,requests,fullReads,async close(){if(errors.length)console.error('Application load diagnostics:',JSON.stringify(errors));ResearchCatalogue.prototype.read=read;await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}};
 }
 const opened=async(page,f)=>{try{await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();}catch(error){throw Error(error.message+'\nApplication errors: '+JSON.stringify(f?.errors));}};
-const openComparison=async(page,f)=>{await page.goto(f.app.url,{waitUntil:'commit'});await opened(page,f);await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await editable(page);await (await revealInEditor(page,page.getByText('Organize runs or takes',{exact:true}),'Activity and history')).click();await page.getByRole('button',{name:'View runs and comparisons',exact:true}).click();};
+const openComparison=async(page,f)=>{await page.goto(f.app.url,{waitUntil:'commit'});await opened(page,f);await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);await editable(page);await (await revealInEditor(page,page.getByText('Organize runs or takes',{exact:true}),'Activity and history')).click();await page.getByRole('button',{name:'Link records to compare',exact:true}).click();};
 const editable=async page=>expect(page.locator('main').getByRole('heading',{level:1,name:'Take 0',exact:true})).toBeVisible();
 
 test('interrupted comparison load stays separate from an empty workspace and retries only the unfinished page',async({page})=>{
@@ -45,12 +45,14 @@ test('interrupted comparison load stays separate from an empty workspace and ret
   await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toHaveCount(0);
   await expect(page.getByRole('heading',{name:'Choose a workspace',exact:true})).toHaveCount(0);
   await page.keyboard.press('Enter');await editable(page);expect(f.fullReads).toEqual([]);
+  await expect(page.locator('#dialog').getByRole('heading',{name:'Link research',exact:true})).toBeVisible();await page.locator('#dialog').getByRole('button',{name:'Cancel',exact:true}).click();
   const reads=f.requests.filter(r=>r.url.endsWith('/page'));expect(reads).toHaveLength(4);
   expect(reads[2].data.cursor).toBe(reads[1].data.cursor);
   expect(f.requests.filter(r=>r.url.endsWith('/start'))).toHaveLength(2);
   await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('Loaded and editable');
   await page.getByRole('button',{name:'Save workspace',exact:true}).click();
-  await expect(page.locator('.workspace-name')).toHaveText('Loaded and editable');
+  // The workspace name is its folder name: saving it renames and reopens the folder, so the reader follows the new folder.
+  await expect(page.locator('.workspace-name')).toHaveText('Loaded and editable',{timeout:30000});f.ws.root=(await (await sessionRequest(page,'get',f.app.origin+'/api/storage')).json()).root;
   expect((await f.ws.read()).book.entries).toEqual(f.book.entries);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
