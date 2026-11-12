@@ -110,5 +110,12 @@
   "inventoryStage:ready": "Comprovació de l’inventari preparada",
   "inventoryStage:stale": "Esperant un nou intent",
   "website-preparation": "Preparació dels llocs web desats",
-  "cancelWebsitePreparation": "Atura la preparació dels llocs web"
+  "cancelWebsitePreparation": "Atura la preparació dels llocs web",
+  "preparation-capturing-entries": "S’estan llegint les entrades seleccionades",
+  "preparation-rendering-pages": "S’estan generant les pàgines del web",
+  "preparation-reading-saved-files": "S’estan llegint els fitxers desats del web",
+  "preparation-converting-entries": "S’estan convertint les entrades seleccionades",
+  "preparation-copying-files": "S’estan copiant els fitxers del web",
+  "preparation-saving-files": "S’estan desant els fitxers del web",
+  "preparation-discovering-library": "Cercant entrades per a la biblioteca del lloc web"
 }

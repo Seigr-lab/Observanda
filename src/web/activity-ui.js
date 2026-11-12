@@ -5,8 +5,7 @@ import {updateText,updateAttribute,updateProperty,placeAt} from './progress-dom.
 import {operationProgress} from './operation-progress-ui.js';
 import {storageProgressPresentation,storageSize} from './storage-progress-presentation.js';
 import {language as appLanguage} from './i18n/index.js';
-import './i18n/catalogues/websiteFiles.js';
-const text=localizedText('activity'),messages=new Map(['activity','storageProgress','recordSaveProgress','websiteFiles'].map(namespace=>[namespace,localizedText(namespace)]));
+const text=localizedText('activity'),messages=new Map(['activity','storageProgress','recordSaveProgress'].map(namespace=>[namespace,localizedText(namespace)]));
 const optional=(namespace,key)=>{try{return messages.get(namespace)(key);}catch{return '';}};
 const active=entry=>['running','queued'].includes(entry.state);
 function title(kind,view){
@@ -48,7 +47,7 @@ export function activityWait(entry,blocker){
  return blocker?text('waitingFor',{operation:title(blocker.kind)}):text('waiting-writer');
 }
 function stageName(kind,stage){
- if(kind==='website-preparation'){const label=optional('websiteFiles',stage);if(label)return label;}
+ if(kind==='website-preparation'){const label=optional('activity','preparation-'+stage);if(label)return label;}
  if(kind==='job:inventory.reconcile'){const label=optional('activity','inventoryStage:'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('lab-book:')||activityCommand(kind).startsWith('/api/lab-books/import')){const label=optional('storageProgress','book-'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('project:')||kind.startsWith('/api/projects/open')){const label=optional('storageProgress','project-'+stage);if(label)return label;}

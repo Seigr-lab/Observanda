@@ -110,5 +110,12 @@
   "inventoryStage:ready": "Lagerkontrollen er klar",
   "inventoryStage:stale": "Ventar på eit nytt forsøk",
   "website-preparation": "Klargjer lagra nettstader",
-  "cancelWebsitePreparation": "Stopp klargjeringa av nettstader"
+  "cancelWebsitePreparation": "Stopp klargjeringa av nettstader",
+  "preparation-capturing-entries": "Les valde oppføringar",
+  "preparation-rendering-pages": "Genererer nettsider",
+  "preparation-reading-saved-files": "Les lagra nettfiler",
+  "preparation-converting-entries": "Konverterer valde oppføringar",
+  "preparation-copying-files": "Kopierer nettfiler",
+  "preparation-saving-files": "Lagrar nettfiler",
+  "preparation-discovering-library": "Finn oppføringar til nettstadbiblioteket"
 }

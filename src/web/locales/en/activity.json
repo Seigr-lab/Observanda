@@ -110,5 +110,12 @@
   "inventoryStage:ready": "Inventory check ready",
   "inventoryStage:stale": "Waiting for a retry",
   "website-preparation": "Preparing saved websites",
-  "cancelWebsitePreparation": "Stop preparing websites"
+  "cancelWebsitePreparation": "Stop preparing websites",
+  "preparation-capturing-entries": "Reading selected entries",
+  "preparation-rendering-pages": "Rendering website pages",
+  "preparation-reading-saved-files": "Reading saved website files",
+  "preparation-converting-entries": "Converting selected entries",
+  "preparation-copying-files": "Copying website files",
+  "preparation-saving-files": "Saving website files",
+  "preparation-discovering-library": "Finding entries for the website library"
 }

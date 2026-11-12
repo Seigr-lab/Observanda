@@ -110,5 +110,12 @@
   "inventoryStage:ready": "Comprobación del inventario preparada",
   "inventoryStage:stale": "Esperando un nuevo intento",
   "website-preparation": "Preparación de los sitios web guardados",
-  "cancelWebsitePreparation": "Detener la preparación de los sitios web"
+  "cancelWebsitePreparation": "Detener la preparación de los sitios web",
+  "preparation-capturing-entries": "Leyendo las entradas seleccionadas",
+  "preparation-rendering-pages": "Generando las páginas del sitio web",
+  "preparation-reading-saved-files": "Leyendo los archivos guardados del sitio web",
+  "preparation-converting-entries": "Convirtiendo las entradas seleccionadas",
+  "preparation-copying-files": "Copiando los archivos del sitio web",
+  "preparation-saving-files": "Guardando los archivos del sitio web",
+  "preparation-discovering-library": "Buscando entradas para la biblioteca del sitio web"
 }

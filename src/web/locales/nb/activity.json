@@ -110,5 +110,12 @@
   "inventoryStage:ready": "Lagerkontrollen er klar",
   "inventoryStage:stale": "Venter på et nytt forsøk",
   "website-preparation": "Klargjør lagrede nettsteder",
-  "cancelWebsitePreparation": "Stopp klargjøringen av nettsteder"
+  "cancelWebsitePreparation": "Stopp klargjøringen av nettsteder",
+  "preparation-capturing-entries": "Leser valgte oppføringer",
+  "preparation-rendering-pages": "Genererer nettsider",
+  "preparation-reading-saved-files": "Leser lagrede nettfiler",
+  "preparation-converting-entries": "Konverterer valgte oppføringer",
+  "preparation-copying-files": "Kopierer nettfiler",
+  "preparation-saving-files": "Lagrer nettfiler",
+  "preparation-discovering-library": "Finner oppføringer til nettstedsbiblioteket"
 }
