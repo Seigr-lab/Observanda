@@ -17,7 +17,7 @@ export function validResourceQuality(value,resourceKind){
   (value.evidence===null||reference(value.evidence));
  return resourceKind==='equipment'&&value.kind==='equipment'&&
   exact(value,['version','kind','certificate','coverage','holdReason','policy'])&&
-  (value.certificate===null?value.coverage===null:reference(value.certificate)&&value.certificate.kind==='analysis'&&validCalibrationCoverage(value.coverage));
+  (value.certificate===null?value.coverage===null:reference(value.certificate)&&value.certificate.kind==='analysis'&&!!validCalibrationCoverage(value.coverage));
 }
 
 export function qualityAssessment(quality,workflow,on){
