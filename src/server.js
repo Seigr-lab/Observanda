@@ -284,9 +284,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   };
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();void ctx.jobs.recover().catch(error=>diagnostic('worker-claim',{error}));startDashboardEdits(ctx);}};
   const projectApplication=ctx=>ctx.projects??=new ProjectApplication(ctx.workspace,{publicationConversion:ctx.publicationConversion??=new PublicationConversion(ctx.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
-  const websitePreparation=ctx=>ctx.websitePreparation??=new WorkspaceWebsitePreparation(ctx.workspace);
-  const prepareWebsites=(ctx,client,{retry=false}={})=>{
-   if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly||!client.access)return;
+  const websitePreparation=ctx=>ctx.websitePreparation??=new WorkspaceWebsitePreparation(ctx.workspace,{activity:()=>activities.begin(ctx.id,'website-preparation',{view:'#/website'})});
+  // A person resuming preparation from the website editor still holds research access.
+  const prepareWebsites=(ctx,client,{retry=false,resume=false}={})=>{
+   if(!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown||changing||client.filesOnly&&!resume||!client.access)return;
    const check=async()=>{if(context!==ctx||ctx.manualLock||shuttingDown||client.expires<=Date.now()||![...sessions.values()].includes(client)||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
    const projects=projectApplication(ctx),sourceReader=publicationSourceFactory(projects,client,ctx.workspace,{check});
    websitePreparation(ctx).start(client,{check,retry,prepare:run=>{
@@ -590,7 +591,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
          }finally{publishing=false;}
         },
         onWrite:()=>{if(!countedWrite){activeWrites++;countedWrite=true;}},
-        preparation:()=>websitePreparation(selectedContext).status()});
+        preparation:()=>websitePreparation(selectedContext).status(),
+        preparationControl:{cancel:()=>websitePreparation(selectedContext).cancel(),resume:async()=>{prepareWebsites(selectedContext,client,{retry:true,resume:true});return websitePreparation(selectedContext).status();}}});
       }
       if(client.filesOnly){await ensureWorkspaceIdentity(selectedContext);client.filesOnly=false;startJobs(selectedContext);}
       const historyProjects=projectApplication(selectedContext);
@@ -1568,7 +1570,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   },30000);expiry.unref();
   const shutdownStatus=()=>{
    const operations=activities.list(context.id);
-   return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>['running','queued'].includes(item.state))),failure:activities.failureSequence};
+   return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>item.kind!=='website-preparation'&&['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
   return {server,origin,get launchToken(){return launches.issue();},get url(){return origin+'/#'+launches.issue();},shutdownStatus,close:()=>closePromise??=(async()=>{
    shuttingDown=true;launches.clear();downloads.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);

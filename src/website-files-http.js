@@ -74,7 +74,7 @@ async function sshReview(metadata,id,revision,etag){
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,actor,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,githubAccount,folderPicker,withPublication=work=>work()}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,actor,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,preparationControl,githubAccount,folderPicker,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
@@ -179,6 +179,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
   }
   if(operation==='preparation'){json({preparation:await preparation()});return true;}
+  if((operation==='preparation/cancel'||operation==='preparation/resume')&&req.method==='POST'){if(!preparationControl)throw new AppError('INVALID');json({preparation:await preparationControl[operation.slice(12)]()});return true;}
   if(operation==='list'){json(await store.list(data));return true;}
   if(operation==='recovery/list'){json(await listWebsiteRecovery(store,{...data,signal}));return true;}
   if(operation==='pdf-version'){json({revision:await store.pdfVersion({signal})});return true;}

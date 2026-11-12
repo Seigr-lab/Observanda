@@ -108,5 +108,7 @@
   "inventoryStage:reset": "Preparant la comprovació de l’inventari modificat",
   "inventoryStage:restart": "Reiniciant per comprovar l’inventari modificat",
   "inventoryStage:ready": "Comprovació de l’inventari preparada",
-  "inventoryStage:stale": "Esperant un nou intent"
+  "inventoryStage:stale": "Esperant un nou intent",
+  "website-preparation": "Preparació dels llocs web desats",
+  "cancelWebsitePreparation": "Atura la preparació dels llocs web"
 }

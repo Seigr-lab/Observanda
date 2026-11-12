@@ -1473,5 +1473,8 @@
   "designImportPrivate": {
     "one": "{count} privat komponent ble utelatt da pakken ble laget.",
     "other": "{count} private komponenter ble utelatt da pakken ble laget."
-  }
+  },
+  "discovering-library": "Finner oppføringer til nettstedsbiblioteket",
+  "preparationCancelled": "Klargjøringen av de lagrede nettstedene ble stoppet. Når du fortsetter, fortsetter den der den stoppet.",
+  "resumePreparation": "Fortsett klargjøringen"
 }

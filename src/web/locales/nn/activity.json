@@ -108,5 +108,7 @@
   "inventoryStage:reset": "Førebur kontroll av endra lagerbehaldning",
   "inventoryStage:restart": "Startar kontrollen på nytt for endra lagerbehaldning",
   "inventoryStage:ready": "Lagerkontrollen er klar",
-  "inventoryStage:stale": "Ventar på eit nytt forsøk"
+  "inventoryStage:stale": "Ventar på eit nytt forsøk",
+  "website-preparation": "Klargjer lagra nettstader",
+  "cancelWebsitePreparation": "Stopp klargjeringa av nettstader"
 }

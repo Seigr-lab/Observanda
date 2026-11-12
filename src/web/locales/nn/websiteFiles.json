@@ -1473,5 +1473,8 @@
   "designImportPrivate": {
     "one": "{count} privat komponent vart utelaten då pakken vart laga.",
     "other": "{count} private komponentar vart utelatne då pakken vart laga."
-  }
+  },
+  "discovering-library": "Finn oppføringar til nettstadbiblioteket",
+  "preparationCancelled": "Klargjeringa av dei lagra nettstadene vart stoppa. Når du held fram, held ho fram der ho stoppa.",
+  "resumePreparation": "Hald fram med klargjeringa"
 }

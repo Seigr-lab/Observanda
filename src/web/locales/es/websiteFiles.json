@@ -1473,5 +1473,8 @@
   "designImportPrivate": {
     "one": "Al crear el paquete se dejó fuera {count} componente privado.",
     "other": "Al crear el paquete se dejaron fuera {count} componentes privados."
-  }
+  },
+  "discovering-library": "Buscando entradas para la biblioteca del sitio web",
+  "preparationCancelled": "Se detuvo la preparación de tus sitios web guardados. Al reanudarla, continúa desde donde se detuvo.",
+  "resumePreparation": "Reanudar la preparación"
 }

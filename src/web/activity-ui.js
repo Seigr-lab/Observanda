@@ -5,7 +5,8 @@ import {updateText,updateAttribute,updateProperty,placeAt} from './progress-dom.
 import {operationProgress} from './operation-progress-ui.js';
 import {storageProgressPresentation,storageSize} from './storage-progress-presentation.js';
 import {language as appLanguage} from './i18n/index.js';
-const text=localizedText('activity'),messages=new Map(['activity','storageProgress','recordSaveProgress'].map(namespace=>[namespace,localizedText(namespace)]));
+import './i18n/catalogues/websiteFiles.js';
+const text=localizedText('activity'),messages=new Map(['activity','storageProgress','recordSaveProgress','websiteFiles'].map(namespace=>[namespace,localizedText(namespace)]));
 const optional=(namespace,key)=>{try{return messages.get(namespace)(key);}catch{return '';}};
 const active=entry=>['running','queued'].includes(entry.state);
 function title(kind,view){
@@ -47,6 +48,7 @@ export function activityWait(entry,blocker){
  return blocker?text('waitingFor',{operation:title(blocker.kind)}):text('waiting-writer');
 }
 function stageName(kind,stage){
+ if(kind==='website-preparation'){const label=optional('websiteFiles',stage);if(label)return label;}
  if(kind==='job:inventory.reconcile'){const label=optional('activity','inventoryStage:'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('lab-book:')||activityCommand(kind).startsWith('/api/lab-books/import')){const label=optional('storageProgress','book-'+stage);if(label)return label;}
  if(activityResource(kind).startsWith('project:')||kind.startsWith('/api/projects/open')){const label=optional('storageProgress','project-'+stage);if(label)return label;}
@@ -79,14 +81,18 @@ export function activityUI({onChange=()=>{}}={}){
  function clear(map){for(const card of map.values()){card.progress?.close();card.node.remove();}map.clear();}
  function create(entry,target,detailed){
   const node=document.createElement('article');node.dataset.operation=entry.id;
-  node.innerHTML='<h3 data-title></h3><p data-status role="status"></p><p data-error></p>'+(detailed?'<p data-waiting></p><div data-progress></div>':'<a data-owner></a>');target.append(node);return {node};
+  node.innerHTML='<h3 data-title></h3><p data-status role="status"></p><p data-error></p>'+(detailed?'<p data-waiting></p><div data-progress></div>':'<a data-owner></a>');
+  // Saved website preparation resumes from its journals, so a person may stop it at any time.
+  if(entry.kind==='website-preparation'){const stop=document.createElement('button');stop.type='button';stop.className='button';stop.dataset.cancelPreparation='';stop.addEventListener('click',()=>void cancelPreparation(stop));node.append(stop);}
+  target.append(node);return {node};
  }
  function update(card,entry,detailed){
   const {node}=card;updateText(node.querySelector('[data-title]'),title(entry.kind,owner(entry)));
+  const stop=node.querySelector('[data-cancel-preparation]');if(stop){updateText(stop,text('cancelWebsitePreparation'));updateProperty(stop,'hidden',entry.state!=='running');}
   updateText(node.querySelector('[data-status]'),text(activityState(entry)));
   const error=node.querySelector('[data-error]');updateText(error,entry.state==='failed'&&!entry.resolvedAt?(entry.error?.message??''):'');updateProperty(error,'hidden',!error.textContent);
   if(!detailed){const link=node.querySelector('[data-owner]'),view=owner(entry);updateProperty(link,'hidden',!view);updateText(link,text('showProgress'));updateAttribute(link,'href',view);return;}
-  const waiting=node.querySelector('[data-waiting]'),blocker=snapshot.operations.find(value=>value.state==='running'&&activityResource(value.kind)===activityResource(entry.kind));
+  const waiting=node.querySelector('[data-waiting]'),blocker=snapshot.operations.find(value=>value.state==='running'&&value.kind!=='website-preparation'&&activityResource(value.kind)===activityResource(entry.kind));
   updateText(waiting,activityWait(entry,blocker));updateProperty(waiting,'hidden',!waiting.textContent);
   if(entry.state==='running'){
    if(!card.progress){card.progress=operationProgress({host:node.querySelector('[data-progress]'),title:()=>title(entry.kind),stageText:s=>stageName(entry.kind,s),presentation:value=>presentation(entry.kind,value),disableControls:false,scroll:false,compact:true});card.progress.element.dataset.ownedProgress='';}
@@ -122,6 +128,12 @@ export function activityUI({onChange=()=>{}}={}){
   const ids=new Set(snapshot.operations.map(entry=>entry.id));for(const [id,card] of cards)if(!ids.has(id)){card.node.remove();cards.delete(id);}
   for(const [index,entry] of ordered().entries()){let card=cards.get(entry.id);if(!card){card=create(entry,list,false);cards.set(entry.id,card);}update(card,entry,false);placeAt(list,card.node,index);}
   updateProperty(host.querySelector('[data-clear]'),'disabled',!snapshot.operations.some(entry=>!active(entry)));visibility();bind();
+ }
+ async function cancelPreparation(control){
+  control.disabled=true;
+  try{const response=await fetch('/api/website-files/preparation/cancel',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId}),body:'{}'});if(!response.ok)throw await response.json();await refresh();}
+  catch{updateText(host.querySelector('[data-connection]'),text('connection'));}
+  finally{control.disabled=false;}
  }
  async function refresh(){
   if(pending)return pending;

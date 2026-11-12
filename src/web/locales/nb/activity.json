@@ -108,5 +108,7 @@
   "inventoryStage:reset": "Forbereder kontroll av endret lagerbeholdning",
   "inventoryStage:restart": "Starter kontrollen på nytt for endret lagerbeholdning",
   "inventoryStage:ready": "Lagerkontrollen er klar",
-  "inventoryStage:stale": "Venter på et nytt forsøk"
+  "inventoryStage:stale": "Venter på et nytt forsøk",
+  "website-preparation": "Klargjør lagrede nettsteder",
+  "cancelWebsitePreparation": "Stopp klargjøringen av nettsteder"
 }

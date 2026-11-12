@@ -50,7 +50,7 @@ import {layerPath,managedWebsiteContent} from './website-layer-model.js';
 const tr=(key,args)=>t('websiteFiles',key,args);
 
 const fileRoute=siteId=>'#/websites/'+siteId+'/editor';
-const preparationStages=new Set(['checking-saved-editions','capturing-entries','rendering-pages','reading-saved-files','converting-entries','copying-files','saving-files']);
+const preparationStages=new Set(['discovering-library','checking-saved-editions','capturing-entries','rendering-pages','reading-saved-files','converting-entries','copying-files','saving-files']);
 
 function preparationMessage(preparation){
  if(!preparationStages.has(preparation.stage))return tr('preparing');
@@ -617,6 +617,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function unopenedView(){
   const state=session.preparation?.state;
   if(state==='preparing')return '<p role="status" data-website-preparation>'+esc(preparationMessage(session.preparation))+'</p>';
+  if(state==='cancelled')return '<section class="panel"><p role="status">'+esc(tr('preparationCancelled'))+'</p>'+button('resumePreparation','resume-preparation')+'</section>';
   if(missingSite||state!=='ready'){
    const message=missingSite?'unavailable':state==='failed'?'preparationFailed':'workspaceCheck';
    return '<section class="panel">'+(error?'':'<p>'+esc(tr(message))+'</p>')+button('create','new')+button('retry','retry')+'</section>';
@@ -882,6 +883,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    catch(reason){if(['AUTH','ACCESS_LOCKED','CONFLICT'].includes(reason.code))hideUnverifiedPage(true);else notify(tr('recoverySourceCorrect'),true);return true;}
   }
   if(operation==='check-access'){await poll();return true;}
+  if(operation==='resume-preparation'){const result=await request('preparation/resume',{},{signal:controller.signal});session.preparation=result.preparation?.state==='cancelled'?{...result.preparation,state:'preparing'}:result.preparation;render();waitForPreparation();return true;}
   if(sourcePane.pending&&!['discard','reopen','undo','redo','html','css'].includes(operation)&&!await sourcePane.check())return true;
   await run(async()=>{
    if(mode==='media'&&recordings.dirty()&&!operation.startsWith('recovery-')&&!['save','reopen'].includes(operation)){if(!await confirmAction(tr('recordingDiscard'),{action:'discard'}))return;await recovery.forget();recordings.reset();mode='visual';}

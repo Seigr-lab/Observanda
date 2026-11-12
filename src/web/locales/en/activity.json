@@ -108,5 +108,7 @@
   "inventoryStage:reset": "Preparing to check changed inventory",
   "inventoryStage:restart": "Restarting for changed inventory",
   "inventoryStage:ready": "Inventory check ready",
-  "inventoryStage:stale": "Waiting for a retry"
+  "inventoryStage:stale": "Waiting for a retry",
+  "website-preparation": "Preparing saved websites",
+  "cancelWebsitePreparation": "Stop preparing websites"
 }

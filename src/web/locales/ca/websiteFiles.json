@@ -1473,5 +1473,8 @@
   "designImportPrivate": {
     "one": "En crear el paquet es va deixar fora {count} component privat.",
     "other": "En crear el paquet es van deixar fora {count} components privats."
-  }
+  },
+  "discovering-library": "Cercant entrades per a la biblioteca del lloc web",
+  "preparationCancelled": "S’ha aturat la preparació dels llocs web desats. Quan la reprenguis, continuarà des d’on es va aturar.",
+  "resumePreparation": "Reprèn la preparació"
 }

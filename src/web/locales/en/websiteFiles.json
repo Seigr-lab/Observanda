@@ -1473,5 +1473,8 @@
   "designImportPrivate": {
     "one": "{count} private component was left out when the package was made.",
     "other": "{count} private components were left out when the package was made."
-  }
+  },
+  "discovering-library": "Finding entries for the website library",
+  "preparationCancelled": "Preparing your saved websites was stopped. When you resume, it continues from where it stopped.",
+  "resumePreparation": "Resume preparation"
 }

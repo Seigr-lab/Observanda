@@ -108,5 +108,7 @@
   "inventoryStage:reset": "Preparando la comprobación del inventario modificado",
   "inventoryStage:restart": "Reiniciando para comprobar el inventario modificado",
   "inventoryStage:ready": "Comprobación del inventario preparada",
-  "inventoryStage:stale": "Esperando un nuevo intento"
+  "inventoryStage:stale": "Esperando un nuevo intento",
+  "website-preparation": "Preparación de los sitios web guardados",
+  "cancelWebsitePreparation": "Detener la preparación de los sitios web"
 }
