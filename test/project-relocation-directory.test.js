@@ -30,7 +30,7 @@ test('departed project identities cannot alias live owners, deletion, hierarchy 
 });
 
 test('a whole project departure is atomic, repeatable and reference-safe without deleting its data',async t=>{
- const f=await projectTreeFixture(t),sibling=await destinationProject(f,t),registry=f.registry,entries=(await registry.read()).value.projects.filter(entry=>entry.projectId!==sibling.projectId),command={workspaceId:randomUUID(),operationId:randomUUID()},addresses=new LabBookDirectory(registry);
+ const f=await projectTreeFixture(t),sibling=await destinationProject(f,t),registry=f.registry,entries=(await registry.read()).value.projects.filter(entry=>entry.projectId!==sibling.projectId).sort((a,b)=>Number(a.parentId!==null)-Number(b.parentId!==null)),command={workspaceId:randomUUID(),operationId:randomUUID()},addresses=new LabBookDirectory(registry);
  for(const book of f.books)await addresses.register(book.projectId,book);
  const before=await registry.read();await assert.rejects(recordProjectDeparture(registry,entries.slice(0,1),command),{code:'CONFLICT'});assert.equal((await registry.read()).revision,before.revision);
  await assert.rejects(recordProjectDeparture(registry,[{...entries[0],vaultId:randomUUID()},entries[1]],command),{code:'CONFLICT'});
@@ -48,7 +48,9 @@ test('a whole project departure is atomic, repeatable and reference-safe without
  assert.deepEqual((await registry.hierarchy(after.value,legacy)).map(entry=>entry.projectId),[sibling.projectId]);
  assert.equal((await recordProjectDeparture(new ProjectRegistry(f.workspace,registry.workspaceId),entries,command)).revision,after.revision);
  await assert.rejects(recordProjectDeparture(registry,entries,{...command,operationId:randomUUID()}),{code:'CONFLICT'});
- const raw=JSON.parse(await f.workspace.readFile(registry.file,'utf8'));assert.deepEqual(raw.relocated,after.value.relocated);assert.ok(!JSON.stringify(raw).includes(f.root));
+ // The registry file is now a marker for the catalogue directory: read the
+ // persisted records through a fresh registry, and keep the file path-free.
+ const raw=JSON.parse(await f.workspace.readFile(registry.file,'utf8'));assert.deepEqual((await new ProjectRegistry(f.workspace,registry.workspaceId).read()).value.relocated,after.value.relocated);assert.ok(!JSON.stringify(raw).includes(f.root));
  for(const entry of entries){const current=await registry.read();await registry.registerExisting(current.revision,entry);}
  assert.equal((await registry.read()).value.relocated.length,0);for(const book of f.books)assert.equal((await addresses.locate(book.namespaceId)).projectId,book.projectId);
 });
