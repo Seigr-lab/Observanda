@@ -1,3 +1,4 @@
+import {nativeMutationFailure} from './fixtures/native-mutation-failure.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -38,9 +39,11 @@ test('interrupted owned move resumes without copying again and verifies retained
  const f=await fixture(t),source=f.workspace.root,destination=path.join(f.parent,'destination'),before=await f.workspace.read();
  await assert.rejects(moveWorkspaceTo(source,destination,{vault:f.vault,activate:()=>{throw Error('Interrupted activation');}}),/Interrupted activation/);
  assert.equal((await readMoveReceipt(destination)).phase,'verified');await assert.rejects(f.workspace.read(),{code:'STORAGE_MOVED'});
- const rename=fs.rename;
- fs.rename=async(from,to)=>{if(from===source)throw Object.assign(Error('Source folder busy'),{code:'EACCES'});return rename(from,to);};syncBuiltinESMExports();
- let result;try{result=await moveWorkspaceTo(source,destination,{vault:f.vault,activate:async()=>{}});}finally{fs.rename=rename;syncBuiltinESMExports();}
+ // The source folder is busy when cleanup retires it: through the native
+ // folder API where it is supported, otherwise through fs.rename.
+ const rename=fs.rename,busy=()=>Object.assign(Error('Source folder busy'),{code:'EACCES'});
+ fs.rename=async(from,to)=>{if(from===source)throw busy();return rename(from,to);};syncBuiltinESMExports();
+ let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='rename'&&file===source)throw busy();},()=>moveWorkspaceTo(source,destination,{vault:f.vault,activate:async()=>{}}));}finally{fs.rename=rename;syncBuiltinESMExports();}
  assert.equal(result.phase,'cleanup',JSON.stringify(result));
  const target=new Workspace(destination,f.vault);assert.deepEqual(await target.read(),before);await target.update(book=>{book.description='New destination work';return book;});
  assert.equal((await finishWorkspaceMove(destination,{vault:f.vault})).phase,'complete');assert.equal((await target.read()).book.description,'New destination work');await assert.rejects(fs.access(source),{code:'ENOENT'});

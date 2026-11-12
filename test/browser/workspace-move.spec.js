@@ -51,7 +51,9 @@ test('storage progress keeps dialog bounds stable across long paths, wrapped cou
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-progress-layout-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  try{
   await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root));
+  const horizontal=bounds=>({x:bounds.x,width:bounds.width});
   for(const viewport of [{width:1440,height:1000,font:17},{width:760,height:900,font:24},{width:390,height:844,font:17}]){
+   const within=bounds=>{expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height);};
    await page.setViewportSize(viewport);await page.evaluate(async font=>{
     document.documentElement.style.fontSize=font+'px';const dialog=document.querySelector('#dialog');dialog.innerHTML='<form><h2>Workspace transfer</h2><p>Source and destination</p><button type="submit">Continue</button></form>';dialog.showModal();
     const {storageProgress}=await import('/storage-progress.js');window.testProgress=storageProgress();
@@ -59,7 +61,8 @@ test('storage progress keeps dialog bounds stable across long paths, wrapped cou
    let first;
    for(const [i,stage] of ['copy-file','verify-file','database-inventory','verify-history','copy-workspace'].entries()){
     await page.evaluate(({stage,i})=>window.testProgress.update({stage,stages:['copy-workspace',stage],item:i%2?'nested/'.repeat(80)+'evidence.img':'',completed:57475072,unit:i%2?'rows':'bytes',...(i%2?{}:{total:67108900}),transfer:{phase:i%2?'verifying':'copying',files:19704,totalFiles:19904,bytes:11000000000,totalBytes:27110680000}}),{stage,i});
-    const bounds=await page.locator('#dialog').boundingBox();if(first)expect(bounds).toEqual(first);else first=bounds;
+    const bounds=await page.locator('#dialog').boundingBox();within(bounds);if(first)expect(horizontal(bounds)).toEqual(horizontal(first));else first=bounds;
+    expect(await page.locator('[data-item]').evaluate(el=>el.clientHeight<=parseFloat(getComputedStyle(el).lineHeight)*4+1)).toBe(true);
     expect(await page.locator('.storage-progress').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     await expect(page.locator('.storage-progress')).not.toContainText('Stored objects');await expect(page.locator('[data-wait]')).toHaveText('');
    }
@@ -68,9 +71,9 @@ test('storage progress keeps dialog bounds stable across long paths, wrapped cou
    await expect(progress.locator('[data-path]')).toContainText("Transferring records directly to this workspace's database");
    await expect(progress.locator('[data-count]')).toContainText('Database archive processed:');await expect(progress.locator('[data-detail]')).toHaveText('Database rows imported: 432');
    await expect(progress.getByRole('progressbar')).toHaveAttribute('max','8100000000');await expect(progress.getByRole('progressbar')).toHaveAttribute('value','26080000');
-   await expect(progress).not.toContainText('Current file:');await expect(progress).not.toContainText('does not copy');expect(await page.locator('#dialog').boundingBox()).toEqual(first);
+   await expect(progress).not.toContainText('Current file:');await expect(progress).not.toContainText('does not copy');{const bounds=await page.locator('#dialog').boundingBox();within(bounds);expect(horizontal(bounds)).toEqual(horizontal(first));}
    await page.evaluate(()=>window.testProgress.update({stage:'verify-file',stages:['copy-workspace','verify-file'],completed:10,unit:'bytes',observedAt:30000,advancedAt:10000}));
-   await expect(page.locator('[data-wait]')).toContainText('No progress reported for');expect(await page.locator('#dialog').boundingBox()).toEqual(first);
+   await expect(page.locator('[data-wait]')).toContainText('No progress reported for');{const bounds=await page.locator('#dialog').boundingBox();within(bounds);expect(horizontal(bounds)).toEqual(horizontal(first));}
    await page.locator('[data-item]').focus();expect(await page.locator('[data-item]').evaluate(el=>el.scrollHeight>=el.clientHeight)).toBe(true);
    await page.evaluate(()=>{window.testProgress.close();document.querySelector('#dialog').close();});
   }

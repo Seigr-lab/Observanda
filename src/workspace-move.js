@@ -138,7 +138,9 @@ async function cleanupWithSession(receipt,{locked=false,vault,verified=false,mov
  if(receipt.directory&&!moveDirectory)return withWorkspaceMoveDirectory(new Workspace(receipt.destination,vault),receipt,directory=>cleanup(receipt,{locked,vault,verified,moveDirectory:directory,signal}));
  operationTransfer({phase:'cleanup'});
  try{
-  receipt.phase='cleanup';delete receipt.error;await save(receipt);
+  // Keep the last failure visible while a retry runs; a reader then still
+  // sees why removal has not finished.
+  receipt.phase='cleanup';await save(receipt);
   if(receipt.ownedDatabase){
    // A resumed cleanup may follow new destination edits. Verify that all
    // transferred revision/event history is still retained before retiring it.
@@ -162,7 +164,7 @@ async function cleanupWithSession(receipt,{locked=false,vault,verified=false,mov
    }
    await removeRetired(receipt,{verifyDestination:!locked,signal});
   });
-  receipt.phase='complete';await save(receipt);operationTransfer({phase:'complete'});
+  receipt.phase='complete';delete receipt.error;await save(receipt);operationTransfer({phase:'complete'});
  }catch(error){receipt.phase='cleanup';receipt.error=safeError(error);await save(receipt);}
  return {id:receipt.id,source:receipt.source,destination:receipt.destination,phase:receipt.phase,error:receipt.error??null};
 }
@@ -174,8 +176,10 @@ export async function moveWorkspace(plan,{vault,onProgress,activate,recovery,mov
   }
   // Activation clears the caller's session key. Cleanup still needs it to prove
   // the folder-bound query cache and staging namespace the copy left out.
+  // Requests read retired record copies through the caller's own source key;
+  // hand that authority to the retained key, as the owned path does.
   const retainedVault=cloneVault(vault);
-  try{return await moveInstalledWorkspace(plan,{vault:retainedVault,activate});}finally{await clearVault(retainedVault);}
+  try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveInstalledWorkspace(plan,{vault:retainedVault,activate}));}finally{await clearVault(retainedVault);}
  });
 }
 async function moveInstalledWorkspace(plan,{vault,activate}){

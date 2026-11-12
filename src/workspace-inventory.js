@@ -27,6 +27,8 @@ export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
 // staging namespace and an owner's query cache are verified like a catalogue
 // owner's held ones. Both are bound to the folder that holds them: a copy
 // never carries them, and a fresh-key copy never tries to re-encrypt them.
+// A keyless writer lock on the same folder (an installed move retiring its
+// source) never hides the key its caller passed.
 export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],excludeProject,readPool,vault=null}={}){
  const excluded=new Set();
  for(const projectRoot of projectRoots){const relative=path.relative(root,projectRoot);if(!relative||relative==='.observanda'||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new AppError('STORAGE_PATH');excluded.add(relative.split(path.sep).join('/'));}
@@ -44,11 +46,11 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
     // complete contents travel through the transactional catalogue archive.
     if(relative!=='.observanda'&&path.posix.basename(relative.replace(/\/$/,''))==='.observanda'&&item.name==='postgresql')throw new AppError('DATABASE_LOCATION');
     if(relative==='.observanda'&&item.name==='query-cache'){
-     await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore(),key=held?.root===root?held.vault:vault;
+     await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore(),key=held?.root===root&&held.vault?.key?held.vault:vault;
      if(key){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,key))continue;}
     }
     if(relative==='.observanda'&&['staging-reservations','.staging-reservations.lock'].includes(item.name)){
-     await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore(),key=held?.root===root?held.vault:vault;
+     await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore(),key=held?.root===root&&held.vault?.key?held.vault:vault;
      if(key){const {verifiedStagingReservationNamespace}=await import('./staging-reservations.js');if(await verifiedStagingReservationNamespace(root,key))continue;}
     }
     if(relative==='.observanda'&&['postgresql','database-transition','project-transfer-files','lab-book-transfer-files'].includes(item.name)){await assertRegular(path.join(absolute,item.name),{directory:true});continue;}
