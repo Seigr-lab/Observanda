@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {chromium} from '@playwright/test';
 import {desktopFixture} from './fixture.js';
 import {payloadFiles} from '../../scripts/desktop-payload.js';
+import {verifyWindowsPayload} from '../../scripts/windows-desktop-payload.js';
 
 // Packaged Electron intentionally refuses the Node main-process inspector.
 // Drive its real renderer over a disposable loopback Chromium debugging port.
@@ -19,6 +20,7 @@ export async function websiteDesktopFixture(){
  const candidateVersion=JSON.parse(await readFile(new URL('../../package.json',import.meta.url),'utf8')).version;
  const env={...fixture.env};for(const key of ['NODE_OPTIONS','ELECTRON_RUN_AS_NODE','OBSERVANDA_DESKTOP_NODE','OBSERVANDA_POSTGRES_BIN','OBSERVANDA_TEST_POSTGRES_BIN'])delete env[key];
  const endpoint=path.join(fixture.directory,'.observanda','window','DevToolsActivePort');
+ const verifiedResources=new Set();
  async function close(app){
   if(!app)return;
   if(!app.child)return fixture.close(app);
@@ -38,13 +40,17 @@ export async function websiteDesktopFixture(){
   const resources=process.platform==='darwin'?path.resolve(path.dirname(executable),'../Resources'):path.join(path.dirname(executable),'resources');
   const installed=JSON.parse(await readFile(path.join(resources,'service/package.json'),'utf8'));
   assert.equal(installed.version,expectedVersion);await access(path.join(resources,'app.asar'));
-  if(expectedVersion!==candidateVersion){
-   // The installer includes separate uncompressed resources. Reject an
-   // incomplete predecessor before its older shell can show a native dialog.
+  if(!verifiedResources.has(resources)){
+   // Both sides of an upgrade, and fresh installations, must launch from a
+   // complete payload. A normal close/reopen reuses this verified installation.
    const manifest=JSON.parse(await readFile(path.join(resources,'payload.json'),'utf8'));
    assert.equal(manifest.format,1);assert.equal(manifest.platform,process.platform);assert.equal(manifest.arch,process.arch);
-   const actual=new Map((await payloadFiles(resources)).map(row=>[row.path,row]));
-   for(const row of manifest.files)assert.deepEqual(actual.get(row.path),row,'Incomplete previous desktop payload: '+row.path);
+   if(process.platform==='win32')await verifyWindowsPayload(resources,manifest,{installed:true});
+   else{
+    const actual=new Map((await payloadFiles(resources)).map(row=>[row.path,row]));
+    for(const row of manifest.files)assert.deepEqual(actual.get(row.path),row,'Incomplete installed desktop payload: '+row.path);
+   }
+   verifiedResources.add(resources);
   }
   await rm(endpoint,{force:true});
   const child=spawn(executable,['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--disable-renderer-backgrounding','--disable-background-timer-throttling','--disable-backgrounding-occluded-windows',...(website?['--website']:[])],{env,windowsHide:true,stdio:'ignore'});

@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {payloadFiles} from '../scripts/desktop-payload.js';
+import {installWindowsPayload,verifyWindowsPayload} from '../scripts/windows-desktop-payload.js';
+import config from '../electron-builder.config.js';
+
+test('per-user Windows installers cannot inject an elevation program after resource verification',()=>{
+ assert.equal(config.forceCodeSigning,true);
+ assert.equal(config.nsis.perMachine,false);
+ assert.equal(config.nsis.allowElevation,false);
+ assert.equal(config.nsis.packElevateHelper,false);
+});
+
+test('Windows packaging preserves reviewed runtime bytes and verifies the signed resource tree',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-payload-'));
+ t.after(()=>rm(directory,{recursive:true,force:true}));
+ const prepared=path.join(directory,'prepared'),resources=path.join(directory,'resources');
+ await mkdir(path.join(prepared,'runtime'),{recursive:true});
+ await mkdir(resources);
+ const original=Buffer.from('MZ\0runtime\0original publisher signature');
+ await writeFile(path.join(prepared,'runtime','node.exe'),original);
+ const manifest={format:1,platform:'win32',arch:'x64',files:await payloadFiles(prepared)};
+ await writeFile(path.join(prepared,'payload.json'),JSON.stringify(manifest));
+ await writeFile(path.join(resources,'app.asar'),'shell');
+ const collision=path.join(resources,'RUNTIME');
+ await mkdir(collision);
+ await assert.rejects(installWindowsPayload(prepared,resources,manifest),/overwrite/);
+ await assert.rejects(readFile(path.join(resources,'payload.json')),{code:'ENOENT'});
+ await rm(collision,{recursive:true});
+ await installWindowsPayload(prepared,resources,manifest);
+ const executable=path.join(resources,'runtime','node.exe');
+ assert.deepEqual(await readFile(executable),original);
+ await verifyWindowsPayload(resources,manifest);
+ const marker=path.join(resources,'package-type');
+ await writeFile(marker,'nsis');
+ await verifyWindowsPayload(resources,manifest,{installed:true});
+ await assert.rejects(verifyWindowsPayload(resources,manifest),/resource bytes/);
+ await writeFile(marker,'fake');
+ await assert.rejects(verifyWindowsPayload(resources,manifest,{installed:true}),/installation marker/);
+ await rm(marker);
+ await writeFile(executable,'changed signature');
+ await assert.rejects(verifyWindowsPayload(resources,manifest),/resource bytes/);
+ await writeFile(executable,original);
+ await writeFile(path.join(resources,'extra'),'unexpected');
+ await assert.rejects(verifyWindowsPayload(resources,manifest),/resource bytes/);
+ await rm(path.join(resources,'extra'));
+ await writeFile(path.join(resources,'payload.json'),'{}');
+ await assert.rejects(verifyWindowsPayload(resources,manifest),/manifest differs/);
+});

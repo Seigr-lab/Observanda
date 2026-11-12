@@ -1,19 +1,33 @@
+import path from 'node:path';
+import {installWindowsPayload,verifyWindowsPayload} from './scripts/windows-desktop-payload.js';
+
+const reviewedWindowsPayloads=new Map();
 export default {
  appId:'org.observanda.desktop',productName:'Observanda',directories:{app:'desktop',output:'dist/installers'},
  fileOptions:{files:['pdf-renderer.js','pdf-service.js','bootstrap.js','runtime-inventory.js','main.js','policy.js','branding.js','close-guard.js','service-supervisor.js','service-process.js','icon.png','icon-black.png','icon-white.png','package.json'],
-  extraResources:[{from:'dist/desktop-resources',to:'.',filter:['**/*','!**/.package-lock.json']}]},asar:true,nativeModules:{npmRebuild:false},
+  extraResources:process.platform==='win32'?[]:[{from:'dist/desktop-resources',to:'.',filter:['**/*','!**/.package-lock.json']}]},asar:true,nativeModules:{npmRebuild:false},
  forceCodeSigning:true,
  electronFuses:{runAsNode:false,enableCookieEncryption:true,enableNodeOptionsEnvironmentVariable:false,enableNodeCliInspectArguments:false,onlyLoadAppFromAsar:true,enableEmbeddedAsarIntegrityValidation:true,loadBrowserProcessSpecificV8Snapshot:false,grantFileProtocolExtraPrivileges:false},
- beforePack:async()=>{
+ beforePack:async({electronPlatformName,appOutDir})=>{
+  if(electronPlatformName!==process.platform)throw Error('Prepare and package desktop resources on the matching operating system.');
   await import('./scripts/check-dependencies.js');
-  const {verifyDesktopPayload}=await import('./scripts/desktop-payload.js');await verifyDesktopPayload('dist/desktop-resources',{sourceRoot:'.'});
-  const {readFile}=await import('node:fs/promises');
-  const manifest=JSON.parse(await readFile('dist/desktop-resources/payload.json','utf8'));
+  const {verifyDesktopPayload}=await import('./scripts/desktop-payload.js');
+  const manifest=await verifyDesktopPayload('dist/desktop-resources',{sourceRoot:'.'});
   for(const name of ['dependencies.cdx.json','build-dependencies.cdx.json','runtimes.json'])if(!manifest.files.some(file=>file.path===name))throw Error('Recreate the desktop payload with dependency and runtime inventories.');
+  if(electronPlatformName==='win32')reviewedWindowsPayloads.set(appOutDir,manifest);
   const {updateDesktopIcons}=await import('./scripts/update-icons.js');await updateDesktopIcons({png:true});
  },
+ afterPack:async({electronPlatformName,appOutDir})=>{
+  if(electronPlatformName==='win32')await installWindowsPayload('dist/desktop-resources',path.join(appOutDir,'resources'),reviewedWindowsPayloads.get(appOutDir));
+ },
+ afterSign:async({electronPlatformName,appOutDir})=>{
+  if(electronPlatformName==='win32'){
+   await verifyWindowsPayload(path.join(appOutDir,'resources'),reviewedWindowsPayloads.get(appOutDir));
+   reviewedWindowsPayloads.delete(appOutDir);
+  }
+ },
  win:{target:[{target:'nsis',arch:['x64']}],icon:'desktop/icon.ico',requestedExecutionLevel:'asInvoker'},
- nsis:{oneClick:false,perMachine:false,allowElevation:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'Observanda',deleteAppDataOnUninstall:false,runAfterFinish:false},
+ nsis:{oneClick:false,perMachine:false,allowElevation:false,packElevateHelper:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'Observanda',deleteAppDataOnUninstall:false,runAfterFinish:false},
  extraMetadata:{homepage:'https://github.com/Seigr-lab/Observanda'},
  linux:{target:[{target:'deb',arch:['x64']}],icon:'desktop/icon.png',executableName:'observanda',category:'Education',maintainer:'Seigr Lab'},
  // Preserve the packager's Debian defaults, then declare the OS
