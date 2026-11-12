@@ -9,8 +9,8 @@ import {PDF_PAGINATION_CSS} from '../src/pdf-pagination.js';
 import {PDF_COMPOSITION_CSS} from '../src/pdf-composition.js';
 import {validPdfPreflight} from '../src/pdf-preflight.js';
 const flow={version:1,defaultLayout:'paper',layouts:[{name:'paper',widthMm:128,heightMm:190,columns:1,columnGapMm:0}]};
-const note=(id,number,body)=>'<template data-pdf-footnote-source="'+id+'"><li value="'+number+'" style="font-size:9pt;line-height:1.35"><aside id="note-'+id+'" role="doc-footnote">'+body+'<p><a href="#call-'+id+'" role="doc-backlink">RETURN '+number+'</a></p></aside></li></template>';
-const call=(id,number,block)=>'<sup id="call-'+id+'" data-pdf-footnote-call="'+id+'" data-pdf-footnote-block="'+block+'"><a href="#note-'+id+'" role="doc-noteref">'+number+'</a></sup>';
+const note=(id,number,body)=>'<template data-pdf-footnote-source="'+id+'"><li value="'+number+'" style="font-size:9pt;line-height:1.35"><aside id="note-'+id+'" role="doc-footnote">'+body+'<p><a href="#call-'+id+'" data-pdf-note-link="return">RETURN '+number+'</a></p></aside></li></template>';
+const call=(id,number,block)=>'<sup id="call-'+id+'" data-pdf-footnote-call="'+id+'" data-pdf-footnote-block="'+block+'"><a href="#note-'+id+'" data-pdf-note-link="reference">'+number+'</a></sup>';
 const html=body=>'<!doctype html><html><head><style>@page paper{size:148mm 210mm;margin:10mm}*{box-sizing:border-box}html,body{margin:0;padding:0}body{font:10pt/1.4 sans-serif;overflow-wrap:anywhere}.paper{page:paper}p{margin:0 0 2mm;widows:3;orphans:3}h1,h2{break-after:avoid;margin:0 0 2mm}h1{font-size:14pt}h2{font-size:12pt}table{width:100%;border-collapse:collapse}td,th{border:1px solid;padding:2mm}thead{display:table-header-group}figure{break-inside:avoid;margin:2mm 0}img{max-width:100%}li{margin-bottom:1mm}'+PDF_PAGINATION_CSS+'</style></head><body>'+body+'</body></html>';
 
 test('footnote flow admits exact printable geometry without executable layout names',()=>{

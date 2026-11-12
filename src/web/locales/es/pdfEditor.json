@@ -1,4 +1,6 @@
 {
+  "outputNoteCall": "Nota {number}",
+  "outputNoteReturn": "Volver a la referencia {number}",
   "placementReviewTitle": "Revisar las posiciones de la sección",
   "placementReviewHelp": "Los cuadros de composición, las reglas de párrafo, las imágenes y las notas utilizan posiciones del texto. Comprueba las posiciones siguientes después de editarlo. Puedes ajustarlas antes de confirmar la sección para la vista previa y la exportación.",
   "placementBefore": "Antes de {block}",

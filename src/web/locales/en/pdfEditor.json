@@ -1,4 +1,6 @@
 {
+  "outputNoteCall": "Note {number}",
+  "outputNoteReturn": "Back to reference {number}",
   "placementReviewTitle": "Review section placements",
   "placementReviewHelp": "Layout boxes, paragraph rules, images and notes use positions in the text. Check the positions below after editing. You can adjust them before confirming this section for preview and export.",
   "placementBefore": "Before {block}",

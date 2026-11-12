@@ -1,4 +1,6 @@
 {
+  "outputNoteCall": "Note {number}",
+  "outputNoteReturn": "Tilbake til referanse {number}",
   "placementReviewTitle": "Gjennomgå plasseringene i delen",
   "placementReviewHelp": "Layoutbokser, avsnittsregler, bilder og noter bruker posisjoner i teksten. Kontroller plasseringene nedenfor etter redigering. Du kan justere dem før du bekrefter delen for forhåndsvisning og eksport.",
   "placementBefore": "Før {block}",

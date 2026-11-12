@@ -1,4 +1,6 @@
 {
+  "outputNoteCall": "Nota {number}",
+  "outputNoteReturn": "Torna a la referència {number}",
   "placementReviewTitle": "Revisa les posicions de la secció",
   "placementReviewHelp": "Els quadres de composició, les regles de paràgraf, les imatges i les notes fan servir posicions del text. Comprova les posicions següents després d’editar-lo. Pots ajustar-les abans de confirmar la secció per a la previsualització i l’exportació.",
   "placementBefore": "Abans de {block}",

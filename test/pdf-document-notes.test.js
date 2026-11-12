@@ -46,7 +46,7 @@ test('PDF notes render ordered semantic references and exact backlinks across se
  assert.deepEqual(a.references.map(row=>row.block),[1,1,3]);assert.equal(a.nextNumber,4);assert.equal(b.nextNumber,5);assert.equal(b.references[0].block,12000,'Authored position remains intact for compiler clamping');
  assert.equal(seen[0].content,first.notes[1].content);assert.equal(seen[0].context.number,1);assert.equal(seen[0].context.kind,'endnote');
  const html=scopePdfIds(a.references.map(row=>row.html).join('')+a.sectionNotes,'pdf-section-'+first.id+'-')+scopePdfIds(b.references.map(row=>row.html).join('')+b.sectionNotes,'pdf-section-'+second.id+'-')+renderPdfEndnotes([...a.endnotes,...b.endnotes],{textGlyphs:(font,text)=>glyphs.push(font+':'+text)});
- assert.match(html,/role="doc-noteref"/);assert.match(html,/role="doc-footnote"/);assert.match(html,/role="doc-endnotes"/);assert.match(html,/role="doc-endnote"/);assert.match(html,/role="doc-backlink"/);assert.match(html,/Section notes/);assert.match(html,/https:\/\/example.invalid\/method/);assert.match(html,/rt-font-dm-sans/);assert.equal(html.includes('<script>'),false);assert.match(html,/&lt;script&gt;plain text/);
+ assert.match(html,/data-pdf-note-link="reference"/);assert.match(html,/role="doc-footnote"/);assert.match(html,/role="doc-endnotes"/);assert.match(html,/role="doc-endnote"/);assert.match(html,/data-pdf-note-link="return"/);assert.match(html,/Section notes/);assert.match(html,/https:\/\/example.invalid\/method/);assert.match(html,/rt-font-dm-sans/);assert.equal(html.includes('<script>'),false);assert.match(html,/&lt;script&gt;plain text/);
  const ids=[...html.matchAll(/ id="([^"]+)"/g)].map(match=>match[1]);assert.equal(new Set(ids).size,ids.length);assert.ok(ids.every(id=>Buffer.byteLength(id)<=127),'Derived PDF destinations fit the PDF/A name limit');for(const match of html.matchAll(/href="#([^"]+)"/g))assert.ok(ids.includes(match[1]),'Exact note target exists: '+match[1]);
  assert.ok(glyphs.some(text=>text.includes('Ω')));assert.ok(glyphs.includes('atkinson:Endnotes'));assert.ok(glyphs.includes('atkinson:Section notes'));assert.ok(glyphs.some(text=>text.includes('Back to reference 4')));
 });
@@ -70,6 +70,20 @@ test('PDF note authoring adds, edits and removes stable notes without accepting 
  section=oldSection;ui.view();ui.action('note-remove',{dataset:{id}});assert.equal(section.notes,undefined);assert.equal(markers.at(-1).action,'remove');assert.equal(changes,4);assert.equal(draws,3);assert.equal(ui.action('other',{}),false);
 });
 
+test('printed note headings and link descriptions follow the authored document language',async()=>{
+ for(const [language,sectionLabel,call,back,end] of [
+  ['en-GB','Section notes','Note 1','Back to reference 1','Endnotes'],
+  ['es-ES','Notas de sección','Nota 1','Volver a la referencia 1','Notas finales'],
+  ['ca','Notes de secció','Nota 1','Torna a la referència 1','Notes finals'],
+  ['nb','Delnotat','Note 1','Tilbake til referanse 1','Sluttnoter'],
+  ['nn','Delnotat','Note 1','Tilbake til referanse 1','Sluttnotar']
+ ]){
+  const section={id:randomUUID(),title:'',notes:[note('Source note','footnote'),note('End note','endnote')]};
+  const output=await renderPdfNotes(section,{language,renderContent:content=>renderProse(content,{resolveLink:()=>null})});
+  assert.ok(output.sectionNotes.includes(sectionLabel),language);assert.ok(output.references[0].html.includes('aria-label="'+call+'"'));
+  assert.ok(output.sectionNotes.includes(back));assert.ok(renderPdfEndnotes(output.endnotes,{language}).includes(end),language);
+ }
+});
 test('PDF note links follow disabled policy while endnote typography retains the authored section settings',async()=>{
  const result=await renderPdfNotes({id:randomUUID(),notes:[note('Printed endnote','endnote')]},{renderContent:content=>renderProse(content,{resolveLink:()=>null}),links:false,font:'dm-sans',fontSizePt:17,lineHeight:1.8});
  const html=result.references[0].html+renderPdfEndnotes(result.endnotes,{layoutClass:'pdf-layout-0'});assert.equal(html.includes('<a '),false);assert.match(html,/>1<\/sup>/);assert.match(html,/font-size:17pt;line-height:1.8/);assert.match(html,/pdf-endnotes pdf-layout-0/);assert.match(html,/DM Sans/);
