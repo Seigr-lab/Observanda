@@ -21,6 +21,9 @@ import {selectEditionRecord} from './web/publication-selection.js';
 import {editionReferences} from './web/publication-record-references.js';
 import {validateEditionSelection,validateEditionRecord} from './publication-selection.js';
 import {customFieldLabel} from './web/custom-field-presentation.js';
+// Template field labels may be shipped profile text, which reads its catalogue;
+// a website build registers it itself instead of relying on the interface.
+import './web/i18n/catalogues/labBookProfiles.js';
 
 export function publicProjection(source, options={}) {
   const {designPageId=null,designTarget=null,workspaceContent=false}=options;

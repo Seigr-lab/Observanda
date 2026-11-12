@@ -14,6 +14,8 @@ import {editionRevisionKey,selectEditionRecord,validEditionRecord} from './web/p
 import {validateEditionRecord} from './publication-selection.js';
 import {recordEditionInventory} from './web/publication-inventory.js';
 import {customFieldLabel} from './web/custom-field-presentation.js';
+// Template field labels may be shipped profile text; register its catalogue here.
+import './web/i18n/catalogues/labBookProfiles.js';
 import {editionReferences,omittedEditionReferences} from './web/publication-record-references.js';
 export {editionReferences} from './web/publication-record-references.js';
 // A publication page has its own stable identity. The encrypted original keeps
