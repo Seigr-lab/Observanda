@@ -96,15 +96,19 @@ test('idle project services are evicted and reopened with saved data while activ
 });
 
 
-test('a failed stop does not retain a rejected promise and the same installation recovers its owned project',async t=>{
+// A server stopped outside Observanda is verified stopped by pg_ctl status, so
+// closing it succeeds (postgres-runtime.js stopServer) and leaves no runtime.
+test('a server stopped outside Observanda closes cleanly and the same installation recovers its owned project',async t=>{
  const f=await fixture(t),owner=f.manager(),a=await f.project('failed-stop'),env=await owner.open(a.root,a.id,a.vault,{create:true});await query(env,'CREATE TABLE retained(value integer)');await query(env,'INSERT INTO retained VALUES (73)');
  const data=path.join(a.root,'.observanda/postgresql/data');assert.ok(data.startsWith(f.parent+path.sep));const ctl=path.join(process.env.OBSERVANDA_TEST_POSTGRES_BIN,process.platform==='win32'?'pg_ctl.exe':'pg_ctl');await runtimeCommand(ctl,['-D',data,'-m','fast','-w','-t','15','stop']);
- await assert.rejects(owner.closeProject(a.root));assert.equal(env.OBSERVANDA_DATABASE_URL,undefined);assert.equal(owner.stats().open,0);
+ await owner.closeProject(a.root);assert.equal(env.OBSERVANDA_DATABASE_URL,undefined);assert.equal(owner.stats().open,0);
  const recovered=await owner.acquire(a.root,a.id,a.vault);try{assert.equal((await query(recovered.env,'SELECT value FROM retained'))[0].value,73);}finally{recovered.release();}
 });
 
 
-test('authenticated deletion recovery stops an orphan project runtime without restarting it',async t=>{
+// On Windows the native runtime guard holds PostgreSQL in a kill-on-close job
+// that ends with its owner process, so no orphan server can remain to stop.
+test('authenticated deletion recovery stops an orphan project runtime without restarting it',{skip:process.platform==='win32'&&'The Windows runtime guard ends PostgreSQL with its owner process'},async t=>{
  const f=await fixture(t),ownerId=randomUUID(),owner=f.manager(ProjectPostgres,{ownerId}),project=await f.project('orphan'),deleteId=randomUUID();
  const {spawn}=await import('node:child_process'),{writeFile,unlink}=await import('node:fs/promises');
  const child=spawn(process.execPath,['--input-type=module','-e',`import {ProjectPostgres} from './src/project-postgres.js';let input='';for await(const bytes of process.stdin)input+=bytes;const p=JSON.parse(input),owner=new ProjectPostgres({ownerId:p.ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});const env=await owner.open(p.root,p.id,{id:p.vaultId,key:Buffer.from(p.key,'base64')},{create:true});process.stdout.write(JSON.stringify({url:env.OBSERVANDA_DATABASE_URL}));await new Promise(()=>{});`],{cwd:process.cwd(),windowsHide:true,stdio:['pipe','pipe','pipe']});
