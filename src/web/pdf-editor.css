@@ -9,4 +9,29 @@
 
 [data-pdf-finding-target]{outline:3px solid var(--accent,#3b55bb);outline-offset:4px;scroll-margin-block:3rem}
 
-.pdf-composition-canvas{position:relative;width:100%;max-width:700px;outline:1px solid #64748b;background-color:#fff}.pdf-composition-canvas[data-pdf-grid-enabled=true]{background-image:linear-gradient(to right,#dbe3e8 1px,transparent 1px),linear-gradient(to bottom,#dbe3e8 1px,transparent 1px)}.pdf-composition-handle{position:absolute;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;touch-action:none;cursor:move;user-select:none;border:1px solid #446076;background:#e9f0f7;color:#172332;font:inherit;text-align:start;min-width:0;min-height:0;padding:2px}
+.pdf-composition-frame{display:grid;grid-template-columns:2.1rem minmax(0,1fr);grid-template-rows:1.5rem auto;width:100%;max-width:740px;margin-block:1rem}
+.pdf-composition-ruler{position:relative;color:var(--muted,#475569);font-size:.75rem;font-variant-numeric:tabular-nums}
+.pdf-composition-ruler.ruler-x{grid-column:2;border-bottom:1px solid currentColor}
+.pdf-composition-ruler.ruler-y{grid-column:1;grid-row:2;border-right:1px solid currentColor}
+.pdf-composition-ruler span{position:absolute;white-space:nowrap}
+.ruler-x span{bottom:0;border-left:1px solid currentColor;padding-left:3px}
+.ruler-y span{right:0;border-top:1px solid currentColor;padding-right:3px}
+.pdf-composition-canvas{grid-column:2;grid-row:2;position:relative;width:100%;outline:1px solid #64748b;background-color:white;isolation:isolate}
+.pdf-composition-canvas[data-pdf-grid-enabled=true]{background-image:linear-gradient(to right,#dbe3e8 1px,transparent 1px),linear-gradient(to bottom,#dbe3e8 1px,transparent 1px)}
+.pdf-composition-canvas canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.pdf-composition-canvas:not([data-proof=ready]) canvas{visibility:hidden}
+.pdf-composition-box{position:absolute;box-sizing:border-box;pointer-events:none}
+.pdf-composition-handle,.pdf-composition-resize{box-sizing:border-box;pointer-events:auto;touch-action:none;user-select:none;min-width:0;min-height:0}
+.pdf-composition-handle{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;cursor:move;border:1px dashed #516e85;background:transparent;color:#172332;font:inherit;text-align:start;padding:2px}
+.pdf-composition-handle[aria-pressed=true]{outline:2px solid #3152a5;outline-offset:-1px}
+.pdf-composition-canvas[data-proof=ready] .pdf-composition-handle span{opacity:0}
+.pdf-composition-box:focus-within{z-index:1}
+.pdf-composition-resize{position:absolute;right:0;bottom:0;width:1.5rem;height:1.5rem;cursor:nwse-resize;border:1px solid currentColor;background:white;color:#24478b;line-height:1;padding:0}
+.pdf-composition-handle:focus-visible,.pdf-composition-resize:focus-visible{outline:3px solid #2149a5;outline-offset:2px}
+.pdf-arrange{margin-block:.6rem}
+.pdf-arrange>summary{cursor:pointer}
+.pdf-arrange select[multiple]{width:100%;max-width:40rem}
+.pdf-page-object-editor{box-sizing:border-box;width:min(55rem,88vw);max-height:82vh;overflow:auto;padding:1rem 1.25rem;border:1px solid var(--border,#ccd2dc);background:var(--panel,#fff);color:inherit}
+.pdf-page-object-editor::backdrop{background:#18243b75}
+.pdf-page-object-editor h2{margin:0 0 .75rem}
+.pdf-page-object-editor>button{margin-top:.75rem}

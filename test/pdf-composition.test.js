@@ -5,11 +5,23 @@ import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
 import {pdfPageMasterDefaults} from '../src/web/pdf-page-master-model.js';
 import {pdfCompositionArea,pdfCompositionItems,pdfCompositionDefaults,pdfAdjustComposition,pdfMoveCompositionBox,pdfCompositionStatus,validPdfComposition} from '../src/web/pdf-composition-model.js';
 import {pdfCompositionUI} from '../src/web/pdf-composition-ui.js';
+import {arrangeComposition,compositionMovement} from '../src/web/pdf-composition-arrange.js';
 import {renderPdfComposition} from '../src/pdf-composition.js';
 import {scopePdfIds} from '../src/pdf-figure-renderer.js';
 const paragraph=text=>({type:'paragraph',content:[{type:'text',text}]}),image=(block,alt)=>({id:randomUUID(),alt,position:{block}});
 const section=()=>({id:randomUUID(),title:'Guide',content:{type:'doc',content:[paragraph('First prose'),paragraph('Second prose')]},layout:null,start:null});
 function composed(value=section(),layout=pdfLayoutPreset()){value.composition=pdfCompositionDefaults(value,layout);return {value,layout};}
+test('multi-object layout preserves millimetres, group offsets and reading order without silently overlapping distributed boxes',()=>{
+ const box=(index,xMm,widthMm)=>({target:{kind:'block',index},xMm,widthMm,yMm:index*3,heightMm:10});
+ const boxes=[box(0,10,4),box(1,60,12),box(2,40,8),box(3,65,2)],area={widthMm:100,heightMm:70};
+ const keys=new Set(['block:0','block:1','block:2']),values=input=>input.map(b=>b.xMm);
+ assert.deepEqual(values(arrangeComposition(boxes,keys,area,{axis:'horizontal',placement:'distribute'})),[10,60,33,65]);
+ assert.deepEqual(values(arrangeComposition(boxes,keys,area,{axis:'horizontal',placement:'end',relative:'page'})),[96,88,92,65]);
+ const move=compositionMovement(boxes,keys,boxes[2],area,5),edits=move(90,65);
+ assert.deepEqual(values(boxes.map(box=>edits.get(box)??box)),[38,88,68,65]);assert.equal(edits.size,3);
+ assert.equal(move(0,0).get(boxes[2]).xMm,40);
+ assert.deepEqual(values(boxes),[10,60,40,65]);assert.equal(arrangeComposition(boxes,keys,{...area,widthMm:20},{axis:'horizontal',placement:'distribute',relative:'page'}),null);
+});
 const content=value=>({titleHTML:value.title?'<h1>'+value.title+'</h1>':'',blocks:(value.content.content??[]).map((node,index)=>'<p id="prose-'+index+'">'+node.content[0].text+'</p>'),images:(value.images??[]).map(image=>({id:image.id,html:'<figure class="pdf-placed-image"><img alt="'+image.alt+'"><figcaption>Caption</figcaption></figure>'})),notesHTML:value.notes?.some(note=>note.kind==='footnote')?'<section class="pdf-section-notes">Section notes</section>':''});
 
 test('composition geometry uses printable margins and gutter while keeping flow the default',()=>{
@@ -61,7 +73,15 @@ test('composition authoring has physical controls and explicit mode/adjust actio
 
 test('canvas handles support bounded arrow movement, drag cancellation and context-safe commits',()=>{
  let value=section();const document={header:{id:randomUUID(),layout:pdfLayoutPreset()}};value.composition=pdfCompositionDefaults(value,document.header.layout);const box=value.composition.boxes.find(box=>box.target.kind==='block'&&box.target.index===0);Object.assign(box,{xMm:10,yMm:20,widthMm:40,heightMm:30});let changes=0;
- const ui=pdfCompositionUI({esc:String,getDocument:()=>document,getSection:()=>value,changed:()=>changes++,draw:()=>{}});ui.view();const handlers=new Map(),canvas={getBoundingClientRect:()=>({width:170,height:256.9})},node={dataset:{pdfCompositionHandle:'block:0'},style:{left:'5%',top:'10%'},focus(){},setPointerCapture(){},releasePointerCapture(){},closest(selector){return selector==='[data-pdf-composition-handle]'?this:selector==='[data-pdf-composition-canvas]'?canvas:null;}},host={querySelector:()=>node,addEventListener(name,fn,{signal}){handlers.set(name,fn);signal.addEventListener('abort',()=>{if(handlers.get(name)===fn)handlers.delete(name);});}},event=extra=>({target:node,preventDefault(){},stopPropagation(){},...extra});ui.bind(host);
+ const ui=pdfCompositionUI({esc:String,getDocument:()=>document,getSection:()=>value,changed:()=>changes++,draw:()=>{},isSaved:()=>false,getPreflight:()=>null});
+ ui.view();
+ const handlers=new Map(),status={},ownerDocument={hidden:false,addEventListener(){}};
+ const canvas={dataset:{},style:{},getBoundingClientRect:()=>({width:170,height:256.9}),querySelectorAll:()=>[container],querySelector:()=>null,closest:()=>null};
+ const container={dataset:{pdfCompositionBox:'block:0'},style:{},parentElement:canvas};
+ const node={dataset:{pdfCompositionHandle:'block:0'},parentElement:container,firstElementChild:{},hasAttribute:()=>false,setAttribute(){},focus(){},setPointerCapture(){},closest(selector){return selector.includes('[data-pdf-composition-handle]')?this:null;}};
+ container.firstElementChild=node;
+ const host={ownerDocument,querySelector:selector=>selector==='[data-pdf-composition-canvas]'?canvas:status,addEventListener(name,fn,{signal}){handlers.set(name,fn);signal.addEventListener('abort',()=>{if(handlers.get(name)===fn)handlers.delete(name);});}};
+ const event=extra=>({target:node,preventDefault(){},stopPropagation(){},...extra});ui.bind(host);
  handlers.get('keydown')(event({key:'ArrowRight'}));assert.equal(value.composition.boxes.find(box=>box.target.index===0).xMm,15);assert.equal(changes,1);
  handlers.get('pointerdown')(event({button:0,pointerId:7,clientX:0,clientY:0}));handlers.get('pointermove')(event({pointerId:7,clientX:10,clientY:5}));assert.equal(changes,1);handlers.get('keydown')(event({key:'Escape'}));assert.equal(value.composition.boxes.find(box=>box.target.index===0).xMm,15);assert.equal(changes,1);
  handlers.get('pointerdown')(event({button:0,pointerId:8,clientX:0,clientY:0}));handlers.get('pointermove')(event({pointerId:8,clientX:10,clientY:5}));handlers.get('pointerup')(event({pointerId:8}));assert.equal(changes,2);assert.equal(value.composition.boxes.find(box=>box.target.index===0).xMm,25);

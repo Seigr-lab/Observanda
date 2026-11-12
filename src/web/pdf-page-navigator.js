@@ -5,6 +5,11 @@ const pdfLibrary=()=>library??=(async()=>{
  const url='/vendor/pdfjs/pdf.js',pdf=await import(url);
  pdf.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.js';return pdf;
 })().catch(error=>{library=null;throw error;});
+export async function loadPdfPreview(blob,signal){
+ const pdf=await pdfLibrary();signal.throwIfAborted();
+ const data=new Uint8Array(await blob.arrayBuffer());signal.throwIfAborted();
+ return pdf.getDocument({data,isEvalSupported:false,useSystemFonts:false,disableFontFace:true,useWasm:false,useWorkerFetch:false,isOffscreenCanvasSupported:false,maxImageSize:64*1024*1024,stopAtErrors:true});
+}
 const batch=6,maximumPages=100000;
 export function pdfPageNavigator({getHost,getFrame,esc}){
  let current=null,document=null,loading=null,controller=null,generation=0,range=0,page=1,error='',rendering=null,disposed=false;
@@ -35,8 +40,7 @@ export function pdfPageNavigator({getHost,getFrame,esc}){
  async function load(value){
   cancel();current=value;range=0;page=1;error='';const epoch=generation,abort=new AbortController();controller=abort;draw();
   try{
-   const pdf=await pdfLibrary();abort.signal.throwIfAborted();const data=new Uint8Array(await value.blob.arrayBuffer());abort.signal.throwIfAborted();
-   const task=pdf.getDocument({data,isEvalSupported:false,useSystemFonts:false,disableFontFace:true,useWasm:false,useWorkerFetch:false,isOffscreenCanvasSupported:false,maxImageSize:64*1024*1024,stopAtErrors:true});loading=task;
+   const task=await loadPdfPreview(value.blob,abort.signal);if(epoch!==generation||disposed){await task.destroy();return;}loading=task;
    const loaded=await task.promise;if(epoch!==generation||disposed){await task.destroy();return;}
    if(!Number.isSafeInteger(loaded.numPages)||loaded.numPages<1||loaded.numPages>maximumPages)throw Error('PDF page limit');document=loaded;bind();
   }catch(failure){if(epoch===generation&&!abort.signal.aborted&&!disposed){error=failure.message;draw();}}

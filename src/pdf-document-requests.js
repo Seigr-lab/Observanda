@@ -69,11 +69,12 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
   if(request.pdf==='selection'){if(Object.keys(input).sort().join()!=='id,revision'||!researchId(input.id)||!revisionId(input.revision)||!await documents.available())throw new AppError('INVALID');return documents.domains.run(['pdf'],async get=>{const owner=new PdfDocumentStore(get('pdf')),selected=await owner.open(input.id,{revision:input.revision});return pdfAudienceSummary(selected.header,pdfFileSections(get('pdf'),publicationFiles,input.id,owner.content(input.id,input.revision,{signal}),{signal}),{signal});},{signal,check});}
   if(request.pdf==='source-images'||request.pdf==='source-image-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source-images'?readPdfResearchImages(publicationFiles,input,{signal}):retainPdfResearchImage(documents,publicationFiles,input,{signal,check});}
   if(request.pdf==='source'||request.pdf==='source-retain'){if(!publicationFiles)throw new AppError('PDF_SOURCE_CONTENT');return request.pdf==='source'?readPdfResearch(publicationFiles,input,{signal}):retainPdfResearch(documents,publicationFiles,input,{signal,check});}
-  if(request.pdf==='export'||request.pdf==='preflight'){
-   if(!revisionId(input.revision)||Object.keys(input).sort().join()!=='id,revision')throw new AppError('INVALID');
+  if(request.pdf==='export'||request.pdf==='preflight'||request.pdf==='composition-proof'){
+   const proof=request.pdf==='composition-proof';
+   if(!revisionId(input.revision)||Object.keys(input).sort().join()!==(proof?'id,revision,sectionId':'id,revision')||proof&&!researchId(input.sectionId))throw new AppError('INVALID');
    if(!pdfRendererAvailable())throw new AppError('PDF_DESKTOP');
    if(!await documents.available())throw new AppError('NOT_FOUND');
-   const result=await prepareSavedPdf(documents,{documentId:input.id,revision:input.revision},{signal,check,preflightOnly:request.pdf==='preflight'});
+   const result=await prepareSavedPdf(documents,{documentId:input.id,revision:input.revision},{signal,check,preflightOnly:request.pdf==='preflight',compositionSectionId:proof?input.sectionId:null});
    if(request.pdf==='preflight')return {revision:input.revision,...result.preflight};
    if(!result.bytes||result.preflight?.status==='fatal')throw new AppError('PDF_PREFLIGHT',result.preflight?.findings??[]);
    return binary({name:'document.pdf',download:'document.pdf',mime:'application/pdf',content:result.bytes});

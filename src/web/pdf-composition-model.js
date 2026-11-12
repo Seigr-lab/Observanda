@@ -58,8 +58,18 @@ export function pdfAdjustComposition(section,layout){
  const old=section.composition,next=pdfCompositionDefaults(section,layout,validPdfComposition(old)?{gridMm:old.gridMm,snap:old.snap}:{}),area=pdfCompositionArea(layout),boxes=new Map((old?.boxes??[]).filter(validPdfCompositionBox).map(box=>[pdfCompositionKey(box.target),box]));
  next.boxes=next.boxes.map(box=>{const prior=boxes.get(pdfCompositionKey(box.target));if(!prior)return box;const widthMm=Math.min(prior.widthMm,area.widthMm),heightMm=Math.min(prior.heightMm,area.heightMm);return {...prior,target:{...prior.target},widthMm,heightMm,xMm:Math.min(prior.xMm,area.widthMm-widthMm),yMm:Math.min(prior.yMm,area.heightMm-heightMm)};});return next;
 }
-export function pdfMoveCompositionBox(section,layout,key,{xMm,yMm},{snap=true}={}){
- const area=pdfCompositionArea(layout),value=section.composition;if(!area||!validPdfComposition(value)||![xMm,yMm].every(Number.isFinite))return null;
- const selected=value.boxes.find(box=>pdfCompositionKey(box.target)===key);if(!selected||selected.widthMm>area.widthMm||selected.heightMm>area.heightMm)return null;
- const round=number=>snap&&value.snap&&value.gridMm?Math.round(number/value.gridMm)*value.gridMm:number,box={...selected,xMm:Math.max(0,Math.min(round(xMm),area.widthMm-selected.widthMm)),yMm:Math.max(0,Math.min(round(yMm),area.heightMm-selected.heightMm))};return {...value,boxes:value.boxes.map(item=>item===selected?box:item)};
+export function pdfCompositionGeometry(selected,area,{xMm,yMm,widthMm,heightMm},grid=0){
+ const round=n=>grid?Math.round(n/grid)*grid:n;
+ if(Number.isFinite(widthMm)&&Number.isFinite(heightMm)){
+  if(area.widthMm-selected.xMm<.001||area.heightMm-selected.yMm<.001)return null;
+  return {...selected,widthMm:Math.max(.001,Math.min(round(widthMm),area.widthMm-selected.xMm)),heightMm:Math.max(.001,Math.min(round(heightMm),area.heightMm-selected.yMm))};
+ }
+ if(![xMm,yMm].every(Number.isFinite)||selected.widthMm>area.widthMm||selected.heightMm>area.heightMm)return null;
+ return {...selected,xMm:Math.max(0,Math.min(round(xMm),area.widthMm-selected.widthMm)),yMm:Math.max(0,Math.min(round(yMm),area.heightMm-selected.heightMm))};
+}
+export function pdfMoveCompositionBox(section,layout,key,geometry,{snap=true}={}){
+ const area=pdfCompositionArea(layout),value=section.composition;if(!area||!validPdfComposition(value))return null;
+ const selected=value.boxes.find(box=>pdfCompositionKey(box.target)===key);if(!selected)return null;
+ const box=pdfCompositionGeometry(selected,area,geometry,snap&&value.snap?value.gridMm:0);
+ return box?{...value,boxes:value.boxes.map(item=>item===selected?box:item)}:null;
 }

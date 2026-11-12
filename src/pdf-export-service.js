@@ -14,26 +14,34 @@ import {PdfExportJobs} from './pdf-export-jobs.js';
 import {withoutWriterWait} from './writer-wait.js';
 import {withDatabaseRequest} from './database-request-context.js';
 import {AppError} from './errors.js';
+import {renderPdfCompositionProof,pdfCompositionProof} from './pdf-composition-proof.js';
 
-export async function prepareSavedPdf(documents,{documentId,revision},{signal,check=async()=>{},progress=async()=>{},preflightOnly=false}={}){
- const proof=new Map();
+export async function prepareSavedPdf(documents,{documentId,revision},{signal,check=async()=>{},progress=async()=>{},preflightOnly=false,compositionSectionId=null}={}){
+ const proof=new Map(),compositionProof=compositionSectionId?pdfCompositionProof(compositionSectionId):null;
  try{
   await check();await progress('compiling');
-  const compiled=await documents.domains.run(['pdf'],async get=>{
+  const {proofArea,...compiled}=await documents.domains.run(['pdf'],async get=>{
    const store=get('pdf'),owner=new PdfDocumentStore(store),selected=await owner.open(documentId,{revision});
    const readImage=async asset=>{if(!await allowPdfImage(store,documents.publicationFiles,documentId,{asset},{signal,proof}))throw new AppError('PDF_SOURCE_CONTENT');return new PdfDocumentImages(store,documentId).read(asset,{signal});};
-   const compiled=await compilePdfDocument(selected.header,pdfFileSections(store,documents.publicationFiles,documentId,owner.content(documentId,revision,{signal}),{signal,proof}),{signal,readImage}),customFonts=new Map();
+   const compiled=await compilePdfDocument(selected.header,pdfFileSections(store,documents.publicationFiles,documentId,owner.content(documentId,revision,{signal}),{signal,proof}),{signal,readImage,compositionProof}),customFonts=new Map();
+   if(compositionProof&&!compiled.proofArea)throw new AppError('PDF_COMPOSITION_STALE');
    const bleedImage=await preparePdfBleedImage(selected.header.press,readImage,{signal});if(bleedImage)compiled.bleedImage=bleedImage;
    for(const pin of selected.header.fonts??[])if(compiled.fonts.includes(pin.id))customFonts.set(pin.id,await readPdfDocumentFont(store,documentId,pin,{signal}));
    if(selected.header.printCondition){compiled.printCondition=structuredClone(selected.header.printCondition);compiled.iccProfile=(await new PdfPrintProfiles(store,documentId).read(selected.header.printCondition.profile,{signal})).toString('base64');}
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
-  await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);return {...result,sourceProof};
+  await progress('rendering');
+  const render=input=>renderSavedPdf(input,{signal,wait:true});
+  const result=compositionProof?await renderPdfCompositionProof(compiled,compositionProof,proofArea,{signal,render}):await render({...compiled,preflightOnly});
+  await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);
+  return {...result,sourceProof};
  }catch(error){
   if(!(error instanceof PdfLayoutError))throw error;
-  if(error.code==='PDF_GLYPH'&&error.preflight&&preflightOnly){
+  if(error.code==='PDF_GLYPH'&&error.preflight&&(preflightOnly||compositionProof)){
    await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();
-   return {preflight:error.preflight};
+   if(preflightOnly)return {preflight:error.preflight};
+   const findings=error.preflight.findings.filter(row=>row.sectionId===compositionProof.sectionId);
+   throw new AppError(error.code,findings);
   }
   const [sectionId,blockId,target]=error.details;
   if(!preflightOnly||!researchId(sectionId)||!['PDF_LINK_CODE_LAYOUT','PDF_PLACEMENT_REVIEW','PDF_NOTE_ANCHOR','PDF_UNRESOLVED_REFERENCE'].includes(error.code))throw new AppError(error.code,error.details);

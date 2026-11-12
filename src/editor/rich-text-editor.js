@@ -211,6 +211,13 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc,chosen.from,chosen.to)).scrollIntoView());
   view.focus();return true;
  },
+ focusTopLevelBlock(index){
+  const doc=view.state.doc;
+  if(!Number.isSafeInteger(index)||index<0||index>=doc.childCount)return false;
+  let position=0;for(let i=0;i<index;i++)position+=doc.child(i).nodeSize;
+  const block=doc.child(index),selection=block.isAtom&&NodeSelection.isSelectable(block)?NodeSelection.create(doc,position):TextSelection.near(doc.resolve(position+1),1);
+  view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());view.focus();return true;
+ },
  focusBlock(id){
   let at=null;
   view.state.doc.descendants((node,pos)=>{if(node.attrs.id===id&&NodeSelection.isSelectable(node))at=pos;});
