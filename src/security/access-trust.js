@@ -61,6 +61,12 @@ export class AccessTrustStore{
  }
  async remember(value,vault){
   if(value.formatVersion!==3)return;authenticateKeyring(value,vault);
+  // Every unlock remembers its keyring. An already current record needs no
+  // write, so read it first: current.json is only ever replaced atomically.
+  // Taking the kernel lease here serialized every concurrent unlock of one
+  // vault (one helper process each), stalling a reloaded project's reads.
+  // A missing or different record still takes the lease and is rechecked.
+  if((await this.current(value.vaultId))?.sha256===keyringFingerprint(value))return;
   return this.locked(value.vaultId,async folder=>{
    const existing=await this.current(value.vaultId),sha256=keyringFingerprint(value);
    if(existing){if(existing.sha256!==sha256)throw new AppError('ACCESS_STATE_CHANGED');return;}
