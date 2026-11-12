@@ -34,7 +34,8 @@ test('new record save progress stays readable, preserves newer typing and closes
   await expect(title).toBeVisible();await title.fill('Submitted title');await save.click();
   const progress=page.getByRole('region',{name:'Saving records',exact:true});await expect(progress.getByRole('heading',{name:'Writing records and history'})).toBeVisible();
   await expect(progress.locator('[data-count]')).toHaveText('0 of 1 records completed in this stage');await expect(progress.locator('[data-hint]')).toContainText('only when the complete save succeeds');
-  await expect(page.locator('#save-status')).toHaveText('Unsaved changes');await expect(title).toBeEnabled();await title.fill('Newer typing');
+  // While a save is in flight the status says so; editing stays available.
+  await expect(page.locator('#save-status')).toHaveText('Saving…');await expect(title).toBeEnabled();await title.fill('Newer typing');
   await page.setViewportSize({width:760,height:1000});await page.evaluate(()=>document.documentElement.style.fontSize='24px');await progress.scrollIntoViewIfNeeded();
   expect(await progress.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await expect(progress.locator('[data-time]')).toBeVisible();await page.screenshot({path:test.info().outputPath('record-save-progress.png')});
   release();await expect(progress).toHaveCount(0);await expect(title).toHaveValue('Newer typing');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
