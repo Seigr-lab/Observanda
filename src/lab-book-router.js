@@ -10,7 +10,10 @@ export class LabBookRouter{
  async withLabBook(labBookId,operation,{action='read',withStorage}={}){
   if(!['read','write'].includes(action)||typeof operation!=='function'||withStorage!==undefined&&typeof withStorage!=='function')throw new AppError('INVALID');
   if(await this.authorize({labBookId,action})!==true)throw new AppError('ACCESS_DENIED');
-  if((await bookPlacementPending(this.registry.project,labBookId))?.kind==='import')throw new AppError('LAB_BOOK_IMPORT_PENDING');
+  // A pending placement owns this book's storage handoff. Refuse at once rather
+  // than wait behind it: a held move must not occupy the reader's request and
+  // database slots, which the project's other reads need.
+  const placement=await bookPlacementPending(this.registry.project,labBookId);if(placement)throw new AppError(placement.kind==='import'?'LAB_BOOK_IMPORT_PENDING':'LAB_BOOK_MOVE_PENDING');
   const entry=await this.registry.locate(labBookId),binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
   if(binding&&(binding.placement!=='lab-book'||binding.labBookId!==labBookId)||access.value.formatVersion!==3||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
   const vault=await this.unlock(entry,access);if(!vault?.key)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,vault);

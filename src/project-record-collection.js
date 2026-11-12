@@ -11,7 +11,7 @@ import {AppError} from './errors.js';
 import {createCatalogueConnections} from './catalogue-connections.js';
 import {withQueryCacheScope} from './query-cache-scope.js';
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
-const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','STORAGE_INCOMPLETE']);
+const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','LAB_BOOK_MOVE_PENDING','STORAGE_INCOMPLETE']);
 export function projectRecordCollection(application,client,check){
  return async(consume,{workspaceId,query,scope,signal,selection=null,namespaces=null,includeBooks=true,includeOwner=()=>true,onUnavailable=null})=>{
   const registry=await application.registry();
