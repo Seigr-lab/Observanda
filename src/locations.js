@@ -139,7 +139,7 @@ export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[]
   // A review must authenticate the same transient-file policy as its copy.
   // Unknown cache-shaped content remains ordinary data once access is proved.
   if(!vault?.key)for(const [name,directory] of [['query-cache',true],['staging-reservations',true],['.staging-reservations.lock',false]])if(await assertRegular(path.join(root,'.observanda',name),{missing:true,directory}))throw new AppError('ACCESS_LOCKED');
-  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject}),{detached:true,existing:true}));
+  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject,vault}),{detached:true,existing:true}));
   return {...plan,...inventory,...(projectRoots.length?{projectRoots}: {})};
  });
 }
@@ -170,7 +170,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     let destination,marker;
     const catalogue=await hasCatalogue(plan.source);
     if(catalogue)await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
-    await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+    await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));
      operationTransfer({phase:'copying',totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
@@ -190,7 +190,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     }});
     operationTransfer({phase:'verifying'});
     await admitted.assertNamed();
-    await reviewedInventory(plan,{excludeProject});
+    await reviewedInventory(plan,{excludeProject,vault});
     if(catalogue&&reuseCatalogue){
       // A move keeps the installation's database. Verify that database against
       // the copied files below while the destination is still marked incomplete.
@@ -248,7 +248,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
       if(beforeSnapshot)await beforeSnapshot();
       const catalogue=await hasCatalogue(plan.source);
       if(catalogue)await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
-      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,vault:sourceVault,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
         Object.assign(plan,inventory);
         publication=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination);
         const priorAccess=await readAccess(plan.destination);
@@ -269,7 +269,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
           operationTransferred({files:1,bytes:file.bytes});
         }
       }});
-      await admitted.assertNamed();await reviewedInventory(plan,{excludeProject});
+      await admitted.assertNamed();await reviewedInventory(plan,{excludeProject,vault:sourceVault});
       operationTransfer({phase:'verifying'});
       const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
       if(catalogue){

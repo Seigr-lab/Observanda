@@ -7,6 +7,8 @@ import {AppError} from './errors.js';
 
 const damaged=()=>{throw new AppError('COLLABORATION_DAMAGED');};
 export const STAGING_NAMESPACE_LEASE='.staging-reservations.lock';
+// The namespace admission lease is an empty native lease bound to its folder.
+export const STAGING_ADMISSION_LEASE='admission';
 // These small encrypted controls use the same retained directory and exclusive
 // file primitives as scientific content. The caller owns their native lifetime.
 export class StagingReservationFiles{
@@ -48,12 +50,12 @@ export class StagingReservationFiles{
     // Before the namespace proof exists, initialization can have created only
     // its empty admission control. No staged payload is admitted in this phase.
     for await(const entry of directory.entries()){if(entry.name!=='admission'||entry.directory||(await directory.stat(entry.name)).bytes!==0)damaged();}
-    admission=await this.lease(directory,'admission');
+    admission=await this.lease(directory,STAGING_ADMISSION_LEASE);
     try{const value={version:1,id:intent.id,rootIdentity:this.scope.identity,internalIdentity:this.scope.internalIdentity,directoryIdentity:directory.identity,admissionIdentity:admission.identity,initializationIdentity};await this.write(directory,'namespace','namespace',value);proof={value};}finally{await admission.close();}
    }
    const value=proof.value;
    if(Object.keys(value).sort().join()!=='admissionIdentity,directoryIdentity,id,initializationIdentity,internalIdentity,rootIdentity,version'||value.version!==1||value.rootIdentity!==this.scope.identity||value.internalIdentity!==this.scope.internalIdentity||value.directoryIdentity!==directory.identity||value.initializationIdentity!==initializationIdentity||typeof value.admissionIdentity!=='string'||typeof value.id!=='string'||! /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id))damaged();
-   admission=await this.lease(directory,'admission');try{
+   admission=await this.lease(directory,STAGING_ADMISSION_LEASE);try{
     if(admission.identity!==value.admissionIdentity)damaged();
     const pending=await this.read(internal,'.staging-reservations.intent','namespace-intent',{missing:true});if(pending){if(pending.value.id!==value.id)damaged();if(create)await internal.remove('.staging-reservations.intent',{identity:pending.identity});}
    }finally{await admission.close();}

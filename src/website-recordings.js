@@ -1,3 +1,4 @@
+import {WEBSITE_WRITER_LEASE} from './website-upgrade-lease.js';
 import path from 'node:path';
 import {AppError} from './errors.js';
 import {FileContent,writeContent} from './file-content.js';
@@ -104,7 +105,7 @@ export async function withPreparedRecording(store,{name,size,bytes,recover,signa
  const {policy}=await new MediaPolicy(workspace).read();if(size>policy.maxUploadBytes)throw new AppError('MEDIA_LIMIT');
  return withNativeDestination(workspace.root,async scope=>{
   await scope.admit();await scope.ensure(stage);
-  return scope.member(store.absolute(stage+'/writer'),async(parent,member)=>{
+  return scope.member(store.absolute(stage+'/'+WEBSITE_WRITER_LEASE),async(parent,member)=>{
    let lease;
    try{lease=await parent.lease(member);}catch(error){if(error.code==='EBUSY')throw new AppError('LOCKED');throw error;}
    const clean=async()=>{for await(const item of parent.entries())if(!item.directory&&(item.name==='original'||item.name==='prepared'||isStorageTemporary(item.name))){const info=await parent.stat(item.name);await parent.remove(item.name,{identity:info.identity});}};

@@ -149,7 +149,7 @@ async function verify(source,target,receipt){
   const db=await storage.openCatalogue({detached:true});
   try{if(await catalogueArchiveDigest(db)!==receipt.archiveDigest)throw new AppError('CONFLICT');}finally{await db.close();}
  }
- for await(const file of workspaceFiles(source.root,{includeDatabase:false,projectRoots:retainedCopyRoots(receipt)})){
+ for await(const file of workspaceFiles(source.root,{includeDatabase:false,projectRoots:retainedCopyRoots(receipt),vault:source.vault})){
   if(controls.has(file.path))continue;
   const saved=await admitted.member(path.join(target.root,file.path),(directory,name)=>directory.hash(name));
   if(saved.bytes!==file.bytes||saved.sha256!==file.sha256)throw new AppError('CONFLICT');

@@ -47,7 +47,7 @@ export async function reconcileProjectFiles(source,target,receipt,{controls,rece
    }
    batch=[];
   }
-  for await(const file of workspaceFiles(source.root,{includeDatabase:false,hashFiles:false,projectRoots,excludeProject})){
+  for await(const file of workspaceFiles(source.root,{includeDatabase:false,hashFiles:false,projectRoots,excludeProject,vault:source.vault})){
    if(controls.has(file.path))continue;
    const prior=await work.get(file.path),before=await files.hash(file.path);
    if(prior&&!same(before,prior.after)&&!same(before,prior.before))throw new AppError('CONFLICT');

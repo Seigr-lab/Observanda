@@ -23,7 +23,9 @@ export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  };
  return reportProgress?operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},run):run();
 }
-export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],excludeProject,readPool}={}){
+// A caller that holds the owner's key passes it as vault, so a document owner's
+// staging namespace is verified like a catalogue owner's held one.
+export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],excludeProject,readPool,vault=null}={}){
  const excluded=new Set();
  for(const projectRoot of projectRoots){const relative=path.relative(root,projectRoot);if(!relative||relative==='.observanda'||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new AppError('STORAGE_PATH');excluded.add(relative.split(path.sep).join('/'));}
  async function* walk(relative){
@@ -44,8 +46,8 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
      if(held?.root===root){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,held.vault))continue;}
     }
     if(relative==='.observanda'&&['staging-reservations','.staging-reservations.lock'].includes(item.name)){
-     await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore();
-     if(held?.root===root){const {verifiedStagingReservationNamespace}=await import('./staging-reservations.js');if(await verifiedStagingReservationNamespace(root,held.vault))continue;}
+     await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore(),key=held?.root===root?held.vault:vault;
+     if(key){const {verifiedStagingReservationNamespace}=await import('./staging-reservations.js');if(await verifiedStagingReservationNamespace(root,key))continue;}
     }
     if(relative==='.observanda'&&['postgresql','database-transition','project-transfer-files','lab-book-transfer-files'].includes(item.name)){await assertRegular(path.join(absolute,item.name),{directory:true});continue;}
     if(relative==='.observanda'&&item.name==='database-conversion.observanda'){await assertRegular(path.join(absolute,item.name));continue;}
@@ -67,11 +69,11 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
  if(!hashFiles){yield* entries();return;}
  yield* adaptiveReadMap(entries(),async(file,signal)=>({path:file.path,bytes:file.bytes,sha256:await hashWorkspaceFile(path.join(root,file.path),{signal,reportProgress:false}),...(file.database?{database:file.database}:{})}),{signal,pool:readPool});
 }
-export function workspaceInventory(root,salt,{signal,visit,expected,expectedFiles,consume,projectRoots=[],excludeProject}={}){
+export function workspaceInventory(root,salt,{signal,visit,expected,expectedFiles,consume,projectRoots=[],excludeProject,vault=null}={}){
  if(typeof salt!=='string'||!/^[a-f0-9-]{36}$/.test(salt))throw new AppError('INVALID');
  return operationStage('inventory',{unit:'files'},()=>withScratch(async work=>{
   let bytes=0,fileBytes=0,transferFiles=0,databaseBytes=0;
-  for await(const file of workspaceFiles(root,{signal,includeDatabase:!expectedFiles,projectRoots,excludeProject})){
+  for await(const file of workspaceFiles(root,{signal,includeDatabase:!expectedFiles,projectRoots,excludeProject,vault})){
    if(!await work.add(file.path,file))throw new AppError('UNSAFE');
    bytes+=file.bytes+(file.database?.bytes??0);
    databaseBytes+=file.database?.bytes??0;

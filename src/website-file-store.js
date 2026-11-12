@@ -1,3 +1,4 @@
+import {WEBSITE_WRITER_LEASE} from './website-upgrade-lease.js';
 import path from 'node:path';
 import {parse} from 'parse5';
 import {starterPage,starterStyles} from './web/website-file-starter.js';
@@ -193,7 +194,7 @@ export class WebsiteFileStore{
   signal?.throwIfAborted();await this.workspace.requireStorageKey();if(!this.workspace.vault?.id||!Buffer.isBuffer(this.workspace.vault.key))throw new AppError('ACCESS_LOCKED');await assertWorkspaceAvailable(this.workspace.root);
   return withNativeDestination(this.workspace.root,async scope=>{
    await scope.admit();let lease;
-   if(write){await scope.ensure(ROOT);const deadline=Date.now()+30000;for(;;){try{lease=await scope.member(this.absolute(ROOT+'/writer'),(directory,name)=>directory.lease(name));break;}catch(error){if(error.code!=='EBUSY'||Date.now()>=deadline)throw error;await delay(25,undefined,{signal});}}}
+   if(write){await scope.ensure(ROOT);const deadline=Date.now()+30000;for(;;){try{lease=await scope.member(this.absolute(ROOT+'/'+WEBSITE_WRITER_LEASE),(directory,name)=>directory.lease(name));break;}catch(error){if(error.code!=='EBUSY'||Date.now()>=deadline)throw error;await delay(25,undefined,{signal});}}}
    const held={root:this.workspace.root,scope,write,writerToken:write?Symbol():null};
    try{await assertWorkspaceAvailable(this.workspace.root);const run=admission=>{held.admission=admission;return active.run(held,()=>operation(scope));};return await (write?withStagingCapacity(this.workspace,run,{signal}):run());}
    finally{held.writerToken=null;await lease?.close();}

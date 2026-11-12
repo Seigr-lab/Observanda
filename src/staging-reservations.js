@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {withNativeDestination} from './native-destination.js';
-import {StagingReservationFiles} from './staging-reservation-files.js';
+import {StagingReservationFiles,STAGING_ADMISSION_LEASE} from './staging-reservation-files.js';
 import {STAGING_PROGRESS_BYTES,STAGING_FREE_BYTES,STAGING_ACTIVE_LIMIT,admitStagingClaim,stagingRemaining} from './staging-reservation-model.js';
 import {diskCapacity} from './disk-capacity.js';
 import {uuid,exact} from './modules/validation.js';
@@ -32,9 +32,9 @@ export async function withStagingAuthority(workspace,operation,{signal,createInt
   const active=new Set();
   async function critical(operation,{create=false}={}){
    const opened=await (namespace?Promise.resolve(namespace):controls.openNamespace({create}));if(!opened)return operation(null,null);namespace=opened;
-   const lease=await controls.lease(namespace.directory,'admission');
+   const lease=await controls.lease(namespace.directory,STAGING_ADMISSION_LEASE);
    try{controls.check();await scope.assertNamed();if((await scope.internalDirectory.stat('staging-reservations',{folder:true})).identity!==namespace.directory.identity||lease.identity!==namespace.proof.admissionIdentity)damaged();const saved=await controls.read(namespace.directory,'state','ledger',{missing:true}),ledger=saved?validateLedger(saved.value):{version:1,claims:[]};
-    const ids=new Set(ledger.claims.map(claim=>claim.id));for await(const entry of namespace.directory.entries())if(entry.directory?!ids.has(entry.name):!['namespace','admission','state'].includes(entry.name))damaged();
+    const ids=new Set(ledger.claims.map(claim=>claim.id));for await(const entry of namespace.directory.entries())if(entry.directory?!ids.has(entry.name):!['namespace',STAGING_ADMISSION_LEASE,'state'].includes(entry.name))damaged();
     return await operation(ledger,async()=>controls.write(namespace.directory,'state','ledger',ledger));}
    finally{await lease.close();}
   }
@@ -164,7 +164,7 @@ export async function verifiedStagingReservationNamespace(root,vault){
  if(!vault?.key)return false;
  try{return await withNativeDestination(root,async scope=>{
   await scope.admit();const controls=new StagingReservationFiles({root,vault},scope),opened=await controls.openNamespace();if(!opened)return false;let lease;
-  try{lease=await controls.lease(opened.directory,'admission',{wait:false});if(lease.identity!==opened.proof.admissionIdentity)return false;const saved=await controls.read(opened.directory,'state','ledger',{missing:true});if(saved&&validateLedger(saved.value).claims.length)return false;for await(const entry of opened.directory.entries())if(entry.directory||!['namespace','admission','state'].includes(entry.name))return false;return true;}
+  try{lease=await controls.lease(opened.directory,STAGING_ADMISSION_LEASE,{wait:false});if(lease.identity!==opened.proof.admissionIdentity)return false;const saved=await controls.read(opened.directory,'state','ledger',{missing:true});if(saved&&validateLedger(saved.value).claims.length)return false;for await(const entry of opened.directory.entries())if(entry.directory||!['namespace',STAGING_ADMISSION_LEASE,'state'].includes(entry.name))return false;return true;}
   finally{await lease?.close();await opened.directory.close();}
  });}catch{return false;}
 }

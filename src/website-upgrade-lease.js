@@ -4,6 +4,11 @@ import {AppError} from './errors.js';
 
 const folder='.observanda/website-files/upgrades',running=new Map();
 export const upgradeControl=name=>folder+'/'+name+'.json';
+const upgradeLease=name=>folder+'/'+name+'.lock';
+// Website writers lease an empty file named writer in the folder they guard;
+// upgrades lease one file each. Neither holds website content.
+export const WEBSITE_WRITER_LEASE='writer';
+export const websiteLeaseFile=relative=>relative.startsWith('.observanda/website-files/')&&(relative.slice(relative.lastIndexOf('/')+1)===WEBSITE_WRITER_LEASE||relative.startsWith(folder+'/')&&relative.endsWith('.lock')&&!relative.slice(folder.length+1).includes('/'));
 
 // The OS releases this dedicated lease on process exit. Other website files
 // keep their own shorter write transactions during conversion.
@@ -16,7 +21,7 @@ export async function runWebsiteUpgrade(store,name,operation,{signal,shareResult
  const work=(async()=>{
   await store.scope(scope=>scope.ensure(folder),{write:true,signal});
   return withNativeDestination(store.workspace.root,async scope=>{
-   await scope.admit();let lease;const member=store.absolute(folder+'/'+name+'.lock');
+   await scope.admit();let lease;const member=store.absolute(upgradeLease(name));
    while(!lease){
     signal?.throwIfAborted();try{lease=await scope.member(member,(dir,file)=>dir.lease(file));}
     catch(error){if(error.code!=='EBUSY')throw error;await delay(200,undefined,{signal});}

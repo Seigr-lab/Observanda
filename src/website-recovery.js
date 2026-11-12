@@ -1,3 +1,4 @@
+import {WEBSITE_WRITER_LEASE} from './website-upgrade-lease.js';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 import {AppError} from './errors.js';
 import {WebsiteFileContent} from './website-file-store.js';
@@ -72,7 +73,7 @@ export function registerRecoveryWrite(store,site,path,id,signal){
  return store.scope(()=>store.writeControl(pendingName(site,id),{site,path,id},{signal}),{write:true,signal});
 }
 async function withIdleInputs(store,scope,site,id,task){
- const file=store.absolute(owner(site,id)+'/inputs/writer');
+ const file=store.absolute(owner(site,id)+'/inputs/'+WEBSITE_WRITER_LEASE);
  return scope.member(file,async(parent,name)=>{
   if(!parent)return task();let lease;
   try{lease=await parent.lease(name);}catch(error){if(error.code==='EBUSY'||error.code==='LOCKED')return;throw error;}
@@ -89,7 +90,7 @@ async function collectFiles(store,scope,site,path,id){
   await scope.member(store.absolute(selected+'/sentinel'),async parent=>{
    if(!parent)return;
    for await(const item of parent.entries()){
-    if(item.directory||item.name==='writer')continue;
+    if(item.directory||item.name===WEBSITE_WRITER_LEASE)continue;
     const managed=child==='inputs'?/^[a-f0-9-]{36}\.bin$/:/^[a-f0-9]{64}\.(png|wav|mp4|vtt|html|css)$/;
     if(!managed.test(item.name)&&!isStorageTemporary(item.name)||admitted.has(selected+'/'+item.name))continue;
     const stat=await parent.stat(item.name);await parent.remove(item.name,{identity:stat.identity});

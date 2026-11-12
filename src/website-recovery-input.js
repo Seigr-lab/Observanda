@@ -1,3 +1,4 @@
+import {WEBSITE_WRITER_LEASE} from './website-upgrade-lease.js';
 import {randomUUID} from 'node:crypto';
 import {withNativeDestination} from './native-destination.js';
 import {FileContent,writeContent} from './file-content.js';
@@ -49,7 +50,7 @@ export async function writeRecordingDraft(store,request,{save,register,finishDra
  // withdrawals remain available throughout the transfer.
  return withNativeDestination(store.workspace.root,async scope=>{
   await scope.admit();await scope.ensure(directory);
-  return scope.member(store.absolute(directory+'/writer'),async(parent,name)=>{
+  return scope.member(store.absolute(directory+'/'+WEBSITE_WRITER_LEASE),async(parent,name)=>{
    const lease=await parent.lease(name),created=[];
    try{
     await register(store,site,data.path,id,signal);
