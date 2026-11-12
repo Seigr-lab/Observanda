@@ -17,9 +17,10 @@ export function focusedRecordWriting({state,api}){
  function stop(){request?.abort();request=null;epoch++;active=false;page=null;visit=null;nav.remove();}
  function clear(){stop();scope=null;target=null;last=null;drafts.clear();editingStates.clear();}
  function begin(input){
-  stop();if(!input.focused)return input;
+  stop();
   const key=JSON.stringify([researchContext(state),state.book.id,input.recordId]);
-  if(scope!==key)clear();scope=key;target={workspaceId:state.book.id,recordId:input.recordId};owner=researchOwner(state);active=true;
+  if(scope!==key)clear();if(!input.focused)return input;
+  scope=key;target={workspaceId:state.book.id,recordId:input.recordId};owner=researchOwner(state);active=true;
   selected=input.sectionId??last??null;
   return {...input,sectionId:selected};
  }
