@@ -9,6 +9,9 @@ import {pdfStructureDefaults,pdfCaptionDefaults} from '../src/web/pdf-structure-
 import {pdfNoteCall} from '../src/web/pdf-notes-model.js';
 import {pdfCrossReference} from '../src/web/pdf-cross-reference-model.js';
 import {pdfPressDefaults} from '../src/web/pdf-press-model.js';
+import {bundledPublicationStarters,pdfStarterRevision,inspectPublicationStarter,validatePublicationStarter} from '../src/pdf-publication-starters.js';
+import {PublicationTemplates} from '../src/pdf-publication-template-library.js';
+import {compilePdfDocument} from '../src/pdf-document-renderer.js';
 
 // This adapter includes the real authenticated domain identity and transaction
 // boundary. Feature admission never relies on a production test-only bypass.
@@ -21,6 +24,66 @@ function fixture({domain='pdf',projectId=randomUUID()}={}){
  return {owner,values,writes,run,change:command=>run(store=>new PdfDocumentStore(store).change(command),{write:true})};
 }
 function creation(){const id=randomUUID();return {id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{version:1,id,name:'Compatibility report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section:{id:randomUUID(),title:'Evidence',content:'Retained observations',layout:null,start:null}}};}
+
+test('publication templates create independent, atomic editions, localize guidance and preserve it outside the final publication',async()=>{
+ const f=fixture();
+ for(const language of ['en','ca','es','nb','nn']){
+  const starters=bundledPublicationStarters(language);
+  assert.equal(starters.length,5);
+  for(const value of starters){
+   const id=randomUUID(),revision=pdfStarterRevision(value),template={id:value.id,revision,language},slots=value.sections.filter(row=>!row.optional).map(row=>row.id);
+   const command={id,commandId:randomUUID(),expectedRevision:null,operation:{type:'template-create',template,slots,name:value.name}};
+   const first=await f.change(command);assert.equal((await f.change(command)).revision,first.revision);
+   const current=await f.run(store=>new PdfDocumentStore(store).open(id));
+   assert.equal(current.starter.revision,revision);assert.equal(current.header.language,language);
+   const parts=await f.run(async store=>Array.fromAsync(new PdfDocumentStore(store).content(id,first.revision)));
+   assert.deepEqual(parts.map(p=>p.title),value.sections.filter(row=>!row.optional).map(row=>row.title));
+   assert.ok(parts.every(p=>p.content===''));assert.equal(current.header.layout.font,value.layout.font);
+   const compiled=await compilePdfDocument(current.header,parts);
+   for(const s of value.sections)assert.ok(!compiled.html.includes(s.guidance));
+  }
+ }
+ assert.equal(f.values.get('owner').pdfFormat,9);
+ const doc=bundledPublicationStarters('en')[0],id=randomUUID(),command={id,commandId:randomUUID(),expectedRevision:null,operation:{type:'template-create',template:{id:doc.id,revision:pdfStarterRevision(doc),language:'en'},slots:[],name:'Incomplete'}};
+ await assert.rejects(f.change(command),{code:'INVALID'});assert.equal(f.values.has('pdf:head:'+id),false);
+});
+
+test('reviewed publication template changes preserve local prose, edits, notes, IDs and older editions',async()=>{
+ const f=fixture(),value={...structuredClone(bundledPublicationStarters('en')[0]),id:randomUUID(),name:'Field report'};
+ const publish=(value,expectedRevision,commandId=randomUUID())=>f.run(store=>new PublicationTemplates(store).publish({commandId,expectedRevision,value}),{write:true});
+ const first=await publish(value,null),template={id:value.id,revision:first.revision,language:'en'},id=randomUUID(),slots=value.sections.filter(row=>!row.optional).map(row=>row.id);
+ const create=await f.change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'template-create',template,name:'Transect results',slots}});
+ const edition=await f.run(store=>new PdfDocumentStore(store).open(id)),source=edition.starter.sections[0];
+ const row=(await f.run(store=>new PdfDocumentStore(store).section(id,source.sectionId))).section;
+ const modified=await f.change({id,commandId:randomUUID(),expectedRevision:create.revision,operation:{type:'section',section:{...row,title:'Author’s title',content:'Verified reading 100.020',notes:[{id:randomUUID(),block:1,kind:'footnote',content:'Instrument note'}]}}});
+ const next=structuredClone(value);next.sections[0].title='Updated overview';next.sections[0].guidance='State the measurement interval.';
+ next.sections[1].title='Study criteria';next.sections.push({id:randomUUID(),title:'Equipment log',guidance:'Describe the equipment.',level:1,optional:true,start:null});next.layout.fontSizePt=14;
+ const releaseId=randomUUID(),released=await publish(next,first.revision,releaseId);assert.equal((await publish(next,first.revision,releaseId)).replayed,true);
+ assert.equal((await f.run(store=>new PdfDocumentStore(store).open(id))).revision,modified.revision);
+ const cmd={id,commandId:randomUUID(),expectedRevision:modified.revision,operation:{type:'template-update',template:{...template,revision:released.revision},slots:[next.sections.at(-1).id],settings:true,titles:true}};
+ const applied=await f.change(cmd);assert.deepEqual(await f.change(cmd),{...applied,replayed:true});
+ const before=await f.run(async store=>Array.fromAsync(new PdfDocumentStore(store).content(id,modified.revision)));
+ const after=await f.run(async store=>Array.fromAsync(new PdfDocumentStore(store).content(id,applied.revision)));
+ assert.deepEqual(after[0],before[0]);assert.equal(after[1].id,before[1].id);assert.equal(after[1].title,'Study criteria');assert.equal(after.at(-1).title,'Equipment log');
+ assert.equal((await f.run(store=>new PdfDocumentStore(store).open(id))).header.layout.fontSizePt,14);
+ assert.equal((await f.run(store=>new PdfDocumentStore(store).open(id,{revision:modified.revision}))).starter.revision,first.revision);
+ const incompatible=structuredClone(value);incompatible.fontFiles[0].sha256='1'.repeat(64);
+ assert.throws(()=>validatePublicationStarter(incompatible),{code:'PDF_TEMPLATE_COMPONENT'});
+ assert.throws(()=>validatePublicationStarter({...value,assets:[{}]}),{code:'PDF_TEMPLATE_COMPONENT'});
+ assert.deepEqual(inspectPublicationStarter({...incompatible,interactiveArtwork:{caption:'private'}}),{compatible:false,components:['interactiveArtwork','fontFiles']});
+ const reordered=Object.fromEntries(Object.entries(value).reverse());reordered.fontFiles=value.fontFiles.map(({file,sha256})=>({sha256,file}));
+ assert.equal(inspectPublicationStarter(reordered).revision,pdfStarterRevision(value));
+ const removed=await f.change({id,commandId:randomUUID(),expectedRevision:applied.revision,operation:{type:'remove-section',sectionId:after.at(-1).id}});
+ const destination=randomUUID(),duplicate={id:destination,commandId:randomUUID(),expectedRevision:null,operation:{type:'duplicate',id,expectedRevision:removed.revision,name:'Independent field report'}};
+ const copied=await f.change(duplicate);
+ assert.deepEqual(await f.change(duplicate),{...copied,replayed:true});
+ const copy=await f.run(store=>new PdfDocumentStore(store).open(destination));
+ const copiedParts=await f.run(store=>Array.fromAsync(new PdfDocumentStore(store).content(destination,copy.revision)));
+ assert.equal(copy.starter.revision,released.revision);assert.ok(!copy.starter.sections.some(s=>s.slot===next.sections.at(-1).id));
+ assert.ok(copy.starter.sections.every(s=>copiedParts.some(p=>p.id===s.sectionId)));assert.deepEqual(copiedParts[0].notes,after[0].notes);
+ const restored=await f.change({id,commandId:randomUUID(),expectedRevision:removed.revision,operation:{type:'restore',revision:modified.revision}});
+ assert.equal((await f.run(store=>new PdfDocumentStore(store).open(id,{revision:restored.revision}))).starter.revision,first.revision);
+});
 
 test('inline markers, equation citations and equation captions acquire authenticated format six before saving',async()=>{
  for(const edit of ['note','equation','captions']){
@@ -42,7 +105,7 @@ test('inline markers, equation citations and equation captions acquire authentic
   const open=store=>new PdfDocumentStore(store).verify();
   await f.run(open);
   f.values.set('owner',{...f.owner,pdfFormat:5});await assert.rejects(f.run(open),{code:'CATALOGUE_DAMAGED'});
-  f.values.set('owner',{...f.owner,pdfFormat:9});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
+  f.values.set('owner',{...f.owner,pdfFormat:10});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
  }
 });
 

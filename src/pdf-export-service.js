@@ -3,6 +3,7 @@ import {preparePdfBleedImage} from './pdf-bleed-artwork.js';
 import {PdfPrintProfiles} from './pdf-print-profiles.js';
 import {PdfDocuments} from './pdf-documents.js';
 import {PdfDocumentStore} from './pdf-document-store.js';
+import {PublicationTemplates} from './pdf-publication-template-library.js';
 import {PdfDocumentImages} from './pdf-document-images.js';
 import {readPdfDocumentFont} from './pdf-document-fonts.js';
 import {compilePdfDocument} from './pdf-document-renderer.js';
@@ -28,7 +29,8 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
    const bleedImage=await preparePdfBleedImage(selected.header.press,readImage,{signal});if(bleedImage)compiled.bleedImage=bleedImage;
    for(const pin of selected.header.fonts??[])if(compiled.fonts.includes(pin.id))customFonts.set(pin.id,await readPdfDocumentFont(store,documentId,pin,{signal}));
    if(selected.header.printCondition){compiled.printCondition=structuredClone(selected.header.printCondition);compiled.iccProfile=(await new PdfPrintProfiles(store,documentId).read(selected.header.printCondition.profile,{signal})).toString('base64');}
-   return embedPdfFonts(compiled,{signal,customFonts});
+   const template=selected.starter?await new PublicationTemplates(store).value(selected.starter.id,selected.starter.revision):null;
+   return embedPdfFonts(compiled,{signal,customFonts,templateFaceHashes:template&&new Map(template.fontFiles.map(face=>[face.file,face.sha256]))});
   },{signal,check});
   await progress('rendering');
   const render=input=>renderSavedPdf(input,{signal,wait:true});

@@ -460,6 +460,7 @@
   "ACCESS_STATE_CHANGED": "These access settings are not in this device's trusted history. Review and import the current access settings from a trusted device before opening this copy.",
   "ACCESS_SAVE_UNCERTAIN": "Saving access settings was interrupted. The new credentials may already be active. Reopen the workspace and try the new credentials first.",
   "WEBSITE_APPROVAL_REQUIRED": "This website requires an approved review of the current saved edition before it is published. Request a review or ask a reviewer to approve it.",
+  "PDF_TEMPLATE_COMPONENT": "This publication template contains an unsupported component or an unavailable version of its font. Review its format, section structure and font before importing.",
   "PDF_LIBRARY_NAME_USED": "This name is already in use. Choose another name for the collection or tag.",
   "PDF_LIBRARY_GROUP_USED": "This group contains documents. Remove the documents from the group before deleting it.",
   "PDF_FONT_SUBSTITUTED": "This object contains text printed with a substitute font. Choose a font that covers those characters.",

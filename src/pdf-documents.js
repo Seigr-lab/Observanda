@@ -9,6 +9,8 @@ import {readProjectDomainRegistry} from './project-domain-registry.js';
 import {PdfDocumentStore,validatePdfCommand} from './pdf-document-store.js';
 import {validatePdfLibraryQuery} from './pdf-library-index.js';
 import {PdfLibraryOrganization,validatePdfLabelEdit,validatePdfLabelQuery} from './pdf-library-organization.js';
+import {PublicationTemplates,validateTemplatePublication} from './pdf-publication-template-library.js';
+import {publicationFontFiles,pdfStarterRevision,inspectPublicationStarter,validatePublicationStarter} from './pdf-publication-starters.js';
 import {latestPdfLibraryExport,queuePdfExport} from './pdf-export-jobs.js';
 import {randomUUID} from 'node:crypto';
 import {proseText} from './web/prose-model.js';
@@ -38,8 +40,43 @@ export class PdfDocuments{
      }
     }await checkPdfSources(this.publicationFiles,[...proof.values()]);return {...result,...(operation==='outline'?{query:needle}:{}),items};
    }
-   return documents[operation](data.id,data,options);
+   const result=await documents[operation](data.id,data,options);
+   if((operation==='open'||operation==='openArchived')&&result.starter){
+    const definition=await new PublicationTemplates(store).value(result.starter.id,result.starter.revision);
+    const rows=new Map(definition.sections.map(row=>[row.id,row]));
+    result.starter={...result.starter,name:definition.name,language:definition.language,guidance:Object.fromEntries(result.starter.sections.map(row=>[row.sectionId,rows.get(row.slot)?.guidance??'']))};
+   }
+   return result;
   },options);
+ }
+ async template(action,input,options={}){
+  if(!['template-list','template-read','template-publish','template-inspect','template-style','template-review'].includes(action))throw new AppError('INVALID');
+  const publish=action==='template-publish';
+  const work=async store=>{
+   const library=new PublicationTemplates(store);
+   if(action==='template-list')return library.list(input);
+   if(action==='template-read')return library.head(input.id,input.language);
+   if(action==='template-inspect'||action==='template-style'){
+    if(Object.keys(input).join()!=='value')throw new AppError('INVALID');
+    if(action==='template-inspect')return inspectPublicationStarter(input.value);
+    const selected={...input.value,fontFiles:publicationFontFiles(input.value?.layout?.font)};
+    const value=validatePublicationStarter(selected);return {value,revision:pdfStarterRevision(value),builtIn:false};
+   }
+   if(action==='template-review'){
+    if(Object.keys(input).sort().join()!=='id,revision'||!store)throw new AppError('INVALID');
+    const doc=await new PdfDocumentStore(store).open(input.id,{revision:input.revision});
+    if(!doc.starter)throw new AppError('NOT_FOUND');
+    const old=await library.value(doc.starter.id,doc.starter.revision),current=await library.head(doc.starter.id,old.language);
+    return {old:{value:old,revision:doc.starter.revision},current};
+   }
+   return library.publish(input,options);
+  };
+  if(!await this.available()){
+   if(!publish)return work(null);
+   validateTemplatePublication(input);
+   await this.domains.initialize(['pdf']);
+  }
+  return this.domains.run(['pdf'],get=>work(get('pdf')),{...options,...(publish?{write:['pdf']}:{})});
  }
  async prepareLibrary(input,options={}){
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length)throw new AppError('INVALID');
@@ -123,7 +160,7 @@ export class PdfDocuments{
   for(const id of ids)if(!customFontId(id)&&!BUNDLED_FONTS.some(font=>font.id===id))throw new AppError('PDF_FONT',[id]);
   const apply=async(store,extra={})=>{
    const owner=new PdfDocumentStore(store);
-   if(operation.type==='create'&&!await store.object('pdf:directory'))await owner.prepareLibrary(options);
+   if(['create','template-create'].includes(operation.type)&&!await store.object('pdf:directory'))await owner.prepareLibrary(options);
    return owner.change(command,{...options,...extra,publicationFiles:this.publicationFiles});
   };
   const custom=ids.filter(customFontId);if(!custom.length)return this.domains.run(['pdf'],get=>apply(get('pdf')),{...options,write:['pdf']});

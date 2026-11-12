@@ -1,6 +1,9 @@
 import {PdfLibraryIndex,preparePdfLibrary,queryPdfLibrary,recordPdfLibraryItem,validPdfLibrary,verifyPdfLibrary} from './pdf-library-index.js';
 import {PdfLibraryOrganization} from './pdf-library-organization.js';
 import {copyPdfEdition} from './pdf-document-copy.js';
+import {PublicationTemplates,validPublicationOrigin} from './pdf-publication-template-library.js';
+import {publicationLanguage} from './pdf-publication-starters.js';
+import {applyPublicationTemplate} from './pdf-publication-template-apply.js';
 import {PdfPrintProfiles} from './pdf-print-profiles.js';
 import {requiredPdfDomainFormat,requirePdfDomainFormat,assertPdfDomainFormat} from './pdf-domain-format.js';
 import {verifyPdfResearchImages} from './pdf-research-images.js';
@@ -28,6 +31,10 @@ export function validatePdfCommand(command){
  const {id,commandId,expectedRevision,operation:o}=command;
  if(!researchId(id)||!researchId(commandId)||expectedRevision!==null&&!revisionId(expectedRevision)||!o||typeof o!=='object')invalid();
  if(o.type==='create'){if(expectedRevision!==null||!exact(o,'type,header,section')||!validPdfDocumentHeader(o.header)||o.header.id!==id||!validPdfSection(o.section))invalid();}
+ else if(o.type==='template-create'||o.type==='template-update'){
+  if(!exact(o,o.type==='template-create'?'type,template,name,slots':'type,template,slots,settings,titles')||!exact(o.template,'id,revision,language')||!researchId(o.template.id)||!revisionId(o.template.revision)||!publicationLanguage(o.template.language)||!Array.isArray(o.slots)||o.slots.length>256||!o.slots.every(researchId)||new Set(o.slots).size!==o.slots.length)invalid();
+  if(o.type==='template-create'?(expectedRevision!==null||typeof o.name!=='string'||!o.name.trim()||o.name.length>240||/[\u0000-\u001f]/.test(o.name)):(!expectedRevision||typeof o.settings!=='boolean'||typeof o.titles!=='boolean'))invalid();
+ }
  else if(o.type==='duplicate'){
   if(expectedRevision!==null||!exact(o,'type,id,expectedRevision,name')||!researchId(o.id)||o.id===id||!revisionId(o.expectedRevision)||typeof o.name!=='string'||!o.name.trim()||o.name.length>240||/[\u0000-\u001f]/u.test(o.name))invalid();
  }
@@ -102,8 +109,8 @@ export class PdfDocumentStore{
  async revision(id,revision){
   if(!researchId(id)||!revisionId(revision))invalid();
   const value=await this.store.object('pdf:revision:'+id+':'+revision);
-  if(!exact(value,'version,header,sections,order,nextPosition'+(value?.version===2?',lifecycle':''))||![1,2].includes(value.version)||value.version===2&&(!exact(value.lifecycle,'previous,archived')||!revisionId(value.lifecycle.previous)||typeof value.lifecycle.archived!=='boolean')||hash(value)!==revision||!validPdfDocumentHeader(value.header)||value.header.id!==id||!validTableRef(value.sections)||!validTableRef(value.order)||(value.sections?.count??0)!==(value.order?.count??0)||!natural(value.nextPosition)||value.nextPosition<(value.order?.count??0))bad();
-  const format=requiredPdfDomainFormat({header:value.header});if(format>1)await assertPdfDomainFormat(this.store,format);return value;
+  if(!exact(value,'version,header,sections,order,nextPosition'+(value?.version===2?',lifecycle':'')+(Object.hasOwn(value??{},'starter')?',starter':''))||![1,2].includes(value.version)||Object.hasOwn(value,'starter')&&!validPublicationOrigin(value.starter)||value.version===2&&(!exact(value.lifecycle,'previous,archived')||!revisionId(value.lifecycle.previous)||typeof value.lifecycle.archived!=='boolean')||hash(value)!==revision||!validPdfDocumentHeader(value.header)||value.header.id!==id||!validTableRef(value.sections)||!validTableRef(value.order)||(value.sections?.count??0)!==(value.order?.count??0)||!natural(value.nextPosition)||value.nextPosition<(value.order?.count??0))bad();
+  const format=value.starter?9:requiredPdfDomainFormat({header:value.header});if(format>1)await assertPdfDomainFormat(this.store,format);return value;
  }
  async head(id,{removed=false}={}){
   if(!researchId(id))invalid();const value=await this.store.object('pdf:head:'+id);if(!value)throw new AppError('NOT_FOUND');
@@ -115,7 +122,7 @@ export class PdfDocumentStore{
   const {id}=head,selected=revision??head.revision;
   if(selected!==head.revision&&!await this.index(id).find({root:head.versions},selected))throw new AppError('NOT_FOUND');
   const value=await this.revision(id,selected);if(selected===head.revision&&value.version===2&&value.lifecycle.archived!==head.removed)bad();
-  return {revision:selected,header:value.header,count:value.order?.count??0,sequence:head.sequence,currentRevision:head.revision};
+  return {revision:selected,header:value.header,count:value.order?.count??0,sequence:head.sequence,currentRevision:head.revision,...(value.starter?{starter:value.starter}:{})};
  }
  async open(id,{revision=null}={}){return this.openHead(await this.head(id),revision);}
  async openArchived(id,{revision=null}={}){
@@ -183,17 +190,22 @@ export class PdfDocumentStore{
   let previous=null,current;
   if(expectedRevision===null){if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
   else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));if(current.version===2&&current.lifecycle.archived!==previous.removed)bad();}
-  const format=operation.type==='duplicate'?7:requiredPdfDomainFormat(operation);if(format>1)await requirePdfDomainFormat(this.store,format);
+  const format=operation.type.startsWith('template-')?9:operation.type==='duplicate'?7:requiredPdfDomainFormat(operation);if(format>1)await requirePdfDomainFormat(this.store,format);
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
   const put=async(section,position)=>{for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
   const selected=async sectionId=>{if(!researchId(sectionId))invalid();const row=await index.find({root:current.sections},sectionId);if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);};
   if(operation.type==='create')await put(operation.section,current.nextPosition++);
+  else if(operation.type==='template-create'||operation.type==='template-update')await applyPublicationTemplate(this,{id,operation,current,index,put,signal});
   else if(operation.type==='duplicate'){
    const copy=await copyPdfEdition(this,operation,id,async section=>{
     await put(section,current.nextPosition++);
     if(current.nextPosition%32===0){await index.flush(current.sections);await orderIndex.flush(current.order);}
    },{signal,publicationFiles,check});
    current.header=copy.header;
+   if(copy.starter){
+    await requirePdfDomainFormat(this.store,9);
+    current.starter=copy.starter;
+   }
   }
   else if(operation.type==='header'){
    if(!exact(operation,'type,header')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id)invalid();current.header=operation.header;
@@ -284,7 +296,7 @@ export class PdfDocumentStore{
   for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();yield value.section;}
  }
  async verify({signal}={}){
-  await new PdfLayoutLibrary(this.store).verify({signal});await verifyPdfResearchImages(this.store,{signal});await verifyPdfImages(this.store,{signal});await verifyPdfExportJobs(this.store,{signal});
+  await new PdfLayoutLibrary(this.store).verify({signal});await new PublicationTemplates(this.store).verify({signal});await verifyPdfResearchImages(this.store,{signal});await verifyPdfImages(this.store,{signal});await verifyPdfExportJobs(this.store,{signal});
   const verified=new Set(),once=async(key,check)=>{const token=JSON.stringify(key);if(!verified.has(token)){await check();verified.add(token);}};
   const directory=await this.directory(),directoryIndex=this.index('directory'),archive=await this.archiveDirectory(),archiveIndex=this.index('archive');let documents=0,archived=0,editions=0;
   for await(const key of this.store.objectIdEntries('pdf:head:',{signal})){
@@ -301,6 +313,7 @@ export class PdfDocumentStore{
     signal?.throwIfAborted();if(entry.id!==ordinal(count++))bad();const value=await this.revision(id,entry.revision);if((await index.find({root:head.versions},entry.revision))?.revision!==entry.revision)bad();currentFound=entry.revision===head.revision;
     if(value.version===2&&(await index.find({root:head.versions},value.lifecycle.previous))?.revision!==value.lifecycle.previous)bad();
     await verifyPdfDocumentFonts(this.store,value.header,{signal,once});
+    if(value.starter)await once(['pdf-template',value.starter.id,value.starter.revision],()=>new PublicationTemplates(this.store).value(value.starter.id,value.starter.revision));
     if(value.header.printCondition)await once(['pdf-print-profile',id,value.header.printCondition.profile.revision],()=>new PdfPrintProfiles(this.store,id).read(value.header.printCondition.profile,{signal}));
     if(value.header.press?.version===2&&value.header.press.artwork.image)await once(['bleed-image',id,value.header.press.artwork.image.asset],async()=>{try{await new PdfDocumentImages(this.store,id).descriptor(value.header.press.artwork.image.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}});
     const sectionRoot=value.sections;let sections=0;for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();for(const image of value.section.images??[])try{await new PdfDocumentImages(this.store,id).descriptor(image.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}const named=await index.find({root:sectionRoot},value.section.id);if(named?.revision!==row.revision)bad();sections++;}

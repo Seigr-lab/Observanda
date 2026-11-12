@@ -1,6 +1,7 @@
 import {pdfEquationAssets} from './pdf-content-blocks.js';
 import {createFont} from './font-parser.js';
 import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {BUNDLED_FONTS,faceCSS,customFontId,validCustomFont} from './web/font-catalogue.js';
 import {validPdfFontPins} from './web/pdf-font-model.js';
 import {inspectFont} from './font-inspector.js';
@@ -8,7 +9,7 @@ import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {positionedGlyphFailures} from './pdf-missing-glyphs.js';
 // Bundled fonts and exact retained custom-font pins are embedded. Document
 // names and source links never become paths or remote font requests.
-export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,customFonts=new Map()}={}){
+export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,customFonts=new Map(),templateFaceHashes}={}){
  if(compiled?.version!==1||typeof compiled.html!=='string'||!Array.isArray(compiled.fonts)||!Number.isSafeInteger(maxFontBytes)||maxFontBytes<1||maxFontBytes>32*1024*1024)throw new PdfLayoutError('PDF_FONT');
  if(!(customFonts instanceof Map)||!validPdfFontPins(compiled.fontPins??[]))throw new PdfLayoutError('PDF_FONT');
  const styles=[];let total=0;
@@ -23,6 +24,7 @@ export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,c
   for(const face of font.faces){
    signal?.throwIfAborted();const bytes=custom?font.bytes:await readFile(new URL('./fonts/'+face.file,import.meta.url),{signal});total+=bytes.length;
    if(total>maxFontBytes)throw new PdfLayoutError('PDF_CAPACITY');
+   if(!custom&&templateFaceHashes?.has(face.file)&&createHash('sha256').update(bytes).digest('hex')!==templateFaceHashes.get(face.file))throw new PdfLayoutError('PDF_TEMPLATE_COMPONENT');
    for(const point of createFont(bytes).characterSet)available.add(point);
    const type={ttf:'font/ttf',otf:'font/otf',woff:'font/woff',woff2:'font/woff2'}[face.file.split('.').at(-1)];
    styles.push(faceCSS(id,face,'data:'+type+';base64,'+bytes.toString('base64')));

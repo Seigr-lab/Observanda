@@ -26,6 +26,7 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
  const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId,{publicationFiles});
  if(request.pdf==='capabilities'){await documents.available();return pdfRendererCapabilities();}
  try{
+  if(request.pdf.startsWith('template-'))return await documents.template(request.pdf,input,{signal,check});
   if(request.pdf==='exports'||request.pdf.startsWith('export-')){
    const jobs=new PdfExportJobs(documents),options={signal,check};
    if(request.pdf==='exports')return jobs.list(input,options);

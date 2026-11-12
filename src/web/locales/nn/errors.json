@@ -460,6 +460,7 @@
   "ACCESS_STATE_CHANGED": "Desse tilgangsinnstillingane finst ikkje i den tiltrudde historikken på denne eininga. Kontroller og importer gjeldande tilgangsinnstillingar frå ei tiltrudd eining før du opnar denne kopien.",
   "ACCESS_SAVE_UNCERTAIN": "Lagringa av tilgangsinnstillingane vart avbroten. Dei nye påloggingsopplysningane kan allereie vere aktive. Opne arbeidsområdet på nytt og prøv dei nye opplysningane først.",
   "WEBSITE_APPROVAL_REQUIRED": "Denne nettstaden krev ein godkjend gjennomgang av den gjeldande lagra utgåva før han blir publisert. Be om ein gjennomgang, eller be ein gjennomgåar om å godkjenne han.",
+  "PDF_TEMPLATE_COMPONENT": "Malen inneheld ein komponent utan støtte eller ein utilgjengeleg skrifttypeversjon. Kontroller format, delar og skrifttype før import.",
   "PDF_LIBRARY_NAME_USED": "Namnet er allereie i bruk. Vel eit anna namn for samlinga eller emneknaggen.",
   "PDF_LIBRARY_GROUP_USED": "Gruppa inneheld dokument. Fjern dokumenta frå gruppa før du slettar henne.",
   "PDF_FONT_SUBSTITUTED": "Dette objektet inneheld tekst som vert skriven ut med ei erstatningsskrift. Vel ein skrifttype som dekkjer desse teikna.",

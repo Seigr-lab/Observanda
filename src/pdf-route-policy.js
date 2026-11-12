@@ -3,6 +3,8 @@
 const reads=['list','archive','library-query','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'];
 const writes=['library-prepare','print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'];
 reads.push('composition-proof');
+reads.push('template-list','template-read','template-inspect','template-style','template-review');
+writes.push('template-publish');
 const binaries=new Set(['export','image-read','font-read','export-download','composition-proof']);
 const controls=new Set(['export-status','export-cancel']);
 writes.push('library-pin','library-label-edit','library-batch');
