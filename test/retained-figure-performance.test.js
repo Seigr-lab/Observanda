@@ -21,8 +21,10 @@ test('retained figures are saved and drawn for the website in near-linear time',
   const figure=createFigure();figure.title='Series of '+count;figure.series[0].points=Array.from({length:count},(_,i)=>({x:i,y:Number((1+i/7).toFixed(6)),error:null}));
   let started=performance.now();const retained=await workspace.withLock(()=>new RetainedFigureDocuments(workspace).retain(figure)),retain=performance.now()-started;
   started=performance.now();const output=await convertPublicationRecord(workspace,book,{...record,share:true,figures:[retained],results:undefined}),draw=performance.now()-started;
-  const svg=output.assets.filter(asset=>asset.path.endsWith('.svg')).map(asset=>String(asset.bytes)).join('');
-  assert.equal(svg.split('class="figure-observation"').length-1,count);
+  // A website figure is drawn once per number style its page languages use;
+  // every drawing holds every observation.
+  const drawings=output.assets.filter(asset=>asset.path.endsWith('.svg')).map(asset=>String(asset.bytes));assert.ok(drawings.length>=1);
+  for(const svg of drawings)assert.equal(svg.split('class="figure-observation"').length-1,count);
   measured[count]={retain,draw};t.diagnostic(`${count} points: retain ${Math.round(retain)} ms, website drawing ${Math.round(draw)} ms`);
  }
  // A 400-point figure fits the block caches; a 4000-point one is read and
