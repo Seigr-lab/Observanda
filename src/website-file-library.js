@@ -42,7 +42,7 @@ export async function indexWebsiteSource(store,source,html,signal,context){
  }
  entries[source.id]=item;
  await store.writeControl(shardFile(source.id),entries,{signal});
- await store.writeControl(generation,randomUUID(),{signal});
+ await store.libraryChanged(generation,{signal});
  return item;
 }
 // Called by the producer under the file writer. Enrich an existing projection
@@ -58,7 +58,7 @@ export async function enrichWebsiteSources(store,rows,signal){
   }
   if(dirty){await store.writeControl(shardFile(prefix),entries,{signal});changed=true;}
  }
- if(changed)await store.writeControl(generation,randomUUID(),{signal});
+ if(changed)await store.libraryChanged(generation,{signal});
 }
 async function version(store){return store.control(generation,{missing:true,limit:128});}
 export async function libraryStamp(store){

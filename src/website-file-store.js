@@ -337,7 +337,33 @@ export class WebsiteFileStore{
    const current=await this.control(ROOT+'/sources/'+source.id+'/head.json');if(current.target!=='website'||current.revision!==source.revision)throw new AppError('CONFLICT');
   }
  }
+ // A group of source updates under one writer shares one write of the global fence list
+ // and one library generation change. Each source still writes its journal and fence
+ // scope first, as alone, so every interruption leaves a state a single update can leave.
+ async batchFences(operation,{signal}={}){
+  const held=active.getStore();if(!held?.write||held.root!==this.workspace.root)throw new AppError('LOCKED');
+  if(held.fences)return operation();
+  const batch=held.fences={entries:null,removals:[],changed:false,generation:null,bumped:false};
+  let failure=null;
+  try{return await operation();}catch(error){failure=error;throw error;}
+  finally{
+   held.fences=null;
+   try{
+    if(batch.changed){if(batch.entries.size)await this.writeControl(ROOT+'/pending.json',[...batch.entries],{signal});else await this.remove(ROOT+'/pending.json');}
+    for(const file of batch.removals)await this.remove(file);
+    if(batch.generation)await this.writeControl(batch.generation,randomUUID(),{signal});
+   }catch(error){if(!failure)throw error;}
+  }
+ }
+ // Library readers detect a change by its generation. In a fence batch the first change
+ // bumps it at once and later ones bump it again when the batch ends.
+ async libraryChanged(file,{signal}={}){
+  const batch=active.getStore()?.fences;
+  if(batch?.bumped){batch.generation=file;return;}
+  await this.writeControl(file,randomUUID(),{signal});if(batch)batch.bumped=true;
+ }
  async pendingSources(){
+  const batch=active.getStore()?.fences;if(batch?.entries)return new Set(batch.entries);
   const value=await this.control(ROOT+'/pending.json',{missing:true});if(value!==null&&(!Array.isArray(value)||value.some(id=>!hex(id))))throw new AppError('FORMAT');return new Set(value??[]);
  }
  async sourceDirectoryFilter(memberCount){
@@ -357,6 +383,12 @@ export class WebsiteFileStore{
  }
  async fence(sourceId,set,signal,scope){
   if(!hex(sourceId))throw new AppError('INVALID');
+  const batch=active.getStore()?.fences;
+  if(batch){
+   batch.entries??=await this.pendingSources();if(set)batch.entries.add(sourceId);else batch.entries.delete(sourceId);batch.changed=true;
+   if(set)await this.writeControl(pendingScopeFile(sourceId),scope??sourceFenceScope(null,null),{signal});else batch.removals.push(pendingScopeFile(sourceId));
+   return;
+  }
   const entries=await this.pendingSources();if(set)entries.add(sourceId);else entries.delete(sourceId);
   if(set)await this.writeControl(pendingScopeFile(sourceId),scope??sourceFenceScope(null,null),{signal});
   if(entries.size)await this.writeControl(ROOT+'/pending.json',[...entries],{signal});else await this.remove(ROOT+'/pending.json');
@@ -790,6 +822,10 @@ export class WebsiteFileStore{
   return token;
  },{write:true,signal});}
  async finishSourceUpdate(sourceId,target,signal,seed=false){
+  const batch=active.getStore()?.fences;
+  // A seed releases its fence before its journal. In a batch both follow the shared fence
+  // write, in that order, so no fence is ever left without its journal.
+  if(seed&&batch){await this.fence(sourceId,false,signal);batch.removals.push(ROOT+'/sources/'+sourceId+'/pending.json');if(target==='pdf')await this.advancePdfVersion(signal);return;}
   if(seed)await this.fence(sourceId,false,signal);
   await this.remove(ROOT+'/sources/'+sourceId+'/pending.json');
   if(!seed)await this.fence(sourceId,false,signal);

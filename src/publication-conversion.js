@@ -265,7 +265,7 @@ export class PublicationConversion{
   try{
    // Fence before taking the research snapshot. One owner can contain many
    // selected entries; its grant and snapshot cover them all.
-   await this.files.scope(async()=>{
+   await this.files.scope(()=>this.files.batchFences(async()=>{
     const fenced=await this.files.pendingSources();
     for(const provenance of provenances){
      signal?.throwIfAborted();const sourceId=websiteSourceId(provenance),{source,pending:journal}=await this.files.sourceStatus(sourceId);
@@ -285,7 +285,7 @@ export class PublicationConversion{
       pending.set(sourceId,{token,provenance});
      }
     }
-   },{write:true,signal});
+   },{signal}),{write:true,signal});
    if(existing.length||pending.size)await withOwner(async(store,snapshot,{storage,snapshotId})=>{
     if(existing.length){
      const rows=[],metadata=snapshot.metadata;
@@ -348,14 +348,14 @@ export class PublicationConversion{
       if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
       group.push({sourceId,token,provenance,row,metadata,record,output});
      }
-     await this.files.scope(async()=>{
+     await this.files.scope(()=>this.files.batchFences(async()=>{
       for(const {sourceId,token,provenance,row,metadata,record,output} of group){
        signal?.throwIfAborted();
        const saved=await this.files.putSource({sourceId,target:'website',title:record.title,provenance:{...provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1},pickerContext:libraryContext(metadata,provenance),...output,signal},{token});
        pending.delete(sourceId);sources.set(provenance.recordId,{id:saved.id,revision:saved.revision,assets:output.assets.map(asset=>({path:asset.path,sha256:asset.path.slice(7,71)}))});
        await onSource?.();
       }
-     },{write:true,signal});
+     },{signal}),{write:true,signal});
     }
    });
    return sources;
