@@ -28,7 +28,7 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(siteId);
   const canvas=page.frameLocator('#website-files-canvas'),copies=canvas.locator('section[data-observanda-source="'+source.id+'"]');
   const panel=page.locator('dialog[data-website-presentation]'),toolbar=page.locator('[data-action="website-files-presentation"]:not([data-placement-context])');
-  const formats=panel.getByRole('group',{name:'Display as'}),preview=panel.getByRole('region',{name:'Preview'});
+  const formats=panel.getByRole('group',{name:'Display as'}),preview=panel.getByRole('region',{name:'Preview',exact:true});
   async function enter(){await expect(toolbar).toBeEnabled();await toolbar.focus();await expect(toolbar).toBeFocused();await toolbar.press('Enter');await expect(panel).toBeVisible();}
   async function apply(){const button=panel.getByRole('button',{name:'Apply to this copy',exact:true});await button.focus();await button.press('Enter');await expect(panel).not.toBeVisible();}
   await expect(copies).toHaveCount(2);
