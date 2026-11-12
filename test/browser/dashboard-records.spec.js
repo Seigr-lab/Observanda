@@ -65,7 +65,8 @@ for(const count of [42,420])test('general and module preferences save metadata w
   await page.goto(f.app.url);await expect(page.locator('.desk-desktop')).toBeVisible();await page.evaluate(()=>location.hash='#/preferences/general');const main=page.locator('#main');
   await expect(main.getByLabel('Workspace name',{exact:true})).toBeVisible();
   await main.getByLabel('Workspace name',{exact:true}).fill('Research collective');
-  await main.getByRole('button',{name:'Save workspace',exact:true}).click();await expect(main.locator('[data-workspace-status]')).toHaveText('Saved');
+  // A new name renames the workspace folder and reopens it; with 420 records that takes longer than an ordinary save.
+  await main.getByRole('button',{name:'Save workspace',exact:true}).click();await expect(main.locator('[data-workspace-status]')).toHaveText('Saved',{timeout:30000});
   await main.getByLabel('Workspace name',{exact:true}).fill('Discarded name');await main.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(main.getByLabel('Workspace name',{exact:true})).toHaveValue('Research collective');
   await main.getByRole('button',{name:'Modules',exact:true}).click();
   const inventory=main.getByRole('switch',{name:'Enable Inventory',exact:true});if(!await inventory.isChecked())await inventory.check();
@@ -172,6 +173,8 @@ test('New record on a records card scoped to one lab book creates in that book; 
   await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();
   await card(page,'all').getByRole('button',{name:'New record',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Choose a lab book',exact:true})).toBeVisible();
+  // The destination chooser lists a project's lab books once its project is chosen.
+  await dialog.getByLabel('Project',{exact:true}).selectOption({label:f.book.projects[0].title});
   await expect(dialog.getByRole('button',{name:/Recipe trials/})).toBeVisible();await expect(dialog.getByRole('button',{name:/Field journal/})).toBeVisible();
   expect(f.errors).toEqual([]);
  }finally{await f.close();}
