@@ -72,3 +72,15 @@ test('card discovery retries failed or malformed pages and cancels obsolete sear
   await expect(library).toHaveCount(0);expect(f.requests.filter(r=>r.url.endsWith('/page'))).toEqual([]);expect(f.errors).toEqual([]);
  }finally{release?.();await page.unrouteAll({behavior:'wait'});await f.close();}
 });
+
+test('card search finds a card by what it holds, not only by its name',async({page})=>{
+ test.setTimeout(60000);const f=await fixture(page);
+ try{
+  const library=page.getByRole('region',{name:'Data library',exact:true}),search=library.getByRole('searchbox',{name:'Find data to display',exact:true});
+  const row=label=>library.locator('.desk-library-item').filter({has:page.locator('strong').getByText(label,{exact:true})});
+  await search.fill('audio');await expect(row('Media collection')).toBeVisible();await expect(row('Recent records')).toHaveCount(0);
+  await search.fill('citations');await expect(row('Research links')).toBeVisible();await expect(row('Media collection')).toHaveCount(0);
+  await search.fill('Media collection');await expect(row('Media collection')).toBeVisible();
+  expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
+ }finally{await f.close();}
+});
