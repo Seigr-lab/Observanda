@@ -18,6 +18,7 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {defaultDashboard,createPanel} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {starterTemplate} from '../../src/web/project-templates.js';
+import {Workspace} from '../../src/storage.js';
 
 async function fixture(page,{count=45,cards=null,prepare=async()=>{},decorate=()=>{}}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-dashboard-read-ui-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -80,7 +81,8 @@ for(const count of [42,420])test('general and module preferences save metadata w
   await page.reload();await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
   await main.getByRole('button',{name:'General',exact:true}).click();await expect(main.getByLabel('Workspace name',{exact:true})).toHaveValue('Research collective');await page.goBack();await expect(main.getByRole('group',{name:'Lab-book templates',exact:true})).toBeVisible();
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toHaveLength(0);expect(f.bodies).toHaveLength(0);expect(f.errors).toEqual([]);
-  const saved=(await f.ws.read()).book;expect(saved.entries).toEqual(f.book.entries);expect(saved.projects[0].tools).toContain('resources');expect(saved.notebooks[0].configuration.sections[0].label).toBe('Research questions');
+  // The workspace name is its folder: saving the new name renamed the folder beside the original.
+  const renamed=new Workspace(path.join(path.dirname(f.ws.root),'Research collective'),f.ws.vault),saved=(await renamed.read()).book;expect(saved.entries).toEqual(f.book.entries);expect(saved.projects[0].tools).toContain('resources');expect(saved.notebooks[0].configuration.sections[0].label).toBe('Research questions');
  }finally{await f.close();}
 });
 
