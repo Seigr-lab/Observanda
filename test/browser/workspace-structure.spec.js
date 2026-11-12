@@ -135,6 +135,16 @@ test('people define their structure and every lab uses the same notebook and rec
   await location('Field Lab');await expect(main.locator('#project-recent-records [role="status"]')).toHaveCount(0,{timeout:30000});await expect(main.getByRole('link',{name:'First session',exact:true})).toHaveCount(0);
   // The dashboard collects recent records from every project and lab book store, opening each one.
   await navigate(page,'Dashboard');await expect(page.locator('.desk-card').getByRole('button',{name:'First session',exact:true})).toBeVisible({timeout:90000});
+  // Preferences lists the lab books that use a lab-book type across project and lab book stores and edits the chosen one in its store.
+  await navigate(page,'Preferences');await preferences(page,'Templates');
+  await page.locator('[data-module-preference="laboratory-arts-creative"]').getByRole('button',{name:/Record types/}).click();
+  const settings=page.locator('[data-module-settings-slot]');
+  await expect(settings.getByLabel('Lab book',{exact:true}).locator('option:checked')).toHaveText('Nature Archive / Music practice',{timeout:60000});
+  await expect(settings.getByLabel('Lab book',{exact:true}).locator('option')).toContainText(['EP One / Recording sessions']);
+  await settings.locator('[data-command="section-select"]').filter({hasText:'Rehearsals & recordings'}).click({timeout:30000});
+  await settings.getByLabel('Record type name',{exact:true}).fill('Sound ideas');
+  await click(settings,'Save changes');await expect(settings.locator('[data-type-settings-status]')).toHaveText('No unsaved changes',{timeout:90000});
+  await expect(settings.locator('[data-command="section-select"]').filter({hasText:'Sound ideas'})).toBeVisible();
   // A subproject card opens from its name.
   await location('Nature Archive');await main.locator('.project-card').getByRole('button',{name:'EP One',exact:true}).click();await expect(main.getByRole('heading',{name:'EP One',level:1,exact:true})).toBeVisible({timeout:30000});
   await click(main,'Open lab book');await expect(main.getByRole('heading',{name:'Recording sessions',level:1,exact:true})).toBeVisible({timeout:30000});await click(main,'Lab book settings');
