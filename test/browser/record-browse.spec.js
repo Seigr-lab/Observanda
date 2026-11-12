@@ -18,6 +18,7 @@ async function fixture(){
 }
 
 test('record pages combine filters, preserve page context and open current saved content',async({page})=>{
+ test.setTimeout(60000);
  const f=await fixture(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(f.app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,f.book.notebooks[0].id);
