@@ -27,6 +27,12 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
  if(request.pdf==='capabilities'){await documents.available();return pdfRendererCapabilities();}
  try{
   if(request.pdf.startsWith('template-'))return await documents.template(request.pdf,input,{signal,check});
+  if(request.pdf==='settings-draft-save'){
+   const acknowledgement=await documents.settingsDraft('prepare',input,{signal,check});
+   if(acknowledgement.saved)return {revision:acknowledgement.revision,replayed:true};
+   return await documents.settingsDraft('submit',input,{signal,check});
+  }
+  if(request.pdf.startsWith('settings-draft-'))return await documents.settingsDraft(request.pdf.slice('settings-draft-'.length),input,{signal,check});
   if(request.pdf==='exports'||request.pdf.startsWith('export-')){
    const jobs=new PdfExportJobs(documents),options={signal,check};
    if(request.pdf==='exports')return jobs.list(input,options);

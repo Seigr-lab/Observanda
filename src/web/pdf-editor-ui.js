@@ -85,7 +85,7 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
   saving=(async()=>{
    while(dirty()){
     if(!retry){if(!validPdfDocumentHeader(selected.header)||section&&!validPdfSection(section))throw new Error(tr('invalid'));const kind=headerDirty?'header':'section',mark=kind==='header'?headerDirty:sectionDirty;retry={kind,mark,command:{id:selected.header.id,commandId:uuid(),expectedRevision:selected.revision,operation:{type:kind,[kind]:structuredClone(kind==='header'?selected.header:section)}}};}
-    const task=retry,result=await post('change',task.command);selected.revision=result.revision;
+    const task=retry,result=await post(task.kind==='header'?'settings-draft-save':'change',task.command);selected.revision=result.revision;
     if(task.kind==='placement-confirm'&&section?.id===task.command.operation.sectionId&&!sectionDirty)delete section.placementReview;if(active())retainedFonts.update(selected,section,fontChoices);if(task.kind==='section'){const summary=sections.items.find(item=>item.id===task.command.operation.section.id);if(summary){summary.title=task.command.operation.section.title;summary.level=task.command.operation.section.level??1;}}
     if(task.kind==='header'&&headerDirty===task.mark)headerDirty=0;if(task.kind==='section'&&sectionDirty===task.mark)sectionDirty=0;retry=null;
    }

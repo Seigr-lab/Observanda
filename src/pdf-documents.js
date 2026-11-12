@@ -14,6 +14,7 @@ import {publicationFontFiles,pdfStarterRevision,inspectPublicationStarter,valida
 import {latestPdfLibraryExport,queuePdfExport} from './pdf-export-jobs.js';
 import {randomUUID} from 'node:crypto';
 import {proseText} from './web/prose-model.js';
+import {PdfSettingsRecovery} from './pdf-settings-recovery.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 // The PDF owner has independent locks and encrypted objects. Reads never
@@ -145,9 +146,27 @@ export class PdfDocuments{
   if(!await this.available())await this.domains.initialize(['pdf']);
   return this.domains.run(['pdf'],get=>new PdfLayoutLibrary(get('pdf')).change(command,options),{...options,write:['pdf']});
  }
+ async settingsDraft(action,input,options={}){
+  if(!['list','read','prepare','discard','submit'].includes(action))throw new AppError('INVALID');
+  if(action==='list'&&(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!['limit','cursor'].includes(key))))throw new AppError('INVALID');
+  if(action==='submit'){
+   validatePdfCommand(input);
+   if(input.operation.type!=='header')throw new AppError('INVALID');
+   return this.change(input,{...options,settingsCheckpoint:true});
+  }
+  if(!await this.available()){
+   if(action==='list')return {items:[],next:null};
+   throw new AppError('NOT_FOUND');
+  }
+  return this.domains.run(['pdf'],get=>new PdfSettingsRecovery(get('pdf'))[action](input,options.signal),
+   {...options,write:['prepare','discard'].includes(action)?['pdf']:[]});
+ }
  async change(command,options={}){
   validatePdfCommand(command);options.signal?.throwIfAborted();
-  if(!await this.available())await this.domains.initialize(['pdf']);
+  if(!await this.available()){
+   if(options.settingsCheckpoint)throw new AppError('NOT_FOUND');
+   await this.domains.initialize(['pdf']);
+  }
   const operationSection=command.operation.section;
   if(operationSection){
    if(command.operation.type==='section'){
@@ -158,10 +177,15 @@ export class PdfDocuments{
   }
   const {operation}=command,ids=[...new Set([...(operation.header?[operation.header.layout.font]:[]),...pdfSectionFontIds(operation.section)])];
   for(const id of ids)if(!customFontId(id)&&!BUNDLED_FONTS.some(font=>font.id===id))throw new AppError('PDF_FONT',[id]);
-  const apply=async(store,extra={})=>{
-   const owner=new PdfDocumentStore(store);
-   if(['create','template-create'].includes(operation.type)&&!await store.object('pdf:directory'))await owner.prepareLibrary(options);
-   return owner.change(command,{...options,...extra,publicationFiles:this.publicationFiles});
+  const apply=(store,extra={})=>{
+   const change=async()=>{
+    const owner=new PdfDocumentStore(store);
+    if(['create','template-create'].includes(operation.type)&&!await store.object('pdf:directory'))await owner.prepareLibrary(options);
+    return owner.change(command,{...options,...extra,publicationFiles:this.publicationFiles});
+   };
+   // A retried header command can also arrive through the ordinary PDF save
+   // route. Both routes settle the same pending settings in this transaction.
+   return operation.type==='header'?new PdfSettingsRecovery(store).apply(command,change,{prepared:options.settingsCheckpoint}):change();
   };
   const custom=ids.filter(customFontId);if(!custom.length)return this.domains.run(['pdf'],get=>apply(get('pdf')),{...options,write:['pdf']});
   const prior=await this.domains.run(['pdf'],async get=>{const store=get('pdf'),owner=new PdfDocumentStore(store),receipt=await store.object('pdf:command:'+command.id+':'+command.commandId);if(receipt)return {replay:true};return {fonts:command.expectedRevision?(await owner.open(command.id,{revision:command.expectedRevision})).header.fonts??[]:[]};},options);

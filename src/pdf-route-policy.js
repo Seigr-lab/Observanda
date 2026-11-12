@@ -2,6 +2,8 @@
 // source-permission and exact-revision validation remain in the owning handlers.
 const reads=['list','archive','library-query','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'];
 const writes=['library-prepare','print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'];
+reads.push('settings-draft-list','settings-draft-read');
+writes.push('settings-draft-save','settings-draft-discard','settings-draft-submit');
 reads.push('composition-proof');
 reads.push('template-list','template-read','template-inspect','template-style','template-review');
 writes.push('template-publish');
