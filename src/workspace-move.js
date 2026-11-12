@@ -172,6 +172,13 @@ export async function moveWorkspace(plan,{vault,onProgress,activate,recovery,mov
   if(plan.ownedDatabase||(await catalogueBinding(plan.source))?.placement==='workspace'){
    const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate,recovery,moveDirectory}));}finally{await clearVault(retainedVault);}
   }
+  // Activation clears the caller's session key. Cleanup still needs it to prove
+  // the folder-bound query cache and staging namespace the copy left out.
+  const retainedVault=cloneVault(vault);
+  try{return await moveInstalledWorkspace(plan,{vault:retainedVault,activate});}finally{await clearVault(retainedVault);}
+ });
+}
+async function moveInstalledWorkspace(plan,{vault,activate}){
   let receipt;
   const freeze=async destination=>{
    receipt={...plan,version:1,destination,phase:'verified'};delete receipt.resume;
@@ -192,7 +199,6 @@ export async function moveWorkspace(plan,{vault,onProgress,activate,recovery,mov
   // Persist the source guard before releasing that database's writer.
   operationTransfer({phase:'opening'});await activate(plan.destination,plan.source);
   return cleanup(receipt,{vault});
- });
 }
 export async function finishWorkspaceMove(root,{onProgress,vault,requireAuthorization=false,signal}={}){
  return withWriterLease(path.join(root,WORKSPACE_MOVE_CLEANUP_LEASE),()=>withOperationProgress(onProgress,async()=>{
