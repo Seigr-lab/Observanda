@@ -242,7 +242,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     }
     if(!await assertRegular(await workspaceFile(ctx.root),{missing:true}))return;
     await workspaceDirectory.using(ctx.root,{allowExisting:true,replacing:await renames.completedSource(ctx.root)},async()=>{
-     try{await synchronizeWorkspaceName(ctx.workspace);}catch(error){if(!['MISSING','CATALOGUE_UNAVAILABLE'].includes(error.code))throw error;}
+     // A workspace whose move was interrupted is offered as a recovery screen by /api/storage.
+     try{await synchronizeWorkspaceName(ctx.workspace);}catch(error){if(!['MISSING','CATALOGUE_UNAVAILABLE','STORAGE_MOVED'].includes(error.code))throw error;}
     });
    })().catch(async error=>{
     ctx.identityPrepared=null;
