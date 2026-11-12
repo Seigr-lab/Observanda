@@ -8,8 +8,7 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {sampleNotebook} from '../../src/sample.js';
-import {preferences,navigate} from './preferences-helper.js';
-import {task} from './composer-helper.js';
+import {preferences} from './preferences-helper.js';
 let app,root,errors,fixture;
 const savedBook=async()=>({...((await new WebsiteSites(fixture.workspace).read(null)).book),entries:(await fixture.workspace.read()).book.entries});
 test.beforeEach(async({page})=>{
@@ -21,6 +20,13 @@ test.beforeEach(async({page})=>{
 test.afterEach(async()=>{await app.close();if(fixture)await clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});expect(errors).toEqual([]);});
 const header=page=>page.locator('.workspace-heading');
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
+// Header alignment and order are app settings: App appearance keeps them in its layout group
+// and saves them on this computer with Save app settings.
+async function appLayout(page){
+ await preferences(page,'App appearance');const layout=page.locator('details[data-disclosure="app-layout"]');
+ if(!await layout.evaluate(node=>node.open))await layout.locator(':scope > summary').click();
+}
+const appSettingsSaved=page=>expect(page.locator('[data-interface-status]')).toHaveText('Saved on this computer. Applies across workspaces.');
 test('SVG logo upload, return to Appearance, header alignment and order persist with explicit save',async({page})=>{
  await preferences(page,'Appearance');
  await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
@@ -31,22 +37,22 @@ test('SVG logo upload, return to Appearance, header alignment and order persist 
  await expect(page.getByLabel('Add logo',{exact:true})).toBeEnabled();
  await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
  await page.getByRole('button',{name:'Back to Appearance',exact:true}).click();
- await expect(page.getByLabel('Header alignment')).toBeVisible();
+ // Website design previews the saved logo beside the site title.
+ await expect(page.frameLocator('#design-preview').locator('.site-name .custom-logo')).toHaveCount(1,{timeout:15000});
+ await appLayout(page);
  await page.getByLabel('Header alignment').selectOption('right');await page.getByLabel('Logo and title order').selectOption('title-first');
  const positioned=async()=>{
   expect(await header(page).evaluate(el=>getComputedStyle(el).justifySelf)).toBe('end');
   await expect(page.getByLabel('Logo and title order')).toHaveValue('title-first');
-  await expect(page.frameLocator('#design-preview').locator('.site-name .custom-logo')).toHaveCount(1);
   await expect(page.locator('.workspace-logo')).toHaveCount(0);
  };
  await positioned();
- await page.getByRole('button',{name:'Save appearance',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
- await page.reload();await positioned();await expect(page.getByLabel('Logo and title order')).toHaveValue('title-first');
+ await page.getByRole('button',{name:'Save app settings',exact:true}).click();await appSettingsSaved(page);
+ await page.reload();await appLayout(page);await positioned();await expect(page.getByLabel('Logo and title order')).toHaveValue('title-first');
  await page.getByLabel('Header alignment').selectOption('left');
- await page.getByRole('button',{name:'Discard changes',exact:true}).click();
- // Section discard uses the common leave guard.
- if(await page.locator('#leave-dialog').isVisible())await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
- await positioned();
+ // Leaving with unsaved app settings asks through the common leave guard; discarding restores the saved layout.
+ await preferences(page,'General');await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
+ await appLayout(page);await positioned();
  await page.evaluate(()=>window.scrollTo(0,0));
  await mkdir('.local/screenshots',{recursive:true});await page.screenshot({path:'.local/screenshots/branding-appearance-desktop.png'});
  await page.setViewportSize({width:390,height:844});await noOverflow(page);await positioned();
@@ -76,16 +82,17 @@ test('General directly edits workspace details and protects unsaved form changes
  await page.screenshot({path:'.local/screenshots/general-settings-phone.png'});
 });
 test('branding returns to the website draft and explicit discard removes its unsaved logo',async({page})=>{
- await navigate(page,'Website editor');await task(page,'Site');
- await page.getByRole('button',{name:'Layout & branding',exact:true}).click();
- await page.getByRole('button',{name:'Website logos',exact:true}).click();
- await expect(page.getByRole('button',{name:'Back to website editor',exact:true})).toBeVisible();
+ // Website logos are edited from Website design; they stay a website draft until saved.
+ await preferences(page,'Appearance');
+ await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Back to Appearance',exact:true})).toBeVisible();
  await page.getByLabel('Add logo',{exact:true}).setInputFiles({name:'mark.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>')});
  await expect(page.getByLabel('Logo 1 alternative text')).toBeVisible({timeout:15000});
  await page.getByLabel('Logo 1 alternative text').fill('Draft mark');
- await page.getByRole('button',{name:'Back to website editor',exact:true}).click();
- await expect(page.locator('#leave-dialog')).toBeHidden();await page.getByRole('button',{name:'Discard changes',exact:true}).click();
- await expect(page.locator('#website-preview-page')).toBeVisible();
+ await page.getByRole('button',{name:'Back to Appearance',exact:true}).click();
+ await expect(page.locator('#leave-dialog')).toBeHidden();await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
+ await page.getByRole('button',{name:'Discard changes',exact:true}).click();
+ await expect(page.locator('#design-preview')).toBeVisible();await expect(page.locator('#save-status')).toHaveText('Saved');
  expect((await savedBook()).branding).toEqual([]);
 });
 
@@ -101,6 +108,7 @@ test('four logos and a long title reflow at narrow and enlarged layouts with key
  }
  await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
  const back=page.getByRole('button',{name:'Back to Appearance',exact:true});await back.focus();await page.keyboard.press('Enter');
+ await expect(page.locator('#design-preview')).toBeVisible();await appLayout(page);
  const alignment=page.getByLabel('Header alignment');await alignment.focus();await page.keyboard.press('Home');await page.keyboard.press('ArrowDown');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await expect(alignment).toHaveValue('right');
  await page.getByLabel('Logo and title order').selectOption('title-first');
  for(const width of [320,640]){

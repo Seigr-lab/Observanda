@@ -11,6 +11,7 @@ import {OperationActivity} from '../../src/operation-activity.js';
 import {OperationalDiagnostics} from '../../src/operational-diagnostics.js';
 import {AppError} from '../../src/errors.js';
 import {openRecordWriting} from './record-editing-helper.js';
+import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
 
 test('local diagnostics require an unlocked session and are reviewed before a private-safe download',async({page})=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-diagnostic-ui-')),book=sampleNotebook();book.title='private-record-sentinel';
@@ -61,7 +62,17 @@ test('health review returns a waiting writer to its owner and keeps an uncertain
  try{
   app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),diagnostics});
   await page.goto(app.url);await expect(page.locator('.workspace-name')).toBeVisible();
-  await preferences(page,'General');seed=true;
+  await preferences(page,'General');
+  // Signing in starts the workspace's own website preparation, a separate activity.
+  // Let it finish and clear it, so the review counts only the operations seeded below.
+  await expect.poll(async()=>(await websiteUpgradeStatus(fixture.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(()=>page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations.filter(entry=>['running','queued'].includes(entry.state)).length),{timeout:30000}).toBe(0);
+  expect(await page.evaluate(async()=>{
+   const {sessionHeaders}=await import('/session-store.js'),snapshot=await(await fetch('/api/activity')).json();
+   await fetch('/api/activity/clear',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId}),body:'{}'});
+   return (await(await fetch('/api/activity')).json()).operations;
+  })).toEqual([]);
+  seed=true;
   const review=page.getByRole('button',{name:'Review diagnostics',exact:true}),dialog=page.locator('#dialog');
   await review.click();
   const summary=dialog.locator('[data-health-summary]');
