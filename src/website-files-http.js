@@ -30,6 +30,8 @@ import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-li
 import {websiteSourceUsage,websitesUsingSource,changeWebsitePlacement,placementPresentationOptions,setPlacementPresentation,previewPlacementPresentation} from './website-file-placements.js';
 import {listGalleryItems,openGalleryImage,readSourceGallery,saveSourceGallery} from './website-source-gallery.js';
 import {websitePictureUpload} from './website-picture-upload.js';
+import {importStaticWebsite,readWebsiteFolder,readWebsiteImportUpload,readWebsiteZip} from './website-import.js';
+import {listWebsiteDownloads,readDownloadUpload,removeWebsiteDownload,saveWebsiteDownload} from './website-downloads.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from './website-recordings.js';
 import {onResponseClose} from './response-close.js';
 import {websiteVersions} from './website-versions.js';
@@ -50,7 +52,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','import/folder','downloads/remove','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 // A design upload is length-prefixed JSON followed by the package bytes.
@@ -143,6 +145,17 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    return true;
   }
   if(!['GET','POST'].includes(req.method))throw new AppError('NOT_FOUND');
+  if(operation==='import/zip'&&req.method==='POST'){
+   if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
+   onWrite();await check();const upload=await readWebsiteImportUpload(req,{signal});
+   json(await importStaticWebsite(store,{name:upload.name,source:'zip',read:async()=>readWebsiteZip(upload.zip),signal}));return true;
+  }
+  if(operation==='downloads/save'&&req.method==='POST'){
+   if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
+   onWrite();await check();const {data,bytes}=await readDownloadUpload(req,{signal});
+   if(!researchId(data.siteId)||!revision(data.expectedRevision))throw new AppError('INVALID');
+   json(await saveWebsiteDownload(store,data.siteId,{...data,bytes,signal}));return true;
+  }
   if(operation==='media/save'&&req.method==='POST'){
    if(req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
    onWrite();await check();const upload=await readRecordingUpload(req,signal);
@@ -190,6 +203,16 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='library/validate'){json(await store.scope(()=>validateWebsiteLibraryRows(store,{...data,signal}),{signal}));return true;}
   if(operation==='library/preview'){json(await store.previewSource({...data,signal}));return true;}
   if(operation==='library/gallery-items'){json(await listGalleryItems(store,{...data,signal}));return true;}
+  if(operation==='import/chooser'||operation==='import/choose'){
+   if(Object.keys(data).some(key=>key!=='path')||data.path!==undefined&&typeof data.path!=='string')throw new AppError('INVALID');
+   if(operation==='import/chooser'){json(folderPicker?await folderPicker.capabilities():{mode:'server'});return true;}
+   if(!folderPicker)throw new AppError('FOLDER_PICKER_UNAVAILABLE');
+   const selection=await folderPicker.choose({path:data.path??'',signal});await check();json(selection);return true;
+  }
+  if(operation==='import/folder'){
+   if(Object.keys(data).some(key=>!['name','directory'].includes(key))||typeof data.name!=='string'||typeof data.directory!=='string')throw new AppError('INVALID');
+   json(await importStaticWebsite(store,{name:data.name,source:'folder',read:()=>readWebsiteFolder(data.directory,{signal}),signal}));return true;
+  }
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,language:data.language,starter:data.starter,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}
   const {siteId,expectedRevision,...options}=data;
@@ -334,6 +357,8 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(!folderPicker)throw new AppError('FOLDER_PICKER_UNAVAILABLE');
    const selection=await folderPicker.choose({path:options.path??'',signal});await check();json(selection);return true;
   }
+  if(operation==='downloads/list'){json(await listWebsiteDownloads(store,siteId,{expectedRevision,signal}));return true;}
+  if(operation==='downloads/remove'){if(typeof options.name!=='string')throw new AppError('INVALID');json(await removeWebsiteDownload(store,siteId,{expectedRevision,name:options.name,signal}));return true;}
   if(operation==='library/placements'){json(await websiteSourceUsage(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/presentation-options'){json(await placementPresentationOptions(store,siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='library/present-placement'){json(await setPlacementPresentation(store,siteId,{...options,expectedRevision,signal}));return true;}

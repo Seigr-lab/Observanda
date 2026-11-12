@@ -141,6 +141,10 @@ Each website has its own HTML pages, CSS, assets and publishing destination. Ope
 
 Permission changes affect the saved composition. To update an already published website, publish the changed files to its destination. Previously downloaded PDFs and independent copies of public files cannot be withdrawn.
 
+To continue a website you already have, choose **New website**, then **An existing website folder** or **A website ZIP file**. Observanda checks every page, stylesheet, image and script before copying them into a new website, and lists each file it cannot accept so you can correct it; nothing is added until every file is accepted. Pages containing research placed by Observanda are not imported. Open the original website instead, so that research keeps following its lab book sharing choices.
+
+To offer a paper, a dataset export or an archive to visitors, choose **Element**, select **Download** and choose **Insert element**. Upload the file or link one already in the website. A download is published only while a page included in the publication links to it, so a file linked from a private draft stays private. Observanda publishes the file exactly as uploaded and cannot inspect its contents for private lab book information.
+
 Use the **Publication** tools to manage an edition after it is published:
 
 - **Releases** compares the saved website with the edition the destination last acknowledged. It lists the files an update would add, change or remove, including material whose permission was withdrawn, and records earlier releases so you can reopen their version and publish it again under current permissions.

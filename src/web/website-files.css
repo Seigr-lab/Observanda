@@ -248,7 +248,7 @@
  .website-files-app:has(.website-files-editor,#website-files-preview)>.website-file-controls {
   display:flex;flex-direction:column;flex:1;min-height:0;
  }
- .website-files-editor { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;grid-template-columns:minmax(12rem,18%) minmax(0,1fr) minmax(13rem,20%) }
+ .website-files-editor { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;grid-template-columns:minmax(16rem,18%) minmax(0,1fr) minmax(13rem,20%) }
  .website-files-editor>aside { min-height:0;max-height:none;overflow-y:auto;overscroll-behavior-y:contain }
  .website-files-viewport,.website-files-stage .website-files-canvas { height:100%;min-height:0 }
  .website-file-controls>.website-files-viewport { flex:1;height:0;min-height:0 }
@@ -297,6 +297,18 @@
 .website-page-form h2,.website-page-form p,.website-page-form fieldset { margin:0 }
 .website-page-form .website-page-form-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr)); gap:.85rem }
 .website-page-form label { display:grid; gap:.3rem; font-weight:600 }
+.website-import-choices { display:grid; gap:.4rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.6rem .8rem }
+.website-page-form .website-import-choices label { display:flex; gap:.5rem; align-items:center; font-weight:400 }
+.website-import-issues { border-inline-start:3px solid var(--danger,#a62020); padding:.2rem .8rem }
+.website-import-issues h3 { margin:0 0 .3rem }
+.website-import-issues ul { margin:.4rem 0 0; padding-inline-start:1.2rem; max-height:16rem; overflow:auto }
+.website-import-issues code { overflow-wrap:anywhere }
+.website-download-dialog form { display:grid; gap:.8rem; width:min(36rem,86vw) }
+.website-download-dialog fieldset { display:grid; gap:.5rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.6rem .8rem }
+.website-download-list { list-style:none; margin:0; padding:0; max-height:14rem; overflow:auto }
+.website-download-list li { display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.35rem 0; border-block-end:1px solid var(--border,#cbd3df) }
+.website-download-list label { display:flex; align-items:baseline; gap:.4rem; min-width:0; overflow-wrap:anywhere }
+.website-download-list small { color:var(--muted,CanvasText) }
 .website-page-form :is(input,select) { width:100%; min-width:0; padding:.45rem .6rem; color:inherit; font:inherit; font-weight:normal; background:var(--surface,#fff); border:1px solid var(--border,#bac5d4); border-radius:.25rem }
 .website-page-form fieldset { display:grid; gap:.7rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.75rem .9rem }
 .website-page-form legend { font-weight:650; padding-inline:.3rem }

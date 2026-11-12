@@ -11,6 +11,7 @@ import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-r
 import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink} from './website-files-dialogs.js';
+import {openDownloadDialog} from './website-files-downloads.js';
 import {showPageAccessibility} from './website-access-review.js';
 import {applyAccessRepair} from './website-access-repairs.js';
 import {editWebsiteEquation} from './website-files-equation.js';
@@ -466,6 +467,19 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const authoredHTML=doc=>serializeWebsiteHTML(doc,html,()=>notify(tr('sourceNormalized')));
  function documentChange(operation){flushCanvas();checkpoint(true);const document=websiteHTML(html);operation(document);html=authoredHTML(document);changed();render();}
  function ensureStyle(doc){const url=baseURL(opened.site.cssPath);if(![...doc.querySelectorAll('link[rel="stylesheet"][href]')].some(link=>new URL(link.getAttribute('href'),baseURL()).href===url)){const link=doc.createElement('link');link.rel='stylesheet';link.href='../'.repeat(opened.path.split('/').length-1)+opened.site.cssPath;doc.head.append(link);}}
+ function downloadDialog(){
+  const doc=websiteHTML(html),site=opened,original=html;
+  const current=()=>opened===site&&html===original&&!stale;
+  openDownloadDialog({doc,at:blockAt(doc,selected),t:tr,path:site.path,site:site.site,request,notify,
+   apply:value=>{if(!current()){notify(tr('changed'),true);return;}checkpoint(true);html=authoredHTML(value);changed();render();},
+   upload:async(value,file)=>{
+    if(!current())throw Error(tr('changed'));
+    const header=new TextEncoder().encode(JSON.stringify({siteId:site.site.id,expectedRevision:site.site.revision,path:site.path,historyKey,html:serializeWebsiteHTML(value),css,name:file.name})),size=new Uint8Array(4);
+    new DataView(size.buffer).setUint32(0,header.length);
+    const result=await request('downloads/save',new Blob([size,header,file],{type:'application/octet-stream'}));
+    await recovery.forget({saved:true});checkpoint(true);adopt(result,{savedCheckpoint:true});render();
+   }});
+ }
  function blockDialog(edit,style=''){
   const doc=websiteHTML(html),site=opened,original=html;
   const current=()=>opened===site&&html===original&&!stale;
@@ -668,12 +682,33 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
    button('reopen','reopen','data-website-files-reopen '+(stale&&!awaitingAccess&&!conflictingPage?'':'hidden'))+body+'</fieldset>';
  }
+ function importIssues(){
+  const result=form.issues;if(!result)return '';
+  const rows=result.issues.map(item=>'<li>'+(item.file?'<code>'+esc(item.line?tr('importIssueLine',{file:item.file,line:item.line}):item.file)+'</code> ':'')+esc(tr(item.reason))+'</li>').join('');
+  const more=result.issueCount>result.issues.length?'<p>'+esc(tr('importMore',{count:result.issueCount-result.issues.length}))+'</p>':'';
+  return '<div class="website-import-issues" role="alert"><h3>'+esc(tr('importIssuesTitle'))+'</h3><p>'+esc(tr('importIssuesHelp'))+'</p><ul>'+rows+'</ul>'+more+'</div>';
+ }
+ function newWebsiteForm(){
+  const source=form.source??'blank',choice=value=>'<label><input type="radio" name="website-import-source" data-website-import-source value="'+value+'"'+(source===value?' checked':'')+'>'+esc(tr('importSource_'+value))+'</label>';
+  const folderField=source==='folder'?'<label>'+esc(tr('importFolder'))+'<input data-website-import-folder value="'+esc(form.folder??'')+'" required></label>'+(form.native?button('importChooseFolder','import-choose'):''):'';
+  const zipField=source==='zip'?'<label>'+esc(tr('importZip'))+'<input type="file" data-website-import-zip accept=".zip,application/zip"'+(form.zipFile?'':' required')+'></label>'+(form.zipFile?'<p>'+esc(tr('importSelected',{name:form.zipFile.name}))+'</p>':''):'';
+  const label=source==='blank'?'create':'importSubmit';
+  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr('create'))+'</h2><div class="website-page-form-fields">'+field('name',form.name??'','required maxlength="160"')+'</div>'+
+   '<fieldset class="website-import-choices"><legend>'+esc(tr('importStart'))+'</legend>'+choice('blank')+choice('folder')+choice('zip')+'</fieldset>'+(source==='blank'?starterChoice():'')+folderField+zipField+
+   (source==='blank'?'':'<p>'+esc(tr('importHelp'))+'</p>')+importIssues()+
+   '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
+ }
+ async function loadImportChooser(){
+  try{const capability=await request('import/chooser',{});if(form?.type==='new'){form.native=capability?.mode==='native';render();}}
+  catch(error){if(['ACCESS_LOCKED','AUTH'].includes(error.code))throw error;if(form?.type==='new')form.native=false;}
+ }
  function formView(){
   if(form.type==='design'){
    const name=field('designName',form.name,'required maxlength="160"');
    const remove=form.local?button('designKeep','design-keep')+button('designForget','design-forget'):'';
    return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr('designManage'))+'</h2><code>'+esc(opened.path)+'</code><p>'+esc(tr('designHelp'))+'</p>'+name+'<div class="inline-actions"><button type="submit" class="button primary">'+esc(tr('designSave'))+'</button>'+remove+button('cancel','form-cancel')+'</div></form></section>';
   }
+  if(form.type==='new')return newWebsiteForm();
   const isPage=form.type==='page',label=isPage?'addPage':'create';
   const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
   const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
@@ -706,7 +741,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const sizes=viewport.controls()+button('breakpointManage','breakpoints');
   const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'?sizes:'')+'</div></div>';
   if(mode!=='visual')return toolbar+sourcePane.view(mode);
-  const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option></select></label>'+button('addBlock','add-block');
+  const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option><option value="download">'+esc(tr('downloadBlock'))+'</option></select></label>'+button('addBlock','add-block');
   return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open':'')+'><aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside><section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside></div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
@@ -946,7 +981,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
     adoptMerge(value,result);await save();render();
    }
    else if(operation==='discard'||operation==='reopen')await discard();
-   else if(operation==='new'){if(await beforeLeave(true)){form={type:'new'};render();}}
+   else if(operation==='new'){if(await beforeLeave(true)){form={type:'new',source:'blank'};render();}}
+   else if(operation==='import-choose'&&form?.type==='new'){
+    const result=await request('import/choose',{path:form.folder??''});
+    if(form?.type==='new'&&!result?.cancelled&&result?.folder){form.folder=result.folder;form.issues=null;if(!form.name)form.name=result.folder.split(/[\\/]/).filter(Boolean).at(-1)??'';render();}
+   }
    else if(operation==='new-page'){if(await beforeLeave(true)){
     form={type:'page',title:'',path:'',customPath:false,designId:'',designQuery:'',designOffset:0,taken:new Set(opened.site.pages.map(page=>page.path.toLowerCase()))};render();
    }}
@@ -1012,6 +1051,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='add-block'||operation==='paragraph'||operation==='heading'){
     const type=operation==='add-block'?document.querySelector('[data-website-file-block]').value:operation;
     if(type==='feed'){await openFeed(element,true);return;}
+    if(type==='download'){downloadDialog();return;}
     if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
     if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
     if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
@@ -1101,6 +1141,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    sourcePane.queue();changed();return true;
   }
   if(element.matches('[data-website-files-confirm]')){paintStatus();return true;}
+  if(form?.type==='new'&&element.closest('[data-website-files-form]')){
+   if(element.dataset.websiteFileField==='name')form.name=element.value;
+   else if(element.matches('[data-website-import-source]')){form.source=element.value;form.issues=null;render();if(form.source==='folder'&&form.native===undefined)void run(loadImportChooser);}
+   else if(element.matches('[data-website-import-folder]')){form.folder=element.value;form.issues=null;}
+   else if(element.matches('[data-website-import-zip]')){form.zipFile=element.files?.[0]??null;form.issues=null;}
+   return true;
+  }
   if(form?.type==='page'&&element.closest('[data-website-files-form]')){
    if(element.dataset.websiteFileField==='pageTitle'){
     form.title=element.value;
@@ -1129,7 +1176,18 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  async function submit(element){if(!element.matches('[data-website-files-form]'))return false;if(!element.reportValidity())return true;await run(async()=>{
   const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result;
-  if(form.type==='new')result=await request('create',{name:value('name'),language:document.documentElement.lang||'en',starter:element.querySelector('[data-website-file-field="starter"]:checked')?.value??'blank'});
+  if(form.type==='new'){
+   const name=value('name'),source=form.source??'blank';
+   if(source==='folder')result=await request('import/folder',{name,directory:form.folder??''});
+   else if(source==='zip'){
+    if(!form.zipFile)return;
+    const header=new TextEncoder().encode(JSON.stringify({name})),size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,header.length);
+    result=await request('import/zip',new Blob([size,header,form.zipFile],{type:'application/octet-stream'}));
+   }
+   else result=await request('create',{name,language:document.documentElement.lang||'en',starter:element.querySelector('[data-website-file-field="starter"]:checked')?.value??'blank'});
+   if(result?.issues){if(form?.type==='new'){form.name=name;form.issues=result;render();}return;}
+   if(result?.skipped)notify(tr('importSkipped',{count:result.skipped}));
+  }
   else if(form.type==='design'){
    result=await designs('name',{expectedRevision:form.revision,name:value('designName')});adoptRelated(result);form=null;mode='pages';pagesPanel.open();return;
   }

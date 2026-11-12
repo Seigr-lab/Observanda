@@ -52,6 +52,7 @@ import {syncSavedAppearance,validateSavedAppearance} from './website-saved-appea
 import {validatePageDesigns} from './website-page-designs.js';
 import {addPageStyle,newPageStylesheet,pageStylesheet,sharedDraftStyle,validatePageStyles} from './website-page-style.js';
 import {preparePublicPageFiles,privateWebsiteNames,publicText,websiteFileReferences} from './website-page-dependencies.js';
+import {publicDownloadNames} from './website-downloads.js';
 import {syncWebsiteThemes,validateWebsiteThemes} from './website-scoped-themes.js';
 import {syncStyleResources,validateStyleResources} from './website-style-resources.js';
 import {validBreakpoints} from './web/website-breakpoint-model.js';
@@ -743,10 +744,10 @@ export class WebsiteFileStore{
   return {revision:manifest.revision,pages:[...site.pages,...(site.feedPages??[])],files:names};
  },{signal});}
  async publicationFiles(manifest,signal,renderPages){
-  const descriptors=new Map(),styles=[],pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest);
+  const descriptors=new Map(),styles=[],pictures=publicPictureNames(manifest),recordings=publicRecordingNames(manifest),downloads=await publicDownloadNames(this,manifest,signal);
   const publicPages=manifest.pages.filter(page=>!page.draft),publicPaths=new Set(publicPages.map(p=>p.path));
   if(manifest.feeds?.some(feed=>feed.unavailable==='capacity'&&publicPaths.has(feed.path)))throw new AppError('WEBSITE_FEED_CAPACITY');
-  for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name)))descriptors.set(file.name,file);
+  for(const file of manifest.files)if(!file.draft&&(!file.entryDisplaySheet||file.name===entryStyleName)&&(!file.picture||pictures.has(file.name))&&(!file.recording||recordings.has(file.name))&&(!file.download||downloads.has(file.name)))descriptors.set(file.name,file);
   for(const row of manifest.publicPageFiles??[])if(descriptors.has(row.file.name))descriptors.set(row.file.name,row.file);
   for(const page of publicPages){
    // A names-only review needs to know whether the shared stylesheet exists.
