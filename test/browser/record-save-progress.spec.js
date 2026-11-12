@@ -23,7 +23,7 @@ test('new record save progress stays readable, preserves newer typing and closes
  // "Writing records and history" stage, to observe a slow save.
  ResearchCatalogue.prototype.historyIndex=function(...args){
   const index=historyIndex.apply(this,args),append=index.append.bind(index);
-  index.append=async(entry,...rest)=>{const title=entry.view?.title;if(title==='Submitted title')await gate;if(fail&&title==='Retry this title')throw new AppError('INVALID');if(title==='Retry this title')return operationStage('unrecognized-nested-stage',{},()=>append(entry,...rest));return append(entry,...rest);};
+  index.append=async(entry,...rest)=>{const title=entry.view?.title;if(title==='Submitted title')await gate;if(fail&&title==='Newer typing')throw new AppError('INVALID');if(title==='Newer typing')return operationStage('unrecognized-nested-stage',{},()=>append(entry,...rest));return append(entry,...rest);};
   return index;
  };
  try{
@@ -42,12 +42,16 @@ test('new record save progress stays readable, preserves newer typing and closes
   expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Submitted title');
   await expect(page.locator('#notice')).toContainText('Newer edits remain unsaved');await expect(page.locator('#notice')).not.toHaveClass(/error/);await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#leave-dialog')).toBeVisible();await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();await expect(title).toHaveValue('Newer typing');
-  await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');
-  await page.locator('#notice').getByRole('button',{name:'Dismiss'}).click();
-  fail=true;await title.fill('Retry this title');await save.click();await expect(save).toBeEnabled();await expect(progress).toHaveCount(0);await expect(title).toHaveValue('Retry this title');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
-  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');
-  const failure=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Check these fields',exact:true})});await expect(failure).toBeVisible();await failure.getByRole('button',{name:'Back to workspace',exact:true}).click();
-  fail=false;await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Retry this title');expect(errors).toEqual([]);
+  // A rejected save keeps the newer typing in the new-record editor and reports the fields to check.
+  const failure=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Check these fields',exact:true})});
+  fail=true;await save.click();await expect(failure).toBeVisible({timeout:15000});await expect(save).toBeEnabled();await expect(progress).toHaveCount(0);await expect(title).toHaveValue('Newer typing');await expect(page.locator('#save-status')).toHaveText('Unsaved changes');
+  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Submitted title');
+  await failure.getByRole('button',{name:'Back to workspace',exact:true}).click();await expect(failure).toHaveCount(0);
+  // The retry saves the newer edit. Once nothing remains unsaved, the record continues in its saved
+  // field-by-field editor, which saves each field on its own and has no record-wide save footer.
+  fail=false;await save.click();await expect(page.locator('#notice')).toContainText('Changes saved.',{timeout:15000});await expect(page.locator('.record-editing h1')).toHaveText('Newer typing');
+  await expect(page.getByRole('button',{name:'Edit Record title',exact:true})).toBeVisible();await expect(title).toBeHidden();await expect(page.locator('#save-status')).toHaveCount(0);await expect(progress).toHaveCount(0);
+  expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');expect(errors).toEqual([]);
  }finally{release();ResearchCatalogue.prototype.historyIndex=historyIndex;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
