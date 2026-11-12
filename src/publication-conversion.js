@@ -289,7 +289,9 @@ export class PublicationConversion{
    if(existing.length||pending.size)await withOwner(async(store,snapshot,{storage,snapshotId})=>{
     if(existing.length){
      const rows=[],metadata=snapshot.metadata;
-     for(const entry of existing){
+     // Live feed reconciliation checks each existing source in website storage; one
+     // writer scope per group replaces a storage scope per entry.
+     const check=async entry=>{
       let {source}=entry;const {provenance}=entry;let repairPermissions=false;
       signal?.throwIfAborted();const context=libraryContext(metadata,provenance),row=await store.member(snapshot,provenance.recordId);
       const captured=source.provenance?.recordRevision??source.provenance?.revision;
@@ -308,6 +310,11 @@ export class PublicationConversion{
       }
       if(refreshHistoricalLive)source=await this.reconcileFeed(store,row,metadata,snapshotId,storage,source,context,signal,{repairPermissions});
       rows.push({source,context});
+     };
+     for(let start=0;start<existing.length;start+=SEED_GROUP){
+      const group=existing.slice(start,start+SEED_GROUP);
+      if(refreshHistoricalLive)await this.files.scope(async()=>{for(const entry of group)await check(entry);},{write:true,signal});
+      else for(const entry of group)await check(entry);
      }
      await this.files.scope(async()=>{
       const fenced=await this.files.pendingSources();
