@@ -13,7 +13,11 @@ import {withRecordDocument} from './record-document.js';
 export async function commitRecordDocument(store,{etag,snapshot,row,document,summaries=[],member=row}){
  const now=new Date().toISOString();document=await document.replace(['updatedAt'],now);
  const readiness=new RunReadiness(store.workspace);
+ // Identify collections by their stored subtree, so unchanged ones need no format inspection.
+ const part=async(target,path)=>{const value=await target.tree.select(target.root,path);return JSON.stringify(value?value.inline?{inline:value.value}:{revision:value.revision}:null);};
+ const paths=[['figures'],['sections'],['results','statements']],previousParts=new Map();
  const admit=async previous=>{
+  if(previous)for(const path of paths)previousParts.set(path.join('/'),await part(previous,path));
   const header=await operationStage('validate-records',{},()=>validateRecordDocument(document,snapshot.metadata,{summaries,admitted:previous}));
   await readiness.documentCompletion(previous,document,header,snapshot.metadata);return header;
  };
@@ -24,7 +28,7 @@ export async function commitRecordDocument(store,{etag,snapshot,row,document,sum
  const nextEtag=digest('Observanda/catalogue-snapshot/'+randomUUID()),ordinal=(await store.db.get('SELECT MAX(ordinal)+1 AS n FROM snapshots')).n;
  // One record and its history entry: report them as the counted "write records and history" stage.
  await operationStage('write-records',{total:1,unit:'records'},async()=>{
-  const fresh=await retainStoredDocument(store,document,encoding);
+  const fresh=await retainStoredDocument(store,document,encoding,{unchanged:async path=>previousParts.has(path.join('/'))&&previousParts.get(path.join('/'))===await part(document,path)});
   await store.historyIndex(header.id).append({revision:encoding.revision,snapshotId:nextEtag,view:{revision:encoding.contentRevision,title:header.title,status:header.status,updatedAt:now}},{fresh,initialize:!row});
   operationAdvance();
  });

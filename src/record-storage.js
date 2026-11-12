@@ -89,23 +89,26 @@ export async function readStoredRecord(store,id,revision){
   if(record.id!==id||record.notebookId!==value.notebookId||recordEncoding(record).revision!==revision)fail();return record;
  });
 }
-export async function retainStoredDocument(store,document,encoding){
+// A collection the previous revision already stored unchanged was admitted with it.
+// Format checks inspect only collections this save changed.
+export async function retainStoredDocument(store,document,encoding,{unchanged=async()=>false}={}){
  const id=(await document.field(['id'])).value,scopeId=(await document.field(['notebookId'])).value,{blocks}=document;
  if(blocks.store!==store||scopeId!==blocks.scopeId)throw new AppError('INVALID');
  const revision=encoding.revision;
- if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
- if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))&&await plotResourceFigureDocument(document))await requireFigureProjectionPolicies(store.db);
- if(!catalogueRequiresApproximateCalculator(await catalogueFormat(store.db))&&await approximateFigureDocument(document))await requireApproximateCalculator(store.db);
- if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&await authoredFigureDocument(document))await requireFigureAuthoring(store.db);
- if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&await retainedFigureDocument(document))await requireRetainedFigures(store.db);
+ const figuresChanged=!await unchanged(['figures']);
+ if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&figuresChanged&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
+ if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))&&figuresChanged&&await plotResourceFigureDocument(document))await requireFigureProjectionPolicies(store.db);
+ if(!catalogueRequiresApproximateCalculator(await catalogueFormat(store.db))&&figuresChanged&&await approximateFigureDocument(document))await requireApproximateCalculator(store.db);
+ if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&figuresChanged&&await authoredFigureDocument(document))await requireFigureAuthoring(store.db);
+ if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&figuresChanged&&await retainedFigureDocument(document))await requireRetainedFigures(store.db);
  const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
  if(present){await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:true});return false;}
  // Only inspect permission fields until this owner requires the new reader.
  // Large section bodies remain referenced; subsequent saves skip this pass.
- if(!catalogueRequiresSourcePublicationControls(await catalogueFormat(store.db)))for await(const section of document.items(['sections'])){
+ if(!catalogueRequiresSourcePublicationControls(await catalogueFormat(store.db))&&!await unchanged(['sections']))for await(const section of document.items(['sections'])){
   if((await document.tree.selected(section.value,['share'])).found){await requireSourcePublicationControls(store.db);break;}
  }
- if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))await requirePagedResearchTables(store.db);
+ if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&!await unchanged(['results','statements'])&&await pagedTableDocument(document))await requirePagedResearchTables(store.db);
  await requireRecordBlocks(store.db);if(await document.reference(['attempt'])&&document.attemptIndex?.source!==await document.reference(['attempt']))await requireNestedAttemptCollections(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
  const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
  const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();
