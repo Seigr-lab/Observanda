@@ -10,6 +10,7 @@ import {openQueryCacheFiles,verifiedQueryCacheNamespace} from '../src/query-cach
 import {QueryResultSort,QueryCachePressure} from '../src/query-result-sort.js';
 import {withStagingAuthority} from '../src/staging-reservations.js';
 import {diskCapacity} from '../src/disk-capacity.js';
+import {workspaceFiles} from '../src/workspace-inventory.js';
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-query-cache-'));await mkdir(path.join(root,'.observanda'));const workspace={root,vault:{id:randomUUID(),key:randomBytes(32)},cleanup:[]};t.after(async()=>{const results=await Promise.allSettled(workspace.cleanup.map(value=>value.close()));workspace.vault.key.fill(0);await rm(root,{recursive:true,force:true});for(const result of results)if(result.status==='rejected')throw result.reason;});return workspace;}
 
 test('query cache allocations honor durable staging claims and recover after their retirement',async t=>{
@@ -52,4 +53,14 @@ test('substituted internal directory cannot redirect cache reads, writes or clea
  await rename(internal,retained);const external=path.join(internal,'query-cache',files.id);await mkdir(external,{recursive:true});await writeFile(path.join(external,'a.data'),'external retained data');
  await assert.rejects(files.assertNamed(),QueryCachePressure);assert.equal((await files.read('a.data',0,24)).toString(),'original encrypted bytes');await files.write('a.data',0,Buffer.from('original encrypted bytes'));await files.close();
  assert.equal(await readFile(path.join(external,'a.data'),'utf8'),'external retained data');assert.equal(await verifiedQueryCacheNamespace(workspace.root,workspace.vault),false);assert.equal((await readdir(path.join(retained,'query-cache'))).includes(files.id),false);
+});
+test('an inventory given the owner key leaves a proved folder-bound query cache out of copies',async t=>{
+ const workspace=await fixture(t);await writeFile(path.join(workspace.root,'observanda.json'),'{}');
+ const files=await openQueryCacheFiles(workspace);workspace.cleanup.push(files);await files.write('a.data',0,Buffer.from('cached encrypted frame'));
+ const listed=async options=>(await Array.fromAsync(workspaceFiles(workspace.root,{hashFiles:false,includeDatabase:false,...options}))).map(file=>file.path);
+ // Without a key the cache cannot be proved, so it stays ordinary data.
+ assert.equal((await listed()).some(name=>name.startsWith('.observanda/query-cache/')),true);
+ const keyed=await listed({vault:workspace.vault});
+ assert.equal(keyed.some(name=>name.startsWith('.observanda/query-cache/')),false);assert.equal(keyed.includes('observanda.json'),true);
+ await files.close();
 });

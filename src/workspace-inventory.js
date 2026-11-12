@@ -24,7 +24,9 @@ export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  return reportProgress?operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},run):run();
 }
 // A caller that holds the owner's key passes it as vault, so a document owner's
-// staging namespace is verified like a catalogue owner's held one.
+// staging namespace and an owner's query cache are verified like a catalogue
+// owner's held ones. Both are bound to the folder that holds them: a copy
+// never carries them, and a fresh-key copy never tries to re-encrypt them.
 export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],excludeProject,readPool,vault=null}={}){
  const excluded=new Set();
  for(const projectRoot of projectRoots){const relative=path.relative(root,projectRoot);if(!relative||relative==='.observanda'||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new AppError('STORAGE_PATH');excluded.add(relative.split(path.sep).join('/'));}
@@ -42,8 +44,8 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
     // complete contents travel through the transactional catalogue archive.
     if(relative!=='.observanda'&&path.posix.basename(relative.replace(/\/$/,''))==='.observanda'&&item.name==='postgresql')throw new AppError('DATABASE_LOCATION');
     if(relative==='.observanda'&&item.name==='query-cache'){
-     await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore();
-     if(held?.root===root){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,held.vault))continue;}
+     await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore(),key=held?.root===root?held.vault:vault;
+     if(key){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,key))continue;}
     }
     if(relative==='.observanda'&&['staging-reservations','.staging-reservations.lock'].includes(item.name)){
      await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore(),key=held?.root===root?held.vault:vault;
