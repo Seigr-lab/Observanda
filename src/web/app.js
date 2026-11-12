@@ -530,7 +530,10 @@ async function navigateResearch(target,{origin:providedOrigin}={}){
 }
 const displayedRecord=()=>state.page==='record-reader'?recordContent.current():entry();
 const recordActivity=recordActivityUI({getRecord:displayedRecord,state,api,esc,field,showDialog,notify,render,dirty:()=>dirtyRecord(),revisions:()=>state.page==='record-reader'?{[state.selected]:recordContent.savedRevision()}:savedRecordRevisions,create:addEntry,relationSaved:async()=>{await workspaceLive.check();render();}});
-const recordStarters=recordStartersUI({state,api,esc,showDialog,notify,sourceRecord:()=>state.page==='record-reader'?recordContent.captureTarget():null,openRecord:id=>rawAction({dataset:{action:'edit-entry',id}})});
+const recordStarters=recordStartersUI({state,api,esc,showDialog,notify,sourceRecord:()=>state.page==='record-reader'?recordContent.captureTarget():null,openRecord:id=>rawAction({dataset:{action:'edit-entry',id}}),
+  openRecordDraft:record=>openCreatedRecord(record),openBook:(projectId,setup)=>structureUI.notebooks.openTaskBook(projectId,setup),
+  chooseDestination:(book,start)=>recordDestination.open({projectOnly:book,heading:t('recordStarters',book?'taskBrowseProjects':'taskBrowseBooks'),
+    selected:async(projectId,bookId,legacy)=>{await projectOwners.enter(legacy?null:projectId,legacy?null:bookId);await start(book?projectId:bookId);}})});
 const workflow=recordWorkflowUI({getRecord:displayedRecord,state,api,esc,notify,revisions:()=>savedRecordRevisions,create:openCreatedRecord});
 const recordDetails=recordDetailsUI({state,esc,field,dirty:()=>dirtyRecord(),render,showDialog,notify,navigate:navigateResearch,api});
 const bookReferences=bookReferenceUI({state,api,esc,showDialog,notify,revisions:()=>savedRecordRevisions});

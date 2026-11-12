@@ -23,6 +23,8 @@ export function recordDestinationUI({state,api,esc,field,showDialog,rootBook,acc
   const select=node.querySelector('[name=recordProject]');
   select.innerHTML='<option value="">'+esc(text('chooseProject'))+'</option>'+projects().map(row=>'<option value="'+esc(row.projectId)+'">'+esc(title(row))+'</option>').join('');
   select.value=active.projectId??'';choices.paint(node,active.kind);
+  const confirm=node.querySelector('[data-action="record-destination-project"]');
+  if(confirm)confirm.disabled=!active.projectId;
  }
  function paintBooks(){
   const node=host(),entry=active;if(!node||!entry)return;
@@ -50,20 +52,28 @@ export function recordDestinationUI({state,api,esc,field,showDialog,rootBook,acc
   }finally{if(current(entry,request)){if(authorize&&!host()){present();paintProjects();}entry.authorizing=false;entry.loading=false;paintBooks();}}
  }
  function present(){
-  showDialog('<form data-no-draft data-record-destination><h2 id="dialog-title">'+esc(active.heading??text('chooseBook'))+'</h2>'+field(text('destinationProject'),'<select name="recordProject"></select>')+choices.view(active.kind)+'<div class="record-type-grid" data-record-destination-books></div><p data-record-destination-status role="status"></p><button type="button" class="button" data-action="record-destination-retry" hidden>'+esc(text('retryBooks'))+'</button><button type="button" class="button" data-action="record-destination-more" hidden>'+esc(text('moreBooks'))+'</button><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">'+esc(text('cancel'))+'</button></div></form>');
+  const books='<div class="record-type-grid" data-record-destination-books></div><p data-record-destination-status role="status"></p><button type="button" class="button" data-action="record-destination-retry" hidden>'+esc(text('retryBooks'))+'</button><button type="button" class="button" data-action="record-destination-more" hidden>'+esc(text('moreBooks'))+'</button>';
+  const confirm=active.projectOnly?'<button type="button" class="button primary" data-action="record-destination-project">'+esc(text('chooseProject'))+'</button>':'';
+  showDialog('<form data-no-draft data-record-destination><h2 id="dialog-title">'+esc(active.heading??text('chooseBook'))+'</h2>'+field(text('destinationProject'),'<select name="recordProject"></select>')+choices.view(active.kind)+(active.projectOnly?'':books)+'<div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">'+esc(text('cancel'))+'</button>'+confirm+'</div></form>');
  }
- function open({heading,selected:onSelected,cancelled,filter,kind='record-parents'}={}){
+ function open({heading,selected:onSelected,cancelled,filter,kind='record-parents',projectOnly=false}={}){
   reset();const candidate=state.project??state.projectOwner?.projectId??null,id=kind==='book-parents'&&!state.projectOwner?null:candidate,project=state.book.projects.find(row=>row.id===id);
-  active={heading,selected:onSelected,cancelled,filter,kind,context:state.storage?.contextId,route:location.hash,projectId:id,initial:project?{projectId:id,summary:{title:project.title},legacy:!state.projectOwner}:null,items:[],next:null,revision:null,request:0,loading:false,error:''};
+  active={heading,selected:onSelected,cancelled,filter,kind,projectOnly,context:state.storage?.contextId,route:location.hash,projectId:id,initial:project?{projectId:id,summary:{title:project.title},legacy:!state.projectOwner}:null,items:[],next:null,revision:null,request:0,loading:false,error:''};
   present();
   const opened=++generation;dialog().addEventListener('close',()=>{if(generation===opened&&!active?.authorizing&&!dialog().open)reset();},{once:true});
-  choices.start(null,{recordParents:kind==='record-parents',bookParents:kind==='book-parents',templates:false});paintProjects();void loadBooks();
+  choices.start(null,{recordParents:kind==='record-parents',bookParents:kind==='book-parents',templates:false});paintProjects();if(!projectOnly)void loadBooks();
  }
  return {open,reset,
-  input(element){if(!element.closest?.('[data-record-destination]'))return false;if(choices.input(element))return true;if(element.name!=='recordProject')return false;active.projectId=element.value||null;void loadBooks();return true;},
+  input(element){if(!element.closest?.('[data-record-destination]'))return false;if(choices.input(element))return true;if(element.name!=='recordProject')return false;active.projectId=element.value||null;if(active.projectOnly)paintProjects();else void loadBooks();return true;},
   async action(node){
    if(!node.closest?.('[data-record-destination]'))return false;
+   if(!active||active.context!==state.storage?.contextId||active.route!==location.hash){reset();if(host())dialog().close();return true;}
    if(await choices.action(node))return true;
+   if(active?.projectOnly&&node.dataset.action==='record-destination-project'){
+    const {projectId,selected:onSelected,initial}=active,project=choices.known(projectId)??initial;
+    if(!project||projectId!==project.projectId)return true;
+    reset({cancel:false});dialog().close();await onSelected(projectId,null,project.legacy===true);return true;
+   }
    if(node.dataset.action==='record-destination-more'){if(!active.loading)await loadBooks({more:true});return true;}
    if(node.dataset.action==='record-destination-retry'){if(!active.loading)await loadBooks({authorize:active.locked});return true;}
    if(node.dataset.action!=='record-destination-book')return false;

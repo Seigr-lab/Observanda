@@ -8,6 +8,7 @@ import './i18n/catalogues/workspaceViews.js';
 import {labBookProfileLabel} from './project-type-presentation.js';
 import {projectSettings} from './project-settings.js';
 import {newLabBookConfiguration,templateAvailable,templateChoices,starterTemplate,retainedTemplateAvailable} from './project-templates.js';
+import {taskBookConfiguration} from './task-starters.js';
 import {isConfigurationReference} from './configuration-reference.js';
 import {enabledLabBookTypes} from './feature-modules.js';
 import {enableProfile,profileById,profileUpgrade,profileUpgradeReview,upgradeProfile} from './laboratory/catalog.js';
@@ -29,13 +30,14 @@ export function projectNotebooksUI(services){
  const available=template=>isConfigurationReference(template?.configuration)?templateAvailability.get(template)===true:templateAvailable(template,state.dashboardSettings);
  const configuration=configurationEditor({...services,draw:()=>{if(editing&&active())draw();},root:()=>active()?.querySelector('[data-configuration-editor]')});
  const sourceReader=configurationDocumentClient({state,api});
- let baseTemplate='blank',creationAccess=null;
+ let baseTemplate='blank',creationAccess=null,taskBook=null;
  const attrs=route=>Object.entries(route).map(([key,value])=>'data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+esc(value)+'"').join(' ');
  const directory=(id,options)=>notebookDirectory(state.book,id,{...options,types:profileLabels.types,counts:state.workspaceOutline?.notebookCounts??state.recordScope?.notebookCounts});
  const recordCount=id=>(state.workspaceOutline?.notebookCounts??state.recordScope?.notebookCounts)?.[id]??state.book.entries.filter(e=>e.notebookId===id).length;
  const active=()=>editing&&document.querySelector('#dialog[open] #notebook-config-form');
  function applyTemplate(){
   if(native())return;
+  if(templateChoice==='task'){editing.configuration=structuredClone(taskBook.configuration);return;}
   const template=templateChoice==='default'?state.book.projects.find(p=>p.id===editing.projectId)?.labBookTemplate:
    templateChoice.startsWith('profile:')?starterTemplate(templateChoice.slice(8)):
    templateChoices(state.book,state.dashboardSettings).find(p=>'project:'+p.id===templateChoice)?.template;
@@ -63,6 +65,7 @@ export function projectNotebooksUI(services){
   const remote=native()?(services.projectDirectory?.entries()??[]).filter(entry=>entry.summary?.templateName&&!local.some(p=>p.id===entry.projectId)).map(entry=>({id:entry.projectId,label:entry.summary.templateName+' / '+entry.summary.title})):[];
   const profiles=enabledLabBookTypes(settings),saved=[...local,...remote].filter(p=>p.id!==editing.projectId||templateChoice==='project:'+p.id);
   return field(msg('labBookTemplate'),`<select data-notebook-template ${templateLoading||templateError?'disabled':''}>
+   ${taskBook?option('task',t('recordStarters','task_'+taskBook.id),templateChoice):''}
    ${available(template)?option('default',msg('projectDefault',{name:template.name}),templateChoice):''}
    ${option('blank',msg('blankBook'),templateChoice)}
    ${profiles.length?'<optgroup label="'+text('enabledTypes')+'">'+profiles.map(p=>option('profile:'+p.id,labBookProfileLabel(p.id,p.label),templateChoice)).join('')+'</optgroup>':''}
@@ -115,7 +118,7 @@ export function projectNotebooksUI(services){
   }catch(error){if(editing!==draft||state.book!==book||!active()||error.name==='AbortError')return;capture();templateError=error;}
   finally{reader.stop();if(templateController===controller)templateController=null;if(editing===draft&&state.book===book&&active()){templateLoading=false;draw();}}
  }
- async function openNotebook(id,projectId){
+ async function openNotebook(id,projectId,setup=null){
   const current=state.book.notebooks.find(n=>n.id===id),owner=projectId??state.project??state.book.projects[0]?.id,template=state.book.projects.find(p=>p.id===owner)?.labBookTemplate;
   templateController?.abort();templateAvailability=new WeakMap();templateLoading=false;templateError=null;
   creating=!current;creationId=crypto.randomUUID();followProjectDefault=true;templateChoice=available(template)?'default':'blank';baseTemplate=templateChoice;
@@ -123,6 +126,8 @@ export function projectNotebooksUI(services){
   configuration.stop();sourceReader.stop();
   if(native()){const {configuration:ignored,...header}=current??{id:crypto.randomUUID(),title:'',projectId:owner};void ignored;editing=structuredClone(header);}
   else {editing=structuredClone(current??{id:crypto.randomUUID(),title:'',projectId:owner,configuration:newLabBookConfiguration(template,state.dashboardSettings)});editing.configuration=structuredClone(configurationOf(editing));}
+  taskBook=setup?{id:setup.starterId,configuration:taskBookConfiguration(setup.sections,()=>crypto.randomUUID())}:null;
+  if(taskBook){templateChoice=baseTemplate='task';followProjectDefault=false;editing.title=setup.title;editing.share=false;editing.sharePdf=false;applyTemplate();}
   base=structuredClone(editing);
   templateLoading=native()&&creating&&state.book.projects.some(project=>isConfigurationReference(project.labBookTemplate?.configuration));
   etag=state.etag;selected=null;draw(true);
@@ -227,7 +232,8 @@ export function projectNotebooksUI(services){
        const result=await services.accessProject(()=>sourceReader.open({workspaceId:response.metadata.id,projectId,notebookId:null,slot:'labBookTemplate'},{owner:projectId,saved:true}));source=result.configurationPin;
       }
      }
-     selectedConfiguration={configurationSource:source};
+     if(templateChoice==='task')value.configuration=structuredClone(taskBook.configuration);
+     else selectedConfiguration={configurationSource:source};
     }else selectedConfiguration=await configuration.checkpoint();
    }
    if(creating&&state.projectOwner){
@@ -250,6 +256,11 @@ export function projectNotebooksUI(services){
   render();notify(msg('bookSaved'));return true;
  }
  return {directory,card,action,input,submit,attrs,route:notebookRoute,types:profileLabels.types,bind:profileLabels.bind,
+  async openTaskBook(projectId,setup){
+   if(!state.book.projects.some(project=>project.id===projectId))throw Error(msg('createProjectFirst'));
+   if(state.projectOwner)await services.accessProject(()=>services.enterProject(projectId));
+   await openNotebook(null,projectId,setup);
+  },
   generalRecords:id=>recordsIn(state.book,id),isDirty:()=>isDirty()||projects.isDirty(),
   async save(){await projects.save();if(editing&&!active()){deleting=null;draw(true);}const form=active();if(form)await submit(form,new FormData(form));},
   async discard(){templateController?.abort();await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=creationAccess=null;},async close(){templateController?.abort();await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=creationAccess=null;}};

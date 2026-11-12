@@ -5,10 +5,11 @@ import {renderProse} from './prose-model.js';
 import {documentEditors} from './document-editor.js';
 import {recordStarterCapture} from './record-starter-capture.js';
 import {recordStarterPages} from './record-starter-pages.js';
+import {taskStartersUI} from './task-starters-ui.js';
 import {sha256} from './vendor/sha256.js';
 import {language as appLanguage} from './i18n/index.js';
 const msg=(key,args)=>t('recordStarters',key,args);
-export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sourceRecord=()=>null}){
+export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,openRecordDraft,openBook,chooseDestination,sourceRecord=()=>null}){
  let context,workspaceId,generation=0,requesting=false,items=[],next=null,pageCursor=null,previousPages=[],current=null,versions=[],historyCursor=null,selected=null,notebookId=null,imported=null,source=null,newBody='';
  const dialog=()=>document.querySelector('#dialog'),text=(k,a)=>esc(msg(k,a));
  const valid=()=>context===state.storage?.contextId&&workspaceId===state.book?.id&&!state.access?.locked;
@@ -16,19 +17,30 @@ export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sou
  const editors=documentEditors({context:()=>generation,destinations:()=>[],figures:()=>[],onError:e=>notify(e,true)});
  const pages=recordStarterPages({request,esc,frame,notify,onBack:async()=>{if(imported)await importReview();else await open(current.header.id);}});
  const sourceCapture=recordStarterCapture({api,esc,frame,valid,onPrepared:async value=>{current=value;await pages.start({id:value.header.id,release:null},{editing:true});}});
+ const tasks=taskStartersUI({state,esc,tr:msg,dialog,frame,openRecordDraft,openBook,chooseDestination,selectedNotebook:()=>notebookId});
  const button=(key,action,extra='')=>'<button type="button" class="button" data-action="starter-'+action+'" '+extra+'>'+text(key)+'</button>';
  const field=(label,control)=>'<label class="field">'+text(label)+control+'</label>';
  const close=()=>button('close','close'),back=()=>button('back','list');
  function frame(title,html,keepEditors=false){if(!keepEditors)editors.release();showDialog('<section class="record-starters"><h2 id="dialog-title" tabindex="-1">'+esc(title)+'</h2>'+html+'</section>');dialog().querySelector('h2').focus();}
  async function request(operation,data){guard();const serial=generation;requesting=true;try{const result=await api('/api/research/starters/'+operation,{workspaceId,...data},{adopt:false});guard();if(serial!==generation)throw Error(msg('reopen'));return result;}finally{requesting=false;}}
- function listView(){
-  frame(msg('library'),'<p>'+text('description')+'</p><div class="inline-actions">'+button('new','new')+(source?button('capture','capture')+button('origin','origin'):'')+button('import','import')+'</div><ul>'+items.map(v=>'<li><h3>'+esc(v.name)+'</h3><p>'+text(v.status)+' · '+(v.latest?text('released',{number:v.sequence}):text('draft'))+(v.latest&&v.draftHash!==v.releasedDraftHash?' · '+text('unreleased'):'')+'</p>'+button('open','open','data-id="'+v.id+'"')+'</li>').join('')+'</ul>'+(items.length?'':'<p>'+text('empty')+'</p>')+'<div class="dialog-actions">'+(previousPages.length?button('previous','previous'):'')+(next?button('next','next'):'')+close()+'</div>');
+ function savedTemplates(){
+  return '<ul>'+items.map(v=>'<li><h3>'+esc(v.name)+'</h3><p>'+text(v.status)+' · '+(v.latest?text('released',{number:v.sequence}):text('draft'))+(v.latest&&v.draftHash!==v.releasedDraftHash?' · '+text('unreleased'):'')+'</p>'+button('open','open','data-id="'+v.id+'"')+'</li>').join('')+'</ul>'+(items.length?'':'<p>'+text('empty')+'</p>')+'<div class="inline-actions">'+(previousPages.length?button('previous','previous'):'')+(next?button('next','next'):'')+'</div>';
  }
- async function list(cursor=null,{reset=true}={}){pages.stop();const page=await request('list',{cursor});if(reset)previousPages=[];pageCursor=cursor;items=page.items;next=page.next;listView();}
+ async function list(cursor=null,{reset=true}={}){
+  pages.stop();if(reset)previousPages=[];pageCursor=cursor;
+  frame(msg('library'),tasks.library()+'<h3>'+text('taskSavedTemplates')+'</h3><p>'+text('description')+'</p><div class="inline-actions">'+button('new','new')+(source?button('capture','capture')+button('origin','origin'):'')+button('import','import')+'</div><div data-saved-starters><p role="status">'+text('loading')+'</p></div><div class="dialog-actions">'+close()+'</div>');
+  tasks.bind();guard();
+  const target=dialog().querySelector('[data-saved-starters]'),serial=generation;
+  const active=()=>target.isConnected&&dialog().open&&serial===generation&&valid();
+  try{
+   const page=await api('/api/research/starters/list',{workspaceId,cursor},{adopt:false});
+   if(!active())return;items=page.items;next=page.next;target.innerHTML=savedTemplates();
+  }catch(error){if(active())target.innerHTML='<p role="alert">'+esc(error.message)+'</p>'+button('retry','list');}
+ }
  async function launch(control){
-  sourceCapture.stop();pages.stop();context=state.storage?.contextId;workspaceId=state.book.id;notebookId=control.dataset.notebook??(state.notebook==='all'?null:state.notebook);source=sourceRecord()??(state.page==='editor'?{id:state.selected,snapshotId:state.etag}:null);const serial=++generation;
-  frame(msg('library'),'<p role="status">'+text('loading')+'</p>'+close());
-  try{await list();}catch(e){if(serial===generation&&valid()&&dialog().open)frame(msg('library'),'<p role="alert">'+esc(e.message)+'</p>'+button('retry','list')+close());}
+  tasks.reset();
+  sourceCapture.stop();pages.stop();context=state.storage?.contextId;workspaceId=state.book.id;notebookId=control.dataset.notebook??(state.notebook==='all'?null:state.notebook);source=sourceRecord()??(state.page==='editor'?{id:state.selected,snapshotId:state.etag}:null);generation++;
+  await list();
  }
  async function releasedView(id,revision){const view=await request('view',{id,release:revision,offset:0}),body=await request('field',{id,release:revision,field:'body',position:0});return {...view,...view.release,body:body.value};}
  async function open(id){pages.stop();current=await request('view',{id,release:null,offset:0});const history=await request('history',{id,cursor:null});versions=history.items;historyCursor=history.next;selected=current.header.latest?await releasedView(id,current.header.latest):null;detail();}
@@ -63,6 +75,7 @@ export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sou
   }finally{hash.destroy();}
  }
  async function action(control){const name=control.dataset.action;if(name==='starter-library'){await launch(control);return true;}if(!name?.startsWith('starter-'))return false;guard();if(requesting&&name!=='starter-close')return true;if(await sourceCapture.action(control)||await pages.action(control))return true;sourceCapture.stop();
+  if(name==='starter-task-preview'){tasks.preview(control.dataset.task);return true;}
   if(name==='starter-close')dialog().close();
   if(name==='starter-list'){if(imported){await request('discard',{uploadId:imported.uploadId});imported=null;}await list();}
   if(name==='starter-next'){previousPages.push(pageCursor);await list(next,{reset:false});}if(name==='starter-previous')await list(previousPages.pop()??null,{reset:false});
@@ -79,7 +92,7 @@ export function recordStartersUI({state,api,esc,showDialog,notify,openRecord,sou
   return true;
  }
  async function submit(form){if(!form.id.startsWith('starter-'))return false;if(await sourceCapture.submit(form))return true;if(form.dataset.busy||requesting)return true;guard();form.dataset.busy='true';const buttons=[...form.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
-  try{if(await pages.submit(form))return true;const data=new FormData(form);
+  try{if(await tasks.submit(form)||await pages.submit(form))return true;const data=new FormData(form);
    if(form.id==='starter-edit-form'){const type=data.get('type'),draft={name:data.get('name'),title:data.get('title'),type,body:newBody,tags:[],sections:RECORD_TYPES.find(t=>t.id===type).sections.map(title=>({title,body:''}))};const result=await request('save',{id:form.dataset.id??=crypto.randomUUID(),expectedRevision:null,draft});current=result;notify(msg('saved'));frame(result.header.name,'<p>'+text('saved')+'</p><div class="dialog-actions">'+button('edit','edit')+button('release','release')+back()+'</div>');}
    if(form.id==='starter-release-form'){await request('publish-selected',{id:current.header.id,expectedRevision:current.header.revision,note:data.get('note').trim()});await open(current.header.id);}
    if(form.id==='starter-use-form'){const notebook=data.get('notebook');if(!notebook)throw Error(msg('notebookMissing'));const result=await request('create',{id:current.header.id,release:selected.revision,recordId:form.dataset.id??=crypto.randomUUID(),notebookId:notebook});dialog().close();await openRecord(result.recordId);notify(msg('created'));}

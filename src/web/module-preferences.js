@@ -26,5 +26,5 @@ export function modulePreferences(services){
 }
 export function templatePreferences(services){
  const {esc}=services;
- return `<section class="desk-modules"><h2>${esc(t('templatePreferences','title'))}</h2><p>${esc(t('templatePreferences','intro'))}</p><div role="group" aria-label="${esc(t('templatePreferences','title'))}">${branches(services,moduleChildren('research'))}</div></section>`;
+ return `<section class="desk-modules"><h2>${esc(t('templatePreferences','title'))}</h2><button class="button" data-action="starter-library">${esc(t('recordStarters','taskLibrary'))}</button><p>${esc(t('templatePreferences','intro'))}</p><div role="group" aria-label="${esc(t('templatePreferences','title'))}">${branches(services,moduleChildren('research'))}</div></section>`;
 }
