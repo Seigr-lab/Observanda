@@ -4,6 +4,7 @@ import {digest,serialize} from './storage-format.js';
 import {sampleInterval} from './web/sample-result-numerics.js';
 import {sampleScalarFields} from './web/sample-result-format.js';
 import {validSampleSources} from './web/sample-result-references.js';
+import {validRunQuality} from './sample-run-quality.js';
 const text = (v, max = 500, required = true) => typeof v === 'string' && v.length <= max && (!required || v.trim()) && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(v);
 const keys = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(k => expected.includes(k)) && expected.every(k => Object.hasOwn(value, k));
 const id = v => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(v);
@@ -31,7 +32,7 @@ export function resultFlag(r) {
   if (!flag) fail();
   return {below: 'Below interval', above: 'Above interval', within: 'Within interval', noInterval: 'No interval specified'}[flag];
 }
-const resultHash = (a, sample) => digest(serialize({ code: a.code, sample, result: a.result }));
+const resultHash = (a, sample) => digest(serialize({ code: a.code, sample, result: a.result, ...(a.runQuality?{runQuality:a.runQuality}:{}) }));
 export function validateSampleAnalysisEvent(event,previous){
  if (!keys(event, ['id', 'at', 'action', 'recordId', 'actor', 'reason', 'previous', 'hash']) || !id(event.id) || !id(event.recordId) || !Number.isFinite(Date.parse(event.at)) || !text(event.action, 80) || !text(event.actor, 160, false) || !text(event.reason, 2000, false) || event.previous !== previous) fail();
  const {hash,...payload}=event;if(hash!==digest(serialize(payload)))fail();
@@ -44,7 +45,7 @@ export function validateLab(lab,{bounded=true}={}) {
   const sampleIds = new Set(ids);
   codes.clear();
   for (const a of lab.analyses) {
-    if (!keys(a, ['id', 'code', 'sampleId', 'result', 'status', 'review', 'updatedAt']) || !id(a.id) || ids.has(a.id) || !text(a.code, 80) || codes.has(a.code.toLowerCase()) || !sampleIds.has(a.sampleId) || !['draft', 'in review', 'approved', 'rejected', 'archived'].includes(a.status) || !Number.isFinite(Date.parse(a.updatedAt))) fail();
+    if (!keys(a, ['id', 'code', 'sampleId', 'result', 'status', 'review', 'updatedAt',...(Object.hasOwn(a??{},'runQuality')?['runQuality']:[])]) || Object.hasOwn(a,'runQuality')&&!validRunQuality(a.runQuality) || !id(a.id) || ids.has(a.id) || !text(a.code, 80) || codes.has(a.code.toLowerCase()) || !sampleIds.has(a.sampleId) || !['draft', 'in review', 'approved', 'rejected', 'archived'].includes(a.status) || !Number.isFinite(Date.parse(a.updatedAt))) fail();
     ids.add(a.id); codes.add(a.code.toLowerCase()); validateResult(a.result);
     if (a.review !== null) {
       const r = a.review;
@@ -64,14 +65,15 @@ export function validateLab(lab,{bounded=true}={}) {
 }
 
 
-export function applySampleAnalysisCommand(data,{existing=null,sourceSample=null,now=new Date().toISOString()}={}){
+export function applySampleAnalysisCommand(data,{existing=null,sourceSample=null,now=new Date().toISOString(),runQuality=null}={}){
       let record, actor = '', reason = '';
       if (data.action === 'create-sample') {
         if (!keys(data, ['etag', 'action', 'sample'])) fail();
         record = { ...data.sample, id: randomUUID() }; validateSample(record);
       } else if (data.action === 'create-analysis') {
-        if (!keys(data, ['etag', 'action', 'analysis']) || !keys(data.analysis, ['code', 'sampleId', 'result'])) fail();
-        record = { ...data.analysis, id: randomUUID(), status: 'draft', review: null, updatedAt: now };
+        if (!keys(data, ['etag', 'action', 'analysis']) || !keys(data.analysis, ['code', 'sampleId', 'result',...(runQuality?['runInputs']:[])])) fail();
+        const {code,sampleId,result}=data.analysis;
+        record = {code,sampleId,result,id:randomUUID(),status:'draft',review:null,updatedAt:now,...(runQuality?{runQuality}:{})};
       } else {
         record = existing ? structuredClone(existing) : null; if (!record) fail();
         if (data.action === 'save-result') {

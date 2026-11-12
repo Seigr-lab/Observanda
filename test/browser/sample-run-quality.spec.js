@@ -1,0 +1,81 @@
+import {test,expect} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {sampleNotebook} from '../../src/sample.js';
+import {Laboratory} from '../../src/laboratory.js';
+import {SampleAnalysisReader} from '../../src/sample-analysis-reader.js';
+import {workspaceModules} from '../../src/modules/index.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {defaultDashboard} from '../../src/web/dashboard-model.js';
+import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {startServer} from '../../src/server.js';
+
+const policy=(overrides={})=>({reserve:'warn',use:'warn',run:'warn',...overrides});
+test('an analysis run records the lots and equipment it used with their readiness at run start',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(12000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-run-quality-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
+ const modules=workspaceModules(f.workspace),cmd=(action,payload)=>modules.execute({workspaceId:book.id,commandId:randomUUID(),action,payload});
+ const create=async(name,kind,quality)=>{const id=randomUUID();await cmd('resource.create',{id,data:{projectId:null,placementId:null,name,code:'',kind,description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:kind==='material'?'mL':'',capacity:1,status:'available',links:[],...(quality?{quality}:{})},openingStock:{quantity:kind==='material'?'100':'0',projectId:null}});return id;};
+ const instrument=await create('UV-Vis spectrophotometer','equipment',{version:1,kind:'equipment',certificate:null,coverage:null,holdReason:'',policy:policy()});
+ await create('Blocked balance','equipment',{version:1,kind:'equipment',certificate:null,coverage:null,holdReason:'',policy:policy({run:'block'})});
+ const buffer=await create('Reference buffer','material',{version:1,kind:'lot',number:'LOT-77',supplier:'Synthetic supplier',evidence:null,expiresOn:'2099-12-31',retestOn:null,holdReason:'',policy:policy()});
+ await create('Plain beaker','material',null);
+ const current=async id=>(await modules.current()).entities.find(e=>e.id===id);
+ await cmd('stock.move',{resourceId:buffer,expectedRevision:(await current(buffer)).revision,projectId:null,delta:'-3',reason:'Titration aliquot',links:[],useKind:'used'});
+ const use=(await modules.current()).entities.find(e=>e.type==='movement'&&e.data.resourceId===buffer&&e.data.useKind==='used');
+ const lab=new Laboratory(f.workspace.root,f.vault),reader=new SampleAnalysisReader(lab);
+ await lab.change({action:'create-sample',etag:'new',sample:{code:'S-RUN',material:'Synthetic solution',source:'Test',collectedOn:'2026-10-01',receivedOn:'2026-10-01'}},{compact:true,commandId:randomUUID()});
+ const settings=defaultDashboard();settings.enabledModules.push('laboratory','resources');await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
+ const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const main=page.locator('main'),dialog=page.locator('#dialog');
+ const fillAnalysis=async code=>{
+  await main.getByRole('button',{name:'Record analysis',exact:true}).click();
+  await dialog.getByLabel('Analysis code',{exact:true}).fill(code);await dialog.getByLabel('Method / version').fill('Method v1');await dialog.getByLabel('Analyte',{exact:true}).fill('Absorbance');await dialog.getByLabel('Result value',{exact:true}).fill('0.42');await dialog.getByLabel('Unit (required for numeric results)').fill('AU');
+  await expect(dialog.getByLabel('Sample',{exact:true}).locator('option')).toHaveCount(1);
+  const group=dialog.getByRole('group',{name:'Lots and equipment used in this run',exact:true});await expect(group).toContainText('Select qualified equipment or a stock lot with recorded use.');
+  await expect(group.getByRole('button',{name:'Add to run: UV-Vis spectrophotometer',exact:true})).toBeVisible();return group;
+ };
+ try{
+  await page.goto(app.url);await page.evaluate(()=>location.hash='#/laboratory/samples');await expect(main.getByRole('button',{name:'S-RUN',exact:true})).toBeVisible();
+  const group=await fillAnalysis('A-RUN-1');
+  await expect(group).not.toContainText('Plain beaker');await expect(group).toContainText('Reference buffer · Material lot · Lot or batch number LOT-77');
+  await group.getByLabel('Search inventory',{exact:true}).fill('Plain');await expect(group).toContainText('No matching items on this page.');
+  await group.getByLabel('Search inventory',{exact:true}).fill('');await group.getByRole('button',{name:'Add to run: UV-Vis spectrophotometer',exact:true}).click();
+  await expect(group.getByRole('button',{name:'Remove from run: UV-Vis spectrophotometer',exact:true})).toBeVisible();await expect(group.getByRole('button',{name:'Add to run: UV-Vis spectrophotometer',exact:true})).toBeDisabled();
+  await group.getByRole('button',{name:'Choose a recorded use: Reference buffer',exact:true}).click();
+  await expect(group.getByLabel('Search inventory',{exact:true})).toBeHidden();await expect(group.getByLabel('Choose a recorded use',{exact:true}).locator('option')).toHaveCount(1);
+  await expect(group.getByLabel('Choose a recorded use',{exact:true})).toContainText('-3 mL · Titration aliquot');
+  await group.getByRole('button',{name:'Add to run',exact:true}).click();
+  await expect(group.getByRole('listitem')).toHaveCount(2);await expect(group.getByRole('listitem').nth(1)).toContainText('Reference buffer · Lot or batch number LOT-77 · -3 mL · Titration aliquot');
+  await expect(group.getByLabel('Search inventory',{exact:true})).toBeVisible();
+  const commands=[];page.on('request',r=>{if(new URL(r.url()).pathname==='/api/laboratory/change')commands.push(r.postDataJSON());});
+  await dialog.getByRole('button',{name:'Save analysis',exact:true}).click();await expect(dialog).not.toBeVisible();
+  expect(commands.at(-1).analysis.runInputs).toEqual([{kind:'equipment',id:instrument,revision:(await current(instrument)).revision},{kind:'movement',id:use.id,revision:use.revision}]);
+  const saved=(await reader.query({workspaceId:book.id,view:'analyses',search:'A-RUN-1'})).items[0],record=(await reader.selected({workspaceId:book.id,kind:'analysis',id:saved.id})).record;
+  expect(record.runQuality.items.map(item=>[item.kind,item.readiness.workflow,item.readiness.issues])).toEqual([['equipment','run',['calibration-missing']],['movement','run',[]]]);
+  expect(record.runQuality.items[1].stockUse).toEqual(use.data.qualityAtUse);
+
+  await cmd('resource.save',{id:buffer,expectedRevision:(await current(buffer)).revision,data:{...(await current(buffer)).data,quality:{...(await current(buffer)).data.quality,holdReason:'Contamination suspected'}}});
+  await main.getByRole('button',{name:/^Analyses /}).click();await main.getByRole('button',{name:'A-RUN-1',exact:true}).click();
+  const recorded=dialog.locator('[data-lab-run-quality]');await expect(recorded.getByRole('heading',{name:'Readiness at run start',exact:true})).toBeVisible();
+  await expect(recorded.getByRole('listitem')).toHaveCount(2);
+  await expect(recorded.getByRole('listitem').first()).toContainText('UV-Vis spectrophotometer · Item revision');await expect(recorded.getByRole('listitem').first()).toContainText('Warning · Missing calibration');
+  await expect(recorded.getByRole('listitem').nth(1)).toContainText('Lot or batch number LOT-77');await expect(recorded.getByRole('listitem').nth(1)).toContainText('Recorded stock use: -3 mL');
+  await expect(recorded).not.toContainText('Contamination suspected');
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(dialog).not.toBeVisible();
+
+  const blockedGroup=await fillAnalysis('A-RUN-2');
+  await blockedGroup.getByRole('button',{name:'Add to run: Blocked balance',exact:true}).click();await expect(blockedGroup.getByRole('button',{name:'Remove from run: Blocked balance',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'Save analysis',exact:true}).click();
+  await expect(page.locator('.notice.error')).toContainText('The selected lot or equipment is blocked by its readiness rule.');await expect(dialog).toBeVisible();
+  await blockedGroup.getByRole('button',{name:'Remove from run: Blocked balance',exact:true}).click();await expect(blockedGroup.getByRole('listitem')).toHaveCount(0);
+  await dialog.getByRole('button',{name:'Save analysis',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const plain=(await reader.query({workspaceId:book.id,view:'analyses',search:'A-RUN-2'})).items[0];expect((await reader.selected({workspaceId:book.id,kind:'analysis',id:plain.id})).record.runQuality).toBeUndefined();
+  await page.setViewportSize({width:390,height:844});await main.getByRole('button',{name:'Record analysis',exact:true}).click();await expect(dialog.getByRole('group',{name:'Lots and equipment used in this run',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  expect(errors).toEqual([]);
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

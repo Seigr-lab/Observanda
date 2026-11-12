@@ -10,10 +10,10 @@ export async function sampleAnalysisDomain(storage){
  const registry=await storage.catalogue(readProjectDomainRegistry);if(!registry?.domains.includes('samples'))return null;
  routes.set(storage,{root:storage.root,vaultId:storage.vault?.id,namespaceId:registry.namespaceId});return registry.namespaceId;
 }
-export async function sampleAnalysisTransaction(storage,namespaceId,operation,{write=false,signal,check}={}){
- return new ProjectDomains(storage,namespaceId).run(['samples'],async(get,{research})=>{
+export async function sampleAnalysisTransaction(storage,namespaceId,operation,{write=false,inventory=false,signal,check}={}){
+ return new ProjectDomains(storage,namespaceId).run(inventory?['samples','inventory']:['samples'],async(get,{research})=>{
   // Two writable authorities must never silently mask one another.
   if(await research.object('laboratory'))throw new AppError('CATALOGUE_DAMAGED');
-  return operation(get('samples'));
+  return operation(get('samples'),inventory?get('inventory'):null);
  },{write:write?['samples']:[],signal,check});
 }

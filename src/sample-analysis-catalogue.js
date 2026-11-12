@@ -4,6 +4,7 @@ import {ObjectIndex,validIndexRef} from './object-index.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {blank,validateLab,validateSampleAnalysisEvent,applySampleAnalysisCommand} from './sample-analysis-model.js';
+import {requireResourceQualityFormat,assertResourceQualityFormat} from './resource-quality-domain.js';
 import {randomUUID} from 'node:crypto';
 import {operationAdvance} from './operation-progress.js';
 import {sampleAnalysisOrder} from './sample-analysis-order.js';
@@ -51,7 +52,7 @@ export class SampleAnalysisCatalogue{
  }
  async value(revision){
   const slot='sample-analysis-value:'+revision,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=this.store.decode('state',slot,row?.payload);
-  if(hash(value)!==revision)fail();return value;
+  if(hash(value)!==revision)fail();if(value?.runQuality)await assertResourceQualityFormat(this.store);return value;
  }
  async member(head,kind,id){
   const entry=await this.index.find(head,kind+':'+id);if(!entry)return null;const member=await this.value(entry.revision);
@@ -92,7 +93,7 @@ export class SampleAnalysisCatalogue{
   if(record.status==='in review')head.counts.review+=delta;
   if(record.status==='approved')head.counts.approved+=delta;
  }
- async change(source,command,{verifyResult}={}){
+ async change(source,command,{verifyResult,observeRun}={}){
   const {expectedRecordRevision,...data}=command,head=structuredClone(source.head),kind=data.action==='create-sample'?'sample':'analysis',create=['create-sample','create-analysis'].includes(data.action);
   const before=create?null:await this.member(head,kind,data.id);
   if(expectedRecordRevision!==undefined){if(!before||before.revision!==expectedRecordRevision)throw new AppError('LAB_STALE');}
@@ -102,7 +103,12 @@ export class SampleAnalysisCatalogue{
   head.formatVersion=3;
   const existing=before?await this.value(before.revision):null,sampleId=data.analysis?.sampleId??existing?.sampleId;
   const sourceSample=sampleId?await this.selected(source,'sample',sampleId):null;
-  const now=new Date().toISOString(),{record,actor,reason}=applySampleAnalysisCommand(data,{existing,sourceSample:sourceSample?.record,now});
+  const now=new Date().toISOString();let runQuality=null;
+  if(data.action==='create-analysis'&&Object.hasOwn(data.analysis??{},'runInputs')){
+   if(!observeRun)throw new AppError('ACCESS_UPGRADE');
+   runQuality=await observeRun(data.analysis.runInputs,now);await requireResourceQualityFormat(this.store);
+  }
+  const {record,actor,reason}=applySampleAnalysisCommand(data,{existing,sourceSample:sourceSample?.record,now,runQuality});
   if(record.result?.provenance && !['amend','archive'].includes(data.action)){
    if(!verifyResult)throw new AppError('LAB_INVALID');
    await verifyResult(record.result);

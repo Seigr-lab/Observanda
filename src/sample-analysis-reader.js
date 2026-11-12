@@ -7,6 +7,7 @@ import {revisionId} from './web/revision-model.js';
 import {SampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
 import {sampleResultSummary} from './web/sample-result-format.js';
 import {resolveSampleSource} from './sample-result-sources.js';
+import {sampleAnalysisDomain} from './sample-analysis-storage.js';
 const invalid=()=>{throw new AppError('INVALID');};
 const etagValid=value=>value===null||value==='new'||revisionId(value);
 const views=['samples','analyses','review','archive','all','events'];
@@ -56,7 +57,9 @@ export class SampleAnalysisReader{
    const read=(collect,sourceSignal=signal)=>owner.query(source,{view,search,sampleId,recordId,key,offset,limit,signal:sourceSignal,collect});
    return consume?{consumed:true,value:await consume({etag:source.etag,counts:source.head.counts,read})}:{...await read(collect),etag:source.etag};
   },{signal});
-  if(indexed)return indexed.consumed?indexed.value:this.page({workspaceId,view,query,offset,limit,...indexed});
+  // Run inputs need the project domains that join samples and inventory in one transaction.
+  const runInputs=await sampleAnalysisDomain(this.laboratory.workspace)!==null;
+  if(indexed)return indexed.consumed?indexed.value:this.page({workspaceId,view,query,offset,limit,...indexed,runInputs});
   const current=await this.source(workspaceId,etag,{signal}),lab=current.lab,samples=new Map(lab.samples.map(s=>[s.id,s])),counts={samples:lab.samples.length,analyses:0,review:0,archive:0,approved:0,events:lab.events.length},perSample=new Map();
   for(const a of lab.analyses){signal?.throwIfAborted();counts[a.status==='archived'?'archive':'analyses']++;if(a.status==='in review')counts.review++;if(a.status==='approved')counts.approved++;perSample.set(a.sampleId,(perSample.get(a.sampleId)??0)+1);}
   const read=async(collect,sourceSignal=signal)=>{
@@ -70,13 +73,13 @@ export class SampleAnalysisReader{
    const value=view==='samples'?{...row,analyses:perSample.get(row.id)??0}:view==='events'?{id:row.id,at:row.at,action:row.action,recordId:row.recordId,actor:row.actor,reason:row.reason}:{id:row.id,code:row.code,sampleId:row.sampleId,sampleCode:sample.code,status:row.status,updatedAt:row.updatedAt,result:sampleResultSummary(row.result)};
    if(collect)await collect(value);else items.push(value);
   }
-  return this.page({workspaceId,view,query,offset,limit,items,counts,total,etag:current.etag});
+  return this.page({workspaceId,view,query,offset,limit,items,counts,total,etag:current.etag,runInputs});
   };
   return consume?consume({etag:current.etag,counts,read}):read(collect);
  }
- page({workspaceId,view,query,offset,limit,items,counts,total,etag}){
+ page({workspaceId,view,query,offset,limit,items,counts,total,etag,runInputs=false}){
   const at=Math.min(offset,Math.max(0,total)),encode=position=>Buffer.from(JSON.stringify({query,etag,offset:position})).toString('base64url');
-  return {workspaceId,etag,view,items,counts,total,offset:at,cursor:encode(at),previousCursor:at?encode(Math.max(0,at-limit)):null,nextCursor:at+items.length<total?encode(at+items.length):null};
+  return {workspaceId,etag,view,items,counts,total,offset:at,cursor:encode(at),previousCursor:at?encode(Math.max(0,at-limit)):null,nextCursor:at+items.length<total?encode(at+items.length):null,runInputs};
  }
  async selected(command,options){
   if(!command||Object.keys(command).some(k=>!['workspaceId','etag','id','kind'].includes(k))||!researchId(command.id)||!['sample','analysis'].includes(command.kind))invalid();

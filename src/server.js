@@ -1288,9 +1288,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if (req.method === 'POST' && url.pathname === '/api/laboratory/change') { await workspace.outline(); const {commandId,...command}=await body(req);return json(await laboratory.change(command,{compact:url.searchParams.get('compact')==='1',commandId:commandId??null,check:req.checkWriter})); }
       const resultSheet = /^\/api\/laboratory\/report\/([a-f0-9-]{36})$/.exec(url.pathname);
-      if (req.method === 'GET' && resultSheet) return sendBytes(req, res, await laboratory.report(resultSheet[1], url.searchParams.get('revision'), blockedValues), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && resultSheet) return sendBytes(req, res, await laboratory.report(resultSheet[1], url.searchParams.get('revision'), blockedValues, {language:url.searchParams.get('language')}), 'text/html; charset=utf-8');
       const issuedSheet=/^\/api\/laboratory\/issued\/([a-f0-9-]{36})$/.exec(url.pathname);
-      if(req.method==='GET'&&issuedSheet)return sendBytes(req,res,await laboratory.report(issuedSheet[1],url.searchParams.get('revision'),blockedValues,{retained:true}),'text/html; charset=utf-8');
+      if(req.method==='GET'&&issuedSheet)return sendBytes(req,res,await laboratory.report(issuedSheet[1],url.searchParams.get('revision'),blockedValues,{retained:true,language:url.searchParams.get('language')}),'text/html; charset=utf-8');
       const retainedCandidate=async(id,{signal}={})=>{
         signal?.throwIfAborted();
         if(!/^[a-f0-9]{64}$/.test(id??''))return null;
