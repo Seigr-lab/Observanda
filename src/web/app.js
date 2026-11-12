@@ -855,6 +855,7 @@ function render() {
   if(state.page==='workspaces'&&!state.newWorkspace&&(state.storageUnavailable||!state.book)){renderAccess(storageControls.workspaces.view({standalone:true}));storageControls.workspaces.bind();syncRoute();return;}
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
+  if(state.page==='website'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/editor':'#/website',replace:true}).catch(report);return;}
   accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
@@ -885,7 +886,6 @@ function renderPage(){
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
  case 'templates':content=dashboard.templates();break;
-  if(state.page==='website'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/editor':'#/website',replace:true}).catch(report);return;}
  case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
@@ -1108,7 +1108,7 @@ async function rawAction(button) {
   if(await structureUI.notebooks.action(button)){returnToProjectAfterBookSettings(name);return;}
   if(name==='module-open'&&moduleDestination(button.dataset.moduleId)){state.page=moduleDestination(button.dataset.moduleId);state.project=null;state.notebook='all';render();return;}
   if(name==='module-open')document.querySelector('#dialog').close();
-  if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await localExport.action(button)||await migration.action(button)||await reviews.action(button)||await publicationJobs.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await figures.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button)||await website.action(button))return;
+  if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await localExport.action(button)||await migration.action(button)||await reviews.action(button)||await publicationJobs.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await figures.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button))return;
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await designUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
   if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
