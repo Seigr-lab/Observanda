@@ -1,9 +1,10 @@
 import {expect} from '@playwright/test';
+import {revealInEditor} from './record-editor-helper.js';
 
 export async function openRecordDetail(page,field='title'){
- await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Record details',exact:true}).click();
- await page.locator('[data-record-detail-field]').selectOption(field);
- await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
+ // A record opened for reading shows Edit record; details live in the editor's Record details area.
+ await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption(field);
+ await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();
  const dialog=page.locator('dialog.record-writing[open]');await expect(dialog.locator('[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea').first()).toBeVisible();return dialog;
 }
 export async function setRecordTitle(page,title){
