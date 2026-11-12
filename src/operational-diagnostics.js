@@ -3,10 +3,11 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {performance} from 'node:perf_hooks';
+import {fileURLToPath} from 'node:url';
 import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
-const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
+const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped','unexpected-error']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job','session-access','session-device','session-workers','workspace-identity','session-location']);
 for(const stage of ['startup-modules','runtime-permissions','runtime-version','runtime-status','runtime-start','runtime-connect','website-source-selections','website-source-owners','website-source-counts'])phases.add(stage);
 for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
@@ -35,6 +36,27 @@ const counters=new Set(['durationMs','queued','active','pendingRequests','active
 for(const name of workCounters)counters.add(name);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
 const codeOf=error=>{let code;try{code=error?.code;}catch{}return typeof code==='string'&&(Object.hasOwn(errors,code)||systemCodes.has(code))?code:'IO';};
+// An unexpected error is reported as IO to its caller. Diagnostics keep where
+// it came from: its built-in type and the application's own source positions,
+// never its message, which can name user paths or content.
+const errorTypes=new Set(['Error','TypeError','RangeError','ReferenceError','SyntaxError','URIError','EvalError','AggregateError','AbortError','SystemError','DOMException']);
+const applicationFrame=/^src\/[A-Za-z0-9_./-]{1,200}\.js:\d{1,7}:\d{1,7}$/,maxFrames=8;
+const applicationRoot=fileURLToPath(new URL('..',import.meta.url));
+function applicationFrames(error){
+ let stack;try{stack=error?.stack;}catch{return [];}if(typeof stack!=='string')return [];
+ const frames=[];
+ for(const line of stack.split('\n')){
+  const match=/^\s+at (?:.*?\()?((?:file:\/\/)?[^()]+?):(\d+):(\d+)\)?\s*$/.exec(line);if(!match)continue;
+  let file;try{file=match[1].startsWith('file:')?fileURLToPath(match[1]):match[1];}catch{continue;}
+  const relative=path.relative(applicationRoot,file).split(path.sep).join('/'),frame=relative+':'+match[2]+':'+match[3];
+  if(applicationFrame.test(frame)&&!relative.includes('/node_modules/')){frames.push(frame);if(frames.length===maxFrames)break;}
+ }
+ return frames;
+}
+export function unexpectedError(error){
+ let type;try{type=error?.name;}catch{}
+ diagnostic('unexpected-error',{error,errorType:type,origin:applicationFrames(error)});
+}
 const correlation=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 
 // Deliberately no free-text field: error messages, paths, URLs, query strings,
@@ -47,6 +69,10 @@ export function diagnosticEvent(event,data={}){
  if(routes.has(data.route)||websiteRoutes.has(data.route))value.route=data.route;
  if(['GET','POST'].includes(data.method))value.method=data.method;
  if(data.error)value.code=codeOf(data.error);
+ if(event==='unexpected-error'){
+  if(errorTypes.has(data.errorType))value.errorType=data.errorType;
+  if(Array.isArray(data.origin)){const origin=data.origin.filter(frame=>typeof frame==='string'&&applicationFrame.test(frame)).slice(0,maxFrames);if(origin.length)value.origin=origin;}
+ }
  for(const key of counters)if(Number.isFinite(data[key])&&data[key]>=0&&data[key]<=Number.MAX_SAFE_INTEGER)value[key]=Math.round(data[key]);
  return value;
 }
