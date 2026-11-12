@@ -31,6 +31,10 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
   await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();const sourceProof=[...proof.values()];await checkPdfSources(documents.publicationFiles,sourceProof);return {...result,sourceProof};
  }catch(error){
   if(!(error instanceof PdfLayoutError))throw error;
+  if(error.code==='PDF_GLYPH'&&error.preflight&&preflightOnly){
+   await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();
+   return {preflight:error.preflight};
+  }
   const [sectionId,blockId,target]=error.details;
   if(!preflightOnly||!researchId(sectionId)||!['PDF_LINK_CODE_LAYOUT','PDF_PLACEMENT_REVIEW','PDF_NOTE_ANCHOR','PDF_UNRESOLVED_REFERENCE'].includes(error.code))throw new AppError(error.code,error.details);
   await check();await checkPdfSources(documents.publicationFiles,[...proof.values()]);signal?.throwIfAborted();

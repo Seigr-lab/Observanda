@@ -208,5 +208,30 @@
     "file": "aref-ruqaa-OFL.txt",
     "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaa/OFL.txt",
     "sha256": "41ac14451a624c69490e24b9aaaaa1f65dc9dc17c3f6f38172fc43d5ba654a1b"
+  },
+  {
+    "file": "scheherazade-new.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/scheherazadenew/ScheherazadeNew-Regular.ttf",
+    "sha256": "794bac8dc9e83d1d620bc471ea694f5f31d0965ce8006490a79dfc51a2d283b3"
+  },
+  {
+    "file": "scheherazade-new-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/scheherazadenew/ScheherazadeNew-Medium.ttf",
+    "sha256": "060b801307ec55d996d635578fffba0d95169f63e1d0f6061402185eaf4fa6af"
+  },
+  {
+    "file": "scheherazade-new-2.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/scheherazadenew/ScheherazadeNew-SemiBold.ttf",
+    "sha256": "155056d27ea5a34ab739170abeff8d45b44a494e39be329f0a4d1e6cbd173390"
+  },
+  {
+    "file": "scheherazade-new-3.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/scheherazadenew/ScheherazadeNew-Bold.ttf",
+    "sha256": "91363517a63dbc7448b5814226d33d845b26b32a461cd159ea0b3f23c7effd2d"
+  },
+  {
+    "file": "scheherazade-new-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/scheherazadenew/OFL.txt",
+    "sha256": "5b9fd21ce2377fc542debebd9edfe1c48f2d3525e78a2a8abdba4a0ec3280163"
   }
 ]

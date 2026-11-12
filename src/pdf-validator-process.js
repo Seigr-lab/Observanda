@@ -2,6 +2,7 @@ import {spawn} from 'node:child_process';
 import {parserEnvironment} from './parser-process.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
 import {diagnosticPhase} from './operational-diagnostics.js';
+import {PDF_VALIDATOR_VERSION} from './pdf-validation-dependencies.js';
 
 const profiles={
  '2u':{failure:'PDF_ARCHIVAL_FAILED',unavailable:'PDF_ARCHIVAL_UNAVAILABLE',maxFailures:'5',exitCodes:[0]},
@@ -9,6 +10,17 @@ const profiles={
 };
 const fail=code=>Object.assign(new Error(code),{code});
 const outputLimit=2*1024*1024,diagnosticLimit=256*1024;
+// Read only a pinned validator's rejection. No document text, paths, or
+// arbitrary diagnostic strings cross the renderer boundary.
+function archivalUnicodeFailure(bytes){
+ try{
+  const {report}=JSON.parse(bytes),jobs=report.jobs,versions=report.buildInformation.releaseDetails;
+  if(jobs.length!==1||versions.length!==3||!['core','validation-model','apps'].every(id=>versions.some(v=>v.id===id&&v.version===PDF_VALIDATOR_VERSION)))return false;
+  const results=jobs[0].validationResult,result=results[0];
+  if(results.length!==1||result.jobEndStatus!=='normal'||result.profileName!=='PDF/A-2u validation profile'||result.compliant!==false)return false;
+  return result.details.ruleSummaries.some(row=>row.specification==='ISO 19005-2:2011'&&row.ruleStatus==='FAILED'&&row.clause==='6.2.11.7.2'&&row.testNumber===2&&row.failedChecks>0);
+ }catch{return false;}
+}
 // The Java heap plus native overhead is a launch reservation, not an OS memory
 // limit. The caller authenticates the pinned runtime and owns the input folder.
 export async function runPdfValidator(runtime,file,directory,{profile,signal,admission=nativeMediaAdmission,spawnProcess=spawn}={}){
@@ -35,7 +47,8 @@ export async function runPdfValidator(runtime,file,directory,{profile,signal,adm
    child.once('error',()=>{if(!failed){failed=true;error=fail(policy.unavailable);}chunks=[];});
    child.once('close',code=>{
     signal?.removeEventListener('abort',abort);
-    if(failed||!policy.exitCodes.includes(code))reject(failed?error:fail(policy.failure));
+    if(!failed&&code===1&&profile==='2u'&&archivalUnicodeFailure(Buffer.concat(chunks,size)))reject(fail('PDF_UNMAPPED_GLYPH'));
+    else if(failed||!policy.exitCodes.includes(code))reject(failed?error:fail(policy.failure));
     else resolve(Buffer.concat(chunks,size).toString('utf8'));
    });
    signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();

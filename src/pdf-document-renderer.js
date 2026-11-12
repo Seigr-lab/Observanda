@@ -77,7 +77,7 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
   const captioned=captions.section(scopePdfIds((composition?composition.html:chunks.join('')+notes.sectionNotes)+notes.pageFootnotes.join(''),'pdf-section-'+section.id+'-'),{sectionId:section.id,font:settings.font,links:settings.links,layout:settings});crossReferences.section(section,heading,captioned.targets);const html=captioned.html;
   equations ||= blocks.equations;
   const linkCodeHTML=await linkCodes.render();if(linkCodeHTML)styles.add(PDF_LINK_CODE_CSS);
-  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}${composition?' pdf-composed-section':''}" data-pdf-width-mm="${contentBox.widthMm}" data-pdf-height-mm="${contentBox.heightMm}"${section.start?` data-start="${section.start}"`:''}>${composition?'':titleHTML}${html}${linkCodeHTML}</section>`));
+  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}${composition?' pdf-composed-section':''}"${composition?` data-pdf-font="${esc(settings.font)}"`:''} data-pdf-width-mm="${contentBox.widthMm}" data-pdf-height-mm="${contentBox.heightMm}"${section.start?` data-start="${section.start}"`:''}>${composition?'':titleHTML}${html}${linkCodeHTML}</section>`));
  }
  const endnoteHTML=renderPdfEndnotes(endnotes,{language:header.language,textGlyphs,font:header.layout.font,layoutClass:defaultLayout});
  signal?.throwIfAborted();if(!count)throw new PdfLayoutError('PDF_EMPTY');

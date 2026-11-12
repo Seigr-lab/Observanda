@@ -5,6 +5,7 @@ import {BUNDLED_FONTS,faceCSS,customFontId,validCustomFont} from './web/font-cat
 import {validPdfFontPins} from './web/pdf-font-model.js';
 import {inspectFont} from './font-inspector.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
+import {positionedGlyphFailures} from './pdf-missing-glyphs.js';
 // Bundled fonts and exact retained custom-font pins are embedded. Document
 // names and source links never become paths or remote font requests.
 export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,customFonts=new Map()}={}){
@@ -26,7 +27,11 @@ export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,c
    const type={ttf:'font/ttf',otf:'font/otf',woff:'font/woff',woff2:'font/woff2'}[face.file.split('.').at(-1)];
    styles.push(faceCSS(id,face,'data:'+type+';base64,'+bytes.toString('base64')));
   }
-  const missing=(compiled.glyphs?.[id]??[]).filter(point=>!available.has(point));if(missing.length)throw new PdfLayoutError('PDF_GLYPH',[id,...missing.map(point=>'U+'+point.toString(16).toUpperCase())]);
+  const missing=(compiled.glyphs?.[id]??[]).filter(point=>!available.has(point));
+  if(missing.length){
+   const error=new PdfLayoutError('PDF_GLYPH',[id,...missing.slice(0,256).map(point=>'U+'+point.toString(16).toUpperCase())]);
+   error.preflight=positionedGlyphFailures(compiled.html,id,missing);throw error;
+  }
  }
  if(compiled.equations){const math=await pdfEquationAssets({signal,maxBytes:maxFontBytes-total});styles.push(math.css);total+=math.bytes;}
  signal?.throwIfAborted();return {...compiled,html:compiled.html.replace('</head>','<style>'+styles.join('\n')+'</style></head>'),fontBytes:total};

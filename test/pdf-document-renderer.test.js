@@ -4,8 +4,20 @@ import {randomUUID} from 'node:crypto';
 import {pdfLayoutPreset,validPdfLayout} from '../src/web/pdf-layout-model.js';
 import {compilePdfDocument} from '../src/pdf-document-renderer.js';
 import {embedPdfFonts} from '../src/pdf-font-assets.js';
+import {pdfCompositionDefaults} from '../src/web/pdf-composition-model.js';
+import {validPdfPreflight} from '../src/pdf-preflight.js';
 const header=()=>({version:1,id:randomUUID(),name:'Research report',language:'en',direction:'ltr',layout:pdfLayoutPreset()});
 const section=(content='Exact observation')=>({id:randomUUID(),title:'Results',content,layout:null,start:null});
+test('missing-glyph diagnostics identify the positioned text with the affected font',async()=>{
+ const h=header(),text=(value,marks)=>({type:'paragraph',content:[{type:'text',text:value,...(marks?{marks}:{})}]}),
+  s=section({type:'doc',content:[text('A文'),text('B文',[{type:'font_family',attrs:{font:'aref-ruqaa-ink'}}]),text('Readable')]});
+ s.composition=pdfCompositionDefaults(s,h.layout);
+ const input=await compilePdfDocument(h,[s]);
+ await assert.rejects(embedPdfFonts(input),error=>{
+  assert.equal(error.code,'PDF_GLYPH');assert.equal(validPdfPreflight(error.preflight),true);
+  assert.deepEqual(error.preflight.findings,[{code:'PDF_GLYPH',severity:'fatal',blockId:'composition-block:0',blockIndex:0,sectionId:s.id,details:{}}]);return true;
+ });
+});
 const linked={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Source',marks:[{type:'link',attrs:{href:'https://example.org/result',title:'',target:'_self',nofollow:false}}]}]},{type:'book_citation',attrs:{version:1,id:randomUUID(),title:'Cited result',authors:'An author',issued:'2026',locator:'p. 2',url:'https://example.org/citation'}}]};
 test('PDF layouts preserve custom physical dimensions and reject unusable content areas',()=>{
  const layout=pdfLayoutPreset('print');Object.assign(layout,{widthMm:230,heightMm:170,columns:2,columnGapMm:7,fontSizePt:12.5});

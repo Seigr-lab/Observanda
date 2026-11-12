@@ -460,6 +460,8 @@
   "ACCESS_STATE_CHANGED": "These access settings are not in this device's trusted history. Review and import the current access settings from a trusted device before opening this copy.",
   "ACCESS_SAVE_UNCERTAIN": "Saving access settings was interrupted. The new credentials may already be active. Reopen the workspace and try the new credentials first.",
   "WEBSITE_APPROVAL_REQUIRED": "This website requires an approved review of the current saved edition before it is published. Request a review or ask a reviewer to approve it.",
+  "PDF_FONT_SUBSTITUTED": "This object contains text printed with a substitute font. Choose a font that covers those characters.",
+  "PDF_UNMAPPED_GLYPH": "The printed font cannot represent some characters as searchable Unicode in this profile. For Arabic, select Scheherazade New for the affected text. You can also choose another font or standard PDF.",
   "WEBSITE_DESIGN_PACKAGE": "This file is not a usable website design package. Export the design again and choose the new file.",
   "WEBSITE_DESIGN_VERSION": "This design package was made by a newer version of Observanda. Update Observanda to import it."
 }

@@ -460,6 +460,8 @@
   "ACCESS_STATE_CHANGED": "Desse tilgangsinnstillingane finst ikkje i den tiltrudde historikken på denne eininga. Kontroller og importer gjeldande tilgangsinnstillingar frå ei tiltrudd eining før du opnar denne kopien.",
   "ACCESS_SAVE_UNCERTAIN": "Lagringa av tilgangsinnstillingane vart avbroten. Dei nye påloggingsopplysningane kan allereie vere aktive. Opne arbeidsområdet på nytt og prøv dei nye opplysningane først.",
   "WEBSITE_APPROVAL_REQUIRED": "Denne nettstaden krev ein godkjend gjennomgang av den gjeldande lagra utgåva før han blir publisert. Be om ein gjennomgang, eller be ein gjennomgåar om å godkjenne han.",
+  "PDF_FONT_SUBSTITUTED": "Dette objektet inneheld tekst som vert skriven ut med ei erstatningsskrift. Vel ein skrifttype som dekkjer desse teikna.",
+  "PDF_UNMAPPED_GLYPH": "Skrifttypen kan ikkje gje att enkelte teikn som søkbar Unicode i denne profilen. For arabisk kan du velje Scheherazade New for den aktuelle teksten. Du kan òg velje ein annan skrifttype eller standard PDF.",
   "WEBSITE_DESIGN_PACKAGE": "Denne fila er ikkje ein brukande designpakke for nettstader. Eksporter designet på nytt og vel den nye fila.",
   "WEBSITE_DESIGN_VERSION": "Denne designpakken vart laga med ein nyare versjon av Observanda. Oppdater Observanda for å importere han."
 }

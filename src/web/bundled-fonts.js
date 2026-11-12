@@ -379,5 +379,44 @@ export const BUNDLED_FONTS = [
       }
     ],
     "license": "patua-one-OFL.txt"
+  },
+  {
+    "id": "scheherazade-new",
+    "family": "Scheherazade New",
+    "faces": [
+      {
+        "file": "scheherazade-new.ttf",
+        "style": "normal",
+        "weight": [
+          400
+        ],
+        "axes": {}
+      },
+      {
+        "file": "scheherazade-new-1.ttf",
+        "style": "normal",
+        "weight": [
+          500
+        ],
+        "axes": {}
+      },
+      {
+        "file": "scheherazade-new-2.ttf",
+        "style": "normal",
+        "weight": [
+          600
+        ],
+        "axes": {}
+      },
+      {
+        "file": "scheherazade-new-3.ttf",
+        "style": "normal",
+        "weight": [
+          700
+        ],
+        "axes": {}
+      }
+    ],
+    "license": "scheherazade-new-OFL.txt"
   }
 ];

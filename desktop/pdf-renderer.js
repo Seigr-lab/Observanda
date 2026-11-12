@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 // Recipe version tracks layout/finalization semantics independently of IPC.
-const PDF_RECIPE_VERSION=3;
+const PDF_RECIPE_VERSION=4;
 const fail=code=>Object.assign(new Error(code),{code});
 let active=false,partition,preflightModule,resolutionModule,referencesModule,footnoteModule,pressModule,printModule,archivalModule,accessibilityModule;
 const preflight=()=>preflightModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-preflight.js')).href:new URL('../src/pdf-preflight.js',import.meta.url).href);
@@ -54,7 +54,7 @@ async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputByt
    const {pdfImageResolutionScript}=await resolution();try{await win.webContents.executeJavaScript(pdfImageResolutionScript);}catch{signal.throwIfAborted();throw fail('PDF_IMAGE_RESOLUTION_FAILED');}
    let footnoteResult=null;
    if(footnoteTools){try{footnoteResult=await win.webContents.executeJavaScript(footnoteTools.pdfFootnoteFlowScript(input.footnoteFlow));}catch(error){signal.throwIfAborted();throw fail(['PDF_FOOTNOTE_LAYOUT','PDF_CAPACITY'].find(code=>error?.message?.includes(code))??'PDF_FOOTNOTE_OVERFLOW');}}
-   const {pdfPreflightScript,validPdfPreflight}=await preflight();let findings=footnoteResult?.preflight??await win.webContents.executeJavaScript(pdfPreflightScript);
+   const {pdfPreflightScript,validPdfPreflight,PDF_PREFLIGHT_LIMIT,inspectPositionedFonts}=await preflight();let findings=footnoteResult?.preflight??await win.webContents.executeJavaScript(pdfPreflightScript);
    if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
    signal?.throwIfAborted();
    const renderer={engine:'chromium',electron:process.versions.electron,chromium:process.versions.chrome,recipeVersion:PDF_RECIPE_VERSION};
@@ -69,6 +69,11 @@ async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputByt
      findings=await win.webContents.executeJavaScript(pdfPreflightScript);if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
     }catch(error){signal.throwIfAborted();throw ['PDF_CAPACITY','PDF_OUTPUT'].includes(error?.code)?error:fail('PDF_PAGE_REFERENCES');}
    }
+   if(findings.status!=='fatal'&&input.html.includes('data-pdf-composition-key=')){
+    try{findings=await inspectPositionedFonts(win.webContents,findings,{signal,limit:PDF_PREFLIGHT_LIMIT});}
+    catch{signal.throwIfAborted();throw fail('PDF_OUTPUT');}
+    if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
+   }
    if(input.preflightOnly||findings.status==='fatal')return output();
    let bytes=await print(input.bookmarks??true);
    if(input.outputProfile==='pdfua-1'){const {applyPdfAccessibilityOutput}=await accessibility();bytes=await applyPdfAccessibilityOutput(bytes,{accessibilityLayout:input.accessibilityLayout,identifyPdfUa:true,signal,maxBytes:maxOutputBytes});signal.throwIfAborted();}
@@ -76,7 +81,7 @@ async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputByt
    if(iccProfile){const {applyPdfPrintOutput}=await printer(),result=await applyPdfPrintOutput(bytes,{printCondition:input.printCondition,iccProfile,signal,maxBytes:maxOutputBytes});bytes=result.bytes;signal.throwIfAborted();}
    let validation;
    if(input.outputProfile==='pdfa-2u'){const {applyPdfArchival}=await archival(),result=await applyPdfArchival(bytes,{runtime:validationRuntime(),signal,maxBytes:maxOutputBytes});bytes=result.bytes;validation=result.validation;signal.throwIfAborted();}
-   if(input.outputProfile==='pdfua-1'){const {validatePdfAccessibilityOutput}=await accessibility(),report=await validatePdfAccessibilityOutput(bytes,{runtime:validationRuntime(),signal,maxBytes:maxOutputBytes});if(!report.compliant)throw fail('PDF_ACCESSIBILITY_FAILED');const {version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks}=report;validation={version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks,automatedOnly:true};signal.throwIfAborted();}
+   if(input.outputProfile==='pdfua-1'){const {validatePdfAccessibilityOutput}=await accessibility(),report=await validatePdfAccessibilityOutput(bytes,{runtime:validationRuntime(),signal,maxBytes:maxOutputBytes});if(!report.compliant)throw fail(report.findings.some(row=>row.clause==='7.21.7'&&row.testNumber===2)?'PDF_UNMAPPED_GLYPH':'PDF_ACCESSIBILITY_FAILED');const {version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks}=report;validation={version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks,automatedOnly:true};signal.throwIfAborted();}
    return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),renderer,conformance:validation?.profile==='pdfa-2u'?['pdfa-2u']:[],preflight:findings,...(validation?{validation}:{})};
   })();
   return await Promise.race([operation,cancelled]);
