@@ -57,7 +57,7 @@
   "bytes": "bytes",
   "downloadOriginal": "Download original",
   "fileProgress": "Checking original file: {done} of {total}",
-  "loading": "Loading media?",
+  "loading": "Loading media…",
   "loadFailed": "Could not load media.",
   "retry": "Retry"
 }

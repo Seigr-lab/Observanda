@@ -26,7 +26,7 @@
   "otherDrafts": "Guarda o descarta los cambios de otros registros o de la configuración antes de eliminar este registro.",
   "destinationProject": "Proyecto",
   "chooseProject": "Elige un proyecto",
-  "loadingBooks": "¿Cargando cuadernos de laboratorio?",
+  "loadingBooks": "Cargando cuadernos de laboratorio…",
   "moreBooks": "Más cuadernos de laboratorio",
   "retryBooks": "Reintentar",
   "booksFailed": "No se han podido cargar los cuadernos de laboratorio.",

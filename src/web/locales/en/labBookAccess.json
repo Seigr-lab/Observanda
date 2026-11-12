@@ -14,7 +14,7 @@
   "confirmPassword": "Confirm password",
   "savePassword": "Save lab book password",
   "lock": "Lock lab book",
-  "loading": "Loading access settings?",
+  "loading": "Loading access settings…",
   "saved": "Lab book password saved.",
   "passwordMismatch": "The passwords do not match."
 }

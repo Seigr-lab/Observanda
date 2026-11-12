@@ -14,7 +14,7 @@
   "confirmPassword": "Stadfest passord",
   "savePassword": "Lagre labbokpassord",
   "lock": "Lås labbok",
-  "loading": "Lastar inn tilgangsinnstillingar?",
+  "loading": "Lastar inn tilgangsinnstillingar…",
   "saved": "Labbokpassordet er lagra.",
   "passwordMismatch": "Passorda er ikkje like."
 }

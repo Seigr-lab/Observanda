@@ -57,7 +57,7 @@
   "bytes": "bytes",
   "downloadOriginal": "Descargar el original",
   "fileProgress": "Comprobando el archivo original: {done} de {total}",
-  "loading": "¿Cargando archivos multimedia?",
+  "loading": "Cargando archivos multimedia…",
   "loadFailed": "No se han podido cargar los archivos multimedia.",
   "retry": "Reintentar"
 }

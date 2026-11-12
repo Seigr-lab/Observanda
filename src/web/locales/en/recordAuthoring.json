@@ -26,7 +26,7 @@
   "otherDrafts": "Save or discard changes to other records or settings before removing this record.",
   "destinationProject": "Project",
   "chooseProject": "Choose a project",
-  "loadingBooks": "Loading lab books?",
+  "loadingBooks": "Loading lab books…",
   "moreBooks": "More lab books",
   "retryBooks": "Retry",
   "booksFailed": "Lab books could not be loaded.",

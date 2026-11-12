@@ -35,7 +35,7 @@
   "browseChoices": "Explorar cuentas y organizaciones",
   "refreshChoices": "Actualizar cuentas y organizaciones",
   "connectToBrowse": "Inicia sesión con GitHub para elegir una cuenta, organización y repositorio.",
-  "loadingChoices": "¿Cargando desde GitHub?",
+  "loadingChoices": "Cargando desde GitHub…",
   "previousChoices": "Anterior",
   "nextChoices": "Siguiente",
   "choicePage": "Página {page}",

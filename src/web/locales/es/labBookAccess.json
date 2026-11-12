@@ -14,7 +14,7 @@
   "confirmPassword": "Confirmar contraseña",
   "savePassword": "Guardar la contraseña del cuaderno de laboratorio",
   "lock": "Bloquear el cuaderno de laboratorio",
-  "loading": "¿Cargando la configuración de acceso?",
+  "loading": "Cargando la configuración de acceso…",
   "saved": "Contraseña del cuaderno de laboratorio guardada.",
   "passwordMismatch": "Las contraseñas no coinciden."
 }

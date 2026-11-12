@@ -35,7 +35,7 @@
   "browseChoices": "Browse accounts and organizations",
   "refreshChoices": "Refresh accounts and organizations",
   "connectToBrowse": "Sign in with GitHub to choose an account, organization and repository.",
-  "loadingChoices": "Loading from GitHub?",
+  "loadingChoices": "Loading from GitHub…",
   "previousChoices": "Previous",
   "nextChoices": "Next",
   "choicePage": "Page {page}",
