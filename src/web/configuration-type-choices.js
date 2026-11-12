@@ -6,11 +6,11 @@ import {t} from './i18n/index.js';
 import {templateText} from './custom-field-presentation.js';
 
 export function configurationTypeChoices({state,api,esc,showDialog}){
- let notebook=null,options=null,page=null,error=null,busy=false,controller=null,epoch=0,search='';
+ let notebook=null,options=null,page=null,error=null,busy=false,controller=null,epoch=0,search='',shown=false;
  const instance=crypto.randomUUID(),client=configurationDocumentClient({state,api});
  const text=(key,args)=>t('configurationEditor',key,args);
  const root=()=>document.querySelector('#dialog[open] [data-configuration-type-choices="'+instance+'"]');
- function stop(){if(root())document.querySelector('#dialog').close();epoch++;controller?.abort();controller=null;client.stop();notebook=options=page=error=null;busy=false;search='';}
+ function stop(){if(root())document.querySelector('#dialog').close();epoch++;controller?.abort();controller=null;client.stop();notebook=options=page=error=null;busy=false;search='';shown=false;}
  function view(){
   const labels=page?.rows??[],orderedTypes=[...RECORD_TYPES.map(recordTypePresentation)].sort((a,b)=>['note','observation'].indexOf(a.id)<0?(['note','observation'].includes(b.id)?1:0):['note','observation'].indexOf(b.id)<0?-1:['note','observation'].indexOf(a.id)-['note','observation'].indexOf(b.id));
   const custom=row=>'<button type="button" class="record-type-option" aria-label="'+esc(t('recordAuthoring','createType',{type:templateText(row.value.label).toLocaleLowerCase()}))+'" data-action="configuration-type-select" data-key="'+esc(row.key)+'" '+(busy?'disabled':'')+'><strong>'+esc(templateText(row.value.label))+'</strong><span>'+esc(templateText(row.value.description))+'</span></button>';
@@ -21,7 +21,8 @@ export function configurationTypeChoices({state,api,esc,showDialog}){
    '<details '+(!labels.length?'open':'')+'><summary>'+esc(t('recordAuthoring','generalTypes'))+'</summary><div class="record-type-grid">'+orderedTypes.map(value=>'<button type="button" class="record-type-option" aria-label="'+esc(t('recordAuthoring','createType',{type:value.label.toLowerCase()}))+'" data-action="configuration-type-general" data-type="'+value.id+'"><strong>'+esc(value.label)+'</strong><span>'+esc(value.description)+'</span></button>').join('')+'</div></details>'+
    '<div class="dialog-actions">'+(options.starters?'<button type="button" class="button" data-action="starter-library" data-notebook="'+notebook.id+'">'+esc(t('recordStarters','library'))+'</button>':'')+'<button type="button" class="button" data-action="close-dialog">'+esc(text('cancel'))+'</button></div></div>';
  }
- function paint(){if(!options)return;const focused=root()?.querySelector('[data-configuration-type-search]')===document.activeElement,selection=focused?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;showDialog(view());if(focused){const input=root()?.querySelector('[data-configuration-type-search]');input?.focus();input?.setSelectionRange(...selection);}}
+ // Once shown, a closed or replaced dialog ends this chooser; a late page never reopens it.
+ function paint(){if(!options)return;if(shown&&!root()){stop();return;}const focused=root()?.querySelector('[data-configuration-type-search]')===document.activeElement,selection=focused?[document.activeElement.selectionStart,document.activeElement.selectionEnd]:null;showDialog(view());shown=true;if(focused){const input=root()?.querySelector('[data-configuration-type-search]');input?.focus();input?.setSelectionRange(...selection);}}
  async function load(offset=0,{open=false}={}){
   const request=++epoch;controller?.abort();controller=new AbortController();busy=true;error=null;paint();
   try{
