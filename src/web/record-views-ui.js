@@ -1,6 +1,6 @@
 import {viewQuery,validViewQuery,viewScopeIssue,viewScopeLabel} from './record-view-model.js';
 import {recordTypeLabel} from './record-type-presentation.js';
-import {lookupRecordTypes} from './record-type-lookup.js';
+import {lookupRecordTypes,recordTypeSource} from './record-type-lookup.js';
 import {t} from './i18n/index.js';
 import {labBookProfileLabel} from './project-type-presentation.js';
 const text=(key,args)=>t('recordViews',key,args);
@@ -59,8 +59,9 @@ export function recordViewsUI({state,api,esc,field,showDialog,notify,apply,snaps
    <div class="dialog-actions">${button('back','back')}<button class="button primary" type="submit">${esc(text('save'))}</button></div></form>`);
   dialog().querySelector('[name="name"]').focus();
   typeController?.abort();const controller=new AbortController();typeController=controller;
+  const source=recordTypeSource(state,api,snapshot);
   for(const node of dialog().querySelectorAll('[data-view-record-type]')){
-   void lookupRecordTypes(api,{workspaceId,etag:snapshot(),...JSON.parse(node.dataset.viewRecordType),search:'',cursor:null,limit:1},{signal:controller.signal})
+   void lookupRecordTypes(source.api,{workspaceId,etag:source.etag,...JSON.parse(node.dataset.viewRecordType),search:'',cursor:null,limit:1},{signal:controller.signal})
     .then(result=>{if(!controller.signal.aborted&&node.isConnected&&validContext())node.textContent=result.selected?.label??t('recordTypes','unavailable');})
     .catch(()=>{if(!controller.signal.aborted&&node.isConnected)node.textContent=t('recordTypes','error');});
   }

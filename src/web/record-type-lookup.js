@@ -1,5 +1,12 @@
 import {validViewFilter} from './record-view-model.js';
 import {t} from './i18n/index.js';
+import {collectionRecords,recordCollectionRoute} from './record-collection-client.js';
+// Record lists over a project collection read types from that collection and
+// its outline snapshot; workspace lists read the workspace at the list snapshot.
+export function recordTypeSource(state,api,snapshot){
+ const collection=collectionRecords(state);
+ return {api:collection?(_route,data,options)=>api(recordCollectionRoute(state).replace(/query$/,'types'),data,options):api,etag:collection?state.etag:snapshot()};
+}
 const validChoice=value=>value&&validViewFilter(value.value)&&value.value!=='all'&&typeof value.label==='string'&&value.label.length<=160;
 export async function lookupRecordTypes(api,command,{signal}={}){
  const result=await api('/api/workspace/read/record-types',command,{adopt:false,signal});

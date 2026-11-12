@@ -1,5 +1,4 @@
-import {collectionRecords,recordCollectionRoute} from './record-collection-client.js';
-import {lookupRecordTypes} from './record-type-lookup.js';
+import {lookupRecordTypes,recordTypeSource} from './record-type-lookup.js';
 import {viewQuery} from './record-view-model.js';
 import {RECORD_TYPES} from './record-types.js';
 import {recordTypeLabel} from './record-type-presentation.js';
@@ -10,7 +9,7 @@ const text=(key,args)=>t('recordTypes',key,args);
 export function recordTypeFilter({state,api,esc,showDialog,snapshot,choose}){
  let key='',result=null,pending=null,error=false,modal=null,timer=null;
  const dialog=()=>document.querySelector('#dialog');
- const command=()=>{const q=viewQuery(state);return {workspaceId:state.book.id,etag:collectionRecords(state)?state.etag:snapshot(),projectId:q.projectId,notebookId:q.notebookId,selected:q.filter,search:'',cursor:null,limit:25};};
+ const command=()=>{const q=viewQuery(state);return {workspaceId:state.book.id,etag:recordTypeSource(state,api,snapshot).etag,projectId:q.projectId,notebookId:q.notebookId,selected:q.filter,search:'',cursor:null,limit:25};};
  const identity=()=>JSON.stringify([state.storage?.contextId,command()]);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="record-type-${action}" ${extra}>${esc(text(label))}</button>`;
  function cancel(){clearTimeout(timer);pending?.abort();pending=null;}
@@ -32,7 +31,7 @@ export function recordTypeFilter({state,api,esc,showDialog,snapshot,choose}){
   cancel();const request=new AbortController(),requestedKey=key,requestedModal=modal;pending=request;error=false;
   if(inDialog){modal.cursor=cursor;modal.loading=true;modal.error=false;paintDialog();}
   try{
-   const transport=collectionRecords(state)?(_route,data,options)=>api(recordCollectionRoute(state).replace(/query$/,'types'),data,options):api;
+   const transport=recordTypeSource(state,api,snapshot).api;
    const page=await lookupRecordTypes(transport,{...command(),search,cursor},{signal:request.signal});
    if(request.signal.aborted||identity()!==requestedKey||key!==requestedKey||inDialog&&modal!==requestedModal)return;
    if(inDialog){modal.page=page;modal.loading=false;}else result=page;
