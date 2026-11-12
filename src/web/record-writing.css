@@ -8,6 +8,8 @@
 .publication-parts .publication-part-choice{display:grid;place-items:center;min-width:3rem;min-height:2.55rem;cursor:pointer}
 .publication-part-choice input[type=checkbox]{width:1.15rem;height:1.15rem;margin:0;cursor:pointer}
 .record-writing [data-writing-fields]{min-width:0}.record-writing .document-content{min-height:12rem}
+.record-draft-edit fieldset[data-writing-fields]{border:0;margin:0;padding:0}
+.record-draft-edit fieldset[data-writing-fields][aria-busy="true"]{opacity:.65;cursor:progress}
 .record-writing .document-tools{position:static}
 .record-writing .dialog-actions{position:static;display:flex;flex-wrap:wrap;gap:.5rem;padding:1rem 0;background:var(--ui-surface)}
 .record-writing-conflict{border:1px solid var(--ui-border);padding:1rem;margin-top:1rem;overflow-wrap:anywhere}
