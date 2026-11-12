@@ -8,7 +8,7 @@ const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export function pdfDomainFormat(owner,domain){
  if(!Object.hasOwn(owner??{},'pdfFormat'))return 1;
  if(domain!=='pdf'||!Number.isSafeInteger(owner.pdfFormat)||owner.pdfFormat<2)bad();
- if(owner.pdfFormat>6)throw new AppError('ACCESS_UPGRADE');return owner.pdfFormat;
+ if(owner.pdfFormat>8)throw new AppError('ACCESS_UPGRADE');return owner.pdfFormat;
 }
 function inlineReferences(node){
  if(!node||typeof node!=='object')return false;
@@ -32,6 +32,6 @@ async function ownerValue(store){
  return {owner,format:pdfDomainFormat(owner,store.domain)};
 }
 export async function requirePdfDomainFormat(store,required=2){
- if(!store.writable)throw new AppError('INVALID');const {owner,format}=await ownerValue(store);if(![2,3,4,5,6].includes(required))throw new AppError('INVALID');if(format<required)await store.putObject('owner',{...owner,pdfFormat:required});
+ if(!store.writable)throw new AppError('INVALID');const {owner,format}=await ownerValue(store);if(![2,3,4,5,6,7,8].includes(required))throw new AppError('INVALID');if(format<required)await store.putObject('owner',{...owner,pdfFormat:required});
 }
 export async function assertPdfDomainFormat(store,required=2){if((await ownerValue(store)).format<required)bad();}

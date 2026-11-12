@@ -9,7 +9,7 @@ import {projectContentHttp} from '../src/project-content-http.js';
 
 const id='00000000-0000-4000-8000-000000000001';
 test('PDF dispatch, snapshot and request admission use the same declared contracts',()=>{
- assert.equal(dispatched,pdfDocumentRequest);assert.equal(Object.keys(pdfDocumentRoutes).length,32);
+ assert.equal(dispatched,pdfDocumentRequest);assert.equal(Object.keys(pdfDocumentRoutes).length,40);
  for(const [name,route] of Object.entries(pdfDocumentRoutes)){
   assert.ok(Object.isFrozen(route));
   for(const key of ['method','input','schema','authority','owner','admission','cancellation','output'])assert.equal(typeof route[key],'string',name+': '+key);

@@ -68,6 +68,15 @@ export class PdfDocumentImages{
   try{const image=canonicalPNG(content,{strict:true});if(image.width!==value.width||image.height!==value.height)fail('CATALOGUE_DAMAGED');}catch{fail('CATALOGUE_DAMAGED');}
   signal?.throwIfAborted();return {...projection(value),content};
  }
+ async copyTo(destinationId,asset,{signal}={}){
+  const target=new PdfDocumentImages(this.store,destinationId);
+  if(await this.store.object(target.key(asset)))return projection(await target.descriptor(asset));
+  const {content,...info}=await this.read(asset,{signal});
+  try{
+   const prepared=Object.freeze(info);preparedImages.set(prepared,content);
+   return await target.retain(prepared,{signal});
+  }finally{content.fill(0);}
+ }
  async verify({signal}={}){let images=0;for await(const key of this.store.objectIdEntries('pdf:image:'+this.id+':',{signal})){await this.read(key.slice(('pdf:image:'+this.id+':').length),{signal});images++;}return {images};}
 }
 export async function verifyPdfImages(store,{signal}={}){

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {PdfExportJobs,verifyPdfExportJobs} from '../src/pdf-export-jobs.js';
 import {PdfDocumentStore} from '../src/pdf-document-store.js';
+import {PdfDocuments} from '../src/pdf-documents.js';
+import {pdfFileResearch} from '../src/pdf-publication-files.js';
 import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {AppError} from '../src/errors.js';
@@ -21,6 +23,36 @@ async function fixture({archival=false}={}){
  const saved=await documents.domains.run(['pdf'],get=>new PdfDocumentStore(get('pdf')).change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header,section}}),{write:['pdf']});
  return {documents,values,id,header,section,revision:saved.revision,tick:ms=>now+=ms,writes:()=>writes,verify:()=>documents.domains.run(['pdf'],get=>verifyPdfExportJobs(get('pdf')))};
 }
+test('publication batch binds reviewed editions and grants across lost acknowledgements, restart and withdrawal',async()=>{
+ const f=await fixture(),documents=f.documents,recordId=randomUUID(),workspaceId=randomUUID();
+ let permission='a'.repeat(64),rendered=0;
+ const files={sourceForRecord:async()=>permission?{id:recordId,visible:true,revision:permission}:null,pdfSource:async()=>({id:recordId,revision:permission,title:'Eligible material',provenance:{workspaceId,recordId,recordRevision:permission},parts:{entry:'Visible only while granted',sections:[],figures:[]}})};
+ documents.publicationFiles=files;
+ const selected=await pdfFileResearch(files,{operation:'selection',sourceId:workspaceId,snapshotId:permission,recordId,itemId:recordId,collection:'entry'});
+ const {revision}=await documents.domains.run(['pdf'],async get=>{
+  const docs=new PdfDocumentStore(get('pdf'));await docs.prepareLibrary();
+  return docs.change({id:f.id,commandId:randomUUID(),expectedRevision:f.revision,operation:{type:'append',section:{id:randomUUID(),layout:null,start:null,title:selected.title,content:selected.content,research:selected,figures:[]}}});
+ },{write:['pdf']});
+ const organize=(action,input)=>PdfDocuments.prototype.organizeLibrary.call(documents,action,input);
+ const input={action:'export',groupId:null,selection:[{id:f.id,revision}]},review=await organize('library-review',input);
+ assert.equal(review.items[0].included,2);assert.equal(review.items[0].edition,2);
+ assert.doesNotMatch(JSON.stringify(review),/Eligible material|Visible only/);
+ const command={commandId:randomUUID(),review:input,token:review.token};permission='b'.repeat(64);
+ await assert.rejects(organize('library-batch',command),{code:'CONFLICT'});
+ assert.equal([...f.values.keys()].some(key=>key.startsWith('pdf-export:job:')),false);
+ permission='a'.repeat(64);
+ const acknowledged=await organize('library-batch',command),[id]=acknowledged.jobs;
+ const jobs=new PdfExportJobs(documents,{prepare:async()=>{rendered++;return {...render(),sourceProof:[{workspaceId,recordId,revision:permission}]};}});
+ permission=null;
+ assert.deepEqual(await organize('library-batch',command),acknowledged);
+ assert.equal((await jobs.work(id)).error.code,'PDF_SOURCE_CONTENT');assert.equal(rendered,0);
+ await assert.rejects(jobs.download(id),{code:'JOB_CHANGED'});
+ permission='a'.repeat(64);await jobs.resume(id);assert.equal((await jobs.work(id)).state,'completed');assert.equal(rendered,1);
+ const afterRestart=new PdfExportJobs(documents);
+ assert.equal((await afterRestart.download(id)).revision,revision);permission=null;
+ await assert.rejects(afterRestart.download(id),{code:'PDF_SOURCE_CONTENT'});
+ assert.deepEqual(await f.verify(),{jobs:1,completed:1});
+});
 
 test('PDF export jobs pin editions, retain bounded output and verify downloads independently of current headers',async()=>{
  const f=await fixture(),output=render(1100000),seen=[],jobs=new PdfExportJobs(f.documents,{prepare:async(pin,{progress})=>{seen.push(pin);await progress('compiling');await progress({stage:'rendering',done:0,total:1});return output;}}),jobId=randomUUID(),input={jobId,documentId:f.id,revision:f.revision};

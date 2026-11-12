@@ -1,10 +1,12 @@
 // Transport, owner dispatch and service admission share this policy. Document,
 // source-permission and exact-revision validation remain in the owning handlers.
-const reads=['list','archive','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'];
-const writes=['print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'];
+const reads=['list','archive','library-query','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'];
+const writes=['library-prepare','print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'];
 reads.push('composition-proof');
 const binaries=new Set(['export','image-read','font-read','export-download','composition-proof']);
 const controls=new Set(['export-status','export-cancel']);
+writes.push('library-pin','library-label-edit','library-batch');
+reads.push('library-details','library-labels','library-review');
 const routes=Object.create(null);
 for(const [write,names] of [[false,reads],[true,writes]])for(const pdf of names){
  if(Object.hasOwn(routes,pdf))throw Error('Duplicate PDF route contract');

@@ -42,7 +42,7 @@ test('inline markers, equation citations and equation captions acquire authentic
   const open=store=>new PdfDocumentStore(store).verify();
   await f.run(open);
   f.values.set('owner',{...f.owner,pdfFormat:5});await assert.rejects(f.run(open),{code:'CATALOGUE_DAMAGED'});
-  f.values.set('owner',{...f.owner,pdfFormat:7});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
+  f.values.set('owner',{...f.owner,pdfFormat:9});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
  }
 });
 

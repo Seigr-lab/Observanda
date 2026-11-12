@@ -10,6 +10,8 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {PdfDocuments} from '../../src/pdf-documents.js';
 import {PdfDocumentImages} from '../../src/pdf-document-images.js';
+import {PdfDocumentStore} from '../../src/pdf-document-store.js';
+import {executePdfRequest,pdfDocumentRequest} from '../../src/pdf-document-requests.js';
 import {readPdfResearchImages,retainPdfResearchImage,verifyPdfResearchImages} from '../../src/pdf-research-images.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
 import {PublicationConversion} from '../../src/publication-conversion.js';
@@ -17,6 +19,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {MediaStore} from '../../src/media.js';
 import {installPdfRenderer} from '../../src/pdf-render-service.js';
 import {measurePdfPreflight} from '../../src/pdf-preflight.js';
+import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {navigate} from './preferences-helper.js';
 const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
 function comment(png){const value=Buffer.from('Comment\0private-camera-marker'),chunk=Buffer.alloc(value.length+12);chunk.writeUInt32BE(value.length);chunk.write('tEXt',4);value.copy(chunk,8);chunk.writeUInt32BE(crc32(chunk.subarray(4,-4)),chunk.length-4);return Buffer.concat([png.subarray(0,-12),chunk,png.subarray(-12)]);}
@@ -42,8 +45,60 @@ test('PDF author inserts permitted pixels and a remote withdrawal refreshes its 
   await page.reload();await expect(ui.locator('[data-pdf-image]')).toHaveCount(1);const downloadEvent=page.waitForEvent('download',{timeout:45000});await ui.getByRole('button',{name:'Download PDF',exact:true}).click();const download=await downloadEvent;expect((await readFile(await download.path())).subarray(0,5).toString()).toBe('%PDF-');expect(rendered.at(-1).images).toEqual([{alt:'Selected research image',caption:'Author-approved observation'}]);for(const forbidden of ['Private caption marker','Retained image choice','unexported-evidence-name','private-camera-marker',firstCommand.source.recordRevision])expect(rendered.at(-1).html).not.toContain(forbidden);await ui.locator('[data-command="preview"]').click();const frame=ui.locator('[data-pdf-preview] iframe');await expect(frame).toHaveAttribute('src',/^blob:/);const oldPreview=await frame.getAttribute('src');expect(await page.evaluate(()=>document.visibilityState)).toBe('visible');
   const sourceReads=[],observe=request=>{const route=new URL(request.url()).pathname;if(['/api/pdf/section','/api/pdf/sections','/api/workspace/read/version'].includes(route))sourceReads.push(route);};
   page.on('request',observe);await page.waitForResponse(response=>response.url().endsWith('/api/website-files/pdf-version'),{timeout:10000});page.off('request',observe);expect(sourceReads).toEqual([]);
+  const copiedId=randomUUID(),head=await documents.read('open',{id});
+  const details=await documents.libraryDetails({id,revision:head.revision,cursor:null});
+  expect(details.exported.item).toMatchObject({state:'completed',revision:head.revision});expect(details.protected).toBe(true);
+  const copyCommand={id:copiedId,commandId:randomUUID(),expectedRevision:null,operation:{type:'duplicate',id,expectedRevision:head.revision,name:'Image permissions copy'}};
+  const interrupted={...copyCommand,id:randomUUID(),commandId:randomUUID()};
+  await assert.rejects(documents.domains.run(['pdf'],get=>new PdfDocumentStore(get('pdf')).change(interrupted,{publicationFiles:files,check:()=>{throw Error('Copy interrupted before saving');}}),{write:['pdf']}),/Copy interrupted before saving/);
+  await documents.domains.run(['pdf'],async get=>{
+   const store=get('pdf');
+   for(const key of ['pdf:head:'+interrupted.id,'pdf:image:'+interrupted.id+':'+first.asset,'pdf-copy-image:'+interrupted.id+':'+first.id,'pdf:command:'+interrupted.id+':'+interrupted.commandId])expect(await store.object(key)).toBeNull();
+  });
+  const copyResult=await documents.change(copyCommand);
+  expect(await documents.change(copyCommand)).toEqual({revision:copyResult.revision,replayed:true});
+  const copiedSection=(await documents.read('sections',{id:copiedId})).items[0].id;
+  expect(copiedSection).not.toBe(sectionId);
+  expect((await documents.read('section',{id:copiedId,sectionId:copiedSection})).section.images[0]).toEqual(first);
+  const libraryPage=await page.context().newPage();await libraryPage.goto(app.url);await navigate(libraryPage,'PDF editor');
+  const library=libraryPage.locator('[data-pdf-editor]'),copyRow=library.locator('[data-library-item="'+copiedId+'"]');
+  await copyRow.getByRole('button',{name:'Details',exact:true}).click();await expect(copyRow.locator('.pdf-library-detail ul')).toBeVisible();
+  await expect(copyRow.locator('.pdf-library-detail')).toContainText('No PDF exports yet.');
+  await copyRow.getByRole('button',{name:'Image permissions copy',exact:true}).click();
+  const downloadCopy=libraryPage.waitForEvent('download',{timeout:45000});
+  await library.getByRole('button',{name:'Download PDF',exact:true}).click();
+  const reader=getDocument({data:new Uint8Array(await readFile(await (await downloadCopy).path())),useSystemFonts:true}),pdf=await reader.promise;
+  try{
+   let text='';for(let number=1;number<=pdf.numPages;number++)text+=(await (await pdf.getPage(number)).getTextContent()).items.map(item=>item.str).join(' ');
+   expect(text).toContain('Author-approved observation');expect(text).not.toContain('Private caption marker');
+  }finally{await reader.destroy();}
+  await library.getByRole('button',{name:'Documents',exact:true}).click();await copyRow.getByRole('button',{name:'Details',exact:true}).click();
+  await expect(copyRow.locator('.pdf-library-detail')).toContainText('Ready to download');
+  await documents.domains.run(['pdf'],async get=>{
+   const owner=get('pdf');expect((await new PdfDocumentImages(owner,copiedId).read(first.asset)).content).toEqual(stored.image.content);
+   expect((await verifyPdfResearchImages(owner)).images).toBe(2);
+  });
+  const layoutTab=await page.context().newPage();await layoutTab.goto(app.url);await navigate(layoutTab,'PDF editor');
+  const layoutUI=layoutTab.locator('[data-pdf-editor]');
+  await layoutUI.locator('[data-library-item="'+copiedId+'"]').getByRole('button',{name:'Image permissions copy',exact:true}).click();
+  const advanced=layoutUI.locator('[data-disclosure="pdf-section-options"]');await advanced.locator(':scope > summary').click();
+  const canvasEditor=layoutUI.locator('[data-pdf-composition-editor]');await canvasEditor.locator(':scope > summary').click();
+  await canvasEditor.getByRole('combobox',{name:'Layout mode',exact:true}).selectOption('page');
+  await expect(canvasEditor.locator('[data-pdf-proof-status]')).toContainText('Saved PDF content area',{timeout:20000});
+  await canvasEditor.locator('[data-pdf-composition-handle^="image:"]').first().dblclick();
+  await expect(layoutUI.getByRole('dialog')).toBeVisible();
+  const measured=await documents.read('open',{id:copiedId});
   // This independent writer has no renderer, BroadcastChannel or focus event.
   // The foreground PDF editor must observe only the file generation change.
   await editSource(record=>{record.attachments[0].sharePdf=false;});await expect(ui.locator('[data-pdf-image]')).toHaveCount(0,{timeout:15000});await expect(frame).toHaveAttribute('src',/^blob:/);await expect(frame).not.toHaveAttribute('src',oldPreview);expect(rendered.at(-1).images).toEqual([]);expect((await documents.read('section',{id,sectionId})).section.images??[]).toEqual([]);expect(errors).toEqual([]);
+  await expect(copyRow.locator('.pdf-library-detail')).toHaveCount(0,{timeout:15000});
+  expect((await documents.read('section',{id:copiedId,sectionId:copiedSection})).section.images).toEqual([]);
+  await assert.rejects(executePdfRequest(f.workspace,pdfDocumentRequest('/api/pdf/image-read'),{workspaceId,id:copiedId,asset:first.asset},{publicationFiles:files,binary:()=>assert.fail('A withdrawn asset was delivered')}),{code:'PDF_SOURCE_CONTENT'});
+  await expect(canvasEditor.locator('[data-pdf-composition-proof]')).toBeHidden({timeout:15000});
+  await expect(layoutUI.getByRole('dialog')).toHaveCount(0);
+  await expect(canvasEditor.locator('[data-pdf-composition-handle^="image:"]')).toHaveCount(0);
+  await assert.rejects(executePdfRequest(f.workspace,pdfDocumentRequest('/api/pdf/composition-proof'),{workspaceId,id:copiedId,sectionId:copiedSection,revision:measured.revision},{publicationFiles:files,binary:()=>assert.fail('A withdrawn layout proof was delivered')}),error=>['PDF_COMPOSITION_STALE','PDF_PLACEMENT_REVIEW'].includes(error.code));
+  await layoutTab.close();
+  await libraryPage.close();
  }finally{await app.close();removeRenderer();await clearVault(f.vault);if(path.dirname(directory)!==parent||!path.basename(directory).startsWith('observanda-pdf-source-images-'))throw Error('Unexpected test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

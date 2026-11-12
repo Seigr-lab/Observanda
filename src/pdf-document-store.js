@@ -1,3 +1,6 @@
+import {PdfLibraryIndex,preparePdfLibrary,queryPdfLibrary,recordPdfLibraryItem,validPdfLibrary,verifyPdfLibrary} from './pdf-library-index.js';
+import {PdfLibraryOrganization} from './pdf-library-organization.js';
+import {copyPdfEdition} from './pdf-document-copy.js';
 import {PdfPrintProfiles} from './pdf-print-profiles.js';
 import {requiredPdfDomainFormat,requirePdfDomainFormat,assertPdfDomainFormat} from './pdf-domain-format.js';
 import {verifyPdfResearchImages} from './pdf-research-images.js';
@@ -25,6 +28,9 @@ export function validatePdfCommand(command){
  const {id,commandId,expectedRevision,operation:o}=command;
  if(!researchId(id)||!researchId(commandId)||expectedRevision!==null&&!revisionId(expectedRevision)||!o||typeof o!=='object')invalid();
  if(o.type==='create'){if(expectedRevision!==null||!exact(o,'type,header,section')||!validPdfDocumentHeader(o.header)||o.header.id!==id||!validPdfSection(o.section))invalid();}
+ else if(o.type==='duplicate'){
+  if(expectedRevision!==null||!exact(o,'type,id,expectedRevision,name')||!researchId(o.id)||o.id===id||!revisionId(o.expectedRevision)||typeof o.name!=='string'||!o.name.trim()||o.name.length>240||/[\u0000-\u001f]/u.test(o.name))invalid();
+ }
  else{
   if(expectedRevision===null)invalid();
   if(o.type==='header'){if(!exact(o,'type,header')||!validPdfDocumentHeader(o.header)||o.header.id!==id)invalid();}
@@ -50,11 +56,44 @@ export class PdfDocumentStore{
  constructor(store){if(store.domain!=='pdf')invalid();this.store=store;}
  async directory(){
   const value=await this.store.object('pdf:directory');
-  if(value){if(!exact(value,'version,root')||value.version!==1||!validTableRef(value.root))bad();return value;}
+  if(value){
+   if(!validTableRef(value.root))bad();
+   if(value.version===1&&exact(value,'version,root'))return value;
+   if(value.version!==2||!exact(value,'version,root,library')||!validPdfLibrary(value.library))bad();
+   await assertPdfDomainFormat(this.store,value.library.version===2?8:7);return value;
+  }
   for await(const id of this.store.objectIdEntries('pdf:')){void id;bad();}
   return {version:1,root:null};
  }
- index(id){return new RetainedTableIndex(new PdfBlocks(this.store,id),{namespace:'index',allowSparseBranches:true});}
+ index(id){const derived=id==='library'||id==='organization'||id.startsWith('group-');const Index=derived&&this.store.writable?PdfLibraryIndex:RetainedTableIndex;return new Index(new PdfBlocks(this.store,id),{namespace:'index',allowSparseBranches:true});}
+ async prepareLibrary({signal}={}){
+  const directory=await this.directory();
+  if(directory.library?.backfill===null)return {ready:true};
+  await requirePdfDomainFormat(this.store,7);
+  const library=await preparePdfLibrary(this,directory,{signal});
+  await this.store.putObject('pdf:directory',{version:2,root:directory.root,library});
+  return {ready:library.backfill===null};
+ }
+ async libraryQuery(data,options){
+  const directory=await this.directory();
+  const organization=new PdfLibraryOrganization(this,directory.library);
+  return queryPdfLibrary(this,directory.library,data,{...options,group:id=>organization.group(id)});
+ }
+ async pinDocument(input,{signal}={}){
+  if(!exact(input,'id,expectedRevision,pinned')||!researchId(input.id)||!revisionId(input.expectedRevision)||typeof input.pinned!=='boolean')invalid();
+  const directory=await this.directory(),library=directory.library,head=await this.head(input.id);
+  if(!library||library.backfill||head.revision!==input.expectedRevision)throw new AppError('CONFLICT');
+  const row=await this.store.object('pdf-library:item:'+input.id);
+  if(!row||row.id!==input.id||row.revision!==head.revision||row.archived)bad();
+  if(row.pinned!==input.pinned){
+   const index=this.index('library');
+   const organization=new PdfLibraryOrganization(this,library);
+   await recordPdfLibraryItem(this.store,index,library,{...row,pinned:input.pinned},{groups:(prior,row)=>organization.updateDocument(prior,row,{signal})});
+   await index.flushRoots([library.names,library.recent,library.pinned],{signal});
+   await this.store.putObject('pdf:directory',directory);
+  }
+  return {pinned:input.pinned};
+ }
  async archiveDirectory(){
   const value=await this.store.object('pdf:archive');
   if(value&&(!exact(value,'version,root')||value.version!==1||!validTableRef(value.root)))bad();
@@ -136,19 +175,26 @@ export class PdfDocumentStore{
   }
   return {revision:current.revision,items,next:offset+items.length<current.count?offset+items.length:null,total:current.count};
  }
- async change(command, {signal,fontPins=[]}={}){
+ async change(command, {signal,fontPins=[],publicationFiles,check}={}){
   const {id,commandId,expectedRevision,operation}=validatePdfCommand(command);
   if(!researchId(id)||!researchId(commandId)||expectedRevision!==null&&!revisionId(expectedRevision)||!operation||typeof operation!=='object')invalid();signal?.throwIfAborted();
   const receiptKey='pdf:command:'+id+':'+commandId,fingerprint=hash({id,expectedRevision,operation}),receipt=await this.store.object(receiptKey);
   if(receipt){if(!exact(receipt,'fingerprint,revision')||!revisionId(receipt.revision))bad();if(receipt.fingerprint!==fingerprint)throw new AppError('MODULE_REPLAY');await this.revision(id,receipt.revision);return {revision:receipt.revision,replayed:true};}
   let previous=null,current;
-  if(expectedRevision===null){if(operation.type!=='create'||!exact(operation,'type,header,section')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id||!validPdfSection(operation.section))invalid();if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
+  if(expectedRevision===null){if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
   else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));if(current.version===2&&current.lifecycle.archived!==previous.removed)bad();}
-  const format=requiredPdfDomainFormat(operation);if(format>1)await requirePdfDomainFormat(this.store,format);
+  const format=operation.type==='duplicate'?7:requiredPdfDomainFormat(operation);if(format>1)await requirePdfDomainFormat(this.store,format);
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
   const put=async(section,position)=>{for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
   const selected=async sectionId=>{if(!researchId(sectionId))invalid();const row=await index.find({root:current.sections},sectionId);if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);};
   if(operation.type==='create')await put(operation.section,current.nextPosition++);
+  else if(operation.type==='duplicate'){
+   const copy=await copyPdfEdition(this,operation,id,async section=>{
+    await put(section,current.nextPosition++);
+    if(current.nextPosition%32===0){await index.flush(current.sections);await orderIndex.flush(current.order);}
+   },{signal,publicationFiles,check});
+   current.header=copy.header;
+  }
   else if(operation.type==='header'){
    if(!exact(operation,'type,header')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id)invalid();current.header=operation.header;
   }else if(operation.type==='append'){
@@ -213,6 +259,12 @@ export class PdfDocumentStore{
   const versions=await index.change(previous?.versions??null,revision,revision);await index.flush(versions);
   await this.store.putObject('pdf:revision:'+id+':'+revision,current);
   await this.store.putObject('pdf:head:'+id,{version:1,id,revision,sequence,history,versions,removed:operation.type==='remove'});
+  if(directory.library){
+   const metadataIndex=this.index('library');
+   const organization=new PdfLibraryOrganization(this,directory.library);
+   await recordPdfLibraryItem(this.store,metadataIndex,directory.library,{id,name:current.header.name,count:current.order?.count??0,revision,archived:operation.type==='remove',modified:Date.now()},{groups:(prior,row)=>organization.updateDocument(prior,row,{signal})});
+   await metadataIndex.flushRoots([directory.library.names,directory.library.recent,directory.library.pinned],{signal});
+  }
   const directoryIndex=this.index('directory');directory.root=operation.type==='remove'?await directoryIndex.remove(directory.root,id):await directoryIndex.change(directory.root,id,revision);await directoryIndex.flush(directory.root);await this.store.putObject('pdf:directory',directory);
   if(['remove','restore-document'].includes(operation.type)){
    const archive=await this.archiveDirectory(),archiveIndex=this.index('archive');
@@ -256,6 +308,12 @@ export class PdfDocumentStore{
    }
    if(count!==head.sequence+1||!currentFound)bad();if(!head.removed)documents++;
   }
-  if(documents!==(directory.root?.count??0)||archived!==(archive.root?.count??0))bad();return {documents,editions};
+  if(documents!==(directory.root?.count??0)||archived!==(archive.root?.count??0))bad();
+  if(directory.library){
+   const indexed=await verifyPdfLibrary(this,directory.library,{signal});
+   if(directory.library.organization)await new PdfLibraryOrganization(this,directory.library).verify({signal});
+   if(!directory.library.backfill&&indexed!==documents+archived)bad();
+  }
+  return {documents,editions};
  }
 }

@@ -7,6 +7,7 @@ import {pdfReferencedFigures,validPdfResearch} from './web/pdf-research-model.js
 import {PDF_IMAGE_MAX_BYTES} from './web/pdf-image-model.js';
 import {proseDocument} from './web/prose-model.js';
 import {reconcilePdfPlacements} from './web/pdf-placement-review.js';
+import {pdfImageGrant,pdfImageGrants} from './pdf-research-images.js';
 
 const invalid=()=>{throw new AppError('INVALID');};
 const denied=()=>{throw new AppError('PDF_SOURCE_CONTENT');};
@@ -78,10 +79,10 @@ export async function pdfFileImageBytes(files,pin,{signal}={}){
 export async function allowPdfImage(store,files,documentId,{asset,imageId},{signal,proof}={}){
  // Match by asset as well as placement: changing an image placement ID cannot
  // resurrect a private retained blob or bypass the direct image-read endpoint.
- if(imageId){const receipt=await store.object('pdf-source-image:'+documentId+':'+imageId);if(receipt)return receipt.asset===asset&&Boolean(await imageFile(files,receipt.command.source,{signal,proof}));}
+ if(imageId){const grant=await pdfImageGrant(store,documentId,imageId);if(grant)return grant.asset===asset&&Boolean(await imageFile(files,grant.source,{signal,proof}));}
  let documents=imageWindows.get(store);if(!documents){documents=new Map();imageWindows.set(store,documents);}
  if(!documents.has(documentId)){
-  const rows=new Map();for await(const key of store.objectIdEntries('pdf-source-image:'+documentId+':',{signal})){const receipt=await store.object(key),pins=rows.get(receipt.asset)??[];pins.push(receipt.command.source);rows.set(receipt.asset,pins);}
+  const rows=new Map();for await(const grant of pdfImageGrants(store,documentId,{signal})){const pins=rows.get(grant.asset)??[];pins.push(grant.source);rows.set(grant.asset,pins);}
   documents.set(documentId,rows);
  }
  const grants=documents.get(documentId).get(asset);if(!grants)return true;

@@ -23,9 +23,40 @@ import {TestDeviceStore} from './device-fixture.js';
 import {PDF_ARCHIVAL_VALIDATOR_SHA256} from '../src/web/pdf-archival-model.js';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 
+test('fresh-key recovery restores tagged documents, exact edition selection and completed reviewed jobs', {timeout:180000},async t=>{
+ const f=await fixture(t),documents=new PdfDocuments(f.storage,f.book.id),id=randomUUID();
+ const header={version:1,id,name:'Retained publication',language:'en',direction:'ltr',layout:pdfLayoutPreset()};
+ const section={id:randomUUID(),title:'Observations',content:'Retain this edition.',layout:null,start:null};
+ const {revision}=await documents.change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header,section}});
+ const groupId=randomUUID(),edit={commandId:randomUUID(),operation:{type:'create',id:groupId,kind:'tag',name:'Approved'}};
+ await documents.organizeLibrary('library-label-edit',edit);
+ async function batch(action){
+  const review={action,groupId:action==='assign'?groupId:null,selection:[{id,revision}]};
+  const {token}=await documents.organizeLibrary('library-review',review),command={commandId:randomUUID(),review,token};
+  return {command,result:await documents.organizeLibrary('library-batch',command)};
+ }
+ await batch('assign');const {command,result}=await batch('export'),[jobId]=result.jobs,bytes=Buffer.from('%PDF-1.7\nReviewed storage fixture.');
+ const queue=new PdfExportJobs(documents,{prepare:async()=>({bytes,sha256:digest(bytes),renderer:{engine:'chromium',electron:'synthetic',chromium:'synthetic',recipeVersion:1},preflight:{version:1,status:'ok',findings:[],truncated:false}})});
+ assert.equal((await queue.work(jobId)).state,'completed');
+ const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'reviewed-recovery-device')})),vault=takeCreatedVault(access);
+ try{
+  const target=new ProjectStorage(path.join(f.root,'recovered'),f.projectId,vault);
+  await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));
+  await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));
+  const recovered=new PdfDocuments(target,f.book.id),labels=await recovered.organizeLibrary('library-labels',{kind:'tag',search:'App',cursor:null,limit:5});
+  assert.equal(labels.items[0].id,groupId);assert.equal(labels.items[0].count,1);
+  assert.deepEqual((await recovered.read('library-query',{groupId})).items.map(row=>[row.id,row.revision]),[[id,revision]]);
+  assert.deepEqual(await recovered.organizeLibrary('library-batch',command),result);
+  assert.deepEqual((await new PdfExportJobs(recovered).download(jobId)).bytes,bytes);
+ }finally{clearVault(vault);}
+});
+
 test('durable PDF exports clean cancelled chunks transactionally and retain exact outputs through archive and fresh-key recovery',{timeout:180000},async t=>{
  const f=await fixture(t),documents=new PdfDocuments(f.storage,f.book.id),id=randomUUID(),jobId=randomUUID(),header={version:1,id,name:'Durable report',language:'en',direction:'ltr',layout:pdfLayoutPreset()},section={id:randomUUID(),title:'Evidence',content:'Pinned export contents',layout:null,start:null};
- const saved=await documents.change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header,section}}),bytes=Buffer.alloc(900000);for(let at=0;at<bytes.length;at++)bytes[at]=at%251;bytes.write('%PDF-1.7\n');
+ // Open an existing pre-index PDF owner. Newly created libraries acquire
+ // their metadata index on the first authoring command.
+ await documents.domains.initialize(['pdf']);
+ const saved=await documents.domains.run(['pdf'],get=>new PdfDocumentStore(get('pdf')).change({id,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header,section}}),{write:['pdf']}),bytes=Buffer.alloc(900000);for(let at=0;at<bytes.length;at++)bytes[at]=at%251;bytes.write('%PDF-1.7\n');
  const legacyOwner=await documents.domains.run(['pdf'],get=>get('pdf').object('owner'));assert.equal(Object.hasOwn(legacyOwner,'pdfFormat'),false);
  const rollbackId=randomUUID();await assert.rejects(documents.domains.run(['pdf'],async get=>{await new PdfDocumentStore(get('pdf')).change({id:rollbackId,commandId:randomUUID(),expectedRevision:null,operation:{type:'create',header:{...header,id:rollbackId,press:{version:1,bleedMm:3,cropMarks:true}},section}});assert.equal((await get('pdf').object('owner')).pdfFormat,2);throw new Error('rollback feature acquisition');},{write:['pdf']}),/rollback feature acquisition/);
  await documents.domains.run(['pdf'],async get=>{assert.deepEqual(await get('pdf').object('owner'),legacyOwner);assert.equal(await get('pdf').object('pdf:head:'+rollbackId),null);});

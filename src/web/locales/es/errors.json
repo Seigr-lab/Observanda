@@ -460,6 +460,8 @@
   "ACCESS_STATE_CHANGED": "Estos ajustes de acceso no constan en el historial de confianza de este dispositivo. Revisa e importa los ajustes de acceso actuales desde un dispositivo de confianza antes de abrir esta copia.",
   "ACCESS_SAVE_UNCERTAIN": "Se interrumpió el guardado de los ajustes de acceso. Puede que las nuevas credenciales ya estén activas. Vuelve a abrir el espacio de trabajo y prueba primero las nuevas credenciales.",
   "WEBSITE_APPROVAL_REQUIRED": "Este sitio web requiere una revisión aprobada de la edición guardada actual antes de publicarse. Solicita una revisión o pide a una persona revisora que la apruebe.",
+  "PDF_LIBRARY_NAME_USED": "Este nombre ya está en uso. Elige otro nombre para la colección o etiqueta.",
+  "PDF_LIBRARY_GROUP_USED": "Este grupo contiene documentos. Quita los documentos del grupo antes de eliminarlo.",
   "PDF_FONT_SUBSTITUTED": "Este objeto contiene texto que se imprime con una fuente de sustitución. Elige una fuente que incluya esos caracteres.",
   "PDF_UNMAPPED_GLYPH": "La tipografía impresa no puede representar algunos caracteres como texto Unicode que se pueda buscar en este perfil. Para el árabe, selecciona Scheherazade New en el texto afectado. También puedes elegir otra tipografía o el PDF estándar.",
   "WEBSITE_DESIGN_PACKAGE": "Este archivo no es un paquete de diseño de sitio web utilizable. Vuelve a exportar el diseño y elige el archivo nuevo.",

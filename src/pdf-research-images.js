@@ -6,6 +6,7 @@ import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {PDF_IMAGE_MAX_BYTES,pdfImagePlacement} from './web/pdf-image-model.js';
 const prefix='pdf-source-image:';
+const copiedPrefix='pdf-copy-image:';
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys.split(',').sort().join();
 const hash=value=>digest(serialize(value));
 const invalid=()=>{throw new AppError('INVALID');},bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -21,11 +22,45 @@ const receiptKey=(id,imageId)=>prefix+id+':'+imageId;
 function checkedReceipt(value,id,imageId){
  if(!exact(value,'version,command,fingerprint,asset,revision')||value.version!==1||!validCommand(value.command)||value.command.id!==id||value.command.imageId!==imageId||value.fingerprint!==hash(value.command)||![value.asset,value.revision].every(revisionId))bad();return value;
 }
+async function copiedGrant(store,id,imageId){
+ const value=await store.object(copiedPrefix+id+':'+imageId);
+ if(value===null)return null;
+ if(!exact(value,'version,origin,asset')||value.version!==1||!researchId(value.origin)||value.origin===id||!revisionId(value.asset))bad();
+ const original=checkedReceipt(await store.object(receiptKey(value.origin,imageId)),value.origin,imageId);
+ if(original.asset!==value.asset)bad();
+ return {imageId,asset:value.asset,source:original.command.source,origin:value.origin};
+}
+export async function pdfImageGrant(store,id,imageId){
+ const value=await store.object(receiptKey(id,imageId));
+ if(value===null)return copiedGrant(store,id,imageId);
+ const original=checkedReceipt(value,id,imageId);
+ return {imageId,asset:original.asset,source:original.command.source,origin:id};
+}
+export async function* pdfImageGrants(store,id,{signal}={}){
+ for(const type of [prefix,copiedPrefix]){
+  const start=type+id+':';
+  for await(const key of store.objectIdEntries(start,{signal})){
+   signal?.throwIfAborted();const imageId=key.slice(start.length);
+   if(!researchId(imageId))bad();
+   const grant=type===prefix?await pdfImageGrant(store,id,imageId):await copiedGrant(store,id,imageId);
+   if(!grant)bad();
+   yield grant;
+  }
+ }
+}
+// Record the original permission for every retained asset, including an
+// image reused as decorative artwork or under another placement identity.
+export async function copyPdfImageGrants(store,sourceId,destinationId,{signal}={}){
+ for await(const grant of pdfImageGrants(store,sourceId,{signal})){
+  if(await store.object('pdf:image:'+destinationId+':'+grant.asset))
+   await store.putObject(copiedPrefix+destinationId+':'+grant.imageId,{version:1,origin:grant.origin,asset:grant.asset});
+ }
+}
 export {pdfFileImages as readPdfResearchImages} from './pdf-publication-files.js';
 import {pdfFileImageBytes} from './pdf-publication-files.js';
 export async function retainPdfResearchImage(documents,publicationFiles,input,{signal,check=async()=>{}}={}){
  if(!validCommand(input))invalid();input={...input,source:{...input.source}};await check();signal?.throwIfAborted();if(!await documents.available())throw new AppError('NOT_FOUND');const fingerprint=hash(input),[{PdfDocumentStore},{PdfDocumentImages,preparePdfImage}]=await Promise.all([import('./pdf-document-store.js'),import('./pdf-document-images.js')]);
- const replay=store=>async()=>{const value=await store.object(receiptKey(input.id,input.imageId));if(value===null)return null;const receipt=checkedReceipt(value,input.id,input.imageId);if(receipt.fingerprint!==fingerprint)throw new AppError('MODULE_REPLAY');await new PdfDocumentStore(store).revision(input.id,receipt.revision);return {revision:receipt.revision,replayed:true};};
+ const replay=store=>async()=>{const value=await store.object(receiptKey(input.id,input.imageId));if(value===null){if(await copiedGrant(store,input.id,input.imageId))throw new AppError('EXISTS');return null;}const receipt=checkedReceipt(value,input.id,input.imageId);if(receipt.fingerprint!==fingerprint)throw new AppError('MODULE_REPLAY');await new PdfDocumentStore(store).revision(input.id,receipt.revision);return {revision:receipt.revision,replayed:true};};
  const prior=await documents.domains.run(['pdf'],get=>replay(get('pdf'))(),{signal,check});if(prior){await pdfFileImageBytes(publicationFiles,input.source,{signal});return prior;}
  await documents.read('section',{id:input.id,sectionId:input.sectionId,revision:input.expectedRevision},{signal,check});const original=await pdfFileImageBytes(publicationFiles,input.source,{signal});let prepared;try{prepared=await preparePdfImage(original,{signal,approvedSvg:true});}finally{original.fill(0);}await check();signal?.throwIfAborted();
  return documents.domains.run(['pdf'],async get=>{
@@ -42,6 +77,12 @@ export async function verifyPdfResearchImages(store,{signal}={}){
   signal?.throwIfAborted();const parts=key.slice(prefix.length).split(':');if(parts.length!==2||!parts.every(researchId))bad();const receipt=checkedReceipt(await store.object(key),...parts),command=receipt.command,value=await owner.revision(command.id,receipt.revision),entry=await owner.index(command.id).find({root:value.sections},command.sectionId);if(!entry)bad();
   const {section}=await owner.sectionRow(command.id,entry.revision,command.sectionId),image=section.images?.find(image=>image.id===command.imageId);let asset;try{asset=await new PdfDocumentImages(store,command.id).descriptor(receipt.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}if(!image||serialize(image)!==serialize(pdfImagePlacement(asset,{id:command.imageId,alt:command.alt,caption:command.caption})))bad();
   const saved=await store.object('pdf:command:'+command.id+':'+command.commandId);if(saved?.revision!==receipt.revision||saved.fingerprint!==hash({id:command.id,expectedRevision:command.expectedRevision,operation:{type:'section',section}}))bad();images++;
+ }
+ for await(const key of store.objectIdEntries(copiedPrefix,{signal})){
+  const parts=key.slice(copiedPrefix.length).split(':');if(parts.length!==2||!parts.every(researchId))bad();
+  const [id,imageId]=parts,grant=await copiedGrant(store,id,imageId);await owner.head(id,{removed:true});
+  if(!grant||await store.object(receiptKey(id,imageId)))bad();
+  await new PdfDocumentImages(store,id).descriptor(grant.asset);images++;
  }
  return {images};
 }

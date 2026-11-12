@@ -1,4 +1,6 @@
 import {checkPdfSources} from './pdf-publication-files.js';
+import {reviewPdfExport} from './pdf-library-export-review.js';
+import {assertPdfDomainFormat} from './pdf-domain-format.js';
 // Durable exports belong to the independent PDF domain. Render callbacks run
 // outside transactions; short, fenced writes retain each immutable output.
 import {randomUUID,createHash} from 'node:crypto';
@@ -28,10 +30,11 @@ const validProgress=value=>exact(value,'stage,done,total')&&stages.includes(valu
 const validRenderer=value=>exact(value,'engine,electron,chromium,recipeVersion')&&value.engine==='chromium'&&['electron','chromium'].every(key=>typeof value[key]==='string'&&value[key].length>0&&value[key].length<=80)&&Number.isSafeInteger(value.recipeVersion)&&value.recipeVersion>0;
 const errorValue=error=>({code:error instanceof AppError?error.code:'IO',preflight:validPdfPreflight(error?.preflight)?structuredClone(error.preflight):null});
 const attemptPrefix=job=>BLOCK+job.id+':'+job.attempt+':';
-const identity=job=>({id:job.id,documentId:job.documentId,revision:job.revision,createdAt:job.createdAt});
+const identity=job=>({id:job.id,documentId:job.documentId,revision:job.revision,createdAt:job.createdAt,...(job.reviewedSources?{reviewedSources:job.reviewedSources}:{})});
 const listKey=job=>String(9999999999999-job.createdAt).padStart(13,'0')+'-'+job.id;
 function validateJob(value,id){
- if(!exact(value,'version,id,documentId,revision,state,attempt,createdAt,updatedAt,completedAt,lease,progress,error,output,cleanupPending')||![1,2].includes(value.version)||value.id!==id||!researchId(id)||!researchId(value.documentId)||!revisionId(value.revision)||!states.includes(value.state)||!natural(value.attempt)||!natural(value.createdAt)||value.createdAt>9999999999999||!natural(value.updatedAt)||value.updatedAt<value.createdAt||!validProgress(value.progress)||typeof value.cleanupPending!=='boolean')bad();
+ const reviewed=Object.hasOwn(value??{},'reviewedSources');
+ if(!exact(value,'version,id,documentId,revision,state,attempt,createdAt,updatedAt,completedAt,lease,progress,error,output,cleanupPending'+(reviewed?',reviewedSources':''))||reviewed&&!revisionId(value.reviewedSources)||![1,2].includes(value.version)||value.id!==id||!researchId(id)||!researchId(value.documentId)||!revisionId(value.revision)||!states.includes(value.state)||!natural(value.attempt)||!natural(value.createdAt)||value.createdAt>9999999999999||!natural(value.updatedAt)||value.updatedAt<value.createdAt||!validProgress(value.progress)||typeof value.cleanupPending!=='boolean')bad();
  if(value.lease!==null&&(!exact(value.lease,'token,until')||!researchId(value.lease.token)||!natural(value.lease.until)))bad();
  if((value.state==='rendering')!==(value.lease!==null)||value.state==='rendering'&&value.cleanupPending)bad();
  if(value.error!==null&&(!exact(value.error,'code,preflight')||typeof value.error.code!=='string'||new AppError(value.error.code).code!==value.error.code||value.error.preflight!==null&&!validPdfPreflight(value.error.preflight)))bad();
@@ -42,6 +45,11 @@ function validateJob(value,id){
  return value;
 }
 async function jobValue(store,id){if(!researchId(id))invalid();const value=await store.object(JOB+id);if(!value)throw new AppError('NOT_FOUND');return validateJob(value,id);}
+async function checkRegisteredJob(store,job){
+ const head=await directory(store),entry=await directoryIndex(store).find(head,listKey(job));
+ if(entry?.revision!==hash(identity(job)))bad();
+ if(job.reviewedSources)await assertPdfDomainFormat(store,8);
+}
 async function summary(store,job,now,{details=true}={}){
  const selected=await pinnedDocument(store,job);if(job.version===2&&job.output)await outputValue(store,job,{selected});
  return {documentName:selected.header.name,...identity(job),state:job.state,attempt:job.attempt,updatedAt:job.updatedAt,completedAt:job.completedAt,progress:job.progress,error:details?job.error:job.error&&{code:job.error.code},recoverable:job.state!=='completed'&&(job.state!=='rendering'||job.lease.until<=now),...(job.output?{bytes:job.output.bytes,sha256:job.output.sha256,...(job.version===2?{validation:structuredClone(job.output.validation)}:{})}:{})};
@@ -55,6 +63,24 @@ class ExportBlocks{
 }
 const directoryIndex=store=>new RetainedTableIndex(new ExportBlocks(store,BLOCK+'directory:'),{namespace:'index',allowSparseBranches:true});
 async function directory(store){const value=await store.object(DIRECTORY);if(value){if(!exact(value,'version,root')||value.version!==1||!validTableRef(value.root))bad();return value;}for await(const id of store.objectIdEntries(JOB)){void id;bad();}return {version:1,root:null};}
+export async function latestPdfLibraryExport(store,documentId,cursor,{signal}={}){
+ const projection=job=>({state:job.state,revision:job.revision,createdAt:job.createdAt});
+ if(!researchId(documentId)||cursor!==null&&(!exact(cursor,'offset,pin')||!natural(cursor.offset)||!revisionId(cursor.pin)))invalid();
+ const latest=await store.object('pdf-library:export:'+documentId);
+ if(latest!==null){
+  const job=await jobValue(store,latest);if(job.documentId!==documentId)bad();
+  return {item:projection(job),next:null};
+ }
+ const head=await directory(store),index=directoryIndex(store),pin=hash({documentId,root:head.root?.hash??null});
+ if(cursor&&cursor.pin!==pin)throw new AppError('CONFLICT');
+ let at=cursor?.offset??0;const stop=Math.min(at+32,head.root?.count??0);
+ for(;at<stop;at++){
+  abort(signal);const row=await index.entryAt(head,at),job=await jobValue(store,row.id.slice(14));
+  if(row.id!==listKey(job)||row.revision!==hash(identity(job)))bad();
+  if(job.documentId===documentId)return {item:projection(job),next:null};
+ }
+ return {item:null,next:at<(head.root?.count??0)?{offset:at,pin}:null};
+}
 async function pinnedDocument(store,job){const documents=new PdfDocumentStore(store),head=await documents.head(job.documentId,{removed:true});if(!await documents.index(job.documentId).find({root:head.versions},job.revision))bad();const value=await documents.revision(job.documentId,job.revision);if((job.version===2)!==validPdfOutputProfile(value.header.outputProfile)||job.version===2&&job.output&&job.output.validation.profile!==value.header.outputProfile)bad();return value;}
 // Reuse the canonical string tree without allocating a second whole-PDF
 // base64 string. Each node contains at most 32 KiB of canonical JSON bytes.
@@ -82,16 +108,28 @@ async function readOutput(store,job,{signal,collect=false}={}){
  return {...value,...(collect?{bytes:Buffer.concat(chunks,size)}:{})};
 }
 
+export async function queuePdfExport(store,data,{reviewedSources}={}){
+ const previous=await store.object(JOB+data.jobId);
+ if(previous){
+  const job=validateJob(previous,data.jobId);
+  if(job.documentId!==data.documentId||job.revision!==data.revision||job.reviewedSources!==reviewedSources)throw new AppError('MODULE_REPLAY');
+  return job;
+ }
+ const selected=await new PdfDocumentStore(store).open(data.documentId,{revision:data.revision}),now=await clock(store);
+ const job={version:validPdfOutputProfile(selected.header.outputProfile)?2:1,id:data.jobId,documentId:data.documentId,revision:data.revision,state:'queued',attempt:0,createdAt:now,updatedAt:now,completedAt:null,lease:null,progress:{stage:'queued',done:0,total:null},error:null,output:null,cleanupPending:false,...(reviewedSources?{reviewedSources}:{})};
+ const head=await directory(store),index=directoryIndex(store);
+ head.root=await index.change(head.root,listKey(job),hash(identity(job)));await index.flush(head.root);
+ await store.putObject(DIRECTORY,head);await store.putObject(JOB+job.id,job);
+ if((await store.object('owner'))?.pdfFormat>=7)await store.putObject('pdf-library:export:'+data.documentId,job.id);
+ return job;
+}
+
 export class PdfExportJobs{
  constructor(documents,{prepare=null,leaseMs=30000}={}){if(!documents?.domains||prepare!==null&&typeof prepare!=='function'||!Number.isInteger(leaseMs)||leaseMs<100||leaseMs>300000)invalid();this.documents=documents;this.prepare=prepare;this.leaseMs=leaseMs;this.active=new Map();}
  run(write,operation,options={}){return this.documents.domains.run(['pdf'],get=>operation(get('pdf')),{signal:options.signal,check:options.check,...(write?{write:['pdf']}:{})});}
  async start(data,options={}){
   if(!exact(data,'jobId,documentId,revision')||!researchId(data.jobId)||!researchId(data.documentId)||!revisionId(data.revision))invalid();abort(options.signal);await options.check?.();if(!await this.documents.available())throw new AppError('NOT_FOUND');
-  return this.run(true,async store=>{
-   const previous=await store.object(JOB+data.jobId);if(previous){const job=validateJob(previous,data.jobId);if(job.documentId!==data.documentId||job.revision!==data.revision)throw new AppError('MODULE_REPLAY');return summary(store,job,await clock(store));}
-   const selected=await new PdfDocumentStore(store).open(data.documentId,{revision:data.revision});const now=await clock(store),job={version:validPdfOutputProfile(selected.header.outputProfile)?2:1,id:data.jobId,documentId:data.documentId,revision:data.revision,state:'queued',attempt:0,createdAt:now,updatedAt:now,completedAt:null,lease:null,progress:{stage:'queued',done:0,total:null},error:null,output:null,cleanupPending:false};
-   const head=await directory(store),index=directoryIndex(store);head.root=await index.change(head.root,listKey(job),hash(identity(job)));await index.flush(head.root);await store.putObject(DIRECTORY,head);await store.putObject(JOB+job.id,job);return summary(store,job,now);
-  },options);
+  return this.run(true,async store=>summary(store,await queuePdfExport(store,data),await clock(store)),options);
  }
  async status(id,options={}){return this.run(false,async store=>summary(store,await jobValue(store,id),await clock(store)),options);}
  async list({after=null,limit=20}={},options={}){
@@ -122,7 +160,7 @@ export class PdfExportJobs{
  async work(id,options={}){
   if(!this.prepare)throw new AppError('PDF_DESKTOP');
   let outputProfile;
-  const claim=await this.run(true,async store=>{const job=await jobValue(store,id),now=await clock(store);if(job.state!=='queued'||job.cleanupPending)throw new AppError(job.state==='rendering'?'PDF_BUSY':'JOB_CHANGED');outputProfile=(await pinnedDocument(store,job)).header.outputProfile;
+  const claim=await this.run(true,async store=>{const job=await jobValue(store,id),now=await clock(store);if(job.state!=='queued'||job.cleanupPending)throw new AppError(job.state==='rendering'?'PDF_BUSY':'JOB_CHANGED');await checkRegisteredJob(store,job);outputProfile=(await pinnedDocument(store,job)).header.outputProfile;
    job.state='rendering';job.attempt++;job.updatedAt=now;job.lease={token:randomUUID(),until:now+this.leaseMs};job.progress={stage:'preparing',done:0,total:null};await store.putObject(JOB+id,job);return job;
   },options),token=claim.lease.token,controller=new AbortController(),signal=options.signal?AbortSignal.any([options.signal,controller.signal]):controller.signal,scoped={signal,check:options.check};
   this.active.set(id,controller);let pulse=Promise.resolve();
@@ -130,7 +168,21 @@ export class PdfExportJobs{
   const timer=setInterval(heartbeat,Math.max(25,Math.floor(this.leaseMs/3)));timer.unref?.();
   const progress=async(value,counts={})=>{const next=typeof value==='string'?{stage:value,done:counts.done??0,total:counts.total??null}:{stage:value?.stage,done:value?.done??0,total:value?.total??null};if(!validProgress(next)||['queued','completed','failed','cancelled'].includes(next.stage))invalid();return this.fenced(id,token,async(store,job,now)=>{job.progress=next;job.updatedAt=now;job.lease.until=now+this.leaseMs;await store.putObject(JOB+id,job);},scoped);};
   try{
+   let reviewed=null;
+   if(claim.reviewedSources){
+    reviewed=await this.run(false,async store=>{
+     const owner=new PdfDocumentStore(store),selected=await owner.open(claim.documentId,{revision:claim.revision});
+     if(selected.currentRevision!==claim.revision)throw new AppError('CONFLICT');
+     return reviewPdfExport(owner,this.documents.publicationFiles,claim.documentId,selected,{signal});
+    },scoped);
+    if(!reviewed.ready||reviewed.sources!==claim.reviewedSources)throw new AppError('PDF_SOURCE_CONTENT');
+   }
    await options.check?.();abort(signal);const result=await this.prepare({documentId:claim.documentId,revision:claim.revision},{signal,progress,check:options.check??(async()=>{})});abort(signal);await options.check?.();
+   if(reviewed){
+    const allowed=new Map(reviewed.pins.map(pin=>[pin.workspaceId+':'+pin.recordId,pin.revision]));
+    if((result.sourceProof??[]).some(pin=>allowed.get(pin.workspaceId+':'+pin.recordId)!==pin.revision))throw new AppError('PDF_SOURCE_CONTENT');
+    await checkPdfSources(this.documents.publicationFiles,reviewed.pins);
+   }
    if(validPdfPreflight(result?.preflight)&&result.preflight.status==='fatal'){const error=new AppError('PDF_PREFLIGHT');error.preflight=result.preflight;throw error;}
    if(!Buffer.isBuffer(result?.bytes)||result.bytes.length<5||result.bytes.length>PDF_EXPORT_MAX_BYTES||result.bytes.subarray(0,5).toString()!=='%PDF-'||!validRenderer(result.renderer)||!validPdfPreflight(result.preflight))throw new AppError('PDF_OUTPUT');
    const bytes=Buffer.from(result.bytes),sha256=digest(bytes),renderer=structuredClone(result.renderer),preflight=structuredClone(result.preflight);if(result.sha256!==sha256)throw new AppError('PDF_OUTPUT');
@@ -138,7 +190,12 @@ export class PdfExportJobs{
    const validation=claim.version===2?structuredClone(result.validation):null;
    await progress('retaining',{done:0,total:bytes.length});
    const blocks=new ExportBlocks(null,attemptPrefix(claim),{signal,write:operation=>this.fenced(id,token,store=>operation(store),scoped)}),root=await retainBytes(blocks,bytes,signal),value={version:claim.version,documentId:claim.documentId,revision:claim.revision,root,bytes:bytes.length,sha256,renderer,preflight,...(validation?{validation}:{})},outputRoot=await new RecordValueTree(blocks).retain(value),proofRoot=await new RecordValueTree(blocks).retain(result.sourceProof??[]);await blocks.flush();abort(signal);
-   await this.fenced(id,token,async(store,job,now)=>{const pins=result.sourceProof??[];await checkPdfSources(this.documents.publicationFiles,pins);await store.putObject('pdf-publication-proof:'+id,{version:1,attempt:job.attempt,sha256,root:proofRoot});job.state='completed';job.completedAt=now;job.updatedAt=now;job.lease=null;job.output={root:outputRoot,bytes:bytes.length,sha256,...(validation?{validation}:{})};job.progress={stage:'completed',done:bytes.length,total:bytes.length};await store.putObject(JOB+id,job);},scoped);
+   await this.fenced(id,token,async(store,job,now)=>{const pins=result.sourceProof??[];await checkPdfSources(this.documents.publicationFiles,pins);
+    if(reviewed){
+     if((await new PdfDocumentStore(store).head(job.documentId)).revision!==job.revision)throw new AppError('CONFLICT');
+     await checkPdfSources(this.documents.publicationFiles,reviewed.pins);
+    }
+    await store.putObject('pdf-publication-proof:'+id,{version:1,attempt:job.attempt,sha256,root:proofRoot});job.state='completed';job.completedAt=now;job.updatedAt=now;job.lease=null;job.output={root:outputRoot,bytes:bytes.length,sha256,...(validation?{validation}:{})};job.progress={stage:'completed',done:bytes.length,total:bytes.length};await store.putObject(JOB+id,job);},scoped);
   }catch(error){
    // Revoked authorization cannot mutate the owner. In that case the durable
    // lease expires and an authenticated explicit resume owns cleanup/retry.
@@ -148,7 +205,7 @@ export class PdfExportJobs{
   return this.status(id,{check:options.check});
  }
  async download(id,options={}){
-  return this.run(false,async store=>{const job=await jobValue(store,id);if(job.state!=='completed')throw new AppError('JOB_CHANGED');const proof=await store.object('pdf-publication-proof:'+id),files=this.documents.publicationFiles;
+  return this.run(false,async store=>{const job=await jobValue(store,id);if(job.state!=='completed')throw new AppError('JOB_CHANGED');await checkRegisteredJob(store,job);const proof=await store.object('pdf-publication-proof:'+id),files=this.documents.publicationFiles;
    let pins;if(proof){if(proof.version!==1||proof.attempt!==job.attempt||proof.sha256!==job.output.sha256||!revisionId(proof.root))bad();pins=await new RecordValueTree(new ExportBlocks(store,attemptPrefix(job),{signal:options.signal})).read(proof.root);await checkPdfSources(files,pins);}
    else{
     // Pre-proof PDFs that contain research or selected source images must be

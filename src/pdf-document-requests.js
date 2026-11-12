@@ -79,6 +79,16 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
    if(!result.bytes||result.preflight?.status==='fatal')throw new AppError('PDF_PREFLIGHT',result.preflight?.findings??[]);
    return binary({name:'document.pdf',download:'document.pdf',mime:'application/pdf',content:result.bytes});
   }
+  if(request.pdf==='library-prepare'){const result=await documents.prepareLibrary(input,{signal,check});await check();return result;}
+  if(request.pdf==='library-details')return documents.libraryDetails(input,{signal,check});
+  if(['library-labels','library-review','library-label-edit','library-batch'].includes(request.pdf)){
+   const exports=request.pdf==='library-batch'&&input.review?.action==='export';
+   if(exports&&(!exportService||!pdfRendererAvailable()))throw new AppError('PDF_DESKTOP');
+   const result=await documents.organizeLibrary(request.pdf,input,{signal,check});await check();
+   if(exports)for(const id of result.jobs)exportService.schedule(workspaceId,id,{check});
+   return result;
+  }
+  if(request.pdf==='library-pin'){if(!await documents.available())throw new AppError('NOT_FOUND');return documents.domains.run(['pdf'],get=>new PdfDocumentStore(get('pdf')).pinDocument(input,{signal}),{signal,check,write:['pdf']});}
   const result=request.pdf==='layout-change'?await documents.changeLayout(input,{signal,check}):request.pdf==='change'?await documents.change(input,{signal,check}):await documents.read(request.pdf,input,{signal,check});await check();return result;
  }catch(error){if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
 }

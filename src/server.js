@@ -1060,7 +1060,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(!workspace)throw new AppError('MISSING');
       const pdf=pdfDocumentRequest(url.pathname,req.method);
-      if(pdf){req.operationActivity=null;const publicationFiles=(selectedContext.publicationConversion??=new PublicationConversion(workspace)).files;const service=['export-start','export-resume'].includes(pdf.pdf)?selectedContext.pdfs??=new PdfExportService(workspace,{publicationFiles,check:async()=>{if(shuttingDown||context!==selectedContext||selectedContext.manualLock||!selectedContext.vault.key)throw new AppError('ACCESS_LOCKED');}}):null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,publicationFiles,check:req.checkWriter,sourceReader,exportService:service})});}
+      if(pdf){req.operationActivity=null;const publicationFiles=(selectedContext.publicationConversion??=new PublicationConversion(workspace)).files;const service=['export-start','export-resume','library-batch'].includes(pdf.pdf)?selectedContext.pdfs??=new PdfExportService(workspace,{publicationFiles,check:async()=>{if(shuttingDown||context!==selectedContext||selectedContext.manualLock||!selectedContext.vault.key)throw new AppError('ACCESS_LOCKED');}}):null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,publicationFiles,check:req.checkWriter,sourceReader,exportService:service})});}
       const starter=recordStarterRequest(url.pathname,req.method);
       if(starter){
         if(!starter.write)req.operationActivity=null;
