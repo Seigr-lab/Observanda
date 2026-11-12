@@ -2,8 +2,9 @@ import {withNativeTree,nativeControl,nativeTreeFiles,nativeMemberCursor,removeNa
 import {operationStage,operationItem,operationAdvance,operationWork} from './operation-progress.js';
 import {DELETE_MARKER,MOVE_SOURCE,MOVE_RECEIPT} from './storage-lifecycle-markers.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
-import {ownedStorageLeaseFile} from './owned-storage-control.js';
+import {ownedStorageLeaseFile,ownerNativeControl} from './owned-storage-control.js';
 import {isStorageTemporary} from './storage-temporary.js';
+import {websiteUpgradeControlFile} from './website-upgrade-lease.js';
 import {AppError} from './errors.js';
 
 export async function removeNativeDeletion(directory,value,{checkpoint=async()=>{}}={}){
@@ -36,7 +37,7 @@ export async function removeNativeMove(directory,receipt,{verifyDestination=fals
    await removeNativeTree(root,context,MOVE_SOURCE,{identity:marker.identity,beforeFile:async(parent,name,relative,stat)=>{
     signal?.throwIfAborted();
     const databaseInternal=receipt.ownedDatabase&&(relative.startsWith('.observanda/postgresql/')||relative.startsWith('.observanda/database-transition/')||['.observanda/research.observanda','.observanda/database-conversion.observanda'].includes(relative));
-    if(verifyDestination&&!databaseInternal&&!workspaceTransferControl(relative)&&relative!==MOVE_RECEIPT&&!ownedStorageLeaseFile(relative)&&!isStorageTemporary(name)){
+    if(verifyDestination&&!databaseInternal&&!workspaceTransferControl(relative)&&relative!==MOVE_RECEIPT&&!ownedStorageLeaseFile(relative)&&!ownerNativeControl(relative)&&!websiteUpgradeControlFile(relative)&&!isStorageTemporary(name)){
      const source=await parent.hash(name),target=await cursor.member(relative),copy=await target.directory.hash(target.name);
      if(source.identity!==stat.identity||source.bytes!==copy.bytes||source.sha256!==copy.sha256)throw new AppError('STORAGE_COPY');
     }

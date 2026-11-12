@@ -9,6 +9,9 @@ const upgradeLease=name=>folder+'/'+name+'.lock';
 // upgrades lease one file each. Neither holds website content.
 export const WEBSITE_WRITER_LEASE='writer';
 export const websiteLeaseFile=relative=>relative.startsWith('.observanda/website-files/')&&(relative.slice(relative.lastIndexOf('/')+1)===WEBSITE_WRITER_LEASE||relative.startsWith(folder+'/')&&relative.endsWith('.lock')&&!relative.slice(folder.length+1).includes('/'));
+// Upgrade and discovery controls record each folder's own conversion state;
+// an opened destination rewrites them. They hold no website content.
+export const websiteUpgradeControlFile=relative=>relative.startsWith(folder+'/')&&relative.endsWith('.json')&&!relative.slice(folder.length+1).includes('/');
 
 // The OS releases this dedicated lease on process exit. Other website files
 // keep their own shorter write transactions during conversion.
