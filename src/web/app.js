@@ -268,6 +268,9 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   if(sourceVisibilityWrite(route,data))fileChanges?.postMessage({type:'visibility',contextId:requestContext});
   // An explicit project command can finish after its page has been left. Its
   // owner receives the result; it does not adopt research into the current view.
+  // Storage metadata names the active context itself. A caller that establishes
+  // or reconciles that context reads it without adopting it into the view.
+  if(!adopt&&route==='/api/storage'&&data===undefined)return result;
   if(!adopt&&route.startsWith('/api/projects/')){if(requestContext!==state.storage?.contextId)throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return result;}
   if(scopedWebsite&&requestWebsite!==websiteContext(state))throw {name:'AbortError',message:t('websiteSites','changed')};
   if(requestContext!==state.storage?.contextId||requestResearch!==researchContext(state))throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};
@@ -291,9 +294,6 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
     result={...receipt,...await readRecordSelection({workspaceId:result.book.id,ids:structureSelection,snapshotId:result.etag},{signal,committed:true})};
   }
   if(result.book&&result.etag){if(adopt)adoptSnapshot(result);else result.book=snapshotWorkspace(result.book);}return result;
-  // Storage metadata names the active context itself. A caller that establishes
-  // or reconciles that context reads it without adopting it into the view.
-  if(!adopt&&route==='/api/storage'&&data===undefined)return result;
 }
 const recordSelectionLoading=recordSelectionLoadUI({esc});
 const recordUpdatesLoading=recordSelectionLoadUI({esc,namespace:'recordUpdates'});
