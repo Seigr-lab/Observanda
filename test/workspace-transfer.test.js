@@ -34,3 +34,18 @@ test('reported copy failures keep their specific error and never infer completio
   assert.equal(calls,1);
  }
 });
+
+test('move response recovery accepts the destination the app already opened from activity',async()=>{
+ for(const opened of ['/destination','/another-workspace']){
+  const state={storage:{contextId:'source',root:'/source'}},calls=[],receipt={root:'/destination',contextId:'target',available:true,move:{source:'/source',destination:'/destination',phase:'complete'}};
+  const api=async route=>{
+   calls.push(route);
+   // The activity stream reports the new context first; the app reloads that workspace before the move response is lost.
+   if(route==='/api/storage/move'){state.storage={contextId:opened==='/destination'?'target':'other',root:opened};throw TypeError('Disconnected');}
+   return opened==='/destination'?receipt:{...receipt,root:opened,contextId:'other',move:null};
+  };
+  const operation=transferWorkspace({api,state,destination:'/destination',route:'/api/storage/move',data:{id:'reviewed'}});
+  if(opened==='/destination'){assert.equal((await operation).move.phase,'complete');assert.deepEqual(calls,['/api/storage/move','/api/storage']);}
+  else{await assert.rejects(operation);assert.deepEqual(calls,['/api/storage/move']);}
+ }
+});
