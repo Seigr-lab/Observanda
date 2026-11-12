@@ -17,6 +17,13 @@ test('candidate runtime inspection checks actual versions and executable stabili
  const hash='a'.repeat(64),calls=[],execute=async(file,args,options)=>{calls.push({file,args,options});return {stdout:JSON.stringify({format:1,platform:'linux',arch:'x64',versions})};};
  const options={expectedElectron:versions.electron,digest:async()=>hash,execute};
  const value=await collectDesktopRuntimeInventory('synthetic-executable',options);assert.equal(value.executableSha256,hash);assert.deepEqual(value.versions,desktopRuntimeVersions(versions));assert.doesNotMatch(JSON.stringify(value),/synthetic-executable|sentinel/);
+ for(const arch of ['arm64','x64']){
+  const inspect=async()=>({stdout:JSON.stringify({format:1,platform:'darwin',arch,versions})});
+  const mac=await collectDesktopRuntimeInventory('synthetic-executable',{...options,execute:inspect});
+  assert.equal(mac.platform,'darwin');assert.equal(mac.arch,arch);
+ }
+ const unknown=async()=>({stdout:JSON.stringify({format:1,platform:'darwin',arch:'unknown',versions})});
+ await assert.rejects(collectDesktopRuntimeInventory('synthetic',{...options,execute:unknown}),/Could not verify/);
  assert.equal(calls[0].options.windowsHide,true);assert.equal(calls[0].options.timeout,30000);assert.equal(calls[0].options.env.ELECTRON_RUN_AS_NODE,undefined);assert.deepEqual(calls[0].args,['--observanda-runtime-inventory']);
  await assert.rejects(collectDesktopRuntimeInventory('synthetic',{...options,expectedElectron:'44.4.5'}),/Could not verify/);
  await assert.rejects(collectDesktopRuntimeInventory('synthetic',{...options,execute:async()=>({stdout:JSON.stringify({format:1,platform:'linux',arch:'x64',versions:{...versions,undici:undefined}})})}),/Could not verify/);

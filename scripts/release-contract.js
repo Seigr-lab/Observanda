@@ -1,8 +1,10 @@
 import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';
+import {buffer} from 'node:stream/consumers';
 import {readFile,lstat,realpath} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {isDesktopTarget} from './desktop-target.js';
 
 // Evidence completeness is separate from the truth of a qualification result.
 // Reviewers must inspect these retained reports; a JSON receipt is not a test,
@@ -42,16 +44,16 @@ function performanceEvidence(r){
  }
 }
 export function validateReleaseEvidence(value,{now=Date.now()}={}){
- if(!object(value)||value.format!==1||!object(value.candidate)||!object(value.profile)||!Array.isArray(value.results))reject('invalid evidence document.');
+ if(!object(value)||value.format!==2||!object(value.candidate)||!object(value.profile)||!Array.isArray(value.results))reject('expected format 2 with platform-bound qualification results.');
  const c=value.candidate,p=value.profile;
- if(!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(c.version??'')||!/^[a-f0-9]{40}$/.test(c.commit??'')||!['win32','linux'].includes(c.platform)||c.arch!=='x64'||!hash(c.sha256)||!hash(c.payloadSha256))reject('candidate identity is incomplete.');
+ if(!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(c.version??'')||!/^[a-f0-9]{40}$/.test(c.commit??'')||!isDesktopTarget(c.platform,c.arch)||!hash(c.sha256)||!hash(c.payloadSha256))reject('candidate identity is incomplete.');
  if(!['local','network'].includes(p.storage)||typeof p.liveHosting!=='boolean'||!text(p.platform)||!text(p.hardware)||!text(p.storageConfiguration)||!text(p.concurrency)||!text(p.limitations))reject('supported profile is incomplete.');
  if(p.limits?.powerLossQualified!==false)reject('the current persistence implementation cannot claim power-loss qualification.');
  const required=releaseRequirements.filter(r=>r.profile==='all'||r.profile==='network'&&p.storage==='network'||r.profile==='live'&&p.liveHosting),seen=new Set();
  for(const r of value.results){
   if(!object(r)||!required.some(item=>item.id===r.requirement)||seen.has(r.requirement))reject('unexpected or duplicate requirement.');seen.add(r.requirement);
   if(r.result!=='pass')reject('every included requirement must pass; restrict the supported profile rather than hiding a failed gate.');
-  if(r.candidateSha256!==c.sha256||r.payloadSha256!==c.payloadSha256||r.commit!==c.commit)reject('evidence belongs to a different candidate.');
+  if(r.candidateSha256!==c.sha256||r.payloadSha256!==c.payloadSha256||r.commit!==c.commit||r.platform!==c.platform||r.arch!==c.arch)reject('evidence belongs to a different candidate.');
   if(!text(r.owner)||!text(r.procedure)||!text(r.fixture)||!text(r.environment)||!finite(r.elapsedMs)||!text(r.limitations))reject('a result lacks reproducible qualification details.');
   const time=Date.parse(r.completedAt);if(!Number.isFinite(time)||time>now+300000||now-time>7*86400000)reject('qualification is stale or dated in the future.');
   if(!Array.isArray(r.reports)||!r.reports.length||r.reports.length>128||r.reports.some(file=>!object(file)||!hash(file.sha256)||!safeRelativeFile(file.file)))reject('retained reports are missing or unsafe.');
@@ -67,7 +69,15 @@ export async function qualifyRelease({artifact,evidence,payload,now}){
  if((await regular(evidence)).size>1024*1024)reject('evidence document exceeds its limit.');
  const value=JSON.parse(await readFile(evidence,'utf8')),result=validateReleaseEvidence(value,{now}),base=await realpath(path.dirname(evidence));
  await regular(artifact);await regular(payload);
- if(await digest(artifact)!==value.candidate.sha256||await digest(payload)!==value.candidate.payloadSha256)reject('candidate or payload digest does not match its qualification.');
+ if(await digest(artifact)!==value.candidate.sha256)reject('candidate or payload digest does not match its qualification.');
+ // Read and hash the same inventory bytes. This limit applies only to the
+ // packaged executable's file list, independently of all user workspace data.
+ const maxManifestBytes=64*1024*1024;
+ const manifestBytes=await buffer(createReadStream(payload,{end:maxManifestBytes}));
+ if(manifestBytes.length>maxManifestBytes)reject('payload inventory exceeds its limit.');
+ if(createHash('sha256').update(manifestBytes).digest('hex')!==value.candidate.payloadSha256)reject('candidate or payload digest does not match its qualification.');
+ const manifest=JSON.parse(manifestBytes.toString('utf8'));
+ if(manifest?.format!==1||manifest.platform!==value.candidate.platform||manifest.arch!==value.candidate.arch)reject('payload inventory belongs to a different desktop target.');
  const checked=new Map();
  for(const r of value.results)for(const report of r.reports){
   const file=path.join(base,...report.file.split('/'));await regular(file);const actual=await realpath(file),relative=path.relative(base,actual);
