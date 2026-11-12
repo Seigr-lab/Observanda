@@ -3,6 +3,8 @@ import {hasApproximateFigure,hasApproximateFigures,approximateFigureDocument} fr
 import {requireFigureProjectionPolicies,catalogueRequiresFigureProjectionPolicies} from './catalogue-format.js';
 import {requireApproximateCalculator,catalogueRequiresApproximateCalculator} from './catalogue-format.js';
 import {hasAuthoredFigures,authoredFigureDocument} from './figure-authoring-format.js';
+import {hasSemanticWriting,semanticWritingDocument} from './semantic-record-format.js';
+import {catalogueRequiresSemanticRecordStyles,requireSemanticRecordStyles} from './catalogue-format.js';
 import {requireFigureAuthoring,catalogueRequiresFigureAuthoring} from './catalogue-format.js';
 import {hasRetainedFigures,retainedFigureDocument} from './record-retained-figures.js';
 import {requireRetainedFigures,catalogueRequiresRetainedFigures} from './catalogue-format.js';
@@ -58,6 +60,7 @@ export async function withStoredRecord(store,id,revision,consume){
  });
 }
 export async function retainStoredRecord(store,record,revision){
+ if(hasSemanticWriting(record))await requireSemanticRecordStyles(store.db);
  if(hasRecordProjection(record))await requireNativeNumericalModels(store.db);
  if(hasPlotResourceFigures(record))await requireFigureProjectionPolicies(store.db);
  if(hasApproximateFigures(record))await requireApproximateCalculator(store.db);
@@ -94,6 +97,7 @@ export async function readStoredRecord(store,id,revision){
 export async function retainStoredDocument(store,document,encoding,{unchanged=async()=>false}={}){
  const id=(await document.field(['id'])).value,scopeId=(await document.field(['notebookId'])).value,{blocks}=document;
  if(blocks.store!==store||scopeId!==blocks.scopeId)throw new AppError('INVALID');
+ if(!catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db))&&await semanticWritingDocument(document))await requireSemanticRecordStyles(store.db);
  const revision=encoding.revision;
  const figuresChanged=!await unchanged(['figures']);
  if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&figuresChanged&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
@@ -121,6 +125,7 @@ export async function retainStoredDocument(store,document,encoding,{unchanged=as
 export async function verifyStoredRecord(store,id,revision,{signal}={}){
  signal?.throwIfAborted();
  const indexed=await withStoredRecord(store,id,revision,async({value,blocks})=>{
+  if(!catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db))&&(blocks?await semanticWritingDocument(new RecordDocument(blocks,value.root),{signal}):hasSemanticWriting(value)))fail();
   if(blocks){const hash=createHash('sha256');for await(const text of blocks.tree().json(value.root,{signal}))hash.update(text);hash.update('\n');if(hash.digest('hex')!==revision)fail();}
   if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&(blocks?await projectedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRecordProjection(value)))fail();
   if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))&&(blocks?await plotResourceFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasPlotResourceFigures(value)))fail();

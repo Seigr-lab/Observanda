@@ -9,6 +9,8 @@ import {RecordContainerBuilder} from './record-tree-values.js';
 import {StarterValueBlocks,retainStarterDocument,starterFingerprint} from './record-starter-documents.js';
 import {openStarterStream,sealStarterStream,starterBlocks,validateStarterRelease} from './record-starter-stream.js';
 import {openStarter,packageDigest} from './record-starter-package.js';
+import {catalogueFormat,catalogueRequiresSemanticRecordStyles,requireSemanticRecordStyles} from './catalogue-format.js';
+import {semanticWritingDocument} from './semantic-record-format.js';
 import {requireStarterDocuments} from './catalogue-format.js';
 import {starterKeys,STARTER_PACKAGE_BYTES} from './web/record-starter-model.js';
 import {researchId} from './web/research-reference.js';
@@ -51,6 +53,11 @@ export class RecordStarterTransfer extends RecordStarterEditing{
    }else value=await openStarterStream(input(),c.password,blocks,{signal});
    if(hash.digest('hex')!==content.sha256)throw new AppError('STARTER_PACKAGE');
    const metadata=await validateStarterRelease(value.document,{signal}),result={root:value.document.root,fingerprint:value.fingerprint,sha256:content.sha256,...metadata};
+   await this.workspace.catalogue(async store=>{
+    if(catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db)))return;
+    const blueprint=new RecordDocument(blocks,await value.document.reference(['blueprint']));
+    if(await semanticWritingDocument(blueprint,{signal}))await requireSemanticRecordStyles(store.db);
+   });
    await this.workspace.writeMetadata(STARTER_ROOT+'/packages/'+c.uploadId+'.json',JSON.stringify(result));return {fingerprint:result.fingerprint,number:result.number,note:result.note};
   });
  }

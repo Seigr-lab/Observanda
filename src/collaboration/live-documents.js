@@ -2,6 +2,7 @@ import {RecordWriting} from '../record-writing.js';
 import {liveRecordWithoutAttempt} from './live-access.js';
 import {randomUUID} from 'node:crypto';
 import {Step} from 'prosemirror-transform';
+import {portableEditorDocument} from '../editor/portable-editor-document.js';
 import {schema} from '../editor/schema.js';
 import {proseDocument} from '../web/prose-model.js';
 import {validRichText} from '../web/rich-text-model.js';
@@ -21,7 +22,7 @@ export function documentField(record,field){
 export class LiveDocuments{
  constructor(workspace){this.workspace=workspace;this.records=new ResearchRecords(workspace,new MediaStore(workspace));}
  async state(record,field){
-  const document=schema.nodeFromJSON(proseDocument(documentField(record,field).body)).toJSON(),hash=identityHash(document),file='.observanda/collaboration/live/documents/'+record.id+'/'+identityHash(field)+'.json',raw=await this.workspace.readMetadata(file,4*1024*1024);
+  const document=portableEditorDocument(schema.nodeFromJSON(proseDocument(documentField(record,field).body))),hash=identityHash(document),file='.observanda/collaboration/live/documents/'+record.id+'/'+identityHash(field)+'.json',raw=await this.workspace.readMetadata(file,4*1024*1024);
   let state=raw?JSON.parse(raw):null;
   if(!state||state.hash!==hash){state={epoch:randomUUID(),version:0,from:0,steps:[],clients:[],hash};await this.workspace.writeMetadata(file,JSON.stringify(state));}
   return {state,document,file};
@@ -35,11 +36,11 @@ export class LiveDocuments{
    valid(Array.isArray(data.steps)&&data.steps.length>0&&data.steps.length<=250&&uuid(data.clientId));
    if(!reset&&data.version===state.version){
     let doc=schema.nodeFromJSON(document);try{for(const value of data.steps){const result=Step.fromJSON(schema,value).apply(doc);valid(!result.failed);doc=result.doc;}}catch{valid(false);}
-    valid(validRichText(doc.toJSON(),{maxCharacters:60000}));
-    const next=structuredClone(record);documentField(next,data.field).body=doc.toJSON();next.updatedAt=new Date().toISOString();
-    if(access){const writing=new RecordWriting(this.workspace),target={workspaceId,recordId:record.id,sectionId:data.field==='body'?null:data.field.slice(8)},selected=await writing.read(target);await writing.saveLocked({...target,expectedRevision:selected.revision,value:{...selected.value,body:doc.toJSON()}});revision=await this.workspace.catalogue(async store=>(await liveRecordWithoutAttempt(store,access,record.id)).revision);}
+    const body=portableEditorDocument(doc);valid(validRichText(body,{maxCharacters:60000}));
+    const next=structuredClone(record);documentField(next,data.field).body=body;next.updatedAt=new Date().toISOString();
+    if(access){const writing=new RecordWriting(this.workspace),target={workspaceId,recordId:record.id,sectionId:data.field==='body'?null:data.field.slice(8)},selected=await writing.read(target);await writing.saveLocked({...target,expectedRevision:selected.revision,value:{...selected.value,body:body}});revision=await this.workspace.catalogue(async store=>(await liveRecordWithoutAttempt(store,access,record.id)).revision);}
     else await this.records.saveLocked({workspaceId,changes:[{id:record.id,expectedRevision:recordRevision(record),record:next}]},{receipt:true});
-    state.steps.push(...data.steps);state.clients.push(...data.steps.map(()=>data.clientId));state.version+=data.steps.length;state.hash=identityHash(doc.toJSON());
+    state.steps.push(...data.steps);state.clients.push(...data.steps.map(()=>data.clientId));state.version+=data.steps.length;state.hash=identityHash(body);
     // Keep a bounded rebase window. Older clients keep their unsent document
     // for comparison and explicitly reopen the latest authoritative revision.
     while(state.steps.length>2000||Buffer.byteLength(JSON.stringify(state))>2*1024*1024){state.steps.shift();state.clients.shift();state.from++;}

@@ -7,6 +7,7 @@ import {digest,serialize} from './storage-format.js';
 import {revisionId} from './web/revision-model.js';
 import {validStarter} from './web/record-starter-model.js';
 import {AppError} from './errors.js';
+import {rememberSemanticWriting} from './semantic-record-format.js';
 import {withScratch} from './scratch-work.js';
 import {catalogueFormat} from './catalogue-format.js';
 import {researchId} from './web/research-reference.js';
@@ -50,9 +51,14 @@ export async function validateStarterDocument(document,{portable=true,signal}={}
  const names=await document.tree.propertyNames(document.root);if(names.sort().join()!=='body,name,sections,tags,title,type')throw new AppError('STARTER_INVALID');
  const header={sections:[],tags:[]};for(const name of ['name','type','title','body'])header[name]=(await document.field([name],{signal})).value;
  if(!validStarter(header,{portable}))throw new AppError('STARTER_INVALID');
- const sections=await document.tree.arrayLength(document.root,['sections']);for(let index=0;index<sections;index++)if(!validStarter({...header,body:'',sections:[(await document.field(['sections',String(index)],{signal})).value]},{portable}))throw new AppError('STARTER_INVALID');
+ let semantic=!!header.body?.attrs?.semanticStyles;const sections=await document.tree.arrayLength(document.root,['sections']);
+ for(let index=0;index<sections;index++){
+  const section=(await document.field(['sections',String(index)],{signal})).value;
+  if(!validStarter({...header,body:'',sections:[section]},{portable}))throw new AppError('STARTER_INVALID');
+  if(section.body?.attrs?.semanticStyles)semantic=true;
+ }
  const tags=await document.tree.arrayLength(document.root,['tags']);if(tags)await withScratch(async seen=>{for(let index=0;index<tags;index++){const tag=(await document.field(['tags',String(index)],{signal})).value;if(!validStarter({...header,body:'',tags:[tag]},{portable})||!await seen.add(tag))throw new AppError('STARTER_INVALID');}},{signal});
- return header;
+ rememberSemanticWriting(document,semantic);return header;
 }
 export async function verifyStarterDocument(workspace,pointer,{signal,portable=true}={}){
  const document=await starterDocument(workspace,pointer);await validateStarterDocument(document,{signal,portable});

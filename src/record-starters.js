@@ -4,6 +4,7 @@ import {MetadataFeed} from './metadata-feed.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {validStarter,starterKeys,starterText,STARTER_BYTES} from './web/record-starter-model.js';
+import {requireStarterWriting} from './semantic-record-format.js';
 import {requireStarterDocuments} from './catalogue-format.js';
 import {packageDigest,sealStarter,openStarter} from './record-starter-package.js';
 import {StarterValueBlocks,starterDocument,starterDocumentPointer,retainStarterDocument,validateStarterDocument} from './record-starter-documents.js';
@@ -44,7 +45,7 @@ export class RecordStarters{
   if(prior?.status==='archived')throw new AppError('STARTER_ARCHIVED');
   const header=prior??{version:1,id:c.id,createdAt:new Date().toISOString(),status:'active',sequence:0,latest:null,...(origin?{origin}: {})};
   Object.assign(header,{name:c.draft.name,draftHash});
-  await this.workspace.catalogue(store=>requireStarterDocuments(store.db));const blocks=new StarterValueBlocks(this.workspace),document=new RecordDocument(blocks,await blocks.tree().retain(c.draft));
+  await this.workspace.catalogue(store=>requireStarterWriting(store.db,c.draft));const blocks=new StarterValueBlocks(this.workspace),document=new RecordDocument(blocks,await blocks.tree().retain(c.draft));
   await this.workspace.writeMetadata(ROOT+'/drafts/'+c.id+'.json',JSON.stringify(await retainStarterDocument(document)));
   await this.workspace.writeMetadata(headers+'/'+c.id+'.json',JSON.stringify(header));if(!prior)await this.feed.putLocked(header);
   return {header:stamp(header),draft:c.draft};

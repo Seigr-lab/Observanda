@@ -19,6 +19,8 @@ import {RecordContainerBuilder} from './record-tree-values.js';
 import {inspectTransferredDraft} from './record-draft-inspection.js';
 import {catalogueFormat,requireDraftEdits,requireNestedAttemptCollections,requirePagedResearchTables,catalogueRequiresPagedResearchTables} from './catalogue-format.js';
 import {AppError} from './errors.js';
+import {requireSemanticRecordStyles} from './catalogue-format.js';
+import {semanticDraftPart} from './semantic-record-format.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 
@@ -32,6 +34,7 @@ export async function retainDraftDocument(workspace,id,content,expected,{signal}
    const blocks=new RecordBlockStore(store,expected.notebookId,generation,key),tree=blocks.tree(),record=new RecordContainerBuilder(blocks,'object');let collection=null,template=null;
    const close=async()=>{if(collection){await record.add({name:collection.name,value:await collection.builder.finish()});collection=null;}};
    const inspected=await inspectTransferredDraft(workspace,id,content,{signal,ownership:true,part:async part=>{
+    if(semanticDraftPart(part))await requireSemanticRecordStyles(store.db);
     if(part.name==='figures'&&(part.kind==='item'&&hasAuthoredFigure(part.value)||part.kind==='field'&&part.value?.some(hasAuthoredFigure)))await requireFigureAuthoring(store.db);
     if(part.name==='figures'&&(part.kind==='item'&&hasFigureProjection(part.value)||part.kind==='field'&&part.value?.some(hasFigureProjection)))await requireNativeNumericalModels(store.db);
     if(part.name==='figures'&&(part.kind==='item'&&hasPlotResourceFigure(part.value)||part.kind==='field'&&part.value?.some(hasPlotResourceFigure)))await requireFigureProjectionPolicies(store.db);

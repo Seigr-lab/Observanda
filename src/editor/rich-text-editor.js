@@ -14,10 +14,12 @@ import {collab,getVersion,sendableSteps,receiveTransaction} from 'prosemirror-co
 import {Step} from 'prosemirror-transform';
 import {safeRichLink,richTextAdmission,RICH_TEXT_LIMITS,plainRichText} from '../web/rich-text-model.js';
 import {writingCapacity} from './writing-capacity.js';
+import {portableEditorDocument} from './portable-editor-document.js';
+import {semanticStyleEditor} from './semantic-style-editor.js';
 import {formattedText} from '../web/formatted-text.js';
 
 export function mountRichText({mount,toolbar,section,onChange,onError,initialState,revealSelection,message=bookText,label=message('editorSectionText'),onOpenLink,getDestinations,getFigures,maxCharacters=RICH_TEXT_LIMITS.characters,collaboration=null,recovery=null}) {
- const controller=new AbortController(),opts={signal:controller.signal};let view;
+ const controller=new AbortController(),opts={signal:controller.signal};let view,semanticEditor;
  let doc;
  if(section.richText)doc=schema.nodeFromJSON(section.richText);
  else if(section.format==='markdown'){const holder=mount.ownerDocument.createElement('div');holder.innerHTML=formattedText(section.body,'markdown');doc=DOMParser.fromSchema(schema).parse(holder);}
@@ -42,7 +44,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  mount.replaceChildren();
  const capacity=writingCapacity({toolbar,message,maxCharacters,recovery,signal:controller.signal,restoreFocus:()=>view.focus()});
  const measure=json=>richTextAdmission(json,{maxCharacters});
- let accepted=measure(doc.toJSON()),clipboard=null;
+ let accepted=measure(portableEditorDocument(doc)),clipboard=null;
  capacity.update(accepted);
  const identity=tr=>{const ids=new Set();tr.doc.descendants((n,pos)=>{if(n.type===schema.nodes.heading||BOOK_BLOCKS.includes(n.type.name)){if(!n.attrs.id||ids.has(n.attrs.id))tr.setNodeMarkup(pos,null,{...n.attrs,id:crypto.randomUUID()});ids.add(tr.doc.nodeAt(pos).attrs.id);}});return tr;};
  const plugins=[history(),keymap(keys),keymap(baseKeymap),...(collaboration?[collab({version:collaboration.version,clientID:collaboration.clientId})]:[])];
@@ -50,7 +52,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
  view=new EditorView({mount},{state,attributes:state=>({role:'textbox','aria-label':label,'aria-multiline':'true','data-empty':String(!state.doc.textContent.length)}),handleScrollToSelection:revealSelection,handleClick:()=>false,handleDOMEvents:{keydown:syncCaret,keyup:syncCaret,pointerup:syncCaret,blur:syncCaret,click:(v,event)=>{const a=event.target.closest('a');if(a){event.preventDefault();if((event.ctrlKey||event.metaKey)&&onOpenLink)onOpenLink(a.getAttribute('href'));}return false;}},dispatchTransaction(tr){
    if(!tr.docChanged){view.updateState(view.state.apply(tr));update();return;}
    identity(tr);
-   const json=tr.doc.toJSON(),usage=measure(json),pasted=tr.getMeta('paste')&&clipboard;
+   const json=portableEditorDocument(tr.doc),usage=measure(json),pasted=tr.getMeta('paste')&&clipboard;
    if(!usage.valid){
     const notice=capacity.reason(usage.issue,accepted);
     if(pasted)capacity.offer({notice,clipboard:pasted});
@@ -70,6 +72,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
    view.updateState(view.state.apply(tr));accepted=usage;capacity.update(accepted);onChange(json);update();
  }});
  // A paste creates a copy even between independent section editors.
+ semanticEditor=semanticStyleEditor({view,toolbar,signal:controller.signal});
  const copied=fragment=>Fragment.fromArray(fragment.content.map(n=>n.isText?n:n.type.create({...n.attrs,...(n.attrs.id?{id:crypto.randomUUID()}:{})},copied(n.content),n.marks)));
  const contentEditor=bookContentEditor({view,schema,toolbar,message,figures:getFigures,validationMessage:doc=>{
   const usage=measure(doc);return usage.valid?'':capacity.reason(usage.issue,accepted);
@@ -105,7 +108,7 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   return false;
  }});
  function active(type){const {from,to,empty,$from}=view.state.selection;return empty?Boolean(type.isInSet(view.state.storedMarks??$from.marks())):view.state.doc.rangeHasMark(from,to,type);}
- function update(){for(const [key,mark] of Object.entries({bold:'strong',italic:'em',underline:'underline',strike:'strike',code:'code',subscript:'subscript',superscript:'superscript'}))toolbar.querySelector(`[data-rich-command="${key}"]`)?.setAttribute('aria-pressed',String(active(schema.marks[mark])));for(const key of ['undo','redo','indent','outdent']){const b=toolbar.querySelector(`[data-rich-command="${key}"]`);if(b)b.disabled=!commands[key](view.state);}
+ function update(){semanticEditor?.sync();for(const [key,mark] of Object.entries({bold:'strong',italic:'em',underline:'underline',strike:'strike',code:'code',subscript:'subscript',superscript:'superscript'}))toolbar.querySelector(`[data-rich-command="${key}"]`)?.setAttribute('aria-pressed',String(active(schema.marks[mark])));for(const key of ['undo','redo','indent','outdent']){const b=toolbar.querySelector(`[data-rich-command="${key}"]`);if(b)b.disabled=!commands[key](view.state);}
   const size=toolbar.querySelector('[data-rich-size]');if(size){const {from,to,empty,$from}=view.state.selection,values=new Set();if(empty)values.add(schema.marks.text_size.isInSet(view.state.storedMarks??$from.marks())?.attrs.size??'');else view.state.doc.nodesBetween(from,to,node=>{if(node.isText)values.add(schema.marks.text_size.isInSet(node.marks)?.attrs.size??'');});size.value=values.size>1?'mixed':[...values][0]??'';}
   const font=toolbar.querySelector('[data-rich-font]');if(font){const {from,to,empty,$from}=view.state.selection,values=new Set();if(empty)values.add(schema.marks.font_family.isInSet(view.state.storedMarks??$from.marks())?.attrs.font??'');else view.state.doc.nodesBetween(from,to,node=>{if(node.isText)values.add(schema.marks.font_family.isInSet(node.marks)?.attrs.font??'');});font.value=values.size>1?'mixed':[...values][0]??'';font.dispatchEvent(new Event('fontselectionchange'));}
   for(const key of ['bullet','numbered','quote'])toolbar.querySelector(`[data-rich-command="${key}"]`)?.setAttribute('aria-pressed',String(ancestor(schema.nodes[{bullet:'bullet_list',numbered:'ordered_list',quote:'blockquote'}[key]])));
@@ -184,10 +187,10 @@ export function mountRichText({mount,toolbar,section,onChange,onError,initialSta
   if(getDestinations){shownDestinations=60;fillDestinations();return;}
   const words=event.target.value.toLowerCase().trim().split(/\s+/);for(const button of toolbar.querySelectorAll('[data-rich-destination]'))button.hidden=!words.every(word=>button.dataset.richMatch.includes(word));
  },opts);
- update();return {focus:()=>{view.focus();view.dispatch(view.state.tr.scrollIntoView());},get state(){return view.state;},destroy(){controller.abort();contentEditor.destroy();view.destroy();},get doc(){return view.state.doc.toJSON();},
+ update();return {focus:()=>{view.focus();view.dispatch(view.state.tr.scrollIntoView());},get state(){return view.state;},destroy(){controller.abort();contentEditor.destroy();view.destroy();},get doc(){return portableEditorDocument(view.state.doc);},
  get pendingPaste(){return capacity.pending;},reviewPaste:()=>capacity.focus(),
  get collaboration(){if(!collaboration)return null;const pending=sendableSteps(view.state);return {version:getVersion(view.state),steps:pending?.steps.map(s=>s.toJSON())??[],clientId:collaboration.clientId};},
- receive(steps,clients){if(!collaboration)return;const tr=receiveTransaction(view.state,steps.map(s=>Step.fromJSON(schema,s)),clients);view.updateState(view.state.apply(tr));if(tr.docChanged){accepted=measure(view.state.doc.toJSON());capacity.update(accepted);}update();},
+ receive(steps,clients){if(!collaboration)return;const tr=receiveTransaction(view.state,steps.map(s=>Step.fromJSON(schema,s)),clients);view.updateState(view.state.apply(tr));if(tr.docChanged){accepted=measure(portableEditorDocument(view.state.doc));capacity.update(accepted);}update();},
  insertInlineLink(link,markerAction){
   const tr=inlineLinkTransaction(view.state,link,markerAction);
   if(!tr)return false;

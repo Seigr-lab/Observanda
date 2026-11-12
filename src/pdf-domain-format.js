@@ -1,5 +1,6 @@
 import {AppError} from './errors.js';
 import {parsePdfCrossReference} from './web/pdf-cross-reference-model.js';
+import {documentHasSemanticStyles} from './web/semantic-text-styles.js';
 import {pdfNoteHref} from './web/pdf-notes-model.js';
 import {moduleDomainOwner} from './module-domain-owner.js';
 const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -8,7 +9,7 @@ const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export function pdfDomainFormat(owner,domain){
  if(!Object.hasOwn(owner??{},'pdfFormat'))return 1;
  if(domain!=='pdf'||!Number.isSafeInteger(owner.pdfFormat)||owner.pdfFormat<2)bad();
- if(owner.pdfFormat>9)throw new AppError('ACCESS_UPGRADE');return owner.pdfFormat;
+ if(owner.pdfFormat>10)throw new AppError('ACCESS_UPGRADE');return owner.pdfFormat;
 }
 function inlineReferences(node){
  if(!node||typeof node!=='object')return false;
@@ -17,6 +18,7 @@ function inlineReferences(node){
  return node.content?.some(inlineReferences)??false;
 }
 export function requiredPdfDomainFormat({header,section}={}){
+ if(documentHasSemanticStyles(section?.content)||section?.notes?.some(note=>documentHasSemanticStyles(note.content)))return 10;
  const caption=header?.structure?.caption;
  if(caption&&Object.hasOwn(caption,'numberEquations')||section?.notes?.some(note=>note.anchor==='inline'||inlineReferences(note.content))||inlineReferences(section?.content))return 6;
  if(section?.placementReview)return 5;
@@ -32,6 +34,6 @@ async function ownerValue(store){
  return {owner,format:pdfDomainFormat(owner,store.domain)};
 }
 export async function requirePdfDomainFormat(store,required=2){
- if(!store.writable)throw new AppError('INVALID');const {owner,format}=await ownerValue(store);if(![2,3,4,5,6,7,8,9].includes(required))throw new AppError('INVALID');if(format<required)await store.putObject('owner',{...owner,pdfFormat:required});
+ if(!store.writable)throw new AppError('INVALID');const {owner,format}=await ownerValue(store);if(![2,3,4,5,6,7,8,9,10].includes(required))throw new AppError('INVALID');if(format<required)await store.putObject('owner',{...owner,pdfFormat:required});
 }
 export async function assertPdfDomainFormat(store,required=2){if((await ownerValue(store)).format<required)bad();}

@@ -4,7 +4,7 @@ import {RecordStarterSource} from './record-starter-source.js';
 import {STARTER_ROOT} from './record-starters.js';
 import {RecordDocument} from './record-document.js';
 import {StarterValueBlocks,retainStarterDocument,validateStarterDocument} from './record-starter-documents.js';
-import {requireStarterDocuments} from './catalogue-format.js';
+import {requireStarterWriting} from './semantic-record-format.js';
 import {packageDigest} from './record-starter-package.js';
 import {starterKeys} from './web/record-starter-model.js';
 import {researchId} from './web/research-reference.js';
@@ -19,7 +19,7 @@ export class RecordStarterCapture extends RecordStarterEditing{
    await this.context(c.workspaceId);const file=root+'/'+c.id+'.json',request=packageDigest(c),prior=await this.object(file);if(prior){if(!await starterRequestMatches(this.workspace,c,prior,'request',file))throw new AppError('STARTER_CHANGED');return {received:prior.received};}
    if(await this.object(STARTER_ROOT+'/headers/'+c.id+'.json'))throw new AppError('STARTER_CHANGED');
    const target={workspaceId:c.workspaceId,recordId:c.recordId,snapshotId:c.snapshotId},source=await new RecordStarterSource(this.workspace).prepare({...target,body:c.body,sections:[]});
-   await this.workspace.catalogue(store=>requireStarterDocuments(store.db));const blocks=new StarterValueBlocks(this.workspace),document=new RecordDocument(blocks,await blocks.tree().retain(source.draft));
+   await this.workspace.catalogue(store=>requireStarterWriting(store.db,source.draft));const blocks=new StarterValueBlocks(this.workspace),document=new RecordDocument(blocks,await blocks.tree().retain(source.draft));
    await this.workspace.writeMetadata(file,JSON.stringify({request,target,root:document.root,received:0,last:-1}));return {received:0};
   });
  }
@@ -34,6 +34,7 @@ export class RecordStarterCapture extends RecordStarterEditing{
    // values. Cross-page choices cannot silently change order or ownership.
    for(const item of c.sections){const page=await source.page({...state.target,offset:item.position});if(page.values[0]?.id!==item.id)throw new AppError('STARTER_CHANGED');}
    const prepared=await source.prepare({...state.target,body:false,sections:c.sections.map(({id,body})=>({id,body}))});
+   if(prepared.draft.sections.some(section=>section.body?.attrs?.semanticStyles))await this.workspace.catalogue(store=>requireStarterWriting(store.db,prepared.draft));
    let document=new RecordDocument(new StarterValueBlocks(this.workspace),state.root,{mutable:true});document=await document.splice(['sections'],await document.tree.arrayLength(document.root,['sections']),0,prepared.draft.sections);
    state.root=document.root;state.received+=c.sections.length;state.last=c.sections.at(-1).position;await this.workspace.writeMetadata(file,JSON.stringify(state));await this.workspace.writeMetadata(receiptFile,JSON.stringify({request,received:state.received}));return {received:state.received};
   });

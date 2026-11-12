@@ -1,3 +1,4 @@
+import {catalogueRequiresSemanticRecordStyles,requireSemanticRecordStyles} from './catalogue-format.js';
 import {hasNestedPreparationContinuations} from './web/attempt-model.js';
 import {attemptValueField} from './web/record-attempt-value.js';
 import {recordOwnerDraftArchived} from './record-owner-drafts.js';
@@ -41,6 +42,7 @@ export class RecordDraftEdits{
    if(command.editRevision!==previous)throw new AppError('DRAFT_CHANGED');
    const selected=await selectDraftEdit(mine,command.field);if(selected.revision!==command.valueRevision)throw new AppError('DRAFT_CHANGED');
    await (attemptValueField(command.field)?.kind==='preparation'&&hasNestedPreparationContinuations(command.value?.value)?requireNestedAttemptCollections:command.field==='type'?requireRecordTypeDrafts:requireDraftEdits)(this.store.db);
+   if(command.value.body?.attrs?.semanticStyles)await requireSemanticRecordStyles(this.store.db);
    const next=await replaceDraftEdit(mine,command.field,command.value,selected);await next.blocks.flush();
    const node={owner:owner(plan),operationId:command.operationId,requestHash:hash(command),planId:plan.id,previous,notebookId:next.blocks.scopeId,generation:next.blocks.generation,before:mine.root,root:next.root,field:command.field,value:await next.tree.retain(command.value)};
    await next.blocks.flush();const revision=hash(node);
@@ -79,6 +81,7 @@ export async function verifyRecordDraftEdit(store,node,{signal}={}){
    if(expected!==node.before)fail();
    const before=new RecordDocument(document.blocks,node.before,{mutable:true}),value=await document.tree.read(node.value),selected=await selectDraftEdit(before,node.field,{signal});
    if(attemptValueField(node.field)?.kind==='preparation'&&hasNestedPreparationContinuations(value?.value)&&!catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db)))fail();
+   if(value.body?.attrs?.semanticStyles&&!catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db)))fail();
    if(!validDraftEdit(node.field,value)||(await replaceDraftEdit(before,node.field,value,selected)).root!==node.root)fail();
    if((await document.field(['id'])).value!==node.owner.recordId)fail();
   },{signal}));

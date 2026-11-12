@@ -105,8 +105,21 @@ test('inline markers, equation citations and equation captions acquire authentic
   const open=store=>new PdfDocumentStore(store).verify();
   await f.run(open);
   f.values.set('owner',{...f.owner,pdfFormat:5});await assert.rejects(f.run(open),{code:'CATALOGUE_DAMAGED'});
-  f.values.set('owner',{...f.owner,pdfFormat:10});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
+  f.values.set('owner',{...f.owner,pdfFormat:11});await assert.rejects(f.run(open),{code:'ACCESS_UPGRADE'});
  }
+});
+
+test('a report requires the named style reader on its first authored note and retains the original edition',async()=>{
+ const f=fixture(),create=creation(),first=await f.change(create);
+ assert.equal(f.values.get('owner').pdfFormat,undefined);
+ const content={type:'doc',attrs:{semanticStyles:{version:1,roles:{}}},content:[{type:'paragraph',attrs:{semanticRole:'note'},content:[{type:'text',text:'Method note'}]}]};
+ const command={id:create.id,commandId:randomUUID(),expectedRevision:first.revision,operation:{type:'section',section:{...create.operation.section,content}}};
+ const updated=await f.change(command);assert.equal(f.values.get('owner').pdfFormat,10);
+ assert.equal((await f.change(command)).revision,updated.revision);
+ const read=revision=>f.run(store=>Array.fromAsync(new PdfDocumentStore(store).content(create.id,revision)));
+ assert.equal((await read(first.revision))[0].content,'Retained observations');
+ assert.deepEqual((await read(updated.revision))[0].content,content);
+ f.values.set('owner',{...f.owner,pdfFormat:9});await assert.rejects(read(updated.revision),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('a normal section save detects changed note placements, survives retry and requires explicit revision-bound review',async()=>{

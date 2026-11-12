@@ -9,6 +9,7 @@ import {withScratch} from './scratch-work.js';
 import {AppError} from './errors.js';
 import {recordTemplateHeader,validateRecordTemplate} from './record-template-document.js';
 import {attemptDocumentHeader,validateAttemptDocument} from './record-attempt-document.js';
+import {rememberSemanticWriting} from './semantic-record-format.js';
 import {resultDocumentHeader,validateResultDocument} from './record-result-document.js';
 
 const collections=['sections','contributors','relations','figures','attachments','tags'];
@@ -37,7 +38,8 @@ export async function validateRecordDocument(document,metadata,{signal,summaries
  }
  if(!reuse)await validateRecordTemplate(document,header.template,{signal});
  validateRecordChanges(metadata,[header],summaries,{capacity:false});
- if(reuse){signal?.throwIfAborted();return header;}
+ let semantic=!!header.body?.attrs?.semanticStyles;
+ if(reuse){signal?.throwIfAborted();rememberSemanticWriting(document,semantic);return header;}
  const blank={...header,body:''};let parents=0;
  return withScratch(async identities=>{
   const unique=async(kind,id,field)=>{if(!await identities.add(kind+':'+id))invalid(field,header.id);};
@@ -47,7 +49,10 @@ export async function validateRecordDocument(document,metadata,{signal,summaries
    for await(const ref of document.items([name],{signal})){
     signal?.throwIfAborted();const item=await document.tree.read(ref.value),part={...blank,[name]:[item]};
     validateDetachedRecords([part]);
-    if(name==='sections')await unique('identity',item.id,'sections');
+    if(name==='sections'){
+     await unique('identity',item.id,'sections');
+     if(item.body?.attrs?.semanticStyles)semantic=true;
+    }
     if(['contributors','relations','attachments'].includes(name))await unique(name,item.id,name);
     if(name==='figures')for await(const figure of retainedFigureTargets(document.blocks,item,{signal}))await unique('figures',figure.id,'figures');
     for(const selector of bookSelectors(part))await unique('selector:'+selector.kind,selector.id,'duplicate book content identity');
@@ -58,6 +63,6 @@ export async function validateRecordDocument(document,metadata,{signal,summaries
     }
    }
   }
-  signal?.throwIfAborted();return header;
+  signal?.throwIfAborted();rememberSemanticWriting(document,semantic);return header;
  },{signal});
 }

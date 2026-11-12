@@ -9,16 +9,26 @@ import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 import {RecordDraftChunks} from './record-draft-chunks.js';
 import {operationItem,operationAdvance} from './operation-progress.js';
+import {catalogueFormat,catalogueRequiresSemanticRecordStyles} from './catalogue-format.js';
+import {semanticWritingDocument} from './semantic-record-format.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export async function verifyRecordStarters(workspace,{signal}={}){
- return workspace.catalogue(async()=>{
+ return workspace.catalogue(async store=>{
+ const styled=catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db));
+ const checkStyles=async(document,release=false)=>{
+  if(styled)return;
+  const blueprint=release?new RecordDocument(document.blocks,await document.reference(['blueprint'])):document;
+  if(await semanticWritingDocument(blueprint,{signal}))fail();
+ };
  const owner=new RecordStarters(workspace),metadata=await workspace.catalogue(async store=>(await store.snapshot()).metadata),workspaceId=metadata.id;
  owner.context=async id=>{if(id!==workspaceId)fail();return metadata;};
  for await(const name of workspace.metadataNames(STARTER_ROOT+'/headers')){
   signal?.throwIfAborted();if(!name.endsWith('.json')||!researchId(name.slice(0,-5)))fail();const header=await owner.header(name.slice(0,-5)),draft=await owner.draftDocument(header);
   operationItem(header.name);const details=await validateStarterDocument(draft,{portable:false,signal});if(details.name!==header.name||await starterFingerprint(draft,{signal})!==header.draftHash)fail();let count=0,latest=false;
+  await checkStyles(draft);
   for await(const file of workspace.metadataNames(STARTER_ROOT+'/releases/'+header.id)){
    signal?.throwIfAborted();if(!file.endsWith('.json')||!revisionId(file.slice(0,-5)))fail();const revision=file.slice(0,-5),release=await owner.releaseDocument({workspaceId,id:header.id,release:revision}),metadata=await validateStarterRelease(release,{signal});
+   await checkStyles(release,true);
    if(await starterFingerprint(release,{signal})!==revision)fail();const history=await owner.object(STARTER_ROOT+'/history/'+header.id+'/'+String(999999999-metadata.number).padStart(9,'0')+'.json');
    if(history?.revision!==revision||history.number!==metadata.number||history.note!==metadata.note||history.createdAt!==metadata.createdAt)fail();count++;if(revision===header.latest){latest=true;if(metadata.number!==header.sequence)fail();const blueprint=new RecordDocument(release.blocks,await release.reference(['blueprint']));if(await starterFingerprint(blueprint,{signal})!==header.releasedDraftHash)fail();}
   }
@@ -26,13 +36,13 @@ export async function verifyRecordStarters(workspace,{signal}={}){
  }
  for await(const name of workspace.metadataNames(STARTER_ROOT+'/packages')){
   signal?.throwIfAborted();if(!name.endsWith('.json')||!researchId(name.slice(0,-5)))fail();const value=await owner.object(STARTER_ROOT+'/packages/'+name),document=new RecordDocument(new StarterValueBlocks(workspace,{staging:name.slice(0,-5)}),value.root);
-  await validateStarterRelease(document,{signal});if(await starterFingerprint(document,{signal})!==value.fingerprint)fail();
+  await validateStarterRelease(document,{signal});await checkStyles(document,true);if(await starterFingerprint(document,{signal})!==value.fingerprint)fail();
  }
  // Incomplete capture roots are recoverable drafts; they must be copied with
  // their selected values even though no library entry is visible yet.
  for await(const name of workspace.metadataNames(STARTER_ROOT+'/captures')){
   if(!name.endsWith('.json'))continue;signal?.throwIfAborted();if(!researchId(name.slice(0,-5)))fail();const value=await owner.object(STARTER_ROOT+'/captures/'+name);
-  const document=new RecordDocument(new StarterValueBlocks(workspace),value.root);await validateStarterDocument(document,{portable:false,signal});if(await document.tree.arrayLength(document.root,['sections'])!==value.received)fail();
+  const document=new RecordDocument(new StarterValueBlocks(workspace),value.root);await validateStarterDocument(document,{portable:false,signal});await checkStyles(document);if(await document.tree.arrayLength(document.root,['sections'])!==value.received)fail();
  }
  // Detect retained roots in an old-generation catalogue even if a header was
  // lost. Ordinary header traversal above validates the referenced content.

@@ -1,4 +1,6 @@
 import {hasNestedAttemptContinuations} from './web/attempt-model.js';
+import {catalogueRequiresSemanticRecordStyles} from './catalogue-format.js';
+import {semanticDraftPart} from './semantic-record-format.js';
 import {catalogueFormat,catalogueRequiresNestedAttemptCollections} from './catalogue-format.js';
 import {DraftTemplateComparison} from './record-draft-template.js';
 // A backup must prove both checkpoint representations agree. Authentication of
@@ -21,6 +23,7 @@ export async function verifyRetainedDraft(store,draft,{signal}={}){
   const fields=new Set();let collection=null,count=0,template=null;
   const close=async()=>{if(document&&collection!==null&&await document.tree.arrayLength(document.root,[collection])!==count)fail();collection=null;count=0;};
   const inspected=await inspectTransferredDraft(store.workspace,draft.id,draft.content,{signal,ownership:true,part:async(part,{templateScratch}={})=>{
+   if(semanticDraftPart(part)&&!catalogueRequiresSemanticRecordStyles(await catalogueFormat(store.db)))fail();
    if(part.kind==='field'&&part.name==='attempt'&&hasNestedAttemptContinuations(part.value)&&!catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db)))fail();
    if(part.kind!=='item')await close();
    if(part.kind==='change')return;

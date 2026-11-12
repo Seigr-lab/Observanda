@@ -6,6 +6,7 @@ import {starterKeys,validStarter} from './web/record-starter-model.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {packageDigest} from './record-starter-package.js';
+import {requireSemanticRecordStyles} from './catalogue-format.js';
 import {requireStarterDocuments} from './catalogue-format.js';
 import {AppError} from './errors.js';
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
@@ -72,6 +73,7 @@ export class RecordStarterEditing extends RecordStarters{
      if(operation==='move'){if(!natural(value)||value>=total)fail();const selected=(await document.field(['sections',String(position)])).value;document=await document.splice(['sections'],position,1,[]);document=await document.splice(['sections'],value,0,[selected]);}
     }
    }
+   if(operation==='body'&&value?.attrs?.semanticStyles||['insert','section'].includes(operation)&&value?.body?.attrs?.semanticStyles)await requireSemanticRecordStyles(store.db);
    const pointer=await retainStarterDocument(document),{revision,...next}=header;next.draftHash=pointer.fingerprint;next.name=(await document.field(['name'])).value;
    await this.workspace.writeMetadata(STARTER_ROOT+'/drafts/'+command.id+'.json',JSON.stringify(pointer));await this.workspace.writeMetadata(STARTER_ROOT+'/headers/'+command.id+'.json',JSON.stringify(next));
    const result={header:{...next,revision:packageDigest(next)}};await this.workspace.writeMetadata(receiptFile,JSON.stringify({request,result}));return result;

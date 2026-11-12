@@ -1,5 +1,6 @@
 import './i18n/catalogues/editorControls.js';
 
+import {semanticTextTools} from './semantic-text-tools.js';
 import {fontSelect} from './font-picker.js';
 import {localizedText,t} from './i18n/index.js';
 export const editorBookText=localizedText('book');
@@ -13,7 +14,7 @@ export function textTools({destinations=[],compact=false,fonts}={}){
  const style=`<select data-rich-block aria-label="${text('paragraphStyle')}"><option value="paragraph">${text('paragraph')}</option><option value="h2">${text('heading2')}</option><option value="h3">${text('heading3')}</option><option value="h4">${text('heading4')}</option><option value="code">${text('codeBlock')}</option></select><input data-code-language maxlength="120" aria-label="${esc(t('book','codeLanguage'))}" placeholder="${esc(t('book','codeLanguage'))}" hidden>${cmd('book',t('book','content'))}`;
  const typography=`${fontSelect(`data-rich-font aria-label="${text('textFont')}"`,'',{fonts,first:[['',t('editorControls','inheritedFont')],['mixed',t('editorControls','mixedFonts')]]})}<select data-rich-size aria-label="${text('textSize')}"><option value="">${text('inheritedSize')}</option><option value="mixed" disabled>${text('mixedSizes')}</option>${Array.from({length:89},(_,i)=>'<option value="'+(i+8)+'">'+(i+8)+' px</option>').join('')}</select>`;
  const colors=`<label class="rich-color" title="${text('color')}"><span>A</span><input type="color" data-rich-color="text_color" aria-label="${text('selectedColor')}" value="#202a3a"></label><label class="rich-color" title="${text('highlight')}"><span>H</span><input type="color" data-rich-color="highlight" aria-label="${text('textHighlight')}" value="#fff2a8"></label>`;
- return `<div class="rich-toolbar" role="toolbar" aria-label="${text('formatting')}">${style}${compact?commands(definitions.filter(([id])=>basic.has(id)))+`<details class="text-more"><summary>${text('moreFormatting')}</summary><div>`+typography+commands(definitions.filter(([id])=>!basic.has(id)))+colors+'</div></details>':typography+commands(definitions)+colors}</div>
+ return `<div class="rich-toolbar" role="toolbar" aria-label="${text('formatting')}">${style}${compact?commands(definitions.filter(([id])=>basic.has(id)))+`<details class="text-more"><summary>${text('moreFormatting')}</summary><div>`+typography+commands(definitions.filter(([id])=>!basic.has(id)))+colors+'</div></details>':typography+commands(definitions)+colors}${semanticTextTools(text)}</div>
  <dialog class="rich-link-panel" aria-label="${text('linkSettings')}" hidden>
   <header><h3>${text('link')}</h3>${cmd('link-cancel',t('editorControls','linkCancel'))}</header>
   <label>${text('linkText')}<input name="label" aria-label="${text('linkText')}"></label>
