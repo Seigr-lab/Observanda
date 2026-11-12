@@ -157,6 +157,24 @@ test('dashboard opens without loading every record, shows real lab-book counts, 
  }finally{await f.close();}
 });
 
+test('New record on a records card scoped to one lab book creates in that book; a wider card asks where',async({page})=>{
+ test.setTimeout(90000);const scoped=createPanel('records','scoped'),all=createPanel('records','all');scoped.config.title='Recipe card';all.config.title='Every book';
+ const f=await fixture(page,{count:12,cards:[scoped,all],decorate:book=>{
+  const recipes={...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Recipe trials'};book.notebooks.push(recipes);
+  Object.assign(scoped.options,{notebookMode:'selected',notebookIds:[recipes.id]});
+ }});
+ try{
+  await page.goto(f.app.url);const dialog=page.locator('#dialog');
+  await card(page,'scoped').getByRole('button',{name:'New record',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'New record in Recipe trials',exact:true})).toBeVisible();
+  await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();
+  await card(page,'all').getByRole('button',{name:'New record',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Choose a lab book',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:/Recipe trials/})).toBeVisible();await expect(dialog.getByRole('button',{name:/Field journal/})).toBeVisible();
+  expect(f.errors).toEqual([]);
+ }finally{await f.close();}
+});
+
 test('record cards load independent filters, recover errors in place, and keep changed filters after reload',async({page})=>{
  test.setTimeout(90000);const field=createPanel('records','field'),studio=createPanel('records','studio');
  field.config.title='Field takes';field.options.tag='field';studio.config.title='Studio takes';studio.options.tag='studio';
