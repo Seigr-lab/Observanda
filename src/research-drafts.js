@@ -11,7 +11,7 @@ import {requireNativeNumericalModels,catalogueRequiresNativeNumericalModels} fro
 import {hasPagedResultTables} from './retained-tables.js';
 import {hasNestedAttemptContinuations} from './web/attempt-model.js';
 import {validPreparationEdit,attemptValueField} from './web/record-attempt-value.js';
-import {projectRecordOwnerDraft} from './record-owner-drafts.js';
+import {projectRecordOwnerDraft,recordOwnerDraftProjectionNeeded} from './record-owner-drafts.js';
 import {upgradeRecord} from './web/record-model.js';
 import {validDraftRecord as record} from './record-draft-validation.js';
 import {ResearchDraftIndex,draftSummary,draftKey,recordRecoverySummary} from './research-draft-index.js';
@@ -45,7 +45,7 @@ const validChanges=validDraftChanges;
 // manifest, record history or publication selection. Each editor owns a unique
 // checkpoint ID, with a revision guard for recovery from another window.
 export class ResearchDrafts {
-  constructor(workspace){this.workspace=workspace;this.index=new ResearchDraftIndex(workspace,id=>this.read(id,{indexed:false,expand:false,header:true,raw:true}),result=>projectRecordOwnerDraft(workspace,result));}
+  constructor(workspace){this.workspace=workspace;this.index=new ResearchDraftIndex(workspace,id=>this.read(id,{indexed:false,expand:false,header:true,raw:true}),result=>projectRecordOwnerDraft(workspace,result),(store,summary)=>recordOwnerDraftProjectionNeeded(store,summary.id));}
   async read(idValue,{indexed=true,expand=true,header=false,raw=false,includePending=false}={}){
     if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(()=>this.readValue(idValue,indexed,expand,header,{raw,includePending}));
     return this.readValue(idValue,false,expand,header,{raw,includePending});
@@ -98,8 +98,7 @@ export class ResearchDrafts {
     if(typeof includeRecovery!=='boolean'||workspaceId!==null&&!id(workspaceId)||excludeId!==null&&!id(excludeId)||!Number.isInteger(limit)||limit<1||limit>20||cursor!==null&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096))throw new AppError('INVALID');
     signal?.throwIfAborted();const {metadata:book}=await this.workspace.outline();
     if(workspaceId!==null&&workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
-    const labBookId=this.workspace.labBookId??null;
-    const owner={projectId:this.workspace.projectId??(labBookId?book.projects[0].id:null),labBookId};
+    const owner=this.recoveryOwner(book);
     const presentSummary=includeRecovery?(result,sourceRevision)=>recordRecoverySummary(result,sourceRevision,owner):draftSummary;
     if(await this.workspace.storageKind()==='catalogue')return this.index.page(book.id,{cursor,excludeId,limit},{signal,presentSummary});
     // The old file representation has no authenticated index. Keep its
@@ -120,6 +119,21 @@ export class ResearchDrafts {
     if(anchor.reverse)items.reverse();
     const encode=(item,reverse)=>Buffer.from(JSON.stringify({workspaceId:book.id,excludeId,limit,after:draftKey(item),reverse})).toString('base64url');
     return {workspaceId:book.id,drafts:items,previousCursor:items.length&&(anchor.reverse?more:opposite)?encode(items[0],true):null,nextCursor:items.length&&(anchor.reverse?opposite:more)?encode(items.at(-1),false):null};
+  }
+  recoveryOwner(book){
+    const labBookId=this.workspace.labBookId??null;
+    return {projectId:this.workspace.projectId??(labBookId?book.projects[0].id:null),labBookId};
+  }
+  // Recovery details of one listed checkpoint, read only when the author asks
+  // for them, so that discovery never reads checkpoint bodies.
+  async recovery(data,{signal}={}){
+    if(!keys(data,['workspaceId','id'])||!id(data.workspaceId)||!id(data.id))throw new AppError('INVALID');
+    signal?.throwIfAborted();const {metadata:book}=await this.workspace.outline();
+    if(data.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
+    const result=await this.read(data.id,{expand:false,header:true});
+    if(!result)throw new AppError('NOT_FOUND');
+    if(result.draft.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
+    signal?.throwIfAborted();return recordRecoverySummary(result,result.revision,this.recoveryOwner(book)).recovery;
   }
   async write(command){
     const compact=Array.isArray(command?.changes)&&command.changes.some(c=>Object.hasOwn(c??{},'baseRevision'));

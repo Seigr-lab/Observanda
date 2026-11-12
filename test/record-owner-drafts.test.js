@@ -60,6 +60,7 @@ test('record owner transfer preserves selected checkpoints and corrections witho
  const recovery=(await drafts.list({workspaceId:from.namespaceId,includeRecovery:true})).drafts.find(item=>item.id===id).recovery;
  assert.deepEqual(recovery.owner,{...sourceOwner,recordId:b.id});
  assert.equal(recovery.revision,remaining.revision);assert.equal(recovery.baseRevision,recordRevision(b));
+ assert.deepEqual(await drafts.recovery({workspaceId:from.namespaceId,id}),recovery);
  const received=(await importedDrafts.list({workspaceId:to.namespaceId,includeRecovery:true})).drafts.find(item=>item.id===id).recovery;
  assert.deepEqual(received.owner,{...targetOwner,recordId:a.id});
  assert.equal(received.revision,imported.revision);assert.equal(received.baseRevision,recordRevision(a));

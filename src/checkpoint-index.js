@@ -13,9 +13,9 @@ export function validCheckpointSummary(value){
  return value&&researchId(value.id)&&researchId(value.workspaceId)&&revisionId(value.revision)&&revisionId(value.sourceRevision)&&validCheckpointTime(value.updatedAt)&&Number.isSafeInteger(value.count)&&value.count>0&&Array.isArray(value.titles)&&value.titles.length===Math.min(value.count,3)&&value.titles.every(t=>typeof t==='string'&&t.length<=160);
 }
 export class CheckpointIndex{
- constructor(workspace,read,{source,order,cursorKind,summary,validSummary,scopeOf=()=>'',present=null}){
+ constructor(workspace,read,{source,order,cursorKind,summary,validSummary,scopeOf=()=>'',present=null,presentRequired=null}){
   this.workspace=workspace;this.read=read;this.source='metadata:'+source+'/';this.prefix='metadata:'+order+'/';this.order=order;this.marker=order+'.json';
-  this.cursorKind=cursorKind;this.summary=summary;this.validSummary=validSummary;this.scopeOf=scopeOf;this.present=present;
+  this.cursorKind=cursorKind;this.summary=summary;this.validSummary=validSummary;this.scopeOf=scopeOf;this.present=present;this.presentRequired=presentRequired;
  }
  path(summary){return this.order+'/'+(this.scopeOf(summary)?this.scopeOf(summary)+'/':'')+checkpointKey(summary);}
  async initialized(workspaceId){
@@ -91,6 +91,9 @@ export class CheckpointIndex{
    const rows=(reverse,after)=>reverse?index.reverseEntries(head,prefix,after===null?null:prefix+after):index.entries(head,prefix,after===null?null:prefix+after);
    const display=async summary=>{
     if(!this.present)return summary;
+    // The indexed summary is exact for a checkpoint its presenter cannot change:
+    // discovery then lists it without reading the checkpoint body.
+    if(presentSummary===this.summary&&this.presentRequired&&!await this.presentRequired(store,summary))return summary;
     const raw=await this.read(summary.id);
     if(!raw||hash(this.summary(raw,summary.sourceRevision))!==hash(summary))fail();
     const result=await this.present(raw);

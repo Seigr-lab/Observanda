@@ -18,5 +18,5 @@ export function recordRecoverySummary(result,sourceRevision,{projectId,labBookId
  }};
 }
 export class ResearchDraftIndex extends CheckpointIndex{
- constructor(workspace,read,present=null){super(workspace,read,{source:'.observanda/drafts',order:'.observanda/draft-list',cursorKind:'draft-page',summary:draftSummary,validSummary:validDraftSummary,present});}
+ constructor(workspace,read,present=null,presentRequired=null){super(workspace,read,{source:'.observanda/drafts',order:'.observanda/draft-list',cursorKind:'draft-page',summary:draftSummary,validSummary:validDraftSummary,present,presentRequired});}
 }

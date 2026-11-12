@@ -30,6 +30,7 @@ test('near-limit record checkpoints pin one base and survive concurrency, failed
   revision:saved.revision,baseRevision:recordRevision(base),updatedAt:row.updatedAt,state:'unchecked',
   capabilities:{recover:false,compare:true,discard:true}});
  assert.ok(Buffer.byteLength(JSON.stringify(row))<2048);assert.deepEqual(reads,[]);
+ assert.deepEqual(await drafts.recovery({workspaceId:book.id,id:command.id}),row.recovery);assert.deepEqual(reads,[]);
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:{...base,title:'Concurrent saved title'}}]},{receipt:true});reads.length=0;
  const recovered=await drafts.read(command.id);assert.deepEqual(reads,[base.id]);assert.deepEqual(recovered.draft.changes[0].base,base);assert.equal(recovered.draft.changes[0].record.title,change.record.title);
  const put=ResearchCatalogue.prototype.putObject;t.mock.method(ResearchCatalogue.prototype,'putObject',function(id,...args){if(id.startsWith('metadata:.observanda/draft-list/'))throw Object.assign(Error('Synthetic disk full'),{code:'ENOSPC'});return put.call(this,id,...args);});

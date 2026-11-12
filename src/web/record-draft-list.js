@@ -24,14 +24,8 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   dialog.innerHTML='<h2 id="draft-list-title" tabindex="-1">'+esc(text('title'))+'</h2><p>'+esc(text('description'))+'</p><div class="record-draft-rows">'+body+'</div>'+controls+'<p data-draft-error role="alert" hidden></p><div class="dialog-actions">'+button('close','close')+'</div>';
  }
  function renderPage(){
-  function savedVersion(item){
-   const detail=item.recovery;
-   if(!detail)return '';
-   if(detail.owner?.workspaceId!==owner.workspaceId||detail.id!==item.id||detail.revision!==item.revision||detail.surface!=='record')throw Error(text('invalidPage'));
-   const base=detail.baseRevision;
-   const version=base===null?text(item.count===1?'newRecordBase':'multipleBases'):text('savedVersion',{revision:base});
-   return '<details><summary>'+esc(text('recoveryDetails'))+'</summary><p>'+esc(version)+'</p><p>'+esc(text('checkOnReview'))+'</p></details>';
-  }
+  // Recovery details are read when the author opens them (loadDetails).
+  const savedVersion=item=>'<details data-recovery-details="'+esc(item.id)+'"><summary>'+esc(text('recoveryDetails'))+'</summary><p data-recovery-version role="status"></p><p>'+esc(text('checkOnReview'))+'</p></details>';
   const rows=page.drafts.map(item=>'<section class="record-draft-row"><h3>'+item.titles.map(title=>esc(title||text('untitled'))).join(' · ')+'</h3>'+
    (item.count>item.titles.length?'<p>'+esc(text('additional',{count:item.count-item.titles.length}))+'</p>':'')+
    '<p>'+esc(text('checkpointedAt',{date:new Date(item.updatedAt).toLocaleString(language())}))+'</p>'+savedVersion(item)+'<div class="inline-actions">'+button('review','review','data-id="'+item.id+'"')+button('discard','discard','data-id="'+item.id+'"')+'</div></section>').join('');
@@ -42,7 +36,7 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
   if(!preview){cursor=next;frame('<p role="status">'+esc(text('loading'))+'</p>');}
   const limit=preview?1:10;
   try{
-   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:owner.id,limit,...(preview?{}:{includeRecovery:true})},{adopt:false,signal:request.signal});
+   const result=await api('/api/research/drafts/list',{workspaceId,cursor:next,excludeId:owner.id,limit},{adopt:false,signal:request.signal});
    if(request.signal.aborted||!current(epoch,workspaceId))return;
    if(result?.workspaceId!==workspaceId||!Array.isArray(result.drafts)||result.drafts.length>limit||!result.drafts.every(validItem)||new Set(result.drafts.map(d=>d.id)).size!==result.drafts.length||result.drafts.some(d=>d.id===owner.id)||![result.previousCursor,result.nextCursor].every(v=>v===null||typeof v==='string'&&v.length>0&&v.length<=4096))throw Error(text('invalidPage'));
    available=Boolean(result.drafts.length||result.nextCursor||result.previousCursor);failed=false;
@@ -55,6 +49,24 @@ export function recordDraftList({api,esc,onChange,recover,recoverWriting,recover
    failed=true;if(!preview){frame('<p role="alert">'+esc(text('loadFailed'))+'</p><div class="inline-actions">'+button('retry','retry')+button('refresh','refresh')+'</div>');dialog.querySelector('[data-draft-retry]').focus();}
   }finally{if(controller===request)controller=null;if(!request.signal.aborted&&current(epoch,workspaceId))onChange();}
  }
+ // One checkpoint's saved version, read only for the details the author opens.
+ async function loadDetails(details){
+  const item=page?.drafts.find(d=>d.id===details.dataset.recoveryDetails),output=details.querySelector('[data-recovery-version]');
+  if(!item||!output||!owner||details.dataset.loaded)return;
+  details.dataset.loaded='true';const epoch=generation,workspaceId=owner.workspaceId,shown=page;
+  const valid=()=>current(epoch,workspaceId)&&page===shown&&details.isConnected;
+  try{
+   const detail=await api('/api/research/drafts/recovery',{workspaceId,id:item.id},{adopt:false});
+   if(!valid())return;
+   if(detail?.owner?.workspaceId!==workspaceId||detail.id!==item.id||detail.revision!==item.revision||detail.surface!=='record'||detail.baseRevision!==null&&!revisionId(detail.baseRevision))throw Error(text('invalidPage'));
+   const base=detail.baseRevision;
+   output.textContent=base===null?text(item.count===1?'newRecordBase':'multipleBases'):text('savedVersion',{revision:base});
+  }catch(error){
+   if(!valid())return;
+   delete details.dataset.loaded;output.textContent=error.message||text('readFailed');
+  }
+ }
+ dialog.addEventListener('toggle',event=>{const details=event.target;if(details.open&&details.matches?.('details[data-recovery-details]'))void loadDetails(details);},true);
  async function reset(writer){generation++;close();owner=writer?{id:writer.id,workspaceId:writer.workspaceId}:null;available=false;failed=false;busy=false;onChange();if(owner)await load(null,{preview:true});}
  async function refresh(){if(dialog.open)return load();return load(null,{preview:true});}
  async function show(){

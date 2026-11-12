@@ -23,6 +23,9 @@ import {PdfDocuments} from '../../src/pdf-documents.js';
 import {pdfLayoutPreset} from '../../src/web/pdf-layout-model.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+async function writeWhenFree(write){
+ for(let attempt=0;;attempt++)try{return await write();}catch(error){if(error.code!=='LOCKED'||attempt===49)throw error;await new Promise(resolve=>setTimeout(resolve,200));}
+}
 async function fixture(page,count=24,options={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-list-ui-')),book=upgradeNotebook(sampleNotebook()),source=book.entries[2];
  book.entries=Array.from({length:64},(_,i)=>({...structuredClone(source),id:randomUUID(),title:'Saved observation '+i,body:'Private original '+i,sections:[],figures:[],attachments:[],relations:[]}));
@@ -163,7 +166,9 @@ test('closing discovery cancels late pages; stale discard requires a refresh and
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await aborted;release();release=null;
   await expect(page.getByRole('button',{name:'Review drafts',exact:true})).toBeFocused();
   await page.context().unroute('**/api/research/drafts/list');await page.getByRole('button',{name:'Review drafts',exact:true}).click();await expect(rows).toHaveCount(2);
-  const command=f.commands[1];await f.drafts.write({...command,changes:command.changes.map(c=>({...c,record:{...c.record,title:'Changed in the other editor'}}))});
+  // The other editor writes directly; a write the app is running at that moment
+  // holds the workspace writer, so it retries as a second window would.
+  const command=f.commands[1];await writeWhenFree(()=>f.drafts.write({...command,changes:command.changes.map(c=>({...c,record:{...c.record,title:'Changed in the other editor'}}))}));
   await rows.first().getByRole('button',{name:'Discard draft',exact:true}).click();await rows.first().getByRole('button',{name:'Confirm discard',exact:true}).click();
   await expect(dialog.locator('[data-draft-error]')).toContainText('changed');
   await dialog.getByRole('button',{name:'Refresh drafts',exact:true}).click();await expect(rows.first()).toContainText('Changed in the other editor');

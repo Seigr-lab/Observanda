@@ -17,6 +17,7 @@ function define(name,Owner,method,{write=false,large=false,cancellable=false,run
  commands.set('/api/research/drafts/'+name,{write,cancellable,limit:large?MAX_RECORD_COMMAND_BYTES:MAX_BYTES,capacity:large?'checkpointRequest':null,run:run??((storage,data,options)=>new Owner(storage,...(Owner===RecordDraftReview?[new MediaStore(storage)]:[]))[method](data,options))});
 }
 for(const method of ['list','write','remove'])define(method,ResearchDrafts,method,{write:method!=='list',large:method==='write'});
+define('recovery',ResearchDrafts,'recovery');
 for(const [name,Owner] of [['writing',RecordWritingDrafts],['values',RecordValueDrafts]])for(const method of ['read','write'])define(name+'/'+method,Owner,method,{write:method==='write',large:method==='write'});
 for(const method of ['start','change','read','finish','import'])define('figures/'+method,RecordFigureDrafts,method,{write:method!=='read',cancellable:true});
 define('content',ResearchDraftContent,'read');

@@ -9,7 +9,7 @@ import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
-import {readRecordOwnerFence,readRecordOwnerTransfer,withRecordOwnerTransferWrite} from './record-owner-transfer-state.js';
+import {readRecordOwnerFence,readRecordOwnerTransfer,withRecordOwnerTransferWrite,recordOwnerFenceSlot} from './record-owner-transfer-state.js';
 import {copyRecordOwnerValue} from './record-owner-document.js';
 import {RecordDocument} from './record-document.js';
 import {withRecordBlockStore,recordBlockResource} from './record-block-store.js';
@@ -30,6 +30,13 @@ async function authorized(store,value){
  if(value?.version!==1||!researchId(value.transferId)||!researchId(value.recordId)||!revisionId(value.fingerprint))fail();
  const receipt=await readRecordOwnerTransfer(store,value.transferId);
  if(!receipt||value.fingerprint!==receipt.fingerprint||value.recordId!==receipt.command.recordId||receipt.targetOwner.workspaceId!==(await store.snapshot()).metadata.id)fail();return receipt;
+}
+// A checkpoint needs owner projection only when it was received from another
+// owner or when this owner has a record transfer fence; without either, its
+// indexed summary is exactly what projection would show.
+export async function recordOwnerDraftProjectionNeeded(store,id){
+ if(await store.object(originKey(id)))return true;
+ return Boolean(await store.db.get('SELECT 1 AS found FROM state WHERE slot LIKE $1 LIMIT 1',recordOwnerFenceSlot('%')));
 }
 export async function recordOwnerDraftOrigin(store,id){
  const pointer=await store.object(originKey(id));if(!pointer)return null;
