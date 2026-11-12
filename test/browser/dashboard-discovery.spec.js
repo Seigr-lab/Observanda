@@ -11,27 +11,23 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {startServer} from '../../src/server.js';
+import {WorkspaceWebsitePreparation} from '../../src/workspace-website-preparation.js';
 
 async function fixture(page,count=42){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-discovery-ui-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,body:'Private detailed notes '+i,sections:[],attachments:[],figures:[],relations:[],contributors:[{id:randomUUID(),name:'Artist '+i,role:'Performer'}]}));
  const f=await encryptedFixture(directory,book),settings=defaultDashboard();settings.views[0].panels=[];settings.shortcuts=[];
  await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
+ // Opening a workspace converts its saved website once, reading every shared record it publishes.
+ // That background job has its own specs; hold it here so the counter measures only the dashboard.
+ const prepare=WorkspaceWebsitePreparation.prototype.start;WorkspaceWebsitePreparation.prototype.start=function(){};
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[],bodies=[],errors=[];
  const original=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('request',request=>{if(request.url().includes('/api/workspace/read/')||request.url().includes('/dashboard-collection/'))requests.push({url:request.url(),data:request.postDataJSON()});});page.on('pageerror',error=>errors.push(error.message));
  await page.goto(app.url);
- // Opening a workspace prepares its saved website once, reading the shared records it publishes.
- // That is not the dashboard: wait for it to finish, then count only what the dashboard reads.
- await expect.poll(()=>page.evaluate(async()=>{
-  const {sessionHeaders}=await import('/session-store.js'),storage=await (await fetch('/api/storage',{headers:await sessionHeaders()})).json();
-  const response=await fetch('/api/website-files/preparation',{method:'POST',headers:await sessionHeaders({'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId}),body:'{}'});
-  const {preparation}=await response.json();return preparation?.state==='ready'&&preparation.library?.state!=='preparing';
- }),{timeout:60000}).toBe(true);
- bodies.length=0;
  // Adding cards is part of the dashboard's Customize dashboard disclosure.
  await page.locator('details[data-disclosure="dashboard-customization"] > summary').click();await page.getByRole('button',{name:'+ Add cards',exact:true}).click();
- return {...f,book,app,requests,bodies,errors,close:async()=>{ResearchCatalogue.prototype.record=original;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,book,app,requests,bodies,errors,close:async()=>{ResearchCatalogue.prototype.record=original;WorkspaceWebsitePreparation.prototype.start=prepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 for(const count of [42,420])test('card search, paging, pinning and restoration stay scoped with '+count+' records',async({page},testInfo)=>{
  test.setTimeout(90000);const f=await fixture(page,count);
