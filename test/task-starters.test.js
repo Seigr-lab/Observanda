@@ -5,6 +5,8 @@ import {readFile} from 'node:fs/promises';
 import {taskStarters,taskStarterDescription,createTaskRecord,taskBookConfiguration} from '../src/web/task-starters.js';
 import {validConfiguration} from '../src/web/notebook-schema.js';
 import {enableProfile} from '../src/web/laboratory/catalog.js';
+// The app loads lab-book profile text at startup; this test does the same.
+import '../src/web/i18n/catalogues/labBookProfiles.js';
 
 test('every installed starter resolves to valid private authoring content in each supported catalogue',async()=>{
   const expected=['blankRecord','blankBook','projectDiary','illustratedProcedure','fieldVisit','lesson','studioSession','hiveInspection','methodsBook'];
