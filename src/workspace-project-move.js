@@ -19,7 +19,8 @@ import {WorkspaceCopyRecovery} from './workspace-copy-recovery.js';
 import {resolveLocation,prepareCopyDestination,probeLocation} from './locations.js';
 import {moveWorkspace,readMoveReceipt,finishWorkspaceMove} from './workspace-move.js';
 import {moveSource} from './workspace-move-state.js';
-import {withWriterLease} from './writer-lease.js';
+import {withWriterLease,writerLeaseHeld} from './writer-lease.js';
+import {workspaceOwnerLeaseFile,ownerNativeControl} from './owned-storage-control.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
@@ -142,7 +143,11 @@ export class WorkspaceProjectMove{
    }
   }
   // The internal directory also contains the explicit claim and marker.
-  for(const name of await readdir(target.root)){if(name==='.observanda'){await assertRegular(path.join(target.root,name),{directory:true});for(const inner of await readdir(path.join(target.root,name))){const relative=name+'/'+inner;if(files.has(relative)){await assertRegular(path.join(target.root,relative));continue;}if(!await directory.destination(path.join(target.root,relative))&&!await directory.destinationContainer(path.join(target.root,relative)))throw new AppError('EXISTS');await walk(relative);}}else await walk(name);}
+  // Lease and control files belong to the running owner; one held open without
+  // sharing cannot be inspected (EBUSY) and holds no copied content.
+  // This move holds its own destination lease the same way: a native stat of
+  // that file opens it and fails with EBUSY, so the held lease is not stat'd.
+  for(const name of await readdir(target.root)){if(name==='.observanda'){await assertRegular(path.join(target.root,name),{directory:true});for(const inner of await readdir(path.join(target.root,name))){const relative=name+'/'+inner;if(files.has(relative)){if(relative!==lease||!writerLeaseHeld(path.join(target.root,lease)))await assertRegular(path.join(target.root,relative));continue;}if(workspaceOwnerLeaseFile(relative)||ownerNativeControl(relative))continue;if(!await directory.destination(path.join(target.root,relative))&&!await directory.destinationContainer(path.join(target.root,relative)))throw new AppError('EXISTS');await walk(relative);}}else await walk(name);}
   await atomicWrite(path.join(target.root,'.observanda/copy-in-progress'),'incomplete\n');
  }
 }
