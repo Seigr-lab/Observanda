@@ -125,6 +125,10 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   for(const [value,key] of [['section','sectionScopeSection'],['selection','sectionScopeSelection'],['page','sectionScopePage'],['site','sectionScopeSite']])scope.append(option(value,t(key)));
   if(component)for(const o of scope.options)if(['site','page'].includes(o.value))o.hidden=true;
   const grid=make('div');grid.className='website-visual-fields';
+  // Pictures, overlays, spacing and effects sit in their own collapsed group,
+  // so the everyday text and colour controls stay in view.
+  const extra=make('details');extra.className='website-visual-extra';extra.append(make('summary',t('sectionMoreAppearance')));
+  const extraGrid=make('div');extraGrid.className='website-visual-fields';extra.append(extraGrid);
   for (const field of fields) {
     let control;
     if (field.options) {
@@ -136,7 +140,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     }
     control.dataset.visualProperty=field.name;controls.set(field.name,control);
     const unit=field.unit?' ('+field.unit+')':'';
-    const label=labelled(t(field.label)+unit,control);grid.append(label);
+    const label=labelled(t(field.label)+unit,control);(field.group==='more'?extraGrid:grid).append(label);
     // A new picture can be added here; it uses the gallery's picture copies.
     if(field.name==='background-image'&&uploadPicture){
      const input=make('input'),upload=make('button',t('sectionUploadPicture'));
@@ -170,7 +174,7 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change,
    addCSS:rule=>{if(!getCSS().includes(rule))persistStyle(getCSS()+'\n'+rule,savedStyle.textContent+'\n'+rule);}});
-  form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,styleActions);
+  form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,...(extraGrid.children.length?[extra]:[]),styleActions);
   const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,getWidth,previewWidth,getRanges,manageRanges,beforeChange,change,make,listen,signal,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
   websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});

@@ -16,6 +16,9 @@ test('the block inspector offers space around, opacity and shadow as ordinary de
  assert.deepEqual(byName.get('box-shadow').options.map(([value])=>value)[0],'none');
  for(const field of fields)assert.ok(en[field.label],field.label);
  for(const name of ['margin','opacity','box-shadow'])assert.ok(generatedAppearanceProperties.has(name));
+ // These controls sit in the collapsed group, under its own label.
+ for(const name of ['margin','opacity','box-shadow'])assert.equal(byName.get(name).group,'more');
+ assert.ok(en.sectionMoreAppearance);
  const style=fakeStyle();
  applyVisualStyle(style,[['margin','24px'],['opacity','0.8'],['box-shadow',byName.get('box-shadow').options[2][0]],['unknown','1']]);
  assert.deepEqual([...style.values.keys()].sort(),['box-shadow','margin','opacity']);

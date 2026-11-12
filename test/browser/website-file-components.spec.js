@@ -22,7 +22,9 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await page.exposeFunction('filesAPI',async(route,data)=>{
    let value;await websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL(route,'https://website.test'),body:async()=>data??{},json:r=>{value=r;},check:async()=>{},title:'Field protocols',preparation:async()=>({state:'ready',defaultSiteId:id})});return value;
   });
-  await page.setViewportSize({width:1360,height:850});await mountFilesEditor(page);
+  // The drag needs the library row and the canvas target on screen at once;
+  // the block inspector now has one more row (its collapsed effects group).
+  await page.setViewportSize({width:1360,height:900});await mountFilesEditor(page);
   const canvas=page.frameLocator('#website-files-canvas'),library=page.locator('[data-website-components]');
   await expect(canvas.getByRole('heading',{name:'Methods'})).toBeVisible();
   await page.locator('[data-website-file-block]').selectOption('section');await page.locator('[data-action="website-files-add-block"]').click();
