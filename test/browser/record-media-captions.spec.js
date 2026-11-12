@@ -47,7 +47,9 @@ test('a video gets a caption track in the media dialog, plays it in the reader, 
   await expect(history.getByRole('heading',{name:'Record history',exact:true})).toBeVisible();
   // Newest first: the second listed version is the one saved from the dialog above.
   await history.locator('.record-history-list li').nth(1).getByRole('button',{name:'Review version',exact:true}).click();
-  const earlier=history.locator('video track[srclang="en"]').first();
+  // The reviewed version, not the collapsed comparison with the current one.
+  const earlier=history.locator('video track[srclang="en"]:not([data-history-compare] track)').first();
+  await expect(history.locator('[data-history-compare] video track[srclang="en"]').first()).not.toHaveAttribute('src',/[?&]revision=/);
   await expect(earlier).toHaveAttribute('src',/[?&]revision=[a-f0-9]{64}/);
   expect(await fetchTrack(earlier)).toContain('The queen crosses the frame.');
   await history.getByRole('button',{name:'Close',exact:true}).click();
@@ -57,7 +59,7 @@ test('a video gets a caption track in the media dialog, plays it in the reader, 
   const shared={...record,share:true,attachments:record.attachments.map(item=>({...item,share:item.id===video.id}))};
   const metadata={id:read.book.id,projects:[{...project,share:true}],notebooks:[{...book,share:true}]};
   const output=await convertPublicationRecord(f.workspace,metadata,shared,{target:'website'});
-  expect(output.html).toMatch(/<track kind="captions" src="assets\/[a-f0-9]{64}\.vtt" srclang="en" label="English" default>/);
+  expect(output.html).toMatch(/<track kind="captions" src="assets\/[a-f0-9]{64}\.vtt" srclang="en" label="English" default="">/);
   const store=new WebsiteFileStore(f.workspace),siteId=randomUUID(),provenance={workspaceId:read.book.id,projectId:project.id,notebookId:book.id,recordId:record.id},sourceId=websiteSourceId({...provenance,target:'website'});
   const source=await store.putSource({sourceId,provenance,title:record.title,...output},{token:await store.beginSourceUpdate({sourceId,target:'website',provenance})});
   let opened=await store.importFiles(siteId,{name:'Inspections',files:new Map([['index.html','<!doctype html><html lang="en"><head><title>Inspections</title></head><body><main><h1>Inspections</h1></main></body></html>'],['style.css','']])});
