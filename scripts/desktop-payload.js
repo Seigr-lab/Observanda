@@ -1,7 +1,7 @@
 import {readdir,lstat,readFile,readlink,realpath,mkdtemp,rm} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import {workDirectory} from './work-directory.js';
 import {createHash} from 'node:crypto';
 import {githubRuntimeFiles} from './github-runtime.js';
 import {pdfValidationRuntimeFiles} from './pdf-validation-runtime.js';
@@ -57,7 +57,7 @@ export async function verifyDesktopPayload(root,{sourceRoot}={}){
   if(application.version!==desktop.version)throw Error('Desktop and application versions must match before packaging.');
   // Generated chunks are not source files. Rebuild them independently so a
   // refreshed payload manifest cannot hide stale or substituted browser code.
-  const parent=await realpath(os.tmpdir()),temporary=await mkdtemp(path.join(parent,'observanda-browser-verify-'));
+  const parent=await workDirectory(),temporary=await mkdtemp(path.join(parent,'observanda-browser-verify-'));
   try{
    await buildBrowser({root:path.resolve(sourceRoot),out:temporary});
    const expected=(await payloadFiles(temporary)).map(file=>({...file,path:generated+file.path}));

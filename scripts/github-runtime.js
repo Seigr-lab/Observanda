@@ -1,7 +1,7 @@
 import {mkdir,mkdtemp,copyFile,lstat,readFile,readdir,readlink,realpath,open,rm} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import os from 'node:os';
+import {workDirectory} from './work-directory.js';
 import path from 'node:path';
 import {admitReviewedRuntime,assertRuntimeAdmission,copyAdmittedRuntime} from './runtime-input-trust.js';
 import {withRuntimeProbeEnvironment} from './runtime-probe-environment.js';
@@ -81,7 +81,7 @@ export async function verifyLinuxGitRuntime(directory,{execute=executeFile,admis
  await assertRuntimeAdmission(directory,admission);
  for(const name of ['share/git-core/templates/description','LICENSE'])if(!(await lstat(await realpath(path.join(directory,name)))).isFile())throw Error('Incomplete Linux Git runtime: '+name);
  const base=await verifyLinuxRuntime(directory,{executables:['bin/git','bin/git-remote-http','bin/git-remote-https'],execute,admission}),inside=file=>file===base||file.startsWith(base+path.sep);
- const options={timeout:30000,maxBuffer:1024*1024,windowsHide:true},scratch=await mkdtemp(path.join(os.tmpdir(),'observanda-git-runtime-'));
+ const options={timeout:30000,maxBuffer:1024*1024,windowsHide:true},scratch=await mkdtemp(path.join(await workDirectory(),'observanda-git-runtime-'));
  try{
   const git=path.join(base,'bin/git'),isolated={...options,cwd:scratch,env:{PATH:path.join(base,'bin'),HOME:scratch,XDG_CONFIG_HOME:scratch,LC_ALL:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_SYSTEM:'/dev/null',GIT_TERMINAL_PROMPT:'0'}};
   const {stdout:execPath}=await execute(git,['--exec-path'],isolated);

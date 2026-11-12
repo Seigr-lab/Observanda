@@ -1,6 +1,6 @@
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
+import {workDirectory} from './work-directory.js';
 
 // GCM locates Git even for --version. Call only with the executable from an
 // admitted runtime; never restore the user's PATH or Git configuration.
@@ -21,7 +21,7 @@ export function runtimeProbeEnvironment(directory,{platform=process.platform,env
  };
 }
 export async function withRuntimeProbeEnvironment(operation,options){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-runtime-probe-'));
+ const directory=await mkdtemp(path.join(await workDirectory(),'observanda-runtime-probe-'));
  try{return await operation({cwd:directory,env:runtimeProbeEnvironment(directory,options),windowsHide:true,timeout:30000,maxBuffer:65536});}
  finally{await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 }
