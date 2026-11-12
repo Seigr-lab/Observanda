@@ -196,14 +196,17 @@ async function researchWebsiteFiles(workspace,store,site,{metadata,websitePin,so
    }
   });
   const files=new Map(),bind=(name,html)=>bindConvertedPage(name,html,{records,aliases,mediaNames});
-  for await(const [name,value] of candidate.files){
-   signal?.throwIfAborted();if(name==='publication.json'||aliases.has(name))continue;
-   if(name.endsWith('.html'))files.set(name,bind(name,(await contentBuffer(value,{signal})).toString('utf8')));
-   else if(name.endsWith('.css')){let css=(await contentBuffer(value,{signal})).toString('utf8');for(const [original,alias] of aliases)css=css.split(original).join(alias);files.set(name,css);}
-   else if(records.size&&name!=='.nojekyll'&&!/^(?:[^/]+\.js|(?:media|fonts|assets)\/[^/]+)$/.test(name))failed('unowned-edition-member');
-   else files.set(name,value);
-   await progress?.('copying-files',files.size,candidate.files.size);
-  }
+  // One read scope for the whole edition: each retained file otherwise opens its own catalogue transaction.
+  await workspace.catalogue(async()=>{
+   for await(const [name,value] of candidate.files){
+    signal?.throwIfAborted();if(name==='publication.json'||aliases.has(name))continue;
+    if(name.endsWith('.html'))files.set(name,bind(name,(await contentBuffer(value,{signal})).toString('utf8')));
+    else if(name.endsWith('.css')){let css=(await contentBuffer(value,{signal})).toString('utf8');for(const [original,alias] of aliases)css=css.split(original).join(alias);files.set(name,css);}
+    else if(records.size&&name!=='.nojekyll'&&!/^(?:[^/]+\.js|(?:media|fonts|assets)\/[^/]+)$/.test(name))failed('unowned-edition-member');
+    else files.set(name,value);
+    await progress?.('copying-files',files.size,candidate.files.size);
+   }
+  });
   await assertPublicationSourcePermissions(site,retained,{sourceReader,signal});
   return {files,bind,edition:{input,records,aliases,candidate}};
  }finally{await reader?.close();}
