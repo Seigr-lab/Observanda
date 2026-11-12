@@ -12,7 +12,10 @@ export function pdfBlockRenderer(settings,{textGlyphs,sectionId}){
    let html;
    try{html=require('katex').renderToString(a.source,{output:'htmlAndMathml',displayMode:true,trust:()=>{throw new Error('External equation content');},strict:'error',throwOnError:true,maxExpand:100,maxSize:20,macros:{}});}catch{throw new PdfLayoutError('PDF_EQUATION',[sectionId,a.id]);}
    equations=true;textGlyphs(settings.font,a.label);
-   return '<figure class="book-equation" id="record-equation-'+a.id+'"><div role="math" aria-label="'+esc(a.label)+'">'+html+'</div><figcaption>'+esc(a.label)+'</figcaption></figure>';
+   // In a PDF print tree the visually hidden MathML and aria-hidden visible
+   // branch would leave the actual glyphs outside any semantic object.
+   const visible=html.replace('class="katex-html" aria-hidden="true"','class="katex-html"');
+   return '<figure class="book-equation" id="record-equation-'+a.id+'"><div role="img" aria-label="'+esc(a.label+'. '+a.source)+'">'+visible+'</div><figcaption>'+esc(a.label)+'</figcaption></figure>';
   }
   if(node.type==='book_sketch'){
    textGlyphs(settings.font,[a.title,a.description,...a.items.filter(item=>item.kind==='text').map(item=>item.text)].join(' '));

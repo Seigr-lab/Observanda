@@ -63,6 +63,7 @@ async function apply(){
   for(const [ref,obj] of context.enumerateIndirectObjects()){
    if(!(obj instanceof PDFDict))continue;const key=ref.objectNumber+'R'+(ref.generationNumber||''),label=links.get(key);
    if(String(obj.get(name('Subtype')))==='/Link'&&!obj.has(name('Contents'))&&label)obj.set(name('Contents'),PDFHexString.fromText([...label].join(' ')));
+   if(String(obj.get(name('Type')))==='/StructElem'&&String(obj.get(name('S')))==='/LI')wrapListBody(context,ref,obj);
    if(String(obj.get(name('S')))!=='/Figure'||obj.has(name('Alt'))||obj.has(name('ActualText')))continue;const kids=context.lookup(obj.get(name('K')));
    // HTML figure is a grouping container; its child image/SVG already has the
    // authored alternative. Preserve that child and caption as separate content.
@@ -75,5 +76,25 @@ async function apply(){
   if(xml!==null)document.catalog.set(name('Metadata'),context.register(context.stream(Buffer.from(xml,'utf8'),{Type:'Metadata',Subtype:'XML'})));
   const output=await document.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false});if(output.length>maxBytes)throw Object.assign(fail(),{code:'PDF_CAPACITY'});if(output.length<=bytes.length||!Buffer.from(output.buffer,output.byteOffset,bytes.length).equals(Buffer.from(bytes)))throw fail();return output;
  }finally{await loading.destroy();}
+}
+// Chromium may place real Link or Div structure children directly under LI.
+// Wrap contiguous non-label children without moving their content items or
+// annotation ownership. Parent-tree entries continue to refer to their
+// original marked-content elements.
+function wrapListBody(context,owner,item){
+ const k=name('K'),kids=context.lookup(item.get(k)),refs=kids instanceof PDFArray?kids.asArray():[item.get(k)];
+ const children=refs.map(ref=>context.lookup(ref));
+ if(!children.length||!children.every(child=>child instanceof PDFDict&&String(child.get(name('Type')))==='/StructElem'&&String(child.get(name('P')))===String(owner)))return;
+ const side=child=>String(child.get(name('S'))),plain=children.map(child=>!['/Lbl','/LBody'].includes(side(child)));
+ if(!plain.some(Boolean))return;
+ const ordered=[];let at=0;
+ while(at<refs.length){
+  if(!plain[at]){ordered.push(refs[at++]);continue;}
+  const start=at;while(at<refs.length&&plain[at])at++;
+  const body=context.register(context.obj({Type:'StructElem',S:'LBody',P:owner,K:refs.slice(start,at)}));
+  for(let i=start;i<at;i++)children[i].set(name('P'),body);
+  ordered.push(body);
+ }
+ item.set(k,context.obj(ordered));
 }
 try{const bytes=await apply();parentPort.postMessage({bytes},[bytes.buffer]);}catch(error){parentPort.postMessage({error:error?.code==='PDF_CAPACITY'?'PDF_CAPACITY':'PDF_ACCESSIBILITY_FAILED'});}
