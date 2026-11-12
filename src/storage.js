@@ -428,7 +428,13 @@ export class Workspace {
     validateNotebook(next);
     if(await this.storageKind()==='catalogue')return this.catalogue(async store=>{
       if(await store.head()!==current.etag)throw new AppError('CONFLICT');
-      return store.put(next);
+      const saved=await store.put(next);
+      // The explicit format upgrade is the writer that gives a workspace its
+      // current website documents, as creation does. Left to sign-in website
+      // preparation, that initialization would move the head after the author
+      // had read it, and the author's next save would meet a conflict.
+      if(next.formatVersion===21&&current.book.formatVersion!==21&&!this.projectId&&!this.labBookId){await store.initializeWebsiteDocuments();return store.read();}
+      return saved;
     });
     const revisions = await privateDirectory(this.root, '.observanda/revisions');
     const originalBytes = await this.readFile(await workspaceFile(this.root), 'utf8');
