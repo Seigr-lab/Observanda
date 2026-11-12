@@ -30,20 +30,25 @@ export async function indexHistoricalSources(store,signal){
 export async function reconcileHistoricalMembership(store,reader,namespace,snapshotId,conversion,signal){
  const directory=root+'/'+namespace;let after=null;
  do{
-  const page=await store.scope(()=>store.names(directory,{after,limit:32,directories:false}),{signal});
-  for(const name of page.items){
-   if(!/^[a-f0-9]{2}\.json$/.test(name))throw new AppError('FORMAT');
-   const rows=await store.scope(()=>store.control(directory+'/'+name,{signal}),{signal});
-   for(let offset=0;offset<rows.length;offset+=40){
-    const batch=rows.slice(offset,offset+40);
-    const {value:candidates}=await reader.use(namespace,undefined,async(catalogue,snapshot,context)=>{
-     if(context.snapshotId!==snapshotId)throw new AppError('RECORD_CHANGED');
-     const items=[];
-     for(const row of batch)if(await conversion.historicalDisposition(catalogue,snapshot,row))items.push(row);
-     return items;
-    });
-    for(const row of candidates)await conversion.withdrawHistoricalMembership(reader,namespace,row,signal);
+  // Read a page of membership buckets in one storage scope, then check its rows in
+  // catalogue batches across buckets, in the same order as before.
+  const {page,rows}=await store.scope(async()=>{
+   const page=await store.names(directory,{after,limit:32,directories:false}),rows=[];
+   for(const name of page.items){
+    if(!/^[a-f0-9]{2}\.json$/.test(name))throw new AppError('FORMAT');
+    rows.push(...await store.control(directory+'/'+name,{signal}));
    }
+   return {page,rows};
+  },{signal});
+  for(let offset=0;offset<rows.length;offset+=40){
+   const batch=rows.slice(offset,offset+40);
+   const {value:candidates}=await reader.use(namespace,undefined,async(catalogue,snapshot,context)=>{
+    if(context.snapshotId!==snapshotId)throw new AppError('RECORD_CHANGED');
+    const items=[];
+    for(const row of batch)if(await conversion.historicalDisposition(catalogue,snapshot,row))items.push(row);
+    return items;
+   });
+   for(const row of candidates)await conversion.withdrawHistoricalMembership(reader,namespace,row,signal);
   }
   after=page.next;
  }while(after);
