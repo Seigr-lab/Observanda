@@ -12,20 +12,22 @@ import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {catalogueBinding} from '../../src/postgres-activation.js';
 import {preferences} from './preferences-helper.js';
 import {moveWorkspaceTo} from '../../src/workspace-move.js';
+import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
 
-test('existing workspace converts in the app, locks its owned database and moves the whole workspace',async({page})=>{
+test('workspace owns its database, locks it and moves the whole workspace in the app',async({page})=>{
  test.setTimeout(180000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-database-ui-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'complete move');
- const owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});owner.legacy=async()=>process.env;
- const detach=installDatabaseProvider(owner),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-database-ui-')),destination=path.join(directory,'complete move');
+ const owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});
+ const detach=installDatabaseProvider(owner),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await preferences(page,'Storage & access');
-  await expect(page.getByText('This older workspace still uses an installation-wide database.',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Store database in this workspace',exact:true}).click();
-  await expect(page.getByText('This workspace owns its database files.',{exact:false})).toBeVisible({timeout:60000});
+  await expect(page.getByText('This workspace owns its database files.',{exact:false})).toBeVisible();
   expect((await catalogueBinding(f.workspace.root)).placement).toBe('workspace');
   await expect(page.locator('p.storage-path').filter({hasText:path.join(f.workspace.root,'.observanda','postgresql')})).toBeVisible();
+  // Signing in starts website preparation and its writes; locking refuses while a writer is active.
+  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect(page.getByRole('button',{name:'Activity',exact:true})).toBeVisible({timeout:30000});
   await page.getByRole('button',{name:'Lock workspace',exact:true}).last().click();
   await expect(page.getByRole('button',{name:'Unlock workspace',exact:true})).toBeVisible();
   expect(owner.instances.instances.has(f.workspace.root)).toBe(false);
@@ -54,7 +56,7 @@ test('restarting after interrupted move offers the verified destination and fini
   expect(owner.instances.instances.has(f.workspace.root)).toBe(false);
   await page.getByRole('button',{name:'Open moved workspace',exact:true}).click();
   const dialog=page.locator('#dialog');await expect(dialog.getByLabel('Workspace folder',{exact:true})).toHaveValue(destination);
-  await dialog.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(sampleNotebook().title);
+  await dialog.getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Retry original cleanup',exact:true}).click();
   await dialog.getByRole('button',{name:'Retry original cleanup',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:45000});
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});

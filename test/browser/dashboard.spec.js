@@ -44,6 +44,8 @@ async function library(page){
 }
 async function addCard(page,label,category='collections'){
  const region=await library(page);await region.getByLabel('Show',{exact:true}).selectOption(category);
+ // The library shows twelve items a page; find the card by name as a person would.
+ await region.getByRole('searchbox',{name:'Find data to display',exact:true}).fill(label);
  await region.locator('.desk-library-item').filter({has:page.locator('strong').getByText(label,{exact:true})}).locator('[data-action="dashboard-add"]').click();
  await expect(region).toHaveCount(0);
 }
@@ -260,7 +262,8 @@ test('cards resize with the keyboard or pointer, cancel a resize with Escape, mo
  let box=await page.getByRole('button',{name:'Resize Recent records',exact:true}).boundingBox();
  await page.mouse.move(box.x+12,box.y+12);await page.mouse.down();await page.mouse.move(box.x+12,box.y+132,{steps:8});await page.mouse.up();await settled(page);
  const dragged=await panel();expect(dragged.height).toBeGreaterThan(keyed.height+80);
- box=await page.getByRole('button',{name:'Resize Recent records',exact:true}).boundingBox();
+ // The taller card puts its resize handle below the window; bring it into view as a person would before dragging.
+ const handle=page.getByRole('button',{name:'Resize Recent records',exact:true});await handle.evaluate(node=>node.scrollIntoView({block:'center'}));box=await handle.boundingBox();
  await page.mouse.move(box.x+12,box.y+12);await page.mouse.down();await page.mouse.move(box.x+60,box.y+90,{steps:4});await page.keyboard.press('Escape');await page.mouse.up();
  await expect(page.locator('#desk-move-status')).toHaveText('Move cancelled.');await settled(page);expect(await panel()).toEqual(dragged);
  const move=page.getByRole('button',{name:'Move Recent records',exact:true});await move.focus();await page.keyboard.press('Space');for(let i=0;i<12;i++)await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowRight');await page.keyboard.press('Enter');
