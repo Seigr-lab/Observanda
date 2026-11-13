@@ -962,6 +962,7 @@
   "pickerPageCount": "Páginas con esta entrada: {count}",
   "pickerPreparingLibrary": "Se están preparando las entradas compartidas anteriormente. Ya puede utilizar las entradas disponibles.",
   "pickerLockedLibrary": "Desbloquee el espacio de investigación para terminar de preparar las entradas compartidas anteriormente. Ya puede utilizar las entradas disponibles.",
+  "pickerWorkspaceOwners": "Proyectos y cuadernos",
   "pickerFailedLibrary": "No se pudieron preparar algunas entradas compartidas anteriormente. Ya puede utilizar las entradas disponibles.",
   "pickerHeadUse": "Se ha abierto {page}. Esta entrada se usa en los metadatos de la página.",
   "pickerBackToEntry": "Mostrar detalles de la entrada",

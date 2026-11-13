@@ -8,7 +8,7 @@ const defaults=()=>({search:'',searchField:'all',filter:'all',dateFrom:'',dateTo
 const initial=()=>({open:false,galleryOnly:false,filtersShown:true,fields:defaults(),criteria:defaults(),tags:[],owners:{project:facet(),book:facet(),tag:facet()},rows:[],page:0,pages:[null],next:null,
  queue:new Map(),item:null,detail:null,placements:null,tagOffset:0,sectionOffset:0,sectionPages:[0],placeOffset:0,placePages:[0],position:'end',block:1,confirm:null,
  status:'',loading:false,generation:null,token:null,totalEntries:null,preparation:null,pane:'detail',siteList:null,sitePage:0,sitePages:[null],usageSite:null});
-export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mutatePlacement,jumpPlacement,libraryStatus,onSourceGallery,choosingGallerySource,onPickerPaint,onPickerClose}){
+export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mutatePlacement,jumpPlacement,libraryStatus,onSourceGallery,choosingGallerySource,onPickerPaint,onPickerClose,workspaceOwners=null}){
  const msg=(key,args)=>t('websiteFiles',key,args);
  let s=initial(),epoch=0,controller=null,validating=false,types=null;
  const ownerRequests=new Map();
@@ -294,7 +294,7 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
   const op=name.slice(7),owner=/^(find|choose|clear|next|previous)-(project|book|tag)$/.exec(op);
   if(op==='close'){close();return true;}
   if(op==='open'){
-   s.open=true;s.galleryOnly=Boolean(choosingGallerySource?.());const opening=s;
+   s.open=true;s.galleryOnly=Boolean(choosingGallerySource?.());s.ownersAvailable=typeof workspaceOwners==='function';const opening=s;
    if(!types){
     const [definitions,presentation]=await Promise.all([import('./record-types.js'),import('./record-type-presentation.js')]);
     types={ids:definitions.RECORD_TYPES.map(row=>row.id),statuses:definitions.STATUSES,label:presentation.recordTypeLabel};
@@ -307,6 +307,16 @@ export function websiteFilesPicker({request,esc,blocks,site,insert,insertMany,mu
    await browse({focus:'[data-picker-search]'});return true;
   }
   if(!s.open)return true;
+  // Projects and lab books of this workspace reach the library through their own
+  // grants. Unlocking one resumes discovery, then the library is read again.
+  if(op==='workspace-owners'){
+   if(!s.ownersAvailable)return true;const opening=s;
+   if(!await workspaceOwners()||s!==opening||!s.open)return true;
+   s.preparation=null;await browse({});
+   const result=await libraryStatus?.().catch(()=>null);
+   if(s===opening&&s.open&&['preparing','locked','failed'].includes(result?.state)){s.preparation=result.state;paint();}
+   return true;
+  }
   if(op.startsWith('saved-')){await saved.action(op.slice(6),el);return true;}
   if(s.galleryOnly&&['insert','insert-group','select-page','remove-placement','show-uses','sites-open','jump'].includes(op))return true;
   if(owner){await actFacet(owner[1],owner[2],el);return true;}

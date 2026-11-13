@@ -50,6 +50,7 @@ export const deferredCatalogues=Object.freeze({
  planningData:()=>import('./catalogues/planningData.js'),
  inventoryData:()=>import('./catalogues/inventoryData.js'),
  resourceQuality:()=>import('./catalogues/resourceQuality.js'),
+ workspaceReach:()=>import('./catalogues/workspaceReach.js'),
  moduleRecovery:()=>import('./catalogues/moduleRecovery.js'),
  sampleAnalysis:()=>import('./catalogues/sampleAnalysis.js'),
  materialAnalysis:()=>import('./catalogues/materialAnalysis.js'),

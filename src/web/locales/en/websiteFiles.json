@@ -962,6 +962,7 @@
   "pickerPageCount": "Pages with this entry: {count}",
   "pickerPreparingLibrary": "Previously shared entries are being prepared. Available entries can be used now.",
   "pickerLockedLibrary": "Unlock the research workspace to finish preparing previously shared entries. Available entries can be used now.",
+  "pickerWorkspaceOwners": "Projects and lab books",
   "pickerFailedLibrary": "Some previously shared entries could not be prepared. Available entries can be used now.",
   "pickerHeadUse": "Opened {page}. This entry is used in the page metadata.",
   "pickerBackToEntry": "Show entry details",

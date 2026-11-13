@@ -3,17 +3,27 @@ import {researchReference,parseResearchReference} from './research-reference.js'
 import {WORKFLOW_ROLES,workflowRole} from './record-workflow.js';
 import {RELATION_TYPES} from './record-model.js';
 import {t} from './i18n/index.js';
+import {workspaceOwnerPicker} from './workspace-owner-picker.js';
 const text=(key,args)=>t('recordValues',key,args);
 export const recordRelationAddButton=esc=>'<button type="button" class="button" data-action="record-value-add-relation">'+esc(text('addRelation'))+'</button>';
 export const recordRelationEditButton=(link,esc)=>'<button type="button" class="button" data-action="record-value-edit" data-value-field="relation:'+link.id+'" aria-label="'+esc(text('editRelation',{label:link.label||link.type}))+'">'+esc(text('editRelationButton'))+'</button>';
 
 // Discovery is embedded in the selected editor. Changing or closing its form
 // cancels discovery, so an old choice cannot enter another recovered edit.
-export function recordRelationView({state,api,esc,field},lifecycle){
+export function recordRelationView({state,api,esc,field,access},lifecycle){
  let current=null,unbind=null,retained=null,pending=false;
  const empty=()=>({type:RELATION_TYPES[0],label:'',reference:''});
  const picker=researchTargetPicker({state,api,esc,field,excludeId:()=>current?.base.recordId,active:()=>!!current?.dialog?.open&&current.context===lifecycle.context()});
- const stop=()=>{picker.stop();pending=false;current?.dialog?.querySelector('[data-relation-picker]')?.replaceChildren();lifecycle.refresh();};
+ // Records of the workspace's other projects and lab books, through each owner's
+ // own grant and publication consent. A locked owner asks to be unlocked first.
+ const owners=workspaceOwnerPicker({state,api,esc,field,access});
+ function linkOther(record,page){
+  const selected=current;if(!selected?.dialog?.open||selected.context!==lifecycle.context())return true;
+  const exact=selected.dialog.querySelector('[data-relation-version]').value==='exact',target={workspaceId:page.sourceId,kind:'record',id:record.id,...(exact?{revision:record.revision}:{})};
+  selected.value.value??=empty();selected.value.value.reference=researchReference(target);selected.value.value.label=record.title;
+  refresh();selected.changed();selected.dialog.querySelector('[data-relation-value="reference"]').focus();return true;
+ }
+ const stop=()=>{picker.stop();owners.stop();pending=false;current?.dialog?.querySelector('[data-relation-picker]')?.replaceChildren();lifecycle.refresh();};
  const option=(id,label,value)=>'<option value="'+esc(id)+'"'+(id===value?' selected':'')+'>'+esc(label)+'</option>';
  const roleLabel=role=>text('relationRole_'+role);
  const version=item=>item.role?(workflowRole(item.role).exact?'exact':'current'):parseResearchReference(item.reference)?.revision?'exact':'current';
@@ -21,6 +31,7 @@ export function recordRelationView({state,api,esc,field},lifecycle){
   const {dialog,value}=current,item=value.value??retained,removed=value.value===null&&!!current.base.definition.original;
   for(const control of dialog.querySelectorAll('[data-relation-value]')){control.value=item[control.dataset.relationValue]??'';control.disabled=removed;}
   dialog.querySelector('[data-relation-browse]').disabled=removed;
+  dialog.querySelector('[data-relation-workspace]').disabled=removed||!!item.role;
   dialog.querySelector('[data-relation-value="reference"]').setCustomValidity('');
   const control=dialog.querySelector('[data-relation-version]');control.value=version(item);control.disabled=removed||!!item.role;
  }
@@ -49,12 +60,15 @@ export function recordRelationView({state,api,esc,field},lifecycle){
     field(esc(text('relationLabel')),'<input data-relation-value="label" value="'+esc(retained.label)+'">')+
     field(esc(text('relationReference')),'<textarea data-relation-value="reference" required rows="3" spellcheck="false">'+esc(retained.reference)+'</textarea>')+
     '<p class="muted">'+esc(text('relationReferenceHelp'))+'</p>'+field(esc(text('relationVersion')),'<select data-relation-version>'+option('current',text('relationCurrent'),version(retained))+option('exact',text('relationExact'),version(retained))+'</select>')+
-    '<button type="button" class="button" data-relation-browse>'+esc(text('relationBrowse'))+'</button><div data-relation-picker></div>'+
+    '<button type="button" class="button" data-relation-browse>'+esc(text('relationBrowse'))+'</button><button type="button" class="button" data-relation-workspace>'+esc(t('workspaceReach','linkButton'))+'</button><div data-relation-picker></div>'+
     (base.definition.original?'<p><label><input type="checkbox" data-relation-remove'+(value.value===null?' checked':'')+'> '+esc(text('removeRelation'))+'</label></p><p class="muted">'+esc(text('removeRelationHelp'))+'</p>':'');
   },
   bind(dialog){
    if(!current)return;current.dialog=dialog;refresh();
-   const click=event=>{if(!event.target.closest('[data-relation-browse]'))return;event.preventDefault();event.stopPropagation();
+   const click=event=>{
+    if(event.target.closest('[data-relation-workspace]')){event.preventDefault();event.stopPropagation();stop();
+     owners.open({title:t('workspaceReach','linkTitle'),help:t('workspaceReach','linkHelp'),row:(record,index,page)=>'<button type="button" class="button" data-owner-command="link">'+esc(t('workspaceReach','link',{title:record.title}))+'</button>',act:async(node,record,page)=>node.dataset.ownerCommand==='link'&&linkOther(record,page)});return;}
+    if(!event.target.closest('[data-relation-browse]'))return;event.preventDefault();event.stopPropagation();
     const role=(current.value.value??retained).role,exact=dialog.querySelector('[data-relation-version]').value==='exact';
     stop();
     picker.open({root:dialog.querySelector('[data-relation-picker]'),recordType:role==='run-of'?'non-run':role==='follows-run'?'run':'all',recordsOnly:!!role||exact,onChoose:choose,onCancel:()=>{stop();dialog.querySelector('[data-relation-browse]').focus();}});

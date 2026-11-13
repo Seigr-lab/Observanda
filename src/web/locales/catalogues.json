@@ -1206,5 +1206,6 @@
     "nb",
     "nn"
   ],
-  "resourceQuality": ["en", "ca", "es", "nb", "nn"]
+  "resourceQuality": ["en", "ca", "es", "nb", "nn"],
+  "workspaceReach": ["en", "ca", "es", "nb", "nn"]
 }

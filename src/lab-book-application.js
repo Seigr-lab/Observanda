@@ -46,6 +46,7 @@ export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&['reference','reference-location'].includes(match[2]))return {bookOperation:'reference',operation:'lab-books/'+match[2],labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&match[2]==='publication-source-directory')return {operation:'publication-source-directory',labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&match[2]==='publication-source')return {operation:'publication-source',labBookId:match[1],write:false,limit:1048576};
+ if(method==='POST'&&['workspace-owners','workspace-owner-records'].includes(match[2]))return {operation:match[2],labBookId:match[1],write:false,limit:16384};
  const route='/api/'+match[2];
  const command=inventoryMaintenanceRequest(route,method)??recordOwnerTransferRequest(route,method)??sampleAnalysisRequest(route,method)??projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
 }

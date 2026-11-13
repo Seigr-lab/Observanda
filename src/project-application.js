@@ -21,6 +21,7 @@ import {ProjectWorkspaceTargets} from './project-workspace-targets.js';
 import {ProjectWorkspaceMoveApplication} from './project-workspace-move-application.js';
 import {publicationSourceDirectory} from './publication-source-directory.js';
 import {projectPublicationSource,publicationSourceFactory} from './project-publication-sources.js';
+import {workspaceOwnerRequest} from './workspace-owner-reach.js';
 import {publicationSiteDirectory} from './publication-site-directory.js';
 import {timelineCollectionQuery} from './timeline-collection-query.js';
 import {timelineCollectionChoices} from './timeline-collection-choices.js';
@@ -86,6 +87,7 @@ export function projectRequest(route,method){
  if(['/api/projects/move/targets','/api/projects/move/target/open','/api/projects/move/target/choices','/api/projects/move/target/unlock','/api/projects/move/target/release','/api/projects/move/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(route==='/api/projects/publication-source-directory')return {operation:'publication-source-directory',write:false,limit:16384};
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
+ if(['/api/projects/workspace-owners','/api/projects/workspace-owner-records'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(route==='/api/projects/publication-sites')return {operation:'publication-sites',write:false,limit:16384};
  if(['/api/projects/timeline-collection/query','/api/projects/timeline-collection/choices'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:131072};
  if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar','/api/projects/dashboard-collection/samples'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
@@ -100,6 +102,7 @@ export function projectRequest(route,method){
  if(!match||!researchId(match[1]))return null;
  if(match[2]==='publication-source-directory')return {projectId:match[1],operation:'publication-source-directory',write:false,limit:16384};
  if(match[2]==='publication-source')return {projectId:match[1],operation:'publication-source',write:false,limit:1048576};
+ if(['workspace-owners','workspace-owner-records'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(match[2]==='publication-sites')return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(['timeline-collection/query','timeline-collection/choices'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:131072};
  const bookRequest=labBookRequest(match[2],method);if(bookRequest)return {projectId:match[1],...bookRequest};
@@ -230,6 +233,7 @@ export class ProjectApplication{
   if(selected.bookConversion)return this.bookConversions.run(client,selected,data,{check,signal,onProgress});
   if(selected.operation?.startsWith('move/'))return this.tracked(()=>this.workspaceMoves.target(client,selected.operation,data,{check}));
   if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
+  if(['workspace-owners','workspace-owner-records'].includes(selected.operation))return this.tracked(()=>workspaceOwnerRequest(this,client,selected.operation,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:selected.projectId?projectRecordCollection(this,client,check):async visit=>{await check();signal?.throwIfAborted();await visit(this.workspace,{workspaceId:data.workspaceId,projectId:null,labBookId:null},data.projectId);await check();},signal}),selected.projectId);
   if(['timeline-collection/query','timeline-collection/choices'].includes(selected.operation))return this.tracked(async()=> (selected.operation.endsWith('/choices')?timelineCollectionChoices:timelineCollectionQuery)(this.recordCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);

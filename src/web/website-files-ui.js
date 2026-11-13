@@ -1,5 +1,6 @@
 import './i18n/catalogues/websiteFiles.js';
 import {confirmAction} from './confirm-action.js';
+import {workspaceOwnerPicker} from './workspace-owner-picker.js';
 import {t} from './i18n/index.js';
 import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,applyCanvasCSS,websiteCanvasValue,canvasSelection,restoreCanvasSelection,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
 import {websiteFilesRecovery} from './website-files-recovery.js';
@@ -61,7 +62,7 @@ function preparationMessage(preparation){
  return completed?tr('stageCompleted',{stage,completed}):stage;
 }
 
-export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{}}){
+export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSite=()=>{},onSession=()=>{},state=null,field:formField=null,access=operation=>operation()}){
  let session=null,sites=[],opened=null,html='',css='',mode='visual',dirty=false,busy=false,error='',stale=false,generation=0,controller=null;
  let destination=null,destinationDirty=false,plan=null,form=null,timer=null,checkBusy=false;
  let remoteEdition='website';
@@ -229,7 +230,17 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    })
   });
  }
- const picker=websiteFilesPicker({request,esc,site:()=>opened,blocks:()=>structure().map(label),
+ // The workspace's projects and lab books, each listed with its lock state. A
+ // locked owner is unlocked through its own access dialog; an opened owner's
+ // shared records then join the library through the workspace's discovery.
+ const owners=state&&formField?workspaceOwnerPicker({state,api,esc,field:formField,access,workspace:()=>({workspaceId:null,owner:null})}):null;
+ const workspaceOwners=owners?()=>new Promise(resolve=>{
+  const resumed=new Set();
+  owners.open({title:t('workspaceReach','sourcesTitle'),help:t('workspaceReach','sourcesHelp'),row:()=>'',act:async()=>false,
+   loaded:async page=>{if(resumed.has(page.sourceId))return;resumed.add(page.sourceId);await request('preparation/resume',{});},
+   onClose:()=>resolve(resumed.size>0)});
+ }):null;
+ const picker=websiteFilesPicker({request,esc,site:()=>opened,blocks:()=>structure().map(label),workspaceOwners,
   onPickerPaint:placementDrag.paint,onPickerClose:placementDrag.reset,
   onSourceGallery:entry=>startFigures(null,entry),choosingGallerySource:()=>mode==='source-gallery',
   libraryStatus:async()=> (await request('preparation',undefined,{signal:controller?.signal})).preparation?.library,

@@ -962,6 +962,7 @@
   "pickerPageCount": "Sider med denne oppføringa: {count}",
   "pickerPreparingLibrary": "Tidlegare delte oppføringar blir klargjorde. Tilgjengelege oppføringar kan brukast no.",
   "pickerLockedLibrary": "Lås opp forskingsområdet for å fullføre klargjeringa av tidlegare delte oppføringar. Tilgjengelege oppføringar kan brukast no.",
+  "pickerWorkspaceOwners": "Prosjekt og labbøker",
   "pickerFailedLibrary": "Nokre tidlegare delte oppføringar kunne ikkje klargjerast. Tilgjengelege oppføringar kan brukast no.",
   "pickerHeadUse": "Opna {page}. Denne oppføringa er brukt i metadataa til sida.",
   "pickerBackToEntry": "Vis detaljar om oppføringa",

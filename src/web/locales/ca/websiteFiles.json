@@ -962,6 +962,7 @@
   "pickerPageCount": "Pàgines amb aquesta entrada: {count}",
   "pickerPreparingLibrary": "S’estan preparant les entrades compartides anteriorment. Ja podeu utilitzar les entrades disponibles.",
   "pickerLockedLibrary": "Desbloquegeu l’espai de recerca per acabar de preparar les entrades compartides anteriorment. Ja podeu utilitzar les entrades disponibles.",
+  "pickerWorkspaceOwners": "Projectes i quaderns",
   "pickerFailedLibrary": "No s’han pogut preparar algunes entrades compartides anteriorment. Ja podeu utilitzar les entrades disponibles.",
   "pickerHeadUse": "S’ha obert {page}. Aquesta entrada s’utilitza a les metadades de la pàgina.",
   "pickerBackToEntry": "Mostra els detalls de l’entrada",

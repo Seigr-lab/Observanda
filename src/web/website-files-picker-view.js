@@ -101,5 +101,6 @@ export function websitePickerView(state,{msg,esc,blocks,destination,owner,types,
  return '<header><div><h2 id="website-picker-title">'+label('pickerLibraryTitle')+'</h2>'+
  '<strong data-picker-total>'+(Number.isSafeInteger(state.totalEntries)?label('pickerEligibleCount',{count:count(state.totalEntries)}):'')+'</strong></div><div class="website-picker-commands">'+(galleryOnly?'':'<button type="button" class="button" data-picker-dock>'+label('pickerDock')+'</button>')+button('pickerClose','close')+'</div></header><div class="website-picker-intro"><p>'+label('pickerPermissionHelp')+'</p>'+
  (state.preparation?'<p class="hint">'+label(({preparing:'pickerPreparingLibrary',locked:'pickerLockedLibrary',failed:'pickerFailedLibrary'})[state.preparation])+'</p>':'')+
+ (state.ownersAvailable&&!galleryOnly?'<p>'+button('pickerWorkspaceOwners','workspace-owners')+'</p>':'')+
  refinements.search+'<p role="status" aria-live="polite">'+esc(state.status)+'</p></div><div class="website-picker-workspace" data-filters-shown="'+(state.filtersShown||Boolean(saved?.isOpen()))+'" data-detail-open="'+Boolean(item||queue.size&&state.pane==='queue')+'">'+(saved?.isOpen()?saved.view():refinements.rail)+resultList+'<div class="website-picker-side">'+(state.pane==='queue'&&queue.size?selected():preview())+'</div></div>'+footer;
 }
