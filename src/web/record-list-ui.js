@@ -71,5 +71,8 @@ export function recordListUI({state,api,esc,table,showDialog,chooseType,render,d
   await load(cursor,true,collectionAccessError(error));return true;
  }
  function modes(){return state.notebook==='all'?'':`<nav class="record-reading-modes" aria-label="${esc(t('recordReading','view'))}">${[['reading','read'],['table','list']].map(([mode,label])=>`<button class="button" type="button" data-action="record-list-${mode}" aria-pressed="${(mode==='reading')===reading()}">${esc(t('recordReading',label))}</button>`).join('')}</nav>`;}
- return {view,count,snapshot,modes,hasPinnedReading:()=>active()&&reading()&&!!result,typeFilter:types.view,input:types.input,domains:()=>[...knownDomains],bind,stop,action};
+ return {view,count,snapshot,modes,hasPinnedReading:()=>active()&&reading()&&!!result,
+  // A paged list keeps its saved snapshot until the person refreshes it; the
+  // next page then reports that saved records have changed.
+  hasPinnedPage:()=>active()&&!!result&&(reading()||result.offset>0),typeFilter:types.view,input:types.input,domains:()=>[...knownDomains],bind,stop,action};
 }
