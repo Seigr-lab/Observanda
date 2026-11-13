@@ -5,13 +5,16 @@ import {MAX_FONT_BYTES} from './font-inspector.js';
 import {MediaStore} from './media.js';
 import {MediaImports} from './media-imports.js';
 import {MediaPolicy} from './media-policy.js';
+import {mediaDetails,mediaThumbnail} from './media-details.js';
 import {diskSpace} from './file-content.js';
 import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 export function projectAssetRequest(route,method='POST'){
- const operation=route.slice(5),font=/^fonts\/(custom-[a-f0-9]{64})$/.exec(operation),media=/^media\/([a-f0-9-]{36})$/.exec(operation),original=/^media-imports\/original\/([a-f0-9-]{36})$/.exec(operation),receive=/^media-imports\/receive\/([a-f0-9-]{36})$/.exec(operation);
+ const operation=route.slice(5),font=/^fonts\/(custom-[a-f0-9]{64})$/.exec(operation),media=/^media\/([a-f0-9-]{36})$/.exec(operation),original=/^media-imports\/original\/([a-f0-9-]{36})$/.exec(operation),receive=/^media-imports\/receive\/([a-f0-9-]{36})$/.exec(operation),facts=/^media\/([a-f0-9-]{36})\/(details|thumbnail-(160|320|640))$/.exec(operation);
  const request=(write,input='json',binary=false)=>({asset:operation,write,input,binary,method,limit:65536});
+ // Gallery thumbnails and technical details of a project's media, as for the workspace.
+ if(method==='GET'&&facts&&researchId(facts[1]))return request(false,'json',facts[2]!=='details');
  if(method==='GET'&&(operation==='fonts'||operation==='media-policy'||font||media&&researchId(media[1])||original&&researchId(original[1])))return request(false,'json',!!(font||media||original));
  if(method==='POST'){
   if(operation==='fonts/import'||/^media\/(image|audio|video|file)$/.test(operation)||receive&&researchId(receive[1]))return request(true,'stream');
@@ -42,6 +45,8 @@ export async function executeProjectAsset(storage,request,data,{signal,stream,qu
   if(method==='finish'){const session=await imports.read(data.id);if(!session.source)throw new AppError('MATERIAL_INCOMPLETE');const job=await queue.enqueue({id:session.id,type:'media.prepare',scope:session.workspaceId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
   const job=await queue.read(data.id);if(!job||job.type!=='media.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);if(method==='job')return {job:jobSummary(job)};const next=await queue.control(job.id,method);if(method==='cancel')worker.cancel(job.id);else worker.wake();return {job:jobSummary(next)};
  }
+ const facts=/^media\/([a-f0-9-]{36})\/(details|thumbnail-(160|320|640))$/.exec(operation);
+ if(facts){const store=new MediaStore(storage);if(facts[2]==='details')return mediaDetails(store,facts[1],{signal});const thumbnail=await mediaThumbnail(store,facts[1],Number(facts[3]),{signal});return binary({content:thumbnail.bytes,mime:thumbnail.mime});}
  const media=new MediaStore(storage),id=operation.slice(6);
  if(request.method==='GET'){const asset=await media.get(id,{streamed:true});return binary({content:asset.bytes,mime:asset.mime,...(asset.kind==='file'?{download:asset.name}:{})});}
  const policy=(await new MediaPolicy(storage).read()).policy,size=Number(contentLength??0);
