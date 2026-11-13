@@ -71,7 +71,8 @@ import {ChangeReview} from './collaboration/change-review.js';
 import {sharedReviewFigure} from './collaboration/review-figures.js';
 import {httpDrain} from './http-drain.js';
 import {storageResponse} from './storage-response.js';
-import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt} from './workspace-move.js';
+import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt,sameWorkspaceVolume} from './workspace-move.js';
+import {recordWorkspaceRelocation,workspaceRelocationStatus} from './workspace-relocation-receipt.js';
 import {WORKSPACE_MOVE_CLEANUP_JOB} from './workspace-move-jobs.js';
 import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
@@ -188,7 +189,7 @@ import { Publisher } from './publishing.js';
 import {githubDestinations} from './github/destinations.js';
 import {githubSerializedRequest} from './github/request-policy.js';
 import http from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { Workspace, workspaceFile, assertRegular } from './storage.js';
 import { createNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
@@ -382,7 +383,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       unavailableReason=e.code==='STORAGE_MOVED'?'workspace-moved':e.code==='CATALOGUE_UNAVAILABLE'?'database-missing':await assertRegular(context.root,{directory:true,missing:true})?'record-missing':'folder-missing';
     }
     const researchStorage=available?await context.workspace.storageKind():null;
-    return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,researchFormatVersion,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
+    return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,researchFormatVersion,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root)??await workspaceRelocationStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
   };
   let shuttingDown=false,closePromise,githubMutation=false,collaborationSession;const pending=new Set(),drained=[];
   const server = http.createServer((req, res) => withAccessDevice(deviceStore,()=>withDiagnostics(diagnostics,correlation=>requestWriterWait(req,res,async()=>{
@@ -966,10 +967,43 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           }
           if(url.pathname==='/api/storage/move'){
             if(data.confirmed!==true||data.id!==undefined)throw new AppError('INVALID');
-            return await storageResponse(req,res,async()=>{return workspaceDirectory.using(await resolveLocation(data.path),{replacing:context.root},async()=>{const projectCount=await (await historyProjects.registry()).inspect(view=>view.count);
-              if(projectCount)await withWorkspaceMoveSession(historyProjects,client,async move=>{
-                await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
-              });else await moveWorkspaceTo(context.root,data.path,{vault:context.vault,activate:(destination,movingFrom)=>activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true})});return metadata();});},json);
+            return await storageResponse(req,res,async()=>{
+              const source=context.root,destination=await resolveLocation(data.path);
+              const install=move=>move.install(context.projects??=new ProjectApplication(context.workspace,{publicationConversion:context.publicationConversion??=new PublicationConversion(context.workspace),deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));
+              // One database per workspace. On the same volume the whole stopped
+              // workspace folder is moved, keeping its cluster, cluster identity
+              // and every project and lab book binding (a journalled rename to a
+              // new parent, recovered like any rename). As for a rename, the
+              // rename journal carries the dashboard settings to the new folder.
+              if(await sameWorkspaceVolume(source,destination)){
+                const vault=cloneVault(context.vault);
+                try{await withWorkspaceRenameSession(historyProjects,client,async rename=>{
+                  const result=await workspaceDirectory.using(destination,{replacing:source},async()=>rename.begin(renames,path.basename(destination),{parent:path.dirname(destination),checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=destination;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==source).map(item=>item.path)]}));
+                  await recordWorkspaceRelocation(result.destination,{id:result.id??randomUUID(),source});
+                  await activate(result.destination,client,vault,{movingFrom:source});await install(rename);
+                });}catch(error){await clearVault(vault);throw error;}
+                return metadata();
+              }
+              const projectCount=await (await historyProjects.registry()).inspect(view=>view.count);
+              if(projectCount){
+                // Across volumes a workspace with projects is copied into a new
+                // cluster that activates every project and lab book; then the
+                // verified original is deleted with its own cluster through the
+                // journalled deletion, and the copy opens. An interruption leaves
+                // the complete copy, and the deletion resumes like any other.
+                const vault=cloneVault(context.vault),target=new Workspace(source,vault);let opening=cloneVault(context.vault);
+                try{await withWorkspaceCopySession(historyProjects,client,async copy=>{
+                  const location=await workspaceDirectory.using(destination,{},async()=>copy.copy(await copy.plan(destination,{inspect:false})));
+                  const review=await deletions.review(target,{protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),location],recent:preferencesFile?(await readPreferences(preferencesFile)).recent:localPreferences.recent});
+                  const deleted=await withWorkspaceDeletionSession(historyProjects,client,owners=>deletions.begin(target,review,{...owners,onFrozen:receipt=>detachDeleted(receipt.source,client)}));
+                  await forgetDeleted(deleted.source);await deletions.acknowledge(deleted.id);await recordWorkspaceRelocation(location,{id:deleted.id,source});
+                  operationTransfer({phase:'opening'});const adopted=opening;opening=null;
+                  await workspaceDirectory.using(location,{replacing:source,allowExisting:true},()=>activate(location,client,adopted,{movingFrom:source,followSettings:true}));await install(copy);
+                });}finally{await clearVault(vault);await clearVault(opening);}
+                return metadata();
+              }
+              return workspaceDirectory.using(destination,{replacing:source},async()=>{await moveWorkspaceTo(source,data.path,{vault:context.vault,activate:(moved,movingFrom)=>activate(moved,client,cloneVault(context.vault),{movingFrom,followSettings:true})});return metadata();});
+            },json);
           }
           if(url.pathname==='/api/storage/move/finish'){
             if(data.reviewed!==true)throw new AppError('INVALID');

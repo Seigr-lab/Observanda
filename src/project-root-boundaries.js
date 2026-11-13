@@ -1,10 +1,15 @@
-// A project may live inside its workspace while retaining its own storage owner.
-// Workspace internals and overlapping project roots are separate boundaries.
+// Every project lives inside its workspace folder while retaining its own
+// storage owner. Workspace internals and overlapping project roots are separate
+// boundaries. Only a copy or backup destination, which never becomes a
+// registered project, is checked here without lying inside the workspace.
 import path from 'node:path';
 import {AppError} from './errors.js';
 const below=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-export function assertProjectRoot(workspaceRoot,root,projects,{existing=false,parentId}={}){
+export function projectInsideWorkspace(workspaceRoot,root){return typeof root==='string'&&root!==workspaceRoot&&below(workspaceRoot,root);}
+export function assertProjectInsideWorkspace(workspaceRoot,root){if(!projectInsideWorkspace(workspaceRoot,root))throw new AppError('PROJECT_OUTSIDE_WORKSPACE');}
+export function assertProjectRoot(workspaceRoot,root,projects,{existing=false,parentId,transfer=false}={}){
  if(below(root,workspaceRoot))throw new AppError('STORAGE_PATH');
+ if(!transfer)assertProjectInsideWorkspace(workspaceRoot,root);
  if(below(workspaceRoot,root)&&path.relative(workspaceRoot,root).split(path.sep).some(part=>part.toLowerCase()==='.observanda'))throw new AppError('STORAGE_PATH');
  const selected=existing?projects.find(entry=>entry.root===root):null,ancestors=new Set();
  let parent=parentId===undefined?selected?.parentId??null:parentId;

@@ -44,9 +44,11 @@ async function tree(f,copied){
  }
  assert.equal((await f.registry.read()).value.projects.length,1);assert.equal((await f.targetRegistry.read()).value.projects.length,2);
 }
-for(const copied of [false,true])test((copied?'cross-filesystem':'native')+' workspace handoff recovers publication and departure without losing independent owners',{timeout:600000},async t=>{
- const f=await fixture(t),originalRename=fs.rename;let attempts=0,transferred=false;
- if(copied){fs.rename=async(from,to)=>{if(from===f.source.root&&to===f.destination){attempts++;throw Object.assign(Error('Different filesystem'),{code:'EXDEV'});}return originalRename(from,to);};syncBuiltinESMExports();}
+// Each workspace has its own cluster, so a project moving to another workspace
+// is always copied into the destination cluster, never renamed with its schema.
+for(const copied of [true])test('workspace handoff copies owners into the destination cluster and recovers publication and departure',{timeout:600000},async t=>{
+ const f=await fixture(t),originalRename=fs.rename;let transferred=false;
+ fs.rename=async(from,to)=>{if(from===f.source.root&&to===f.destination)assert.fail('A project is never renamed into another workspace');return originalRename(from,to);};syncBuiltinESMExports();
  try{
   const stages=['prepared','frozen','project-frozen','project-stopped','stopped',...(copied?['copying','copy:file-receipt','copy:database-committed','owner-copied','transferred']:['folder-moved']),'destination-registry','destination-addresses','registered',...(copied?['retiring','source-retired','retired','retire:removed','source-removed']:[]),'departing','source-directory','departed','unfrozen','complete','released'];
   for(const boundary of stages){
@@ -63,11 +65,12 @@ for(const copied of [false,true])test((copied?'cross-filesystem':'native')+' wor
    await new ProjectStorage(f.sibling.root,f.sibling.projectId,f.sibling.key).update(value=>{value.projects[0].description='Saved while '+boundary;return value;});
    process.stdout.write('Workspace handoff '+boundary+'\n');
   }
-  const result=await f.moves.resume(f.source.vault,f.options);assert.equal(result.complete,true);assert.equal(result.workspaceId,f.targetRegistry.workspaceId);if(copied)assert.equal(attempts,1);
+  const result=await f.moves.resume(f.source.vault,f.options);assert.equal(result.complete,true);assert.equal(result.workspaceId,f.targetRegistry.workspaceId);
  }finally{fs.rename=originalRename;syncBuiltinESMExports();}
  await tree(f,copied);
  // Restart all database owners and reopen the authoritative destination.
- await f.stopProvider();f.restartProvider();await tree(f,copied);
+ // As after an application restart, both workspaces are unlocked before their owners open.
+ await f.stopProvider();f.restartProvider();await f.workspace.outline();await f.targetRegistry.workspace.outline();await tree(f,copied);
 });
 
 test('workspace handoff rejects changed retained records before retirement and accepts an independently authorized return',{timeout:360000},async t=>{
@@ -84,11 +87,11 @@ test('workspace handoff rejects changed retained records before retirement and a
 
 test('killed cross-workspace transfer recovers retirement without deleting a replacement source folder',{timeout:360000},async t=>{
  const f=await fixture(t);await f.stopProvider();const {spawn}=await import('node:child_process');let child,ended;
- const script=`import fs from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {Workspace} from './src/storage.js';import {ProjectRegistry} from './src/project-registry.js';import {ProjectStorage} from './src/project-storage.js';import {LabBookStorage} from './src/lab-book-storage.js';import {LabBookRegistry} from './src/lab-book-registry.js';import {ProjectWorkspaceMoves} from './src/project-workspace-move.js';let raw='';for await(const chunk of process.stdin)raw+=chunk;const input=JSON.parse(raw),key=value=>({id:value.id,key:Buffer.from(value.key,'base64')}),provider=new WorkspaceDatabases(input.runtime);installDatabaseProvider(provider);const sourceRegistry=new ProjectRegistry(new Workspace(input.root,key(input.vault)),input.workspaceId),targetRegistry=new ProjectRegistry(new Workspace(input.target.root,key(input.target.vault)),input.target.id),selected=input.projects[0],storage=new ProjectStorage(selected.root,selected.projectId,key(selected.key)),rename=fs.rename;fs.rename=async(from,to)=>{if(from===storage.root&&to===input.destination)throw Object.assign(Error('Different filesystem'),{code:'EXDEV'});return rename(from,to);};syncBuiltinESMExports();await new ProjectWorkspaceMoves(sourceRegistry,targetRegistry,storage.projectId).run(storage,{...input.options,withProject:async(id,use)=>use(new ProjectStorage((await sourceRegistry.locate(id)).root,id,key(input.projects.find(project=>project.projectId===id).key))),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,key(input.books.find(book=>book.labBookId===id).key))),checkpoint:async stage=>{if(stage==='source-retired'){process.stdout.write('retired');await new Promise(()=>{});}}});`;
+ const script=`import fs from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {Workspace} from './src/storage.js';import {ProjectRegistry} from './src/project-registry.js';import {ProjectStorage} from './src/project-storage.js';import {LabBookStorage} from './src/lab-book-storage.js';import {LabBookRegistry} from './src/lab-book-registry.js';import {ProjectWorkspaceMoves} from './src/project-workspace-move.js';let raw='';for await(const chunk of process.stdin)raw+=chunk;const input=JSON.parse(raw),key=value=>({id:value.id,key:Buffer.from(value.key,'base64')}),provider=new WorkspaceDatabases(input.runtime);installDatabaseProvider(provider);const sourceRegistry=new ProjectRegistry(new Workspace(input.root,key(input.vault)),input.workspaceId),targetRegistry=new ProjectRegistry(new Workspace(input.target.root,key(input.target.vault)),input.target.id),selected=input.projects[0],storage=new ProjectStorage(selected.root,selected.projectId,key(selected.key)),rename=fs.rename;fs.rename=async(from,to)=>{if(from===storage.root&&to===input.destination)throw Object.assign(Error('Different filesystem'),{code:'EXDEV'});return rename(from,to);};syncBuiltinESMExports();await sourceRegistry.workspace.outline();await targetRegistry.workspace.outline();await new ProjectWorkspaceMoves(sourceRegistry,targetRegistry,storage.projectId).run(storage,{...input.options,withProject:async(id,use)=>use(new ProjectStorage((await sourceRegistry.locate(id)).root,id,key(input.projects.find(project=>project.projectId===id).key))),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,key(input.books.find(book=>book.labBookId===id).key))),checkpoint:async stage=>{if(stage==='source-retired'){process.stdout.write('retired');await new Promise(()=>{});}}});`;
  try{
   child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:process.cwd(),windowsHide:true,stdio:['pipe','pipe','pipe']});ended=new Promise(resolve=>child.once('exit',resolve));let errors='';child.stderr.on('data',bytes=>errors+=bytes);
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Retirement timeout: '+errors)),240000);child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',()=>{clearTimeout(timer);reject(Error('Transfer exited before retirement: '+errors));});child.stdout.once('data',()=>{clearTimeout(timer);resolve();});const key=value=>({id:value.id,key:value.key.toString('base64')});child.stdin.end(JSON.stringify({runtime:f.runtime,root:f.root,vault:key(f.workspace.vault),workspaceId:f.registry.workspaceId,target:{root:f.targetRegistry.workspace.root,vault:key(f.targetRegistry.workspace.vault),id:f.targetRegistry.workspaceId},projects:f.projects.map(project=>({...project,key:key(project.key)})),books:f.books.map(book=>({...book,key:key(book.key)})),destination:f.destination,options:f.options}));});
- }finally{if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await ended;}f.restartProvider();await f.workspace.outline();}
+ }finally{if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await ended;}f.restartProvider();await f.workspace.outline();await f.targetRegistry.workspace.outline();}
  await fs.mkdir(f.source.root);const sentinel=path.join(f.source.root,'new-user-file.txt');await fs.writeFile(sentinel,'Independent replacement');
  assert.equal((await f.moves.resume(f.source.vault)).complete,true);assert.equal(await fs.readFile(sentinel,'utf8'),'Independent replacement');
  await assert.rejects(fs.stat(path.join(path.dirname(f.source.root),'.observanda-project-move-'+f.options.id)),{code:'ENOENT'});
@@ -104,7 +107,7 @@ test('actual cross-volume workspace handoff resumes after publication with indep
  assert.notEqual((await fs.stat(f.source.root)).dev,(await fs.stat(f.targetRegistry.workspace.root)).dev,'The destination must be a different mounted volume');
  await assert.rejects(f.moves.run(f.source,{...f.options,checkpoint:stage=>{if(stage==='registered')throw Error('Interrupted after destination publication');}}),/Interrupted after destination publication/);
  assert.equal((await f.moves.read()).ownerDirectoryVersion,2);
- await f.stopProvider();f.restartProvider();
+ await f.stopProvider();f.restartProvider();await f.workspace.outline();await f.targetRegistry.workspace.outline();
  assert.equal((await f.moves.resume(f.source.vault)).complete,true);
  await tree(f,true);
  assert.equal((await f.moves.read()).released,true);

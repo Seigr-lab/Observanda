@@ -1,7 +1,7 @@
 import {ProjectRenames} from '../src/project-rename.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,readFile,copyFile,rename,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,copyFile,rename,rm,realpath} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -25,9 +25,13 @@ async function fixture(t){
  t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-project-storage-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  async function create(name){
   const book=sampleNotebook(),id=book.projects[0].id,device=new TestDeviceStore({file:path.join(parent,name+'.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
-  book.title=name;book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(parent,name),id,book,access,vault);return {storage,id,vault,book};
+  book.title=name;book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(root,name),id,book,access,vault);return {storage,id,vault,book};
  }
- return {parent,owner,create,vaults};
+ // Every project lives inside a workspace folder and uses that workspace's
+ // running cluster; the owners below are placed in one open workspace.
+ const homeBook=sampleNotebook();homeBook.title='workspace';homeBook.projects=[];homeBook.notebooks=[];homeBook.entries=[];
+ const home=await encryptedFixture(path.join(parent,'home'),homeBook),root=home.workspace.root;vaults.push(home.vault);await home.workspace.outline();
+ return {parent,root,home,owner,create,vaults};
 }
 
 test('project storage routes actual records, independent writes, history and reopen to its own catalogue',async t=>{
@@ -48,7 +52,7 @@ test('project storage routes actual records, independent writes, history and reo
  await a.storage.catalogue(()=>withScratch(async work=>{assert.equal(await work.add('probe',{value:37}),true);assert.equal(work.size,1);}));
  const record={...before.book.entries[0],title:'A retained revision'};await new ResearchRecords(a.storage).save({workspaceId:before.book.id,changes:[{id:record.id,record,expectedRevision:recordRevision(before.book.entries[0])}]});
  const saved=await a.storage.read();assert.deepEqual(await a.storage.readRevision(before.etag),before.book);
- await f.owner.closeProject(a.storage.root);const moved=path.join(f.parent,'moved',path.basename(a.storage.root));await mkdir(path.dirname(moved));await rename(a.storage.root,moved);
+ await f.owner.closeProject(a.storage.root);const moved=path.join(f.root,'moved',path.basename(a.storage.root));await mkdir(path.dirname(moved));await rename(a.storage.root,moved);
  const reopened=new ProjectStorage(moved,a.id,a.vault);assert.deepEqual(await reopened.read(),saved);assert.deepEqual(await reopened.readRevision(before.etag),before.book);
  assert.equal((await b.storage.read()).book.entries[0].title,'B committed while A is busy');
 });
@@ -74,7 +78,7 @@ test('wrong owner routes and foreign project metadata fail without changing exis
 });
 
 test('a selected project archive restores and accepts edits independently of its original catalogue',async t=>{
- const f=await fixture(t),a=await f.create('source'),before=await a.storage.read(),destination=path.join(f.parent,'archive-copy',path.basename(a.storage.root));await mkdir(path.join(destination,'.observanda'),{recursive:true});
+ const f=await fixture(t),a=await f.create('source'),before=await a.storage.read(),destination=path.join(f.root,'archive-copy',path.basename(a.storage.root));await mkdir(path.join(destination,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(a.storage.root)),'.observanda/access.json'])await copyFile(path.join(a.storage.root,file),path.join(destination,file));
  const db=await a.storage.openCatalogue();try{await backupCatalogue(a.storage.root,destination,{connection:db});}finally{await db.close();}
  await f.owner.closeProject(a.storage.root);
@@ -104,7 +108,7 @@ test('project imports, evidence, laboratory and verification preserve the select
  const baseline=await lab.read();await lab.change({action:'create-sample',etag:baseline.etag,sample:{code:'A-1',material:'Project specimen',source:'Owned by A',collectedOn:'2026-10-11',receivedOn:'2026-10-11'}});
  assert.equal((await lab.read()).lab.samples.length,1);assert.equal((await new Laboratory(b.storage).read()).lab.samples.length,0);
  await a.storage.catalogue(async store=>store.verify(JSON.parse(await a.storage.readFile(await workspaceFile(a.storage.root),'utf8'))));
- const saved=await a.storage.read();await f.owner.closeProject(a.storage.root);const moved=path.join(f.parent,'moved-assets');await rename(a.storage.root,moved);
+ const saved=await a.storage.read();await f.owner.closeProject(a.storage.root);const moved=path.join(f.root,'moved-assets');await rename(a.storage.root,moved);
  const reopened=new ProjectStorage(moved,a.id,a.vault);assert.deepEqual(await reopened.read(),saved);assert.deepEqual(await contentBuffer((await new MediaImports(reopened).original(upload.id)).content),svg);assert.equal((await new MediaStore(reopened).get(upload.id)).mime,'image/png');assert.equal((await new Laboratory(reopened).read()).lab.samples[0].code,'A-1');
  assert.equal((await new MediaImports(b.storage).list()).length,0);
 });
@@ -114,7 +118,10 @@ test('fresh project access keys preserve original record identities and history 
  const f=await fixture(t),a=await f.create('rekey-source'),before=await a.storage.read();
  await a.storage.update(book=>{book.entries[0].title='Retained after rekey';return book;});const saved=await a.storage.read();
  const device=new TestDeviceStore({file:path.join(f.parent,'fresh.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);f.vaults.push(vault);
- const target=new ProjectStorage(path.join(f.parent,'fresh-project',path.basename(a.storage.root)),a.id,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});
+ // A project's catalogue role belongs to one key per workspace cluster: the
+ // copy under fresh keys is received by another open workspace.
+ const receiver=await encryptedFixture(path.join(f.parent,'receiver'),{...sampleNotebook(),projects:[],notebooks:[],entries:[]});f.vaults.push(receiver.vault);await receiver.workspace.outline();
+ const target=new ProjectStorage(path.join(receiver.workspace.root,'fresh-project',path.basename(a.storage.root)),a.id,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});
  const descriptor=await a.storage.readFile(await workspaceFile(a.storage.root),'utf8');
  const {atomicWrite,serialize}=await import('../src/storage.js'),{rekeyCatalogue,verifyCatalogueArchive}=await import('../src/research-catalogue.js');
  await atomicWrite(path.join(target.root,'.observanda','access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
@@ -126,9 +133,9 @@ test('fresh project access keys preserve original record identities and history 
 
 
 test('project registry and references retain identity across relocation without opening sibling owners',async t=>{
- const f=await fixture(t),a=await f.create('linked-a'),b=await f.create('linked-b'),w=await encryptedFixture(path.join(f.parent,'registry-workspace'),sampleNotebook());f.vaults.push(w.vault);
+ const f=await fixture(t),a=await f.create('linked-a'),b=await f.create('linked-b'),w=f.home;
  const {ProjectRegistry}=await import('../src/project-registry.js'),{ProjectRouter}=await import('../src/project-router.js'),{ProjectReferences}=await import('../src/project-references.js'),{projectReference,parseProjectReference}=await import('../src/web/project-reference.js');
- await f.owner.closeProject(a.storage.root);await f.owner.closeProject(b.storage.root);const aRoot=path.join(w.workspace.root,path.basename(a.storage.root)),bRoot=path.join(aRoot,path.basename(b.storage.root));await rename(a.storage.root,aRoot);await rename(b.storage.root,bRoot);a.storage=new ProjectStorage(aRoot,a.id,a.vault);b.storage=new ProjectStorage(bRoot,b.id,b.vault);
+ await f.owner.closeProject(a.storage.root);await f.owner.closeProject(b.storage.root);const aRoot=path.join(w.workspace.root,path.basename(a.storage.root)),bRoot=path.join(aRoot,path.basename(b.storage.root));if(a.storage.root!==aRoot)await rename(a.storage.root,aRoot);await rename(b.storage.root,bRoot);a.storage=new ProjectStorage(aRoot,a.id,a.vault);b.storage=new ProjectStorage(bRoot,b.id,b.vault);
  const registry=new ProjectRegistry(w.workspace,(await w.workspace.outline()).metadata.id);let state=await registry.read();
  state=await registry.attach(a.storage,{expected:state.revision});state=await registry.attach(b.storage,{expected:state.revision,parentId:a.id});
  const raw=await readFile(registry.file);assert.ok(!raw.includes(Buffer.from(a.storage.root)));assert.ok(!raw.includes(Buffer.from(b.id)));
@@ -144,7 +151,7 @@ test('project registry and references retain identity across relocation without 
  const revision=state.revision;await assert.rejects(registry.reparent(a.id,b.id,{expected:revision}),{code:'STORAGE_PATH'});assert.equal((await registry.read()).revision,revision);
  let entered,release;const enteredPromise=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve),busy=w.workspace.withLock(async()=>{entered();await held;});await enteredPromise;
  try{const placed=await new ProjectRenames(registry,b.id).run(b.storage,{id:randomUUID(),name:path.basename(b.storage.root),expectedName:path.basename(b.storage.root),placement:{parentId:null,expectedParentId:a.id}});b.storage=new ProjectStorage(placed.project.root,b.id,b.vault);state=await registry.read();assert.deepEqual((await references.resolve(target)).value,old);}finally{release();await busy;}
- await f.owner.closeProject(b.storage.root);const moved=path.join(f.parent,'relocated',path.basename(b.storage.root));await mkdir(path.dirname(moved));await rename(b.storage.root,moved);
+ await f.owner.closeProject(b.storage.root);const moved=path.join(w.workspace.root,'relocated',path.basename(b.storage.root));await mkdir(path.dirname(moved));await rename(b.storage.root,moved);
  await assert.rejects(references.resolve(target));const movedStorage=new ProjectStorage(moved,b.id,b.vault);
  state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual((await references.resolve(target)).value,old);assert.equal(projectReference(target),link);
  assert.ok(opened.every(id=>id===b.id));
@@ -157,7 +164,7 @@ test('project registry and references retain identity across relocation without 
 
 test('interrupted project creation resumes its intent and never repeats a committed population',async t=>{
  const f=await fixture(t),book=sampleNotebook(),id=book.projects[0].id,device=new TestDeviceStore({file:path.join(f.parent,'creation.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);f.vaults.push(vault);
- const root=path.join(f.parent,'interrupted'),options={populateId:'fixture-v1',populate:async storage=>{await storage.catalogue(store=>store.putObject('creation-test',{value:42}));throw Error('injected transaction interruption');}};
+ const root=path.join(f.root,'interrupted'),options={populateId:'fixture-v1',populate:async storage=>{await storage.catalogue(store=>store.putObject('creation-test',{value:42}));throw Error('injected transaction interruption');}};
  book.title=book.projects[0].title=path.basename(root);
  await assert.rejects(initializeProjectLocation(root,id,book,access,vault,options),/injected transaction interruption/);
  await assert.rejects(new ProjectStorage(root,id,vault).read(),{code:'STORAGE_INCOMPLETE'});
@@ -181,17 +188,19 @@ test('force-terminated project creation releases its lease and resumes with the 
   if(f&&root&&vault)await f.owner.environment(root,{projectId:id,vault}).catch(()=>{});
  });
  f=await fixture(t);const book=sampleNotebook();id=book.projects[0].id;
- const device=new TestDeviceStore({file:path.join(f.parent,'crash.device')}),access=await createWorkspaceAccess('','',device);vault=takeCreatedVault(access);f.vaults.push(vault);root=path.join(f.parent,'crashed');
+ const device=new TestDeviceStore({file:path.join(f.parent,'crash.device')}),access=await createWorkspaceAccess('','',device);vault=takeCreatedVault(access);f.vaults.push(vault);root=path.join(f.root,'crashed');
  book.title=book.projects[0].title=path.basename(root);
  const {spawn}=await import('node:child_process');
- const script=`import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {initializeProjectLocation} from './src/project-storage.js';let raw='';for await(const bytes of process.stdin)raw+=bytes;const input=JSON.parse(raw),vault={id:input.vault.id,key:Buffer.from(input.vault.key,'base64')};const owner=new WorkspaceDatabases({directory:input.directory,ownerId:input.ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});installDatabaseProvider(owner);await initializeProjectLocation(input.root,input.id,input.book,input.access,vault,{populateId:'crash-v1',populate:async storage=>{await storage.catalogue(store=>store.putObject('crash-test',{value:37}));process.stdout.write('ready');await new Promise(()=>{});}});`;
+ const script=`import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {initializeProjectLocation} from './src/project-storage.js';import {Workspace} from './src/storage.js';let raw='';for await(const bytes of process.stdin)raw+=bytes;const input=JSON.parse(raw),vault={id:input.vault.id,key:Buffer.from(input.vault.key,'base64')};const owner=new WorkspaceDatabases({directory:input.directory,ownerId:input.ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});installDatabaseProvider(owner);await new Workspace(input.workspace,{id:input.workspaceVault.id,key:Buffer.from(input.workspaceVault.key,'base64')}).outline();await initializeProjectLocation(input.root,input.id,input.book,input.access,vault,{populateId:'crash-v1',populate:async storage=>{await storage.catalogue(store=>store.putObject('crash-test',{value:37}));process.stdout.write('ready');await new Promise(()=>{});}});`;
+ // The project uses its workspace's cluster: the creating process opens the workspace.
+ await f.owner.closeWorkspace(f.root);
  child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:process.cwd(),windowsHide:true,stdio:['pipe','pipe','pipe']});exited=new Promise(resolve=>child.once('exit',resolve));let errors='';child.stderr.on('data',bytes=>errors+=bytes);
  await new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>reject(Error('Creation checkpoint timeout: '+errors)),45000);
   child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',()=>{clearTimeout(timer);reject(Error('Creation exited early: '+errors));});child.stdout.once('data',()=>{clearTimeout(timer);resolve();});
-  child.stdin.end(JSON.stringify({directory:f.owner.directory,ownerId:f.owner.instances.ownerId,root,id,book,access,vault:{id:vault.id,key:vault.key.toString('base64')}}));
+  child.stdin.end(JSON.stringify({directory:f.owner.directory,ownerId:f.owner.instances.ownerId,workspace:f.root,workspaceVault:{id:f.home.vault.id,key:f.home.vault.key.toString('base64')},root,id,book,access,vault:{id:vault.id,key:vault.key.toString('base64')}}));
  });
- child.kill('SIGKILL');await exited;
+ child.kill('SIGKILL');await exited;await f.home.workspace.outline();
  const storage=await initializeProjectLocation(root,id,book,access,vault,{populateId:'crash-v1',populate:owner=>owner.catalogue(store=>store.putObject('crash-test',{value:37}))});
  assert.equal((await storage.read()).book.projects[0].id,id);assert.equal(await storage.catalogue(async store=>(await store.object('crash-test')).value),37);
  await storage.update(value=>{value.entries[0].title='Writable after service termination';return value;});assert.equal((await storage.read()).book.entries[0].title,'Writable after service termination');
@@ -199,12 +208,13 @@ test('force-terminated project creation releases its lease and resumes with the 
 
 test('identical concurrent creation and pre-intent interruption acknowledge one project',async t=>{
  const f=await fixture(t),book=sampleNotebook(),id=book.projects[0].id,device=new TestDeviceStore({file:path.join(f.parent,'concurrent.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);f.vaults.push(vault);
- const root=path.join(f.parent,'before-intent');await mkdir(path.join(root,'.observanda'),{recursive:true});let populated=0;
+ const root=path.join(f.root,'before-intent');await mkdir(path.join(root,'.observanda'),{recursive:true});let populated=0;
  book.title=book.projects[0].title=path.basename(root);
  const options={populateId:'concurrent-v1',populate:async()=>{populated++;}};
  const [a,b]=await Promise.all([initializeProjectLocation(root,id,book,access,vault,options),initializeProjectLocation(root,id,book,access,vault,options)]);
  assert.equal(populated,1);assert.equal((await a.read()).etag,(await b.read()).etag);
- assert.deepEqual(await f.owner.details(a),{placement:'project',projectId:id,path:path.join(root,'.observanda','postgresql')});
+ // A project reports the cluster of the workspace that contains it.
+ assert.deepEqual(await f.owner.details(a),{placement:'project',projectId:id,path:path.join(await realpath(f.root),'.observanda','postgresql')});
  await assert.rejects(f.owner.environment(root,{vault}),{code:'DATABASE_LOCATION'});
  await assert.rejects(f.owner.details(new Workspace(root,vault)),{code:'DATABASE_LOCATION'});
 });

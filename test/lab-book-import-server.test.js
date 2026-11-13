@@ -19,6 +19,7 @@ import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {clearVault} from '../src/encryption.js';
 import {startServer} from '../src/server.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {TestDeviceStore} from './device-fixture.js';
 async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
 
@@ -27,9 +28,11 @@ test('book import API authenticates its own source and resumes the destination a
  const original=LabBookImports.prototype.run;
  t.after(async()=>{LabBookImports.prototype.run=original;await app?.close();await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-import-api-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')});
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);keys.push(ownerHome.vault);
  async function credentials(){const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  const initial=createNotebook('Research Workspace'),root=path.join(directory,initial.title),key=await credentials();await initializeLocation(root,initial,key.access,key.vault);
- const sourceModel=createNotebook('External Project'),sourceId=randomUUID(),sourceKey=await credentials();sourceModel.projects=[{id:sourceId,title:sourceModel.title,parentId:null,description:'',share:false,logoId:null}];const sourceProject=await initializeProjectLocation(path.join(directory,sourceModel.title),sourceId,sourceModel,sourceKey.access,sourceKey.vault);
+ const sourceModel=createNotebook('External Project'),sourceId=randomUUID(),sourceKey=await credentials();sourceModel.projects=[{id:sourceId,title:sourceModel.title,parentId:null,description:'',share:false,logoId:null}];const sourceProject=await initializeProjectLocation(path.join(ownerHome.root,sourceModel.title),sourceId,sourceModel,sourceKey.access,sourceKey.vault);
  const created=await new LabBookCreation(sourceProject,device).create({id:randomUUID(),username:'',password:'Portable book password',book:{id:randomUUID(),projectId:sourceId,title:'Observations 1'}}),vault=await verifyAccess(await readAccess(created.book.root),'','Portable book password',{deviceStore:device});keys.push(vault);const source=new LabBookStorage(created.book.root,created.book.labBookId,vault),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:created.book.labBookId};await new ResearchRecords(source,new MediaStore(source)).save({workspaceId:created.book.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]});
  const backups=path.join(directory,'Backups');await mkdir(backups);const backup=path.join(backups,created.book.directory);await copyLabBookLocation(source,backup,{id:randomUUID(),portable:true});
  async function start(){app=await startServer({root,port:0,headless:true,deviceStore:device});const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(response.status,200);const cookie=response.headers.get('x-observanda-session').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}}))).contextId;return (route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(90000),method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});}

@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // Parent deletion promotes independent subprojects by the normal native
 // placement command. A durable plan identifies each source and operation;
 // a retry never invents a new destination or repeats a completed placement.
@@ -41,7 +42,7 @@ export class ProjectChildPreservation{
    await withProject(child.projectId,async storage=>{
     current=await this.registry.locate(child.projectId);
     if(storage.root!==current.root||storage.vault.id!==child.vaultId||current.namespaceId!==child.namespaceId||![source,target].includes(current.root)||current.root===source&&current.parentId!==this.project.projectId||current.root===target&&current.parentId!==null||await realpath(current.root)!==current.root)throw new AppError('CONFLICT');
-    const identity=directoryIdentity(await assertRegular(current.root,{directory:true})),accessHash=await hash(current.root);
+    const identity=(await assertRegular(current.root,{directory:true}),await directoryIdentity(current.root)),accessHash=await hash(current.root);
     if(prior&&(!sameDirectory(identity,child.identity)||accessHash!==child.accessHash))throw new AppError('CONFLICT');
     if(current.root===target){
      const completed=await new ProjectRenames(this.registry,child.projectId).read();if(completed?.id!==child.id||completed.phase!=='complete')throw new AppError('CONFLICT');return;
@@ -64,7 +65,7 @@ export class ProjectChildPreservation{
      if(placeChild)await placeChild(child,{parentId:null,expectedParentId:this.project.projectId});
      else{const storage=await withProject(child.projectId,storage=>storage);await renames.run(storage,{id:child.id,name:child.directory,expectedName:child.directory,placement:{parentId:null,expectedParentId:this.project.projectId},withProject,withBook,check,checkpoint:(stage,value)=>checkpoint('preserve-'+stage,value,child.projectId)});}
     }
-    const current=await this.registry.locate(child.projectId);if(current.root!==target||current.parentId!==null||!sameDirectory(directoryIdentity(await assertRegular(target,{directory:true})),child.identity))throw new AppError('STORAGE_DELETE_STATE');
+    const current=await this.registry.locate(child.projectId);if(current.root!==target||current.parentId!==null||!sameDirectory((await assertRegular(target,{directory:true}),await directoryIdentity(target)),child.identity))throw new AppError('STORAGE_DELETE_STATE');
     await checkpoint('child-preserved',child);operationAdvance();
    }
   });

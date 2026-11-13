@@ -17,8 +17,14 @@ export async function fixture(t){
  t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-domains-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),projectId=book.projects[0].id,access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),vault=takeCreatedVault(access);vaults.push(vault);
  book.title=book.projects[0].title='project';
- const storage=await initializeProjectLocation(path.join(root,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);
- return {root,runtime,book,projectId,vault,storage,domains};
+ // Every project lives inside an open workspace and uses its cluster.
+ const {initializeLocation}=await import('../src/locations.js'),{createNotebook}=await import('../src/model.js'),{Workspace}=await import('../src/storage.js'),home=path.join(root,'Home workspace'),homeAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),homeVault=takeCreatedVault(homeAccess);vaults.push(homeVault);await initializeLocation(home,createNotebook('Home workspace',''),homeAccess,homeVault);const workspace=new Workspace(home,homeVault);await workspace.outline();
+ const storage=await initializeProjectLocation(path.join(home,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);
+ // A copy under fresh keys is received by another open workspace: one project's
+ // catalogue role belongs to one key per workspace cluster.
+ let receiver=null;
+ const receivingWorkspace=async()=>{if(!receiver){const receiverAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'receiver-device')})),receiverVault=takeCreatedVault(receiverAccess);vaults.push(receiverVault);const receiverRoot=path.join(root,'Receiving workspace');await initializeLocation(receiverRoot,createNotebook('Receiving workspace',''),receiverAccess,receiverVault);receiver=new Workspace(receiverRoot,receiverVault);}await receiver.outline();return receiver.root;};
+ return {root,runtime,book,projectId,vault,storage,domains,workspace,receivingWorkspace};
 }
 export const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 export const calendar=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calendar.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calendar',projectId:f.projectId,color:'#123456',archived:false}}});

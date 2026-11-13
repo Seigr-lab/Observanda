@@ -1,5 +1,9 @@
-// Owned project paths travel with their workspace. External owners retain
-// explicit absolute locations; decoding a location never opens a database.
+// Project paths are stored relative to their workspace and travel with it.
+// Every project lives inside its workspace folder. An absolute location is
+// written only while a workspace move hands a project to the workspace's new
+// folder; it becomes internal once the workspace itself arrives there. Opening
+// any other absolute location is refused by the project router. Decoding a
+// location never opens a database.
 import path from 'node:path';
 import {AppError} from './errors.js';
 function segments(relative) {
@@ -48,5 +52,6 @@ export function projectRegistryDescendantPrefix(location,root) {
 export async function assertProjectTransferDestination(registry,destination){
   const overlaps=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
   if(overlaps(registry.workspace.root,destination)||overlaps(destination,registry.workspace.root))throw new AppError('STORAGE_PATH');
-  await registry.assertRoot(destination);
+  // A copy or backup destination never becomes a registered project.
+  await registry.assertRoot(destination,{transfer:true});
 }

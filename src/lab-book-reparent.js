@@ -24,8 +24,7 @@ import {storageCreationPath,validateStorageName} from './storage-names.js';
 import {RENAME_MARKER,renameScope,workspaceRename} from './workspace-rename-state.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
-import {assertLabBookDatabaseStopped,LAB_BOOK_DATABASE_DIRECTORY} from './lab-book-postgres.js';
+import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {researchId} from './web/research-reference.js';
@@ -34,7 +33,7 @@ import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import {PublicationConversion} from './publication-conversion.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {commitStructureDocuments} from './record-structure-documents.js';
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+import {folderIdentity as identity} from './folder-identity.js';
 const sameIdentity=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
 const sameBook=(a,b)=>['labBookId','namespaceId','vaultId'].every(key=>a?.[key]===b?.[key]);
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
@@ -54,7 +53,7 @@ export class LabBookReparents{
  async locate(value){
   const roots=await this.roots(value);
   const candidates=value.version===2?[value.phase==='copying'?roots.source:roots.destination]:[roots.destination,roots.source];
-  for(const root of candidates){const expected=value.version===2&&root===roots.destination?value.transfer.identity:value.identity,stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root||!sameIdentity(value.version===2?await projectMoveDirectory(root):identity(stat),expected))continue;if(await realpath(root)!==root||await hash(path.join(root,'.observanda/access.json'))!==value.accessHash||await hash(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');return root;}
+  for(const root of candidates){const expected=value.version===2&&root===roots.destination?value.transfer.identity:value.identity,stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root||!sameIdentity(value.version===2?await projectMoveDirectory(root):await identity(root),expected))continue;if(await realpath(root)!==root||await hash(path.join(root,'.observanda/access.json'))!==value.accessHash||await hash(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');return root;}
   throw new AppError('STORAGE_RENAME_STATE');
  }
  async locked(source,target,directory,operation){
@@ -93,7 +92,7 @@ export class LabBookReparents{
     await check();const metadata=(await storage.outline()).metadata;if(metadata.id!==entry.namespaceId||metadata.notebooks[0].projectId!==source.projectId)throw new AppError('DATABASE_LOCATION');
     const parent=(await target.outline()).metadata.projects.find(project=>project.id===target.projectId);if(!parent)throw new AppError('DATABASE_LOCATION');
     await this.addresses.register(source.projectId,entry);
-    value={version:1,id,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory,sourceProjectId:source.projectId,sourceVaultId:source.vault.id,targetProjectId:target.projectId,targetVaultId:target.vault.id,parent:{...parent,parentId:null},identity:identity(await assertRegular(entry.root,{directory:true})),accessHash:await hash(path.join(entry.root,'.observanda/access.json')),descriptorHash:await hash(await workspaceFile(entry.root)),phase:'prepared'};
+    value={version:1,id,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory,sourceProjectId:source.projectId,sourceVaultId:source.vault.id,targetProjectId:target.projectId,targetVaultId:target.vault.id,parent:{...parent,parentId:null},identity:(await assertRegular(entry.root,{directory:true}),await identity(entry.root)),accessHash:await hash(path.join(entry.root,'.observanda/access.json')),descriptorHash:await hash(await workspaceFile(entry.root)),phase:'prepared'};
     await this.reserve(source,target,value,{save:true});await checkpoint('prepared',value);
     await atomicWrite(path.join(entry.root,RENAME_MARKER),serialize({version:1,id,source:entry.root,destination,placement:true}));
    },{existing:true});
@@ -114,8 +113,7 @@ export class LabBookReparents{
     if(pending&&pending.id!==value.id)throw new AppError('STORAGE_RENAME_STATE');
     if(!pending)await storage.withStorageHandoff(async()=>{await check();await atomicWrite(path.join(root,RENAME_MARKER),serialize({version:1,id:value.id,...roots,placement:true}));},{existing:true});
     const provider=databaseProvider();if(!provider?.stopLabBookForRename)throw new AppError('DATABASE_LOCATION');await provider.stopLabBookForRename(root,this.labBookId,vault,value.id);
-    const lease=await workspaceDatabaseLease(path.join(root,LAB_BOOK_DATABASE_DIRECTORY),{});
-    try{await assertLabBookDatabaseStopped(root,this.labBookId,vault);if(await this.locate(value)!==root||await assertRegular(roots.destination,{directory:true,missing:true}))throw new AppError('STORAGE_RENAME_STATE');await check();await checkpoint('stopped',value);}finally{await lease.close();}
+    await assertLabBookDatabaseStopped(root,this.labBookId,vault);if(await this.locate(value)!==root||await assertRegular(roots.destination,{directory:true,missing:true}))throw new AppError('STORAGE_RENAME_STATE');await check();await checkpoint('stopped',value);
     try{await rename(root,roots.destination);}catch(error){
      if(error.code!=='EXDEV')throw error;
      value.version=2;value.identity=await projectMoveDirectory(root);value.transfer={sourceId:(await catalogueBinding(root)).id};value.phase='copying';await this.save(value);await checkpoint('copying',value);await transfer.copy();

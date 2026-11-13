@@ -35,7 +35,7 @@ import {AppError} from './errors.js';
 const terminal=value=>value?.phase==='complete';
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
 const inside=(root,child)=>{const relative=path.relative(root,child);return !relative||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+import {folderIdentity as identity} from './folder-identity.js';
 const same=(a,b)=>['labBookId','namespaceId','vaultId'].every(key=>a?.[key]===b?.[key]);
 export class LabBookImports{
  constructor(project,registry,deviceStore){this.project=project;this.registry=new LabBookRegistry(project);this.workspaceRegistry=registry;this.addresses=new LabBookDirectory(registry);this.deviceStore=deviceStore;}
@@ -78,7 +78,7 @@ export class LabBookImports{
     if(!value){
      const owner=await this.source(source,vault),directory=storageFolderName(source),destination=storageCreationPath(this.project.root,directory);
      if(source!==destination&&(inside(this.workspaceRegistry.workspace.root,source)||inside(source,destination)||inside(destination,source)))throw new AppError('STORAGE_PATH');
-     value={version:1,kind:'import',id:command.id,projectId:this.project.projectId,source,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,directory,labBookId:owner.labBookId,namespaceId:owner.namespaceId,vaultId:vault.id,archiveDigest:owner.archiveDigest,accessEtag:access.etag,phase:'prepared'};
+     value={version:1,kind:'import',id:command.id,projectId:this.project.projectId,source,sourceIdentity:(await assertRegular(source,{directory:true}),await identity(source)),destinationIdentity:null,directory,labBookId:owner.labBookId,namespaceId:owner.namespaceId,vaultId:vault.id,archiveDigest:owner.archiveDigest,accessEtag:access.etag,phase:'prepared'};
     }
     if(value.vaultId!==vault.id)throw new AppError('ACCESS_DENIED');
     const names=await privateDirectory(this.project.root,'.observanda/lab-book-creation'),addresses=await privateDirectory(this.workspaceRegistry.workspace.root,'.observanda/lab-book-directory'),locks=[path.join(addresses,value.namespaceId+'.lock'),path.join(names,'book-'+value.labBookId+'.lock'),path.join(names,'name-'+digest(nameKey(value.directory))+'.lock')];
@@ -102,7 +102,7 @@ export class LabBookImports{
   return withOperationProgress(onProgress,()=>operationSequence('import-book',['copy-files','lab-book-database-import','import-book-register'],async()=>{
    await checkpoint('prepared',value);
    if(value.phase==='prepared'){
-    const stat=await assertRegular(value.source,{directory:true});if(serialize(identity(stat))!==serialize(value.sourceIdentity)||(await readAccess(value.source)).etag!==value.accessEtag)throw new AppError('CONFLICT');
+    const stat=await assertRegular(value.source,{directory:true});if(serialize(await identity(value.source))!==serialize(value.sourceIdentity)||(await readAccess(value.source)).etag!==value.accessEtag)throw new AppError('CONFLICT');
     if(destination!==value.source){
      const source=new LabBookStorage(value.source,value.labBookId,vault);
      if(value.archiveDigest)await this.copyArchive(source,target,value,checkpoint);
@@ -145,7 +145,7 @@ export class LabBookImports{
    try{
     if(value.source!==destination&&value.destinationIdentity){
      if(await discard.needsKeys()){
-      if(serialize(identity(await assertRegular(value.source,{directory:true})))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');
+      if(serialize((await assertRegular(value.source,{directory:true}),await identity(value.source)))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');
       try{vault=await verifyAccess(await readAccess(value.source),command.username,command.password,{deviceStore:this.deviceStore,recovery:command.recovery});}
       catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN','AUTH'].includes(error.code)){const failure=new AppError('LAB_BOOK_IMPORT_ACCESS');failure.operationNotStarted=true;throw failure;}throw error;}
       if(vault.id!==value.vaultId)throw new AppError('ACCESS_DENIED');

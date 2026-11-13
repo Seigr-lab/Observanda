@@ -26,7 +26,7 @@ async function fixture(t){
  t.after(async()=>{await owner.close();detach();for(const key of keys)await clearVault(key);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-delete-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const key=async()=>{const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};};
  const registryKey=await key(),registryRoot=path.join(root,'registry'),registryBook=sampleNotebook();await initializeLocation(registryRoot,registryBook,registryKey.access,registryKey.vault);const registry=new ProjectRegistry(new Workspace(registryRoot,registryKey.vault),registryBook.id);
- async function project(name,parentId=null,{nested=false}={}){const book=sampleNotebook(),id=book.projects[0].id,{access,vault}=await key();book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(nested?(parentId?(await registry.locate(parentId)).root:registry.workspace.root):root,name),id,book,access,vault);await registry.attach(storage,{parentId,expected:(await registry.read()).revision});await storage.writeFile(path.join(storage.root,'.observanda/original.bin'),'original '+name);return {storage,vault,id,book};}
+ async function project(name,parentId=null){const book=sampleNotebook(),id=book.projects[0].id,{access,vault}=await key();book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(parentId?(await registry.locate(parentId)).root:registry.workspace.root,name),id,book,access,vault);await registry.attach(storage,{parentId,expected:(await registry.read()).revision});await storage.writeFile(path.join(storage.root,'.observanda/original.bin'),'original '+name);return {storage,vault,id,book};}
  async function book(parent,title){
   const {book}=await new LabBookCreation(parent.storage,device).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:parent.id,title}}),vault=await verifyAccess(await readAccess(book.root),'','',{deviceStore:device});keys.push(vault);
   const storage=new LabBookStorage(book.root,book.labBookId,vault),initial=await storage.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId};
@@ -37,11 +37,15 @@ async function fixture(t){
 const interrupted=phase=>async stage=>{if(stage===phase)throw Error('Interrupted '+phase);};
 test('deleting a portable project preserves independent children and sibling data and retains deleted references',async t=>{
  const f=await fixture(t),a=await f.project('selected'),b=await f.project('sibling'),child=await f.project('child',a.id),sibling=await b.storage.read(),childBook=await child.storage.read(),id=randomUUID(),backup=path.join(f.root,'backup',path.basename(a.storage.root)),original=await a.storage.read();
+ // The independent child lives in its parent's folder; deletion moves it to
+ // the workspace folder before the parent's folder is removed.
+ const known=new Map([a,b,child].map(item=>[item.id,item])),withProject=async(projectId,use)=>{const renames=new ProjectRenames(f.registry,projectId),pending=await renames.read();if(pending&&!['complete','cancelled'].includes(pending.phase))await renames.resume(known.get(projectId).vault);const entry=await f.registry.locate(projectId);return use(new ProjectStorage(entry.root,projectId,known.get(projectId).vault));};
  await mkdir(path.dirname(backup));await copyProjectLocation(a.storage,backup,{id:randomUUID()});const deletions=new ProjectDeletions(f.registry,a.id),source=a.storage.root;
- await assert.rejects(deletions.run(a.vault,{id,expectedRoot:source,checkpoint:interrupted('frozen')}),/Interrupted frozen/);
+ await assert.rejects(deletions.run(a.vault,{id,expectedRoot:source,withProject,checkpoint:interrupted('frozen')}),/Interrupted frozen/);
  await assert.rejects(new ProjectOpening(f.registry,f.device).open({id:randomUUID(),path:backup,username:'',password:'',recovery:''}),{code:'STORAGE_DELETE_BUSY'});
- assert.equal((await deletions.run(a.vault,{id,expectedRoot:source})).complete,true);await assert.rejects(stat(source),{code:'ENOENT'});
- assert.deepEqual(await b.storage.read(),sibling);assert.deepEqual(await child.storage.read(),childBook);assert.equal((await f.registry.locate(child.id)).parentId,null);
+ assert.equal((await deletions.run(a.vault,{id,expectedRoot:source,withProject})).complete,true);await assert.rejects(stat(source),{code:'ENOENT'});
+ const movedChild=await f.registry.locate(child.id);assert.equal(movedChild.root,path.join(f.registry.workspace.root,path.basename(child.storage.root)));assert.equal(movedChild.parentId,null);
+ assert.deepEqual(await b.storage.read(),sibling);assert.deepEqual(await new ProjectStorage(movedChild.root,child.id,child.vault).read(),childBook);
  await assert.rejects(f.registry.locate(a.id),{code:'PROJECT_DELETED'});await assert.rejects(f.registry.namespace(a.book.id),{code:'PROJECT_DELETED'});
  assert.equal((await deletions.run(null,{id})).complete,true);assert.deepEqual((await pendingProjectDeletions(f.registry)).items,[]);
  const opened=await new ProjectOpening(f.registry,f.device).open({id:randomUUID(),path:backup,username:'',password:'',recovery:''});assert.equal(opened.project.projectId,a.id);const restored=path.join(f.registry.workspace.root,path.basename(backup));assert.equal((await f.registry.namespace(a.book.id)).root,restored);
@@ -89,7 +93,7 @@ test('forced termination recovers project deletion from frozen, stopped, retired
 
 
 test('deleting a nested leaf project preserves its containing workspace and parent project',{timeout:120000},async t=>{
- const f=await fixture(t),parent=await f.project('Parent Project',null,{nested:true}),selected=await f.project('Selected Project',parent.id,{nested:true}),sibling=await f.project('Sibling Project',parent.id,{nested:true}),beforeParent=await parent.storage.read(),beforeSibling=await sibling.storage.read(),beforeWorkspace=await f.registry.workspace.read(),deletions=new ProjectDeletions(f.registry,selected.id),id=randomUUID();
+ const f=await fixture(t),parent=await f.project('Parent Project'),selected=await f.project('Selected Project',parent.id),sibling=await f.project('Sibling Project',parent.id),beforeParent=await parent.storage.read(),beforeSibling=await sibling.storage.read(),beforeWorkspace=await f.registry.workspace.read(),deletions=new ProjectDeletions(f.registry,selected.id),id=randomUUID();
  f.registry.read=async()=>{throw Error('Deletion must use selected directory indexes');};
  await assert.rejects(deletions.run(selected.vault,{id,expectedRoot:selected.storage.root,checkpoint:interrupted('frozen')}),/Interrupted frozen/);
  assert.equal((await new ProjectDeletions(f.registry,selected.id).run(selected.vault,{id})).complete,true);await assert.rejects(stat(selected.storage.root),{code:'ENOENT'});
@@ -98,9 +102,9 @@ test('deleting a nested leaf project preserves its containing workspace and pare
 
 
 test('nested project deletion authorizes each book and recovers before and after child database shutdown',{timeout:240000},async t=>{
- const f=await fixture(t),sibling=await f.project('Preserved Project',null,{nested:true}),siblingBook=await f.book(sibling,'Preserved Book'),before=await siblingBook.read();
+ const f=await fixture(t),sibling=await f.project('Preserved Project'),siblingBook=await f.book(sibling,'Preserved Book'),before=await siblingBook.read();
  for(const stage of ['book-frozen','book-stopped','retired']){
-  const selected=await f.project('Selected '+stage,null,{nested:true}),first=await f.book(selected,'First Book'),second=await f.book(selected,'Second Book'),books=new Map([first,second].map(book=>[book.labBookId,book])),id=randomUUID(),deletions=new ProjectDeletions(f.registry,selected.id);
+  const selected=await f.project('Selected '+stage),first=await f.book(selected,'First Book'),second=await f.book(selected,'Second Book'),books=new Map([first,second].map(book=>[book.labBookId,book])),id=randomUUID(),deletions=new ProjectDeletions(f.registry,selected.id);
   await assert.rejects(deletions.run(selected.vault,{id}),{code:'ACCESS_LOCKED'});assert.equal(await workspaceDeletion(selected.storage.root),null);
   const withBook=async(project,id,use)=>{assert.equal(project.projectId,selected.id);return use(books.get(id));};
   await assert.rejects(deletions.run(selected.vault,{id,withBook,checkpoint:interrupted(stage)}),new RegExp('Interrupted '+stage));
@@ -118,7 +122,7 @@ test('nested project deletion authorizes each book and recovers before and after
 
 
 test('parent deletion preserves nested subprojects and their books across interrupted native placement',{timeout:240000},async t=>{
- const f=await fixture(t),parent=await f.project('Selected Parent',null,{nested:true}),child=await f.project('Independent Child',parent.id,{nested:true}),other=await f.project('Other Child',parent.id,{nested:true}),grandchild=await f.project('Grandchild',child.id,{nested:true}),ownedBook=await f.book(parent,'Owned Book'),childBook=await f.book(child,'Child Book'),grandchildBook=await f.book(grandchild,'Grandchild Book'),beforeChild=await childBook.read(),beforeGrandchild=await grandchildBook.read(),projects=new Map([parent,child,other,grandchild].map(item=>[item.id,item])),books=new Map([ownedBook,childBook,grandchildBook].map(book=>[book.labBookId,book])),id=randomUUID();
+ const f=await fixture(t),parent=await f.project('Selected Parent'),child=await f.project('Independent Child',parent.id),other=await f.project('Other Child',parent.id),grandchild=await f.project('Grandchild',child.id),ownedBook=await f.book(parent,'Owned Book'),childBook=await f.book(child,'Child Book'),grandchildBook=await f.book(grandchild,'Grandchild Book'),beforeChild=await childBook.read(),beforeGrandchild=await grandchildBook.read(),projects=new Map([parent,child,other,grandchild].map(item=>[item.id,item])),books=new Map([ownedBook,childBook,grandchildBook].map(book=>[book.labBookId,book])),id=randomUUID();
  const withProject=async(projectId,use)=>{const renames=new ProjectRenames(f.registry,projectId),pending=await renames.read();if(pending&&!['complete','cancelled'].includes(pending.phase))await renames.resume(projects.get(projectId).vault);const entry=await f.registry.locate(projectId);return use(new ProjectStorage(entry.root,projectId,projects.get(projectId).vault));};
  const withBook=async(project,bookId,use)=>{const known=books.get(bookId),root=path.join(project.root,path.basename(known.root));return use(new LabBookStorage(root,bookId,known.vault));};
  f.registry.read=async()=>{throw Error('Deletion must use selected directory indexes');};

@@ -46,7 +46,7 @@ test('workspace move application authenticates both workspaces and protected own
  const mock=t.mock.method(ProjectWorkspaceMoves.prototype,'save',async function(value){await originalSave.call(this,value);if(value.phase==='departed')throw Error('Interrupted after source departure');});
  await assert.rejects(run(projectId+'/storage/move',command),/Interrupted after source departure/);mock.mock.restore();
  const pending=await run('move/pending',{after:null,limit:20});assert.equal(pending.items.length,1);assert.equal(pending.items[0].phase,'departed');await assert.rejects(f.registry.locate(projectId),{code:'PROJECT_MOVED'});
- await app.close();await f.stopProvider();f.restartProvider();app=new ProjectApplication(f.workspace,settings);target=await targetOpen();
+ await app.close();await f.stopProvider();f.restartProvider();await f.workspace.outline();app=new ProjectApplication(f.workspace,settings);target=await targetOpen();
  await run('move/target/unlock',{target:target.id,projectId:parentId,username:'',password:parentPassword,recovery:''});
  const completed=await run(projectId+'/storage/move',{...command,target:target.id});assert.equal(completed.complete,true);assert.equal(completed.workspaceId,metadata.id);assert.equal(completed.project.root,path.join(parent.root,path.basename(f.projects[0].root)));assert.deepEqual((await run('move/pending',{after:null,limit:20})).items,[]);
  for(const book of f.books){const location=path.join(completed.project.root,path.relative(f.projects[0].root,book.root));assert.deepEqual(await new LabBookStorage(location,book.labBookId,book.key).read(),book.before);}

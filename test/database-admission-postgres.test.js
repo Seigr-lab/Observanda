@@ -15,14 +15,19 @@ import {initializeProjectLocation} from '../src/project-storage.js';
 import {databaseCapacity,scratchDatabase} from '../src/postgres.js';
 import {withScratch,withScratchSession} from '../src/scratch-work.js';
 import {withDatabaseRequest} from '../src/database-request-context.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 
 async function waitFor(check){for(let i=0;i<200;i++){if(check())return;await delay(10);}assert.fail('Expected connection state');}
 test('a saturated project admits nested verification and leaves sibling databases independent',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-admission-')),deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),vaults=[],connections=[];
  const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN},projectRuntime:{maxIdle:2}}),detach=installDatabaseProvider(owner);
- t.after(async()=>{await Promise.all(connections.map(db=>db.close()));await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-admission-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ let workspace;
+ t.after(async()=>{await Promise.all(connections.map(db=>db.close()));await owner.close();detach();for(const vault of vaults)await clearVault(vault);await clearVault(workspace?.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-admission-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ // Both projects live in one workspace and share its cluster; admission keeps
+ // one queue per owner role, so saturating one leaves its sibling independent.
+ workspace=await encryptedFixture(path.join(directory,'workspace folder'),sampleNotebook());
  const projects=[];
- for(const name of ['a','b']){const book=sampleNotebook(),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;projects.push(await initializeProjectLocation(path.join(directory,name),book.projects[0].id,book,access,vault));}
+ for(const name of ['a','b']){const book=sampleNotebook(),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;projects.push(await initializeProjectLocation(path.join(workspace.workspace.root,name),book.projects[0].id,book,access,vault));}
  const [a,b]=projects,head=(await a.outline()).etag,sibling=(await b.outline()).etag;
  for(let i=0;i<databaseCapacity().limit;i++)connections.push(await a.openCatalogue());
  const controller=new AbortController();const waiting=withDatabaseRequest(controller.signal,()=>a.outline()),cancelled=assert.rejects(waiting,{name:'AbortError'});await waitFor(()=>databaseCapacity().queued===1);
@@ -60,7 +65,9 @@ test('failed temporary table initialization removes its own table and preserves 
  const spy=t.mock.method(prototype,'run',function(sql,...args){if(fail&&sql.startsWith('CREATE INDEX ON pg_temp.obs_work_')){fail=false;connection=this;return run.call(this,'SELECT 1/0');}return run.call(this,sql,...args);});
  try{await withScratch(async outer=>{
   await outer.put('retained',{value:17});fail=true;
-  await assert.rejects(withScratch(()=>assert.fail('Incomplete temporary table must not be exposed')),{code:'22012'});
+  // Work sets allocate their table on first use; that failed allocation must
+  // not expose an incomplete table to the next statement.
+  await assert.rejects(withScratch(async inner=>{await inner.put('first',{value:1});assert.fail('Incomplete temporary table must not be exposed');}),{code:'22012'});
   assert.equal((await connection.get("SELECT count(*)::int AS n FROM pg_class WHERE relnamespace=pg_my_temp_schema() AND relkind='r'")).n,1);
   assert.deepEqual(await outer.get('retained'),{value:17});
  });}finally{spy.mock.restore();await observer.close();}
@@ -110,7 +117,7 @@ test('external process saturation refuses safely and recovers without leaked cat
  t.after(async()=>{await db?.close();if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await exited;}});
  const ready=receive('full');child.send({action:'fill',url:process.env.OBSERVANDA_DATABASE_URL,maximum:settings.maximum});const full=await ready;
  assert.equal(full.code,'53300');assert.equal(full.count,settings.maximum-settings.reserved-(settings.extra??0));
- const capacity={active:0,limit:12,globalLimit:24,queueLimit:128,connectionLimit:48,owners:0,admitted:0,queued:0};
+ const capacity={active:0,idle:0,limit:12,globalLimit:24,queueLimit:128,connectionLimit:48,owners:0,admitted:0,background:0,foregroundReserve:2,globalForegroundReserve:4,queued:0};
  await assert.rejects(scratchDatabase(),{code:'DATABASE_UNAVAILABLE'});assert.deepEqual(databaseCapacity(),capacity);
  const released=receive('released');child.send({action:'release'});assert.equal((await released).count,full.count-1);
  db=await scratchDatabase();assert.equal((await db.get('SELECT 37 AS value')).value,37);assert.equal(databaseCapacity().active,1);

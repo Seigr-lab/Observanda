@@ -22,7 +22,6 @@ import {withScratch} from './scratch-work.js';
 import {withWriterLease} from './writer-lease.js';
 import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {operationStage,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
@@ -93,7 +92,7 @@ export class NativeProjectMoveBooks{
   });
  }
  async stop(checkpoint){for await(const item of this.owners.entries())await this.use(this.value.source,item,async storage=>{
-  const marker=await moveSource(storage.root);if(marker?.id!==this.value.id||marker.destination!==path.join(this.value.destination,item.directory))throw new AppError('STORAGE_MOVE_STATE');const provider=databaseProvider();if(!provider?.stopLabBookForMove)throw new AppError('DATABASE_RUNTIME');await provider.stopLabBookForMove(storage.root,item.labBookId,storage.vault,this.value.id);const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));try{await assertLabBookDatabaseStopped(storage.root,item.labBookId,storage.vault);}finally{await lease.close();}await checkpoint('book-stopped',item.labBookId);
+  const marker=await moveSource(storage.root);if(marker?.id!==this.value.id||marker.destination!==path.join(this.value.destination,item.directory))throw new AppError('STORAGE_MOVE_STATE');const provider=databaseProvider();if(!provider?.stopLabBookForMove)throw new AppError('DATABASE_RUNTIME');await provider.stopLabBookForMove(storage.root,item.labBookId,storage.vault,this.value.id);await assertLabBookDatabaseStopped(storage.root,item.labBookId,storage.vault);await checkpoint('book-stopped',item.labBookId);
  },{keysRoot:this.value.destination});}
  async clear(root){await releasePortabilityCollection(new ProjectStorage(root,this.value.projectId,this.vault),this.value.bookKeys);}
 }

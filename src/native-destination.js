@@ -10,6 +10,10 @@ import {AppError} from './errors.js';
 const scopes=new AsyncLocalStorage();
 const inside=(root,file)=>{const relative=path.relative(root,path.resolve(file));return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export const nativeDestination=file=>[...(scopes.getStore()??[])].reverse().find(scope=>scope.active&&inside(scope.root,file));
+// Run work for another storage owner (a project or lab book inside the
+// workspace folder) without the workspace's admitted scope: that owner's files
+// and folders are never reached through the workspace's native handles.
+export const outsideNativeDestinations=operation=>scopes.run([],operation);
 
 export async function* nativeFileBlocks(handle,chunkSize,signal,limit=Number.MAX_SAFE_INTEGER){
  const before=await handle.stat({bigint:true});if(before.size>BigInt(limit))throw new AppError('LIMIT');

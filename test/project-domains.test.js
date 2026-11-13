@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {mkdtemp,rm,rename,mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
+import {mkdtemp,rm,rename,mkdir,copyFile,readFile,writeFile,stat} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -25,8 +25,10 @@ async function fixture(t){
  t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-domains-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),projectId=book.projects[0].id,access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),vault=takeCreatedVault(access);vaults.push(vault);
  book.title=book.projects[0].title='project';
- const storage=await initializeProjectLocation(path.join(root,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);
- return {root,runtime,book,projectId,access,vault,storage,domains};
+ // Every project lives inside an open workspace and uses its cluster.
+ const {initializeLocation}=await import('../src/locations.js'),{createNotebook}=await import('../src/model.js'),{Workspace}=await import('../src/storage.js'),home=path.join(root,'Home workspace'),homeAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),homeVault=takeCreatedVault(homeAccess);vaults.push(homeVault);await initializeLocation(home,createNotebook('Home workspace',''),homeAccess,homeVault);const workspace=new Workspace(home,homeVault);await workspace.outline();
+ const storage=await initializeProjectLocation(path.join(home,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);
+ return {root,runtime,book,projectId,access,vault,storage,domains,workspace};
 }
 const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 const calendar=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calendar.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calendar',projectId:f.projectId,color:'#123456',archived:false}}});
@@ -57,7 +59,7 @@ test('project domains commit actual calculator and calendar commands independent
  await f.domains.run(['calculator','calendars'],async get=>{
   for(const domain of ['calculator','calendars']){const store=get(domain);await verifyDomain(f,store);const names=(await store.db.all('SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname=$1',store.db.schema)).map(r=>r.tablename);assert.deepEqual(names.sort(),['domain_format','module_entities','module_events','objects','state']);}
  });
- await f.runtime.closeProject(f.storage.root);const moved=path.join(f.root,'relocated');await rename(f.storage.root,moved);f.storage=new ProjectStorage(moved,f.projectId,f.vault);f.domains=new ProjectDomains(f.storage,f.book.id);
+ await f.runtime.closeProject(f.storage.root);const moved=path.join(f.workspace.root,'relocated');await rename(f.storage.root,moved);f.storage=new ProjectStorage(moved,f.projectId,f.vault);f.domains=new ProjectDomains(f.storage,f.book.id);
  assert.equal((await command(f,'calculator',first)).replayed,true);assert.deepEqual(await f.storage.read(),original);
 });
 
@@ -104,15 +106,17 @@ test('domain ownership binds encrypted rows to feature, project and namespace', 
 test('force-terminated and cancelled domain writes release locks without publishing partial state', {timeout:120000},async t=>{
  let child,exited; t.after(async()=>{if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await exited;}});
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);await command(f,'calculator',calculation(f));await f.runtime.closeProject(f.storage.root);
+ // The project uses its workspace's cluster: the writing process opens the workspace.
+ await f.runtime.closeWorkspace(f.workspace.root);
  const {spawn}=await import('node:child_process');
- const script=`import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {ProjectStorage} from './src/project-storage.js';import {ProjectDomains} from './src/project-domains.js';let raw='';for await(const bytes of process.stdin)raw+=bytes;const input=JSON.parse(raw),vault={id:input.vault.id,key:Buffer.from(input.vault.key,'base64')};const runtime=new WorkspaceDatabases({directory:input.directory,ownerId:input.ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});installDatabaseProvider(runtime);const domains=new ProjectDomains(new ProjectStorage(input.root,input.projectId,vault),input.namespaceId);await domains.run(['calculator','calendars'],async get=>{await get('calculator').putObject('uncommitted',{value:1});await get('calendars').putObject('uncommitted',{value:1});process.stdout.write('ready');await new Promise(()=>{});},{write:['calendars','calculator']});`;
+ const script=`import {WorkspaceDatabases} from './src/workspace-databases.js';import {installDatabaseProvider} from './src/workspace-database-context.js';import {ProjectStorage} from './src/project-storage.js';import {ProjectDomains} from './src/project-domains.js';import {Workspace} from './src/storage.js';let raw='';for await(const bytes of process.stdin)raw+=bytes;const input=JSON.parse(raw),vault={id:input.vault.id,key:Buffer.from(input.vault.key,'base64')};const runtime=new WorkspaceDatabases({directory:input.directory,ownerId:input.ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});installDatabaseProvider(runtime);await new Workspace(input.workspace,{id:input.workspaceVault.id,key:Buffer.from(input.workspaceVault.key,'base64')}).outline();const domains=new ProjectDomains(new ProjectStorage(input.root,input.projectId,vault),input.namespaceId);await domains.run(['calculator','calendars'],async get=>{await get('calculator').putObject('uncommitted',{value:1});await get('calendars').putObject('uncommitted',{value:1});process.stdout.write('ready');await new Promise(()=>{});},{write:['calendars','calculator']});`;
  child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:process.cwd(),windowsHide:true,stdio:['pipe','pipe','pipe']});exited=new Promise(resolve=>child.once('exit',resolve));let errors='';child.stderr.on('data',bytes=>errors+=bytes);
  await new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>reject(Error('Domain checkpoint timeout: '+errors)),45000);
   child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',()=>{clearTimeout(timer);reject(Error('Domain child exited early: '+errors));});child.stdout.once('data',()=>{clearTimeout(timer);resolve();});
-  child.stdin.end(JSON.stringify({directory:f.runtime.directory,ownerId:f.runtime.instances.ownerId,root:f.storage.root,projectId:f.projectId,namespaceId:f.book.id,vault:{id:f.vault.id,key:f.vault.key.toString('base64')}}));
+  child.stdin.end(JSON.stringify({directory:f.runtime.directory,ownerId:f.runtime.instances.ownerId,workspace:f.workspace.root,workspaceVault:{id:f.workspace.vault.id,key:f.workspace.vault.key.toString('base64')},root:f.storage.root,projectId:f.projectId,namespaceId:f.book.id,vault:{id:f.vault.id,key:f.vault.key.toString('base64')}}));
  });
- child.kill('SIGKILL');await exited;await f.runtime.environment(f.storage.root,{projectId:f.projectId,vault:f.vault});
+ child.kill('SIGKILL');await exited;await f.workspace.outline();await f.runtime.environment(f.storage.root,{projectId:f.projectId,vault:f.vault});
  await f.domains.run(['calendars','calculator'],async get=>{for(const domain of ['calculator','calendars']){assert.equal(await get(domain).object('uncommitted'),null);await get(domain).putObject('recovered',{value:2});}},{write:['calendars','calculator']});
  const abort=new AbortController();
  await assert.rejects(f.domains.run(['calculator','calendars'],async get=>{await get('calculator').putObject('cancelled',{value:3});abort.abort(new Error('cancel command'));},{write:['calculator'],signal:abort.signal}),/cancel command/);
@@ -125,21 +129,25 @@ test('independent module schemas survive archived and rekeyed project copies wit
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);const saved=calculation(f),scheduled=calendar(f);await command(f,'calculator',saved);await command(f,'calendars',scheduled);
  const {workspaceFile,atomicWrite,serialize}=await import('../src/storage.js'),{backupCatalogue,CATALOGUE_ARCHIVE}=await import('../src/postgres.js'),{verifyCatalogueArchive,rekeyCatalogue}=await import('../src/research-catalogue.js'),{catalogueBinding}=await import('../src/postgres-activation.js');
  const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),before=await f.storage.read();await verifyCatalogueArchive(f.storage,JSON.parse(descriptor));
- const copyRoot=path.join(f.root,'archive-copy');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
+ const copyRoot=path.join(f.workspace.root,'archive-copy');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(copyRoot,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,copyRoot,{connection:db});}finally{await db.close();}
  const header=JSON.parse((await readFile(path.join(copyRoot,CATALOGUE_ARCHIVE),'utf8')).split(String.fromCharCode(10))[0]);assert.deepEqual(header,{format:'observanda-postgresql-archive',version:4,catalogueVersion:22,domains:['calculator','calendars']});
  const copied=new ProjectStorage(copyRoot,f.projectId,f.vault);assert.deepEqual(await copied.read(),before);await verifyCatalogueArchive(copied,JSON.parse(descriptor));assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(f.storage.root)).id);
  const copyContext={...f,storage:copied,domains:new ProjectDomains(copied,f.book.id)};assert.equal((await command(copyContext,'calculator',saved)).replayed,true);assert.equal((await command(copyContext,'calendars',scheduled)).replayed,true);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),vault=takeCreatedVault(access);
+ // A project's catalogue role belongs to one key per workspace cluster: the
+ // copy under fresh keys is received by another open workspace.
+ const {initializeLocation}=await import('../src/locations.js'),{createNotebook}=await import('../src/model.js'),{Workspace}=await import('../src/storage.js'),receiverAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),receiverVault=takeCreatedVault(receiverAccess),receiverRoot=path.join(f.root,'Receiving workspace');
+ await initializeLocation(receiverRoot,createNotebook('Receiving workspace',''),receiverAccess,receiverVault);await new Workspace(receiverRoot,receiverVault).outline();
  try{
-  const target=new ProjectStorage(path.join(f.root,'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(receiverRoot,'rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));assert.deepEqual(await target.read(),before);
   const context={...f,storage:target,domains:new ProjectDomains(target,f.book.id)};assert.equal((await command(context,'calculator',saved)).replayed,true);
   const updated={...saved,commandId:randomUUID(),payload:{...saved.payload,expectedRevision:1,data:{...saved.payload.data,expression:'7*8'}}};await command(context,'calculator',updated);
   await f.domains.run(['calculator'],async get=>{const module=new ModuleCatalogue(get('calculator'));assert.equal((await module.selected(await module.head(f.book.id),saved.payload.id)).data.expression,'2+3');});
   await verifyCatalogueArchive(target,JSON.parse(descriptor));
- }finally{clearVault(vault);}
+ }finally{clearVault(vault);clearVault(receiverVault);}
  // Missing complete domains and missing metadata rows are both corruption.
  await copyContext.domains.run(['calculator'],get=>get('calculator').db.run("DELETE FROM objects WHERE id='owner'"),{write:['calculator']});
  await assert.rejects(verifyCatalogueArchive(copied,JSON.parse(descriptor)),{code:'CATALOGUE_DAMAGED'});
@@ -149,10 +157,10 @@ test('independent module schemas survive archived and rekeyed project copies wit
 });
 
 
-test('project copy move and deletion fence module writes and carry retained domain history', {timeout:180000},async t=>{
+test('project copy and deletion fence module writes and carry retained domain history while projects stay inside their workspace', {timeout:180000},async t=>{
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);const saved=calculation(f);await command(f,'calculator',saved);await command(f,'calendars',calendar(f));
  const {copyProjectLocation}=await import('../src/project-transfer.js'),{ProjectRegistry}=await import('../src/project-registry.js'),{ProjectMoves}=await import('../src/project-move.js'),{ProjectDeletions}=await import('../src/project-deletion.js'),{Workspace}=await import('../src/storage.js'),{databaseRetention,validDatabaseRetention,verifyDatabaseRetention}=await import('../src/workspace-database-retention.js');
- const destination=path.join(f.root,'stream-copy','project'),copyId=randomUUID(),held=gate();await mkdir(path.dirname(destination));
+ const destination=path.join(f.workspace.root,'stream-copy','project'),copyId=randomUUID(),held=gate();await mkdir(path.dirname(destination));
  const writer=detached(()=>f.domains.run(['calculator'],async get=>{await get('calculator').putObject('checkpoint',{value:1});held.enter();await held.hold;},{write:['calculator']}));await held.started;
  try{await assert.rejects(copyProjectLocation(f.storage,destination,{id:copyId}),{code:'LOCKED'});}
  finally{held.release();await writer;}
@@ -160,8 +168,12 @@ test('project copy move and deletion fence module writes and carry retained doma
  assert.equal((await command({...f,storage:copied,domains:copiedDomains},'calculator',saved)).replayed,true);
  await copiedDomains.run(['calculator'],async get=>assert.deepEqual(await get('calculator').object('checkpoint'),{value:1}));
  const proof=await f.storage.catalogue(store=>databaseRetention(store.db));assert.ok(validDatabaseRetention(proof));assert.equal(proof.domains.calculator.count,1);assert.equal(proof.domains.calendars.count,1);await verifyDatabaseRetention(copied,proof);
- const {initializeLocation}=await import('../src/locations.js'),registryRoot=path.join(f.root,'registry'),registryBook=sampleNotebook();await initializeLocation(registryRoot,registryBook,f.access,f.vault);const registry=new ProjectRegistry(new Workspace(registryRoot,f.vault),registryBook.id);await registry.attach(f.storage,{expected:'new'});
- const movedRoot=path.join(f.root,'moved-project','project');await mkdir(path.dirname(movedRoot));const moves=new ProjectMoves(registry),move=await moves.run(f.projectId,f.vault,{id:randomUUID(),path:movedRoot});assert.equal(move.phase,'complete');
+ const {initializeLocation}=await import('../src/locations.js'),registryRoot=path.join(f.root,'registry'),registryBook=sampleNotebook();await initializeLocation(registryRoot,registryBook,f.access,f.vault);const registry=new ProjectRegistry(new Workspace(registryRoot,f.vault),registryBook.id);
+ // Every project lives inside its workspace folder: an outside folder is never
+ // registered, and a registered project is never moved out of its workspace.
+ await assert.rejects(registry.attach(f.storage,{expected:'new'}),{code:'PROJECT_OUTSIDE_WORKSPACE'});assert.equal((await registry.read()).value.projects.length,0);
+ const movedRoot=path.join(registryRoot,'project');const placed=await copyProjectLocation(f.storage,movedRoot,{id:randomUUID()});await registry.attach(placed,{expected:(await registry.read()).revision});
+ const outside=path.join(f.root,'moved-project','project');await mkdir(path.dirname(outside));await assert.rejects(new ProjectMoves(registry).run(f.projectId,f.vault,{id:randomUUID(),path:outside}),{code:'STORAGE_OUTSIDE_WORKSPACE'});await assert.rejects(stat(outside),{code:'ENOENT'});assert.equal((await registry.locate(f.projectId)).root,movedRoot);
  const moved=new ProjectStorage(movedRoot,f.projectId,f.vault),movedContext={...f,storage:moved,domains:new ProjectDomains(moved,f.book.id)};assert.equal((await command(movedContext,'calculator',saved)).replayed,true);await verifyDatabaseRetention(moved,proof);
  const deleting=new ProjectDeletions(registry,f.projectId),pending=gate(),pendingWriter=detached(()=>movedContext.domains.run(['calendars'],async get=>{await get('calendars').putObject('before-delete',{value:2});pending.enter();await pending.hold;},{write:['calendars']}));await pending.started;
  try{await assert.rejects(deleting.run(f.vault,{id:randomUUID(),expectedRoot:movedRoot}),{code:'LOCKED'});}
@@ -178,7 +190,7 @@ test('project copy move and deletion fence module writes and carry retained doma
 test('damaged domain archives remain unpublished and restore cleanly on retry', {timeout:180000},async t=>{
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);await command(f,'calculator',calculation(f));await command(f,'calendars',calendar(f));
  const {workspaceFile}=await import('../src/storage.js'),{backupCatalogue,CATALOGUE_ARCHIVE}=await import('../src/postgres.js'),{catalogueBinding}=await import('../src/postgres-activation.js');
- const archiveRoot=path.join(f.root,'archive');await mkdir(path.join(archiveRoot,'.observanda'),{recursive:true});const connection=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,archiveRoot,{connection});}finally{await connection.close();}
+ const archiveRoot=path.join(f.workspace.root,'archive');await mkdir(path.join(archiveRoot,'.observanda'),{recursive:true});const connection=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,archiveRoot,{connection});}finally{await connection.close();}
  const original=await readFile(path.join(archiveRoot,CATALOGUE_ARCHIVE),'utf8'),lines=original.trimEnd().split(String.fromCharCode(10)).map(line=>JSON.parse(line)),source=await f.storage.read();
  const withoutDomain=values=>{
   values[0].domains=['calculator'];const result=[values[0]];let skip=false,rows=0;
@@ -187,7 +199,7 @@ test('damaged domain archives remain unpublished and restore cleanly on retry', 
  };
  const broken=[values=>{values[0].domains.push('invalid-owner');return values;},withoutDomain];
  for(let i=0;i<broken.length;i++){
-  const root=path.join(f.root,'restore-'+i);await mkdir(path.join(root,'.observanda'),{recursive:true});for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(root,file));
+  const root=path.join(f.workspace.root,'restore-'+i);await mkdir(path.join(root,'.observanda'),{recursive:true});for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(root,file));
   const file=path.join(root,CATALOGUE_ARCHIVE),values=broken[i](structuredClone(lines));await writeFile(file,values.map(value=>JSON.stringify(value)+String.fromCharCode(10)).join(''));
   const target=new ProjectStorage(root,f.projectId,f.vault);await assert.rejects(target.read(),{code:'CATALOGUE_DAMAGED'});assert.equal(await catalogueBinding(root),null);
   await writeFile(file,original);assert.deepEqual(await target.read(),source);

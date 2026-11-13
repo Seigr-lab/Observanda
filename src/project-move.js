@@ -10,8 +10,9 @@ import {projectCopyRoots,projectCopyBoundaries,retainedCopyRoots} from './projec
 import {ownedProjectFolder,projectMoveDirectory,assertProjectMoveDirectory} from './project-move-boundaries.js';
 import {removeRetiredProject} from './project-move-retirement.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
-// A move has one selected project owner. Registry adoption and retirement are
-// journalled independently so a restart can finish either without recopying.
+// A workspace move hands each project owner to the workspace's new folder.
+// Registry adoption and retirement are journalled independently so a restart
+// can finish either without recopying.
 import path from 'node:path';
 import {realpath} from 'node:fs/promises';
 import {atomicReplace as rename} from './atomic-replace.js';
@@ -57,6 +58,10 @@ export class ProjectMoves{
   const directory=await privateDirectory(this.workspace.root,'.observanda/project-moves');
   return withOperationProgress(onProgress,()=>withWriterLease(path.join(directory,projectId+'.lock'),()=>operationSequence('move-project',['copy-project','activate-destination','remove-original'],async()=>{
    let value=await this.read(projectId),entry=await this.registry.locate(projectId);
+   // Every project lives inside its workspace folder. These handoffs serve only
+   // a move of the whole workspace; placement inside a workspace and moves to
+   // another workspace use their own commands. A move out alone is refused.
+   if(workspaceMoveId===undefined&&value?.workspaceMoveId===undefined){if(!value&&(resume||adoptOnly))throw new AppError('NOT_FOUND');const error=new AppError('STORAGE_OUTSIDE_WORKSPACE');error.operationNotStarted=!value;throw error;}
    if(value?.version===3||(!workspaceMoveId||workspaceMove)&&(!value||value.id!==id&&transferTerminal(value.phase)))return status(await new NativeProjectMove(this).run(projectId,vault,{id,path:input,resume,checkpoint,adoptOnly,onAdopt,withBook,onCopiedBook,workspaceMoveId,workspaceMove},value));
    if(value&&value.id!==id&&!transferTerminal(value.phase))throw new AppError('CONFLICT');
    if(value?.id===id){

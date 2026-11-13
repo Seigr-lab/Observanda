@@ -15,9 +15,8 @@ import {withWriterLease} from './writer-lease.js';
 import {storageCreationPath,validateStorageName} from './storage-names.js';
 import {RENAME_MARKER,workspaceRename,renameScope} from './workspace-rename-state.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
-import {assertLabBookDatabaseStopped,LAB_BOOK_DATABASE_DIRECTORY} from './lab-book-postgres.js';
+import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {researchId} from './web/research-reference.js';
@@ -27,7 +26,7 @@ import {AppError} from './errors.js';
 const validSettings=value=>value===null||value&&['configuration,etag','configuration,etag,input','etag,input','checkpoint,configuration,etag,input'].includes(Object.keys(value).filter(key=>!['share','sharePdf'].includes(key)).sort().join())&&['share','sharePdf'].every(key=>!Object.hasOwn(value,key)||typeof value[key]==='boolean')&&hash(value.etag)&&(!Object.hasOwn(value,'configuration')||validConfiguration(value.configuration)||validConfigurationReference(value.configuration))&&(!Object.hasOwn(value,'input')||hash(value.input))&&(!Object.hasOwn(value,'checkpoint')||value.checkpoint&&Object.keys(value.checkpoint).sort().join()==='id,revision'&&researchId(value.checkpoint.id)&&hash(value.checkpoint.revision));
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+import {folderIdentity as identity} from './folder-identity.js';
 const same=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
 export class LabBookRenames{
  constructor(project){this.project=project;this.registry=new LabBookRegistry(project);}
@@ -46,7 +45,7 @@ export class LabBookRenames{
  root(name){return storageCreationPath(this.project.root,name);}
  async locate(value){
   for(const name of [value.destination,value.source]){
-   const root=this.root(name),stat=await assertRegular(root,{directory:true,missing:true});if(!stat||!same(identity(stat),value.identity)||await realpath(root)!==root)continue;
+   const root=this.root(name),stat=await assertRegular(root,{directory:true,missing:true});if(!stat||!same(await identity(root),value.identity)||await realpath(root)!==root)continue;
    if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');
    return root;
   }
@@ -70,7 +69,7 @@ export class LabBookRenames{
    await storage.withStorageHandoff(async()=>{
     await check();const {metadata,etag}=await storage.outline();if(settings&&settings.etag!==etag)throw new AppError('CONFLICT');if(metadata.id!==entry.namespaceId||metadata.notebooks[0].title!==expectedName)throw new AppError('CONFLICT');
     const access=await readAccess(storage.root);authenticateKeyring(access.value,storage.vault);
-    value={version:1,id,projectId:this.project.projectId,labBookId:storage.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,source:expectedName,destination:name,settings,identity:identity(await assertRegular(storage.root,{directory:true})),accessHash:digest(await readFile(path.join(storage.root,'.observanda/access.json'))),descriptorHash:digest(await readFile(await workspaceFile(storage.root))),phase:'prepared'};
+    value={version:1,id,projectId:this.project.projectId,labBookId:storage.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,source:expectedName,destination:name,settings,identity:(await assertRegular(storage.root,{directory:true}),await identity(storage.root)),accessHash:digest(await readFile(path.join(storage.root,'.observanda/access.json'))),descriptorHash:digest(await readFile(await workspaceFile(storage.root))),phase:'prepared'};
     await withWriterLease(path.join(this.project.root,'.observanda/lab-books.lock'),async()=>{await this.save(value);await this.project.writeFile(this.pointer(value.labBookId),value.id);});await checkpoint('prepared',value);
     await atomicWrite(path.join(storage.root,RENAME_MARKER),serialize({version:1,id,source:storage.root,destination:target}));
    },{existing:true});
@@ -104,8 +103,7 @@ export class LabBookRenames{
    if(root===source){
     const provider=databaseProvider();if(!provider?.stopLabBookForRename)throw new AppError('DATABASE_LOCATION');
     await provider.stopLabBookForRename(root,value.labBookId,vault,value.id);
-    const lease=await workspaceDatabaseLease(path.join(root,LAB_BOOK_DATABASE_DIRECTORY),{});
-    try{await assertLabBookDatabaseStopped(root,value.labBookId,vault);if(await this.locate(value)!==root||await realpath(this.project.root)!==this.project.root||digest(await readFile(await workspaceFile(root)))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');const existing=await assertRegular(destination,{directory:true,missing:true});if(existing&&await realpath(destination)!==root)throw new AppError('EXISTS');await check();await checkpoint('stopped',value);}finally{await lease.close();}
+    await assertLabBookDatabaseStopped(root,value.labBookId,vault);if(await this.locate(value)!==root||await realpath(this.project.root)!==this.project.root||digest(await readFile(await workspaceFile(root)))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');const existing=await assertRegular(destination,{directory:true,missing:true});if(existing&&await realpath(destination)!==root)throw new AppError('EXISTS');await check();await checkpoint('stopped',value);
     await rename(root,destination);root=destination;await checkpoint('renamed',value);value.phase='moved';await this.save(value);
    }
    const storage=new LabBookStorage(root,value.labBookId,vault);

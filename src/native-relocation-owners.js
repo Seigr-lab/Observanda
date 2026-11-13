@@ -26,7 +26,6 @@ import {validPlacementIdentity} from './project-placement-transfer-state.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {validateStorageName} from './storage-names.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {researchId} from './web/research-reference.js';
@@ -151,7 +150,7 @@ export class NativeRelocationOwners{
   // the encrypted key pages, but no decrypted key survives its callback.
   for await(const item of this.owners.entries({reverse:true}))await this.use(root,item,async storage=>{
    await check(item);const provider=databaseProvider(),method=item.kind==='project'?'stopProjectForRename':'stopLabBookForRename';if(!provider?.[method])throw new AppError('DATABASE_LOCATION');await provider[method](storage.root,relocationOwnerId(item),storage.vault,value.id);
-   const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));try{await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,relocationOwnerId(item),storage.vault);}finally{await lease.close();}
+   await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,relocationOwnerId(item),storage.vault);
    if(item.relative)await checkpoint(item.kind==='project'?'project-stopped':'book-stopped',value,relocationOwnerId(item));
   });
   await checkpoint('stopped',value);

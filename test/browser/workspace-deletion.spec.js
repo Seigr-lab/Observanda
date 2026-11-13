@@ -39,8 +39,10 @@ test('deleting from Workspaces confirms the name, clears local bindings, and lea
   await expect(dialog).toBeVisible();await access(f.workspace.root);
   await dialog.getByLabel('Type the workspace name to confirm').fill(path.basename(f.workspace.root));
   await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
+  // Owner credentials are requested in a dialog stacked over the running deletion.
   for(const [label,password] of [['Project password','Protected project password'],['Lab book password','Protected book password']]){
-   await expect(dialog.getByLabel(label,{exact:true})).toBeVisible();await dialog.getByLabel(label,{exact:true}).fill(password);await dialog.getByRole('button',{name:'Unlock',exact:true}).click();
+   const unlock=page.locator('dialog[data-project-access]');
+   await expect(unlock.getByLabel(label,{exact:true})).toBeVisible();await unlock.getByLabel(label,{exact:true}).fill(password);await unlock.getByRole('button',{name:'Unlock',exact:true}).click();
   }
   await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('#create-form')).toBeVisible();
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});

@@ -83,7 +83,7 @@ test('incoming adopted research links require per-record witnesses and survive a
  const pages=new RecordCollectionPages(),client={};t.after(()=>pages.clear());
  const read=(storage=f.storage,values={},options={})=>moduleReferenceIncoming(pages,client,{workspaceId:f.book.id,target,types:['calculation'],limit:1,cursor:null,...values},{collectionWorkspaceId:f.book.id,visit:(consume)=>consume(storage,{workspaceId:f.book.id,projectId:f.projectId,labBookId:null}),resolveTarget:(_target,consume)=>storage.catalogue(store=>consume(storage,target,{store})),...options});
  const first=await read();assert.equal(first.total,2);assert.equal((await read(f.storage,{cursor:first.nextCursor})).items.length,1);assert.equal((await read(f.storage,{target:original})).total,2);
- const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),root=path.join(f.root,'archive','project');await mkdir(path.join(root,'.observanda'),{recursive:true});
+ const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),root=path.join(f.workspace.root,'archive','project');await mkdir(path.join(root,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(root,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,root,{connection:db});}finally{await db.close();}
  const copied=new ProjectStorage(root,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(descriptor));await copied.outline();

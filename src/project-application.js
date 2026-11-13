@@ -74,7 +74,7 @@ import {ProjectCreation} from './project-creation.js';
 import {MAX_BYTES} from './model.js';
 import {ProjectReferences} from './project-references.js';
 import {workspaceFile,assertRegular} from './storage.js';
-import {readAccess,verifyAccess} from './access.js';
+import {readAccess,verifyAccess,resolveAccess} from './access.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {retireQueryCacheScope,withQueryCacheScope} from './query-cache-scope.js';
 import {researchId,validTarget} from './web/research-reference.js';
@@ -114,11 +114,12 @@ export function projectRequest(route,method){
  return null;
 }
 const reuseRequestConnections=selected=>selected.bookOperation==='research'||!selected.write&&selected.publication?.startsWith('websites/');
+const DEVICE_GRANT_MS=5*60*1000;
 export class ProjectApplication{
  constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations,publicationConversion}={}){
   this.publicationConversion=publicationConversion;
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  this.importAccess=new ProjectImportAccess(this);this.recordTransfers=new RecordOwnerTransferApplication(this);this.bookConversions=new BookConversionApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions,publicationFiles:publicationConversion?.files});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
+  this.importAccess=new ProjectImportAccess(this);this.recordTransfers=new RecordOwnerTransferApplication(this);this.bookConversions=new BookConversionApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions,publicationFiles:publicationConversion?.files});this.credentials=new Set();this.deviceGrants=new WeakMap();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
  }
  async recoverProjectRename(client,projectId,options){return this.renames.recover(client,projectId,options);}
  async registry(){
@@ -131,7 +132,30 @@ export class ProjectApplication{
   return this.registryOwner??=new ProjectRegistry(this.workspace,value.workspaceId);
  }
  session(client){if(!client||typeof client!=='object')throw new AppError('AUTH');let session=this.sessions.get(client);if(!session){session=new Map();this.sessions.set(client,session);}return session;}
- forget(session,id){const caches=retireQueryCacheScope(session);if(researchId(id))for(const [key,value] of session)if(key.startsWith('book:'+id+':')&&!value.locked)this.forget(session,key);this.calendars.forget(session,id);const old=session.get(id);if(old?.vault){clearVault(old.vault);this.credentials.delete(old);}session.delete(id);return caches;}
+ forget(session,id){const caches=retireQueryCacheScope(session);this.forgetDeviceGrant(session,id);if(researchId(id))for(const [key,value] of session)if(key.startsWith('book:'+id+':')&&!value.locked)this.forget(session,key);this.calendars.forget(session,id);const old=session.get(id);if(old?.vault){clearVault(old.vault);this.credentials.delete(old);}session.delete(id);return caches;}
+ // Unlocking with this device's key asks the platform secret store (DPAPI on
+ // Windows, a separate process) every time. Within one session, the derived
+ // key of a project or book is reused while its keyring is unchanged: same
+ // folder and same access file (etag), for at most a few minutes. Callers still
+ // authenticate the keyring with it on every request; a lock, a forgotten
+ // grant, a changed keyring, a move or the expiry derives it again.
+ async deviceUnlock(session,id,root,access){
+  let grants=this.deviceGrants.get(session);const cached=grants?.get(id);
+  // The device's trusted keyring is still consulted, so a rolled-back access
+  // file never matches a grant derived from a newer one.
+  if(cached&&cached.root===root&&cached.etag===access.etag&&cached.vault.id===access.value.vaultId&&cached.expires>Date.now()&&this.credentials.has(cached)&&(await resolveAccess(access,{deviceStore:this.deviceStore})).etag===access.etag&&grants.get(id)===cached&&this.credentials.has(cached))return cloneVault(cached.vault);
+  this.forgetDeviceGrant(session,id);
+  const vault=await verifyAccess(access,'','',{deviceStore:this.deviceStore});
+  if(this.closed||!vault||session.get(id)?.locked)return vault;
+  this.forgetDeviceGrant(session,id);if(!grants){grants=new Map();this.deviceGrants.set(session,grants);}
+  const grant={root,etag:access.etag,vault:cloneVault(vault),expires:Date.now()+DEVICE_GRANT_MS};grants.set(id,grant);this.credentials.add(grant);
+  return vault;
+ }
+ // Forgetting a project also forgets the device grants of its lab books.
+ forgetDeviceGrant(session,id){
+  const grants=this.deviceGrants.get(session);if(!grants)return;
+  for(const [key,grant] of [...grants])if(key===id||researchId(id)&&key.startsWith('book:'+id+':')){grants.delete(key);this.credentials.delete(grant);void clearVault(grant.vault);}
+ }
  async tracked(operation,projectId,labBookId){
   if(this.closed)throw new AppError('ACCESS_LOCKED');let release;const active=new Promise(resolve=>release=resolve);this.active.set(active,{projectId,labBookId});
   try{return await operation();}finally{this.active.delete(active);release();}

@@ -20,7 +20,10 @@ test('import a protected project tree in its section and resume after navigation
  const original=ProjectImports.prototype.run;
  try{
   const metadata=createNotebook('Workspace',''),f=await encryptedFixture(path.join(directory,'workspace'),metadata);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,metadata.id),research=sampleNotebook(),project=research.projects[0];research.title=project.title='Portable field research';
-  const grant=await createWorkspaceAccess('','Root password',f.deviceStore),vault=takeCreatedVault(grant);vaults.push(vault);const source=await initializeProjectLocation(path.join(directory,project.title),project.id,research,grant,vault),before=await source.outline();
+  const grant=await createWorkspaceAccess('','Root password',f.deviceStore),vault=takeCreatedVault(grant);vaults.push(vault);
+  // The imported folder is a project of another open workspace: every project lives in one.
+  const sourceHome=await encryptedFixture(path.join(directory,'source'),createNotebook('Source workspace',''));vaults.push(sourceHome.vault);await sourceHome.workspace.outline();
+  const source=await initializeProjectLocation(path.join(sourceHome.workspace.root,project.title),project.id,research,grant,vault),before=await source.outline();
   const foreign=new TestDeviceStore({file:path.join(directory,'original-device')}),childGrant=await createWorkspaceAccess('','Child password',foreign),childVault=takeCreatedVault(childGrant);vaults.push(childVault);const childData=createNotebook('Child Project'),childId=randomUUID();childData.projects=[{id:childId,title:childData.title,parentId:null,description:'',share:false,logoId:null}];const child=await initializeProjectLocation(path.join(source.root,childData.title),childId,childData,childGrant,childVault);
   const book=await new LabBookCreation(child,foreign).create({id:randomUUID(),username:'',password:'Book password',book:{id:randomUUID(),projectId:childId,title:'Experiment Notes'}});
   let entered;const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);let hold=true,interrupt=true;

@@ -16,7 +16,6 @@ import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
 import {removeRetiredProject,retirementCheck} from './owned-storage-retirement.js';
 import {relocationOwnerRoot,relocationOwnerId,assertNativeRelocationDatabases} from './native-relocation-owners.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {AppError} from './errors.js';
@@ -54,7 +53,7 @@ export class NativeRelocationTransfer{
     const marker=await moveSource(scope.source);if(marker&&(marker.id!==value.id||marker.destination!==scope.destination))throw new AppError('STORAGE_MOVE_STATE');await assertNativeRelocationDatabases(scope.source,this.owners);
     for await(const item of this.owners.entries({reverse:true}))await this.selected.use(scope.source,item,async storage=>{
      await assertProjectMoveDirectory(storage.root,item.identity);const descriptor=path.basename(await workspaceFile(storage.root));for await(const child of await opendir(storage.root))if(!['.observanda',descriptor].includes(child.name)){const relative=path.posix.join(item.relative,child.name);if(!child.isDirectory()||!await this.owners.get(relative))throw new AppError('STORAGE_MOVE_CONTENTS');}if((await catalogueBinding(storage.root))?.id!==item.sourceId||(await workspaceRename(storage.root))?.id!==value.id)throw new AppError('STORAGE_MOVE_STATE');const provider=databaseProvider(),method=item.kind==='project'?'stopProjectForRename':'stopLabBookForRename';if(!provider?.[method])throw new AppError('DATABASE_LOCATION');if(!marker)await provider[method](storage.root,relocationOwnerId(item),storage.vault,value.id);
-     const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));try{await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,relocationOwnerId(item),storage.vault);}finally{await lease.close();}await this.checkpoint('source-owner-stopped',value,item.relative);
+     await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,relocationOwnerId(item),storage.vault);await this.checkpoint('source-owner-stopped',value,item.relative);
     },{keysRoot:scope.destination,identity:false});
     await atomicWrite(path.join(scope.source,MOVE_SOURCE),serialize({id:value.id,destination:scope.destination}));await this.checkpoint('retire-frozen',value);await this.check();await rename(scope.source,retired);await this.checkpoint('source-retired',value);
    }
@@ -65,6 +64,11 @@ export class NativeRelocationTransfer{
   // instead of once for every file beneath it.
   const owned=new Map(),isOwner=prefix=>{if(!owned.has(prefix))owned.set(prefix,this.owners.get(prefix).then(Boolean));return owned.get(prefix);};
   const ownerRelative=async relative=>{for(let prefix=path.posix.dirname(relative);prefix!=='.';prefix=path.posix.dirname(prefix))if(await isOwner(prefix))return relative.slice(prefix.length+1);return relative;};
-  const removed=retirementCheck(()=>this.check(root));await this.command.registry.workspace.withCatalogueConnections(()=>removeRetiredProject({...scope,sourceDirectory:root.identity},{ownerRelative,verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check(root));await this.checkpoint('retire:'+stage,value,...args);}}));await this.checkpoint('source-removed',value);
+  const removed=retirementCheck(()=>this.check(root));await this.command.registry.workspace.withCatalogueConnections(()=>removeRetiredProject({...scope,sourceDirectory:root.identity},{ownerRelative,verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check(root));await this.checkpoint('retire:'+stage,value,...args);}}));
+  // With the source folders removed, their catalogues leave the source
+  // workspace cluster. A repeated step finds nothing left to remove.
+  const provider=databaseProvider();if(!provider?.retireOwnerCatalogue)throw new AppError('DATABASE_LOCATION');
+  for await(const item of this.owners.entries({reverse:true}))await provider.retireOwnerCatalogue(relocationOwnerRoot(scope.source,item),relocationOwnerId(item),item.sourceId);
+  await this.checkpoint('source-removed',value);
  }
 }

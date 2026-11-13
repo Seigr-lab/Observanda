@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';import {randomUUID} from 'node:crypto';
-import {readFile,access,stat} from 'node:fs/promises';
+import {readFile,access,stat,mkdir} from 'node:fs/promises';
 import {fixture,calculation} from './project-domain-fixture.js';
 import {copyProjectLocation} from '../src/project-transfer.js';
 import {ProjectStorage} from '../src/project-storage.js';
@@ -14,7 +14,7 @@ import {CATALOGUE_ARCHIVE,catalogueBinding} from '../src/postgres-activation.js'
 const save=(f,command)=>f.domains.run(['calculator'],get=>executeModuleCommand(workspaceModules(f.storage),get('calculator'),{book:f.book},command,moduleCommandFingerprint(command),{compact:true}),{write:['calculator']});
 for(const portable of [false,true])test('changed '+(portable?'portable archive':'physical project')+' snapshots include independently saved module data',async t=>{
  const f=await fixture(t);await f.domains.initialize(['calculator']);const first=calculation(f);await save(f,first);
- const id=randomUUID(),destination=path.join(f.root,portable?'backup':'copy'),relative='.observanda/retained.bin';await f.storage.writeFile(path.join(f.storage.root,relative),'unchanged evidence');
+ const id=randomUUID(),destination=path.join(f.workspace.root,portable?'backup':'copy',path.basename(f.storage.root)),relative='.observanda/retained.bin';await f.storage.writeFile(path.join(f.storage.root,relative),'unchanged evidence');await mkdir(path.dirname(destination),{recursive:true});
  await assert.rejects(copyProjectLocation(f.storage,destination,{id,portable,checkpoint:async stage=>{if(stage==='database')throw Error('First snapshot');}}),/First snapshot/);
  const original=portable?await readFile(path.join(destination,CATALOGUE_ARCHIVE)):null,unchanged=await stat(path.join(destination,relative)),head=(await f.storage.outline()).etag;
  const second=calculation(f);await save(f,second);assert.equal((await f.storage.outline()).etag,head);

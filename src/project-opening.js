@@ -13,8 +13,9 @@ import {ProjectStorage} from './project-storage.js';
 import {readAccess,verifyAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
-// Registered projects reopen in place. A newly selected folder enters the
-// recoverable import workflow so its physical nesting matches the workspace.
+// Registered projects reopen in place, always inside the workspace folder; a
+// registered location outside it is refused. Any other selected folder enters
+// the recoverable import workflow, which brings it inside the workspace.
 export class ProjectOpening{
  constructor(registry,deviceStore){this.registry=registry;this.deviceStore=deviceStore;}
  async open(command,options={}){

@@ -1,7 +1,7 @@
 import {ProjectOpening} from '../src/project-opening.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,readFile,access,rename} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,readFile,readdir,access,rename} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -22,21 +22,22 @@ async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-creation-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];
  t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-creation-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const f=await encryptedFixture(path.join(directory,'workspace'),sampleNotebook());vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id),creation=new ProjectCreation(registry,f.deviceStore);
- const command=name=>({id:randomUUID(),path:path.join(f.workspace.root,name),project:{id:randomUUID(),title:name,description:'Private project description',parentId:null,share:false,logoId:null,kind:'Custom project',tools:[]},username:'',password:''});
+ // A project is always created in its parent's folder; a command carries no location.
+ const command=name=>({id:randomUUID(),project:{id:randomUUID(),title:name,description:'Private project description',parentId:null,share:false,logoId:null,kind:'Custom project',tools:[]},username:'',password:''});
  const open=async entry=>{const vault=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(vault);return new ProjectStorage(entry.root,entry.projectId,vault);};
  return {...f,directory,registry,creation,command,open,owner};
 }
 test('creation interrupted before registry attachment reopens one project without overwriting its edits',async t=>{
- const f=await fixture(t),command=f.command('portable'),attach=f.registry.attach.bind(f.registry);let failed=false;
+ const f=await fixture(t),command=f.command('portable'),root=path.join(f.workspace.root,'portable'),attach=f.registry.attach.bind(f.registry);let failed=false;
  f.registry.attach=async(...args)=>{if(!failed){failed=true;throw Error('Interrupted before registry attachment');}return attach(...args);};
  await assert.rejects(f.creation.create(command),/Interrupted before registry attachment/);assert.equal((await f.registry.read()).value.projects.length,0);
- const project=await f.open({root:command.path,projectId:command.project.id});await project.update(book=>{book.projects[0].description='Edited after creation';return book;});const edited=(await project.outline()).etag;
- await f.owner.closeProject(command.path);
+ const project=await f.open({root,projectId:command.project.id});await project.update(book=>{book.projects[0].description='Edited after creation';return book;});const edited=(await project.outline()).etag;
+ await f.owner.closeProject(root);
  const resumed=await new ProjectCreation(f.registry,f.deviceStore).create(command);assert.equal(resumed.project.projectId,command.project.id);assert.equal((await project.outline()).etag,edited);
  assert.equal((await f.registry.read()).value.projects.length,1);
  const reordered=Object.fromEntries(Object.entries(command).reverse());assert.deepEqual(await f.creation.create(reordered),resumed);assert.equal((await project.outline()).etag,edited);
  await assert.rejects(f.creation.create({...command,project:{...command.project,title:'Different request'}}),{code:'CONFLICT'});
- const journal=await readFile(path.join(f.workspace.root,'.observanda/project-created',command.id+'.obsv'));assert.ok(!journal.includes(Buffer.from('Private project description')));assert.ok(!journal.includes(Buffer.from(command.path)));
+ const journal=await readFile(path.join(f.workspace.root,'.observanda/project-created',command.id+'.obsv'));assert.ok(!journal.includes(Buffer.from('Private project description')));assert.ok(!journal.includes(Buffer.from(root)));
 });
 test('project creation has independent keys and serializes only registry attachment',async t=>{
  const f=await fixture(t),a=f.command('parent'),b=f.command('sibling');let release,entered;
@@ -48,8 +49,8 @@ test('project creation has independent keys and serializes only registry attachm
   try{second=await f.creation.create(b);}finally{continueFirst();}
   const first=await firstRequest,one=await f.open(first.project),two=await f.open(second.project);
   assert.notEqual(one.vault.id,two.vault.id);assert.notEqual(one.vault.id,f.vault.id);assert.ok(!one.vault.key.equals(two.vault.key));
-  const child=f.command('child');child.project.parentId=first.project.projectId;child.path=path.join(first.project.root,child.project.title);const created=await f.creation.create(child);assert.equal(created.project.parentId,first.project.projectId);assert.equal((await(await f.open(created.project)).outline()).metadata.projects[0].parentId,null);
-  const wrong=f.command('nested');wrong.path=path.join(one.root,'other');await assert.rejects(f.creation.create(wrong),{code:'STORAGE_PATH'});assert.equal((await f.registry.read()).value.projects.length,3);
+  const child=f.command('child');child.project.parentId=first.project.projectId;const created=await f.creation.create(child);assert.equal(created.project.parentId,first.project.projectId);assert.equal(created.project.root,path.join(first.project.root,child.project.title));assert.equal((await(await f.open(created.project)).outline()).metadata.projects[0].parentId,null);
+  const wrong={...f.command('nested'),path:path.join(one.root,'other')};await assert.rejects(f.creation.create(wrong),{code:'INVALID'});await assert.rejects(access(wrong.path),{code:'ENOENT'});assert.equal((await f.registry.read()).value.projects.length,3);
  }finally{release();await busy;}
 });
 
@@ -57,7 +58,7 @@ test('competing creation requests for one project identity create only one root'
  const f=await fixture(t),a=f.command('first'),b=f.command('duplicate');b.project.id=a.project.id;
  const values=await Promise.allSettled([f.creation.create(a),f.creation.create(b)]);assert.equal(values.filter(value=>value.status==='fulfilled').length,1);assert.equal(values.find(value=>value.status==='rejected').reason.code,'EXISTS');
  const winner=values[0].status==='fulfilled'?a:b,loser=winner===a?b:a;
- await access(winner.path);await assert.rejects(access(loser.path),{code:'ENOENT'});assert.equal((await f.registry.read()).value.projects.length,1);
+ await access(path.join(f.workspace.root,winner.project.title));await assert.rejects(access(path.join(f.workspace.root,loser.project.title)),{code:'ENOENT'});assert.equal((await f.registry.read()).value.projects.length,1);
 });
 
 
@@ -88,56 +89,59 @@ test('unfinished creation is discoverable and resumes after restart with the ori
 test('creation discovery finalizes interrupted acknowledgement after the adopted project was edited and moved',async t=>{
  const f=await fixture(t),command=f.command('adopted'),finish=f.creation.finish.bind(f.creation);f.creation.finish=async()=>{throw Error('Lost creation acknowledgement');};await assert.rejects(f.creation.create(command),/Lost creation acknowledgement/);f.creation.finish=finish;
  const entry=await f.registry.locate(command.project.id),storage=await f.open(entry);await storage.update(book=>{book.projects[0].description='Changed after adoption';return book;});const retained=(await storage.outline()).etag;
- await f.owner.closeProject(entry.root);const destination=path.join(f.directory,'relocated');await rename(entry.root,destination);const moved=new ProjectStorage(destination,entry.projectId,storage.vault);await f.registry.relocate(moved,{from:entry.root,expected:(await f.registry.read()).revision});
+ await f.owner.closeProject(entry.root);const destination=path.join(f.workspace.root,'relocated');await rename(entry.root,destination);const moved=new ProjectStorage(destination,entry.projectId,storage.vault);await f.registry.relocate(moved,{from:entry.root,expected:(await f.registry.read()).revision});
  const restarted=new ProjectCreation(f.registry,f.deviceStore);assert.deepEqual(await restarted.pending(),{items:[],next:null});const result=await restarted.resume({id:command.id,username:'',password:''});assert.equal(result.project.root,destination);assert.equal((await moved.outline()).etag,retained);await assert.rejects(access(entry.root),{code:'ENOENT'});assert.equal((await restarted.read(command.id)).intent.version,2);
 });
 
 
 test('a project inside its workspace has independent storage and can be reopened',async t=>{
- const f=await fixture(t),command=f.command('Local Project 1');command.path=path.join(f.workspace.root,command.project.title);
+ const f=await fixture(t),command=f.command('Local Project 1');
  const {project}=await f.creation.create(command),owned=await f.open(project);
- assert.equal(project.root,command.path);assert.notEqual(owned.vault.id,f.workspace.vault.id);
+ assert.equal(project.root,path.join(f.workspace.root,command.project.title));assert.notEqual(owned.vault.id,f.workspace.vault.id);
  assert.equal((await owned.outline()).metadata.projects[0].title,'Local Project 1');
- const serialized=JSON.parse(await f.workspace.readFile(f.registry.file,'utf8'));
- assert.deepEqual(serialized.projects[0].root,{relative:'Local Project 1'});
+ // The registry stores the location relative to the workspace, never the absolute folder.
+ const raw=await f.workspace.readFile(f.registry.file,'utf8'),stored=await f.registry.directoryOwner.access.read(({directory,value:head})=>directory.find(head,project.projectId,{decode:false}));
+ assert.ok(!raw.includes(JSON.stringify(f.workspace.root).slice(1,-1)));assert.deepEqual(stored.entry.root,{relative:'Local Project 1'});
  await f.owner.closeProject(project.root);
  const reopened=await new ProjectOpening(f.registry,f.deviceStore).open({id:randomUUID(),path:project.root,username:'',password:'',recovery:''});
  assert.equal(reopened.project.namespaceId,project.namespaceId);
- await mkdir(path.join(f.workspace.root,'Files','.observanda'),{recursive:true});
- for(const input of [f.workspace.root,f.directory,path.join(f.workspace.root,'.observanda','Other'),path.join(f.workspace.root,'Files','.observanda','Other'),path.join(project.root,'Other')]){
-  const rejected={...f.command('Other'),path:input};await assert.rejects(f.creation.create(rejected),{code:'STORAGE_PATH'});
+ // Creation offers no location choice: a command naming any folder is refused.
+ for(const input of [f.workspace.root,f.directory,path.join(f.workspace.root,'.observanda','Other'),path.join(f.workspace.root,'Other'),path.join(project.root,'Other')]){
+  const rejected={...f.command('Other'),path:input};await assert.rejects(f.creation.create(rejected),{code:'INVALID'});
  }
+ await assert.rejects(access(path.join(f.workspace.root,'Other')),{code:'ENOENT'});assert.deepEqual((await f.creation.pending()).items,[]);
  assert.equal((await f.registry.read()).value.projects.length,1);
 });
 
 
-test('project creation rejects folder/title disagreement and invalid literal names',async t=>{
- const f=await fixture(t),request=f.command('Field Project 1');request.path=path.join(f.workspace.root,'Field-Project-1');
- await assert.rejects(f.creation.create(request),{code:'STORAGE_NAME_MISMATCH'});
+test('project creation names its folder after the title and rejects invalid literal names',async t=>{
+ const f=await fixture(t),request={...f.command('Field Project 1'),path:path.join(f.workspace.root,'Field-Project-1')};
+ await assert.rejects(f.creation.create(request),{code:'INVALID'});
  await assert.rejects(access(request.path),{code:'ENOENT'});
  assert.deepEqual((await f.creation.pending()).items,[]);
  assert.equal((await f.registry.read()).value.projects.length,0);
+ const folders=(await readdir(f.workspace.root)).sort();
  for(const title of ['A/B',' Leading','Trailing ','..']){
   const invalid={...f.command('Invalid'),project:{...request.project,id:randomUUID(),title}};
   await assert.rejects(f.creation.create(invalid),{code:'FOLDER_NAME'});
-  await assert.rejects(access(invalid.path),{code:'ENOENT'});
+  assert.deepEqual((await readdir(f.workspace.root)).sort(),folders,title);
  }
- const valid=f.command('Field Project 1');valid.path=path.join(f.workspace.root,valid.project.title);
+ const valid=f.command('Field Project 1');
  const result=await f.creation.create(valid);
- assert.equal(path.basename(result.project.root),'Field Project 1');
+ assert.equal(result.project.root,path.join(f.workspace.root,'Field Project 1'));
  assert.equal(result.project.summary.title,'Field Project 1');
  assert.equal((await (await f.open(result.project)).outline()).metadata.projects[0].title,'Field Project 1');
 });
 
 
-test('project creation derives literal child folders when no path is supplied',async t=>{
- const f=await fixture(t),parent=f.command('Field Project 1');delete parent.path;
+test('project creation derives literal child folders and accepts no other location',async t=>{
+ const f=await fixture(t),parent=f.command('Field Project 1');
  const first=await f.creation.create(parent);assert.equal(first.project.root,path.join(f.workspace.root,parent.project.title));
- const child=f.command('Measurement notes 2');delete child.path;child.project.parentId=first.project.projectId;
+ const child=f.command('Measurement notes 2');child.project.parentId=first.project.projectId;
  const second=await f.creation.create(child);assert.equal(second.project.root,path.join(first.project.root,child.project.title));
  await f.owner.closeProject(second.project.root);
  const opened=await new ProjectOpening(f.registry,f.deviceStore).open({id:randomUUID(),path:second.project.root,username:'',password:'',recovery:''});assert.equal(opened.project.parentId,first.project.projectId);
- const rejected=f.command('Elsewhere');rejected.path=path.join(f.directory,'Elsewhere');await assert.rejects(f.creation.create(rejected),{code:'STORAGE_PATH'});
+ const rejected={...f.command('Elsewhere'),path:path.join(f.directory,'Elsewhere')};await assert.rejects(f.creation.create(rejected),{code:'INVALID'});await assert.rejects(access(rejected.path),{code:'ENOENT'});
 });
 
 
@@ -158,7 +162,7 @@ test('selected project creation remains bounded as unrelated retained records gr
     const base={...book.entries[2],relations:[],sections:[],figures:[],attachments:[],body:'Unrelated retained observation. '.repeat(40)};
     while(book.entries.length<count){const index=book.entries.length;book.entries.push({...structuredClone(base),id:randomUUID(),title:'Unrelated observation '+index});}return book;
    });
-   const before=await f.workspace.outline(),command=f.command('Selected Project '+count),metric={unrelatedRecords:count,destination:command.path,opened:0,closed:0,active:0,peakConnections:0,queries:0,unrelatedReads:0};
+   const before=await f.workspace.outline(),command=f.command('Selected Project '+count),metric={unrelatedRecords:count,destination:path.join(f.workspace.root,command.project.title),opened:0,closed:0,active:0,peakConnections:0,queries:0,unrelatedReads:0};
    measuring=metric;const started=performance.now();let result;
    try{result=await f.creation.create(command);}finally{metric.elapsedMs=Math.round(performance.now()-started);measuring=null;}
    assert.ok(metric.elapsedMs<30000,'Selected creation exceeded its 30-second local request budget');assert.equal(metric.unrelatedReads,0);assert.equal(metric.opened,metric.closed);assert.equal(metric.active,0);assert.ok(metric.opened<=64);assert.ok(metric.peakConnections<=4);assert.equal(databaseCapacity().active,0);

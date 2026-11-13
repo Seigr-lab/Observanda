@@ -1,3 +1,4 @@
+import {outsideNativeDestinations} from './native-destination.js';
 import {AsyncResource,AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -426,7 +427,7 @@ export class PublicationConversion{
   // The research DB commit and the subsequent saved-file publication share
   // this owner lease. A second editor cannot supersede the first token
   // between those two commits. Other research owners remain independent.
-  return runWebsiteUpgrade(this.files,name,operation,{shareResult:false,signal});
+  return runWebsiteUpgrade(this.files,name,()=>outsideNativeDestinations(operation),{shareResult:false,signal});
  }
  async mutateTargets(storage,{route,data},targets,operation,hooks={}){
   targets.tagsOnly=route==='/api/research/records/tags';

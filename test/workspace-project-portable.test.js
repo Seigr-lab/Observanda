@@ -28,15 +28,16 @@ import {changeKeyringPassword,recoveryKey} from '../src/security/keyring.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
+import {assertOwnersInCluster} from './owner-workspace-fixture.js';
 import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 
-test('portable workspace archives restore external and nested projects, exact PDF editions and independently protected books',{timeout:600000},async t=>{
+test('portable workspace archives restore independent and nested projects, exact PDF editions and independently protected books',{timeout:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portable-owners-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),f=await encryptedFixture(directory,sampleNotebook()),vaults=[f.vault],owners=new Map(),before=new Map(),password='Each exported project password';let placement,app;
  t.after(async()=>{await app?.close();await provider.close();detach();for(const key of vaults)await clearVault(key);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-portable-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  placement=await workspaceDestinationFixture(directory);
  const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
  const make=async(root,parentId=null)=>{await mkdir(path.dirname(root),{recursive:true});const book=sampleNotebook(),grant=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(grant);vaults.push(vault);book.title=book.projects[0].title=path.basename(root);const owner=await initializeProjectLocation(root,book.projects[0].id,book,grant,vault);await registry.attach(owner,{parentId,expected:(await registry.read()).revision});owners.set(owner.projectId,owner);before.set(owner.projectId,await owner.read());return owner;};
- const external=await make(path.join(directory,'External Project')),externalChild=await make(path.join(external.root,'Child observations 2'),external.projectId),parent=await make(path.join(f.workspace.root,'Parent Project')),child=await make(path.join(parent.root,'Child Project'),parent.projectId),destination=path.join(placement.root,'Portable Workspace');let failAt='project';
+ const external=await make(path.join(f.workspace.root,'Independent Project')),externalChild=await make(path.join(external.root,'Child observations 2'),external.projectId),parent=await make(path.join(f.workspace.root,'Parent Project')),child=await make(path.join(parent.root,'Child Project'),parent.projectId),destination=path.join(placement.root,'Portable Workspace');let failAt='project';
  const namespace=before.get(externalChild.projectId).book.id,documents=new PdfDocuments(externalChild,namespace);
  const id=randomUUID(),header={version:1,id,name:'Instrument survey',language:'en',direction:'ltr',layout:pdfLayoutPreset()};
  const section={id:randomUUID(),title:'Measurement',content:'Mass after calibration: 15.03 g.',layout:null,start:null};
@@ -65,7 +66,7 @@ test('portable workspace archives restore external and nested projects, exact PD
  const receipt=await new WorkspaceCopyRecovery(f.workspace,destination).read();assert.equal(receipt.version,4);assert.equal(receipt.directory.revision,receipt.plan.projectRegistryRevision);assert.equal(receipt.transfers,undefined);assert.equal(receipt.adoptions,undefined);assert.equal(receipt.plan.projectRoots,undefined);assert.ok(Buffer.byteLength(serialize(receipt))<16384);
  for(const root of [destination,...locations.map(entry=>entry.root)]){assert.equal(await catalogueBinding(root),null);await access(path.join(root,CATALOGUE_ARCHIVE));await assert.rejects(access(path.join(root,'.observanda/postgresql')),{code:'ENOENT'});}
  const registryBytes=JSON.parse(await exported.readFile(saved.file,'utf8'));assert.equal(registryBytes.version,8);assert.equal(registryBytes.projects,undefined);assert.equal(serialize(registryBytes).includes(f.workspace.root),false);assert.deepEqual(await f.workspace.read(),sourceBefore);
- await provider.closeLabBook(bookOwner.root);await provider.closeProject(child.root);await provider.closeProject(parent.root);await provider.closeProject(externalChild.root);await provider.closeProject(external.root);await provider.closeWorkspace(f.workspace.root);await rename(f.workspace.root,path.join(directory,'source unavailable'));await rename(external.root,path.join(directory,'external unavailable'));
+ await provider.closeLabBook(bookOwner.root);await provider.closeProject(child.root);await provider.closeProject(parent.root);await provider.closeProject(externalChild.root);await provider.closeProject(external.root);await provider.closeWorkspace(f.workspace.root);const sourceCluster=(await catalogueBinding(f.workspace.root)).cluster;await rename(f.workspace.root,path.join(directory,'source unavailable'));
  assert.equal(await bundle().exportPortable(destination),destination);assert.equal(await catalogueBinding(destination),null);
  const media=path.join(placement.root,'Detached backup');await rename(destination,media);
  const moved=path.join(placement.root,'Another Computer Workspace'),stranger=new TestDeviceStore({file:path.join(directory,'another-device')});await stranger.identity();
@@ -81,7 +82,9 @@ test('portable workspace archives restore external and nested projects, exact PD
   assert.deepEqual(await restoredEditions.read('sections',{id,revision:edition.revision}),edition.sections);
  }
  const internalParent=await restoredRegistry.locate(parent.projectId),externalParent=await restoredRegistry.locate(external.projectId);
- assert.equal(externalParent.root,path.join(moved,'External Project'));assert.equal(path.dirname(restoredParent.root),externalParent.root);assert.equal(path.basename(restoredParent.root),'Child observations 2');
+ assert.equal(externalParent.root,path.join(moved,'Independent Project'));assert.equal(path.dirname(restoredParent.root),externalParent.root);assert.equal(path.basename(restoredParent.root),'Child observations 2');
  const tree=selectProjectTree({root:externalParent.root,projectId:external.projectId,vault:external.vault},(await restoredRegistry.read()).value.projects);assert.deepEqual(tree.entries.map(entry=>entry.projectId),[externalChild.projectId]);
  assert.equal(path.dirname((await restoredRegistry.locate(child.projectId)).root),internalParent.root);assert.equal((await restoredRegistry.locate(child.projectId)).parentId,parent.projectId);
+ // Every restored project activated from its archive in the restored workspace's new cluster.
+ await assertOwnersInCluster(moved,(await restoredRegistry.read()).value.projects.map(entry=>entry.root),{notCluster:sourceCluster});
 });

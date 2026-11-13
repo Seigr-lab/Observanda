@@ -16,6 +16,7 @@ import {startServer} from '../src/server.js';
 import {Workspace} from '../src/storage.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
+import {assertArchiveCopy,importLabBookCopy} from './owner-workspace-fixture.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 import {RecordWriting} from '../src/record-writing.js';
 import {recordRevision} from '../src/research.js';
@@ -46,7 +47,10 @@ test('nested owners retain concurrent work, evidence and links through rename, p
   const raw=(route,{method='GET',body,headers={}}={})=>fetch(server.origin+route,{signal:AbortSignal.timeout(180000),method,body,headers:{Origin:server.origin,'X-Observanda-Session':cookie,...(context?{'X-Observanda-Workspace':context}:{}),...headers}});
   const call=async(route,data)=>{
    const response=await raw(route,data===undefined?{}:{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json','X-Observanda-Wait':'1'}});
-   assert.equal(response.status,200,route+': '+await response.clone().text());return response.json();
+   // A failure names where the server refused or failed: its diagnostics keep
+   // only codes and the application's source positions.
+   if(response.status!==200){const report=await (await raw('/api/diagnostics')).json().catch(()=>({}));assert.fail(route+': '+await response.text()+' '+JSON.stringify((report.entries??[]).filter(entry=>['unexpected-error','native-storage-error','state-refusal'].includes(entry.event))));}
+   return response.json();
   };
   context=(await call('/api/storage')).contextId;return {call,raw,adopt:value=>{context=value.contextId;},context:()=>context};
  }
@@ -65,7 +69,8 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  for(const [index,owner] of [...projects,...books].entries()){
   const binding=bindings[index+1];assert.equal(binding.placement,index<3?'project':'lab-book');
   assert.equal(binding[index<3?'projectId':'labBookId'],index<3?owner.projectId:owner.labBookId);
-  assert.ok((await stat(path.join(owner.root,'.observanda/postgresql/data/PG_VERSION'))).isFile());
+  // Every owner's schema is in the workspace cluster; no owner runs its own.
+  assert.equal(binding.cluster,bindings[0].cluster);await assert.rejects(stat(path.join(owner.root,'.observanda/postgresql')),{code:'ENOENT'});
  }
  const records=books.map((book,index)=>({...structuredClone(sampleNotebook().entries[0]),id:randomUUID(),notebookId:book.labBookId,title:'Observation '+index,body:'Original observation '+index,attachments:[],figures:[],relations:[],sections:[]}));
  for(const [index,book] of books.entries())await api.call(bookRoute(book)+'/research/records/save',{workspaceId:book.namespaceId,changes:[{id:records[index].id,expectedRevision:null,record:records[index]}]});
@@ -118,10 +123,12 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  t.diagnostic('Workspace, project and book renamed; selected book and complete project copied and moved');
  await server.close();server=null;await restartDatabases();
  assert.equal(path.dirname(root),directory);await rename(root,path.join(directory,'Original workspace unavailable'));await assert.rejects(stat(root),{code:'ENOENT'});
- // The standalone selected-book copy remains readable without either parent.
+ // The selected-book copy outside every workspace is a self-contained archive;
+ // brought into another workspace it opens with its data, without either parent.
+ await assertArchiveCopy(copiedBook);
  const copiedKey=await verifyAccess(await readAccess(copiedBook),'','',{deviceStore:device});keys.push(copiedKey);
- const independentBook=new LabBookStorage(copiedBook,books[0].labBookId,copiedKey);
- assert.equal((await independentBook.read()).book.entries[0].body,'Later observation 0');await provider.closeLabBook(copiedBook);
+ const independentBook=await importLabBookCopy(directory,{deviceStore:device,source:copiedBook,password:'',labBookId:books[0].labBookId,vault:copiedKey,vaults:keys,name:'Copy reader'});
+ assert.equal((await independentBook.read()).book.entries[0].body,'Later observation 0');await provider.closeLabBook(independentBook.root);
  const receiving=await initialize('Receiving Workspace 3');api=await open(receiving.root);
  const imported=await api.call('/api/projects/open',{id:randomUUID(),path:copiedProject,parentId:null,username:'',password:'',recovery:'',owners:[]});
  assert.equal(imported.project.root,path.join(receiving.root,'Renamed Field Project 1'));

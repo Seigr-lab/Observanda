@@ -19,14 +19,17 @@ import {LabBookRegistry} from '../src/lab-book-registry.js';
 import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {ResearchMaterials} from '../src/research-materials.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {workspaceRename} from '../src/workspace-rename-state.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-rename-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
  t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-rename-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);vaults.push(ownerHome.vault);
  const model=createNotebook('Field Project 1'),projectId=randomUUID();model.projects=[{id:projectId,title:model.title,parentId:null,description:'',share:false,logoId:null}];
- const project=await initializeProjectLocation(path.join(directory,model.title),projectId,model,access,vault),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);
+ const project=await initializeProjectLocation(path.join(ownerHome.root,model.title),projectId,model,access,vault),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);
  async function create(title){const {book}=await new LabBookCreation(project,device).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title}}),key=await verifyAccess(await readAccess(book.root),'','',{deviceStore:device});vaults.push(key);return new LabBookStorage(book.root,book.labBookId,key);}
  return {project,registry,renames,create};
 }

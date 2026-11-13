@@ -12,6 +12,7 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 
 test('book registration is independent of project writes and remains relative after parent relocation',async t=>{
@@ -19,7 +20,9 @@ test('book registration is independent of project writes and remains relative af
  t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-directory-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  async function accessFor(){const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(parent,randomUUID()+'.device')})),vault=takeCreatedVault(access);vaults.push(vault);return {access,vault};}
  const projectBook=sampleNotebook();projectBook.title='Field Project 1';projectBook.projects[0].title='Field Project 1';projectBook.notebooks=[];projectBook.entries=[];
- const projectRoot=path.join(parent,'Research Workspace 1','Field Project 1');await mkdir(path.dirname(projectRoot),{recursive:true});const credentials=await accessFor(),project=await initializeProjectLocation(projectRoot,projectBook.projects[0].id,projectBook,credentials.access,credentials.vault),registry=new LabBookRegistry(project);
+ // Every owner lives in an open workspace and uses its single cluster.
+ const ownerHome=await ownerWorkspace(parent,{name:'Research Workspace 1'});vaults.push(ownerHome.vault);
+ const projectRoot=path.join(ownerHome.root,'Field Project 1');const credentials=await accessFor(),project=await initializeProjectLocation(projectRoot,projectBook.projects[0].id,projectBook,credentials.access,credentials.vault),registry=new LabBookRegistry(project);
  async function makeBook(title,root=path.join(projectRoot,title)){
   const book=sampleNotebook();book.title=title;book.projects=[{...projectBook.projects[0]}];book.notebooks[0].projectId=project.projectId;book.notebooks[0].title=title;
   const {access,vault}=await accessFor();await mkdir(path.join(root,'.observanda'),{recursive:true});await writeFile(path.join(root,'.observanda/access.json'),JSON.stringify(access));const storage=new LabBookStorage(root,book.notebooks[0].id,vault);await storage.initializeResearch(book);return storage;
@@ -36,10 +39,10 @@ test('book registration is independent of project writes and remains relative af
  const page=await registry.list({limit:1});assert.equal(page.items.length,1);assert.ok(page.next);const last=await registry.list({after:page.next,limit:1,revision:page.revision});assert.equal(last.items.length,1);assert.equal(last.next,null);assert.notEqual(last.items[0].labBookId,page.items[0].labBookId);
  await assert.rejects(registry.change(saved.revision,value=>{value.books[0].directory='../escape';return value;}),{code:'FORMAT'});
  await assert.rejects(registry.change(saved.revision,value=>{value.books[1].directory=value.books[0].directory;return value;}),{code:'FORMAT'});
- const wrong=await makeBook('Outside Book',path.join(parent,'Outside Book'));await assert.rejects(registry.attach(wrong,{expected:saved.revision}),{code:'DATABASE_LOCATION'});
+ const wrong=await makeBook('Outside Book',path.join(ownerHome.root,'Outside Book'));await assert.rejects(registry.attach(wrong,{expected:saved.revision}),{code:'DATABASE_LOCATION'});
  assert.deepEqual(await registry.read(),saved);
  for(const storage of [first,second])await owner.closeLabBook(storage.root);await owner.closeProject(project.root);
- const newWorkspace=path.join(parent,'Moved Workspace');await mkdir(newWorkspace);const moved=path.join(newWorkspace,'Field Project 1');await rename(project.root,moved);
+ const newWorkspace=path.join(ownerHome.root,'Moved Parent');await mkdir(newWorkspace);const moved=path.join(newWorkspace,'Field Project 1');await rename(project.root,moved);
  const reopened=new LabBookRegistry(new ProjectStorage(moved,project.projectId,project.vault)),located=await reopened.locate(first.labBookId);assert.equal(located.root,path.join(moved,'Field Book 1'));assert.deepEqual(await reopened.read(),saved);
  const book=new LabBookStorage(located.root,located.labBookId,first.vault);assert.equal((await book.outline()).metadata.notebooks[0].title,'Field Book 1');assert.equal((await reopened.namespace(located.namespaceId)).labBookId,located.labBookId);
 });

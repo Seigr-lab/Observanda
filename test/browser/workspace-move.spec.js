@@ -9,8 +9,18 @@ import {clearVault} from '../../src/encryption.js';
 import {preferences} from './preferences-helper.js';
 import {readPreferences} from '../../src/preferences.js';
 import {catalogueBinding} from '../../src/postgres-activation.js';
+import fs from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
+// The server moves a workspace folder with its cluster when the destination's
+// parent is on the same volume, and copies it otherwise. Report another volume.
+function acrossVolumes(parent){
+ const original=fs.stat;
+ fs.stat=async(target,...args)=>{const value=await original(target,...args);return path.resolve(String(target))===parent?Object.assign(Object.create(Object.getPrototypeOf(value)),value,{dev:value.dev+1}):value;};
+ syncBuiltinESMExports();return ()=>{fs.stat=original;syncBuiltinESMExports();};
+}
 import {Workspace} from '../../src/storage.js';
 
+// On the same volume the stopped workspace folder moves with its cluster and binding.
 test('Move starts from one action, survives a lost completion response, and leaves one usable workspace',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-move-browser-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'moved'),preferencesFile=path.join(directory,'preferences');
@@ -31,9 +41,10 @@ test('Move starts from one action, survives a lost completion response, and leav
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
-test('unfinished source cleanup is visible and retry completes without another transfer',async({page})=>{
+// Only a copy across volumes retires the original separately.
+test('across volumes, unfinished source cleanup is visible and retry completes without another transfer',async({page})=>{
  test.setTimeout(90000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-move-retry-ui-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'moved'),original=path.join(f.workspace.root,'.observanda','evidence.bin');
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-move-retry-ui-')),restoreStat=acrossVolumes(path.resolve(directory)),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'moved'),original=path.join(f.workspace.root,'.observanda','evidence.bin');
  await writeFile(original,'Reviewed evidence');const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore}),outline=Workspace.prototype.outline;let changed=false,transfers=0;
  Workspace.prototype.outline=async function(...args){const result=await outline.apply(this,args);if(this.root===destination&&!changed){changed=true;await writeFile(original,'Changed source evidence');}return result;};
  try{
@@ -43,7 +54,7 @@ test('unfinished source cleanup is visible and retry completes without another t
   await expect(dialog.getByRole('heading',{name:'Finish removing the original workspace',exact:true})).toBeVisible({timeout:45000});await expect(dialog).toContainText('The original changed after it was copied');
   expect(await readFile(original,'utf8')).toBe('Changed source evidence');await writeFile(original,'Reviewed evidence');
   await dialog.getByRole('button',{name:'Retry original cleanup',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:30000});expect(transfers).toBe(1);await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});
- }finally{Workspace.prototype.outline=outline;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{restoreStat();Workspace.prototype.outline=outline;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('storage progress keeps dialog bounds stable across long paths, wrapped counters and unknown totals',async({page})=>{

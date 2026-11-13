@@ -44,15 +44,17 @@ test('encrypted directory resolves owned projects after its folder moves without
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-registry-locations-')),source=path.join(directory,'workspace'),destination=path.join(directory,'Research Workspace 2'),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);let vault;
   t.after(async()=>{await runtime.close();detach();if(vault)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-registry-locations-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
   const book=sampleNotebook();book.title=path.basename(source);book.projects=[];book.notebooks=[];book.entries=[];const fixture=await encryptedFixture(directory,book),workspace=fixture.workspace;vault=fixture.vault;
-  const value={...registry([entry(path.join(source,'projects','Example experiments')),entry(path.join(directory,'External project'))]),workspaceId:book.id},owner=new ProjectRegistry(workspace,value.workspaceId);
+  const value={...registry([entry(path.join(source,'projects','Example experiments')),entry(path.join(source,'Second project'))]),workspaceId:book.id},owner=new ProjectRegistry(workspace,value.workspaceId);
   await workspace.writeFile(owner.file,JSON.stringify(value));
   const before=await owner.read(),changed=await owner.change(before.revision,next=>next),raw=JSON.parse(await workspace.readFile(owner.file,'utf8'));
   assert.equal(raw.version,8);assert.equal(JSON.stringify(raw).includes(source),false);const stored=await owner.directoryOwner.access.read(({directory,value:head})=>directory.find(head,value.projects[0].projectId,{decode:false}));assert.deepEqual(stored.entry.root,{relative:'projects/Example experiments'});
-  assert.equal(changed.value.projects[0].root,value.projects[0].root);
+  // Directory rows are ordered by identity, not by insertion: compare each project by its id.
+  const rootOf=(result,index)=>result.value.projects.find(item=>item.projectId===value.projects[index].projectId).root;
+  assert.equal(rootOf(changed,0),value.projects[0].root);assert.equal(rootOf(changed,1),value.projects[1].root);
   await assert.rejects(new WorkspaceRenames(path.join(directory,'rename-journal')).begin(workspace,path.basename(destination)),{code:'STORAGE_RENAME_PROJECTS'});
   await runtime.closeWorkspace(source);await rename(source,destination);
   const moved=new ProjectRegistry(new Workspace(destination,vault),value.workspaceId),after=await moved.read();
-  assert.equal(after.revision,changed.revision);assert.equal(after.value.projects[0].root,path.join(destination,'projects','Example experiments'));
-  assert.equal(after.value.projects[1].root,value.projects[1].root);
+  assert.equal(after.revision,changed.revision);assert.equal(rootOf(after,0),path.join(destination,'projects','Example experiments'));
+  assert.equal(rootOf(after,1),path.join(destination,'Second project'));
   const untouched=await moved.change(after.revision,next=>next);assert.equal(untouched.revision,after.revision);
 });

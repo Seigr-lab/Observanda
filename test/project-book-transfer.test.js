@@ -23,14 +23,17 @@ import {RecordWriting} from '../src/record-writing.js';
 import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 import {withWriterLease} from '../src/writer-lease.js';
 import {serialize} from '../src/storage-format.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {workspaceCopyTransferId} from '../src/workspace-copy-directory.js';
 
 test('nested project copies and portable exports publish every independently owned book and recover interruption',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-books-transfer-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
  t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-books-transfer-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),accessDocument=await createWorkspaceAccess('','Project transfer password',device),vault=takeCreatedVault(accessDocument);vaults.push(vault);
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);t.after(()=>clearVault(ownerHome.vault));
  const metadata=createNotebook('Field Project Å 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
- const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,accessDocument,vault),books=[];
+ const source=await initializeProjectLocation(path.join(ownerHome.root,metadata.title),projectId,metadata,accessDocument,vault),books=[];
  async function addBook(title){
   const created=await new LabBookCreation(source,device).create({id:randomUUID(),username:'',password:'Book transfer password',book:{id:randomUUID(),projectId,title}}),key=await verifyAccess(await readAccess(created.book.root),'','Book transfer password',{deviceStore:device});vaults.push(key);
   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),outline=await storage.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:storage.labBookId};
@@ -38,9 +41,9 @@ test('nested project copies and portable exports publish every independently own
   const target={workspaceId:outline.metadata.id,recordId:record.id,sectionId:null},writing=new RecordWriting(storage),first=await writing.read(target);await writing.save({...target,expectedRevision:first.revision,value:{body:'Retained '+title}});
   books.push({storage,key,entry:created.book,target,before:await storage.read()});
  }
- await mkdir(path.join(directory,'Empty project'));const empty=await copyProjectLocation(source,path.join(directory,'Empty project',metadata.title),{id:randomUUID(),onCopiedBook:()=>assert.fail('An empty project has no book callback')});assert.equal((await projectTransferReceipt(empty)).phase,'verified');await provider.closeProject(empty.root);
+ await mkdir(path.join(ownerHome.root,'Empty project'));const empty=await copyProjectLocation(source,path.join(ownerHome.root,'Empty project',metadata.title),{id:randomUUID(),onCopiedBook:()=>assert.fail('An empty project has no book callback')});assert.equal((await projectTransferReceipt(empty)).phase,'verified');await provider.closeProject(empty.root);
  for(const title of ['Observations \u00c5 1','Measurements 2'])await addBook(title);
- const withBook=(id,use)=>use(books.find(book=>book.storage.labBookId===id).storage),parent=path.join(directory,'Copies');await mkdir(parent);
+ const withBook=(id,use)=>use(books.find(book=>book.storage.labBookId===id).storage),parent=path.join(ownerHome.root,'Copies');await mkdir(parent);
  const destination=path.join(parent,metadata.title),id=randomUUID();
  await assert.rejects(copyProjectLocation(source,destination,{id}),{code:'ACCESS_LOCKED'});await assert.rejects(stat(destination),{code:'ENOENT'});
  await assert.rejects(copyProjectLocation(source,path.join(parent,'Different name'),{id,withBook}),{code:'STORAGE_NAME_MISMATCH'});await assert.rejects(stat(path.join(parent,'Different name')),{code:'ENOENT'});
@@ -69,7 +72,7 @@ test('nested project copies and portable exports publish every independently own
  const first=books[0],changed=new LabBookStorage(path.join(copied.root,first.entry.directory),first.storage.labBookId,first.key),writing=new RecordWriting(changed),current=await writing.read(first.target);await writing.save({...first.target,expectedRevision:current.revision,value:{body:'Edited in copied book'}});
  await addBook('Added after the completed copy');
  received.length=0;await copyProjectLocation(source,destination,{id,withBook,onCopiedBook:storage=>received.push(storage.labBookId)});assert.equal(received.length,2);assert.equal((await writing.read(first.target)).value.body,'Edited in copied book');
- const backups=path.join(directory,'Backups');await mkdir(backups);const portable=await copyProjectLocation(source,path.join(backups,metadata.title),{id:randomUUID(),withBook,portable:true});assert.equal(await catalogueBinding(portable.root),null);
+ const backups=path.join(ownerHome.root,'Backups');await mkdir(backups);const portable=await copyProjectLocation(source,path.join(backups,metadata.title),{id:randomUUID(),withBook,portable:true});assert.equal(await catalogueBinding(portable.root),null);
  for(const book of books){const root=path.join(portable.root,book.entry.directory);assert.equal(await catalogueBinding(root),null);assert.ok(await stat(path.join(root,CATALOGUE_ARCHIVE)));await provider.closeLabBook(book.storage.root);}
  await provider.closeProject(source.root);await rename(source.root,source.root+' unavailable');
  const restored=new ProjectStorage(portable.root,projectId,vault);await restored.outline();

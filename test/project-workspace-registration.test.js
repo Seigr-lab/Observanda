@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {rename} from 'node:fs/promises';
+import {rename,unlink} from 'node:fs/promises';
 import {projectTreeFixture} from './project-tree-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {createNotebook} from '../src/model.js';
@@ -11,6 +11,8 @@ import {ProjectRegistry} from '../src/project-registry.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {LabBookDirectory} from '../src/lab-book-directory.js';
+import {backupCatalogue} from '../src/postgres.js';
+import {CATALOGUE_FILE} from '../src/postgres-activation.js';
 import {admitWorkspaceProjectTree,publishWorkspaceProjectTree} from '../src/project-workspace-move-registration.js';
 import {recordProjectDeparture} from '../src/project-relocation-directory.js';
 
@@ -21,8 +23,19 @@ test('destination tree registration resumes between membership and book addresse
  await admitWorkspaceProjectTree(destination,value,destinationRoot,{fresh:true});
  const duplicate=structuredClone(value);duplicate.projects[0].books[0].namespaceId=duplicate.rootBooks.books[0].namespaceId;await assert.rejects(admitWorkspaceProjectTree(destination,duplicate,destinationRoot,{fresh:true}),{code:'DATABASE_LOCATION'});
  // This fixture relocates stopped disposable owners; it exercises membership
- // publication only, not the separate move engine or source retirement.
+ // publication only, not the separate move engine or source retirement. Each
+ // owner's schema is in the source workspace's cluster, so the owners travel
+ // in archive form, as a hand copy does, and activate in the destination cluster.
+ for(const owner of [...f.books.map(book=>new LabBookStorage(book.root,book.labBookId,book.key)),...f.projects.map(project=>new ProjectStorage(project.root,project.projectId,project.key))].reverse()){
+  const db=await owner.openCatalogue({detached:true});try{await backupCatalogue(owner.root,owner.root,{connection:db});}finally{await db.close();}
+  await unlink(path.join(owner.root,CATALOGUE_FILE));
+ }
  await f.stopProvider();await rename(root.root,destinationRoot);f.restartProvider();
+ // As after an application restart, both workspaces are unlocked before their owners open.
+ await f.workspace.outline();await destinationFixture.workspace.outline();
+ // Opening each moved owner activates it from its archive in the destination cluster.
+ for(const project of f.projects)await new ProjectStorage(path.join(destinationRoot,path.relative(root.root,project.root)),project.projectId,project.key).outline();
+ for(const book of f.books)await new LabBookStorage(path.join(destinationRoot,path.relative(root.root,book.root)),book.labBookId,book.key).outline();
  const owners=f.projects.map(project=>({kind:'project',ownerId:project.projectId,storage:new ProjectStorage(path.join(destinationRoot,path.relative(root.root,project.root)),project.projectId,project.key)})),transfer={command:{scope:()=>({destination:destinationRoot})},using:async(_root,operation)=>operation(owners)};
  await assert.rejects(publishWorkspaceProjectTree(destination,value,transfer,{checkpoint:async stage=>{if(stage==='destination-registry')throw Error('Interrupted registry acknowledgement');}}),/Interrupted registry acknowledgement/);
  assert.equal((await destination.read()).value.projects.length,2);assert.equal(await new LabBookDirectory(destination).read(f.books[0].namespaceId),null);

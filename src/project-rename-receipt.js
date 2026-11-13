@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {validNativeRelocation,nativeRelocationOwners} from './native-relocation-state.js';
 import {workspaceProjectMoveLocation} from './project-workspace-move-location.js';
 import {validProjectPlacementTransfer} from './project-placement-transfer-state.js';
@@ -14,7 +15,7 @@ import {validateRenameProjects,validateRenameBooks} from './rename-owner-receipt
 import {AppError} from './errors.js';
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export const validProjectRenameSettings=value=>value&&['etag,project','etag,input,project','checkpoint,etag,input,project'].includes(Object.keys(value).sort().join())&&hash(value.etag)&&(!Object.hasOwn(value,'input')||hash(value.input))&&(!Object.hasOwn(value,'checkpoint')||value.checkpoint&&Object.keys(value.checkpoint).sort().join()==='id,revision'&&researchId(value.checkpoint.id)&&hash(value.checkpoint.revision));
-export const directoryIdentity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+export const directoryIdentity=folderIdentity;
 export const sameDirectory=(a,b)=>a?.dev===b?.dev&&a?.ino===b?.ino;
 export function projectRenameFile(registry,id){if(!researchId(id))throw new AppError('INVALID');return path.join(registry.workspace.root,'.observanda/project-renames',id+'.obsv');}
 export async function readProjectRename(registry,projectId){
@@ -39,7 +40,7 @@ export async function locateProjectRename(registry,value){
   const root=nestedRenameRoot(registry.workspace.root,relative),stat=await assertRegular(root,{directory:true,missing:true});
   // Check the exact spelling first: on case-insensitive volumes a case-only
   // destination resolves to the source until the rename happens.
-  if(!stat||await realpath(root)!==root||!sameDirectory(transferred||native?await projectMoveDirectory(root):directoryIdentity(stat),transferred?(relative===value.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity))continue;
+  if(!stat||await realpath(root)!==root||!sameDirectory(transferred||native?await projectMoveDirectory(root):await directoryIdentity(root),transferred?(relative===value.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity))continue;
   if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(['preparing','prepared'].includes(value.phase)&&relative===value.source&&!await workspaceRename(root)))throw new AppError('STORAGE_RENAME_STATE');return root;
  }
  throw new AppError('STORAGE_RENAME_STATE');

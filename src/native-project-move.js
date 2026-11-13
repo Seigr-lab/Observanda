@@ -26,7 +26,6 @@ import {assertRegular,atomicWrite,privateDirectory,digest,serialize,workspaceFil
 import {catalogueBinding,catalogueActivation,CATALOGUE_ARCHIVE} from './postgres-activation.js';
 import {databaseRetention,validDatabaseRetention,verifyDatabaseRetention} from './workspace-database-retention.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -170,7 +169,7 @@ export class NativeProjectMove{
    const retired=path.join(path.dirname(value.source),'.observanda-project-move-'+id),nested=boundaries.count>0;
    if(value.phase==='adopted'){
     if(!nested&&await assertRegular(retired,{directory:true,missing:true})){await assertProjectMoveDirectory(retired,value.sourceDirectory);const marker=await moveSource(retired);if(marker?.id!==id||marker.destination!==value.destination)throw new AppError('STORAGE_MOVE_STATE');}
-    else{const source=await this.source(value,vault);await this.currentBoundaries(value,boundaries);await ownedProjectFolderPaged(source.root,{boundaries,books:books.owners});await assertProjectMoveDatabases(source.root,boundaries,books.owners);await books.stop(checkpoint);const provider=databaseProvider();if(!provider?.stopProjectForMove)throw new AppError('DATABASE_RUNTIME');await provider.stopProjectForMove(source.root,projectId,vault,id);const lease=await workspaceDatabaseLease(path.join(source.root,'.observanda/postgresql'));try{await assertProjectDatabaseStopped(source.root,projectId,vault);}finally{await lease.close();}await checkpoint('stopped');if(!nested){await rename(source.root,retired);await checkpoint('renamed');}}
+    else{const source=await this.source(value,vault);await this.currentBoundaries(value,boundaries);await ownedProjectFolderPaged(source.root,{boundaries,books:books.owners});await assertProjectMoveDatabases(source.root,boundaries,books.owners);await books.stop(checkpoint);const provider=databaseProvider();if(!provider?.stopProjectForMove)throw new AppError('DATABASE_RUNTIME');await provider.stopProjectForMove(source.root,projectId,vault,id);await assertProjectDatabaseStopped(source.root,projectId,vault);await checkpoint('stopped');if(!nested){await rename(source.root,retired);await checkpoint('renamed');}}
     if(!nested)await persistRename(value.source,retired);value.phase='retired';await this.command.save(value);await checkpoint('retired');
    }
    if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');let previousOwner=null,previousOwned=false;const ownerRelative=async relative=>{const slash=relative.indexOf('/');if(slash<0||relative.startsWith('.observanda/'))return relative;const name=relative.slice(0,slash);let owned;if(name===previousOwner)owned=previousOwned;else{owned=Boolean(await books.owners.get(name));previousOwner=name;previousOwned=owned;}return owned?relative.slice(slash+1):relative;};

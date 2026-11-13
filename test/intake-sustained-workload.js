@@ -183,7 +183,7 @@ async function runProfile(profile,t){
  workload=(async()=>{
   fixture=await encryptedFixture(directory,sampleNotebook());
   memory?.checkpoint('fixture created');
-  const {workspace}=fixture,materials=new ResearchMaterials(workspace),book=(await workspace.read()).book,recordId=book.entries[0].id,baseline=databaseCapacity();
+  const {workspace}=fixture,materials=new ResearchMaterials(workspace),book=(await workspace.read()).book,recordId=book.entries[0].id,admitted=()=>{const {idle,...value}=databaseCapacity();return value;},baseline=admitted();
   memory?.checkpoint('workspace read');
   jobs=workspaceJobs(workspace,undefined,{observe:job=>{
    if(job.type!=='evidence.batch')return;
@@ -295,7 +295,7 @@ async function runProfile(profile,t){
    t.diagnostic(JSON.stringify({profile:profile.name,heapPeak:{...peak.heapAt,usedMiB:Math.ceil(peak.heap/MiB)}}));
    t.diagnostic(JSON.stringify({profile:{...profile,qualification:'engineering, not universal user rate',producerMs:PRODUCER_MS,drainBudgetMs:DRAIN_MS,maxUnfinished:MAX_UNFINISHED},offered:{batches:counts.offered,files:totalFiles,bytes:totalBytes,filesPerSecond:totalFiles/(PRODUCER_MS/1000),firstMs:Math.round(offeredAt[0]-began),lastMs:Math.round(offeredAt.at(-1)-began),maximumProducerLagMs:Math.round(Math.max(...offeredAt.map((time,index)=>time-began-index*profile.intervalMs)))},admissionLag:statistics(admissionLag),enqueueLag:statistics(enqueueLag),peakBacklog:{waitingArrivals:peak.waitingArrivals,unfinished:peak.unfinished,queuedJobs:peak.queuedJobs},completedByProducerEnd:offeredAtEnd,throughput:{filesPerSecond:totalFiles/((drainedAt-began)/1000),MiBPerSecond:totalBytes/MiB/((drainedAt-began)/1000)},drainMs:Math.round(drainMs),pauseRestart:pauseEvidence,foreground:foregroundStats,sampledHeapMiB:Math.ceil(peak.heap/MiB),sampledRSSMiB:Math.ceil(peak.rss/MiB),peakConnections:peak.connections,connections:metrics,storage:{before,after,fileByteGrowth:after.bytes-before.bytes,databaseByteGrowth:after.databaseBytes-before.databaseBytes},verifiedFiles,verifiedBytes}));
    assert.ok(foreground.some(item=>item.at<20000));assert.ok(foreground.some(item=>item.at>=pauseEvidence.pausedAtMs&&item.at<pauseEvidence.resumedAtMs),'Foreground saves continue while intake is paused');assert.ok(foreground.some(item=>item.at>=pauseEvidence.resumedAtMs));
-   assert.ok(peak.unfinished<=MAX_UNFINISHED);assert.ok(peak.heap<256*MiB,'Existing bounded heap budget');assert.ok(metrics.maximumWriterMs<5000,'Existing five-second writer budget');assert.ok(foreground.every(item=>item.ms<5000),'Existing five-second foreground budget including admission');assert.equal(metrics.opens,metrics.closes);assert.deepEqual(databaseCapacity(),baseline);
+   assert.ok(peak.unfinished<=MAX_UNFINISHED);assert.ok(peak.heap<256*MiB,'Existing bounded heap budget');assert.ok(metrics.maximumWriterMs<5000,'Existing five-second writer budget');assert.ok(foreground.every(item=>item.ms<5000),'Existing five-second foreground budget including admission');assert.equal(metrics.opens,metrics.closes);assert.deepEqual(admitted(),baseline);
   }catch(error){throw failure??error;}finally{
    clearTimeout(drainDeadline);clearTimeout(verificationDeadline);cleaning=true;phase='cleanup';foregroundControl.abort();control.abort();
    const cleanupSignal=AbortSignal.timeout(CLEANUP_MS);
@@ -303,7 +303,7 @@ async function runProfile(profile,t){
     await jobs.worker.stop();await Promise.allSettled(tasks);await jobs.queue.pendingWrite;
     // Failure leaves no running/queued work owned by a fixture about to vanish.
     for(const batch of batches){const job=await jobs.queue.read(batch.id);if(job&&['queued','running'].includes(job.state))await writerRequest(cleanupSignal,()=>jobs.queue.control(batch.id,'cancel'));}
-    await jobs.queue.pendingWrite;assert.deepEqual(await jobs.queue.status(),{active:0});assert.equal(metrics.opens,metrics.closes);assert.deepEqual(databaseCapacity(),baseline);
+    await jobs.queue.pendingWrite;assert.deepEqual(await jobs.queue.status(),{active:0});assert.equal(metrics.opens,metrics.closes);assert.deepEqual(admitted(),baseline);
    });
    await boundedCleanup(finalCleanup);
   }

@@ -25,7 +25,6 @@ import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {clearVault} from './encryption.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {AppError} from './errors.js';
@@ -101,11 +100,11 @@ export class NativeWorkspaceRename{
   for await(const item of this.owners.entries({index:'project'})){await assertProjectCreationSettled(this.registry,[item.projectId]);await assertProjectRelocationsSettled(this.registry,[item.projectId]);await this.use(item,async project=>{await new ProjectBookOwners(project).ready();if(await new LabBookRegistry(project).version()!==item.bookRevision)throw new AppError('CONFLICT');});}
  }
  async inventory(){return assertRenameDatabaseOwners(this.workspace.root,{has:async root=>root===this.workspace.root||Boolean(await this.owners.get(relative(this.workspace.root,root)))});}
- marker(item){const value=this.value;return {version:item.kind==='project'?2:3,id:value.id,source:nestedRenameRoot(value.source,item.relative),destination:nestedRenameRoot(value.destination,item.relative),parentSource:value.source,parentDestination:value.destination,relative:item.relative,projectId:item.projectId,...(item.kind==='lab-book'?{labBookId:item.labBookId}:{})};}
+ marker(item){const value=this.value;return {version:item.kind==='project'?2:3,...(path.dirname(value.source)!==path.dirname(value.destination)?{placement:true}:{}),id:value.id,source:nestedRenameRoot(value.source,item.relative),destination:nestedRenameRoot(value.destination,item.relative),parentSource:value.source,parentDestination:value.destination,relative:item.relative,projectId:item.projectId,...(item.kind==='lab-book'?{labBookId:item.labBookId}:{})};}
  async fence({check=async()=>{},checkpoint=async()=>{}}={}){
   const value=this.value;await this.verifyDirectory();
   if(!await workspaceRename(this.workspace.root))await this.workspace.withStorageHandoff(()=>withProjectMembership(this.registry,[null],async()=>{
-   await check();await this.current();if(await fingerprint(await workspaceFile(this.workspace.root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');await renameScope(null,()=>checkpoint('prepared',value));await atomicWrite(path.join(this.workspace.root,RENAME_MARKER),serialize({version:1,id:value.id,source:value.source,destination:value.destination}));
+   await check();await this.current();if(await fingerprint(await workspaceFile(this.workspace.root))!==value.descriptorHash)throw new AppError('STORAGE_RENAME_STATE');await renameScope(null,()=>checkpoint('prepared',value));await atomicWrite(path.join(this.workspace.root,RENAME_MARKER),serialize({version:1,...(path.dirname(value.source)!==path.dirname(value.destination)?{placement:true}:{}),id:value.id,source:value.source,destination:value.destination}));
   }),{existing:true});
   value.phase='frozen';await this.command.save(value);await checkpoint('frozen',value);
  }
@@ -120,7 +119,7 @@ export class NativeWorkspaceRename{
   await this.current();await this.inventory();
   for await(const item of this.owners.entries({reverse:true}))await this.use(item,async storage=>{
    await check(item);const provider=databaseProvider(),method=item.kind==='project'?'stopProjectForRename':'stopLabBookForRename';if(!provider?.[method])throw new AppError('DATABASE_LOCATION');await provider[method](storage.root,item.labBookId??item.projectId,storage.vault,value.id);
-   const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));try{await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,item.labBookId??item.projectId,storage.vault);}finally{await lease.close();}await checkpoint(item.kind==='project'?'project-stopped':'book-stopped',value,item.labBookId??item.projectId);
+   await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(storage.root,item.labBookId??item.projectId,storage.vault);await checkpoint(item.kind==='project'?'project-stopped':'book-stopped',value,item.labBookId??item.projectId);
   });
  }
  async verify(){await this.verifyDirectory();await this.current();for await(const item of this.owners.entries())await this.use(item,async()=>{});}

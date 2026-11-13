@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // A complete project tree moves through independently authenticated owners.
 // Destination registration precedes retirement of the frozen original tree.
 import path from 'node:path';
@@ -20,7 +21,6 @@ import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
 import {workspaceRename} from './workspace-rename-state.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {operationStage,operationItem} from './operation-progress.js';
@@ -73,7 +73,7 @@ export class ProjectPlacementTransfer{
     }
    });
   });
-  const identities=new Map();for(const item of value.transfer.owners){const stat=await assertRegular(at(scope.destination,item.relative),{directory:true});identities.set(item.relative,{dev:String(stat.dev),ino:String(stat.ino)});}
+  const identities=new Map();for(const item of value.transfer.owners){const stat=await assertRegular(at(scope.destination,item.relative),{directory:true});identities.set(item.relative,await folderIdentity(at(scope.destination,item.relative)));}
   for(const book of value.rootBooks.books??[])book.identity=identities.get(book.directory);
   for(const project of value.projects??[]){project.identity=identities.get(project.relative);for(const book of project.books??[])book.identity=identities.get(path.posix.join(project.relative,book.directory));}
   value.phase='moved';await this.command.save(value);this.fresh=fresh;await this.checkpoint('transferred',value);
@@ -108,8 +108,7 @@ export class ProjectPlacementTransfer{
        const children=value.transfer.owners.filter(other=>other.relative!==item.relative&&inside(source.root,at(scope.source,other.relative))).map(other=>path.relative(source.root,at(scope.source,other.relative)).split(path.sep).join('/'));await ownedProjectFolder(source.root,children);
        const stop=item.kind==='project'?'stopProjectForRename':'stopLabBookForRename',provider=databaseProvider();if(!provider?.[stop])throw new AppError('DATABASE_LOCATION');
        if(!marker)await provider[stop](source.root,item.ownerId,source.vault,value.id);
-       const lease=await workspaceDatabaseLease(path.join(source.root,'.observanda/postgresql'));
-       try{await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(source.root,item.ownerId,source.vault);}finally{await lease.close();}
+       await (item.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(source.root,item.ownerId,source.vault);
        await this.checkpoint('source-owner-stopped',value,item.relative);
       }
       await atomicWrite(path.join(scope.source,MOVE_SOURCE),serialize({id:value.id,destination:scope.destination}));await this.checkpoint('retire-frozen',value);await this.check();await rename(scope.source,retired);await this.checkpoint('source-retired',value);
@@ -117,7 +116,11 @@ export class ProjectPlacementTransfer{
      await persistRename(scope.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
     }
     if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
-    const removed=retirementCheck(()=>this.check());await removeRetiredProject({...scope,sourceDirectory:rootOwner.sourceIdentity},{ownerDirectories:value.transfer.owners.map(item=>item.relative).filter(Boolean),verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check());await this.checkpoint('retire:'+stage,value,...args);}});await this.checkpoint('source-removed',value);
+    const removed=retirementCheck(()=>this.check());await removeRetiredProject({...scope,sourceDirectory:rootOwner.sourceIdentity},{ownerDirectories:value.transfer.owners.map(item=>item.relative).filter(Boolean),verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check());await this.checkpoint('retire:'+stage,value,...args);}});
+    // With the source folders removed, their catalogues leave the source cluster.
+    const provider=databaseProvider();if(!provider?.retireOwnerCatalogue)throw new AppError('DATABASE_LOCATION');
+    for(const item of [...value.transfer.owners].reverse())await provider.retireOwnerCatalogue(at(scope.source,item.relative),item.ownerId,item.sourceId);
+    await this.checkpoint('source-removed',value);
    });
   });
  }

@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // Client-scoped authorization for one pending import. The existing encrypted
 // import receipt owns native pages; plaintext passwords never enter those pages.
 import path from 'node:path';
@@ -22,7 +23,7 @@ import {storageCreationPath,storageFolderName,validateStorageName} from './stora
 import {researchId} from './web/research-reference.js';
 import {withWriterLease} from './writer-lease.js';
 import {AppError} from './errors.js';
-const ttl=60*60*1000,identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)}),same=(a,b)=>serialize(a)===serialize(b);
+const ttl=60*60*1000,identity=folderIdentity,same=(a,b)=>serialize(a)===serialize(b);
 const within=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 const relativeOK=relative=>{if(typeof relative!=='string'||relative.length>16384||relative.includes('\\'))return false;try{if(relative)relative.split('/').forEach(part=>validateStorageName(part));return true;}catch{return false;}};
 const ownerMatches=(actual,expected)=>['kind','projectId','labBookId','namespaceId','vaultId','relative','archiveDigest'].every(key=>expected?.[key]===undefined||actual?.[key]===expected[key]);
@@ -62,12 +63,12 @@ export class ProjectImportAccess{
    const rootEntry=value&&!value.accessOnly?await projectImportOwners(registry,value).get(''):null,root=data.intent!=='cancel'&&rootEntry?.copied?destination:source,inventory=new ProjectImportInventory(this.application.deviceStore,[{relative:'',username:data.username,password:data.password,recovery:data.recovery}]);
    try{
     const unlocked=rootEntry?await inventory.unlock(root,'',data.intent==='cancel'?{vaultId:rootEntry.vaultId}:rootEntry):null,found=rootEntry?{entry:{...rootEntry,accessEtag:unlocked.access.etag},storage:importOwnerStorage(root,rootEntry,unlocked.vault)}:await inventory.owner(root,'','project',value?.manifest);await options.check?.();
-    if(value?.accessOnly&&!same(identity(await assertRegular(source,{directory:true})),value.sourceIdentity))throw new AppError('CONFLICT');
+    if(value?.accessOnly&&!same((await assertRegular(source,{directory:true}),await identity(source)),value.sourceIdentity))throw new AppError('CONFLICT');
     if(previous){previous.key.fill(0);this.sessions.delete(data.id);}if(value?.access){try{await eraseImportAuthorization(registry,value);await saveProjectImport(registry,value);}catch(error){if(previous)this.cleanupQueue.set(data.id,previous);throw error;}}
     const session={client,registry,key:randomBytes(32),stamp:randomUUID(),expires:this.now()+ttl};this.sessions.set(data.id,session);
     if(this.sessions.size>32){session.key.fill(0);this.sessions.delete(data.id);throw new AppError('LIMIT');}
     return await this.operation(session,async()=>{
-    if(!value)value={version:2,id:data.id,source,destination,parentId,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,phase:'authorizing',accessOnly:true,manifest:{projectId:found.entry.projectId,namespaceId:found.entry.namespaceId,vaultId:found.entry.vaultId},owners:null};
+    if(!value)value={version:2,id:data.id,source,destination,parentId,sourceIdentity:(await assertRegular(source,{directory:true}),await identity(source)),destinationIdentity:null,phase:'authorizing',accessOnly:true,manifest:{projectId:found.entry.projectId,namespaceId:found.entry.namespaceId,vaultId:found.entry.vaultId},owners:null};
     value.access={version:1,intent:data.intent,session:session.stamp,revision:randomUUID(),cursor:0,initializing:true,candidates:new NativePortabilityCollection(null,randomUUID()).empty(),grants:new NativePortabilityCollection(null,randomUUID()).empty()};
     // Journal both namespace identities before the first grant-bearing write.
     await saveProjectImport(registry,value);
@@ -80,11 +81,11 @@ export class ProjectImportAccess{
   });
  }
  root(value,candidate){return value.access.intent!=='cancel'&&candidate.expected?.copied?value.destination:value.source;}
- async inspectBoundary(value){if(value.accessOnly&&!same(identity(await assertRegular(value.source,{directory:true})),value.sourceIdentity))throw new AppError('CONFLICT');}
+ async inspectBoundary(value){if(value.accessOnly&&!same((await assertRegular(value.source,{directory:true}),await identity(value.source)),value.sourceIdentity))throw new AppError('CONFLICT');}
  async accept(session,registry,value,candidate,found,vault,options){
   candidate=await candidate;
   await this.inspectBoundary(value);await options.check?.();const access=value.access,grants=portabilityCollection(registry.workspace,access.grants),candidates=portabilityCollection(registry.workspace,access.candidates),root=path.join(this.root(value,candidate),...candidate.relative.split('/'));
-  const row={...found.entry,relative:candidate.relative,owner:found.entry,identity:identity(await assertRegular(root,{directory:true})),sealed:seal(vault.key,session.key,'Observanda/import-access/'+value.id+'/'+session.stamp+'/'+candidate.relative).toString('base64')};
+  const row={...found.entry,relative:candidate.relative,owner:found.entry,identity:(await assertRegular(root,{directory:true}),await identity(root)),sealed:seal(vault.key,session.key,'Observanda/import-access/'+value.id+'/'+session.stamp+'/'+candidate.relative).toString('base64')};
   if(await grants.get(candidate.relative))await grants.update(candidate.relative,row);else await grants.append(row);await saveProjectImport(registry,value);
   if(value.accessOnly&&candidate.kind==='project'){
    const books=new LabBookRegistry(found.storage),inspect=operation=>found.entry.archiveDigest?inspectArchivedOwnerDirectory(books,found.entry.archiveDigest,operation):books.inspect(operation);
@@ -143,7 +144,7 @@ export class ProjectImportAccess{
    await check();this.session(client,id,stamp);if(!relativeOK(relative))throw new AppError('INVALID');
    const row=await grants.get(relative);if(!row||row.owner.accessEtag!==access.etag)throw accessFailure(relative);if(!ownerMatches(row.owner,expected))throw new AppError('DATABASE_LOCATION');
    const source=path.join(value.source,...relative.split('/')),destination=path.join(value.destination,...relative.split('/'));if(root!==source&&(value.access.intent==='cancel'||root!==destination))throw new AppError('DATABASE_LOCATION');
-   if(root===source&&!same(identity(await assertRegular(root,{directory:true})),row.identity))throw new AppError('CONFLICT');
+   if(root===source&&!same((await assertRegular(root,{directory:true}),await identity(root)),row.identity))throw new AppError('CONFLICT');
    const vault={id:row.owner.vaultId,key:unseal(Buffer.from(row.sealed,'base64'),session.key,'Observanda/import-access/'+id+'/'+stamp+'/'+relative)};
    try{authenticateKeyring(access.value,vault);await check();this.session(client,id,stamp);return vault;}catch(error){await clearVault(vault);throw error;}
   }};

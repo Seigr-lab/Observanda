@@ -1,4 +1,4 @@
-import {assertProjectRoot} from './project-root-boundaries.js';
+import {assertProjectRoot,assertProjectInsideWorkspace} from './project-root-boundaries.js';
 import {OwnerDirectoryRegistry} from './owner-directory-registry.js';
 import {resolveRecordOwnerReference} from './record-owner-provenance.js';
 import {LabBookDirectory} from './lab-book-directory.js';
@@ -72,7 +72,7 @@ export class ProjectRegistry{
    return {...current,projects,revision:digest(serialize({registry:current.revision,legacy:projects.filter(item=>item.legacy)}))};
   }
  }
- async assertRoot(root,{existing=false,parentId,excludeRoots=[]}={}){
+ async assertRoot(root,{existing=false,parentId,excludeRoots=[],transfer=false}={}){
   if(!Array.isArray(excludeRoots)||excludeRoots.some(value=>typeof value!=='string'||path.resolve(value)!==value||!insideProjectRoot(root,value)))throw new AppError('STORAGE_PATH');
   return this.inspect(async view=>{
    const locationKey=value=>this.locationKey(value);
@@ -80,7 +80,7 @@ export class ProjectRegistry{
    const chosen=parentId===undefined?selected?.entry.parentId??null:parentId;if(chosen!==null)for(const entry of await view.ancestors(chosen))entries.set(entry.projectId,entry);
    for(let current=path.dirname(root);current!==path.dirname(current);current=path.dirname(current)){const row=await view.get(locationKey(current),{index:'location'});if(row)entries.set(row.entry.projectId,row.entry);}
    const key=locationKey(root);for await(const row of view.entries({index:'location',prefix:key+(key.startsWith('relative:')?'/':path.sep)})){if(excludeRoots.some(excluded=>row.entry.root===excluded||insideProjectRoot(excluded,row.entry.root)))continue;entries.set(row.entry.projectId,row.entry);break;}
-   assertProjectRoot(this.workspace.root,root,[...entries.values()],{existing,parentId});
+   assertProjectRoot(this.workspace.root,root,[...entries.values()],{existing,parentId,transfer});
   });
  }
  async describe(storage,parentId,{staged=false}={}){
@@ -91,7 +91,7 @@ export class ProjectRegistry{
   return {projectId:storage.projectId,root,vaultId:storage.vault.id,namespaceId:metadata.id,parentId,summary:summaryOf(metadata.projects.find(project=>project.id===storage.projectId))};
  }
  async attach(storage,{parentId=null,expected}={}){
-  const entry=await this.describe(storage,parentId);
+  const entry=await this.describe(storage,parentId);assertProjectInsideWorkspace(this.workspace.root,entry.root);
   return this.apply(expected,[{state:'active',entry}],{check:async(directory,head)=>{if(await directory.find(head,entry.projectId))throw new AppError('EXISTS');}});
  }
  async relocate(storage,{from,expected}={}){
@@ -122,7 +122,7 @@ export class ProjectRegistry{
    });}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
   }
  }
- registerExisting(expected,entry,{aliases}={}){return this.apply(expected,[{state:'active',entry}],{aliases,check:async(directory,head)=>{
+ async registerExisting(expected,entry,{aliases}={}){assertProjectInsideWorkspace(this.workspace.root,entry?.root);return this.apply(expected,[{state:'active',entry}],{aliases,check:async(directory,head)=>{
   const prior=await directory.find(head,entry.projectId);if(prior?.state==='active')throw new AppError('EXISTS');if(prior&&['namespaceId','vaultId'].some(key=>prior.entry[key]!==entry[key]))throw new AppError('DATABASE_LOCATION');
  }});}
  async reference(target){

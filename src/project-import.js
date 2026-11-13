@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {NativeProjectImport} from './project-import-native.js';
 import {ProjectDeletions} from './project-deletion.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
@@ -38,7 +39,7 @@ import {trackProjectTransfer,projectTransferRunning} from './project-transfer-ta
 import {withOperationProgress,operationStage,operationSequence,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
 const within=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 const ownerRoot=(root,entry)=>path.join(root,...entry.relative.split('/'));
 const credentials=command=>{
  if(!command||!researchId(command.id)||Object.keys(command).some(key=>!['id','path','parentId','username','password','recovery','owners'].includes(key))||['username','password','recovery'].some(key=>typeof command[key]!=='string'||command[key].length>1024)||command.parentId!==undefined&&command.parentId!==null&&!researchId(command.parentId)||command.owners!==undefined&&(!Array.isArray(command.owners)||command.owners.length>8192))throw new AppError('INVALID');
@@ -82,7 +83,7 @@ export class ProjectImports{
    if(!value){
     if(typeof command.path!=='string')throw new AppError('INVALID');const source=await resolveLocation(command.path);if(within(source,this.workspace.root))throw new AppError('STORAGE_PATH');const inspected=await inventory.inspect(source),parentId=command.parentId??null,destination=storageCreationPath(await this.parent(parentId),storageFolderName(source));
     if(source!==destination&&(within(this.workspace.root,source)||within(source,destination)||within(destination,source)))throw new AppError('STORAGE_PATH');
-    value={version:1,id:command.id,source,destination,parentId,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners.map(entry=>({...entry,transferId:randomUUID(),copied:false,restored:false})),phase:'prepared'};
+    value={version:1,id:command.id,source,destination,parentId,sourceIdentity:(await assertRegular(source,{directory:true}),await identity(source)),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners.map(entry=>({...entry,transferId:randomUUID(),copied:false,restored:false})),phase:'prepared'};
 
    }else{
     if(command.path!==undefined&&await resolveLocation(command.path)!==value.source||command.parentId!==undefined&&command.parentId!==value.parentId)throw new AppError('CONFLICT');
@@ -99,7 +100,7 @@ export class ProjectImports{
      for(const entry of value.owners){operationItem(entry.relative||path.basename(value.destination));await check();const vault=inventory.keys.get(entry.relative),destination=ownerRoot(value.destination,entry),target=importOwnerStorage(destination,entry,vault);
       try{
        if(!entry.copied){
-        if(serialize(identity(await assertRegular(value.source,{directory:true})))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');const source=importOwnerStorage(ownerRoot(value.source,entry),entry,vault);authenticateKeyring((await readAccess(source.root)).value,vault);
+        if(serialize((await assertRegular(value.source,{directory:true}),await identity(value.source)))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');const source=importOwnerStorage(ownerRoot(value.source,entry),entry,vault);authenticateKeyring((await readAccess(source.root)).value,vault);
         if(source.root!==destination){if(entry.archiveDigest)await this.copyArchive(source,target,entry,checkpoint);else await (entry.kind==='project'?copyProjectOwnerLocation:copyLabBookLocation)(source,destination,{id:entry.transferId,retainIncomplete:true,projectRoots:entry.kind==='project'?value.manifest.projects.map(item=>ownerRoot(value.source,item)).filter(root=>root!==source.root&&within(source.root,root)):[],checkpoint:(stage,file)=>checkpoint('owner-'+stage,{relative:entry.relative,file})});}
         entry.copied=true;await saveProjectImport(this.registry,value);await checkpoint('owner-copied',entry);
        }
@@ -149,7 +150,7 @@ export class ProjectImports{
     const discard=new ImportDiscard(this.workspace,value.id);
     if(value.source!==value.destination&&value.destinationIdentity){
      if(await discard.needsKeys()){
-      if(serialize(identity(await assertRegular(value.source,{directory:true})))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');
+      if(serialize((await assertRegular(value.source,{directory:true}),await identity(value.source)))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');
       for await(const entry of projectImportOwners(this.registry,value).entries()){await inventory.unlock(ownerRoot(value.source,entry),entry.relative,{vaultId:entry.vaultId});if(value.version===2)inventory.forget(entry.relative);}
      }
      await check();value.phase='cancelling';await saveProjectImport(this.registry,value);await discard.run(value,value.version===2?{get:async relative=>{inventory.close();const entry=await projectImportOwners(this.registry,value).get(relative);return (await inventory.unlock(ownerRoot(value.source,entry),relative,{vaultId:entry.vaultId})).vault;}}:inventory.keys,{check,checkpoint,onProgress});

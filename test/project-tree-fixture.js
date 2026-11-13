@@ -25,9 +25,9 @@ export async function projectTreeFixture(t){
  const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,metadata.id),creation=new ProjectCreation(registry,deviceStore),projects=[],books=[];
  for(const title of ['Field Project 1','Nested Project \u00c5 2']){
   const projectId=randomUUID(),{project:entry}=await creation.create({id:randomUUID(),username:'',password:'',project:{id:projectId,title,description:'',parentId:projects[0]?.projectId??null,share:false,logoId:null}}),key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore});vaults.push(key);
-  const storage=new ProjectStorage(entry.root,projectId,key);projects.push({...entry,key,binding:await catalogueBinding(entry.root),inode:(await stat(path.join(entry.root,'.observanda/postgresql/data/PG_VERSION'))).ino});
+  const storage=new ProjectStorage(entry.root,projectId,key);projects.push({...entry,key,binding:await catalogueBinding(entry.root),inode:(await stat(path.join(entry.root,'.observanda/research.observanda'))).ino});
   const {book}=await new LabBookCreation(storage,deviceStore).create({id:randomUUID(),username:'',password:'Protected observations 456!',book:{id:randomUUID(),projectId,title:'Observations for '+title}}),bookKey=await verifyAccess(await readAccess(book.root),'','Protected observations 456!',{deviceStore});vaults.push(bookKey);const bookStorage=new LabBookStorage(book.root,book.labBookId,bookKey);
-  await bookStorage.update(value=>{value.entries=[{...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId,title:'Retained observation'}];return value;});books.push({...book,projectId,key:bookKey,binding:await catalogueBinding(book.root),before:await bookStorage.read(),inode:(await stat(path.join(book.root,'.observanda/postgresql/data/PG_VERSION'))).ino});
+  await bookStorage.update(value=>{value.entries=[{...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId,title:'Retained observation'}];return value;});books.push({...book,projectId,key:bookKey,binding:await catalogueBinding(book.root),before:await bookStorage.read(),inode:(await stat(path.join(book.root,'.observanda/research.observanda'))).ino});
  }
  return {runtime,stopProvider,restartProvider,directory,provider,deviceStore,workspace,registry,creation,projects,books,root};
 }

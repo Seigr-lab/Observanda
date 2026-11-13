@@ -221,7 +221,7 @@ const verify=owner=>owner.storage.catalogue(store=>store.verify({format:'observa
 test('mixed-owner inventory operations carry each source lot readiness through prepare, apply and verification',{timeout:240000},async t=>{
  const f=await projectFixture(t),book=sampleNotebook();book.title=book.projects[0].title='Stock owner';
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'source-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const storage=await initializeProjectLocation(path.join(f.root,'Stock owner'),book.projects[0].id,book,access,vault),source={book,storage,vault,domains:new ProjectDomains(storage,book.id)};
+ const storage=await initializeProjectLocation(path.join(f.workspace.root,'Stock owner'),book.projects[0].id,book,access,vault),source={book,storage,vault,domains:new ProjectDomains(storage,book.id)};
  f.commands=new ProjectModuleCommands(f.storage,f.book.id);source.commands=new ProjectModuleCommands(storage,book.id);await f.commands.initialize();await source.commands.initialize();
  const owners=new Map([[f.book.id,f],[source.book.id,source]]);
  f.inventorySourceAccess=async()=>({useOwner:async(id,consume)=>consume(owners.get(id).storage,{workspaceId:id},{check:async()=>{}}),verify:async()=>{},close:async()=>{}});

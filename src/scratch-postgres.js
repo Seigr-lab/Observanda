@@ -41,9 +41,13 @@ export async function startScratchPostgres({runtimeDirectory,env=process.env,sig
  child.send({type:'start',runtimeDirectory},error=>{if(error){failure=new AppError('DATABASE_RUNTIME');rejectReady(failure);stop();}});
  try{
   if(signal?.aborted)stop();const {url,directory}=await started;signal?.throwIfAborted();
+  // A running scratch database alone never keeps the application alive: if
+  // nothing else is pending the process exits, and the guardian, seeing its
+  // channel close, stops PostgreSQL and removes its folder. Closing waits.
+  child.unref();child.channel?.unref?.();
   const environment={...childEnv,OBSERVANDA_DATABASE_URL:url},retireStorage=registerRuntimeStorage(environment,directory);let close;
   // A vanished guardian invalidates the reusable environment immediately.
   void exited.then(()=>{retireStorage();delete environment.OBSERVANDA_DATABASE_URL;signal?.removeEventListener('abort',abort);});
-  return {root,env:environment,service:{close:()=>close??=(async()=>{retireStorage();stop();await exited;if(failure)throw failure;})()}};
+  return {root,env:environment,service:{close:()=>close??=(async()=>{retireStorage();child.ref();child.channel?.ref?.();stop();await exited;if(failure)throw failure;})()}};
  }catch(error){stop();await exited;signal?.removeEventListener('abort',abort);throw signal?.aborted?new AppError('DATABASE_CANCELLED'):error;}
 }

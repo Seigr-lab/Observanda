@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {NativeProjectRelocation,locateNativeRelocation} from './native-project-relocation.js';
 import {NativeRelocationOwners} from './native-relocation-owners.js';
 // Cross-workspace placement publishes verified destination ownership before
@@ -27,7 +28,6 @@ import {projectMoveDirectory,assertProjectMoveDirectory} from './project-move-bo
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -67,7 +67,7 @@ export class ProjectWorkspaceMoves{
   const scope=this.scope(value),owner=value.transfer?.owners.find(item=>item.relative==='');
   for(const root of value.version===2?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
    const stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root)continue;
-   if(!sameDirectory(value.version===2?await projectMoveDirectory(root):directoryIdentity(stat),value.version===2?(root===scope.source?owner.sourceIdentity:owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
+   if(!sameDirectory(value.version===2?await projectMoveDirectory(root):await directoryIdentity(root),value.version===2?(root===scope.source?owner.sourceIdentity:owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
    if(await fingerprint(path.join(root,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_MOVE_STATE');return root;
   }
   throw new AppError('STORAGE_MOVE_STATE');
@@ -94,7 +94,7 @@ export class ProjectWorkspaceMoves{
      await check();await assertProjectCreationSettled(this.targetRegistry,[parentId]);await assertProjectRelocationsSettled(this.targetRegistry,[parentId]);
      const latest=await this.registry.inspect(async view=>{const selected=[];for(const id of [this.projectId,...projects.projects.map(item=>item.projectId)]){const row=await view.get(id);if(row?.state!=='active')throw new AppError('CONFLICT');selected.push(row.entry);}return {revision:view.revision,selected};});if(latest.revision!==projects.revision||!same(entry,latest.selected[0])||await this.parent(parentId)!==parent)throw new AppError('CONFLICT');
      const {metadata}=await storage.outline();if(metadata.id!==entry.namespaceId||metadata.projects[0].title!==path.basename(source))throw new AppError('CONFLICT');authenticateKeyring((await readAccess(source)).value,storage.vault);
-     value={version:1,id,workspaceId:this.registry.workspaceId,projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,placement:{parentId,expectedParentId},source:relative(this.registry.workspace.root,source),destination:relative(this.targetRegistry.workspace.root,destination),identity:directoryIdentity(await assertRegular(source,{directory:true})),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'prepared',rootBooks:{},entries:latest.selected.map(({root,...item})=>({...item,relative:relative(source,root)})),target:{root:this.targetRegistry.workspace.root,workspaceId:this.targetRegistry.workspaceId,vaultId:this.targetRegistry.workspace.vault.id,identity:await projectMoveDirectory(this.targetRegistry.workspace.root),parentRelative:relative(this.targetRegistry.workspace.root,parent),parentIdentity:await projectMoveDirectory(parent)}};
+     value={version:1,id,workspaceId:this.registry.workspaceId,projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,placement:{parentId,expectedParentId},source:relative(this.registry.workspace.root,source),destination:relative(this.targetRegistry.workspace.root,destination),identity:(await assertRegular(source,{directory:true}),await directoryIdentity(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'prepared',rootBooks:{},entries:latest.selected.map(({root,...item})=>({...item,relative:relative(source,root)})),target:{root:this.targetRegistry.workspace.root,workspaceId:this.targetRegistry.workspaceId,vaultId:this.targetRegistry.workspace.vault.id,identity:await projectMoveDirectory(this.targetRegistry.workspace.root),parentRelative:relative(this.targetRegistry.workspace.root,parent),parentIdentity:await projectMoveDirectory(parent)}};
      await this.checkTarget(value);await projects.persist(value);await books.persist(id,value.rootBooks);await admitWorkspaceProjectTree(this.targetRegistry,value,destination,{fresh:true});await this.save(value);
      await reserveIncomingProjectMove(this.targetRegistry,value);await checkpoint('prepared',value);await atomicWrite(path.join(source,RENAME_MARKER),serialize({version:1,placement:true,id,source,destination}));
     }),{wait:false}),{parents:[entry.parentId],except:this.projectId}),{existing:true})));
@@ -104,7 +104,7 @@ export class ProjectWorkspaceMoves{
  }
  async discardPrepared(value,vault){
   if(value.ownerDirectoryVersion===2){await new NativeRelocationOwners(this,value,vault).discardPrepared();return releaseIncomingProjectMove(this.targetRegistry,value);}
-  const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(directoryIdentity(stat),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_MOVE_STATE');authenticateKeyring((await readAccess(root)).value,vault);
+  const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(await directoryIdentity(root),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_MOVE_STATE');authenticateKeyring((await readAccess(root)).value,vault);
   for(const [owner,name,expected] of [[root,RENAME_KEYS_FILE,value.projectKeysHash],[root,RENAME_BOOK_KEYS_FILE,value.rootBooks.bookKeysHash],...(value.projects??[]).map(item=>[nestedRenameRoot(root,item.relative),RENAME_KEYS_FILE,item.bookKeysHash])]){
    if(!expected)continue;const file=path.join(owner,name);if(await assertRegular(file,{missing:true})){if(await fingerprint(file)!==expected)throw new AppError('STORAGE_MOVE_STATE');await unlink(file);}
   }
@@ -140,8 +140,7 @@ export class ProjectWorkspaceMoves{
      const storage=new ProjectStorage(root,this.projectId,vault),{projects,books}=this.helpers(storage,value);
      try{await projects.load(scope);await books.load(value.id,value.rootBooks);await projects.freezeAndStop(scope,{checkpoint});await books.freezeAndStop(scope,{checkpoint});}finally{projects.close();books.close();}
      const provider=databaseProvider();if(!provider?.stopProjectForRename)throw new AppError('DATABASE_LOCATION');await operationStage('rename-close-project',{},()=>provider.stopProjectForRename(root,this.projectId,vault,value.id));
-     const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
-     try{await assertProjectDatabaseStopped(root,this.projectId,vault);if(await this.locate(value)!==root||await fingerprint(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_MOVE_STATE');await check();await this.checkTarget(value);if(await assertRegular(scope.destination,{directory:true,missing:true}))throw new AppError('EXISTS');await checkpoint('stopped',value);}finally{await lease.close();}
+     await assertProjectDatabaseStopped(root,this.projectId,vault);if(await this.locate(value)!==root||await fingerprint(await workspaceFile(root))!==value.descriptorHash)throw new AppError('STORAGE_MOVE_STATE');await check();await this.checkTarget(value);if(await assertRegular(scope.destination,{directory:true,missing:true}))throw new AppError('EXISTS');await checkpoint('stopped',value);
      try{await operationStage('place-project-folder',{},()=>rename(root,scope.destination));}catch(error){if(error.code!=='EXDEV')throw error;await transfer.begin();await transfer.copy();}
      await checkpoint('folder-moved',value);value.phase='moved';await this.save(value);
     }

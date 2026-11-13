@@ -15,6 +15,7 @@ import {withProjectMembership,assertProjectCreationSettled,assertProjectRelocati
 import {trackProjectTransfer} from './project-transfer-tasks.js';
 import {projectRenameFile} from './project-rename-receipt.js';
 import {projectWorkspaceMoveFile} from './project-workspace-move-state.js';
+import {ownedMoveScope} from './workspace-move-state.js';
 import {workspaceRename,renameScope} from './workspace-rename-state.js';
 import {ProjectStorage} from './project-storage.js';
 import {projectMoveDirectory} from './project-move-boundaries.js';
@@ -101,7 +102,11 @@ export class NativeProjectRelocation{
     if(root===scope.destination&&!value.copied&&['prepared','frozen'].includes(value.phase))await persistRename(scope.source,scope.destination);
     if(root===scope.source){
      await selected.freeze({check,checkpoint});await check();await target();if(await assertRegular(scope.destination,{directory:true,missing:true})&&await realpath(scope.destination)!==scope.source)throw new AppError('EXISTS');
-     try{await rename(root,scope.destination);}catch(error){if(error.code!=='EXDEV')throw error;if(!value.placement){value.phase='cancelling';value.cancelReason='volume';await command.save(value);await checkpoint('cancelling',value);await selected.current(scope.source);await selected.clear(scope.source,{atSource:true,checkpoint});await checkpoint('cancelled',value);throw new AppError('STORAGE_RENAME_VOLUME');}await transfer.begin();await transfer.copy();}
+     // A project moving to another workspace carries its catalogues into the
+     // destination workspace's cluster: it is always copied and activated
+     // there, then its source catalogues retire with the source folder.
+     if(this.cross){await transfer.begin();await transfer.copy();}
+     else try{await rename(root,scope.destination);}catch(error){if(error.code!=='EXDEV')throw error;if(!value.placement){value.phase='cancelling';value.cancelReason='volume';await command.save(value);await checkpoint('cancelling',value);await selected.current(scope.source);await selected.clear(scope.source,{atSource:true,checkpoint});await checkpoint('cancelled',value);throw new AppError('STORAGE_RENAME_VOLUME');}await transfer.begin();await transfer.copy();}
      await checkpoint(this.cross?'folder-moved':'renamed',value);value.phase='moved';await command.save(value);root=scope.destination;
     }
     if(value.copied)await transfer.activate();
@@ -111,7 +116,7 @@ export class NativeProjectRelocation{
      else{await this.settings(new ProjectStorage(scope.destination,value.projectId,vault),value);await checkpoint('metadata',value);await publishNativeProjectLocation(this.registry,selected);}
      value.phase='registered';await command.save(value);await checkpoint('registered',value);
     }
-    if(value.copied&&['registered','retiring','retired'].includes(value.phase))await transfer.retire();
+    if(value.copied&&['registered','retiring','retired'].includes(value.phase))await ownedMoveScope({id:value.id,source:scope.source,destination:scope.destination},()=>transfer.retire());
     if(this.cross){
      if(!['registered','retired','departing'].includes(value.phase))throw new AppError('STORAGE_MOVE_STATE');value.phase='departing';await command.save(value);await target();await selected.verify(scope.destination);if(value.copied)await transfer.verify();await admitNativeWorkspaceTree(command.targetRegistry,selected);await checkpoint('departing',value);await check();
      await recordProjectDeparture(this.registry,nativeDepartureOwners(selected),{workspaceId:command.targetRegistry.workspaceId,operationId:value.id});await checkpoint('source-directory',value);value.phase='departed';await command.save(value);await checkpoint('departed',value);

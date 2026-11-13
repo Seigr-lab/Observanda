@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {websitePreparationFinished} from './website-preparation-helper.js';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
@@ -24,11 +25,13 @@ test('project calculator authoring, history and recovery stay owned while unrela
  try{
   const rootBook=sampleNotebook(),f=await encryptedFixture(directory,rootBook);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,rootBook.id);
   const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['scientific-calculator','spreadsheet','resources','planning'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
-  const create=async name=>{const book=sampleNotebook();book.title=name;book.projects[0].title=name;book.projects[0].tools=['resources','planning'];const id=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);const storage=await initializeProjectLocation(path.join(directory,name),id,book,access,vault),commands=new ProjectModuleCommands(storage,book.id);await commands.initialize();await registry.attach(storage,{expected:(await registry.read()).revision});const command=calculation({book});command.payload.data.name=name+' calculation';await commands.execute(command);return {id,book,storage,command};};
+  const create=async name=>{const book=sampleNotebook();book.title=name;book.projects[0].title=name;book.projects[0].tools=['resources','planning'];const id=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);const storage=await initializeProjectLocation(path.join(f.workspace.root,name),id,book,access,vault),commands=new ProjectModuleCommands(storage,book.id);await commands.initialize();await registry.attach(storage,{expected:(await registry.read()).revision});const command=calculation({book});command.payload.data.name=name+' calculation';await commands.execute(command);return {id,book,storage,command};};
   const a=await create('Project A'),b=await create('Project B');
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push([r.method(),new URL(r.url()).pathname]);});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
+  // The one-time website preparation needs the workspace writer; let it finish before holding writers.
+  await websitePreparationFinished(page);
   for(const storage of [f.workspace,a.storage]){const db=await storage.openCatalogue();connections.push(db);await db.run('BEGIN');await db.lock();}
   const url=p=>app.origin+'/#/owners/'+p.id+'/modules/scientific-calculator/calculation/'+p.command.payload.id,main=page.locator('main');
   await page.goto(url(a));await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Project A calculation');
@@ -56,7 +59,7 @@ test('project calculator authoring, history and recovery stay owned while unrela
   expect((await new ProjectModuleDrafts(a.storage,a.book.id).list({workspaceId:a.book.id,moduleId:'planning'})).drafts).toHaveLength(0);
   await main.getByRole('button',{name:'New subscription',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('Project A feed');await main.getByLabel('Calendar subscription URL',{exact:true}).fill('https://calendar.example.invalid/feed');await main.getByLabel('Include this subscription',{exact:true}).uncheck();await main.getByRole('button',{name:'Save subscription',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   await main.locator('[data-command="list"][data-type="calendar"]').click();await expect(main.locator('[data-calendar-view]')).toBeVisible();await expect(main.getByRole('button',{name:'Calendar overview',exact:true})).toHaveCount(0);
-  await page.locator('#workspace-navigation').getByRole('button',{name:'Scientific calculator',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('No matching');expect(new URL(page.url()).hash).not.toContain('/owners/');
+  await page.locator('#workspace-navigation').getByRole('button',{name:'Scientific calculator',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toHaveText('No items yet. Create an item to get started.');expect(new URL(page.url()).hash).not.toContain('/owners/');
   expect((await new ProjectModuleReader(a.storage,a.book.id).selected({workspaceId:a.book.id,id:a.command.payload.id})).entity.data.name).toBe('Saved after leaving Project A');
   expect((await new ProjectModuleReader(b.storage,b.book.id).selected({workspaceId:b.book.id,id:b.command.payload.id})).entity.data.name).toBe('Concurrent Project B save');
   expect(requests.filter(([method,route])=>method==='POST'&&route.endsWith('/modules/command')).every(([,route])=>[a.id,b.id].some(id=>route==='/api/projects/'+id+'/modules/command'))).toBe(true);expect(errors).toEqual([]);

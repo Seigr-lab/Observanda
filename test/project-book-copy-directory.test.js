@@ -17,16 +17,19 @@ import {captureProjectBookCopyDirectory,withProjectBookCopyDirectory,validatePro
 import {serialize,digest} from '../src/storage-format.js';
 import {ProjectBookCopy} from '../src/project-book-copy.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 const uuid=(kind,index)=>kind+'0000000-0000-4000-8000-'+String(index).padStart(12,'0');
 test('project book copy pins more than 8192 native owners without aggregate transfer receipts',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-book-directory-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
  t.after(async()=>{await provider.close();detach();await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device);vault=takeCreatedVault(access);
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);t.after(()=>clearVault(ownerHome.vault));
  const metadata=createNotebook('Directory project'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
- const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);
+ const source=await initializeProjectLocation(path.join(ownerHome.root,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);
  const empty=await captureProjectBookCopyDirectory(registry);assert.equal(await withProjectBookCopyDirectory(registry,empty,view=>view.count),0);
- await mkdir(path.join(directory,'Empty copy'));const copied=await copyProjectLocation(source,path.join(directory,'Empty copy',metadata.title),{id:randomUUID()});assert.equal((await projectTransferReceipt(copied)).phase,'verified');await provider.closeProject(copied.root);
+ await mkdir(path.join(ownerHome.root,'Empty copy'));const copied=await copyProjectLocation(source,path.join(ownerHome.root,'Empty copy',metadata.title),{id:randomUUID()});assert.equal((await projectTransferReceipt(copied)).phase,'verified');await provider.closeProject(copied.root);
  const before=await source.outline(),count=8193,entry=index=>({labBookId:uuid('1',index),directory:'Lab book '+String(index).padStart(5,'0'),namespaceId:uuid('2',index),vaultId:uuid('3',index)});
  // Only catalogue directory descriptors grow. No thousands of owner folders,
  // independent databases, keys or transfer processes are created by this test.
@@ -53,15 +56,17 @@ test('pending project copies retain original book transfer IDs across verified n
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-book-legacy-copy-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
  t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-book-legacy-copy-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);t.after(()=>clearVault(ownerHome.vault));
  const metadata=createNotebook('Earlier directory'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
- const source=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);
+ const source=await initializeProjectLocation(path.join(ownerHome.root,metadata.title),projectId,metadata,access,vault),registry=new LabBookRegistry(source);
  const created=await new LabBookCreation(source,device).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title:'Retained book'}}),key=await verifyAccess(await readAccess(created.book.root),'','',{deviceStore:device});vaults.push(key);
  const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),before=await storage.read(),withBook=(id,use)=>{assert.equal(id,storage.labBookId);return use(storage);};
  const legacy=serialize((await registry.read()).value),oldRevision=digest(legacy);await source.writeFile(registry.file,legacy);
  // Exercise the retained older writer directly so this fixture genuinely has
  // an envelope revision and random transfer IDs before native adoption.
  const older=new ProjectBookCopy(source);await older.prepare(withBook,{relocation:true});assert.equal(older.revision,oldRevision);
- await mkdir(path.join(directory,'Copies'));const destination=path.join(directory,'Copies',metadata.title),id=randomUUID();let pending;
+ await mkdir(path.join(ownerHome.root,'Copies'));const destination=path.join(ownerHome.root,'Copies',metadata.title),id=randomUUID();let pending;
  try{
   await assert.rejects(older.using(()=>copyProjectOwnerLocation(source,destination,{id,beforeVerified:async(target,receipt,save)=>{
    await older.copy(target,receipt,save,{checkpoint:stage=>{if(stage==='book'){pending=structuredClone(receipt);throw Error('Interrupted older copy');}}});

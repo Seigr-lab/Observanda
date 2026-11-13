@@ -7,6 +7,8 @@ import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {randomUUID} from 'node:crypto';
 import {WorkspacePostgres} from './workspace-postgres.js';
 import {ProjectPostgres} from './project-postgres.js';
+import {ownerWorkspaceRoot} from './owner-postgres.js';
+import {ownerRoleName} from './owner-database-role.js';
 import {LabBookPostgres} from './lab-book-postgres.js';
 import {assertCatalogueOwner} from './project-catalogue-owner.js';
 import {outsideWorkspace} from './postgres-runtime.js';
@@ -21,8 +23,11 @@ export class WorkspaceDatabases{
  constructor({directory,ownerId,env=process.env,signal,onProgress=()=>{},projectRuntime={},labBookRuntime={}}){
   this.directory=path.resolve(directory);this.env={...env};delete this.env.OBSERVANDA_DATABASE_URL;
   this.signal=signal;this.onProgress=onProgress;this.instances=new WorkspacePostgres({ownerId,env:this.env,runtimeDirectory:this.directory,signal,onProgress});
-  this.projects=new ProjectPostgres({ownerId,env:this.env,runtimeDirectory:this.directory,signal,onProgress,idleMs:projectRuntime.idleMs,maxIdle:projectRuntime.maxIdle});
-  this.labBooks=new LabBookPostgres({ownerId,env:this.env,runtimeDirectory:this.directory,signal,onProgress,idleMs:labBookRuntime.idleMs,maxIdle:labBookRuntime.maxIdle});
+  // One cluster per workspace: projects and lab books use the cluster of the
+  // workspace containing their folder, each under its own role.
+  this.projects=new ProjectPostgres({workspaces:this.instances,idleMs:projectRuntime.idleMs,maxIdle:projectRuntime.maxIdle});
+  this.labBooks=new LabBookPostgres({workspaces:this.instances,idleMs:labBookRuntime.idleMs,maxIdle:labBookRuntime.maxIdle});
+  this.instances.beforeClose=root=>this.closeOwners(root);
  }
  async environment(root,{create=false,detached=false,vault,projectId,labBookId,signal}={}){
   signal?.throwIfAborted();
@@ -82,11 +87,19 @@ export class WorkspaceDatabases{
  healthEnvironments(root){return {scratch:this.closing?null:this.scratchEnv??null,selected:this.closing||!root?null:this.instances.healthEnvironment(root)};}
  async closeProject(root){await this.projects.closeProject(root);}
  async closeLabBook(root){await this.labBooks.closeLabBook(root);}
+ // A workspace cluster stops only after its projects and lab books drained.
+ async closeOwners(root){
+  const results=await Promise.allSettled([this.projects.closeHome(root),this.labBooks.closeHome(root)]);
+  const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+ }
+ ownerOpen(kind,root){return (kind==='lab-book'?this.labBooks:this.projects).isOpen(root);}
+ settleOwner(kind,root){return (kind==='lab-book'?this.labBooks:this.projects).settle(root);}
  async details(workspace){
   if(!workspace)return {placement:'workspace',path:null};
   const binding=await catalogueBinding(workspace.root);assertCatalogueOwner(binding,workspace.projectId,workspace.labBookId);
-  if(workspace.labBookId!==undefined)return {placement:'lab-book',labBookId:workspace.labBookId,path:path.join(workspace.root,'.observanda','postgresql')};
-  if(workspace.projectId!==undefined)return {placement:'project',projectId:workspace.projectId,path:path.join(workspace.root,'.observanda','postgresql')};
+  // Projects and lab books report the cluster of their workspace.
+  if(workspace.labBookId!==undefined)return {placement:'lab-book',labBookId:workspace.labBookId,path:path.join(await ownerWorkspaceRoot(await realpath(workspace.root)),'.observanda','postgresql')};
+  if(workspace.projectId!==undefined)return {placement:'project',projectId:workspace.projectId,path:path.join(await ownerWorkspaceRoot(await realpath(workspace.root)),'.observanda','postgresql')};
   if(binding&&binding.placement!=='workspace')throw new AppError('ACCESS_UPGRADE');
   return {placement:'workspace',path:path.join(workspace.root,'.observanda','postgresql')};
  }
@@ -96,17 +109,26 @@ export class WorkspaceDatabases{
  async stopLabBookForRename(root,labBookId,vault,id){return this.labBooks.stopForRename(root,labBookId,vault,id);}
  async stopProjectForDeletion(root,projectId,vault,deleteId){return this.projects.stopForDeletion(root,projectId,vault,deleteId);}
  async stopProjectForRename(root,projectId,vault,id){return this.projects.stopForRename(root,projectId,vault,id);}
+ // A transfer that replaced its source removes the source catalogue once the
+ // source folder is gone; the owner's role leaves when it owns nothing else.
+ async retireOwnerCatalogue(root,ownerId,catalogueId){
+  const home=await ownerWorkspaceRoot(path.resolve(root)),{service}=await this.instances.running(home);
+  if(typeof service.dropOwnerCatalogue!=='function')throw new AppError('DATABASE_RUNTIME');
+  await service.dropOwnerCatalogue(ownerRoleName(ownerId),catalogueId);
+ }
  async stopWorkspaceForRename(root,vault,id){return this.instances.stopForRename(root,vault,id);}
  async stopWorkspaceForDeletion(root,vault,deleteId){return this.instances.stopForDeletion(root,vault,deleteId);}
  close(){
   return this.closing??=(async()=>{
    // Every owner must drain even if another one's shutdown fails. Detachment
    // is also unconditional; one error must not leave the whole provider locked.
+   // Owners release their connections before the workspace clusters stop.
    let closed;
    try{closed=await Promise.allSettled([
-    Promise.resolve().then(()=>this.instances.close()),
-    Promise.resolve().then(()=>this.projects.close()),
-    Promise.resolve().then(()=>this.labBooks.close()),
+    Promise.allSettled([Promise.resolve().then(()=>this.projects.close()),Promise.resolve().then(()=>this.labBooks.close())]).then(async owners=>{
+     const results=[...owners,...await Promise.allSettled([Promise.resolve().then(()=>this.instances.close())])];
+     const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+    }),
     (async()=>{const owner=await this.scratchStart?.catch(()=>null);await owner?.service.close();})(),
     (async()=>{const owner=await this.legacyStart?.catch(()=>null);await owner?.service.close();})(),
    ]);}finally{this.detach?.();}

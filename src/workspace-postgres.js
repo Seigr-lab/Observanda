@@ -39,7 +39,7 @@ export class WorkspacePostgres{
    try{
     if(!create&&!await assertRegular(path.join(directory,'service.observanda'),{missing:true}))throw new AppError('CATALOGUE_UNAVAILABLE');
     const service=await startManagedPostgres({directory,env,workspace:{root,vault:startupVault,ownerId:this.ownerId},runtimeDirectory:this.runtimeDirectory,onProgress:this.onProgress,signal:this.signal});
-    try{await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);}catch(error){await service.close();throw error;}entry.env=env;return {service,env};
+    try{await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);}catch(error){await service.close();throw error;}entry.env=env;entry.service=service;return {service,env};
    }catch(error){if(this.instances.get(root)===entry)this.instances.delete(root);throw error;}
    finally{startupVault.key.fill(0);}
   })();
@@ -75,6 +75,16 @@ export class WorkspacePostgres{
   root=await this.authorizeMove(root,vault,moveId);await this.closeWorkspace(root);
   const service=await stopManagedPostgres({directory:path.join(root,WORKSPACE_DATABASE_DIRECTORY),env:{...this.env},workspace:{root,vault,ownerId:this.ownerId,moveId}});await service.close();
  }
+ // Projects and lab books use the running cluster of their workspace. They
+ // never start it: a workspace that is not open in this installation is locked.
+ async running(root,{signal}={}){
+  signal?.throwIfAborted();const entry=this.stopping?null:this.instances.get(root);
+  if(!entry||entry.closing)throw new AppError('ACCESS_LOCKED');
+  const value=await waitRuntimeStartup(entry.pending,signal);
+  if(this.instances.get(root)!==entry||entry.closing)throw new AppError('ACCESS_LOCKED');
+  return value;
+ }
+ isRunning(root,service){const entry=this.instances.get(root);return !this.stopping&&!!entry&&!entry.closing&&entry.env!==undefined&&entry.service===service;}
  async cached(root,{signal}={}){signal?.throwIfAborted();const entry=this.instances.get(await realpath(root));if(!entry||entry.closing)throw new AppError('ACCESS_LOCKED');return (await waitRuntimeStartup(entry.pending,signal)).env;}
  // A readiness check observes only an already opened runtime. It must not
  // start PostgreSQL, resolve a network path or await an unfinished startup.
@@ -84,7 +94,9 @@ export class WorkspacePostgres{
   // Retain ownership until shutdown has finished. Concurrent opens must not
   // launch a second process while the first is still flushing its files.
   entry.closing??=(async()=>{
-   try{const {service}=await entry.pending;await service.close();}
+   // Projects and lab books using this cluster drain and release their
+   // connections first; the cluster then stops even if one of them failed.
+   try{try{await this.beforeClose?.(root);}finally{const {service}=await entry.pending;await service.close();}}
    finally{
     // Managed close always releases its kernel lease and clears credentials,
     // even if pg_ctl failed. The next authenticated open checks the durable

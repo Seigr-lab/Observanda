@@ -19,7 +19,14 @@ import {authenticateKeyring} from './security/keyring.js';
 import {withWriterLease} from './writer-lease.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
+import {databaseProvider} from './workspace-database-context.js';
+import {ownerWorkspaceRoot} from './owner-postgres.js';
 import {withOperationProgress,operationStage,operationSequence,operationTransfer} from './operation-progress.js';
+// Managed storage keeps every activated owner in a workspace's cluster.
+export async function outsideWorkspaces(destination){
+ if(!databaseProvider())return false;
+ try{await ownerWorkspaceRoot(destination);return false;}catch(error){if(error.code==='DATABASE_LOCATION')return true;throw error;}
+}
 export function ownedStorageTransfer({Storage,placement,ownerId,archiveFile,readArchive,writeArchive}){
 const intentName='.observanda/'+placement+'-transfer.observanda',leaseName='.observanda/'+placement+'-transfer.lock',markerName='.observanda/copy-in-progress';
 const receiptDirectory='.observanda/'+placement+'-transfer-files';
@@ -42,6 +49,10 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
  if(!relocation)await assertInventoryObligationsSettled(source);
  const sourceRoot=await realpath(source.root),destination=await resolveLocation(input);
  if(within(sourceRoot,destination)||within(destination,sourceRoot))throw new AppError('STORAGE_PATH');
+ // A copy outside every workspace has no database to live in: it is written in
+ // archive form, as a portable copy is, with its keyring unchanged, and it
+ // activates in the database of the workspace where it is later opened.
+ const archive=portable||await outsideWorkspaces(destination);
  requireStorageName(destination,storageFolderName(sourceRoot));
  let boundaries=projectCopyBoundaries(sourceRoot,projectRoots);
  const access=await readAccess(sourceRoot);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,source.vault);
@@ -60,7 +71,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
     if(receipt.phase==='verified'&&!afterVerified){
      const binding=await catalogueBinding(destination);
-     if(portable){const identity=await readArchive(destination,source.vault);if(binding||identity[ownerId]!==source[ownerId]||identity.namespaceId!==receipt.namespaceId||identity.archiveDigest!==receipt.archiveDigest)throw new AppError('STORAGE_COPY');}
+     if(archive){const identity=await readArchive(destination,source.vault);if(binding||identity[ownerId]!==source[ownerId]||identity.namespaceId!==receipt.namespaceId||identity.archiveDigest!==receipt.archiveDigest)throw new AppError('STORAGE_COPY');}
      else{if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');if(!relocation)await assertInventoryObligationsSettled(target);if(retainIncomplete){const metadata=await target.catalogue(async store=>(await store.snapshot()).metadata);if(metadata.id!==receipt.namespaceId)throw new AppError('DATABASE_LOCATION');}else await target.outline();}
      if(onVerified)await onVerified(target,receipt);
      await admitted.assertNamed();if(!retainIncomplete)await admitted.remove(marker,{missing:true});
@@ -87,9 +98,9 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
      const reconcile=async()=>{
       const targetBinding=await catalogueBinding(destination);let current=null,prepared;
       if(targetBinding){
-       if(portable||targetBinding.placement!==placement||targetBinding[ownerId]!==source[ownerId])throw new AppError('STORAGE_COPY');
+       if(archive||targetBinding.placement!==placement||targetBinding[ownerId]!==source[ownerId])throw new AppError('STORAGE_COPY');
        prepared=await target.catalogue(store=>prepareTransferredCatalogue(store.db,expected));current=prepared.digest;
-      }else if(portable&&receipt.archiveDigest){
+      }else if(archive&&receipt.archiveDigest){
        current=await hashWorkspaceFile(path.join(destination,CATALOGUE_ARCHIVE));if(!expected.includes(current))throw new AppError('CONFLICT');
       }
       receipt.head=outline.etag;receipt.phase='files';await save(target,receipt);await atomicWrite(marker,'copying '+placement+'\n');
@@ -99,7 +110,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
       const descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
       const validate=db=>operationStage('verify-'+placement+'-database',{},()=>target.catalogueStore(db).verify(descriptor));
       let digest;
-      if(portable){
+      if(archive){
        if(!receipt.archiveDigest||current!==sourceDigest){
         if(sourceDigest){receipt.nextDigest=sourceDigest;await save(target,receipt);}
         digest=await backupCatalogue(sourceRoot,destination,{connection:original});if(sourceDigest&&digest!==sourceDigest)throw new AppError('CONFLICT');

@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // Placement changes move an existing owner between named parent folders.
 // The workspace registry supplies membership independently of owner payloads.
 import path from 'node:path';
@@ -29,5 +30,5 @@ export async function checkPlacementParent(registry,value){
  if(!parent||path.relative(registry.workspace.root,parent).split(path.sep).join('/')!==value.placementParent.relative)throw new AppError('STORAGE_RENAME_STATE');
  // Native receipts retain exact 64-bit file identities. Number-based stat
  // values can round Windows file IDs; legacy receipts used that representation.
- const stat=value.ownerDirectoryVersion===2?await projectMoveDirectory(parent):await assertRegular(parent,{directory:true});if(String(stat.dev)!==value.placementParent.dev||String(stat.ino)!==value.placementParent.ino)throw new AppError('STORAGE_RENAME_STATE');
+ const stat=value.ownerDirectoryVersion===2?await projectMoveDirectory(parent):(await assertRegular(parent,{directory:true}),await folderIdentity(parent));if(String(stat.dev)!==value.placementParent.dev||String(stat.ino)!==value.placementParent.ino)throw new AppError('STORAGE_RENAME_STATE');
 }

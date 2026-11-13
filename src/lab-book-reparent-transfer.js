@@ -15,8 +15,7 @@ import {authenticateKeyring} from './security/keyring.js';
 import {workspaceRename} from './workspace-rename-state.js';
 import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
-import {assertLabBookDatabaseStopped,LAB_BOOK_DATABASE_DIRECTORY} from './lab-book-postgres.js';
+import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {researchId} from './web/research-reference.js';
 import {operationStage} from './operation-progress.js';
 import {AppError} from './errors.js';
@@ -70,17 +69,16 @@ export class LabBookRelocationTransfer{
      const provider=databaseProvider();if(!provider?.stopLabBookForRename)throw new AppError('DATABASE_LOCATION');
      const pending=await moveSource(roots.source);if(pending&&(pending.id!==value.id||pending.destination!==target.root))throw new AppError('STORAGE_MOVE_STATE');
      if(pending)await provider.stopLabBookForMove(roots.source,value.labBookId,this.vault,value.id);else await provider.stopLabBookForRename(roots.source,value.labBookId,this.vault,value.id);
-     const lease=await workspaceDatabaseLease(path.join(roots.source,LAB_BOOK_DATABASE_DIRECTORY));
-     try{
-      await assertLabBookDatabaseStopped(roots.source,value.labBookId,this.vault);await assertProjectMoveDirectory(roots.source,value.identity);
-      await atomicWrite(path.join(roots.source,MOVE_SOURCE),serialize({id:value.id,destination:target.root}));await this.checkpoint('retire-frozen',value);await this.check();
-     }finally{await lease.close();}
+     await assertLabBookDatabaseStopped(roots.source,value.labBookId,this.vault);await assertProjectMoveDirectory(roots.source,value.identity);
+     await atomicWrite(path.join(roots.source,MOVE_SOURCE),serialize({id:value.id,destination:target.root}));await this.checkpoint('retire-frozen',value);await this.check();
      await rename(roots.source,retired);await this.checkpoint('source-retired',value);
     }
     await persistRename(roots.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
    }
    if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
    const removed=retirementCheck(()=>this.check());await removeRetiredLabBook({...value,...roots,sourceDirectory:value.identity},{verify:!this.fresh,checkpoint:async(stage,...args)=>{await (stage==='removed'?removed():this.check());await this.checkpoint('retire:'+stage,...args);}});
+   // With the source folder removed, its catalogue leaves the cluster.
+   const provider=databaseProvider();if(!provider?.retireOwnerCatalogue)throw new AppError('DATABASE_LOCATION');await provider.retireOwnerCatalogue(roots.source,value.labBookId,value.transfer.sourceId);
    await this.checkpoint('source-removed',value);
   });
  }

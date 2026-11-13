@@ -30,9 +30,9 @@ export class ProjectBookCopy extends ProjectBookOwners{
   const take=index=>index===books.length?withWriterLease(path.join(this.project.root,'.observanda/lab-books.lock'),async()=>{await this.ready();if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');if(!holdBooks)return operation();return this.withStorageHandoff(async()=>{this.holdingBooks=true;try{return await operation();}finally{this.holdingBooks=false;}});}):withWriterLease(path.join(directory,'book-'+books[index].labBookId+'.lock'),()=>take(index+1));
   return take(0);
  }
- async copied(target,receipt,{portable=false,onCopiedBook}={}){
-  if(this.native)return this.native.copied(target,receipt,{portable,onCopiedBook});
-  if(portable||typeof onCopiedBook!=='function')return;
+ async copied(target,receipt,{portable=false,archive=portable,onCopiedBook}={}){
+  if(this.native)return this.native.copied(target,receipt,{portable,archive,onCopiedBook});
+  if(archive||typeof onCopiedBook!=='function')return;
   const registry=new LabBookRegistry(target);await registry.inspect(async current=>{
   for await(const {entry} of current.entries()){
    const source=this.books.find(book=>book.labBookId===entry.labBookId),transfer=receipt.bookTransfers?.find(item=>item.labBookId===entry.labBookId);
@@ -49,14 +49,14 @@ export class ProjectBookCopy extends ProjectBookOwners{
   const identity=await readProjectArchiveIdentity(target.root,target.vault,{verify:false});
   return inspectArchivedOwnerDirectory(registry,identity.archiveDigest,view=>view.revision);
  }
- async copy(target,receipt,save,{portable=false,relocation=false,checkpoint=async()=>{}}={}){
-  if(this.native)return this.native.copy(target,receipt,save,{portable,relocation,checkpoint});
+ async copy(target,receipt,save,{portable=false,archive=portable,relocation=false,checkpoint=async()=>{}}={}){
+  if(this.native)return this.native.copy(target,receipt,save,{portable,archive,relocation,checkpoint});
   if(!this.books.length)return;
   if(receipt.bookRegistryRevision!==undefined&&receipt.bookRegistryRevision!==this.revision)throw new AppError('CONFLICT');
   if(receipt.bookTransfers===undefined){receipt.bookRegistryRevision=this.revision;receipt.bookTransfers=this.books.map(book=>({labBookId:book.labBookId,id:randomUUID()}));await save();}
   const transfers=receipt.bookTransfers;
   if(!Array.isArray(transfers)||transfers.length!==this.books.length||new Set(transfers.map(item=>item.id)).size!==transfers.length||transfers.some((item,index)=>item.labBookId!==this.books[index].labBookId||!researchId(item.id)))throw new AppError('STORAGE_COPY');
-  if(await this.targetRevision(target,portable)!==this.revision)throw new AppError('CONFLICT');
+  if(await this.targetRevision(target,archive)!==this.revision)throw new AppError('CONFLICT');
   await operationStage('copy-project-books',{unit:'books',total:this.books.length},async()=>{
    for(const [index,book] of this.books.entries()){
     operationItem(book.directory);await this.checked(book);const destination=path.join(target.root,book.directory);
@@ -68,6 +68,6 @@ export class ProjectBookCopy extends ProjectBookOwners{
     await assertRegular(destination,{directory:true});operationAdvance();await checkpoint('book',book.labBookId);
    }
   });
-  if(await this.registry.version()!==this.revision||await this.targetRevision(target,portable)!==this.revision)throw new AppError('CONFLICT');
+  if(await this.registry.version()!==this.revision||await this.targetRevision(target,archive)!==this.revision)throw new AppError('CONFLICT');
  }
 }

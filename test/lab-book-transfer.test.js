@@ -19,14 +19,17 @@ import {readLabBookArchiveIdentity} from '../src/lab-book-archive.js';
 import {ResearchRecords} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {MediaStore} from '../src/media.js';
+import {ownerWorkspace,assertArchiveCopy,importLabBookCopy} from './owner-workspace-fixture.js';
 import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 
 test('a dedicated book copies and exports independently, preserving records, evidence and interrupted work',{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-transfer-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
  t.after(async()=>{await provider.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-transfer-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),accessDocument=await createWorkspaceAccess('','',device),vault=takeCreatedVault(accessDocument);vaults.push(vault);
+ // Owners live in an open workspace and use its single cluster.
+ const ownerHome=await ownerWorkspace(directory);vaults.push(ownerHome.vault);
  const metadata=createNotebook('Field Project 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
- const project=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,accessDocument,vault),created=await new LabBookCreation(project,device).create({id:randomUUID(),username:'',password:'Book transfer password',book:{id:randomUUID(),projectId,title:'Observations \u00c5 1'}}),key=await verifyAccess(await readAccess(created.book.root),'','Book transfer password',{deviceStore:device});vaults.push(key);
+ const project=await initializeProjectLocation(path.join(ownerHome.root,metadata.title),projectId,metadata,accessDocument,vault),created=await new LabBookCreation(project,device).create({id:randomUUID(),username:'',password:'Book transfer password',book:{id:randomUUID(),projectId,title:'Observations \u00c5 1'}}),key=await verifyAccess(await readAccess(created.book.root),'','Book transfer password',{deviceStore:device});vaults.push(key);
  const source=new LabBookStorage(created.book.root,created.book.labBookId,key),outline=await source.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:source.labBookId};
  await new ResearchRecords(source,new MediaStore(source)).save({workspaceId:outline.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]});
  const materials=new ResearchMaterials(source),bytes=Buffer.from('Original field observation'),upload=await materials.startImport({recordId:record.id,name:'original.txt',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const ref=await materials.finishImport(upload.id),before=await source.read();
@@ -34,11 +37,16 @@ test('a dedicated book copies and exports independently, preserving records, evi
  await assert.rejects(copyLabBookLocation(source,destination,{id,checkpoint:stage=>{if(stage==='files')throw Error('Interrupted transfer');}}),/Interrupted transfer/);
  await assert.rejects(new LabBookStorage(destination,source.labBookId,key).outline(),{code:'STORAGE_INCOMPLETE'});
  await assert.rejects(copyLabBookLocation(source,destination,{id:randomUUID()}),{code:'CONFLICT'});
- const copied=await copyLabBookLocation(source,destination,{id});assert.equal((await labBookTransferReceipt(copied)).phase,'verified');assert.deepEqual(await copied.read(),before);
- const binding=await catalogueBinding(destination);assert.equal(binding.placement,'lab-book');assert.equal(binding.labBookId,source.labBookId);assert.notEqual(binding.id,(await catalogueBinding(source.root)).id);
+ // A copy outside every workspace is written in archive form.
+ const copied=await copyLabBookLocation(source,destination,{id});assert.equal((await labBookTransferReceipt(copied)).phase,'verified');await assertArchiveCopy(destination);
+ assert.equal((await readLabBookArchiveIdentity(destination,key)).labBookId,source.labBookId);
  const exports=path.join(directory,'Backups');await mkdir(exports);const archiveRoot=path.join(exports,created.book.directory),portable=await copyLabBookLocation(source,archiveRoot,{id:randomUUID(),portable:true});assert.equal(await catalogueBinding(portable.root),null);assert.equal((await readLabBookArchiveIdentity(portable.root,key)).labBookId,source.labBookId);
  await provider.closeLabBook(source.root);await provider.closeProject(project.root);await rename(source.root,source.root+' unavailable');
- await provider.closeLabBook(copied.root);assert.deepEqual(await new LabBookStorage(destination,source.labBookId,key).read(),before);
- const restored=new LabBookStorage(archiveRoot,source.labBookId,key);assert.deepEqual(await restored.read(),before);await assert.rejects(access(path.join(archiveRoot,CATALOGUE_ARCHIVE)),{code:'ENOENT'});
+ // Both copies open with their data once brought into a workspace through the
+ // product's import, even after the source is gone.
+ await provider.closeLabBook(copied.root);await assertArchiveCopy(archiveRoot);
+ const imported=await importLabBookCopy(directory,{deviceStore:device,source:destination,password:'Book transfer password',labBookId:source.labBookId,vault:key,vaults});
+ assert.deepEqual((await imported.read()).book.entries,before.book.entries);assert.notEqual((await catalogueBinding(imported.root)).id,(await catalogueBinding(source.root+' unavailable')).id);
+ const restored=await importLabBookCopy(directory,{deviceStore:device,source:archiveRoot,password:'Book transfer password',labBookId:source.labBookId,vault:key,vaults});assert.deepEqual((await restored.read()).book.entries,before.book.entries);
  const artifact=await new ResearchMaterials(restored).artifact(ref),chunks=[];for await(const part of artifact.content.stream())chunks.push(part);assert.deepEqual(Buffer.concat(chunks),bytes);
 });

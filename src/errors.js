@@ -3,7 +3,7 @@ import {CellComputationError} from './web/measurement-computation.js';
 import {CoordinateFrameError} from './web/coordinate-frame-model.js';
 import {DatasetResourceError} from './web/dataset-resource-policy.js';
 import messages from './web/locales/en/errors.json' with {type:'json'};
-import {unexpectedError} from './operational-diagnostics.js';
+import {unexpectedError,stateRefusal} from './operational-diagnostics.js';
 
 export class AppError extends Error {
   constructor(code, details = []) {
@@ -23,6 +23,7 @@ export function safeError(error) {
   if(error instanceof CoordinateAlignmentError)error=new AppError(error.code);
   if(error instanceof DatasetResourceError)error=new AppError('DATASET_CALCULATION_RESOURCE');
   if(!(error instanceof AppError)){unexpectedError(error);return {code:'IO',message:messages.IO,details:[]};}
+  if(error.code.endsWith('_STATE'))stateRefusal(error);
   const result={code:error.code,message:error.message,details:error.details};
   // JSON and progress streams must identify the same authorized owner so
   // clients can request the correct credentials. Never forward raw paths.

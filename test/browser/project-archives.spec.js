@@ -23,7 +23,7 @@ test('export one project backup and follow its progress in the project page thro
   const rootBook=sampleNotebook();rootBook.title='workspace';const f=await encryptedFixture(path.join(directory,'workspace'),rootBook);keys.push(f.vault);
   const book=sampleNotebook(),id=book.projects[0].id;book.projects[0].title='Selected backup project';const grant=await createWorkspaceAccess('','Project backup password',f.deviceStore),vault=takeCreatedVault(grant);keys.push(vault);
   book.title=book.projects[0].title;
-  const source=await initializeProjectLocation(path.join(directory,book.projects[0].title),id,book,grant,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(source,{expected:'new'});
+  const source=await initializeProjectLocation(path.join(f.workspace.root,book.projects[0].title),id,book,grant,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(source,{expected:'new'});
   const destinationParent=path.join(directory,'Project backups');await mkdir(destinationParent);const destination=path.join(destinationParent,book.title);
   const nested=await new LabBookCreation(source,f.deviceStore).create({id:randomUUID(),username:'',password:'Independent book password',book:{id:randomUUID(),projectId:id,title:'Experiment book 1'}});
   ProjectArchives.prototype.transfer=function(storage,value,options){return transfer.call(this,storage,value,{...options,checkpoint:async stage=>{if(stage==='database'){entered();await gate;}}});};

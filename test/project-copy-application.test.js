@@ -9,6 +9,10 @@ import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectAccessSettings} from '../src/project-access-settings.js';
 import {ScopedLocationAccess} from '../src/scoped-location-access.js';
+import {assertArchiveCopy} from './owner-workspace-fixture.js';
+// A copy outside every workspace is kept in archive form. Read it as an archive,
+// in a temporary schema, without activating it anywhere.
+class ArchivedBook extends LabBookStorage{openCatalogue(options={}){return super.openCatalogue({...options,detached:true});}}
 import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 
 test('selected project application copies and exports independent owners with scoped borrowed keys',{timeout:240000},async t=>{
@@ -21,8 +25,8 @@ test('selected project application copies and exports independent owners with sc
  for(const method of ['withProject','withBook']){const original=ScopedLocationAccess.prototype[method];t.mock.method(ScopedLocationAccess.prototype,method,async function(...args){const use=args.pop();let key;try{return await original.call(this,...args,async storage=>{key=storage.vault;borrowed++;if(method==='withProject')peakProjects=Math.max(peakProjects,++activeProjects);else peakBooks=Math.max(peakBooks,++activeBooks);try{return await use(storage);}finally{if(method==='withProject')activeProjects--;else activeBooks--;}});}finally{if(key)assert.equal(key.key,null,'The awaited owner must clear its borrowed key');}});}
  const copied=await app.run(client,route('copy'),{id:randomUUID(),parent});assert.equal(copied.phase,'complete');
  const exportParent=path.join(f.directory,'Exports');await mkdir(exportParent);const exported=await app.run(client,route('export'),{id:randomUUID(),parent:exportParent});assert.equal(exported.phase,'complete');assert.equal(exported.portable,true);
- for(const book of f.books){const relative=path.relative(selected.root,book.root),copyRoot=path.join(copied.destination,relative),exportRoot=path.join(exported.destination,relative);assert.deepEqual(await new LabBookStorage(copyRoot,book.labBookId,book.key).read(),book.before);assert.equal(await catalogueBinding(exportRoot),null);assert.ok(await stat(path.join(exportRoot,CATALOGUE_ARCHIVE)));}
- for(const project of f.projects){const relative=path.relative(selected.root,project.root);assert.ok(await catalogueBinding(path.join(copied.destination,relative)));assert.equal(await catalogueBinding(path.join(exported.destination,relative)),null);}
+ for(const book of f.books){const relative=path.relative(selected.root,book.root),copyRoot=path.join(copied.destination,relative),exportRoot=path.join(exported.destination,relative);await assertArchiveCopy(copyRoot);assert.deepEqual(await new ArchivedBook(copyRoot,book.labBookId,book.key).read(),book.before);assert.equal(await catalogueBinding(exportRoot),null);assert.ok(await stat(path.join(exportRoot,CATALOGUE_ARCHIVE)));}
+ for(const project of f.projects){const relative=path.relative(selected.root,project.root);await assertArchiveCopy(path.join(copied.destination,relative));assert.equal(await catalogueBinding(path.join(exported.destination,relative)),null);}
  assert.equal(app.session(client).size,originals.size);for(const [id,{grant,root}] of originals){assert.equal(app.session(client).get(id),grant);assert.equal(grant.root,root);}
  assert.ok(borrowed>0);assert.equal(peakProjects,1);assert.equal(peakBooks,1);assert.equal(activeProjects,0);assert.equal(activeBooks,0);t.diagnostic(JSON.stringify({projects:2,books:2,peakBorrowedProjects:peakProjects,peakBorrowedBooks:peakBooks,retainedClientGrants:originals.size}));
 });

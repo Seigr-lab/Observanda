@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {acquirePostgresRuntimeGuard} from './postgres-runtime-guard.js';
+import {acquirePostgresRuntimeGuard,preparePostgresRuntimeGuard} from './postgres-runtime-guard.js';
 import {withMutationFilesSession} from './mutation-files.js';
 import {nativeMember} from './native-storage-tree.js';
 import {nativeDestination} from './native-destination.js';
@@ -31,6 +31,12 @@ export async function withUpgradeablePostgresRuntime(options,operation){
 // permission checks are identical to automatic admission-triggered upgrades.
 export const upgradePostgresRuntime=(options,operation)=>upgradeSession(options,operation,true);
 async function upgradeSession(options,operation,requested){
+ // The guard process starts while the parent lease is taken; it is admitted
+ // only below, with the same checks, or closed unused.
+ const prepared=requested?null:await preparePostgresRuntimeGuard();
+ try{return await upgradeSessionWith(options,operation,requested,prepared);}finally{await prepared?.close();}
+}
+async function upgradeSessionWith(options,operation,requested,prepared){
  const {directory,workspace,signal,env=process.env}=options,name=path.basename(directory),journalName='.'+name+'.runtime-upgrade',protector=runtimeStateProtector(workspace,'upgrade');
  let lastProgress=0,lastPhase,lastPercent;
  const onProgress=value=>{const now=Date.now();if(value.phase!==lastPhase||now-lastProgress>=250||value.percent===100&&lastPercent!==100){lastProgress=now;lastPhase=value.phase;lastPercent=value.percent;options.onProgress?.(value);}};
@@ -53,7 +59,7 @@ async function upgradeSession(options,operation,requested){
    const saved=await parent.read(journalName,{missing:true});
    if(saved){const bytes=await protector.unprotect(saved.bytes);try{journal=journalValid(JSON.parse(bytes.toString('utf8')),parent,name);}finally{bytes.fill(0);}}
    if(!journal&&!requested){
-    try{guard=await acquirePostgresRuntimeGuard({...options,parentIdentity:parent.identity});}
+    try{guard=await acquirePostgresRuntimeGuard({...options,parentIdentity:parent.identity,...(prepared?{prepared}:{})});}
     catch(error){if(!migrationRequired(error)||options.stopOnly)throw error;}
     if(guard)return await operation(guard);
    }

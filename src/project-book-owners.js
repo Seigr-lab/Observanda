@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {assertProjectBookPlacementsComplete} from './lab-book-placement-state.js';
 import {assertProjectBookTransfersComplete} from './lab-book-transfer-state.js';
 // A project discovers and authenticates its immediate book owners. Lifecycle
@@ -17,7 +18,7 @@ import {assertRegular,digest,serialize,privateDirectory} from './storage.js';
 import {withWriterLease,writerLeaseHeld} from './writer-lease.js';
 import {validateRenameBooks} from './rename-owner-receipts.js';
 import {AppError} from './errors.js';
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 const hash=async file=>digest(await readFile(file));
 export class ProjectBookOwners{
  constructor(project,{busyCode='STORAGE_RENAME_BUSY',missingAccessCode='STORAGE_RENAME_PROJECTS'}={}){this.project=project;this.busyCode=busyCode;this.missingAccessCode=missingAccessCode;this.registry=new LabBookRegistry(project);this.keys=new Map();}
@@ -44,7 +45,7 @@ export class ProjectBookOwners{
      if(storage.root!==root||storage.labBookId!==entry.labBookId||storage.vault?.id!==entry.vaultId||await realpath(root)!==root)throw new AppError('DATABASE_LOCATION');
      authenticateKeyring((await readAccess(root)).value,storage.vault);const binding=await catalogueBinding(root),metadata=(await storage.outline()).metadata;
      if(binding?.placement!=='lab-book'||binding.labBookId!==entry.labBookId||metadata.id!==entry.namespaceId||metadata.notebooks[0].projectId!==this.project.projectId)throw new AppError('DATABASE_LOCATION');
-     books.push({...entry,identity:identity(await assertRegular(root,{directory:true})),accessHash:await hash(path.join(root,'.observanda/access.json'))});this.keys.set(entry.labBookId,cloneVault(storage.vault));
+     books.push({...entry,identity:(await assertRegular(root,{directory:true}),await identity(root)),accessHash:await hash(path.join(root,'.observanda/access.json'))});this.keys.set(entry.labBookId,cloneVault(storage.vault));
     });
    }
   });
@@ -66,7 +67,7 @@ export class ProjectBookOwners{
  }
  async checked(item){
   const root=this.registry.location(item).root,stat=await assertRegular(root,{directory:true});
-  if(await realpath(root)!==root||serialize(identity(stat))!==serialize(item.identity)||await hash(path.join(root,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
+  if(await realpath(root)!==root||serialize(await identity(root))!==serialize(item.identity)||await hash(path.join(root,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
   const vault=this.keys.get(item.labBookId);if(!vault)throw new AppError('ACCESS_LOCKED');authenticateKeyring((await readAccess(root)).value,vault);
   const binding=await catalogueBinding(root);if(binding?.placement!=='lab-book'||binding.labBookId!==item.labBookId)throw new AppError('DATABASE_LOCATION');return new LabBookStorage(root,item.labBookId,vault);
  }

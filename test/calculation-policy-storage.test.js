@@ -39,14 +39,14 @@ test('dedicated calculation policies and unfinished policy drafts survive replay
  assert.equal((await drafts.read(scope)).draft.drafts[0].data.policy.displayDigits,null);
  assert.deepEqual((await drafts.read(scope)).draft.drafts[0].base.policy,policy);
  const descriptor={format:'observanda-research-catalogue',version:2,workspaceId:f.book.id};await f.storage.catalogue(store=>store.verify(descriptor));
- const original=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),copyRoot=path.join(f.root,'archive');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
+ const original=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),copyRoot=path.join(f.workspace.root,'archive');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(copyRoot,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,copyRoot,{connection:db});}finally{await db.close();}
  const copied=new ProjectStorage(copyRoot,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(original));
  assert.equal((await new ProjectModuleDrafts(copied,f.book.id).read(scope)).etag,saved.etag);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'replacement-device')})),vault=takeCreatedVault(access);
  try{
-  const recovered=new ProjectStorage(path.join(f.root,'recovered'),f.projectId,vault);await mkdir(path.join(recovered.root,'.observanda'),{recursive:true});await atomicWrite(path.join(recovered.root,'.observanda/access.json'),serialize(access));await recovered.writeFile(await workspaceFile(recovered.root,{secure:true}),original);
+  const recovered=new ProjectStorage(path.join(await f.receivingWorkspace(),'recovered'),f.projectId,vault);await mkdir(path.join(recovered.root,'.observanda'),{recursive:true});await atomicWrite(path.join(recovered.root,'.observanda/access.json'),serialize(access));await recovered.writeFile(await workspaceFile(recovered.root,{secure:true}),original);
   await rekeyCatalogue(f.storage,recovered,JSON.parse(original));await verifyCatalogueArchive(recovered,JSON.parse(original));
   assert.equal((await new ProjectModuleDrafts(recovered,f.book.id).read(scope)).etag,saved.etag);
   const item=(await new ProjectModuleReader(recovered,f.book.id).selected({workspaceId:f.book.id,id:command.payload.id})).entity;

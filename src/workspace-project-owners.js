@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // Parent lifecycle commands share a bounded inventory of independently owned
 // project and book directories. Record and evidence contents are not scanned.
 import path from 'node:path';
@@ -18,7 +19,7 @@ import {assertRegular,digest,serialize} from './storage.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {AppError} from './errors.js';
 const hash=async file=>digest(await readFile(file));
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 export class WorkspaceProjectOwners {
  bookOwner(storage){return new ProjectBookOwners(storage);}
  constructor(workspace,{registry=null,missingAccessCode='STORAGE_RENAME_PROJECTS'}={}){this.workspace=workspace;this.missingAccessCode=missingAccessCode;this.registry=registry;this.externalRegistry=Boolean(registry);this.keys=new Map();this.bookOwners=new Map();}
@@ -37,7 +38,7 @@ export class WorkspaceProjectOwners {
     if(outline.metadata.id!==entry.namespaceId||binding?.placement!=='project'||binding.projectId!==entry.projectId)throw new AppError('DATABASE_LOCATION');
     authenticateKeyring(access.value,storage.vault);
     const relative=path.relative(this.workspace.root,entry.root).split(path.sep).join('/');nestedRenameRoot(this.workspace.root,relative);
-    projects.push({projectId:entry.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,relative,identity:identity(await assertRegular(entry.root,{directory:true})),accessHash:await hash(path.join(entry.root,'.observanda/access.json'))});
+    projects.push({projectId:entry.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,relative,identity:(await assertRegular(entry.root,{directory:true}),await identity(entry.root)),accessHash:await hash(path.join(entry.root,'.observanda/access.json'))});
     this.keys.set(entry.projectId,cloneVault(storage.vault));
     const books=this.bookOwner(new ProjectStorage(storage.root,storage.projectId,this.keys.get(entry.projectId)));this.bookOwners.set(entry.projectId,books);await books.prepare(typeof withBook==='function'?(id,use)=>withBook(storage,id,use):undefined);
    });
@@ -68,7 +69,7 @@ export class WorkspaceProjectOwners {
  }
  async checked(item){
   const root=nestedRenameRoot(this.workspace.root,item.relative),stat=await assertRegular(root,{directory:true});
-  if(await realpath(root)!==root||serialize(identity(stat))!==serialize(item.identity)||await hash(path.join(root,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
+  if(await realpath(root)!==root||serialize(await identity(root))!==serialize(item.identity)||await hash(path.join(root,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
   const key=this.keys.get(item.projectId);if(!key)throw new AppError('ACCESS_LOCKED');authenticateKeyring((await readAccess(root)).value,key);
   const binding=await catalogueBinding(root);if(binding?.placement!=='project'||binding.projectId!==item.projectId)throw new AppError('DATABASE_LOCATION');
   return new ProjectStorage(root,item.projectId,key);

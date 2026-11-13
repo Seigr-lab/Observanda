@@ -1,5 +1,8 @@
-import {initializeManagedApplication,initializeClusterIdentity} from './postgres-runtime-bootstrap.js';
+import {initializeManagedApplication,initializeClusterIdentity,adoptClusterCredentials} from './postgres-runtime-bootstrap.js';
+import {clusterInitArguments,clusterTemplateDirectory,copyClusterTemplate,syncClusterCopy} from './postgres-cluster-template.js';
+import {preparePostgresRuntimeGuard} from './postgres-runtime-guard.js';
 import {validClusterId} from './database-cluster-identity.js';
+import {ensureOwnerRole,dropOwnerCatalogue as dropOwnerCatalogueSQL} from './owner-database-role.js';
 import {diagnosticPhase} from './operational-diagnostics.js';
 import {connectManagedAdmin,verifyManagedApplication} from './postgres-runtime-readiness.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
@@ -27,6 +30,7 @@ import {nativeResources,databaseMemoryReservation} from './native-resource-budge
 import {withUpgradeablePostgresRuntime} from './postgres-runtime-upgrade.js';
 import {postgresRuntimeFiles} from './postgres-runtime-files.js';
 import {registerRuntimeStorage} from './database-runtime-environment.js';
+import {closeIdleConnections} from './database-idle-connections.js';
 
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
 export const windowsRuntime=Object.freeze({version:'17.11',url:'https://sbp.enterprisedb.com/getfile.jsp?fileid=1260569',bytes:379726839,sha256:'b9424ee7bc60b52450ff910a3630225df32e633f3cb29c1d126d9299d59aea28'});
@@ -140,6 +144,12 @@ async function managerLease(directory){
  });}catch(error){child.stdin.end();await exited;throw error;}
  return {close:async()=>{child.stdin.end();await exited;}};
 }
+// One cluster serves a workspace and all its owners. Every admitted catalogue
+// connection may hold one auxiliary connection (database-admission.js), so the
+// process-wide admission limit of 24 needs 48 ordinary slots. Owner role
+// creation, login checks and startup verification add short-lived ones; the
+// administrator's own work uses the superuser-reserved slots.
+export const MANAGED_MAX_CONNECTIONS=64;
 // Optional per-cluster budget for large workloads; ordinary owners stay small.
 export function managedSharedBuffers(env){
  const value=env.OBSERVANDA_POSTGRES_SHARED_BUFFERS_MIB??'64';
@@ -167,12 +177,18 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
  // Keep the installation-wide manager name while old stopped data is upgraded;
  // the private runtime and its native owner lease remain the only data format.
  const installationLease=windows&&!workspace?await managerLease(directory):null;
+ // A new cluster is copied from the installation's template, which has its
+ // own guard. Its process starts now, alongside this cluster's guard; the
+ // missing state file is only a hint, and the guard is closed if unused.
+ let templateGuard=null;
  try{
-  const service=await withUpgradeablePostgresRuntime({directory,create:!stopOnly&&!existingOnly,workspaceRoot:workspace?.root,workspace,env,stopOnly,run:runtimeCommand,signal,onProgress},guard=>manageGuardedPostgres({directory:guard.directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard}));
+  if(runtimeDirectory&&!stopOnly&&!existingOnly&&!await assertRegular(path.join(directory,'service.observanda'),{missing:true}).catch(()=>true))templateGuard=await preparePostgresRuntimeGuard();
+  const service=await withUpgradeablePostgresRuntime({directory,create:!stopOnly&&!existingOnly,workspaceRoot:workspace?.root,workspace,env,stopOnly,run:runtimeCommand,signal,onProgress},guard=>manageGuardedPostgres({directory:guard.directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard,templateGuard}));
   if(!installationLease)return service;let closing;return {...service,close:()=>closing??=(async()=>{try{await service.close();}finally{await installationLease.close();}})()};
  }catch(error){await installationLease?.close();throw error;}
+ finally{await templateGuard?.close();}
 }
-async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard}){
+async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard,templateGuard=null}){
  const files=postgresRuntimeFiles(guard),checkVersion=bin=>version(bin,(command,args,options)=>guard.run(command,args,options));
  // Kernel-owned locks cannot collide with unrelated TCP services.
  const ownership=guard.lease??await (workspace?workspaceDatabaseLease(directory):managerLease(directory));
@@ -187,7 +203,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
  const stateFile=path.join(directory,'service.observanda'),data=path.join(directory,'data'),portableKey=workspace?Buffer.from(workspace.vault.key):null;
  const aad=workspace?'Observanda/workspace-postgresql/v1/'+workspace.vault.id:null;
  const protector=workspace?{protect:bytes=>seal(bytes,portableKey,aad),unprotect:bytes=>unseal(bytes,portableKey,aad)}:windows?new WindowsProtector():null;
- let config,verifiedCluster=false,freshCluster=false,reservation,mayBeRunning=false;
+ let config,verifiedCluster=false,freshCluster=false,reservation,mayBeRunning=false,syncing=null;
  const releaseCapacity=()=>{if(mayBeRunning)reservation?.uncertainExit();else{reservation?.release();if(verifiedCluster)budget.stopped(directory);}};
  const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await files.write(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
  const ctl=(args,options={})=>{const run=()=>guard.run(executable(config.bin,'pg_ctl'),['-D',data,...args],options);return args.includes('start')?diagnosticPhase('runtime-start',run):args.includes('status')?diagnosticPhase('runtime-status',run):run();};
@@ -210,6 +226,8 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    if(stat.size>16384)throw new AppError('DATABASE_RUNTIME');
    let bytes=await files.read(stateFile);try{if(protector)bytes=await protector.unprotect(bytes);config=JSON.parse(bytes.toString());}finally{bytes.fill(0);}
    if(config.format!==1||![16,17,18].includes(config.major)||!['initializing','ready'].includes(config.phase)||!Number.isInteger(config.port)||config.port<1||config.port>65535||![config.adminPassword,config.appPassword].every(v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v))||!path.isAbsolute(config.bin))throw new AppError('DATABASE_RUNTIME');
+   // Only a cluster still initializing from the template carries these.
+   if(config.bootstrapPassword!==undefined&&(config.phase!=='initializing'||!/^[a-f0-9]{64}$/.test(config.bootstrapPassword))||config.templateCopy!==undefined&&(config.phase!=='initializing'||config.templateCopy!==true))throw new AppError('DATABASE_RUNTIME');
    if(workspace&&(config.workspaceId!==workspace.vault.id||typeof config.running!=='boolean'||typeof config.ownerId!=='string'))throw new AppError('DATABASE_RUNTIME');
    // Clusters made before cluster identities are converted outside the
    // product. Refuse them before any process is stopped or started.
@@ -229,6 +247,12 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   }
   if(existingOnly&&config.phase!=='ready')throw new AppError('DATABASE_RUNTIME');
   const stage=path.join(directory,'cluster-staging');
+  // A template copy whose flush had not finished when its process ended may
+  // have lost data. Nothing was stored in it yet: discard it and copy again.
+  if(config.templateCopy&&!stopOnly&&await files.stat(data,{directory:true,missing:true})){
+   if(config.phase!=='initializing'||!await serverStopped())throw new AppError('DATABASE_RUNNING');
+   await files.removeTree(data);
+  }
   if(!await files.stat(data,{directory:true,missing:true})){
    if(stopOnly){
     // Initialization writes its state before initdb and cannot start PostgreSQL
@@ -238,9 +262,21 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    }
    if(config.phase!=='initializing')throw new AppError('DATABASE_RUNTIME');
    if(await files.stat(stage,{directory:true,missing:true}))await files.removeTree(stage);
-   const passwordFile=path.join(directory,'bootstrap-password');await files.write(passwordFile,config.adminPassword);
-   try{onProgress({stage:'initialize'});await guard.run(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await files.rename(stage,data);freshCluster=true;}
-   finally{await files.unlink(passwordFile);}
+   onProgress({stage:'initialize'});
+   if(runtimeDirectory){
+    // initdb runs once per installation and PostgreSQL version; this cluster
+    // is a copy whose credentials are replaced when it first starts. The
+    // state names the template password before the copy is published.
+    const template=clusterTemplateDirectory(runtimeDirectory,config.major);await outsideWorkspace(template);
+    const copied=await diagnosticPhase('runtime-template',()=>copyClusterTemplate({runtimeDirectory,major:config.major,bin:config.bin,stage,lease:managerLease,run:runtimeCommand,prepared:templateGuard,signal}));
+    config.bootstrapPassword=copied.adminPassword;config.templateCopy=true;await save();
+    await files.rename(stage,data);freshCluster=true;
+    syncing=syncClusterCopy(data,copied.members,signal);void syncing.catch(()=>{});
+   }else{
+    const passwordFile=path.join(directory,'bootstrap-password');await files.write(passwordFile,config.adminPassword);
+    try{await guard.run(executable(config.bin,'initdb'),clusterInitArguments(stage,passwordFile),{signal});await files.rename(stage,data);freshCluster=true;}
+    finally{await files.unlink(passwordFile);}
+   }
   }
   if((await files.read(path.join(data,'PG_VERSION'),{limit:128,encoding:'utf8'})).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
   verifiedCluster=true;
@@ -267,9 +303,12 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   for(let attempt=1;;attempt++){
    config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;delete config.localStopTicket;}await save();
    mayBeRunning=true;
-   try{await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false,diagnose:true});break;}
+   try{await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections='+MANAGED_MAX_CONNECTIONS+' -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false,diagnose:true});break;}
    catch(error){if(error.code!=='DATABASE_INSTALL'||attempt>=3||signal?.aborted||!await serverStopped().catch(()=>false))throw error;mayBeRunning=false;await new Promise(resolve=>setTimeout(resolve,500*attempt));}
   }
+  // The template password stays recorded until ready: a copy interrupted
+  // before then is discarded and copied again (see templateCopy above).
+  if(config.bootstrapPassword)await diagnosticPhase('runtime-connect',()=>adoptClusterCredentials(config,{signal,deadline:startupDeadline}));
   const admin=await diagnosticPhase('runtime-connect',()=>connectManagedAdmin(config,{signal,deadline:startupDeadline}));
   try{
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
@@ -287,7 +326,11 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
    });
    if(witness?.ticket)config.localStopTicket=witness.ticket;
   }
-  if(config.phase==='initializing'){config.phase='ready';await save();}
+  if(config.phase==='initializing'){
+   // A template copy is published as ready only once it is durable.
+   if(config.templateCopy){if(!syncing)throw new AppError('DATABASE_RUNTIME');await syncing;delete config.templateCopy;delete config.bootstrapPassword;}
+   config.phase='ready';await save();
+  }
   else if(config.localStopTicket){
    // The required running configuration was already saved before launch.
    // Failure to persist optional proof leaves deletion recovery conservative.
@@ -297,8 +340,26 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
   const retireStorage=registerRuntimeStorage(env,directory);let closing;
-  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{retireStorage();try{await stopServer();mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
+  // Projects and lab books of this workspace log in with their own roles
+  // (owner-database-role.js). Only this running service holds the
+  // administrator credentials that create such a role; it never resets one.
+  const ensured=new Set();
+  const ownerRole=async(role,password,{signal:request}={})=>{
+   if(closing)throw new AppError('DATABASE_CANCELLED');if(ensured.has(role))return;
+   const admin=await connectManagedAdmin(config,{signal:request,database:'observanda'});
+   try{await ensureOwnerRole(admin,{role,password});}finally{await admin.end();}
+   if(closing)throw new AppError('DATABASE_CANCELLED');ensured.add(role);
+  };
+  // Deletion and retirement remove an owner's catalogue, then its role once
+  // the role owns nothing else in this cluster.
+  const dropOwnerCatalogue=async(role,catalogueId,{signal:request}={})=>{
+   if(closing)throw new AppError('DATABASE_CANCELLED');
+   const admin=await connectManagedAdmin(config,{signal:request,database:'observanda'});
+   try{const result=await dropOwnerCatalogueSQL(admin,{role,catalogueId});if(result.roleDropped)ensured.delete(role);return result;}finally{await admin.end();}
+  };
+  return {managed:true,major:config.major,bin:config.bin,clusterId:config.clusterId,ownerRole,dropOwnerCatalogue,close:()=>closing??=(async()=>{const parked=closeIdleConnections(env,{cluster:true});retireStorage();ensured.clear();try{await parked;await stopServer();mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
  }catch(error){
+  await syncing?.catch(()=>{});
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
   if(verifiedCluster&&!stopOnly)await stopServer().then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
   try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);}

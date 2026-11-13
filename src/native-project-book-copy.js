@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 // Project copies pin the native book directory and authenticate one independent
 // owner at a time. Temporary owner proofs contain no vault keys; copy receipts
 // derive per-book command identities instead of retaining an aggregate array.
@@ -22,7 +23,7 @@ import {databaseProvider} from './workspace-database-context.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 const validPin=pin=>pin&&Object.keys(pin).sort().join()==='head,revision,version'&&pin.version===1&&validOwnerDirectoryHead(pin.head)&&pin.head.kind==='books'&&pin.revision===digest(serialize(pin.head));
 export async function captureProjectBookCopyDirectory(registry){
  let pin=await registry.directoryOwner.access.read(value=>value.legacy?{legacy:true,revision:value.legacy.revision}:{version:1,head:value.value,revision:value.revision});
@@ -80,7 +81,7 @@ export class NativeProjectBookCopy{
   const access=await readAccess(root);authenticateKeyring(access.value,storage.vault);
   const binding=await catalogueBinding(root),metadata=(await storage.outline()).metadata;
   if(binding?.placement!=='lab-book'||binding.labBookId!==book.labBookId||metadata.id!==book.namespaceId||metadata.notebooks[0].projectId!==this.project.projectId)throw new AppError('DATABASE_LOCATION');
-  return {...book,identity:identity(await assertRegular(root,{directory:true})),accessHash:digest(await readFile(path.join(root,'.observanda/access.json')))};
+  return {...book,identity:(await assertRegular(root,{directory:true}),await identity(root)),accessHash:digest(await readFile(path.join(root,'.observanda/access.json')))};
  }
  async proof({store=null,portable=false,obligations=false,lifecycle=false}={}){
   const hash=createHash('sha256');let count=0;
@@ -116,7 +117,7 @@ export class NativeProjectBookCopy{
    if(!before||serialize(before)!==serialize(current))throw new AppError('STORAGE_RENAME_STATE');return operation(storage);
   }));
  }
- async copy(target,receipt,save,{portable=false,relocation=false,checkpoint=async()=>{}}={}){
+ async copy(target,receipt,save,{portable=false,archive=portable,relocation=false,checkpoint=async()=>{}}={}){
   if(relocation)throw new AppError('INVALID');if(!this.count)return;
   if(receipt.bookRegistryRevision!==undefined&&receipt.bookRegistryRevision!==this.pin.revision){
    if(receipt.bookTransfersVersion!==undefined||!Array.isArray(receipt.bookTransfers)||!await projectBookCopyMatchesLegacy(this.registry,this.pin,receipt.bookRegistryRevision))throw new AppError('CONFLICT');
@@ -125,7 +126,7 @@ export class NativeProjectBookCopy{
   }
   if(receipt.bookTransfers===undefined&&receipt.bookTransfersVersion===undefined){receipt.bookRegistryRevision=this.pin.revision;receipt.bookTransfersVersion=2;receipt.bookCount=this.count;await save();}
   await this.view(view=>validateProjectBookCopyTransfers(receipt,view,this.pin.revision));await this.current();
-  if(await this.owner.targetRevision(target,portable)!==this.pin.revision)throw new AppError('CONFLICT');
+  if(await this.owner.targetRevision(target,archive)!==this.pin.revision)throw new AppError('CONFLICT');
   await operationStage('copy-project-books',{unit:'books',total:this.count},()=>this.view(async view=>{
    for await(const {entry:book} of view.entries()){
     operationItem(book.directory);const destination=path.join(target.root,book.directory);
@@ -136,10 +137,10 @@ export class NativeProjectBookCopy{
     await assertRegular(destination,{directory:true});operationAdvance();await checkpoint('book',book.labBookId);
    }
   }));
-  await this.current();if(await this.proof({lifecycle:true})!==this.ownerProof)throw new AppError('STORAGE_RENAME_STATE');if(await this.owner.targetRevision(target,portable)!==this.pin.revision)throw new AppError('CONFLICT');
+  await this.current();if(await this.proof({lifecycle:true})!==this.ownerProof)throw new AppError('STORAGE_RENAME_STATE');if(await this.owner.targetRevision(target,archive)!==this.pin.revision)throw new AppError('CONFLICT');
  }
- async copied(target,receipt,{portable=false,onCopiedBook}={}){
-  if(portable||typeof onCopiedBook!=='function')return;
+ async copied(target,receipt,{portable=false,archive=portable,onCopiedBook}={}){
+  if(archive||typeof onCopiedBook!=='function')return;
   await new LabBookRegistry(target).inspect(async view=>{
    if(!view.count)return;
    // A completed destination retains its own membership. Adding another book

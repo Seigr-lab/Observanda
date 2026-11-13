@@ -56,6 +56,7 @@ export class ProjectSessionOwner{
   this.registry=await this.registrySource();const moves=new ProjectMoves(this.registry);
   return this.selectedRouter=new ProjectRouter(this.registry,{
    recover:async(entry,key)=>{const marker=await moveSource(entry.root);if(marker)await moves.run(entry.projectId,key,{id:marker.id,resume:true,adoptOnly:true,onAdopt:latest=>this.relocated(latest)});},
+   transit:async entry=>{const value=await moves.read(entry.projectId);return value?.workspaceMoveId!==undefined&&value.destination===entry.root;},
    authorize:async({projectId})=>{if(projectId!==this.projectId)throw new AppError('ACCESS_DENIED');await this.check();return true;},
    unlock:async(entry,access)=>{
     const saved=this.session.get(entry.projectId);if(saved?.locked)throw new AppError('ACCESS_LOCKED');
@@ -65,7 +66,7 @@ export class ProjectSessionOwner{
     }
     await clearVault(this.vault);this.vault=null;
     if(saved?.vault&&saved.root===entry.root&&saved.etag===access.etag&&saved.expires>Date.now())this.vault=cloneVault(saved.vault);
-    else{if(saved)this.application.forget(this.session,entry.projectId);this.sessionEntry=undefined;this.vault=await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});}
+    else{if(saved)this.application.forget(this.session,entry.projectId);this.sessionEntry=undefined;this.vault=this.application.deviceUnlock?await this.application.deviceUnlock(this.session,entry.projectId,entry.root,access):await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});}
     this.entry=entry;this.etag=access.etag;await this.check();return this.vault;
    }
   });

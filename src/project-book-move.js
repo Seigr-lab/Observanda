@@ -14,7 +14,6 @@ import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {assertRegular,digest} from './storage.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {ownedMoveSource} from './workspace-move-state.js';
 import {researchId} from './web/research-reference.js';
@@ -63,8 +62,7 @@ export class ProjectBookMove extends ProjectBookOwners{
     if(binding.id!==value.bookRetention[i].sourceId||marker?.id!==value.id||marker.destination!==path.join(value.destination,book.directory))throw new AppError('STORAGE_MOVE_STATE');
     const provider=databaseProvider();if(!provider?.stopLabBookForMove)throw new AppError('DATABASE_RUNTIME');
     await provider.stopLabBookForMove(storage.root,book.labBookId,storage.vault,value.id);
-    const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));
-    try{await assertLabBookDatabaseStopped(storage.root,book.labBookId,storage.vault);}finally{await lease.close();}
+    await assertLabBookDatabaseStopped(storage.root,book.labBookId,storage.vault);
     await checkpoint('book-stopped',book.labBookId);operationAdvance();
    }
   });

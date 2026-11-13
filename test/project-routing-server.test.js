@@ -15,7 +15,7 @@ import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operatio
 import {DeploymentJobs} from '../src/deployment-jobs.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdtemp,rm,mkdir,writeFile,readFile,stat} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -37,11 +37,11 @@ import {seedModuleCurrent} from './module-current-fixture.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 
-async function fixture(t,{publishingOptions,nested=false,diagnostics}={}){
+async function fixture(t,{publishingOptions,diagnostics}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-http-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let app;
  t.after(async()=>{await app?.close();await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-http-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,'workspace'),book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
- const create=async(name,password='')=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(nested?f.workspace.root:directory,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage,vault};};
+ const create=async(name,password='')=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(f.workspace.root,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage,vault};};
  const a=await create('a'),b=await create('b'),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0];
  const context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
@@ -49,9 +49,28 @@ async function fixture(t,{publishingOptions,nested=false,diagnostics}={}){
  const project=(p,route,data,headers,options)=>call('/api/projects/'+p.id+'/'+route,data,headers,options);
  const activity=async()=>result(await fetch(app.origin+'/api/activity',{headers:{'X-Observanda-Session':cookie}}));
  const raw=(route,{method='GET',bytes,headers={}}={})=>fetch(app.origin+route,{method,headers:{Origin:app.origin,'X-Observanda-Session':cookie,'X-Observanda-Workspace':context,...headers},...(bytes?{body:bytes}:{})});
+ // Opening a workspace for the first time prepares its saved websites in the
+ // background, reading every project's sources under the workspace writer.
+ // Each test starts once that one-time preparation has finished.
+ await preparationFinished({call,activity});
  return {...f,book,directory,owner,registry,a,b,locked,app,call,project,activity,raw,context};
 }
 const target=p=>({workspaceId:p.book.id,recordId:p.book.entries[0].id,sectionId:null});
+// Website preparation runs once per opening, and again after a project unlock
+// (which can make more sources readable). Wait until it has finished.
+async function preparationFinished(f){
+ // A run that was just requested may not have reported yet: require the idle
+ // state to hold for a full second before continuing.
+ const deadline=Date.now()+180000;let idleSince=null;
+ for(;;){
+  const {preparation}=await result(await f.call('/api/website-files/preparation',{})),running=(await f.activity()).operations.some(item=>item.kind==='website-preparation'&&['queued','running'].includes(item.state));
+  const idle=!running&&['ready','failed'].includes(preparation?.state)&&preparation.library&&preparation.library.state!=='preparing';
+  if(!idle)idleSince=null;else{idleSince??=Date.now();if(Date.now()-idleSince>=1000){assert.equal(preparation.state,'ready',JSON.stringify(preparation));return;}}
+  if(Date.now()>deadline)throw Error('Website preparation did not finish: '+JSON.stringify(preparation));await delay(100);
+ }
+}
+// Name any operation still queued or running, so a failure shows what it is.
+async function assertIdle(f){assert.deepEqual((await f.activity()).operations.filter(item=>['queued','running'].includes(item.state)).map(item=>({kind:item.kind,state:item.state,stage:item.progress?.stage})),[]);}
 async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
 
 test('project evidence integrity verification uses write admission and refuses locked or stale owners',async t=>{
@@ -68,12 +87,26 @@ test('selected project website reads expose bounded numeric connection measureme
  for(let attempt=0;attempt<3;attempt++){
   const response=await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),correlation=response.headers.get('x-observanda-request'),opened=await result(response);
   assert.equal(opened.workspaceId,f.a.book.id);assert.ok(opened.initialView);const entry=(await diagnostics.snapshot()).entries.find(row=>row.event==='request'&&row.correlation===correlation);
-  assert.ok(entry);assert.ok(entry.databaseConnections>0);assert.ok(entry.databaseQueries>0);if(attempt>0)assert.ok(entry.databaseConnections<=4,'warm selected opening must not reopen every membership check');measurements.push({durationMs:entry.durationMs,connections:entry.databaseConnections,connectMs:entry.databaseConnectMs,admissionMs:entry.databaseAdmissionMs,queries:entry.databaseQueries,queryMs:entry.databaseQueryMs});
+  assert.ok(entry);assert.ok(entry.databaseQueries>0);if(attempt>0)assert.ok((entry.databaseConnections??0)<=4,'warm selected opening must not reopen every membership check');measurements.push({durationMs:entry.durationMs,connections:entry.databaseConnections,connectMs:entry.databaseConnectMs,admissionMs:entry.databaseAdmissionMs,queries:entry.databaseQueries,queryMs:entry.databaseQueryMs});
  }
  t.diagnostic(JSON.stringify({projectWebsiteOpening:measurements}));
  await result(await f.project(f.a,'access/lock'));
  await result(await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),401);
  const sibling=await result(await f.project(f.b,'websites/editor/open',{websiteId:null,initialView:true}));assert.equal(sibling.workspaceId,f.b.book.id);
+});
+
+test('warm project requests reuse database connections and the device unlock of their session',{timeout:180000},async t=>{
+ const diagnostics=new OperationalDiagnostics(),f=await fixture(t,{diagnostics});
+ const requests=[['research/drafts/list',{workspaceId:f.a.book.id}],['research/drafts/remove',{id:randomUUID(),workspaceId:f.a.book.id,expectedRevision:'a'.repeat(64)}],['research/records/writing/read',target(f.a)]];
+ const measured=async(route,data)=>{const response=await f.project(f.a,route,data),correlation=response.headers.get('x-observanda-request');await result(response);return (await diagnostics.snapshot()).entries.find(row=>row.event==='request'&&row.correlation===correlation);};
+ for(const [route,data] of requests)await measured(route,data);
+ const unlocks=t.mock.method(f.deviceStore,'privateKey');
+ for(let round=0;round<3;round++)for(const [route,data] of requests){
+  const entry=await measured(route,data);assert.ok(entry,route);assert.ok(entry.databaseQueries>0,route);
+  assert.equal(entry.databaseConnections??0,0,route+' must reuse idle authenticated connections instead of connecting per catalogue open');
+ }
+ assert.equal(unlocks.mock.callCount(),0,'an unchanged project keyring is not unlocked through the platform secret store again');
+ await result(await f.project(f.a,'access/lock'));await result(await f.project(f.a,'research/drafts/list',{workspaceId:f.a.book.id}),401);
 });
 
 test('HTTP project authoring, search and history stay independent during a workspace copy',async t=>{
@@ -126,13 +159,13 @@ test('locking a project cancels its queued save without locking other owners or 
   await result(await f.project(f.a,'access/lock'));await result(await pending,401);
   assert.equal((await new RecordWriting(f.a.storage).read(target(f.a))).value.body,view.value.body);
   await result(await f.project(f.b,'research/records/writing/read',target(f.b)));
-  assert.ok(!(await f.activity()).operations.some(item=>['queued','running'].includes(item.state)));
+  await assertIdle(f);
   await db.run('ROLLBACK');await result(await f.project(f.a,'access/unlock'));await result(await f.project(f.a,'research/records/writing/read',target(f.a)));
  }finally{await db.close();if(pending)await pending.catch(()=>{});}
 });
 
 test('HTTP creation uses a durable project identity and opens it through the same authoring route',async t=>{
- const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:f.a.id,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),path:path.join(f.a.storage.root,project.title),project,username:'',password:''};
+ const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:f.a.id,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),project,username:'',password:''};
  const before=await result(await f.call('/api/projects/list',{offset:0,limit:2,revision:null}));assert.equal(before.projects.length,2);assert.equal(before.total,3);
  const attach=ProjectRegistry.prototype.attach;let created,release,entered;const held=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),busy=f.workspace.withLock(async()=>{entered();await held;});await ready;
  try{
@@ -141,10 +174,10 @@ test('HTTP creation uses a durable project identity and opens it through the sam
   const pending=await result(await f.call('/api/projects/create/pending',{after:null,limit:20}));assert.equal(pending.items.length,1);assert.equal(pending.items[0].id,command.id);assert.equal(pending.items[0].running,false);
   await result(await f.call('/api/projects/create/pending',{after:null,limit:1000}),422);
   await result(await f.call('/api/projects/create/resume',{id:randomUUID(),username:'',password:''}),404);
-  await result(await f.call('/api/projects/create/resume',{id:command.id,username:'',password:'',path:command.path}),422);
+  await result(await f.call('/api/projects/create/resume',{id:command.id,username:'',password:'',path:path.join(f.a.storage.root,project.title)}),422);
   created=await result(await f.call('/api/projects/create/resume',{id:command.id,username:'',password:''}));
   assert.deepEqual(await result(await f.call('/api/projects/create/pending',{after:null,limit:20})),{items:[],next:null});
-  assert.ok(!(await f.activity()).operations.some(item=>['queued','running'].includes(item.state)));
+  await assertIdle(f);
  }finally{ProjectRegistry.prototype.attach=attach;release();await busy;}
  assert.equal(created.project.projectId,project.id);assert.equal(created.project.parentId,f.a.id);
  assert.deepEqual(await result(await f.call('/api/projects/create',command)),created);
@@ -212,7 +245,7 @@ test('selected module readers use the project owner while an unrelated project w
 });
 
 test('HTTP project move keeps sibling authoring available and follows the adopted owner',async t=>{
- const f=await fixture(t,{nested:true}),before=await result(await f.project(f.a,'research/records/writing/read',target(f.a))),id=randomUUID(),destination=path.join(f.b.storage.root,path.basename(f.a.storage.root)),command={id,parentId:f.b.id,expectedParentId:null};
+ const f=await fixture(t),before=await result(await f.project(f.a,'research/records/writing/read',target(f.a))),id=randomUUID(),destination=path.join(f.b.storage.root,path.basename(f.a.storage.root)),command={id,parentId:f.b.id,expectedParentId:null};
  const moving=f.project(f.a,'storage/move',command);
  const sibling=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));
  await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:sibling.revision,value:{body:'Still authoring B during A move'}}));
@@ -223,18 +256,18 @@ test('HTTP project move keeps sibling authoring available and follows the adopte
  assert.equal((await result(await f.project(f.a,'storage/move/resume',{id}))).project.root,destination);assert.equal((await result(await f.project(f.a,'storage/move/status'))).move.phase,'complete');
  assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,'Still authoring B during A move');
 });
-test('opening a project recovers interrupted move adoption instead of stranding a frozen source',async t=>{
- const f=await fixture(t),id=randomUUID(),destination=path.join(f.directory,'Recovered location',path.basename(f.a.storage.root)),moves=new ProjectMoves(f.registry);await mkdir(path.dirname(destination));
- await assert.rejects(moves.run(f.a.id,f.a.vault,{id,path:destination,checkpoint:async stage=>{if(stage==='frozen')throw Error('Restart before registry adoption');}}),/Restart before registry adoption/);
+test('a project move out of its workspace is refused before it starts and the project stays usable',async t=>{
+ const f=await fixture(t),id=randomUUID(),destination=path.join(f.directory,'Outside location',path.basename(f.a.storage.root)),moves=new ProjectMoves(f.registry);await mkdir(path.dirname(destination));
+ await assert.rejects(moves.run(f.a.id,f.a.vault,{id,path:destination}),error=>error.code==='STORAGE_OUTSIDE_WORKSPACE'&&error.operationNotStarted===true);
+ assert.equal(await moves.status(f.a.id),null);await assert.rejects(stat(destination),{code:'ENOENT'});
  assert.equal((await f.registry.locate(f.a.id)).root,f.a.storage.root);
  const opened=await result(await f.project(f.a,'research/records/writing/read',target(f.a)));assert.equal(opened.value.body,f.a.book.entries[0].body);
- assert.equal((await f.registry.locate(f.a.id)).root,destination);
- assert.equal((await result(await f.project(f.a,'storage/move/resume',{id}))).phase,'complete');
+ const refused=await f.project(f.a,'storage/move',{id,path:destination});assert.notEqual(refused.status,200);assert.equal((await refused.json()).code,'INVALID');await assert.rejects(stat(destination),{code:'ENOENT'});
 });
 
 
 test('the paged project directory reads summaries and hierarchy while every project database is unavailable',async t=>{
- const f=await fixture(t,{nested:true});await result(await f.project(f.b,'directory/reparent',{id:randomUUID(),parentId:f.a.id,expectedParentId:null}));
+ const f=await fixture(t);await result(await f.project(f.b,'directory/reparent',{id:randomUUID(),parentId:f.a.id,expectedParentId:null}));
  const {ProjectStorage}=await import('../src/project-storage.js'),outline=ProjectStorage.prototype.outline;ProjectStorage.prototype.outline=async()=>{throw Error('A directory request must not open a project database');};
  try{
   const root=await result(await f.call('/api/projects/list',{offset:0,limit:1,parentId:null,revision:null}));assert.equal(root.total,2);assert.equal(root.projects.length,1);assert.equal(root.projects[0].summary.title,f.a.book.projects[0].title);
@@ -245,7 +278,7 @@ test('the paged project directory reads summaries and hierarchy while every proj
 
 
 test('project hierarchy placement is independent, retryable and rejects cycles and stale parent changes',async t=>{
- const f=await fixture(t,{nested:true}),before=(await f.b.storage.outline()).etag;
+ const f=await fixture(t),before=(await f.b.storage.outline()).etag;
  const command={id:randomUUID(),parentId:f.a.id,expectedParentId:null},placed=await result(await f.project(f.b,'directory/reparent',command));assert.equal(placed.project.parentId,f.a.id);
  assert.deepEqual(await result(await f.project(f.b,'directory/reparent',command)),placed);assert.equal(placed.project.root,path.join(f.a.storage.root,'b'));assert.equal((await result(await f.project(f.b,'workspace/read/start',{}))).etag,before);
  await result(await f.project(f.a,'directory/reparent',{id:randomUUID(),parentId:f.b.id,expectedParentId:null}),422);
@@ -263,7 +296,7 @@ test('project choice search stays read-only while the workspace writer is held a
   const next=await result(await f.call('/api/projects/choices',{...data,offset:1,revision:first.revision}));assert.notEqual(next.projects[0].projectId,first.projects[0].projectId);
   const all=await result(await f.call('/api/projects/choices',{...data,limit:50}));assert.deepEqual(new Set(all.projects.map(p=>p.projectId)),new Set([f.a.id,f.b.id,f.locked.id,(await f.workspace.outline()).metadata.projects[0].id]));
   await result(await f.call('/api/projects/choices',{...data,revision:'outdated'}),409);await result(await f.call('/api/projects/choices',{...data,limit:51}),422);
-  assert.equal((await f.activity()).operations.filter(op=>['running','queued'].includes(op.state)).length,0);
+  await assertIdle(f);
  }finally{ProjectStorage.prototype.openCatalogue=original;release();await holding;}
 });
 
@@ -301,7 +334,7 @@ test('HTTP database admission cancels disconnected reads and does not delay anot
   assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,'Sibling writes during admission pressure');
   assert.equal(databaseCapacity().queued,1);controller.abort();await cancelled;
   for(let i=0;i<200&&databaseCapacity().queued;i++)await delay(10);assert.equal(databaseCapacity().queued,0);
-  const activity=await f.activity();assert.equal(activity.operations.filter(entry=>['running','queued'].includes(entry.state)).length,0);
+  await assertIdle(f);
  }finally{controller.abort();await pending?.catch(()=>{});await Promise.all(connections.map(db=>db.close()));}
  assert.equal(databaseCapacity().active,0);assert.equal(databaseCapacity().admitted,0);
 });
@@ -383,7 +416,8 @@ test('HTTP domain commands and summary reads bypass unrelated writers and keep c
  }finally{release();await writing;if(pending)await pending.catch(()=>{});}
  await result(await f.project(f.a,'access/unlock'));
  assert.equal((await result(await f.project(f.a,'modules/item',{workspaceId:f.a.book.id,id:command.payload.id}))).entity.data.name,command.payload.data.name);
- assert.ok(!(await f.activity()).operations.some(op=>['queued','running'].includes(op.state)));
+ // The unlock starts a new website preparation; nothing else may remain.
+ await preparationFinished(f);await assertIdle(f);
 });
 
 
@@ -438,7 +472,7 @@ test('addressed evidence routes admit exact read commands without mutation or im
 });
 
 test('addressed evidence reads enforce the owning project grant and retain exact bytes after relocation',async t=>{
- const f=await fixture(t,{nested:true}),bytes=Buffer.from('Independent evidence address\n5,8,13\n'),materials=new ResearchMaterials(f.b.storage);
+ const f=await fixture(t),bytes=Buffer.from('Independent evidence address\n5,8,13\n'),materials=new ResearchMaterials(f.b.storage);
  const upload=await materials.startImport({recordId:f.b.book.entries[0].id,name:'addressed.csv',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);
  const artifact=await materials.finishImport(upload.id),ref={...artifact,workspaceId:f.b.book.id},read=(operation,data={ref})=>f.call('/api/projects/material-reference/'+operation,data);
  const rootRef={workspaceId:f.book.id,kind:'record',id:f.book.entries[0].id,revision:recordRevision(f.book.entries[0])};
@@ -469,7 +503,7 @@ test('addressed evidence reads enforce the owning project grant and retain exact
  const reopened=await read('download');assert.equal(reopened.status,200);assert.deepEqual(Buffer.from(await reopened.arrayBuffer()),bytes);
  const receipt=await result(await f.project(f.b,'storage/delete',{id:randomUUID(),expectedRoot:destination}));assert.ok(receipt);
  assert.notEqual((await read('read')).status,200);
- assert.ok(!(await f.activity()).operations.some(item=>['queued','running'].includes(item.state)));
+ await assertIdle(f);
 });
 
 
@@ -584,7 +618,7 @@ test('project template authoring exchange and saved views keep their owner while
   assert.deepEqual((await result(await request('list',{cursor:null}))).items.map(item=>item.id),[id]);
   assert.deepEqual((await result(await f.call('/api/research/starters/list',{workspaceId:f.book.id,cursor:null}))).items,[]);
   assert.deepEqual((await result(await f.call('/api/research/views/list',{workspaceId:f.book.id}))).views,[]);
-  assert.ok(!(await f.activity()).operations.some(item=>['queued','running'].includes(item.state)));
+  await assertIdle(f);
  }finally{for(const db of locks)await db.close();}
 });
 
@@ -617,7 +651,7 @@ test('project draft transfer and conflict recovery stay independent of workspace
   await result(await f.project(f.a,'research/drafts/read',{id,summary:true}),404);
   assert.equal((await result(await f.project(f.a,'research/records/writing/read',target(f.a)))).value.body,mine.body);
   assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,f.b.book.entries[0].body);
-  assert.ok(!(await f.activity()).operations.some(item=>['queued','running'].includes(item.state)));
+  await assertIdle(f);
  }finally{release();await held;await sibling.run('ROLLBACK');await sibling.close();}
 });
 

@@ -18,6 +18,7 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {ProjectAccessSettings} from '../src/project-access-settings.js';
 import {clearVault} from '../src/encryption.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {exportAccessCheckpoint,importAccessCheckpoint} from '../src/security/access-checkpoint.js';
 
 test('import authorization pages independent owners and rejects stale, revoked and foreign-client grants',{timeout:360000},async t=>{
@@ -26,7 +27,9 @@ test('import authorization pages independent owners and rejects stale, revoked a
  const f=await encryptedFixture(path.join(directory,'Receiver'),createNotebook('Receiver'));vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id),foreign=new TestDeviceStore({file:path.join(directory,'foreign-device')});
  const password='Independent owner password';
  async function project(root,title){const metadata=createNotebook(title),projectId=randomUUID(),access=await createWorkspaceAccess('',password,foreign),vault=takeCreatedVault(access);vaults.push(vault);metadata.projects=[{id:projectId,title,parentId:null,description:'',share:false,logoId:null}];return initializeProjectLocation(path.join(root,title),projectId,metadata,access,vault);}
- const source=await project(directory,'Selected Project'),child=await project(source.root,'Nested Project'),book=await new LabBookCreation(source,foreign).create({id:randomUUID(),username:'',password,book:{id:randomUUID(),projectId:source.projectId,title:'Independent Notes'}}),pinned=await stat(source.root);
+ // The imported project comes from another open workspace; owners never exist outside one.
+ const ownerHome=await ownerWorkspace(directory,{name:'Source workspace'});vaults.push(ownerHome.vault);
+ const source=await project(ownerHome.root,'Selected Project'),child=await project(source.root,'Nested Project'),book=await new LabBookCreation(source,foreign).create({id:randomUUID(),username:'',password,book:{id:randomUUID(),projectId:source.projectId,title:'Independent Notes'}}),pinned=await stat(source.root);
  const app={deviceStore:f.deviceStore,registry:async()=>registry};let now=Date.now();manager=new ProjectImportAccess(app,{now:()=>now});const client={},other={},base={username:'',password,recovery:''};
  const begin=(id=randomUUID(),secret=password)=>manager.start(client,{id,path:source.root,parentId:null,intent:'import',...base,password:secret});
  const rows=ref=>f.workspace.catalogue(async store=>Number((await store.db.get('SELECT count(*) AS n FROM state WHERE slot LIKE $1','portability:'+ref.id+':%')).n));

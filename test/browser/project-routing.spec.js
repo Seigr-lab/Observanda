@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {websitePreparationFinished} from './website-preparation-helper.js';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
@@ -25,7 +26,7 @@ test('project research routes preserve independent writing across reload and wor
  try{
   const rootBook=sampleNotebook();rootBook.title='Workspace preferences identity';
   const f=await encryptedFixture(directory,rootBook);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,rootBook.id);
-  const create=async(name,relations=[])=>{const book=sampleNotebook();book.title=name;book.projects[0].title=name;book.entries[0].title=name+' observation';book.entries[0].body=name+' original';book.entries[0].relations=relations;const id=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);const storage=await initializeProjectLocation(path.join(directory,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage};};
+  const create=async(name,relations=[])=>{const book=sampleNotebook();book.title=name;book.projects[0].title=name;book.entries[0].title=name+' observation';book.entries[0].body=name+' original';book.entries[0].relations=relations;const id=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);const storage=await initializeProjectLocation(path.join(f.workspace.root,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage};};
   const b=await create('Project B'),materialsB=new ResearchMaterials(b.storage),foreignBytes=Buffer.from('Retained independent observation\n2,3,5\n');
   const uploadB=await materialsB.startImport({recordId:b.book.entries[0].id,name:'independent.csv',size:foreignBytes.length});await materialsB.appendImport(uploadB.id,0,[foreignBytes]);
   const artifactB=await materialsB.finishImport(uploadB.id),analysisB=await materialsB.analysis({recordId:b.book.entries[0].id,title:'Independent retained analysis',inputs:[artifactB],outputs:[],tool:'Observations',version:'1',parameters:''});
@@ -40,10 +41,12 @@ test('project research routes preserve independent writing across reload and wor
   page.on('response',response=>{if(response.url().includes('/api/'))requests.push([response.status(),new URL(response.url()).pathname]);});
   page.on('pageerror',error=>errors.push(error.message));page.on('request',req=>{if(req.method()==='POST'&&/writing\/save/.test(req.url()))writes.push(new URL(req.url()).pathname);});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
+  await websitePreparationFinished(page);
   db=await f.workspace.openCatalogue();await db.run('BEGIN');await db.lock();
   const url=project=>app.origin+'/#/owners/'+project.id+'/records/'+project.book.entries[0].id+'/read';
   await page.goto(url(a));await expect(page.locator('#main h1')).toHaveText('Project A observation');
-  await page.locator('[data-action="writing-edit"]').first().click();const dialog=page.locator('dialog[open]');
+  // Writing is an authoring control: open the record for editing first.
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.locator('[data-action="writing-edit"]').first().click();const dialog=page.locator('dialog[open]');
   await dialog.locator('.ProseMirror').fill('Only Project A receives this writing.');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.locator('#main')).toContainText('Only Project A receives this writing.');
   expect(writes).toEqual(['/api/projects/'+a.id+'/research/records/writing/save']);
@@ -56,12 +59,12 @@ test('project research routes preserve independent writing across reload and wor
   const item=dialog.locator('.material-list li').filter({hasText:'project-observation.csv'});await expect(item).toBeVisible();
   const originalLink=item.getByRole('link');await expect(originalLink).toHaveAttribute('href',new RegExp('^/api/projects/'+a.id+'/research/materials/original/'));
   const downloading=page.waitForEvent('download',{timeout:15000});await originalLink.click();const download=await downloading;expect(await readFile(await download.path())).toEqual(original);
-  expect(requests.some(([status,route])=>status===200&&route.startsWith('/api/projects/'+a.id+'/research/materials/chunk/'))).toBe(true);
+  expect(requests.some(([status,route])=>status===200&&route==='/api/projects/'+a.id+'/research/materials/chunks')).toBe(true);
   expect(requests.some(([,route])=>route.startsWith('/api/research/materials/'))).toBe(false);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
 
   await page.goto(url(b));await expect(page.locator('#main h1')).toHaveText('Project B observation');await expect(page.locator('#main')).toContainText('Project B original');
-  const assertImage=async host=>{const picture=host.locator('img[alt="Independent apparatus"]').first();await expect(picture).toHaveAttribute('src','/api/projects/'+b.id+'/media/'+media.id);await expect.poll(()=>picture.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);};
+  const assertImage=async host=>{const picture=host.locator('img[alt="Independent apparatus"]').first();await expect(picture).toHaveAttribute('src','/api/projects/'+b.id+'/media/'+media.id+'/thumbnail-320');await expect.poll(()=>picture.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);};
   await assertImage(page.locator('#main'));await page.locator('[data-action="record-edit"]').click();await assertImage(page.locator('#main'));await page.locator('[data-action="record-read"]').click();
   await page.getByRole('button',{name:'History',exact:true}).click();await dialog.locator('[data-action="record-history-select"]').first().click();await assertImage(dialog);await dialog.getByRole('button',{name:'Close',exact:true}).click();
 

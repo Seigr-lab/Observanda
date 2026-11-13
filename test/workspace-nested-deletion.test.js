@@ -22,14 +22,17 @@ import {initializeLocation} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {workspaceDeletion} from '../src/workspace-delete-state.js';
 
-test('workspace deletion stops nested project and book owners and preserves external owners across restart',{timeout:240000},async t=>{
+test('workspace deletion stops nested project and book owners and leaves an owner beside the workspace untouched across restart',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-nested-delete-')),keys=[],device=new TestDeviceStore({file:path.join(directory,'device')}),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);
  t.after(async()=>{await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-nested-delete-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const grant=async()=>{const access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};};
  const workspaceKey=await grant(),metadata=createNotebook('Research Workspace 1'),root=path.join(directory,metadata.title);await initializeLocation(root,metadata,workspaceKey.access,workspaceKey.vault);const workspace=new Workspace(root,workspaceKey.vault),registry=new ProjectRegistry(workspace,metadata.id),projects=new Map(),books=new Map();
+ const neighbourKey=await grant(),neighbour=path.join(directory,'Neighbour Workspace');await initializeLocation(neighbour,createNotebook('Neighbour Workspace'),neighbourKey.access,neighbourKey.vault);
  async function project(name,parent=null,{external=false}={}){
   const model=createNotebook(name),id=randomUUID(),{access,vault}=await grant();model.projects=[{id,title:name,parentId:null,description:'',share:false,logoId:null}];
-  const storage=await initializeProjectLocation(path.join(external?directory:parent?.root??root,name),id,model,access,vault);await registry.attach(storage,{parentId:parent?.projectId??null,expected:(await registry.read()).revision});projects.set(id,storage);return storage;
+  // Every project lives inside a workspace folder. The owner beside this
+  // workspace belongs to a neighbouring workspace and its cluster.
+  const storage=await initializeProjectLocation(path.join(external?neighbour:parent?.root??root,name),id,model,access,vault);if(!external)await registry.attach(storage,{parentId:parent?.projectId??null,expected:(await registry.read()).revision});projects.set(id,storage);return storage;
  }
  async function book(parent,title){
   const result=await new LabBookCreation(parent,device).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:parent.projectId,title}}),entry=result.book,vault=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:device});keys.push(vault);

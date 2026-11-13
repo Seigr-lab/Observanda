@@ -25,11 +25,14 @@ import {WorkspaceCopyRecovery,WORKSPACE_COPY_RECEIPT} from '../src/workspace-cop
 import {workspaceInventory} from '../src/workspace-inventory.js';
 import {recordRevision} from '../src/research.js';
 import {inspectLocation,initializeLocation} from '../src/locations.js';
+import {assertOwnersInCluster,assertArchiveCopy} from './owner-workspace-fixture.js';
+import {catalogueBinding} from '../src/postgres-activation.js';
+import {readLabBookArchiveIdentity} from '../src/lab-book-archive.js';
 import {startServer} from '../src/server.js';
 
 // The mounted copy request has its own ten-minute deadline. Allow setup,
 // interrupted retry and independent reopening outside that request budget.
-test('fresh-key HTTP copy resumes exact credentials and includes contained and external nested owners',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?1200000:420000},async t=>{
+test('fresh-key HTTP copy resumes exact credentials and includes contained and nested independent owners',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?1200000:420000},async t=>{
  const begun=performance.now(),phase=name=>{if(process.env.OBSERVANDA_TEST_SECOND_VOLUME)process.stdout.write(JSON.stringify({phase:name,elapsedMs:Math.round(performance.now()-begun)})+'\n');};
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-encrypted-owners-'));
  const runtime={directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}};
@@ -44,7 +47,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and e
   const storage=await initializeProjectLocation(root,project.id,book,grant,key);await registry.attach(storage,{parentId,expected:(await registry.read()).revision});
   const value={projectId:project.id,root,storage};projects.push(value);return value;
  };
- const contained=await makeProject(path.join(f.workspace.root,'Contained Project')),external=await makeProject(path.join(directory,'External Project')),nested=await makeProject(path.join(external.root,'Nested Project'),external.projectId);
+ const contained=await makeProject(path.join(f.workspace.root,'Contained Project')),independent=await makeProject(path.join(f.workspace.root,'Independent Project')),nested=await makeProject(path.join(independent.root,'Nested Project'),independent.projectId);
  let api;
  const open=async(root,password='')=>{
   server=await startServer({root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
@@ -95,18 +98,23 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and e
  for(const [i,book] of books.entries())assert.equal((await api.call(bookRoute(book)+'/research/records/writing/read',{workspaceId:book.namespaceId,recordId:records[i].id,sectionId:null})).value.body,'Current observation');
  assert.deepEqual(await f.workspace.read(),sourceBefore);
  const targetKey=await verifyAccess(await readAccess(destination),'',newPassword,{deviceStore:f.deviceStore});keys.push(targetKey);const target=new Workspace(destination,targetKey),targetRegistry=new ProjectRegistry(target,registry.workspaceId),locations=(await targetRegistry.read()).value.projects;
- assert.equal(locations.find(p=>p.projectId===contained.projectId).root,path.join(destination,'Contained Project'));assert.equal(locations.find(p=>p.projectId===external.projectId).root,path.join(destination,'External Project'));assert.equal(locations.find(p=>p.projectId===nested.projectId).root,path.join(destination,'External Project','Nested Project'));
+ assert.equal(locations.find(p=>p.projectId===contained.projectId).root,path.join(destination,'Contained Project'));assert.equal(locations.find(p=>p.projectId===independent.projectId).root,path.join(destination,'Independent Project'));assert.equal(locations.find(p=>p.projectId===nested.projectId).root,path.join(destination,'Independent Project','Nested Project'));
  await server.close();server=null;await provider.close();detach();provider=new WorkspaceDatabases(runtime);detach=installDatabaseProvider(provider);
- await rename(f.workspace.root,path.join(directory,'Original unavailable'));await rename(external.root,path.join(directory,'External unavailable'));phase('original owners unavailable');
+ const sourceRoot=f.workspace.root,sourceCluster=(await catalogueBinding(sourceRoot)).cluster;
+ await rename(f.workspace.root,path.join(directory,'Original unavailable'));phase('original owners unavailable');
  api=await open(destination,newPassword);for(const owner of projects)await api.call(projectRoute(owner.projectId)+'/access/unlock',{username:'',password});for(const book of books)await api.call(bookRoute(book)+'/access/unlock',{username:'',password});
  for(const [i,book] of books.entries()){const history=await api.call(bookRoute(book)+'/research/records/history/list',{workspaceId:book.namespaceId,recordId:records[i].id});assert.ok(history.versions.length>=2);}
  assert.equal((await api.call('/api/projects/reference',original)).value.body,'Earlier observation');
  const download=await api.raw('/api/projects/material-reference/original/'+books[0].namespaceId+'/'+evidence.id+'/'+evidence.revision+'?context='+api.context());assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),bytes);
  phase('independent history and evidence verified');
+ // Every successor owner activated in the successor's own, new cluster.
+ await assertOwnersInCluster(destination,[...locations.map(p=>p.root),...books.map(book=>path.join(destination,path.relative(sourceRoot,book.root)))],{notCluster:sourceCluster});
  // The old-key recovery control is excluded from normal successor transfer data.
  let controlSeen=false;await workspaceInventory(destination,randomUUID(),{projectRoots:locations.map(p=>p.root),visit:file=>{if(file.path===WORKSPACE_COPY_RECEIPT)controlSeen=true;}});assert.equal(controlSeen,false);
  const copies=path.join(directory,'Selected Copies');await mkdir(copies);await api.call(bookRoute(books[0])+'/storage/copy',{id:randomUUID(),parent:copies});
- const copyRoot=path.join(copies,'Observation Book'),copyKey=await verifyAccess(await readAccess(copyRoot),'',password,{deviceStore:f.deviceStore});keys.push(copyKey);assert.equal((await new LabBookStorage(copyRoot,books[0].labBookId,copyKey).read()).book.entries[0].body,'Current observation');
+ const copyRoot=path.join(copies,'Observation Book'),copyKey=await verifyAccess(await readAccess(copyRoot),'',password,{deviceStore:f.deviceStore});keys.push(copyKey);
+ // A copy outside the workspace is in archive form, keyed for its own book.
+ await assertArchiveCopy(copyRoot);assert.equal((await readLabBookArchiveIdentity(copyRoot,copyKey)).labBookId,books[0].labBookId);
  await target.catalogue(async store=>store.verify(JSON.parse(await target.readFile(await workspaceFile(target.root),'utf8'))));phase('successor copy and catalogue verified');
 });
 

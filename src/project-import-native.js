@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 ﻿// Bounded selected-project adoption. Control receipts contain native roots;
 // credentials are opened one independent owner at a time.
 import path from 'node:path';
@@ -30,7 +31,7 @@ import {withScratch} from './scratch-work.js';
 import {withOperationProgress,operationStage,operationSequence,operationItem,operationAdvance} from './operation-progress.js';
 import {AppError} from './errors.js';
 const inside=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 const ownerRoot=(root,entry)=>path.join(root,...entry.relative.split('/'));
 export class NativeProjectImport{
  constructor(owner){this.owner=owner;this.registry=owner.registry;this.workspace=owner.workspace;}
@@ -42,10 +43,10 @@ export class NativeProjectImport{
    await check();let value=await owner.read(command.id);const fresh=!value||value.accessOnly===true;if(value?.phase==='cancelled')return owner.cancelled(value);if(value?.phase==='cancelling')throw new AppError('STORAGE_INCOMPLETE');if(resume&&!value)throw new AppError('NOT_FOUND');
    if(fresh){
     const authorization=value?.access,prior=value;
-    if(prior){command={...command,path:prior.source,parentId:prior.parentId};if(serialize(identity(await assertRegular(prior.source,{directory:true})))!==serialize(prior.sourceIdentity))throw new AppError('CONFLICT');}
+    if(prior){command={...command,path:prior.source,parentId:prior.parentId};if(serialize((await assertRegular(prior.source,{directory:true}),await identity(prior.source)))!==serialize(prior.sourceIdentity))throw new AppError('CONFLICT');}
     if(typeof command.path!=='string')throw new AppError('INVALID');const source=await resolveLocation(command.path);if(inside(source,this.workspace.root))throw new AppError('STORAGE_PATH');
     const parentId=command.parentId??null,destination=storageCreationPath(await owner.parent(parentId),storageFolderName(source));if(source!==destination&&(inside(this.workspace.root,source)||inside(source,destination)||inside(destination,source)))throw new AppError('STORAGE_PATH');
-    const inspected=await inventory.inspectNative(source,this.workspace,{id:command.id});value={version:2,id:command.id,source,destination,parentId,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners,phase:'prepared',...(authorization?{access:authorization}:{})};
+    const inspected=await inventory.inspectNative(source,this.workspace,{id:command.id});value={version:2,id:command.id,source,destination,parentId,sourceIdentity:(await assertRegular(source,{directory:true}),await identity(source)),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners,phase:'prepared',...(authorization?{access:authorization}:{})};
    }else if(command.path!==undefined&&await resolveLocation(command.path)!==value.source||command.parentId!==undefined&&command.parentId!==value.parentId)throw new AppError('CONFLICT');
    const owners=projectImportOwners(this.registry,value);
    // Authenticate the complete command before admitting any destination writes;
@@ -65,7 +66,7 @@ export class NativeProjectImport{
         const target=importOwnerStorage(destination,entry,storage.vault);
         try{
          if(!entry.copied){
-          if(serialize(identity(await assertRegular(value.source,{directory:true})))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');authenticateKeyring((await readAccess(storage.root)).value,storage.vault);
+          if(serialize((await assertRegular(value.source,{directory:true}),await identity(value.source)))!==serialize(value.sourceIdentity))throw new AppError('CONFLICT');authenticateKeyring((await readAccess(storage.root)).value,storage.vault);
           if(storage.root!==destination){if(entry.archiveDigest)await owner.copyArchive(storage,target,entry,checkpoint);else await (entry.kind==='project'?copyProjectOwnerLocation:copyLabBookLocation)(storage,destination,{id:entry.transferId,retainIncomplete:true,...(entry.kind==='project'?{boundaryRevision:digest(serialize({manifest:value.manifest,relative:entry.relative})),excludeProject:async candidate=>{const relative=path.relative(value.source,candidate).split(path.sep).join('/');return candidate!==storage.root&&!!await owners.get(relative);}}:{}),checkpoint:(stage,file)=>checkpoint('owner-'+stage,{relative:entry.relative,file})});}
           entry.copied=true;await owners.update(entry.relative,{copied:true});await saveProjectImport(this.registry,value);await checkpoint('owner-copied',entry);
          }

@@ -124,7 +124,9 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
     await stopJobs();return settings.password(data,{deviceStore,check:()=>current(),changed:async next=>{await bookAccess.changed(storage.root,next,vault);etag=next;}});
    }
    if(selected.bookOperation==='settings'){
-    const save=()=>new LabBookSettings(project).save(storage,data,{check:bookAccess?()=>bookAccess.check():check,stopJobs});
+    // A title change renames the book's folder: later steps of this command,
+    // including publication bookkeeping, read the book at its new location.
+    const save=async()=>{try{return await new LabBookSettings(project).save(storage,data,{check:bookAccess?()=>bookAccess.check():check,stopJobs});}finally{const moved=(await registry.locate(selected.labBookId).catch(()=>null))?.root;if(moved&&moved!==storage.root)storage.root=moved;}};
     const result=await (options.publicationConversion?options.publicationConversion.mutateNotebook(storage,selected.labBookId,save):save());entry=await registry.locate(selected.labBookId);etag=(await readAccess(entry.root)).etag;return result;
    }
    if(selected.bookOperation==='rename'){

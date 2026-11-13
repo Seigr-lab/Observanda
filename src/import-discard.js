@@ -20,7 +20,7 @@ import {projectImportOwners} from './project-import-state.js';
 import {NativePortabilityCollection,createPortabilityCollection,portabilityCollection,validPortabilityCollection,releasePortabilityCollection} from './portability-collection.js';
 import {AppError} from './errors.js';
 const hash=async file=>await assertRegular(file,{missing:true})?digest(await readFile(file)):digest('absent');
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+import {folderIdentity as identity} from './folder-identity.js';
 const native=value=>!Array.isArray(value.owners);
 const ownerFields=entry=>({kind:entry.kind,relative:entry.relative,projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId}:{}),vaultId:entry.vaultId});
 const sameOwner=(left,right)=>['kind','relative','projectId','labBookId','vaultId'].every(key=>left?.[key]===right?.[key]);
@@ -73,7 +73,7 @@ export class ImportDiscard extends OwnedStorageDeletions{
  binding(root){return catalogueBinding(root);}
  async frozen(value){
   const retired=path.join(path.dirname(value.source),'.observanda-delete-'+value.id),root=await assertRegular(retired,{directory:true,missing:true})?retired:value.source;
-  const stat=await assertRegular(root,{directory:true});if(await realpath(root)!==root||serialize(identity(stat))!==serialize(value.identity))throw new AppError('STORAGE_DELETE_STATE');
+  const stat=await assertRegular(root,{directory:true});if(await realpath(root)!==root||serialize(await identity(root))!==serialize(value.identity))throw new AppError('STORAGE_DELETE_STATE');
  }
  async ownedDirectory(root,value){
   await this.frozen({...value,source:root});const owners=this.owners(value);
@@ -118,16 +118,20 @@ export class ImportDiscard extends OwnedStorageDeletions{
  async stopDatabase(root,value,_vault,id,{checkpoint=async()=>{}}={}){
   const provider=databaseProvider();if(!provider)throw new AppError('DATABASE_LOCATION');const owners=this.owners(value),keys=native(value)?portabilityCollection(this.owner,value.keyOwners):null;
   await deletionScope(id,async()=>{for await(const entry of owners.entries({reverse:true})){
-   const folder=path.join(root,...entry.relative.split('/'));if(!await assertRegular(path.join(folder,'.observanda/postgresql'),{directory:true,missing:true}))continue;
+   // Every imported owner with storage is frozen, its catalogue and role leave
+   // the workspace cluster, and the freeze is proven. A nested cluster of an
+   // earlier storage format is refused by that proof, never started or removed.
+   const folder=path.join(root,...entry.relative.split('/'));if(!await assertRegular(path.join(folder,'.observanda'),{directory:true,missing:true}))continue;
+   const nested=!!await assertRegular(path.join(folder,'.observanda/postgresql'),{directory:true,missing:true});
    const marker={version:1,id,source:folder},prior=await workspaceDeletion(folder);if(prior&&serialize(prior)!==serialize(marker))throw new AppError('STORAGE_DELETE_STATE');if(!prior)await atomicWrite(path.join(folder,DELETE_MARKER),serialize(marker));
    const database=path.join(folder,'.observanda/postgresql');
-   if(!await assertRegular(path.join(database,'service.observanda'),{missing:true})){
+   if(nested&&!await assertRegular(path.join(database,'service.observanda'),{missing:true})){
     const lease=await workspaceDatabaseLease(database);try{if((await readdir(database)).some(name=>name!=='owner.lock'))throw new AppError('DATABASE_RUNTIME');}finally{await lease.close();}continue;
    }
    const retained=keys?await keys.get(entry.relative):entry;if(!sameOwner(entry,retained)||!validKey(retained.key))throw new AppError('STORAGE_DELETE_STATE');const vault={id:entry.vaultId,key:Buffer.from(retained.key,'base64')};
-   try{const access=await readAccess(folder);authenticateKeyring(access.value,vault);
+   try{const access=await readAccess(folder);if(nested||access.etag!=='none')authenticateKeyring(access.value,vault);
     if(!entry.stopped){if(entry.kind==='project')await provider.stopProjectForDeletion(folder,entry.projectId,vault,id);else await provider.stopLabBookForDeletion(folder,entry.labBookId,vault,id);}
-    const lease=await workspaceDatabaseLease(database);try{await (entry.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(folder,entry.kind==='project'?entry.projectId:entry.labBookId,vault);}finally{await lease.close();}
+    await (entry.kind==='project'?assertProjectDatabaseStopped:assertLabBookDatabaseStopped)(folder,entry.kind==='project'?entry.projectId:entry.labBookId,vault);
     if(native(value)&&!entry.stopped){await owners.update(entry.relative,{stopped:true});await this.save(value);}
     await checkpoint('cancel-owner-stopped',entry.relative);
    }finally{await clearVault(vault);}

@@ -1,7 +1,7 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {randomUUID} from 'node:crypto';
 import {scratchDatabase} from './postgres.js';
-import {scopedDatabaseConnection} from './workspace-database-context.js';
+import {scopedDatabaseConnection,withoutDatabaseScope} from './workspace-database-context.js';
 import {AppError} from './errors.js';
 const context=new AsyncLocalStorage(),owners=new WeakMap();
 
@@ -45,5 +45,9 @@ export function withScratchConnections(operation){
  let owner=parent&&owners.get(parent);if(!owner){owner=new ScratchOwner(parent);if(parent)owners.set(parent,owner);}
  return context.run(owner,operation);
 }
+// Work that stops the database its caller's scratch connection may use (a
+// workspace rename moves the folder that holds that database) runs with a
+// scratch owner of its own, opened outside any database scope.
+export function withSeparateScratchConnections(operation){return withoutDatabaseScope(()=>context.run(new ScratchOwner(null),operation));}
 export const scratchConnectionOwner=()=>context.getStore();
 export const scratchWorkConnection=signal=>{const owner=context.getStore();if(!owner)throw new AppError('INVALID');return owner.acquire(signal);};

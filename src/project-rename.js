@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {NativeProjectRelocation} from './native-project-relocation.js';
 import {NativeRelocationOwners} from './native-relocation-owners.js';
 import {discardConfigurationCheckpoint} from './configuration-commands.js';
@@ -25,7 +26,6 @@ import {validateStorageName} from './storage-names.js';
 import {RENAME_MARKER,workspaceRename,renameScope} from './workspace-rename-state.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -62,7 +62,7 @@ export class ProjectRenames{
     await projects.withStorageHandoff(()=>books.withStorageHandoff(()=>storage.withStorageHandoff(()=>projects.withDirectoryHandoff(()=>withWriterLease(path.join(source,'.observanda/lab-books.lock'),()=>withWriterLease(path.join(this.registry.workspace.root,'.observanda/project-registry.lock'),async()=>{
      await check();const latest=await selectedProjectPlacement(this.registry,entry,name,placement);if(latest.destination!==destination)throw new AppError('CONFLICT');if(latest.revision!==projects.revision)throw new AppError('CONFLICT');const {metadata,etag}=await storage.outline();if(settings){if(settings.etag!==etag)throw new AppError('CONFLICT');await storage.catalogue(async store=>validateIndexedMetadata(store,await store.snapshot(etag),{...metadata,title:name,projects:[settings.project],entries:[]}));}
      if(metadata.id!==entry.namespaceId||metadata.projects[0].title!==expectedName)throw new AppError('CONFLICT');authenticateKeyring((await readAccess(source)).value,storage.vault);
-     value={version:1,id,projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,...(placement?{placement,placementParent:{relative:relative(this.registry.workspace.root,location.parent),...directoryIdentity(await assertRegular(location.parent,{directory:true}))}}:{}),source:relative(this.registry.workspace.root,source),destination:relative(this.registry.workspace.root,destination),identity:directoryIdentity(await assertRegular(source,{directory:true})),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'prepared',settings,rootBooks:{}};
+     value={version:1,id,projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,...(placement?{placement,placementParent:{relative:relative(this.registry.workspace.root,location.parent),...(await assertRegular(location.parent,{directory:true}),await directoryIdentity(location.parent))}}:{}),source:relative(this.registry.workspace.root,source),destination:relative(this.registry.workspace.root,destination),identity:(await assertRegular(source,{directory:true}),await directoryIdentity(source)),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'prepared',settings,rootBooks:{}};
      if(fresh)await this.discardPrepared(prior,storage.vault);
      await projects.persist(value);await books.persist(id,value.rootBooks);await this.save(value);await checkpoint('prepared',value);
      await atomicWrite(path.join(source,RENAME_MARKER),serialize({version:1,...(placement?{placement:true}:{}),id,source,destination}));
@@ -74,7 +74,7 @@ export class ProjectRenames{
  async cancelPrepared(vault,{check=async()=>{}}={}){return withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{await check();const value=await this.read();if(!value||value.phase==='cancelled')return;if(!['preparing','prepared'].includes(value.phase))throw new AppError('STORAGE_RENAMING');await this.discardPrepared(value,vault);});}
  async discardPrepared(value,vault){
   if(value.ownerDirectoryVersion===2)return new NativeRelocationOwners(this,value,vault).discardPrepared();
-  const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(directoryIdentity(stat),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');authenticateKeyring((await readAccess(root)).value,vault);
+  const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(await directoryIdentity(root),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');authenticateKeyring((await readAccess(root)).value,vault);
   const files=[[root,RENAME_KEYS_FILE,value.projectKeysHash],[root,RENAME_BOOK_KEYS_FILE,value.rootBooks.bookKeysHash],...(value.projects??[]).map(item=>[nestedRenameRoot(root,item.relative),RENAME_KEYS_FILE,item.bookKeysHash])];
   for(const [owner,name,expected] of files){if(!expected)continue;const file=path.join(owner,name);if(await assertRegular(file,{missing:true})&&await fingerprint(file)===expected)await unlink(file);}
   value.phase='cancelled';await this.save(value);
@@ -119,11 +119,8 @@ export class ProjectRenames{
     const storage=new ProjectStorage(root,this.projectId,vault),{projects,books}=this.helpers(storage);
     try{await projects.load(scope);await books.load(value.id,value.rootBooks);await projects.freezeAndStop(scope,{checkpoint});await books.freezeAndStop(scope,{checkpoint});}finally{projects.close();books.close();}
     const provider=databaseProvider();if(!provider?.stopProjectForRename)throw new AppError('DATABASE_LOCATION');await operationStage('rename-close-project',{},()=>provider.stopProjectForRename(root,this.projectId,vault,value.id));
-    const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
-    try{
-     await assertProjectDatabaseStopped(root,this.projectId,vault);if(await locateProjectRename(this.registry,value)!==root||await fingerprint(await workspaceFile(root))!==value.descriptorHash||await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('STORAGE_RENAME_STATE');
-     const target=await assertRegular(scope.destination,{directory:true,missing:true});if(target&&await realpath(scope.destination)!==root)throw new AppError('EXISTS');await check();await checkpoint('stopped',value);
-    }finally{await lease.close();}
+    await assertProjectDatabaseStopped(root,this.projectId,vault);if(await locateProjectRename(this.registry,value)!==root||await fingerprint(await workspaceFile(root))!==value.descriptorHash||await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('STORAGE_RENAME_STATE');
+    const target=await assertRegular(scope.destination,{directory:true,missing:true});if(target&&await realpath(scope.destination)!==root)throw new AppError('EXISTS');await check();await checkpoint('stopped',value);
     await checkPlacementParent(this.registry,value);
     try{await operationStage(value.placement?'place-project-folder':'rename-project-folder',{},()=>rename(root,scope.destination));}
     catch(error){if(error.code!=='EXDEV')throw error;if(!value.placement){value.phase='cancelling';value.cancelReason='volume';await this.save(value);await checkpoint('cancelling',value);return this.cancelFrozen(value,vault,{check,checkpoint});}await transfer.begin();await transfer.copy();await transfer.activate();}

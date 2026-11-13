@@ -19,7 +19,6 @@ import {authenticateKeyring} from './security/keyring.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 export class LabBookDeletions extends OwnedStorageDeletions{
@@ -49,8 +48,8 @@ export class LabBookDeletions extends OwnedStorageDeletions{
  }
  async stopDatabase(root,value,vault,id){
   if(vault?.id!==value.vaultId)throw new AppError('ACCESS_DENIED');const provider=databaseProvider();if(!provider?.stopLabBookForDeletion)throw new AppError('DATABASE_LOCATION');
-  await provider.stopLabBookForDeletion(root,this.labBookId,vault,id);const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
-  try{await assertLabBookDatabaseStopped(root,this.labBookId,vault);}finally{await lease.close();}
+  await provider.stopLabBookForDeletion(root,this.labBookId,vault,id);
+  await assertLabBookDatabaseStopped(root,this.labBookId,vault);
  }
  async run(vault,{id,expectedName,check=async()=>{},checkpoint=async()=>{},onProgress,beforeFreeze,onFrozen=async()=>{}}={}){
   if(!researchId(id)||typeof expectedName!=='string')throw new AppError('INVALID');

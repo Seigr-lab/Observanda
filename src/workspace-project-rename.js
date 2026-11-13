@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {ProjectRegistry} from './project-registry.js';
 import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 import {WorkspaceProjectOwners} from './workspace-project-owners.js';
@@ -14,13 +15,12 @@ import {withProjectLifecycle} from './project-lifecycle.js';
 import {assertRegular,atomicWrite,digest,serialize} from './storage.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {RENAME_MARKER,workspaceRename} from './workspace-rename-state.js';
 import {saveRenameKeys,loadRenameKeys,RENAME_KEYS_FILE} from './workspace-rename-keys.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {AppError} from './errors.js';
 const hash=async file=>digest(await readFile(file));
-const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
+const identity=folderIdentity;
 export class WorkspaceProjectRename extends WorkspaceProjectOwners {
  bookOwner(storage){return new ProjectBookRename(storage);}
 
@@ -59,14 +59,13 @@ export class WorkspaceProjectRename extends WorkspaceProjectOwners {
    operationItem(path.basename(item.relative));const storage=await this.checked(item),prior=await workspaceRename(storage.root);
    if(prior&&(prior.version!==2||prior.id!==value.id||prior.projectId!==item.projectId||prior.parentSource!==value.source||prior.parentDestination!==value.destination||prior.relative!==item.relative))throw new AppError('STORAGE_RENAME_STATE');
    if(!prior)await withProjectLifecycle(this.registry,item.projectId,'open',()=>storage.withStorageHandoff(async()=>{
-    await atomicWrite(path.join(storage.root,RENAME_MARKER),serialize({version:2,...(value.placement?{placement:true}:{}),id:value.id,source:nestedRenameRoot(value.source,item.relative),destination:nestedRenameRoot(value.destination,item.relative),parentSource:value.source,parentDestination:value.destination,relative:item.relative,projectId:item.projectId}));
+    await atomicWrite(path.join(storage.root,RENAME_MARKER),serialize({version:2,...(value.placement||path.dirname(value.source)!==path.dirname(value.destination)?{placement:true}:{}),id:value.id,source:nestedRenameRoot(value.source,item.relative),destination:nestedRenameRoot(value.destination,item.relative),parentSource:value.source,parentDestination:value.destination,relative:item.relative,projectId:item.projectId}));
    },{existing:true}));
    await checkpoint('project-frozen',value,item.projectId);
    await this.bookOwners.get(item.projectId).freezeAndStop(value,{checkpoint});
    const provider=databaseProvider();if(!provider?.stopProjectForRename)throw new AppError('DATABASE_LOCATION');
    await provider.stopProjectForRename(storage.root,item.projectId,storage.vault,value.id);
-   const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'),{});
-   try{await assertProjectDatabaseStopped(storage.root,item.projectId,storage.vault);}finally{await lease.close();}
+   await assertProjectDatabaseStopped(storage.root,item.projectId,storage.vault);
    await checkpoint('project-stopped',value,item.projectId);operationAdvance();
   }
   });
@@ -82,7 +81,7 @@ export class WorkspaceProjectRename extends WorkspaceProjectOwners {
 export async function clearRenamedProjects(root,value,{atSource=false}={}){
  for(const item of value.projects??[]){
   const target=nestedRenameRoot(root,item.relative),stat=await assertRegular(target,{directory:true});
-  if(await realpath(target)!==target||serialize(identity(stat))!==serialize(item.identity)||await hash(path.join(target,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
+  if(await realpath(target)!==target||serialize(await identity(target))!==serialize(item.identity)||await hash(path.join(target,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
   await clearRenamedBooks(target,item,value);const marker=await workspaceRename(target);if(!marker)continue;
   if(marker.id!==value.id||marker.projectId!==item.projectId||marker.parentDestination!==value.destination||marker.parentSource!==value.source||root!==(atSource?value.source:value.destination))throw new AppError('STORAGE_RENAME_STATE');
   await unlink(path.join(target,RENAME_MARKER));

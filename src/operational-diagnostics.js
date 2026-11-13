@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
-const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped','unexpected-error','native-storage-error']);
+const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped','unexpected-error','native-storage-error','state-refusal']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job','session-access','session-device','session-workers','workspace-identity','session-location']);
 for(const stage of ['startup-modules','runtime-permissions','runtime-version','runtime-status','runtime-start','runtime-connect','website-source-selections','website-source-owners','website-source-counts'])phases.add(stage);
 for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
@@ -53,6 +53,10 @@ function applicationFrames(error){
  }
  return frames;
 }
+// A journalled operation that refuses to continue because its saved state no
+// longer matches (a *_STATE code) records where it refused: only the code and
+// the application's own source positions, never the message.
+export function stateRefusal(error){diagnostic('state-refusal',{error,origin:applicationFrames(error)});}
 export function unexpectedError(error){
  let type;try{type=error?.name;}catch{}
  diagnostic('unexpected-error',{error,errorType:type,origin:applicationFrames(error)});
@@ -80,7 +84,7 @@ export function diagnosticEvent(event,data={}){
  if(['GET','POST'].includes(data.method))value.method=data.method;
  if(data.error)value.code=codeOf(data.error);
  if(event==='native-storage-error'&&typeof data.nativeOperation==='string'&&/^[a-z][a-z-]{0,31}$/.test(data.nativeOperation))value.nativeOperation=data.nativeOperation;
- if(['unexpected-error','native-storage-error'].includes(event)){
+ if(['unexpected-error','native-storage-error','state-refusal'].includes(event)){
   if(errorTypes.has(data.errorType))value.errorType=data.errorType;
   if(Array.isArray(data.origin)){const origin=data.origin.filter(frame=>typeof frame==='string'&&applicationFrame.test(frame)).slice(0,maxFrames);if(origin.length)value.origin=origin;}
  }

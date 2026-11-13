@@ -15,6 +15,7 @@ import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '..
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
+import {ownerWorkspace} from './owner-workspace-fixture.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 
 async function fixture(t){
@@ -22,7 +23,9 @@ async function fixture(t){
  t.after(async()=>{await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-book-creation-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const book=sampleNotebook();book.title='Field Project 1';book.projects[0].title=book.title;book.notebooks=[];book.entries=[];
- const root=path.join(parent,'Research Workspace 1',book.title);await mkdir(path.dirname(root),{recursive:true});const project=await initializeProjectLocation(root,book.projects[0].id,book,access,vault),creation=new LabBookCreation(project,device);
+ // The project lives in an open workspace and uses its single cluster.
+ const ownerHome=await ownerWorkspace(parent,{name:'Research Workspace 1'});vaults.push(ownerHome.vault);
+ const root=path.join(ownerHome.root,book.title);const project=await initializeProjectLocation(root,book.projects[0].id,book,access,vault),creation=new LabBookCreation(project,device);
  const command=title=>({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:project.projectId,title}});
  async function open(entry){const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:device});vaults.push(key);return new LabBookStorage(entry.root,entry.labBookId,key);}
  return {parent,project,creation,device,owner,command,open};

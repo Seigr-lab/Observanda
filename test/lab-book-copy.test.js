@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,rename,stat} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,rename,stat,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -20,14 +20,17 @@ import {ProjectBookRename} from '../src/project-book-rename.js';
 import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {RecordWriting} from '../src/record-writing.js';
-import {catalogueBinding} from '../src/postgres-activation.js';
+import {ownerWorkspace,assertArchiveCopy,importLabBookCopy} from './owner-workspace-fixture.js';
+import {catalogueBinding,CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 
 test('selected book commands recover independently and serialize only intersecting owner lifecycles',{timeout:180000},async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-book-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];let release,parentTask,copyTask;
- t.after(async()=>{release?.();await Promise.allSettled([parentTask,copyTask]);await provider.close();detach();await Promise.all(keys.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-selected-book-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-book-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];let release,parentTask,copyTask,workspace;
+ t.after(async()=>{release?.();await Promise.allSettled([parentTask,copyTask]);await provider.close();detach();await Promise.all(keys.map(clearVault));await clearVault(workspace?.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-selected-book-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);keys.push(vault);
+ // Every owner and every activated copy lives in one open workspace.
+ workspace=await ownerWorkspace(directory);
  const metadata=createNotebook('Field Project 1'),projectId=randomUUID();metadata.projects=[{id:projectId,title:metadata.title,parentId:null,description:'',share:false,logoId:null}];
- const project=await initializeProjectLocation(path.join(directory,metadata.title),projectId,metadata,access,vault),books=[];
+ const project=await initializeProjectLocation(path.join(workspace.root,metadata.title),projectId,metadata,access,vault),books=[];
  for(const title of ['Observations \u00c5 1','Independent Sibling']){
   const created=await new LabBookCreation(project,device).create({id:randomUUID(),username:'',password:'Independent transfer password',book:{id:randomUUID(),projectId,title}}),key=await verifyAccess(await readAccess(created.book.root),'','Independent transfer password',{deviceStore:device});keys.push(key);
   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),outline=await storage.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:storage.labBookId};await new ResearchRecords(storage,new MediaStore(storage)).save({workspaceId:outline.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]});books.push({storage,entry:created.book,target:{workspaceId:outline.metadata.id,recordId:record.id,sectionId:null}});
@@ -41,8 +44,13 @@ test('selected book commands recover independently and serialize only intersecti
  await assert.rejects(new LabBookRenames(project).run(first.storage,{id:randomUUID(),name:'Renamed book',expectedName:first.entry.directory}),{code:'LAB_BOOK_TRANSFER_PENDING'});
  await assert.rejects(command.run(first.storage,{id:randomUUID(),resume:true}),{code:'NOT_FOUND'});
  assert.equal((await command.run(first.storage,{id,resume:true})).phase,'complete');
- const copied=new LabBookStorage(destination,first.storage.labBookId,first.storage.vault);assert.deepEqual(await copied.read(),await first.storage.read());assert.notEqual((await catalogueBinding(destination)).id,(await catalogueBinding(first.storage.root)).id);
- const writing=new RecordWriting(copied),before=await writing.read(first.target);await writing.save({...first.target,expectedRevision:before.revision,value:{body:'Written in the copy'}});await command.run(first.storage,{id,resume:true});assert.equal((await writing.read(first.target)).value.body,'Written in the copy');
+ // "Copy to…" leaves the workspace: the copy is in archive form, and a
+ // repeated request leaves the completed copy exactly as it is.
+ await assertArchiveCopy(destination);const archived=await readFile(path.join(destination,CATALOGUE_ARCHIVE));
+ await command.run(first.storage,{id,resume:true});assert.deepEqual(await readFile(path.join(destination,CATALOGUE_ARCHIVE)),archived);
+ // Brought into another workspace through the product's import, the copy opens with its data.
+ const copied=await importLabBookCopy(directory,{deviceStore:device,source:destination,password:'Independent transfer password',labBookId:first.storage.labBookId,vault:first.storage.vault,vaults:keys});
+ assert.deepEqual((await copied.read()).book.entries,(await first.storage.read()).book.entries);assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(first.storage.root)).id);
  // The parent already passed preflight. Keep the command alive after its
  // source writer is released, before its completion receipt is published.
  const owner=new ProjectBookRename(project);await owner.prepare((bookId,use)=>use(books.find(book=>book.storage.labBookId===bookId).storage));
@@ -54,5 +62,6 @@ test('selected book commands recover independently and serialize only intersecti
  assert.equal(parentEntered,false);assert.equal((await archive.status()).running,true);release();await copyTask;await parentTask;owner.close();assert.equal(parentEntered,true);
  const cancelledParent=path.join(directory,'Cancelled');await mkdir(cancelledParent);const cancelId=randomUUID();await assert.rejects(command.run(first.storage,{id:cancelId,parent:cancelledParent,checkpoint:stage=>{if(stage==='files')throw Error('Interrupted transfer');}}),/Interrupted transfer/);await assert.rejects(command.cancel(first.storage,{id:randomUUID()}),{code:'NOT_FOUND'});await command.cancel(first.storage,{id:cancelId});assert.equal((await command.status()).phase,'cancelled');assert.ok(await stat(path.join(cancelledParent,first.entry.directory)));
  for(const book of books)await provider.closeLabBook(book.storage.root);await provider.closeProject(project.root);await rename(project.root,project.root+' unavailable');
- const exported=new LabBookStorage(path.join(exports,first.entry.directory),first.storage.labBookId,first.storage.vault);assert.equal((await new RecordWriting(exported).read(first.target)).value.body,sampleNotebook().entries[0].body);
+ const exportedRoot=path.join(exports,first.entry.directory);await assertArchiveCopy(exportedRoot);
+ const exported=await importLabBookCopy(directory,{deviceStore:device,source:exportedRoot,password:'Independent transfer password',labBookId:first.storage.labBookId,vault:first.storage.vault,vaults:keys});assert.equal((await new RecordWriting(exported).read(first.target)).value.body,sampleNotebook().entries[0].body);
 });

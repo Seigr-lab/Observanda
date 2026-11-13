@@ -15,20 +15,20 @@ test('pending and live external stock obligations block copies before creating d
   const id=randomUUID();await f.domains.run([domain],get=>new InventoryOperationStore(get(domain)).write(kind,id,{version:1,id}),{write:[domain]});
   try{
    await assert.rejects(assertInventoryObligationsSettled(f.storage),{code:'INVENTORY_OBLIGATIONS'});
-   const parent=path.join(f.root,domain+'-'+kind);await mkdir(parent);const destination=path.join(parent,path.basename(f.storage.root));
+   const parent=path.join(f.workspace.root,domain+'-'+kind);await mkdir(parent);const destination=path.join(parent,path.basename(f.storage.root));
    await assert.rejects(copyProjectOwnerLocation(f.storage,destination,{id:randomUUID()}),{code:'INVENTORY_OBLIGATIONS'});await assert.rejects(access(destination),{code:'ENOENT'});
   }finally{await f.domains.run([domain],get=>new InventoryOperationStore(get(domain)).remove(kind,id),{write:[domain]});}
   await assertInventoryObligationsSettled(f.storage);
  }
  // A new obligation after the preflight is caught inside the source handoff.
- const handoff=f.storage.withStorageHandoff.bind(f.storage),id=randomUUID(),destination=path.join(f.root,'race','project');await mkdir(path.dirname(destination));
+ const handoff=f.storage.withStorageHandoff.bind(f.storage),id=randomUUID(),destination=path.join(f.workspace.root,'race','project');await mkdir(path.dirname(destination));
  f.storage.withStorageHandoff=async(fn,options)=>{await f.domains.run(['inventory'],get=>new InventoryOperationStore(get('inventory')).write('live',id,{version:1,id}),{write:['inventory']});return handoff(fn,options);};
  try{await assert.rejects(copyProjectOwnerLocation(f.storage,destination,{id:randomUUID()}),{code:'INVENTORY_OBLIGATIONS'});}finally{f.storage.withStorageHandoff=handoff;await f.domains.run(['inventory'],get=>new InventoryOperationStore(get('inventory')).remove('live',id),{write:['inventory']});}
  assert.equal(await catalogueBinding(destination),null);await assertInventoryObligationsSettled(f.storage);
 });
 
 test('copy receipts bind new transfer modes while older paused transfers retain recovery compatibility',{timeout:90000},async t=>{
- const f=await fixture(t),id=randomUUID(),destination=path.join(f.root,'mode-copy','project');await mkdir(path.dirname(destination));
+ const f=await fixture(t),id=randomUUID(),destination=path.join(f.workspace.root,'mode-copy','project');await mkdir(path.dirname(destination));
  const target=await copyProjectOwnerLocation(f.storage,destination,{id});
  try{
   const receipt=await projectTransferReceipt(target);assert.equal(receipt.relocation,false);

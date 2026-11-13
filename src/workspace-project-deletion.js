@@ -9,7 +9,6 @@ import {saveOwnerKeys,loadOwnerKeys,DELETE_PROJECT_KEYS_FILE} from './owned-oper
 import {DELETE_MARKER,workspaceDeletion} from './workspace-delete-state.js';
 import {assertRegular,atomicWrite,serialize} from './storage.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
@@ -39,7 +38,7 @@ export class WorkspaceProjectDeletion extends WorkspaceProjectOwners{
     if(!prior)await withProjectLifecycle(this.registry,item.projectId,'open',()=>atomicWrite(path.join(storage.root,DELETE_MARKER),serialize(marker)));
     await checkpoint('project-frozen',value,item.projectId);await this.bookOwners.get(item.projectId).stop(value,{checkpoint});
     const provider=databaseProvider();if(!provider?.stopProjectForDeletion)throw new AppError('DATABASE_LOCATION');await provider.stopProjectForDeletion(storage.root,item.projectId,storage.vault,value.id);
-    const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));try{await assertProjectDatabaseStopped(storage.root,item.projectId,storage.vault);}finally{await lease.close();}
+    await assertProjectDatabaseStopped(storage.root,item.projectId,storage.vault);
     await checkpoint('project-stopped',value,item.projectId);operationAdvance();
    }
   });

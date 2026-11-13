@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {nativeRelocationOwners} from './native-relocation-state.js';
 // Pending source addresses follow the authenticated handoff location. Storage
 // fences still prevent ordinary writes until both directories agree.
@@ -13,7 +14,7 @@ export async function locateWorkspaceProjectMove(registry,value){
  const native=value.ownerDirectoryVersion===2,transferred=native?value.copied===true:value.version===2,scope=workspaceMoveScope(registry,value),owner=transferred?(native?await nativeRelocationOwners(registry,value).get(''):value.transfer.owners.find(item=>item.relative==='')):null;
  for(const root of transferred?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
   const stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root)continue;
-  const actual=transferred||native?await projectMoveDirectory(root):{dev:String(stat.dev),ino:String(stat.ino)},expected=transferred?(root===scope.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity;
+  const actual=transferred||native?await projectMoveDirectory(root):await folderIdentity(root),expected=transferred?(root===scope.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity;
   if(actual.dev!==expected?.dev||actual.ino!==expected?.ino||await realpath(root)!==root)continue;
   if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(['preparing','prepared'].includes(value.phase)&&root===scope.source))throw new AppError('STORAGE_MOVE_STATE');return root;
  }

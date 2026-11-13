@@ -35,7 +35,7 @@ test('PDF documents save independently, roll back failed writes, and reopen from
  await assert.rejects(documents.domains.run(['pdf'],async get=>{await new PdfLayoutLibrary(get('pdf')).change({id:layoutId,commandId:randomUUID(),expectedRevision:savedLayout.revision,operation:{type:'remove'}});throw new Error('interrupted layout save');},{write:['pdf']}),/interrupted layout save/);
  assert.equal((await documents.read('layouts')).items[0].layout.widthMm,180);
  const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8');await verifyCatalogueArchive(f.storage,JSON.parse(descriptor));
- const targetRoot=path.join(f.root,'pdf-archive');await mkdir(path.join(targetRoot,'.observanda'),{recursive:true});
+ const targetRoot=path.join(f.workspace.root,'pdf-archive');await mkdir(path.join(targetRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(targetRoot,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,targetRoot,{connection:db});}finally{await db.close();}
  const archive=new ProjectStorage(targetRoot,f.projectId,f.vault);await verifyCatalogueArchive(archive,JSON.parse(descriptor));
@@ -43,7 +43,7 @@ test('PDF documents save independently, roll back failed writes, and reopen from
  assert.deepEqual(await new PdfDocuments(archive,f.book.id).read('layouts'),await documents.read('layouts'));
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),vault=takeCreatedVault(access);
  try{
-  const target=new ProjectStorage(path.join(f.root,'pdf-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'pdf-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));
   const reopened=new PdfDocuments(target,f.book.id);assert.deepEqual(await reopened.read('history',{id}),await documents.read('history',{id}));assert.equal((await reopened.read('section',{id,sectionId:section.id,revision:changed.revision})).section.content,'Updated observation');
   assert.deepEqual(await reopened.read('layouts'),await documents.read('layouts'));

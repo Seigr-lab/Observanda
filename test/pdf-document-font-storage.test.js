@@ -57,13 +57,13 @@ test('retained PDF custom fonts survive source removal, historical editions, arc
   const store=get('pdf'),key='pdf-font:value:'+id+':'+header.fonts[0].revision,value=await store.object(key);await store.putObject(key,{...value,size:value.size+1});await new PdfDocumentStore(store).verify();
  },{write:['pdf']}),{code:'CATALOGUE_DAMAGED'});
  const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8');await verifyCatalogueArchive(f.storage,JSON.parse(descriptor));
- const archiveRoot=path.join(f.root,'font-archive');await mkdir(path.join(archiveRoot,'.observanda'),{recursive:true});
+ const archiveRoot=path.join(f.workspace.root,'font-archive');await mkdir(path.join(archiveRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(archiveRoot,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,archiveRoot,{connection:db});}finally{await db.close();}
  const archive=new ProjectStorage(archiveRoot,f.projectId,f.vault);await verifyCatalogueArchive(archive,JSON.parse(descriptor));assert.equal((await renderInput(new PdfDocuments(archive,f.book.id),id,saved.revision)).html,first.html);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'font-recovery-device')})),vault=takeCreatedVault(access);
  try{
-  const target=new ProjectStorage(path.join(f.root,'font-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
+  const target=new ProjectStorage(path.join(await f.receivingWorkspace(),'font-rekeyed'),f.projectId,vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
   await rekeyCatalogue(f.storage,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));
   const reopened=new PdfDocuments(target,f.book.id);assert.equal((await renderInput(reopened,id,saved.revision)).html,first.html);assert.deepEqual(await reopened.read('history',{id}),await documents.read('history',{id}));assert.equal((await reopened.read('open',{id})).revision,changed.revision);
  }finally{clearVault(vault);}

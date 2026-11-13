@@ -1,3 +1,4 @@
+import {folderIdentity} from './folder-identity.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {ProjectChildPreservation,validatePreservedChildren,insideProject,physicalProjectDescendants} from './project-child-preservation.js';
@@ -23,7 +24,6 @@ import {authenticateKeyring} from './security/keyring.js';
 import {workspaceDeletion,deletionScope} from './workspace-delete-state.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {assertProjectDatabaseStopped} from './project-postgres.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 const summary=value=>({id:value.id,projectId:value.projectId,source:value.source,phase:value.phase});
@@ -81,8 +81,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
   const books=new ProjectBookDeletion(new ProjectStorage(root,this.projectId,vault));
   try{await deletionScope(id,async()=>{await books.load(value);await books.stop(value,{checkpoint});});}finally{books.close();}
   await provider.stopProjectForDeletion(root,this.projectId,vault,id);
-  const lease=await workspaceDatabaseLease(path.join(root,'.observanda/postgresql'));
-  try{await assertProjectDatabaseStopped(root,this.projectId,vault);}finally{await lease.close();}
+  await assertProjectDatabaseStopped(root,this.projectId,vault);
  }
  async run(vault,{id,expectedRoot,checkpoint=async()=>{},onProgress,check=async()=>{},beforeFreeze,onFrozen=async()=>{},withProject,withBook,placeChild}={}){
   if(!researchId(id)||expectedRoot!==undefined&&typeof expectedRoot!=='string')throw new AppError('INVALID');
@@ -96,7 +95,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
    }else if(value&&value.phase!=='complete')throw new AppError('STORAGE_DELETE_BUSY');else value=null;
    const entry=await this.registry.locate(this.projectId);if(expectedRoot!==undefined&&entry.root!==expectedRoot)throw new AppError('CONFLICT');
    const storage=new ProjectStorage(entry.root,this.projectId,vault);
-   if(value&&(value.source!==storage.root||value.vaultId!==vault?.id||!sameDirectory(directoryIdentity(await assertRegular(storage.root,{directory:true})),value.identity)))throw new AppError('CONFLICT');
+   if(value&&(value.source!==storage.root||value.vaultId!==vault?.id||!sameDirectory((await assertRegular(storage.root,{directory:true}),await directoryIdentity(storage.root)),value.identity)))throw new AppError('CONFLICT');
    this.bookOwners=new ProjectBookDeletion(storage);this.preservation=new ProjectChildPreservation(this.registry,storage);
    try{
     await this.bookOwners.prepare(typeof withBook==='function'?(bookId,use)=>withBook(storage,bookId,use):undefined);
@@ -111,7 +110,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
       await assertProjectCreationSettled(this.registry,[this.projectId]);await assertProjectRelocationsSettled(this.registry,[this.projectId]);
       const current=await this.registry.inspect(async view=>{const entries=[];for await(const row of view.entries({index:'parent',prefix:this.projectId+':'}))if(insideProject(storage.root,row.entry.root))entries.push(row.entry);return entries;});
       if(current.some(p=>!children.some(child=>child.projectId===p.projectId&&path.join(storage.root,child.directory)===p.root)))throw new AppError('CONFLICT');
-      await this.save({...initial,title:'',version:1,id,phase:'preserving',databaseRemoved:false,identity:directoryIdentity(await assertRegular(storage.root,{directory:true})),preserveChildren:children});
+      await this.save({...initial,title:'',version:1,id,phase:'preserving',databaseRemoved:false,identity:(await assertRegular(storage.root,{directory:true}),await directoryIdentity(storage.root)),preserveChildren:children});
      });await checkpoint('preserving',children);
      await this.preservation.run({withProject,withBook,check,checkpoint,placeChild});
     }

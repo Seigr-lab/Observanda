@@ -23,7 +23,7 @@ export class LabBookAccessSession{
    const access=await readAccess(root);
    if(saved?.vault&&saved.etag===access.etag&&saved.vault.id===access.value.vaultId&&saved.expires>Date.now()){this.expected=saved;await this.check();saved.root=root;return cloneVault(saved.vault);}
    if(saved)this.application.forget(this.session,this.id);this.expected=undefined;
-   const vault=await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});
+   const vault=this.application.deviceUnlock?await this.application.deviceUnlock(this.session,this.id,root,access):await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});
    try{await this.check();return vault;}catch(error){await clearVault(vault);throw error;}
   }catch(error){throw this.error(error);}
  }

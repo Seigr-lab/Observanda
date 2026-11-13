@@ -15,7 +15,6 @@ import {withWriterLease} from './writer-lease.js';
 import {createNotebook,validateNotebook,MAX_BYTES} from './model.js';
 import {createWorkspaceAccess,takeCreatedVault,verifyAccess} from './access.js';
 import {clearVault} from './encryption.js';
-import {resolveLocation} from './locations.js';
 import {researchId} from './web/research-reference.js';
 import {revisionText} from './web/revision-model.js';
 import {AppError} from './errors.js';
@@ -73,10 +72,10 @@ export class ProjectCreation{
   const saved=await this.read(command.id);if(!saved)throw new AppError('NOT_FOUND');
   if(saved.intent.phase==='attached')return withWriterLease(path.join(this.workspace.root,'.observanda/project-creation',command.id+'.lock'),async()=>{await options.check?.();const current=await this.read(command.id),result=await this.acknowledge(command.id,current.intent);await this.finish(command.id,current.intent,current.file);return result;});
   const intent=saved.intent;
-  return this.create({...command,path:intent.root,project:{...intent.book.projects[0],parentId:intent.parentId}},{...options,resume:true});
+  return this.create({...command,project:{...intent.book.projects[0],parentId:intent.parentId}},{...options,resume:true});
  }
  async create(command,{check=async()=>{},resume=false}={}){
-  if(!command||!['id,password,path,project,username','id,password,project,username'].includes(Object.keys(command).filter(key=>!configurationCreationOptions.includes(key)).sort().join())||!researchId(command.id)||!researchId(command.project?.id)||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
+  if(!command||Object.keys(command).filter(key=>!configurationCreationOptions.includes(key)).sort().join()!=='id,password,project,username'||!researchId(command.id)||!researchId(command.project?.id)||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
   const {password,...request}=command;const fingerprint=digest(revisionText(request));
   // Validate editable content before generating keys or writing a request.
   const parentId=command.project.parentId??null;if(parentId!==null&&!researchId(parentId))throw new AppError('INVALID');
@@ -107,10 +106,11 @@ export class ProjectCreation{
      if(current.state!==null)throw new AppError('EXISTS');
      const parent=parentId===null?this.workspace.root:(await this.registry.state(parentId)).entry?.root;
      if(!parent)throw new AppError('NOT_FOUND');
-     const derived=storageCreationPath(parent,command.project.title),root=command.path===undefined?derived:await resolveLocation(command.path);
+     // A project is always created in its parent's folder: the workspace
+     // folder, or its parent project's folder inside the workspace.
+     const root=storageCreationPath(parent,command.project.title);
      await this.registry.assertRoot(root,{parentId});
      requireStorageName(root,command.project.title);
-     if(root!==derived)throw new AppError('STORAGE_PATH');
      const access=await createWorkspaceAccess(command.username,password,this.deviceStore);vault=takeCreatedVault(access);
      intent={version:1,moduleLayout:'domains-and-authoring-v1',fingerprint,phase:'prepared',root,projectId:draft.projects[0].id,parentId:parentId,book:draft,access,...(selected?.frozen?{configuration:selected.frozen}:{})};
      const serialized=serialize(intent);if(Buffer.byteLength(serialized)>intentLimit)throw new AppError('LIMIT');await this.workspace.writeFile(file,serialized);

@@ -105,9 +105,11 @@ export async function initializeLocation(input,book,access,suppliedVault,{dashbo
   const vault=suppliedVault??takeCreatedVault(access);
   if(isEncryptedAccess(access)&&(!vault?.key||vault.id!==access.vaultId))throw new AppError('ACCESS_LOCKED');
   try{
-  validateNotebook(book);if(dashboard!==undefined&&!validDashboard(dashboard))throw new AppError('INVALID');if(isEncryptedAccess(access))await requireDatabase();
+  validateNotebook(book);if(dashboard!==undefined&&!validDashboard(dashboard))throw new AppError('INVALID');
+  // An occupied location is refused before any database is started.
   const info=await probeLocation(input);
   if(!['new','empty'].includes(info.kind))throw new AppError('EXISTS');
+  if(isEncryptedAccess(access))await requireDatabase();
   if(info.kind==='new')await mkdir(info.root,{mode:0o700});
   const ws=new Workspace(info.root,vault);
   await ws.withLock(async()=>{

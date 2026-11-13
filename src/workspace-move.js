@@ -10,7 +10,7 @@ import {withRetiredRecordCopy} from './project-retired-records.js';
 // renamed to a receipt-owned sibling, so retries never delete a reused path.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {readFile,readdir,opendir,realpath} from 'node:fs/promises';
+import {readFile,readdir,opendir,realpath,stat} from 'node:fs/promises';
 import {atomicReplace as rename} from './atomic-replace.js';
 import {unlinkPersistent as unlink,removePersistentDirectory as rmdir,persistRename} from './filesystem-persistence.js';
 import {Workspace,workspaceFile,assertRegular,atomicWrite,serialize} from './storage.js';
@@ -48,6 +48,12 @@ async function ownedFolder(root,projectRoots=[],moveDirectory){
  for(const name of await readdir(root))if(!['.observanda',descriptor].includes(name)){
   if(moveDirectory?!await moveDirectory.sourceContainer(path.join(root,name)):!relativeRoots.some(relative=>relative===name||relative.startsWith(name+'/')))throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(root,name));
  }
+}
+// A workspace moves as one folder, cluster included, when its new parent is on
+// the same volume; otherwise it is copied into a new cluster (server move route).
+export async function sameWorkspaceVolume(source,destination){
+ const [from,to]=await Promise.all([stat(source),stat(path.dirname(destination))]);
+ return from.dev===to.dev;
 }
 export async function readMoveReceipt(root){
  const file=path.join(root,MOVE_RECEIPT),stat=await assertRegular(file,{missing:true});if(!stat)return null;

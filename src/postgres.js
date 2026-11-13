@@ -4,6 +4,7 @@ import {readCatalogueStamp} from './catalogue-stamp.js';
 import {dropProjectDomainSchemas} from './project-domain-schema.js';
 import {databaseRequestSignal,withDatabaseRequest} from './database-request-context.js';
 import {DatabaseAdmission} from './database-admission.js';
+import {idleConnections,idleConnectionKey,idleConnectionScope} from './database-idle-connections.js';
 import {checkServerIdentity} from 'node:tls';
 import {retainRuntimeEnvironment,runtimeStorageDirectory} from './database-runtime-environment.js';
 import {databaseClusterIdentity} from './database-cluster-identity.js';
@@ -52,22 +53,48 @@ export async function databaseConfiguration(env=process.env,{signal}={}){
 }
 let connections=0;
 const admission=new DatabaseAdmission();
-export function databaseCapacity(){return {active:connections,...admission.stats()};}
-async function connect(env=process.env,{signal=databaseRequestSignal(),reservation}={}){
+export function databaseCapacity(){return {active:connections,idle:idleConnections.size,...admission.stats()};}
+// A reusable connection returns to the idle pool (database-idle-connections.js)
+// through client.release(); client.end() always closes it.
+async function connect(env=process.env,{signal=databaseRequestSignal(),reservation,reusable=false}={}){
  signal?.throwIfAborted();const releaseRuntime=retainRuntimeEnvironment(env);let ticket,releaseSlot,client,released=false,counted=false;
  const release=()=>{if(released)return;released=true;if(counted)connections--;releaseSlot?.();releaseRuntime();};
  try{
   const configuration=await databaseConfiguration(env);signal?.throwIfAborted();
   const host=['localhost','127.0.0.1','::1'].includes(configuration.host)?'loopback':configuration.host.toLowerCase();
-  const endpoint=createHash('sha256').update(host+'\0'+configuration.port).digest('hex');
+  // One workspace cluster serves the workspace and each of its projects and
+  // lab books under their own roles. Admission keeps one queue per role, as
+  // when every owner had its own server, so a saturated owner never starves
+  // its siblings; the global limit bounds what reaches the shared server.
+  const endpoint=createHash('sha256').update(host+'\0'+configuration.port+'\0'+configuration.user).digest('hex');
   const admissionMeasured=diagnosticMeasurement('database-admission');
   try{if(reservation)releaseSlot=reservation.auxiliary();
   else{ticket=await admission.acquire(endpoint,{signal});releaseSlot=()=>ticket.release();}}
   finally{admissionMeasured();}
   signal?.throwIfAborted();
+  const url=env.OBSERVANDA_DATABASE_URL,storage=runtimeStorageDirectory(env),key=reusable?idleConnectionKey(configuration,env,storage):null;
+  const checkout=value=>{
+   connections++;counted=true;value.reservation=ticket;
+   value.end=async()=>{try{return await value.closeConnection();}finally{release();}};
+   // Only a session without a transaction is reset and parked; anything that
+   // fails here, or an owner that retired its credentials, closes instead.
+   let returned=false;
+   value.release=async()=>{
+    if(returned)return;returned=true;
+    if(!key||databaseConnectionEnded(value)||env.OBSERVANDA_DATABASE_URL!==url||runtimeStorageDirectory(env)!==storage)return value.end();
+    try{await databaseQuery(value,'DISCARD ALL',[],{signal:null});}catch{return value.end();}
+    if(databaseConnectionEnded(value))return value.end();
+    const physical=value.closeConnection;value.end=physical;value.release=physical;value.reservation=undefined;release();
+    if(!idleConnections.park(key,value,idleConnectionScope(configuration),physical))await physical().catch(()=>{});
+   };
+   return value;
+  };
+  const reused=key?idleConnections.take(key,value=>!databaseConnectionEnded(value)):null;
+  if(reused){client=checkout(reused);return client;}
+  // Parked connections give way before a new one could exceed the server's budget.
+  while(idleConnections.size&&connections+idleConnections.size>=admission.globalLimit*2)idleConnections.evictOldest();
   try{client=new Client(configuration);}catch{throw new AppError('DATABASE_CONFIG');}
-  connections++;counted=true;client.reservation=ticket;
-  const end=client.end.bind(client);client.end=async()=>{try{return await end();}finally{release();}};
+  client.closeConnection=client.end.bind(client);checkout(client);
   client.on('error',()=>{});
   const connectionMeasured=diagnosticMeasurement('database-connect');
   try{await client.connect();signal?.throwIfAborted();return client;}
@@ -90,7 +117,8 @@ export async function hasCatalogue(root){
  return !!(await assertRegular(path.join(root,CATALOGUE_FILE),{missing:true})||await assertRegular(path.join(root,CATALOGUE_ARCHIVE),{missing:true}));
 }
 class CatalogueConnection{
- constructor(client,id,{temporary=false,env=process.env}={}){this.client=client;this.id=id;this.schema=schemaFor(id);this.temporary=temporary;this.env=env;}
+ // A rolled-back, non-temporary connection returns to the idle pool on close.
+ constructor(client,id,{temporary=false,env=process.env}={}){this.client=client;this.id=id;this.schema=schemaFor(id);this.temporary=temporary;this.env=env;this.reusable=true;}
  scope(operation){return databaseScope(this.env,operation,this);}
  async run(sql,...values){return databaseQuery(this.client,sql,values);}
  async get(sql,...values){return (await this.run(sql,...values)).rows[0];}
@@ -121,7 +149,8 @@ class CatalogueConnection{
   // Cleanup owns its deadline; cancellation of the request must not prevent
   // rollback or leave a successfully imported temporary catalogue behind.
   return withDatabaseRequest(null,async()=>{
-   let cleanup=this,replacement;
+   if(this.client===null)return;
+   let cleanup=this,replacement,reset=false;
    try{
     if(databaseConnectionEnded(this.client)){
      // Release the dead connection's admission slot before borrowing another.
@@ -132,7 +161,12 @@ class CatalogueConnection{
     }
     await cleanup.run('ROLLBACK');
     if(this.temporary){await dropProjectDomainSchemas(cleanup);await cleanup.run('DROP SCHEMA IF EXISTS "'+this.schema+'" CASCADE');}
-   }finally{try{await replacement?.end();}finally{await this.client.end();}}
+    else reset=this.reusable;
+   }finally{try{await replacement?.end();}finally{
+    // A parked client may serve another operation at once: this closed
+    // connection keeps no reference that could still reach it.
+    if(reset&&this.client.release){const client=this.client;this.client=null;await client.release();}else await this.client.end();
+   }}
   });
  }
  async lock(){
@@ -180,7 +214,7 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
  if(detached&&activation)throw new AppError('LOCKED');
  const lease=explicitEnv?{env:explicitEnv,release:()=>{}}:await acquireWorkspaceDatabaseEnvironment(root,{create,detached,vault,projectId,labBookId,signal});
  const env=lease.env;let client;
- try{await assertCatalogueEnvironment(root,projectId,env,labBookId);client=await connect(env,{signal});}finally{lease.release();}
+ try{await assertCatalogueEnvironment(root,projectId,env,labBookId);client=await connect(env,{signal,reusable:true});}finally{lease.release();}
  let db,created=false,published=false,restoreLock;
  try{
   // Serialize first activation across processes; recheck the binding under this lock.
@@ -229,7 +263,8 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
   }
   return db;
  }catch(error){
-  if(db){if(created&&!published)db.temporary=true;await db.close().catch(()=>{});}
+  // The activation lock is released below on this same client: never park it.
+  if(db){if(created&&!published)db.temporary=true;db.reusable=false;await db.close().catch(()=>{});}
   else await client.end().catch(()=>{});
   const requestSignal=signal??databaseRequestSignal();
   if(error instanceof AppError||requestSignal?.aborted&&error===requestSignal.reason)throw error;

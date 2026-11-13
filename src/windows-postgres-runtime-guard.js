@@ -3,13 +3,22 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {AppError} from './errors.js';
 
-export const acquireWindowsPostgresRuntimeGuard=options=>windowsRuntimeGuard(options);
-export const inspectWindowsPostgresRuntimeStorage=directory=>windowsRuntimeGuard({directory,inspectOnly:true});
-export const probeWindowsPostgresRuntimeCreation=(directory,{mapped=false}={})=>windowsRuntimeGuard({directory,probeCreate:true,mapped});
-async function windowsRuntimeGuard({directory,create=true,parentIdentity,expectedIdentity,creationToken,admissionKey,signal,inspectOnly=false,probeCreate=false,mapped=false}={}){
- signal?.throwIfAborted();
+export const acquireWindowsPostgresRuntimeGuard=({prepared,...options})=>(prepared??prepareWindowsPostgresRuntimeGuard()).acquire(options);
+export const inspectWindowsPostgresRuntimeStorage=directory=>windowsRuntimeGuard(launchGuard(),{directory,inspectOnly:true});
+export const probeWindowsPostgresRuntimeCreation=(directory,{mapped=false}={})=>windowsRuntimeGuard(launchGuard(),{directory,probeCreate:true,mapped});
+// Starting the guard (PowerShell and its compiled helper) takes most of a
+// second. A caller may start it before it knows the directory, concurrently
+// with other work; admission and every check happen only in acquire().
+export function prepareWindowsPostgresRuntimeGuard(){
+ let launched=launchGuard(),used=false;
+ return {
+  acquire(options){if(used)throw new AppError('DATABASE_GUARD_UNAVAILABLE');used=true;const value=launched;launched=null;return windowsRuntimeGuard(value,options);},
+  async close(){if(used)return;used=true;const value=launched;launched=null;value.child.stdin.end();value.child.kill();await value.exited;}
+ };
+}
+function launchGuard(){
  const child=spawn(path.join(process.env.SystemRoot??'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/postgres-runtime-guard.ps1',import.meta.url))],{windowsHide:true,stdio:['pipe','pipe','pipe']});
- const pending=new Map();let next=0,header='',failed,closing,readyResolve,readyReject,stderr='';
+ const pending=new Map();let next=0,header='',failed,readyResolve,readyReject,stderr='';
  const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
  const fail=error=>{failed??=error;readyReject(failed);for(const item of pending.values())item.reject(failed);pending.clear();};
  const exited=new Promise(resolve=>{child.once('exit',()=>{const error=new AppError('DATABASE_GUARD_UNAVAILABLE');error.diagnostic=stderr;fail(error);resolve();});child.once('error',error=>{fail(new AppError('DATABASE_GUARD_UNAVAILABLE'));resolve();});});
@@ -25,13 +34,18 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
  });
  function request(operation,data={}){if(failed)return Promise.reject(failed);const id=++next,result=new Promise((resolve,reject)=>pending.set(id,{resolve,reject}));child.stdin.write(JSON.stringify({id,operation,...data})+'\n',error=>{if(error)fail(new AppError('DATABASE_GUARD_UNAVAILABLE'));});return result;}
  const timer=setTimeout(()=>{fail(new AppError('DATABASE_GUARD_UNAVAILABLE'));child.kill();},15000);
- try{await ready;}catch(error){child.stdin.end();await exited;throw error;}finally{clearTimeout(timer);}
+ const started=ready.finally(()=>clearTimeout(timer));void started.catch(()=>{});
+ return {child,exited,request,started,failure:()=>failed};
+}
+async function windowsRuntimeGuard(launched,{directory,create=true,parentIdentity,expectedIdentity,creationToken,admissionKey,signal,inspectOnly=false,probeCreate=false,mapped=false}={}){
+ const {child,exited,request}=launched;let closing;
+ try{signal?.throwIfAborted();await launched.started;}catch(error){child.stdin.end();child.kill();await exited;throw error;}
  if(inspectOnly){try{return await request('inspect',{directory});}finally{child.stdin.end();await exited;}}
  if(probeCreate){try{return await request('probe-create',{directory,mapped});}finally{child.stdin.end();await exited;}}
  let receipt;
  try{receipt=await request('admit',{directory,create,parentIdentity,expectedIdentity,creationToken,admissionKey:admissionKey?.toString('base64')});signal?.throwIfAborted();}
  catch(error){child.stdin.end();await exited;throw error;}
- const close=()=>closing??=(async()=>{let stopped=false;try{if(!failed)stopped=(await request('close')).stopped===true;}finally{child.stdin.end();await exited;}return {stopped};})();
+ const close=()=>closing??=(async()=>{let stopped=false;try{if(!launched.failure())stopped=(await request('close')).stopped===true;}finally{child.stdin.end();await exited;}return {stopped};})();
  const relative=file=>{const value=path.relative(directory,path.resolve(file));if(!value||value==='..'||value.startsWith('..'+path.sep)||path.isAbsolute(value))throw new AppError('UNSAFE');return value.split(path.sep).join('/');};
  const file=(action,target,options={})=>request('file',{action,relative:relative(target),...options});
  const optional=async operation=>{try{return await operation();}catch(error){if(error.code==='ENOENT')return null;throw error;}};

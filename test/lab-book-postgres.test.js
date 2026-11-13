@@ -1,82 +1,100 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,readFile,realpath,rename,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,readdir,readFile,realpath,rename,rm,writeFile} from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {Client} from 'pg';
-import {LabBookPostgres,assertLabBookDatabaseStopped} from '../src/lab-book-postgres.js';
-import {ProjectPostgres} from '../src/project-postgres.js';
-import {WorkspacePostgres} from '../src/workspace-postgres.js';
-import {seal,unseal,clearVault} from '../src/encryption.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {assertLabBookDatabaseStopped} from '../src/lab-book-postgres.js';
 import {retainRuntimeEnvironment} from '../src/database-runtime-environment.js';
+import {catalogueBinding} from '../src/postgres-activation.js';
+import {openCatalogue} from '../src/postgres.js';
+import {ownerRoleName} from '../src/owner-database-role.js';
+import {seal,unseal,clearVault} from '../src/encryption.js';
 import {labBookCatalogueBinding,validLabBookCatalogueBinding,assertLabBookCatalogueOwner,assertLabBookCatalogueEnvironment} from '../src/lab-book-catalogue-owner.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {workDirectory} from '../scripts/work-directory.js';
 
-async function connect(env){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL,statement_timeout:3000});await client.connect();return client;}
-async function query(env,sql,values=[]){const client=await connect(env);try{return (await client.query(sql,values)).rows;}finally{await client.end();}}
+const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??''};delete env.OBSERVANDA_DATABASE_URL;return env;};
+async function using(env,operation){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL,statement_timeout:5000});client.on('error',()=>{});await client.connect();try{return await operation(client);}finally{await client.end();}}
+const query=(env,sql,...values)=>using(env,async client=>(await client.query(sql,values)).rows);
+const schemaOf=id=>'obs_'+id.replaceAll('-','');
+// A workspace with one project; lab books live in the project folder. Every
+// folder is inside the repository's git-ignored .local/test-work.
 async function fixture(t){
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-lab-book-owner-')),owners=[],keys=[];
- const manager=(Class=LabBookPostgres,options={})=>{const owner=new Class({ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN},...options});owners.push(owner);return owner;};
- t.after(async()=>{
-  for(const owner of owners)await owner.close();for(const key of keys)await clearVault(key);
-  const resolved=path.resolve(parent);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('observanda-lab-book-owner-'));
-  await rm(resolved,{recursive:true,force:true,maxRetries:10,retryDelay:100});
- });
- async function book(name){const root=path.join(parent,'Research Workspace 1','Field Project 1',name),id=randomUUID(),vault={id:randomUUID(),key:randomBytes(32)};keys.push(vault);await mkdir(path.join(root,'.observanda'),{recursive:true});return {root,id,vault};}
- return {parent,manager,book};
+ const parent=await mkdtemp(path.join(await workDirectory('test-work'),'observanda-lab-book-owner-')),vaults=[];
+ const owner=new WorkspaceDatabases({directory:path.join(parent,'application'),ownerId:randomUUID(),env:environment()}),detach=installDatabaseProvider(owner);
+ let workspace;
+ t.after(async()=>{try{await owner.close();}finally{detach();await clearVault(workspace?.vault);for(const vault of vaults)await clearVault(vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});}});
+ workspace=await encryptedFixture(path.join(parent,'workspace folder'),sampleNotebook());
+ const root=await realpath(workspace.workspace.root),workspaceEnv=await owner.instances.cached(root);
+ async function owned(relative,kind,{create=true}={}){
+  const folder=path.join(root,relative),id=randomUUID(),vault={id:randomUUID(),key:randomBytes(32)};vaults.push(vault);
+  await mkdir(path.join(folder,'.observanda'),{recursive:true});
+  const value={root:await realpath(folder),id,vault};
+  if(create){const db=await openCatalogue(value.root,{create:true,vault,...(kind==='project'?{projectId:id}:{labBookId:id})});value.catalogue=db.id;await db.close();}
+  return value;
+ }
+ const project=await owned('Field Project','project');
+ return {parent,owner,root,workspaceEnv,project,book:(name,options)=>owned(path.join('Field Project',name),'lab-book',options)};
 }
 
-test('nested lab books have independent databases and writers and retain data after relocation',async t=>{
- const f=await fixture(t),owner=f.manager(),a=await f.book('Soil observations'),b=await f.book('Water observations'),originalUrl=process.env.OBSERVANDA_DATABASE_URL;
- const [envA,envB]=await Promise.all([owner.open(a.root,a.id,a.vault,{create:true}),owner.open(b.root,b.id,b.vault,{create:true})]);
- assert.equal(process.env.OBSERVANDA_DATABASE_URL,originalUrl);assert.notEqual(envA.OBSERVANDA_DATABASE_URL,envB.OBSERVANDA_DATABASE_URL);
- for(const [env,book] of [[envA,a],[envB,b]]){
-  await assertLabBookCatalogueEnvironment(book.root,book.id,env);
-  const pid=(await readFile(path.join(book.root,'.observanda/postgresql/data/postmaster.pid'),'utf8')).split('\n');assert.equal(path.resolve(pid[1].trim()),process.platform==='linux'?'/observanda/data':path.join(book.root,'.observanda/postgresql/data'));
-  await query(env,'CREATE TABLE retained(id integer PRIMARY KEY,payload bytea NOT NULL)');
+test('lab books keep their catalogues in the workspace cluster under roles that neither the project nor a sibling holds',async t=>{
+ const f=await fixture(t),a=await f.book('Soil observations'),b=await f.book('Water observations'),workspaceBinding=await catalogueBinding(f.root);
+ for(const book of [a,b]){
+  assert.deepEqual(await catalogueBinding(book.root),{format:'observanda-postgresql',version:7,id:book.catalogue,placement:'lab-book',labBookId:book.id,cluster:workspaceBinding.cluster});
+  assert.equal((await readdir(path.join(book.root,'.observanda'))).includes('postgresql'),false);
  }
- const content=Buffer.from('An independently retained observation'),aad='test/lab-book/'+a.id;
- await query(envA,'INSERT INTO retained VALUES ($1,$2)',[1,seal(content,a.vault.key,aad)]);
- assert.deepEqual(await query(envB,'SELECT * FROM retained'),[]);
- const aWriter=await connect(envA),aOther=await connect(envA),bWriter=await connect(envB);
- try{
-  await aWriter.query('BEGIN');await aWriter.query('SELECT pg_advisory_xact_lock(37)');
-  await aOther.query('BEGIN');assert.equal((await aOther.query('SELECT pg_try_advisory_xact_lock(37) AS locked')).rows[0].locked,false);
-  await bWriter.query('BEGIN');assert.equal((await bWriter.query('SELECT pg_try_advisory_xact_lock(37) AS locked')).rows[0].locked,true);
-  await bWriter.query('INSERT INTO retained VALUES ($1,$2)',[2,seal(Buffer.from('Sibling writes remain available'),b.vault.key,'test/lab-book/'+b.id)]);await bWriter.query('COMMIT');
- }finally{await aWriter.end();await aOther.end();await bWriter.end();}
- await owner.closeLabBook(a.root);assert.equal(envA.OBSERVANDA_DATABASE_URL,undefined);await assertLabBookDatabaseStopped(a.root,a.id,a.vault);
- const nextProject=path.join(f.parent,'Other Workspace','Other Project');await mkdir(nextProject,{recursive:true});const moved=path.join(nextProject,path.basename(a.root));await rename(a.root,moved);
- const next=f.manager(),env=await next.open(moved,a.id,a.vault),row=(await query(env,'SELECT payload FROM retained WHERE id=1'))[0];
- assert.deepEqual(unseal(row.payload,a.vault.key,aad),content);assert.equal(env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT,await realpath(moved));
- assert.equal((await query(envB,'SELECT count(*)::int AS count FROM retained'))[0].count,1);
- await assert.rejects(readFile(path.join(a.root,'.observanda/postgresql/service.observanda')),{code:'ENOENT'});
+ assert.equal((await readdir(path.join(f.project.root,'.observanda'))).includes('postgresql'),false);
+ const [envA,envB,projectEnv]=await Promise.all([f.owner.labBooks.open(a.root,a.id,a.vault),f.owner.labBooks.open(b.root,b.id,b.vault),f.owner.projects.open(f.project.root,f.project.id,f.project.vault)]);
+ const port=new URL(f.workspaceEnv.OBSERVANDA_DATABASE_URL).port;
+ for(const [env,book] of [[envA,a],[envB,b]]){
+  await assertLabBookCatalogueEnvironment(book.root,book.id,env);assert.equal(new URL(env.OBSERVANDA_DATABASE_URL).port,port);
+  assert.deepEqual(await query(env,'SELECT current_user AS role,id::text AS cluster FROM obs_cluster.identity'),[{role:ownerRoleName(book.id),cluster:workspaceBinding.cluster}]);
+ }
+ // A lab book's rows are private to its own role: the containing project, a
+ // sibling book and the workspace application role are all refused.
+ for(const [env,schema] of [[envB,schemaOf(a.catalogue)],[projectEnv,schemaOf(a.catalogue)],[f.workspaceEnv,schemaOf(a.catalogue)],[envA,schemaOf(b.catalogue)],[envA,schemaOf(f.project.catalogue)]])
+  await assert.rejects(query(env,`SELECT count(*) FROM "${schema}".records`),{code:'42501'},schema);
+ const content=Buffer.from('An independently retained observation'),aad='test/lab-book/'+a.id,schema=schemaOf(a.catalogue);
+ await query(envA,`CREATE TABLE "${schema}".retained(id integer PRIMARY KEY,payload bytea NOT NULL)`);await query(envA,`INSERT INTO "${schema}".retained VALUES ($1,$2)`,1,seal(content,a.vault.key,aad));
+ // Moving the book inside the workspace keeps its binding and its schema.
+ await f.owner.closeLabBook(a.root);assert.equal(envA.OBSERVANDA_DATABASE_URL,undefined);await assertLabBookDatabaseStopped(a.root,a.id,a.vault);
+ const moved=path.join(f.project.root,'Renamed observations');await rename(a.root,moved);
+ const env=await f.owner.labBooks.open(moved,a.id,a.vault);
+ assert.deepEqual(unseal((await query(env,`SELECT payload FROM "${schema}".retained WHERE id=1`))[0].payload,a.vault.key,aad),content);assert.equal(env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT,await realpath(moved));
+ assert.equal((await readdir(path.join(moved,'.observanda'))).includes('postgresql'),false);
 });
 
-test('book identity cannot be substituted with sibling, project or workspace credentials',async t=>{
- const f=await fixture(t),owner=f.manager(),a=await f.book('Protected Book');
- await assert.rejects(owner.open(a.root,a.id,a.vault),{code:'CATALOGUE_UNAVAILABLE'});
- const env=await owner.open(a.root,a.id,a.vault,{create:true});await query(env,'CREATE TABLE retained(value integer)');await query(env,'INSERT INTO retained VALUES (37)');
- for(const [id,vault] of [[randomUUID(),a.vault],[a.id,{...a.vault,key:randomBytes(32)}],[a.id,{...a.vault,id:randomUUID()}]])await assert.rejects(owner.open(a.root,id,vault),{code:'ACCESS_DENIED'});
- await owner.closeLabBook(a.root);const file=path.join(a.root,'.observanda/postgresql/service.observanda'),before=await readFile(file);
- const project=f.manager(ProjectPostgres),workspace=f.manager(WorkspacePostgres);
- await assert.rejects(project.open(a.root,a.id,a.vault),{code:'ENCRYPTION_DAMAGED'});
- await assert.rejects(workspace.open(a.root,a.vault),{code:'ENCRYPTION_DAMAGED'});
- await assert.rejects(owner.open(a.root,randomUUID(),a.vault),{code:'ENCRYPTION_DAMAGED'});assert.deepEqual(await readFile(file),before);
- const reopened=await owner.open(a.root,a.id,a.vault);assert.deepEqual(await query(reopened,'SELECT value FROM retained'),[{value:37}]);
+test('book identity cannot be substituted with sibling, project or other credentials',async t=>{
+ const f=await fixture(t),a=await f.book('Protected Book'),sibling=await f.book('Sibling Book');
+ const unbound=await f.book('Unbound',{create:false});await assert.rejects(f.owner.labBooks.open(unbound.root,unbound.id,unbound.vault),{code:'CATALOGUE_UNAVAILABLE'});
+ const env=await f.owner.labBooks.open(a.root,a.id,a.vault);
+ for(const [id,vault] of [[randomUUID(),a.vault],[a.id,{...a.vault,key:randomBytes(32)}],[a.id,{...a.vault,id:randomUUID()}],[sibling.id,sibling.vault]])await assert.rejects(f.owner.labBooks.open(a.root,id,vault),{code:'ACCESS_DENIED'});
+ await f.owner.closeLabBook(a.root);assert.equal(env.OBSERVANDA_DATABASE_URL,undefined);
+ for(const vault of [{...a.vault,key:randomBytes(32)},{...a.vault,id:randomUUID()}])await assert.rejects(f.owner.labBooks.open(a.root,a.id,vault),{code:'ACCESS_DENIED'});
+ await assert.rejects(f.owner.labBooks.open(a.root,sibling.id,sibling.vault),{code:'DATABASE_LOCATION'});
+ await assert.rejects(f.owner.projects.open(a.root,f.project.id,f.project.vault),{code:'DATABASE_LOCATION'});
+ const reopened=await f.owner.labBooks.open(a.root,a.id,a.vault);assert.deepEqual(await query(reopened,'SELECT current_user AS role'),[{role:ownerRoleName(a.id)}]);
 });
 
-test('book shutdown waits for active leases and interrupted initialization can resume',async t=>{
- const f=await fixture(t),a=await f.book('Resumed Book'),controller=new AbortController(),interrupted=f.manager(LabBookPostgres,{signal:controller.signal,onProgress:event=>{if(event.stage==='initialize')controller.abort();}});
- await assert.rejects(interrupted.open(a.root,a.id,a.vault,{create:true}),{code:'DATABASE_CANCELLED'});await interrupted.close();
- const owner=f.manager(),lease=await owner.acquire(a.root,a.id,a.vault,{create:true}),release=retainRuntimeEnvironment(lease.env);lease.release();
- let closed=false;const closing=owner.closeLabBook(a.root).then(()=>{closed=true;});
+test('book shutdown waits for active leases; a nested earlier cluster is refused unchanged',async t=>{
+ const f=await fixture(t),a=await f.book('Leased Book');
+ const lease=await f.owner.labBooks.acquire(a.root,a.id,a.vault),release=retainRuntimeEnvironment(lease.env);lease.release();
+ let closed=false;const closing=f.owner.closeLabBook(a.root).then(()=>{closed=true;});
  try{assert.equal((await query(lease.env,'SELECT 1 AS alive'))[0].alive,1);assert.equal(closed,false);}finally{release();}
- await closing;assert.equal(lease.env.OBSERVANDA_DATABASE_URL,undefined);await assertLabBookDatabaseStopped(a.root,a.id,a.vault);assert.equal(owner.stats().open,0);
+ await closing;assert.equal(lease.env.OBSERVANDA_DATABASE_URL,undefined);await assertLabBookDatabaseStopped(a.root,a.id,a.vault);assert.equal(f.owner.labBooks.stats().open,0);
+ const old=await f.book('Earlier format',{create:false}),nested=path.join(old.root,'.observanda','postgresql');await mkdir(nested);await writeFile(path.join(nested,'service.observanda'),'earlier cluster');
+ await assert.rejects(f.owner.labBooks.open(old.root,old.id,old.vault,{create:true}),{code:'DATABASE_NESTED_CLUSTER'});
+ await assert.rejects(openCatalogue(old.root,{create:true,labBookId:old.id,vault:old.vault}),{code:'DATABASE_NESTED_CLUSTER'});
+ assert.equal(await readFile(path.join(nested,'service.observanda'),'utf8'),'earlier cluster');assert.equal(await catalogueBinding(old.root),null);
+ assert.deepEqual(await query(f.workspaceEnv,'SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=$1',ownerRoleName(old.id)),[]);
 });
 
 test('book catalogue bindings reject ambiguous identities and foreign environments',async t=>{
- const f=await fixture(t),a=await f.book('Binding Book'),id=randomUUID(),binding=labBookCatalogueBinding(id,a.id,randomUUID());
+ const f=await fixture(t),a=await f.book('Binding Book',{create:false}),id=randomUUID(),binding=labBookCatalogueBinding(id,a.id,randomUUID());
  assert.equal(validLabBookCatalogueBinding(binding),true);assertLabBookCatalogueOwner(binding,a.id);
  for(const changed of [{...binding,projectId:randomUUID()},{...binding,placement:'project'},{...binding,version:4},{...binding,version:6},{...binding,labBookId:randomUUID()},{...binding,cluster:'../outside'},(({cluster,...rest})=>rest)(binding)])await assert.rejects(async()=>assertLabBookCatalogueOwner(changed,a.id),{code:'DATABASE_LOCATION'});
  assert.throws(()=>labBookCatalogueBinding('../outside',a.id,randomUUID()),{code:'INVALID'});assert.throws(()=>labBookCatalogueBinding(id,a.id),{code:'INVALID'});

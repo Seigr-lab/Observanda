@@ -22,6 +22,10 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {createWorkspaceAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
+import {assertArchiveCopy} from './owner-workspace-fixture.js';
+// A copy outside every workspace is kept in archive form. Read it as an archive,
+// in a temporary schema, without activating it anywhere.
+class ArchivedProject extends ProjectStorage{openCatalogue(options={}){return super.openCatalogue({...options,detached:true});}}
 import {catalogueBinding} from '../src/postgres-activation.js';
 
 test('selected project copy and export retain the complete independent subtree',{timeout:600000},async t=>{
@@ -40,9 +44,10 @@ test('selected project copy and export retain the complete independent subtree',
  await assert.rejects(copies.run(root,{id,path:copyPath,withBook:callbacks.withBook}),{code:'ACCESS_LOCKED'});assert.equal(await copies.read(root.projectId),null);await assert.rejects(access(copyPath),{code:'ENOENT'});
  let interrupted=false;await assert.rejects(copies.run(root,{id,path:copyPath,...callbacks,checkpoint:async phase=>{if(phase==='project'&&!interrupted){interrupted=true;const before=await sibling.read();before.book.description='Independent writer during export';await sibling.save(before.book,before.etag);throw Error('Child transfer interrupted');}}}),/Child transfer interrupted/);
  assert.equal((await readProjectTree(new ProjectStorage(copyPath,root.projectId,root.vault))).version,2);assert.equal((await copies.run(root,{id,resume:true,...callbacks})).phase,'complete');
- const target=new ProjectStorage(copyPath,root.projectId,root.vault),tree=await readProjectTree(target);const treeRows=[];for await(const row of projectTreeCollection(target,tree).entries())if(row.relative)treeRows.push(row);assert.deepEqual(treeRows.map(item=>item.relative),['Child Project','Child Project/Grandchild Project']);assert.ok(Buffer.byteLength(serialize(tree))<4096);assert.ok(!serialize(tree).includes(directory));
+ for(const source of allOwners)await assertArchiveCopy(path.join(copyPath,path.relative(root.root,source.root)));
+ const target=new ArchivedProject(copyPath,root.projectId,root.vault),tree=await readProjectTree(target);const treeRows=[];for await(const row of projectTreeCollection(target,tree).entries())if(row.relative)treeRows.push(row);assert.deepEqual(treeRows.map(item=>item.relative),['Child Project','Child Project/Grandchild Project']);assert.ok(Buffer.byteLength(serialize(tree))<4096);assert.ok(!serialize(tree).includes(directory));
  const legacy={version:1,projectId:tree.projectId,namespaceId:tree.namespaceId,vaultId:tree.vaultId,projects:treeRows.map(({kind,...row})=>row)};assert.throws(()=>validateProjectTree({...legacy,projects:[{...legacy.projects[0],relative:'../outside'}]}),{code:'STORAGE_COPY'});assert.throws(()=>validateProjectTree({...legacy,projects:[{...legacy.projects[0],parentId:grand.projectId}]}),{code:'STORAGE_COPY'});
- for(const source of [root,child,grand]){const copied=new ProjectStorage(path.join(copyPath,path.relative(root.root,source.root)),source.projectId,source.vault);assert.deepEqual(await copied.read(),await source.read());}
+ for(const source of [root,child,grand]){const copied=new ArchivedProject(path.join(copyPath,path.relative(root.root,source.root)),source.projectId,source.vault);assert.deepEqual(await copied.read(),await source.read());}
  const exportParent=path.join(directory,'Exports');await mkdir(exportParent);const exported=path.join(exportParent,path.basename(root.root)),archives=new ProjectArchives(registry),exportId=randomUUID();
  await archives.run(root,{id:exportId,path:exported,...callbacks});
  for(const source of [root,child,grand,rootBook,childBook,grandBook]){const exportedRoot=path.join(exported,path.relative(root.root,source.root));assert.equal(await catalogueBinding(exportedRoot),null);await assert.rejects(access(path.join(exportedRoot,'.observanda/postgresql')),{code:'ENOENT'});}

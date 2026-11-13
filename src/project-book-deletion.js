@@ -7,7 +7,6 @@ import {validateRenameBooks} from './rename-owner-receipts.js';
 import {DELETE_MARKER,workspaceDeletion} from './workspace-delete-state.js';
 import {assertRegular,atomicWrite,serialize} from './storage.js';
 import {databaseProvider} from './workspace-database-context.js';
-import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {assertLabBookDatabaseStopped} from './lab-book-postgres.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
@@ -34,8 +33,7 @@ export class ProjectBookDeletion extends ProjectBookOwners{
     await checkpoint('book-frozen',value,item.labBookId);
     const provider=databaseProvider();if(!provider?.stopLabBookForDeletion)throw new AppError('DATABASE_LOCATION');
     await provider.stopLabBookForDeletion(storage.root,item.labBookId,storage.vault,value.id);
-    const lease=await workspaceDatabaseLease(path.join(storage.root,'.observanda/postgresql'));
-    try{await assertLabBookDatabaseStopped(storage.root,item.labBookId,storage.vault);}finally{await lease.close();}
+    await assertLabBookDatabaseStopped(storage.root,item.labBookId,storage.vault);
     await checkpoint('book-stopped',value,item.labBookId);operationAdvance();
    }
   });
