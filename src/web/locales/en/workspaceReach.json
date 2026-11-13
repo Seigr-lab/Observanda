@@ -1,7 +1,6 @@
 {
   "sourcesTitle": "Records from projects and lab books",
   "sourcesHelp": "Choose records from any project or lab book in this workspace. Only records that their lab book shares for publication are listed; private records stay private.",
-  "linkButton": "Find in another project or lab book",
   "linkTitle": "Link a record from this workspace",
   "linkHelp": "Records that other projects and lab books in this workspace share can be linked here.",
   "search": "Search records",

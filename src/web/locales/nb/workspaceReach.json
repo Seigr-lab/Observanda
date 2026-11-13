@@ -1,7 +1,6 @@
 {
   "sourcesTitle": "Oppføringer fra prosjekter og labbøker",
   "sourcesHelp": "Velg oppføringer fra et hvilket som helst prosjekt eller en labbok i dette arbeidsområdet. Bare oppføringer som labboken deler for publisering, vises; private oppføringer forblir private.",
-  "linkButton": "Finn i et annet prosjekt eller en annen labbok",
   "linkTitle": "Lenk til en oppføring i dette arbeidsområdet",
   "linkHelp": "Oppføringer som andre prosjekter og labbøker i dette arbeidsområdet deler, kan lenkes her.",
   "search": "Søk i oppføringer",

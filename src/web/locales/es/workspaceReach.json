@@ -1,7 +1,6 @@
 {
   "sourcesTitle": "Registros de proyectos y cuadernos",
   "sourcesHelp": "Elija registros de cualquier proyecto o cuaderno de este espacio de trabajo. Solo se muestran los registros que su cuaderno comparte para publicar; los registros privados siguen siendo privados.",
-  "linkButton": "Buscar en otro proyecto o cuaderno",
   "linkTitle": "Enlazar un registro de este espacio de trabajo",
   "linkHelp": "Aquí se pueden enlazar los registros que comparten otros proyectos y cuadernos de este espacio de trabajo.",
   "search": "Buscar registros",

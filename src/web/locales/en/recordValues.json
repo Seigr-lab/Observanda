@@ -114,6 +114,7 @@
  "relationCurrent": "Current item",
  "relationExact": "Exact saved record revision",
  "relationBrowse": "Choose target",
+ "relationWorkspace": "Find in another project or lab book",
  "relationRole_run-of": "Run / take of",
  "relationRole_uses-method": "Uses method",
  "relationRole_compares": "Compares",

@@ -1,7 +1,6 @@
 {
   "sourcesTitle": "Registres de projectes i quaderns",
   "sourcesHelp": "Trieu registres de qualsevol projecte o quadern d'aquest espai de treball. Només es mostren els registres que el quadern comparteix per publicar; els registres privats continuen sent privats.",
-  "linkButton": "Cerca en un altre projecte o quadern",
   "linkTitle": "Enllaça un registre d'aquest espai de treball",
   "linkHelp": "Aquí es poden enllaçar els registres que comparteixen altres projectes i quaderns d'aquest espai de treball.",
   "search": "Cerca registres",

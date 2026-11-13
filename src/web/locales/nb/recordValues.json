@@ -114,6 +114,7 @@
  "relationCurrent": "Gjeldende element",
  "relationExact": "Eksakt lagret oppføringsrevisjon",
  "relationBrowse": "Velg mål",
+ "relationWorkspace": "Finn i et annet prosjekt eller en annen labbok",
  "relationRole_run-of": "Kjøring / opptak av",
  "relationRole_uses-method": "Bruker metode",
  "relationRole_compares": "Sammenligner",

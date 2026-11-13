@@ -114,6 +114,7 @@
  "relationCurrent": "Element actual",
  "relationExact": "Revisió guardada exacta del registre",
  "relationBrowse": "Tria la destinació",
+ "relationWorkspace": "Cerca en un altre projecte o quadern",
  "relationRole_run-of": "Execució / presa de",
  "relationRole_uses-method": "Utilitza el mètode",
  "relationRole_compares": "Compara",
