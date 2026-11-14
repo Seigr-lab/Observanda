@@ -27,7 +27,7 @@ export default {
   }
  },
  win:{target:[{target:'nsis',arch:['x64']}],icon:'desktop/icon.ico',requestedExecutionLevel:'asInvoker'},
- nsis:{oneClick:false,perMachine:false,allowElevation:false,packElevateHelper:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'Observanda',deleteAppDataOnUninstall:false,runAfterFinish:false},
+ nsis:{include:'scripts/windows-installer.nsh',oneClick:false,perMachine:false,allowElevation:false,packElevateHelper:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'Observanda',deleteAppDataOnUninstall:false,runAfterFinish:false},
  extraMetadata:{homepage:'https://github.com/Seigr-lab/Observanda'},
  linux:{target:[{target:'deb',arch:['x64']}],icon:'desktop/icon.png',executableName:'observanda',category:'Education',maintainer:'Seigr Lab'},
  // Preserve the packager's Debian defaults, then declare the OS
