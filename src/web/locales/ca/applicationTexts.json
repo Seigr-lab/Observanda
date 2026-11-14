@@ -84,6 +84,8 @@
   "requiredWebsite": "Omple els camps obligatoris del lloc web abans de guardar.",
   "newerChanges": "Encara cal guardar canvis més recents. Torna a guardar o queda't en aquesta pantalla.",
   "openingRecord": "S'està obrint el registre...",
+  "openingLabBook": "S'està obrint el llibre de laboratori...",
+  "openingProject": "S'està obrint el projecte...",
   "editingUnavailable": "L'espai de treball ja no admet l'edició de registres per seccions. Recarrega l'espai de treball.",
   "recordUnavailable": "El registre ja no està disponible. Se'n conserva la referència.",
   "labBook": "Llibre de laboratori",

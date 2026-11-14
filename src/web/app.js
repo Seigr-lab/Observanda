@@ -1492,7 +1492,12 @@ async function restoreRoute({websiteReady=false}={}){
     if(sameWebsiteEditRoute(requestedRoute)){if(!websiteReady)await websiteDocuments.flush();const destination=resolveRoute(requestedRoute,state.book);if(!current())return;Object.assign(state,destination);render();return;}
     if(activeWebsite(state))await sites.exit();
     if(!current())return;
-    try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
+    // Opening another project or lab book keeps the previous page on screen until it is ready;
+    // it is marked busy and cannot be used, so nothing acts on the owner being left.
+    const owner=projectRoute(requestedRoute),switching=(state.projectOwner?.projectId??null)!==(owner.projectId??null)||(state.projectOwner?.labBookId??null)!==(owner.labBookId??null);
+    const main=switching?document.querySelector('#main'):null,status=document.createElement('p');
+    if(main){status.setAttribute('role','status');status.textContent=appText(owner.labBookId?'openingLabBook':'openingProject');main.inert=true;main.setAttribute('aria-busy','true');main.before(status);}
+    try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}finally{if(main){status.remove();main.inert=false;main.removeAttribute('aria-busy');}}
     if(!current())return;ownerOperation.clear();
     await sites.restore(projectRoute(requestedRoute).hash);if(!current())return;
     const recordRoute=/^#\/records\/([a-f0-9-]{36})(?:\/read(?:\/[a-f0-9-]{36})?)?$/.exec(projectRoute(location.hash).hash);

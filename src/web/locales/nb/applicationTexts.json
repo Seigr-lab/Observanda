@@ -84,6 +84,8 @@
   "requiredWebsite": "Fyll ut de obligatoriske nettstedsfeltene før du lagrer.",
   "newerChanges": "Nyere endringer må fortsatt lagres. Lagre igjen eller bli på denne skjermen.",
   "openingRecord": "Åpner oppføring...",
+  "openingLabBook": "Åpner labbok...",
+  "openingProject": "Åpner prosjekt...",
   "editingUnavailable": "Arbeidsområdet støtter ikke lenger redigering av oppføringer i seksjoner. Last inn arbeidsområdet på nytt.",
   "recordUnavailable": "Oppføringen er ikke lenger tilgjengelig. Referansen er beholdt.",
   "labBook": "Labbok",

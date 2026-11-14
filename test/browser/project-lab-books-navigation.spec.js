@@ -36,6 +36,15 @@ test('every lab book appears beneath its project in the navigation, whichever pr
     await expect.poll(async()=>(await booksUnder(project).allTextContents()).sort(),{message:round+' '+open+', '+project}).toEqual(books.slice().sort());
    }
   }
+  // A link into another lab book keeps the previous page busy and unusable until the lab book is open.
+  const openBook=async name=>{await navigation.locator('.notebook-link',{hasText:name}).click();await expect(page.locator('main h1')).toHaveText(name);return page.evaluate(()=>location.hash);};
+  const firmware=await openBook('Firmware');await openBook('Releases');
+  let release;const held=new Promise(resolve=>{release=resolve;});
+  await page.route(/\/lab-books\/[a-f0-9-]{36}\/workspace\/read\//,async route=>{await held;await route.continue();});
+  await page.evaluate(hash=>{location.hash=hash;},firmware);
+  await expect(page.getByRole('status').filter({hasText:'Opening lab book...'})).toBeVisible();await expect(page.locator('#main')).toHaveAttribute('aria-busy','true');expect(await page.locator('#main').evaluate(main=>main.inert)).toBe(true);
+  release();
+  await expect(page.locator('main h1')).toHaveText('Firmware');await expect(page.locator('#main')).not.toHaveAttribute('aria-busy','true');expect(await page.locator('#main').evaluate(main=>main.inert)).toBe(false);
   expect(errors).toEqual([]);
  }finally{await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.ok(path.basename(directory).startsWith('observanda-project-books-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

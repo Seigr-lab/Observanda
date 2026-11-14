@@ -84,6 +84,8 @@
   "requiredWebsite": "Complete the required website fields before saving.",
   "newerChanges": "Newer changes still need saving. Save again or stay on this screen.",
   "openingRecord": "Opening record...",
+  "openingLabBook": "Opening lab book...",
+  "openingProject": "Opening project...",
   "editingUnavailable": "The workspace no longer supports record editing in sections. Reload the workspace.",
   "recordUnavailable": "The record is no longer available. Its reference is retained.",
   "labBook": "Lab book",

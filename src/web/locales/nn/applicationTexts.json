@@ -84,6 +84,8 @@
   "requiredWebsite": "Fyll ut dei obligatoriske nettstadfelta før du lagrar.",
   "newerChanges": "Nyare endringar må framleis lagrast. Lagre igjen eller bli på denne skjermen.",
   "openingRecord": "Opnar oppføring...",
+  "openingLabBook": "Opnar labbok...",
+  "openingProject": "Opnar prosjekt...",
   "editingUnavailable": "Arbeidsområdet støttar ikkje lenger redigering av oppføringar i seksjonar. Last inn arbeidsområdet på nytt.",
   "recordUnavailable": "Oppføringa er ikkje lenger tilgjengeleg. Referansen er teken vare på.",
   "labBook": "Labbok",

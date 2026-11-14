@@ -84,6 +84,8 @@
   "requiredWebsite": "Rellena los campos obligatorios del sitio web antes de guardar.",
   "newerChanges": "Todavía hay cambios más recientes por guardar. Vuelve a guardar o permanece en esta pantalla.",
   "openingRecord": "Abriendo el registro...",
+  "openingLabBook": "Abriendo el cuaderno de laboratorio...",
+  "openingProject": "Abriendo el proyecto...",
   "editingUnavailable": "El espacio de trabajo ya no admite la edición de registros por secciones. Recarga el espacio de trabajo.",
   "recordUnavailable": "El registro ya no está disponible. Se conserva su referencia.",
   "labBook": "Cuaderno de laboratorio",
