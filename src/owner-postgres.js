@@ -11,6 +11,8 @@ import {ProjectRuntimePool} from './project-runtime-pool.js';
 import {registerRuntimeStorage} from './database-runtime-environment.js';
 import {closeIdleConnections} from './database-idle-connections.js';
 import {catalogueBinding,catalogueActivation} from './postgres-activation.js';
+import {PROJECT_ARCHIVE_IDENTITY} from './project-archive.js';
+import {LAB_BOOK_ARCHIVE_IDENTITY} from './lab-book-archive.js';
 import {ownerRoleCredentials,verifyOwnerLogin} from './owner-database-role.js';
 import {authenticateKeyring,ACCESS_LIMIT} from './security/keyring.js';
 import {Client} from 'pg';
@@ -51,12 +53,21 @@ async function authenticateOwnerKeyring(root,vault,{strict=false}={}){
  try{authenticateKeyring(value,vault);}catch(error){if(error.code==='ENCRYPTION_DAMAGED')throw new AppError('ACCESS_DENIED');throw error;}
 }
 // Every part lives inside its workspace folder. The containing workspace is
-// the nearest ancestor whose catalogue binding is a workspace binding.
+// the nearest ancestor whose catalogue binding is a workspace binding, or a
+// workspace whose first activation from its archive is in progress: verifying
+// that archive reads records retired into its projects, which open in the same
+// cluster before the workspace binding is published. A project or lab book
+// in archive form carries its own identity file and is never taken for one.
+async function activatingWorkspace(current){
+ if(!await catalogueActivation(current))return false;
+ for(const relative of [PROJECT_ARCHIVE_IDENTITY,LAB_BOOK_ARCHIVE_IDENTITY])if(await assertRegular(path.join(current,relative),{missing:true}))return false;
+ return true;
+}
 export async function ownerWorkspaceRoot(root){
  for(let current=path.dirname(root);;current=path.dirname(current)){
-  let binding=null;
-  try{binding=await catalogueBinding(current);}catch(error){if(!['EACCES','EPERM','ENOTDIR'].includes(error.code))throw error;}
-  if(binding?.placement==='workspace')return current;
+  let binding=null,activating=false;
+  try{binding=await catalogueBinding(current);if(!binding)activating=await activatingWorkspace(current);}catch(error){if(!['EACCES','EPERM','ENOTDIR'].includes(error.code))throw error;}
+  if(binding?.placement==='workspace'||activating)return current;
   // A workspace on a configured PostgreSQL server is not served by managed storage.
   if(binding?.placement==='installation')throw new AppError('ACCESS_UPGRADE');
   if(path.dirname(current)===current)throw new AppError('DATABASE_LOCATION');
