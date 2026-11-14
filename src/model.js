@@ -197,8 +197,10 @@ export function createNotebook(title = 'My field notes', description = '', theme
 }
 
 
-export function upgradeNotebook(source) {
-  validateNotebook(source);
+// Catalogue results keep their admitted configuration references; documents
+// from anywhere else must carry complete configurations.
+export function upgradeNotebook(source,{configurationReferences=false}={}) {
+  validateBook(source,{configurationReferences});
   const book = structuredClone(source);
   if (book.formatVersion === 1) {
     book.formatVersion = 2;
@@ -239,5 +241,5 @@ export function upgradeNotebook(source) {
   // Broader date choices do not rewrite existing records or pinned revisions.
   if(book.formatVersion===19)book.formatVersion=20;
   if(book.formatVersion===20)book.formatVersion=21;
-  return validateNotebook(book);
+  return validateBook(book,{configurationReferences});
 }

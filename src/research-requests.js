@@ -67,5 +67,5 @@ export async function executeResearchRequest(storage,route,data,options={}){
  // Catalogue outlines already passed native metadata admission. They are not
  // legacy whole-workspace documents and retain their referenced schemas.
  if(!result?.book||result.outline===true)return result;
- const book=upgradeNotebook(result.book);return {...result,book,recordRevisions:result.recordRevisions??recordRevisions(book)};
+ const book=upgradeNotebook(result.book,{configurationReferences:true});return {...result,book,recordRevisions:result.recordRevisions??recordRevisions(book)};
 }
