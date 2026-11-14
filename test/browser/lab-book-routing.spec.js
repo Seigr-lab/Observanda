@@ -43,7 +43,7 @@ for(const deviceAvailable of [true,false])test('nested lab books retain independ
   const second=await createBook('Field Book 2'),firstKey=await verifyAccess(await readAccess(first.root),'',password,{deviceStore:f.deviceStore});vaults.push(firstKey);const sibling=new LabBookStorage(first.root,first.labBookId,firstKey);
   let entered;const ready=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve);busy=project.withLock(()=>sibling.withLock(async()=>{entered();await held;}));await ready;
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create observation',exact:true}).click();
-  await page.getByLabel('Record title').fill('Recorded observation');await page.getByLabel('Summary / context').fill('An independently saved observation.');
+  await page.getByLabel('Record title').fill('Recorded observation');await page.getByRole('textbox',{name:'Summary / context',exact:true}).fill('An independently saved observation.');
   const save=page.locator('.section-save [data-action=save]'),applied=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/research/drafts/review/apply'));await save.click();const response=await applied;expect(response.ok()).toBe(true);await expect(page.getByRole('heading',{name:'Recorded observation',exact:true})).toBeVisible();
   release();await busy;busy=null;release=null;
   const secondKey=await verifyAccess(await readAccess(second.root),'',password,{deviceStore:f.deviceStore});vaults.push(secondKey);const selected=new LabBookStorage(second.root,second.labBookId,secondKey);
