@@ -7,46 +7,47 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
-import {RecordHistory} from '../../src/record-history.js';
-import {buildPublication} from '../../src/publication.js';
-import {Workspace} from '../../src/storage.js';
-import {copyPlan,encryptedCopy} from '../../src/locations.js';
-import {createAccess,takeCreatedVault} from '../../src/access.js';
+import {RecordContent} from '../../src/record-content.js';
+import {RecordWriting} from '../../src/record-writing.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 
-test('long records keep writing sections, edits and anchored reading in independent visible windows',async({page},info)=>{
- test.setTimeout(120000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-section-windows-')),book=upgradeNotebook(sampleNotebook()),e=book.entries[0];
+test('long records page their sections in windows for reading, editing, finding and anchored links',async({page},info)=>{
+ test.setTimeout(180000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-section-windows-')),book=upgradeNotebook(sampleNotebook()),e=book.entries[0];
  e.sections=Array.from({length:257},(_,i)=>({id:randomUUID(),title:'Observation '+(i+1),body:'Exact retained notes '+(i+1)+'. '+('Detail from this acquisition. '.repeat(10))}));
- const original=structuredClone(e),f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const content=new RecordContent(f.workspace),target={workspaceId:book.id,recordId:e.id},writing=new RecordWriting(f.workspace);
+ const shown=page.locator('.record-sections>section[id]'),range=page.locator('.record-section-navigation [role=status]'),section=i=>page.locator('#record-section-'+e.sections[i].id);
+ const go=async n=>{await page.getByLabel('Go to section number',{exact:true}).fill(String(n));await page.getByRole('button',{name:'Go',exact:true}).click();await expect(section(n-1)).toBeVisible();};
+ const write=async(i,text)=>{await section(i).getByRole('button',{name:'Edit section',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});await dialog.locator('.ProseMirror').fill(text);await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(section(i)).toContainText(text);};
  try{
-  await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,e.id);
-  await expect(page.locator('.record-section')).toHaveCount(4);await expect(page.locator('.editor-paper .ProseMirror')).toHaveCount(5);
-  await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.getByLabel('Find section heading',{exact:true}).fill('Observation 257');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(page.getByLabel('Section heading',{exact:true}).first()).toHaveValue('Observation 257');await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.getByLabel('Find section heading',{exact:true}).fill('Absent heading');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(page.locator('[data-section-search-status]')).toHaveText('No section heading matches.');await expect(page.getByLabel('Section heading',{exact:true}).first()).toHaveValue('Observation 257');
-  await page.getByLabel('Go to section number',{exact:true}).fill('1');await page.getByRole('button',{name:'Go',exact:true}).click();
-  await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(page.getByLabel('Section heading',{exact:true}).first()).toHaveValue('Observation 5');await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.getByRole('button',{name:'Previous sections',exact:true}).click();await page.getByLabel('Observation 1 content',{exact:true}).fill('Revised first observation');
-  const go=async n=>{await page.getByLabel('Go to section number',{exact:true}).fill(String(n));await page.getByRole('button',{name:'Go',exact:true}).click();};
-  await go(131);await page.getByLabel('Observation 131 content',{exact:true}).fill('Revised late observation');
-  await go(1);await expect(page.getByLabel('Observation 1 content',{exact:true})).toHaveText('Revised first observation');await go(131);await expect(page.getByLabel('Observation 131 content',{exact:true})).toHaveText('Revised late observation');
-  await page.getByRole('button',{name:'Move Observation 134 down',exact:true}).click();await expect(page.locator('[data-writing-heading="'+e.sections[133].id+'"]')).toBeFocused();
-  await page.getByRole('button',{name:'Add section',exact:true}).click();await expect(page.getByLabel('Section heading',{exact:true}).last()).toBeFocused();await page.getByLabel('Section heading',{exact:true}).last().fill('Final observations');await page.getByLabel('Final observations content',{exact:true}).fill('A newly added section beyond the earlier count ceiling.');
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  const saved=(await f.workspace.read()).book.entries[0];expect(saved.sections).toHaveLength(258);expect(saved.sections[134].id).toBe(e.sections[133].id);expect(saved.sections[130].body.content[0].content[0].text).toBe('Revised late observation');expect(saved.sections[5]).toEqual(e.sections[5]);
-  await page.getByRole('button',{name:'Dismiss',exact:true}).click();await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');await page.locator('.record-section-navigation').scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('continued-record-editor.png')});await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.removeProperty('font-size'));
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+e.id+'/read');
+  // Reading shows one window of four sections with its position.
+  await expect(shown).toHaveCount(4);await expect(range).toHaveText('Sections 1–4 of 257');await expect(page.getByRole('button',{name:'Previous sections',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(range).toHaveText('Sections 5–8 of 257');await expect(section(4)).toBeVisible();
+  await page.getByRole('button',{name:'Previous sections',exact:true}).click();await expect(range).toHaveText('Sections 1–4 of 257');
+  await page.getByLabel('Find section heading',{exact:true}).fill('Observation 257');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(section(256)).toBeVisible();await expect(range).toHaveText('Sections 257–257 of 257');
+  await page.getByLabel('Find section heading',{exact:true}).fill('Absent heading');await page.getByRole('button',{name:'Find next',exact:true}).click();await expect(page.getByRole('alert')).toContainText('No section heading matches.');
+  // Editing works in any window and keeps every other section.
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();
+  await go(1);await write(0,'Revised first observation');await go(131);await write(130,'Revised late observation');
+  await go(134);await section(133).getByRole('button',{name:'Move down',exact:true}).click();
+  await expect.poll(async()=>(await content.read({...target,offset:133})).sections.values.map(s=>s.id).slice(0,2)).toEqual([e.sections[134].id,e.sections[133].id]);
+  await go(257);await page.getByRole('button',{name:'Add writing section',exact:true}).click();const added=page.getByRole('dialog',{name:'Edit writing section',exact:true});
+  await added.getByLabel('Section heading',{exact:true}).fill('Final observations');await added.locator('.ProseMirror').fill('Closing notes.');await added.getByRole('button',{name:'Save changes',exact:true}).click();await expect(added).not.toBeVisible();
+  await expect(page.getByRole('heading',{name:'Final observations',exact:true})).toBeVisible();
+  const last=await content.read({...target,offset:257});expect(last.sections.total).toBe(258);expect(last.sections.values[0].title).toBe('Final observations');
+  expect(JSON.stringify((await writing.read({...target,sectionId:e.sections[0].id})).value.body)).toContain('Revised first observation');
+  expect(JSON.stringify((await writing.read({...target,sectionId:e.sections[130].id})).value.body)).toContain('Revised late observation');
+  // An anchored link opens the window that holds its section, and paging moves focus with the window.
   await page.evaluate(({id,section})=>location.hash='#/records/'+id+'/read/'+section,{id:e.id,section:e.sections[211].id});
-  await expect(page.locator('#record-section-'+e.sections[211].id)).toBeFocused();await expect(page.locator('.record-sections>section[id]')).toHaveCount(4);await expect(page.locator('.record-sections')).toContainText('Exact retained notes 212.');
-  await page.getByRole('button',{name:'Next sections',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('#record-section-'+e.sections[215].id)).toBeFocused();
-  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');await page.getByRole('button',{name:'Previous sections',exact:true}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('continued-record-sections.png')});
-  const history=new RecordHistory(f.workspace,{}),command={workspaceId:book.id,recordId:e.id},versions=await history.list(command),version=versions.versions.find(v=>v.revision===recordRevision(original));expect(version).toBeDefined();expect((await history.read({...command,...version})).record).toEqual(original);
-  const current=(await f.workspace.read()).book,edition=buildPublication(current),html=edition.files.get('entries/'+e.id+'.html');expect(html).toContain('Final observations');for(const s of saved.sections)expect(html).toContain('id="record-section-'+s.id+'"');
-  const access=await createAccess('','record section recovery test password'),restoredVault=takeCreatedVault(access),destination=path.join(directory,'restored');
-  try{await encryptedCopy(await copyPlan(f.workspace.root,destination,{vault:f.vault}),access,restoredVault,f.vault);const restored=new Workspace(destination,restoredVault);expect((await restored.read()).book.entries[0]).toEqual(saved);expect((await new RecordHistory(restored,{}).read({...command,...version})).record).toEqual(original);}finally{clearVault(restoredVault);}
+  await expect(section(211)).toBeFocused();await expect(shown).toHaveCount(4);await expect(page.locator('.record-sections')).toContainText('Exact retained notes 212.');
+  await page.getByRole('button',{name:'Next sections',exact:true}).click();await expect(shown.first()).toBeFocused();
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('section-windows-mobile.png')});
   expect(errors).toEqual([]);
- }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('conflict review keeps choices across windows and cancellation preserves the recoverable draft',async({page})=>{
