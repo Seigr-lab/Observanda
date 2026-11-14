@@ -15,7 +15,8 @@ export function labBookDirectory({state,api,esc,changed,directoryChanged=changed
  const creations=labBookCreationRecoveryUI({state,api,esc,refreshDirectory});
  const deletions=labBookDeletionUI({state,api,esc,changed,refreshDirectory});
  const hidden=projectId=>new Set([...deletions.hidden(projectId),...moves.hidden(projectId),...imports.hidden(projectId)]);
- const items=projectId=>{const excluded=hidden(projectId);return cache.page(projectId).items.filter(entry=>!excluded.has(entry.labBookId));};
+ // Lab books are listed by name; a lab book's folder carries its name.
+ const items=projectId=>{const excluded=hidden(projectId);return cache.page(projectId).items.filter(entry=>!excluded.has(entry.labBookId)).sort((a,b)=>a.directory.localeCompare(b.directory,language(),{sensitivity:'base',numeric:true})||a.labBookId.localeCompare(b.labBookId));};
  function card(entry){return '<article class="panel project-notebook" data-directory-book="'+entry.labBookId+'"><p class="scope-kicker">'+esc(text('kind'))+'</p><h2><button class="text-button" data-action="filter-notebook" data-id="'+entry.labBookId+'">'+esc(entry.directory)+'</button></h2><div class="inline-actions"><button class="button" data-action="filter-notebook" data-id="'+entry.labBookId+'">'+esc(text('open'))+'</button><button class="button" data-action="edit-notebook" data-id="'+entry.labBookId+'">'+esc(text('settings'))+'</button></div></article>';}
  function paint(projectId){
   const host=document.querySelector('[data-lab-book-directory="'+projectId+'"]');if(!host)return;
