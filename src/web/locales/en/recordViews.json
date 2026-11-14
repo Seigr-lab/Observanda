@@ -13,6 +13,7 @@
   "anyEnd": "Any end",
   "certainty": "Date certainty",
   "labType": "Lab type",
+  "outcome": "Outcome contains",
   "journey": "Reading journey",
   "general": "General / custom",
   "unavailableLabType": "Unavailable lab type",

@@ -5,7 +5,7 @@ import {AppError} from './errors.js';
 import {recordDateRank} from './record-date-order.js';
 const point=value=>value?{id:value.id,title:value.title,occurredOn:value.occurredOn}:null;
 export function indexedRecordDateQuery(query,{selection,relatedTo,runOf}={}){
- const b=recordBrowse(query.browse);return !selection&&!relatedTo&&!runOf&&query.filter==='all'&&!query.search.trim()&&b.sort!=='title'&&!b.journey&&b.dateKnowledge==='all'&&!b.tags.trim()&&!b.from&&!b.to&&b.domain==='all'&&b.status==='all';
+ const b=recordBrowse(query.browse);return !selection&&!relatedTo&&!runOf&&query.filter==='all'&&!query.search.trim()&&b.sort!=='title'&&!b.journey&&b.dateKnowledge==='all'&&!b.tags.trim()&&!b.from&&!b.to&&b.domain==='all'&&b.status==='all'&&!b.outcome.trim();
 }
 export async function recordDatePage(store,snapshot,notebooks,anchor,{signal,ascending=false}={}){
  if(!snapshot.facetIndex||!snapshot.readingIndex)return null;

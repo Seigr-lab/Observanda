@@ -10,6 +10,7 @@
   "browseAnyTags": "Any of these tags",
   "browseFrom": "From date",
   "browseThrough": "Through date",
+  "browseOutcome": "Outcome contains",
   "browseDateCertainty": "Date certainty",
   "browseAllDates": "All dates",
   "browseKnownDates": "Known dates",

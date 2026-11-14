@@ -11,10 +11,10 @@ import {parseRecordTagList} from './record-tags-model.js';
 const text=(value,max=512)=>typeof value==='string'?value.slice(0,max):'';
 export function recordBrowse(value={}) {
  value=value&&typeof value==='object'?value:{};
- return {...(value.journey&&value.journey!=='all'?{journey:BOOK_JOURNEYS.includes(value.journey)?value.journey:'all'}:{}),dateKnowledge:['known','estimated','unknown'].includes(value.dateKnowledge)?value.dateKnowledge:'all',tags:text(value.tags),tagMode:value.tagMode==='any'?'any':'all',from:text(value.from,10),to:text(value.to,10),domain:text(value.domain,80)||'all',status:STATUSES.includes(value.status)?value.status:'all',sort:['date-asc','title'].includes(value.sort)?value.sort:'date-desc'};
+ return {...(value.journey&&value.journey!=='all'?{journey:BOOK_JOURNEYS.includes(value.journey)?value.journey:'all'}:{}),dateKnowledge:['known','estimated','unknown'].includes(value.dateKnowledge)?value.dateKnowledge:'all',tags:text(value.tags),tagMode:value.tagMode==='any'?'any':'all',from:text(value.from,10),to:text(value.to,10),domain:text(value.domain,80)||'all',status:STATUSES.includes(value.status)?value.status:'all',outcome:text(value.outcome,500),sort:['date-asc','title'].includes(value.sort)?value.sort:'date-desc'};
 }
 export const browseTags=value=>[...new Set(parseRecordTagList(value.tags))];
-export const browseActive=value=>[value.journey&&value.journey!=='all',value.dateKnowledge!=='all',value.tags.trim(),value.from,value.to,value.domain!=='all',value.status!=='all',value.sort!=='date-desc'].filter(Boolean).length;
+export const browseActive=value=>[value.journey&&value.journey!=='all',value.dateKnowledge!=='all',value.tags.trim(),value.from,value.to,value.domain!=='all',value.status!=='all',value.outcome.trim(),value.sort!=='date-desc'].filter(Boolean).length;
 export function browseIssue(value) {
  if(value.dateKnowledge==='unknown'&&(value.from||value.to))return 'unknownDateRange';
  if([value.from,value.to].some(s=>s&&!calendarDate(s)))return 'invalidRecordDate';
@@ -23,13 +23,15 @@ export function browseIssue(value) {
 // Shared semantics for local previews and encrypted catalogue queries.
 export const recordSearchText=e=>[e.title,proseText(e.body),e.outcome??'',...e.tags,...e.sections.flatMap(s=>[s.title,proseText(s.body)]),...e.contributors.flatMap(c=>[c.name,c.role]),e.template?.label??'',...Object.values(e.template?.values??{}),...(e.attempt?[attemptSearchText(e.attempt)]:[]),...(e.results?.statements??[]).flatMap(s=>[s.title,s.text,s.limitations])].join(' ').toLocaleLowerCase();
 export function recordQueryMatcher({notebook='all',filter='all',search='',browse={},relatedTo=null,referenceNamespaces=null}={}) {
- const b=recordBrowse(browse),tags=browseTags(b),needle=search.trim().toLocaleLowerCase();
+ const b=recordBrowse(browse),tags=browseTags(b),needle=search.trim().toLocaleLowerCase(),outcome=b.outcome.trim().toLocaleLowerCase();
  return e=>{
   if(browseIssue(b))return false;
   if(b.journey&&b.journey!=='all'&&readingJourney(e)!==b.journey)return false;
   if(relatedTo&&!(e.referenceTargets??recordReferenceTargets(e)).some(t=>(referenceNamespaces??[relatedTo.workspaceId]).includes(t.workspaceId)&&t.id===relatedTo.id))return false;
   if(notebook!=='all'&&e.notebookId!==notebook||!matchesRecordType(e,filter))return false;
   if(b.domain!=='all'&&(e.template?.profileId??'general')!==b.domain||b.status!=='all'&&e.status!==b.status)return false;
+  // An outcome is the record's own words, such as passed, failed or partial.
+  if(outcome&&!(e.outcome??'').toLocaleLowerCase().includes(outcome))return false;
   if(b.dateKnowledge!=='all'&&dateKnowledge(e.occurredOn)!==b.dateKnowledge||!dateInRange(e.occurredOn,b.from,b.to))return false;
   if(tags.length){const recordTags=new Set(e.tags);if(!(b.tagMode==='any'?tags.some(t=>recordTags.has(t)):tags.every(t=>recordTags.has(t))))return false;}
   return !needle||(e.searchText??recordSearchText(e)).includes(needle);

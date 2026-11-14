@@ -27,6 +27,7 @@ export function recordBrowseFields(state,records,{esc,field,option,domains:known
   ${field(esc(tr('browseDateCertainty')),`<select data-record-browse="dateKnowledge">${[['all',tr('browseAllDates')],['known',tr('browseKnownDates')],['estimated',tr('browseEstimatedDates')],['unknown',tr('browseUnknownDates')]].map(([id,label])=>option(id,label,b.dateKnowledge)).join('')}</select>`)}
   ${field(esc(tr('browseLabType')),`<select data-record-browse="domain">${recordDomainChoices(domains,b.domain).map(c=>option(c.value,c.label,b.domain)).join('')}</select>`)}
   ${field(esc(tr('progress')),`<select data-record-browse="status">${option('all',tr('browseAllProgress'),b.status)}${STATUSES.map(v=>option(v,t('recordValues','status_'+v),b.status)).join('')}</select>`)}
+  ${field(esc(tr('browseOutcome')),`<input type="search" data-record-browse="outcome" maxlength="500" value="${esc(b.outcome)}">`)}
   </div>
   <p id="record-tags-help" class="muted">${esc(tr('browseHelp'))}</p>
  </details>`;

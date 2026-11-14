@@ -28,6 +28,7 @@ export function recordViewsUI({state,api,esc,field,showDialog,notify,apply,snaps
   if(b.dateKnowledge!=='all')lines.push(['certainty',text('certaintyValues.'+b.dateKnowledge)]);
   if(b.domain!=='all')lines.push(['labType',b.domain==='general'?text('general'):labBookProfileLabel(b.domain,text('unavailableLabType'))]);
   if(b.status!=='all')lines.push(['progress',text('statusValues.'+b.status.replaceAll(' ','-'))]);
+  if(b.outcome?.trim())lines.push(['outcome',b.outcome.trim()]);
   lines.push(['order',text({'date-desc':'dateDesc','date-asc':'dateAsc',title:'titleOrder'}[b.sort])]);
   return '<dl class="record-view-summary">'+lines.map(([label,value])=>`<div><dt>${esc(text(label))}</dt><dd>${label==='recordType'&&q.filter.startsWith('template:')?`<span data-view-record-type="${esc(JSON.stringify({projectId:q.projectId,notebookId:q.notebookId,selected:q.filter}))}">${esc(value)}</span>`:esc(value)}</dd></div>`).join('')+'</dl>';
  }
