@@ -265,6 +265,7 @@
   "PUBLISH_FTP": "FTP-publisering mislyktes. Kontroller tjenernavn, port, brukernavn, passord, tilkoblingstype og nettstedmappen. For FTPS må tjenerens sertifikat være gyldig for navnet.",
   "PUBLISH_SFTP": "SFTP-publisering mislyktes. Kontroller OpenSSH, SSH-nøkkelen eller -agenten din, at vertsnøkkelen allerede er kjent, og nettstedmappen.",
   "PUBLISH_PASSWORD": "Passordet for denne verten mangler eller kan ikke lenger leses på denne datamaskinen. Skriv det inn på nytt.",
+  "PUBLISH_LOGIN": "Tjenerpåloggingen dette nettstedet bruker, finnes ikke lenger. Velg en tjenerpålogging i publiseringsmålet for nettstedet; pålogginger settes opp under Innstillinger → Integrasjoner.",
   "PUBLISH_PATH": "Et filnavn på nettstedet inneholder *, ?, [ eller ], som SFTP ikke kan publisere trygt. Gi filen nytt navn og klargjør nettstedet på nytt.",
   "STORAGE_FULL": "Lagringsvolumet har ikke nok ledig plass til denne operasjonen eller den konfigurerte reserven av ledig plass.",
   "SVG_EXTERNAL": "Denne SVG-filen refererer til eksternt innhold eller eksterne entiteter. Bygg inn bilder og stiler, og last deretter opp den selvstendige filen.",

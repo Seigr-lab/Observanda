@@ -52,7 +52,7 @@ export async function websiteReleaseOverview({store,siteId,expectedRevision,targ
   pending=owner?.pending??null;
  }else if(selected.kind==='remote'){
   const {receipt,config,destinationKey}=selected.destination;key=destinationKey;
-  destination={kind:config.kind,config};transfer=selected.destination.transfer;
+  destination={kind:config.kind,config,server:selected.destination.server??null};transfer=selected.destination.transfer;
   if(receipt){
    delivered={releaseId:receipt.releaseId,completedAt:receipt.at??null,status:receipt.status??null,commit:receipt.commit??null,verification:receipt.verification??null};
    if(receipt.fileInventory)rows=new LocalExportManifest(metadata).entries(receipt.fileInventory);

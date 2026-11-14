@@ -1288,7 +1288,7 @@ async function submitForm(form){
     if(form.id.startsWith('storage-')||form.id.startsWith('security-')){form.dataset.busy='true';form.setAttribute('aria-busy','true');const submit=form.querySelector('button[type="submit"]'),label=submit?.textContent,busyLabel=t('access',form.id==='storage-copy-form'?'copyProgress':form.id==='storage-move-form'?'moveProgress':'workingProgress');if(submit){submit.disabled=true;submit.textContent=busyLabel;}try{await storageControls.submit(form,data);return;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(submit){submit.disabled=false;if(submit.textContent===busyLabel)submit.textContent=label;}}}
     if (['workspace-name-form','workspace-organize-form','workspace-organize-confirm'].includes(form.id)) { form.dataset.busy='true'; try { await structureUI.submit(form,data); return; } finally { delete form.dataset.busy; } }
     if (form.id === 'theme-name-form') { form.dataset.busy = 'true'; try { await designUI.submit(form,data); return; } finally { delete form.dataset.busy; } }
-    if (form.id.startsWith('lab-') || form.id === 'publish-token-form') { form.dataset.busy = 'true'; try { if (await labUI.submit(form,data) || await publishUI.submit(form,data)) return; } finally { delete form.dataset.busy; } }
+    if (form.id.startsWith('lab-') || form.id === 'publish-token-form' || form.id === 'server-login-form') { form.dataset.busy = 'true'; try { if (await labUI.submit(form,data) || await publishUI.submit(form,data)) return; } finally { delete form.dataset.busy; } }
     if (form.id === 'create-form') {
       if((data.get('password')??'')!==(data.get('confirmPassword')??'')){notify(appText('passwordMismatch'),true);return;}
       form.dataset.busy = 'true';setupControls.busy(true);

@@ -265,6 +265,7 @@
   "PUBLISH_FTP": "La publicación FTP ha fallado. Comprueba el nombre del servidor, el puerto, el nombre de usuario, la contraseña, el tipo de conexión y la carpeta del sitio web. Para FTPS, el certificado del servidor debe ser válido para su nombre.",
   "PUBLISH_SFTP": "La publicación SFTP ha fallado. Comprueba OpenSSH, tu clave o agente SSH, que la clave de host ya sea conocida y la carpeta del sitio web.",
   "PUBLISH_PASSWORD": "Falta la contraseña de este alojamiento o ya no se puede leer en este ordenador. Vuelve a introducirla.",
+  "PUBLISH_LOGIN": "El inicio de sesión del servidor que usa este sitio web ya no existe. Elige un inicio de sesión del servidor en el destino de publicación del sitio web; los inicios de sesión se configuran en Preferencias → Integraciones.",
   "PUBLISH_PATH": "Un nombre de archivo del sitio web contiene *, ?, [ o ], que SFTP no puede publicar con seguridad. Cambia el nombre del archivo y vuelve a preparar el sitio web.",
   "STORAGE_FULL": "El volumen de almacenamiento no tiene suficiente espacio libre para esta operación o su reserva configurada de espacio libre.",
   "SVG_EXTERNAL": "Este SVG hace referencia a contenido o entidades externos. Incorpora sus imágenes y estilos y sube el archivo autónomo.",

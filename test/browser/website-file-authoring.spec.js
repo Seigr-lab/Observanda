@@ -104,19 +104,19 @@ test('undo never changes the other identical paragraph when the edited occurrenc
 });
 
 test('publish update shows the configured SSH site and its reviewed files before enabling transfer',async({page})=>{
- const transfers=[],config={kind:'ssh',ssh:{host:'lab.example',directory:'/srv/atlas'}};
+ const transfers=[],config={kind:'ssh',ssh:{login:'5f0c3f9e-2b6a-4c1d-9e8f-0a1b2c3d4e5f',directory:'/srv/atlas'}},server={id:'5f0c3f9e-2b6a-4c1d-9e8f-0a1b2c3d4e5f',name:'Lab server',protocol:'ssh',host:'lab.example',port:22,user:'research'};
  await page.exposeFunction('filesAPI',(route,data)=>{
   if(route.endsWith('/session'))return sessionWith([savedSite],{state:'ready'});
   if(route.endsWith('/open'))return savedPage;
   if(route.endsWith('/version'))return {revision:savedSite.revision};
-  if(route.endsWith('/publish-target'))return {kind:'remote',destination:{config,etag:'selected'}};
+  if(route.endsWith('/publish-target'))return {kind:'remote',destination:{config,etag:'selected',server}};
   if(route.endsWith('/plan'))return {id:'review-id',included:['index.html'],counts:{included:1},windows:{included:{offset:0,next:null}}};
   if(route.endsWith('/publish')){transfers.push(data);return {receipt:{status:'published'}};}
   throw Error('Unexpected route '+route);
  });
  await mountFilesEditor(page);await page.getByRole('button',{name:'Publish update',exact:true}).click();
  const review=page.locator('[data-website-files-review]'),send=review.getByRole('button',{name:'Publish website'});
- await expect(review).toContainText('lab.example:/srv/atlas');await review.locator('summary').click();
+ await expect(review).toContainText('Lab server · research@lab.example:/srv/atlas/current');await review.locator('summary').click();
  await expect(review.getByText('index.html',{exact:true})).toBeVisible();await expect(send).toBeDisabled();
  expect(transfers).toHaveLength(0);await review.getByRole('checkbox').check();await expect(send).toBeEnabled();
  await send.click();await expect.poll(()=>transfers.length).toBe(1);expect(transfers[0]).toMatchObject({siteId:savedSite.id,expectedRevision:savedSite.revision,configEtag:'selected',destinationReview:'review-id',destinationReviewed:true});

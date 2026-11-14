@@ -24,7 +24,7 @@ import {githubPlanReader} from '../src/github-plan-index.js';
 import {liveManifestReceipt} from '../src/publication-live-budget.js';
 import {serialize} from '../src/storage-format.js';
 test('deployment summaries preserve indexed SSH progress and legacy uploaded arrays',()=>{
- const intent={reviewId:'a'.repeat(64),releaseId:'b'.repeat(64),key:'c'.repeat(64),config:{kind:'ssh',ssh:{host:'publish.example',directory:'/site'}}};
+ const intent={reviewId:'a'.repeat(64),releaseId:'b'.repeat(64),key:'c'.repeat(64),config:{kind:'ssh',ssh:{login:randomUUID(),directory:'/site'}}};
  const summary=journal=>DeploymentJobs.prototype.summary({id:randomUUID(),createdAt:'2026-10-17T00:00:00.000Z',intent,journal});
  assert.equal(summary({uploadedCount:25,total:60}).uploaded,25);
  assert.equal(summary({uploadedCount:60,total:60,receipt:{status:'uploaded-remote-verified'}}).uploaded,60);

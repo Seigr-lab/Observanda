@@ -1433,6 +1433,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=await body(req,maintenance.limit);startJobs(context);if(!context.jobs)throw new AppError('ACCESS_LOCKED');
         return json(await executeInventoryMaintenance(workspace,context.jobs,maintenance.maintenance,data),maintenance.maintenance==='start'?202:200);
       }
+      // Server logins belong to the whole workspace; each website chooses one.
+      if (req.method === 'POST' && url.pathname.startsWith('/api/server-logins/')) {
+        const data = await body(req),{serverLoginRequest}=await import('./server-login-requests.js');
+        return json(await serverLoginRequest(url.pathname.slice('/api/server-logins/'.length),data,{workspace:selectedContext.workspace,hostCredentials:publishingOptions.hostCredentials,...(publishingOptions.ssh?{ssh:publishingOptions.ssh}:{}),...(publishingOptions.ftp?{ftp:publishingOptions.ftp}:{}),...(publishingOptions.sftp?{sftp:publishingOptions.sftp}:{})}));
+      }
       if (req.method === 'POST' && url.pathname.startsWith('/api/publishing/')) {
         const data = await body(req);
         if (publishing) throw new AppError('LOCKED');

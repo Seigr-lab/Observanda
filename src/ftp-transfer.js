@@ -6,7 +6,8 @@ import {Client,FTPError} from 'basic-ftp';
 import {AppError} from './errors.js';
 import {contentStream} from './file-content.js';
 
-export const FTP_SECURITY=['explicit','implicit','none'];
+import {FTP_SECURITY} from './server-logins.js';
+export {FTP_SECURITY};
 const missing=error=>error instanceof FTPError&&error.code>=550&&error.code<=553;
 const failed=error=>{if(error instanceof AppError||error?.name==='AbortError')return error;return new AppError('PUBLISH_FTP');};
 

@@ -54,7 +54,7 @@ async function fixture(t,{ssh=false,pages=false,foreign=false}={}){
   application=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore});const client={};await application.unlock(client,book.projects[0].id,{password:'Source password'});sourceReader=publicationSourceFactory(application,client,f.workspace);
  }
  const remote=ssh?await sshFixture(t):githubFixture(),publisher=new Publisher(f.workspace.root,ssh?{ssh:remote.host}:{request:remote.request},f.vault),config=defaultPublishing();
- if(ssh){config.kind='ssh';config.ssh=remote.config;}else Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages});
+ if(ssh){config.kind='ssh';config.ssh=await remote.target(f.workspace);}else Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages});
  config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');if(!ssh)await publisher.connect('synthetic_github_token_1234567890');
  const grants=new PublicationSourceAccess();jobs=workspaceJobs(f.workspace,publisher,{sourceAccess:grants});
  const releases=new PublicationJobs(f.workspace,{sourceReader}),candidate=await releases.inline(await releases.workspace.outline());

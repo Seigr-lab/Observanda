@@ -10,8 +10,11 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&
 const load=locale=>prepareLanguage(locale,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});
 const field=(label,control)=>'<label>'+label+control+'</label>';
 const option=(value,label,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(label)+'</option>';
-function state(){return {storage:{contextId:'workspace'},page:'publishing',publishing:{etag:'etag',configured:true,config:{kind:'github',github:{owner:'Authored <owner>',repository:'Authored & repo',branch:'main',directory:'',pages:false},ssh:{host:'host',port:22,user:'user',directory:'/site',identityFile:''},publicUrl:'https://example.org/',limits:{}}}};}
-function ui(value,overrides={}){return publishingUI({state:value,api:async()=>({}),esc,field,option,render(){},notify(){},showDialog(){},onChange(){},...overrides});}
+// A website is selected: the destination form belongs to that website.
+const login='5f0c3f9e-2b6a-4c1d-9e8f-0a1b2c3d4e5f';
+function state(){return {storage:{contextId:'workspace'},page:'publishing',websitePin:{researchSnapshotId:'a',websiteId:'b',websiteRevision:null},websiteId:'b',publishing:{etag:'etag',configured:true,config:{kind:'github',github:{owner:'Authored <owner>',repository:'Authored & repo',branch:'main',directory:'',pages:false},ssh:{login,directory:'/site'},publicUrl:'https://example.org/',limits:{}}}};}
+const logins=async route=>route==='/api/server-logins/list'?{logins:[{id:login,name:'Lab <server>',protocol:'ssh',host:'host.example',port:22,user:'user',identityFile:''}],etag:'e'}:{};
+function ui(value,overrides={}){return publishingUI({state:value,api:logins,esc,field,option,render(){},notify(){},showDialog(){},onChange(){},...overrides});}
 test('publishing controls translate across language switches without changing saved destination values',async context=>{
  context.after(()=>activateLanguage('en'));const value=state(),before=structuredClone(value.publishing.config),view=ui(value);
  for(const locale of locales){
@@ -20,7 +23,10 @@ test('publishing controls translate across language switches without changing sa
   assert.ok(html.includes('value="github" selected'));assert.ok(html.includes('value="main"'));assert.ok(html.includes(esc(before.github.owner)));assert.ok(!html.includes('<owner>'));
   html=view.view();assert.ok(html.includes(esc(t('websiteAuthoring','pubTitle'))));assert.ok(html.includes(esc(t('websiteAuthoring','pubConfigure'))));
   assert.deepEqual(value.publishing.config,before);
-  value.publishing.config.kind='ssh';html=view.view(true);assert.ok(html.includes(esc(t('websiteAuthoring','pubSshHelp',{current:'current',releases:'releases'}))));assert.ok(html.includes('value="/site"'));value.publishing.config.kind='github';
+  value.publishing.config.kind='ssh';html=view.view(true);assert.ok(html.includes(esc(t('websiteAuthoring','pubSshHelp',{current:'current',releases:'releases'}))));assert.ok(html.includes('value="/site"'));assert.ok(html.includes(esc(t('websiteAuthoring','serverLogin'))));value.publishing.config.kind='github';
+  // Without a selected website the page is Integrations: sign-ins only, shared by every website.
+  const workspace={...structuredClone(value),websitePin:null,websiteId:null},integrations=ui(workspace).view(true);
+  assert.ok(integrations.includes(esc(t('websiteAuthoring','loginsTitle'))));assert.ok(!integrations.includes(esc(t('websiteAuthoring','pubWith'))));
  }
 });
 test('canonical publication status messages are localized lazily and unknown server text is escaped unchanged',async context=>{

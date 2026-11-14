@@ -14,7 +14,7 @@ export function websiteFilesReleases({request,site,esc,tr,t,signal}){
  const code=value=>'<code title="'+esc(value)+'">'+esc(short(value))+'</code>';
  function destinationLabel(destination){
   if(destination.kind==='folder')return esc(destination.directory);
-  if(['github','ssh','sftp','ftp'].includes(destination.kind))return esc({github:'GitHub',ssh:'SSH',sftp:'SFTP',ftp:'FTP'}[destination.kind]+' · '+remoteAddress(destination.config));
+  if(['github','ssh','sftp','ftp'].includes(destination.kind))return esc({github:'GitHub',ssh:'SSH',sftp:'SFTP',ftp:'FTP'}[destination.kind]+' · '+remoteAddress(destination.config,destination.server));
   return esc(tr('releaseNoDestination'));
  }
  function editionLabel(edition){return esc(tr(edition==='withdrawal'?'releaseEditionWithdrawal':'releaseEditionWebsite'));}

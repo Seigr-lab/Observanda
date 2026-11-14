@@ -265,6 +265,7 @@
   "PUBLISH_FTP": "FTP-publisering feila. Kontroller tenarnamn, port, brukarnamn, passord, tilkoplingstype og nettstadmappa. For FTPS må sertifikatet til tenaren vere gyldig for namnet.",
   "PUBLISH_SFTP": "SFTP-publisering feila. Kontroller OpenSSH, SSH-nøkkelen eller -agenten din, at vertsnøkkelen alt er kjend, og nettstadmappa.",
   "PUBLISH_PASSWORD": "Passordet for denne verten manglar eller kan ikkje lenger lesast på denne datamaskina. Skriv det inn på nytt.",
+  "PUBLISH_LOGIN": "Tenarinnlogginga denne nettstaden brukar, finst ikkje lenger. Vel ei tenarinnlogging i publiseringsmålet for nettstaden; innloggingar blir sette opp under Innstillingar → Integrasjonar.",
   "PUBLISH_PATH": "Eit filnamn på nettstaden inneheld *, ?, [ eller ], som SFTP ikkje kan publisere trygt. Gje fila nytt namn og gjer nettstaden klar på nytt.",
   "STORAGE_FULL": "Lagringsvolumet har ikkje nok ledig plass for denne operasjonen eller den oppsette reserven av ledig plass.",
   "SVG_EXTERNAL": "Denne SVG-fila viser til eksternt innhald eller eksterne entitetar. Bygg inn bileta og stilane, og last deretter opp den sjølvstendige fila.",

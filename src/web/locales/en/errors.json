@@ -265,6 +265,7 @@
   "PUBLISH_FTP": "FTP publishing failed. Check the server name, port, user name, password, connection type and the website folder. For FTPS the server's certificate must be valid for its name.",
   "PUBLISH_SFTP": "SFTP publishing failed. Check OpenSSH, your SSH key or agent, that the host key is already known, and the website folder.",
   "PUBLISH_PASSWORD": "The password for this host is missing or can no longer be read on this computer. Enter it again.",
+  "PUBLISH_LOGIN": "The server login this website uses no longer exists. Choose a server login in the website's publishing destination; logins are set up in Preferences → Integrations.",
   "PUBLISH_PATH": "A website file name contains *, ?, [ or ], which SFTP cannot publish safely. Rename the file and prepare the website again.",
   "STORAGE_FULL": "The storage volume has insufficient free space for this operation or its configured free-space reserve.",
   "SVG_EXTERNAL": "This SVG references external content or entities. Embed its images and styles, then upload the self-contained file.",

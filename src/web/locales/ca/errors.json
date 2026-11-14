@@ -265,6 +265,7 @@
   "PUBLISH_FTP": "La publicació FTP ha fallat. Comprova el nom del servidor, el port, el nom d'usuari, la contrasenya, el tipus de connexió i la carpeta del lloc web. Per a FTPS, el certificat del servidor ha de ser vàlid per al seu nom.",
   "PUBLISH_SFTP": "La publicació SFTP ha fallat. Comprova OpenSSH, la teva clau o agent SSH, que la clau de l'amfitrió ja sigui coneguda i la carpeta del lloc web.",
   "PUBLISH_PASSWORD": "Falta la contrasenya d'aquest allotjament o ja no es pot llegir en aquest ordinador. Torna-la a introduir.",
+  "PUBLISH_LOGIN": "L'inici de sessió del servidor que fa servir aquest lloc web ja no existeix. Tria un inici de sessió del servidor a la destinació de publicació del lloc web; els inicis de sessió es configuren a Preferències → Integracions.",
   "PUBLISH_PATH": "Un nom de fitxer del lloc web conté *, ?, [ o ], que SFTP no pot publicar amb seguretat. Canvia el nom del fitxer i torna a preparar el lloc web.",
   "STORAGE_FULL": "El volum d'emmagatzematge no té prou espai lliure per a aquesta operació o per a la reserva d'espai lliure configurada.",
   "SVG_EXTERNAL": "Aquest SVG fa referència a contingut o entitats externs. Incrusta'n les imatges i els estils i carrega el fitxer autònom.",

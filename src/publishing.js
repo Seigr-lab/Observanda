@@ -19,22 +19,27 @@ import { AppError } from './errors.js';
 import { SSHHost } from './ssh-host.js';
 import {deployRemoteSite,validRemoteFiles} from './remote-site-publishing.js';
 import {SFTPTransport,sftpPath} from './sftp-transfer.js';
-import {FTPTransport,FTP_SECURITY} from './ftp-transfer.js';
+import {FTPTransport} from './ftp-transfer.js';
+import {ServerLogins,serverIdentity} from './server-logins.js';
 import {publicHttpsRequest} from './public-https.js';
 
-export const defaultPublishing = () => ({ kind: 'github', github: { owner: '', repository: '', branch: 'main', pages: false, directory: '' }, ssh: { host: '', port: 22, user: '', directory: '', identityFile: '' }, sftp: { host: '', port: 22, user: '', directory: '', identityFile: '', allowExisting: false }, ftp: { host: '', port: 21, user: '', directory: '', security: 'explicit', allowExisting: false }, publicUrl: '' });
+export const defaultPublishing = () => ({ kind: 'github', github: { owner: '', repository: '', branch: 'main', pages: false, directory: '' }, ssh: { login: '', directory: '' }, sftp: { login: '', directory: '', allowExisting: false }, ftp: { login: '', directory: '', allowExisting: false }, publicUrl: '' });
+// A server destination names one of the workspace's server logins (shared by
+// every website, server-logins.js) and this website's own folder on it.
+export const SERVER_KINDS=['ssh','sftp','ftp'];
+// Logins belong to the whole workspace: a website's publication workspace
+// keeps its own metadata apart, so they are always read from its base.
+const serverLoginsOf=workspace=>new ServerLogins(workspace.baseWorkspace??workspace);
 // Hosts reached over SFTP (no server shell needed) or FTP/FTPS publish into
 // their web folder in place (remote-site-publishing.js).
 export const REMOTE_SITE_KINDS=['sftp','ftp'];
-const hostName=value=>/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(value);
-const hostUser=value=>typeof value==='string'&&value.length>0&&value.length<=128&&!/[\x00-\x1f@:\/\\]/.test(value);
-function validRemoteSite(kind,v,selected){
-  if(kind==='sftp'&&!keys(v,['host','port','user','directory','identityFile','allowExisting']))return false;
-  if(kind==='ftp'&&!keys(v,['host','port','user','directory','security','allowExisting']))return false;
-  if(!['host','user','directory'].every(k=>string(v[k],1000))||!Number.isInteger(v.port)||v.port<1||v.port>65535||typeof v.allowExisting!=='boolean')return false;
-  if(kind==='sftp'&&!string(v.identityFile,1000)||kind==='ftp'&&!FTP_SECURITY.includes(v.security))return false;
+const loginId=value=>value===''||/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
+// SSH runs shell commands in the folder, so its names are restricted further.
+const serverFolder=(kind,value)=>kind==='ssh'?/^\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+$/.test(value):sftpPath(value)&&value!=='/';
+function validServerTarget(kind,v,selected){
+  if(!keys(v,kind==='ssh'?['login','directory']:['login','directory','allowExisting'])||!loginId(v.login)||!string(v.directory,1000)||kind!=='ssh'&&typeof v.allowExisting!=='boolean')return false;
   if(!selected)return true;
-  return hostName(v.host)&&hostUser(v.user)&&sftpPath(v.directory)&&v.directory.split('/').every(p=>p!=='.'&&p!=='..')&&(kind!=='sftp'||!v.identityFile||path.isAbsolute(v.identityFile));
+  return v.login!==''&&serverFolder(kind,v.directory)&&v.directory.split('/').every(p=>p!=='.'&&p!=='..');
 }
 export const pagesSource = pages => pages ? {build_type:pages.build_type,branch:pages.source?.branch??null,path:pages.source?.path??null,cname:pages.cname??null} : null;
 const keys = (v, list) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === list.length && list.every(k => Object.hasOwn(v, k));
@@ -43,9 +48,8 @@ const part = s => string(s, 100) && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(s) && ![
 export function validatePublishing(c) {
   if(c?.limits){if(!['github','ssh'].every(k=>Object.hasOwn(c.limits,k))||Object.keys(c.limits).some(k=>!['github','ssh',...REMOTE_SITE_KINDS].includes(k))||!Object.values(c.limits).every(v=>keys(v,['maxFileBytes','maxTotalBytes'])&&Object.values(v).every(n=>Number.isSafeInteger(n)&&n>=0)))throw new AppError('PUBLISH_CONFIG');}
   const fields=Object.keys(c??{}).filter(key=>key!=='limits'&&!REMOTE_SITE_KINDS.includes(key));
-  if (!c || typeof c!=='object' || fields.length!==4 || !['kind', 'github', 'ssh', 'publicUrl'].every(k=>Object.hasOwn(c,k)) || !['github', 'ssh', ...REMOTE_SITE_KINDS].includes(c.kind) || REMOTE_SITE_KINDS.some(kind=>(Object.hasOwn(c,kind)||c.kind===kind)&&!validRemoteSite(kind,c[kind],c.kind===kind)) || !c.github || !['owner','repository','branch'].every(k=>Object.hasOwn(c.github,k)) || Object.keys(c.github).some(k=>!['owner','repository','branch','pages','directory'].includes(k)) || Object.hasOwn(c.github,'pages')&&typeof c.github.pages!=='boolean' || Object.hasOwn(c.github,'directory')&&!githubDirectory(c.github.directory) || !keys(c.ssh, ['host', 'port', 'user', 'directory', 'identityFile']) || !['owner','repository','branch'].every(k => string(c.github[k], 100)) || !['host', 'user', 'directory', 'identityFile'].every(k => string(c.ssh[k], 1000)) || !Number.isInteger(c.ssh.port) || c.ssh.port < 1 || c.ssh.port > 65535 || !string(c.publicUrl, 1000)) throw new AppError('PUBLISH_CONFIG');
+  if (!c || typeof c!=='object' || fields.length!==4 || !['kind', 'github', 'ssh', 'publicUrl'].every(k=>Object.hasOwn(c,k)) || !['github', ...SERVER_KINDS].includes(c.kind) || SERVER_KINDS.some(kind=>(Object.hasOwn(c,kind)||c.kind===kind)&&!validServerTarget(kind,c[kind],c.kind===kind)) || !c.github || !['owner','repository','branch'].every(k=>Object.hasOwn(c.github,k)) || Object.keys(c.github).some(k=>!['owner','repository','branch','pages','directory'].includes(k)) || Object.hasOwn(c.github,'pages')&&typeof c.github.pages!=='boolean' || Object.hasOwn(c.github,'directory')&&!githubDirectory(c.github.directory) || !['owner','repository','branch'].every(k => string(c.github[k], 100)) || !string(c.publicUrl, 1000)) throw new AppError('PUBLISH_CONFIG');
   if (c.kind === 'github' && (!part(c.github.owner) || !part(c.github.repository) || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(c.github.branch))) throw new AppError('PUBLISH_CONFIG');
-  if (c.kind === 'ssh' && (!/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(c.ssh.host) || !/^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$/.test(c.ssh.user) || !/^\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+$/.test(c.ssh.directory) || c.ssh.directory.split('/').some(p => p === '.' || p === '..') || (c.ssh.identityFile && !path.isAbsolute(c.ssh.identityFile)))) throw new AppError('PUBLISH_CONFIG');
   if (c.publicUrl) {
     let url; try { url = new URL(c.publicUrl); } catch { throw new AppError('PUBLISH_CONFIG'); }
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new AppError('PUBLISH_CONFIG');
@@ -75,8 +79,12 @@ export class Publisher {
     // the historical receipt on disk, but do not present it as current proof.
     if(receipt?.verification?.configEtag!==etag&&receipt)delete receipt.verification;
     const account=this.connection?await this.connection.summary():null;
-    const host=config?.kind==='ftp'&&this.hostCredentials?{saved:await this.hostCredentials.has(this.hostPasswordFor(config)),persistent:this.hostCredentials.persistent()}:null;
-    return { receipt, config: config ?? defaultPublishing(), etag, destinationKey:config?this.destinationKey(config):null, configured: !!config, connected: !!this.token||!!account?.connected, temporaryToken:!!this.token, account:account?.selected??null, hostPassword:host };
+    let server=null;
+    if(config&&SERVER_KINDS.includes(config.kind)&&config[config.kind].login){
+      const login=(await serverLoginsOf(this.workspace).read()).logins.find(item=>item.id===config[config.kind].login&&item.protocol===config.kind)??null;
+      server=login?{id:login.id,name:login.name,protocol:login.protocol,host:login.host,port:login.port,user:login.user,...(login.protocol==='ftp'?{security:login.security,password:this.hostCredentials?{saved:await this.hostCredentials.has(serverIdentity(login)),persistent:this.hostCredentials.persistent()}:null}:{})}:{missing:true};
+    }
+    return { receipt, config: config ?? defaultPublishing(), etag, destinationKey:config?this.destinationKey(config):null, configured: !!config, connected: !!this.token||!!account?.connected, temporaryToken:!!this.token, account:account?.selected??null, server };
   }
   async save(config, etag) {
     validatePublishing(config);
@@ -176,7 +184,7 @@ export class Publisher {
   async check({plan=null,reviewExisting=false}={}) {
     const saved = await this.read(); if (!saved.configured) throw new AppError('PUBLISH_CONFIG');
     const c = saved.config;
-    if (c.kind === 'ssh') { await this.ssh.check(c.ssh); return { message: 'SSH authentication and required server tools verified. Upload has not started.' }; }
+    if (c.kind === 'ssh') { await this.ssh.check(await this.serverDestination(c)); return { message: 'SSH authentication and required server tools verified. Upload has not started.' }; }
     if (REMOTE_SITE_KINDS.includes(c.kind)) return this.checkRemoteSite(c);
     const base = `/repos/${c.github.owner}/${c.github.repository}`;
     const repo = await this.github(base);
@@ -225,29 +233,35 @@ export class Publisher {
     }
   }
 
+  // A website's server destination: its login, resolved from the workspace's
+  // server logins, with this website's folder. A missing or different login
+  // asks the author to choose one again.
+  // Local copies made for an upload stay inside this workspace.
+  staging(){return path.join(this.workspace.root,'.observanda','publishing-staging');}
+  async serverDestination(config){
+    const target=config[config.kind],login=await serverLoginsOf(this.workspace).get(target.login);
+    if(login.protocol!==config.kind)throw new AppError('PUBLISH_LOGIN');
+    const {id,name,protocol,...access}=login;void id;void name;void protocol;
+    return {...access,directory:target.directory,...(config.kind==='ssh'?{}:{allowExisting:target.allowExisting})};
+  }
   // The protocol access of an SFTP or FTP destination. An FTP password is read
   // from this computer's credentials only when a session opens.
-  remoteSite(config){
-    const c=config[config.kind];
+  async remoteSite(config){
+    const c=await this.serverDestination(config);
     if(config.kind==='sftp')return {c,transport:this.sftp??new SFTPTransport({staging:this.staging()})};
     if(config.kind==='ftp'){const ftp=this.ftp,credentials=this.hostCredentials;return {c,transport:{open:async(value,options)=>{if(!credentials)throw new AppError('PUBLISH_PASSWORD');return ftp.open(value,{...options,password:await credentials.read({protocol:'ftp',host:value.host,port:value.port,user:value.user})});}}};}
     throw new AppError('PUBLISH_CONFIG');
   }
-  // Local copies made for an upload stay inside this workspace.
-  staging(){return path.join(this.workspace.root,'.observanda','publishing-staging');}
-  hostPasswordFor(config){const c=config.ftp;return {protocol:'ftp',host:c.host,port:c.port,user:c.user};}
-  // The password of the saved FTP destination, kept on this computer only.
-  async saveHostPassword(password,{remember=true}={}){
-    const saved=await this.read();if(!saved.configured||saved.config.kind!=='ftp'||!this.hostCredentials)throw new AppError('PUBLISH_CONFIG');
-    return this.hostCredentials.save(this.hostPasswordFor(saved.config),password,{remember});
-  }
-  async forgetHostPassword(){const saved=await this.read();if(!saved.configured||saved.config.kind!=='ftp'||!this.hostCredentials)throw new AppError('PUBLISH_CONFIG');await this.hostCredentials.forget(this.hostPasswordFor(saved.config));}
+  // The file record belongs to this website and to the server it was made on.
+  remoteRecordKey(config,c){return this.destinationKey(config)+'-'+digest(serialize(serverIdentity({protocol:config.kind,...c}))).slice(0,16);}
   async deployRemote(config,candidate,owner,options){
-    const {c,transport}=this.remoteSite(config),previousFiles=options.journal?.nonce?null:await readRemoteFiles(this.workspace,this.destinationKey(config));
+    const {c,transport}=await this.remoteSite(config),record=this.remoteRecordKey(config,c),previousFiles=options.journal?.nonce?null:await readRemoteFiles(this.workspace,record);
+    // The caller stores the record with the receipt, inside its own lock.
+    options.journal.record??=record;if(options.journal.record!==record)throw new AppError('PUBLISH_STALE');
     return deployRemoteSite(transport,c,candidate,owner,{...options,previousFiles,allowExisting:c.allowExisting});
   }
   async checkRemoteSite(config){
-    const {c,transport}=this.remoteSite(config),session=await transport.open(c);
+    const {c,transport}=await this.remoteSite(config),session=await transport.open(c);
     try{
       const marker=await session.readText(c.directory+'/.observanda-owner',{missing:true});
       const entries=marker===null?await session.list(c.directory).catch(()=>[]):[];
@@ -256,7 +270,7 @@ export class Publisher {
     }finally{await session.close();}
   }
   destinationKey(config) {
-    const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):REMOTE_SITE_KINDS.includes(config.kind)?{host:config[config.kind].host.toLowerCase(),port:config[config.kind].port,user:config[config.kind].user,directory:config[config.kind].directory}:config.ssh;
+    const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):{login:config[config.kind].login,directory:config[config.kind].directory};
     return digest(serialize({kind:config.kind,destination}));
   }
   async deploy(candidate, expectedConfigEtag, workspaceId, review={},transfer) {
@@ -293,12 +307,12 @@ export class Publisher {
       let receipt;
       if (config.kind === 'ssh') {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
-        receipt=await this.ssh.deploy(config.ssh,candidate,owner,{...options,indexedFiles:!!transfer,staging:this.staging()});
+        receipt=await this.ssh.deploy(await this.serverDestination(config),candidate,owner,{...options,indexedFiles:!!transfer,staging:this.staging()});
       }
       else if (REMOTE_SITE_KINDS.includes(config.kind)) {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
         receipt=await this.deployRemote(config,candidate,owner,options);
-        await writeRemoteFiles(this.workspace,key,journal.remote);
+        await writeRemoteFiles(this.workspace,journal.record,journal.remote);
       }
       else {
         receipt=await deployGithub(this,candidate,config,{...options,plan,pushed:persist});

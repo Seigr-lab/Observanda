@@ -14,14 +14,14 @@ export async function remoteProgressRequest(request,operation,data,{signal,t,tr}
  try{return await request(operation,data,{signal,onProgress:progress.update});}finally{progress.close();}
 }
 
-export function remoteAddress(config){
+// A server destination shows its shared login and this website's folder.
+export function remoteAddress(config,server=null){
  if(config.kind==='github'){
   const {owner,repository,branch,directory}=config.github;
   return [owner+'/'+repository,branch,directory].filter(Boolean).join(' / ');
  }
- if(config.kind==='sftp'||config.kind==='ftp'){const {user,host,port,directory}=config[config.kind];return config.kind+'://'+(user?user+'@':'')+host+(port&&port!==(config.kind==='ftp'?21:22)?':'+port:'')+directory;}
- const {user,host,port,directory}=config.ssh;
- return (user?user+'@':'')+host+(port&&port!==22?':'+port:'')+':'+directory+'/current';
+ const v=config[config.kind],login=server&&!server.missing?server:null;
+ return (login?login.name+' · '+(login.user?login.user+'@':'')+login.host+(login.port&&login.port!==(config.kind==='ftp'?21:22)?':'+login.port:''):'')+':'+v.directory+(config.kind==='ssh'?'/current':'');
 }
 export function remoteReceiptView(destination,revision,{esc,t,tr,button}){
  if(!destination)return '';

@@ -465,24 +465,33 @@ test('logos at workspace, project, notebook, page and record scopes survive save
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
 });
 
-test('publishing destination persists privately and review identifies the configured SSH target', async ({ page }) => {
-  await new Workspace(root).create(sampleNotebook());await page.goto(app.url);
+// A server login is set up once in Integrations; a website then chooses it and
+// its own folder in its own publishing destination.
+test('a server login is set up once in Integrations and a website publishes to it with its own folder', async ({ page }) => {
+  test.setTimeout(90000);await independentDatabases();await encryptedSample();await page.goto(app.url);
   await preferences(page,'Integrations');
-  await page.getByLabel('Publish with',{exact:true}).selectOption('ssh');
-  await page.getByLabel('SSH hostname',{exact:true}).fill('hosting.example');
-  await page.getByLabel('SSH user',{exact:true}).fill('research');
-  await page.getByLabel('Dedicated hosting directory',{exact:true}).fill('/srv/observanda');
-  await page.getByLabel('Public website URL (HTTPS)',{exact:true}).fill('https://research.example/');
-  await page.getByRole('button',{name:'Save destination',exact:true}).click();
-  await expect(page.locator('#destination-status')).toHaveText('Destination saved on this device.');
-  await page.reload();await preferences(page,'Integrations');
-  await expect(page.getByLabel('SSH hostname',{exact:true})).toHaveValue('hosting.example');
-  await page.screenshot({path:test.info().outputPath('publishing-settings.png'),fullPage:true});
-  await navigate(page,'Publishing');await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
-  await expect(page.locator('main')).toContainText('Destination: hosting.example / /srv/observanda/current');
-  await page.getByRole('button',{name:'Publish to SSH hosting',exact:true}).click();
-  await expect(page.locator('#notice')).toContainText('Review the website');
-  await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).not.toContainText('hosting.example');
+  const logins=page.locator('#server-logins');
+  await expect(logins).toContainText('No server logins yet.');
+  await logins.getByRole('button',{name:'Add server login',exact:true}).click();
+  await logins.getByLabel('Connection type',{exact:true}).selectOption('ssh');
+  await logins.getByLabel('Name',{exact:true}).fill('Lab server');
+  await logins.getByLabel('Server name',{exact:true}).fill('hosting.example');
+  await logins.getByLabel('User name',{exact:true}).fill('research');
+  await logins.getByRole('button',{name:'Save login',exact:true}).click();
+  await expect(logins).toContainText('Lab server');await expect(logins).toContainText('research@hosting.example');
+  await expect(page.getByLabel('Publish with',{exact:true})).toHaveCount(0);
+  await page.reload();await preferences(page,'Integrations');await expect(page.locator('#server-logins')).toContainText('research@hosting.example');
+  await navigate(page,'Publishing');
+  const form=page.locator('.website-files-publish'),reviewWebsite=page.getByRole('button',{name:'Review website',exact:true});
+  await form.or(reviewWebsite).first().waitFor();if(await reviewWebsite.isVisible())await reviewWebsite.click();
+  const destination=page.getByRole('button',{name:'Publishing destination',exact:true});if(await destination.isVisible())await destination.click();
+  await form.getByLabel('Publishing destination').selectOption('ssh');
+  await form.getByLabel('Server login').selectOption({label:'Lab server · research@hosting.example'});
+  await form.getByLabel("This website's folder on the server").fill('/srv/observanda');
+  await form.getByLabel('Public website URL').fill('https://research.example/');
+  await form.getByRole('button',{name:'Save destination',exact:true}).click();
+  await form.getByRole('button',{name:'Review publication',exact:true}).click();
+  await expect(page.locator('[data-website-files-review]')).toContainText('Lab server · research@hosting.example:/srv/observanda/current');
 });
 
 

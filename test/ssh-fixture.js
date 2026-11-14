@@ -6,6 +6,7 @@ import {mkdtemp,rm,copyFile,mkdir,chmod,readlink,realpath} from 'node:fs/promise
 import os from 'node:os';
 import path from 'node:path';
 import {SSHHost} from '../src/ssh-host.js';
+import {ServerLogins} from '../src/server-logins.js';
 const exec=promisify(execFile);
 export async function sshFixture(t){
  // The simulated server folder must be a dedicated hosting directory: a POSIX
@@ -29,5 +30,7 @@ export async function sshFixture(t){
  };
  // Upload copies stay in this fixture's own folder, as in a workspace.
  const staging=path.join(directory,'staging'),host=new SSHHost(run),deploy=host.deploy.bind(host);host.deploy=(c,candidate,owner,options={})=>deploy(c,candidate,owner,{staging,...options});
- return {directory,root,run,staging,host,config:{host:'synthetic.example',user:'research',port:22,directory:root+'/site',identityFile:''},calls,setHook:value=>hook=value,current:()=>readlink(path.join(directory,'site','current'))};
+ // The simulated server as a workspace login, and a website's target on it.
+ const target=async workspace=>{const logins=new ServerLogins(workspace),saved=await logins.save({name:'Synthetic server',protocol:'ssh',host:'synthetic.example',port:22,user:'research',identityFile:''},(await logins.read()).etag);return {login:saved.logins.at(-1).id,directory:root+'/site'};};
+ return {directory,root,run,staging,host,target,config:{host:'synthetic.example',user:'research',port:22,directory:root+'/site',identityFile:''},calls,setHook:value=>hook=value,current:()=>readlink(path.join(directory,'site','current'))};
 }

@@ -14,7 +14,7 @@ async function run(queue){const job=await queue.claim();try{const output=await q
 test('SSH jobs retain an uncertain switch and resume through a new publisher without uploading again',async t=>{
  const remote=await sshFixture(t),f=await encryptedFixture(remote.directory,sampleNotebook()),publisher=new Publisher(f.workspace.root,{ssh:remote.host},f.vault),jobs=workspaceJobs(f.workspace,publisher);
  t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);});
- const config=defaultPublishing();config.kind='ssh';config.ssh=remote.config;config.publicUrl='https://synthetic.example/';const saved=await publisher.save(config,'new'),releases=new PublicationJobs(f.workspace);
+ const config=defaultPublishing();config.kind='ssh';config.ssh=await remote.target(f.workspace);config.publicUrl='https://synthetic.example/';const saved=await publisher.save(config,'new'),releases=new PublicationJobs(f.workspace);
  const {etag,websitePin}=await releases.workspace.outline();await releases.start({etag,websitePin},jobs.queue);const prepared=await run(jobs.queue);assert.equal(prepared.state,'completed');
  const deployments=new DeploymentJobs(f.workspace,publisher,jobs.queue),job=await deployments.start({id:prepared.result.id,reviewed:true,configEtag:saved.etag});let lost=false;
  remote.setHook((call,phase)=>{if(!lost&&phase==='after'&&call.args.at(-1).includes('mv -Tf')){lost=true;throw Error('Switch reply lost');}});

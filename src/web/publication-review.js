@@ -13,7 +13,7 @@ export function destinationPlanRows(plan,key,{esc,action='publish-plan-page'}){
 // Review operates on a retained edition, never on the editable workspace.
 export function publicationReviewView(p,{esc,field,option,icon}){
  const text=(key,values)=>esc(publicationText(key,values)),c=p.summary,plan=p.destinationPlan;
- const destination=p.destination?(p.destination.kind==='github'?`${p.destination.github.owner}/${p.destination.github.repository} / ${p.destination.github.branch}${p.destination.github.directory?' / '+p.destination.github.directory:''}`:`${p.destination.ssh.host} / ${p.destination.ssh.directory}/current`):null;
+ const destination=p.destination?(p.destination.kind==='github'?`${p.destination.github.owner}/${p.destination.github.repository} / ${p.destination.github.branch}${p.destination.github.directory?' / '+p.destination.github.directory:''}`:`${p.destination.kind.toUpperCase()} · ${p.destination[p.destination.kind].directory}${p.destination.kind==='ssh'?'/current':''}`):null;
  const repositoryReview=plan?`<section id="destination-review" class="panel"><h2>${text('repositoryReview')}</h2><p>${text(plan.replacement?'replacementChanges':'repositoryChanges',{destination})}</p>
   ${plan.replacement?`<p>${text('replacementPreservation')}</p><p>${plan.replacement.archiveBranch?text('replacementArchive',{branch:plan.replacement.archiveBranch,commit:plan.head}):text('replacementHistory')}</p>`:''}
   ${['added','replaced','removed','unchanged','preserved','conflicts'].map(key=>`<details><summary>${text(key==='preserved'&&plan.replacement?'replacementPreserved':key,{count:plan.counts?.[key]??plan[key].length})}</summary><div data-plan-rows="${key}">${destinationPlanRows(plan,key,{esc})}</div></details>`).join('')}

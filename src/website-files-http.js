@@ -52,7 +52,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','import/folder','downloads/remove','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','destination/host-password','destination/host-password-forget','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','import/folder','downloads/remove','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
 // Hosts reached over SSH, SFTP or FTP are reviewed by the files they will receive.
@@ -383,15 +383,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   }
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-sources'){json(await store.insertSources(siteId,{...options,expectedRevision,signal}));return true;}
-  if(operation==='destination'||operation==='destination/save'||operation==='destination/host-password'||operation==='destination/host-password-forget'){
+  if(operation==='destination'||operation==='destination/save'){
    json(await store.withSite(siteId,undefined,async()=>{
     const target=await publisher(siteId);
     if(operation==='destination'){const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};}
-    // An FTP password stays on this computer; it is never sent back.
-    if(operation==='destination/host-password'||operation==='destination/host-password-forget'){
-     if(operation==='destination/host-password')await target.saveHostPassword(options.password,{remember:options.remember!==false});else await target.forgetHostPassword();
-     const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};
-    }
     return target.workspace.withLock(async()=>{
      const previous=await target.read(),transfer=await remoteTransferStatus(target,previous);
      if(transfer?.uncertain)throw new AppError('PUBLISH_PENDING');
