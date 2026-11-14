@@ -105,6 +105,7 @@
   "verifying": "Verifiserer bevarte revisjoner og originalbyte…",
   "figureEdited": "Figuren i oppføringen ble redigert etter beregningen. Det bevarte resultatet er uendret.",
   "noAssociatedEvidence": "Ingen dokumentasjon er knyttet til denne oppføringen.",
+  "readingEvidenceHelp": "Originaler importeres og analyseres under redigering: velg Rediger oppføring og deretter Dokumentasjon og resultater.",
   "noEvidence": "Ingen dokumentasjon ennå. Importer en originalfil, og bevar deretter et datasett eller dokumenter en analyse.",
   "evidenceChanged": "Dokumentasjonen er endret siden listen ble åpnet. Gå tilbake til nyeste dokumentasjon for å oppdatere.",
   "completeSelection": "Fullfør dette utvalget for å knytte det til oppføringen.",

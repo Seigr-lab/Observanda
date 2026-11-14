@@ -105,6 +105,7 @@
   "verifying": "S’estan verificant les revisions conservades i els bytes originals…",
   "figureEdited": "La figura de l’entrada es va editar després del càlcul. El resultat conservat no ha canviat.",
   "noAssociatedEvidence": "No hi ha evidències associades a aquesta entrada.",
+  "readingEvidenceHelp": "Els originals s’importen i s’analitzen mentre s’edita: tria Edita el registre i després Evidències i resultats.",
   "noEvidence": "Encara no hi ha evidències. Importa un fitxer original i després conserva un conjunt de dades o documenta una anàlisi.",
   "evidenceChanged": "Les evidències han canviat des que es va obrir aquesta llista. Torna a les evidències més recents per actualitzar-la.",
   "completeSelection": "Completa aquesta selecció per adjuntar-la a l’entrada.",

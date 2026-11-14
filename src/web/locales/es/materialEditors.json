@@ -105,6 +105,7 @@
   "verifying": "Verificando las revisiones conservadas y los bytes originales…",
   "figureEdited": "La figura de la entrada se editó después del cálculo. El resultado conservado no ha cambiado.",
   "noAssociatedEvidence": "No hay evidencias asociadas a esta entrada.",
+  "readingEvidenceHelp": "Los originales se importan y analizan mientras se edita: elige Editar el registro y después Evidencias y resultados.",
   "noEvidence": "Aún no hay evidencias. Importa un archivo original y después conserva un conjunto de datos o documenta un análisis.",
   "evidenceChanged": "Las evidencias han cambiado desde que se abrió esta lista. Vuelve a las evidencias más recientes para actualizarla.",
   "completeSelection": "Completa esta selección para adjuntarla a la entrada.",

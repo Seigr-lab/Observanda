@@ -105,6 +105,7 @@
   "verifying": "Verifying retained revisions and original bytes…",
   "figureEdited": "The record figure was edited after calculation. The retained result is unchanged.",
   "noAssociatedEvidence": "No evidence is associated with this record.",
+  "readingEvidenceHelp": "Originals are imported and analysed while editing: choose Edit record, then Evidence and results.",
   "noEvidence": "No evidence yet. Import an original file, then retain a dataset or document an analysis.",
   "evidenceChanged": "Evidence changed since this list was opened. Return to latest evidence to refresh.",
   "completeSelection": "Complete this selection to attach it to the record.",
