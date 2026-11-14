@@ -45,7 +45,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   }
   function recordContext() {
     const project=state.book.projects.find(p=>p.id===state.project),notebook=state.book.notebooks.find(n=>n.id===state.notebook),parts=[];
-    if(project)parts.push(`<span><small>${esc(projectKindLabel(project.kind))}</small> <button data-action="open-project" data-id="${project.id}">${esc(locationName(projectDirectory.navigation(state.book),project.id))}</button></span>`);
+    if(project)parts.push(`<span><small>${esc(projectKindLabel(project.kind))}</small> <button data-action="open-project" data-id="${project.id}" data-project-location="${project.id}">${esc(locationName(projectDirectory.navigation(state.book),project.id))}</button></span>`);
     if(notebook&&['editor','record-reader'].includes(state.page)){
       parts.push(`<span><small>${text('labBook')}</small> <button data-action="filter-notebook" data-id="${notebook.id}">${esc(notebook.title)}</button></span>`);
     }
