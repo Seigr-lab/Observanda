@@ -4,9 +4,12 @@ const phases=new Set(['startup','http-drain','database-stop','stopped']);
 // may safely flush. It never terminates a process or declares a pending write
 // unsuccessful just because the IPC channel is slow.
 export class ServiceSupervisor{
- constructor({query,onState=()=>{},onWaiting=()=>{},intervalMs=5000,noticeMs=15000,probeMs=5000}={}){
-  if(typeof query!=='function'||![intervalMs,noticeMs,probeMs].every(value=>Number.isSafeInteger(value)&&value>0))throw new TypeError('Invalid service supervisor');
-  this.query=query;this.onState=onState;this.onWaiting=onWaiting;this.intervalMs=intervalMs;this.noticeMs=noticeMs;this.probeMs=probeMs;this.state='starting';this.phase='startup';this.stopping=false;this.stopPromise=null;this.timer=null;
+ // A first start after installing or updating may take a while: the service
+ // stays "starting" while it loads, and is reported as needing attention only
+ // when it has not become ready within startupMs, or stops answering later.
+ constructor({query,onState=()=>{},onWaiting=()=>{},intervalMs=5000,noticeMs=15000,probeMs=5000,startupMs=180000}={}){
+  if(typeof query!=='function'||![intervalMs,noticeMs,probeMs,startupMs].every(value=>Number.isSafeInteger(value)&&value>0))throw new TypeError('Invalid service supervisor');
+  this.query=query;this.startupMs=startupMs;this.onState=onState;this.onWaiting=onWaiting;this.intervalMs=intervalMs;this.noticeMs=noticeMs;this.probeMs=probeMs;this.state='starting';this.phase='startup';this.stopping=false;this.stopPromise=null;this.timer=null;
  }
  change(state){this.state=state;try{this.onState({state,phase:this.phase});}catch{}}
  ready(){this.wasReady=true;if(!this.stopping&&this.state!=='stopped')this.change('ready');}
@@ -18,10 +21,10 @@ export class ServiceSupervisor{
  progress(phase){if(phases.has(phase)){this.phase=phase;this.change(this.state);}}
  exited(){const unexpected=!this.stopping;clearInterval(this.timer);this.change('stopped');return unexpected;}
  monitor(){
-  if(this.timer||this.stopping||this.state==='stopped')return;let checking=false;
+  if(this.timer||this.stopping||this.state==='stopped')return;let checking=false;const started=Date.now();
   this.timer=setInterval(()=>{
    if(checking)return;checking=true;
-   void this.probe().then(responding=>{if(!this.stopping&&this.state!=='stopped')this.change(responding?(this.wasReady?'ready':'starting'):'degraded');}).finally(()=>{checking=false;});
+   void this.probe().then(responding=>{if(!this.stopping&&this.state!=='stopped')this.change(responding?(this.wasReady?'ready':'starting'):this.wasReady||Date.now()-started>=this.startupMs?'degraded':'starting');}).finally(()=>{checking=false;});
   },this.intervalMs);this.timer.unref?.();
  }
  async probe(){

@@ -23,6 +23,7 @@
   "keepWaiting": "Hald fram med å vente",
   "starting": "Startar Observanda…",
   "startingWorkspace": "Startar det private arbeidsområdet ditt…",
+  "startingPatience": "Første oppstart etter installering eller oppdatering kan ta eit par minutt medan datamaskina kontrollerer dei nye filene.",
   "externalTitle": "Opne ekstern nettstad",
   "externalMessage": "Vil du opne denne lenkja i nettlesaren?",
   "cancelAction": "Avbryt",

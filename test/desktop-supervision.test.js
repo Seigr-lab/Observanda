@@ -30,8 +30,14 @@ test('slow safe database shutdown reports its phase once and waits for the actua
 });
 test('startup and ready states recover after a missed heartbeat and every unsolicited exit is unexpected',async t=>{
  t.mock.timers.enable({apis:['setTimeout','setInterval','Date']});let responds=false;
- const supervisor=new ServiceSupervisor({query:async()=>{if(!responds)throw Error('Unavailable');return {phase:'startup'};},intervalMs:10,probeMs:5});supervisor.monitor();
- t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'degraded');responds=true;t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'starting');supervisor.ready();assert.equal(supervisor.state,'ready');assert.equal(supervisor.exited(),true);assert.equal(supervisor.state,'stopped');
+ // A slow first start is still starting, not a service needing attention.
+ const supervisor=new ServiceSupervisor({query:async()=>{if(!responds)throw Error('Unavailable');return {phase:'startup'};},intervalMs:10,probeMs:5,startupMs:100});supervisor.monitor();
+ t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'starting');responds=true;t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'starting');supervisor.ready();assert.equal(supervisor.state,'ready');
+ // Once ready, a missed heartbeat needs attention and recovers when answered.
+ responds=false;t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'degraded');responds=true;t.mock.timers.tick(10);await setImmediate();assert.equal(supervisor.state,'ready');assert.equal(supervisor.exited(),true);assert.equal(supervisor.state,'stopped');
+ // A start that never becomes ready within its allowance needs attention.
+ let silent=true;const stuck=new ServiceSupervisor({query:async()=>{if(silent)throw Error('Unavailable');return {phase:'startup'};},intervalMs:10,probeMs:5,startupMs:30});stuck.monitor();
+ t.mock.timers.tick(10);await setImmediate();assert.equal(stuck.state,'starting');t.mock.timers.tick(30);await setImmediate();assert.equal(stuck.state,'degraded');stuck.exited();
  // Exit classification intentionally does not depend on the child's code.
  const normal=new ServiceSupervisor({query:async()=>({})}),exit=deferred(),closing=normal.stop(()=>{},exit.promise);assert.equal(normal.exited(),false);exit.resolve();await closing;
 });

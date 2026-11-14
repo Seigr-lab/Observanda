@@ -23,6 +23,7 @@
   "keepWaiting": "Keep waiting",
   "starting": "Starting Observanda…",
   "startingWorkspace": "Starting your private workspace…",
+  "startingPatience": "The first start after installing or updating can take a minute or two while the computer checks the new files.",
   "externalTitle": "Open external website",
   "externalMessage": "Open this link in your browser?",
   "cancelAction": "Cancel",

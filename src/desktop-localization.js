@@ -46,7 +46,7 @@ export function desktopLocalization({preferencesFile,onChange=()=>{},watch=true}
 }
 
 export function desktopStartupPage(language,text,failure){
- const status=failure?'<p role="alert">'+html(failure)+'</p>':'<p id="status" role="status">'+html(text('startingWorkspace'))+'</p>';
+ const status=failure?'<p role="alert">'+html(failure)+'</p>':'<p id="status" role="status">'+html(text('startingWorkspace'))+'</p><p>'+html(text('startingPatience'))+'</p>';
  return 'data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><html lang="'+html(language)+'"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>Observanda</title><style>body{font:18px system-ui;color:#263349;background:#f5f6fa;margin:12vh 10vw}h1{font-size:28px}p{line-height:1.6}</style><h1>Observanda</h1>'+status+'</html>');
 }
 

@@ -23,6 +23,7 @@
   "keepWaiting": "Continua esperant",
   "starting": "S’està iniciant Observanda…",
   "startingWorkspace": "S’està iniciant el teu espai de treball privat…",
+  "startingPatience": "La primera obertura després d'instal·lar o actualitzar pot trigar un o dos minuts mentre l'ordinador comprova els fitxers nous.",
   "externalTitle": "Obre un lloc web extern",
   "externalMessage": "Vols obrir aquest enllaç al navegador?",
   "cancelAction": "Cancel·la",

@@ -23,6 +23,7 @@
   "keepWaiting": "Seguir esperando",
   "starting": "Iniciando Observanda…",
   "startingWorkspace": "Iniciando tu espacio de trabajo privado…",
+  "startingPatience": "El primer inicio después de instalar o actualizar puede tardar uno o dos minutos mientras el ordenador comprueba los archivos nuevos.",
   "externalTitle": "Abrir un sitio web externo",
   "externalMessage": "¿Quieres abrir este enlace en el navegador?",
   "cancelAction": "Cancelar",
