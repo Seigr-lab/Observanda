@@ -33,7 +33,7 @@
   "cancelTransfer": "Cancelar la transferencia y conservar los archivos",
   "cancelled": "Transferencia cancelada. Los archivos de destino se han conservado en {path}",
   "inside": "Mover a",
-  "moveTree": "Mueve este proyecto junto con sus proyectos subordinados y cuadernos de laboratorio.",
+  "moveTree": "Mueve este proyecto junto con sus cuadernos de laboratorio al nivel superior del espacio de trabajo elegido.",
   "movingTree": "Moviendo el proyecto...",
   "movedTree": "Proyecto movido.",
   "chooseParent": "Elige un destino",

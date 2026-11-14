@@ -15,6 +15,8 @@ import {clearVault} from '../src/encryption.js';
 import {startServer} from '../src/server.js';
 import {Workspace} from '../src/storage.js';
 import {ProjectStorage} from '../src/project-storage.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {ProjectCreation} from '../src/project-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {assertArchiveCopy,importLabBookCopy} from './owner-workspace-fixture.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
@@ -38,7 +40,7 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  });
  async function initialize(title){
   const access=await createWorkspaceAccess('','',device),key=takeCreatedVault(access),root=path.join(directory,title);keys.push(key);
-  await initializeLocation(root,createNotebook(title),access,key);return {root,key};
+  const book=createNotebook(title);await initializeLocation(root,book,access,key);return {root,key,id:book.id};
  }
  async function open(root){
   server=await startServer({root,port:0,headless:true,deviceStore:device,preferencesFile:path.join(directory,'preferences.json')});
@@ -54,11 +56,15 @@ test('nested owners retain concurrent work, evidence and links through rename, p
   };
   context=(await call('/api/storage')).contextId;return {call,raw,adopt:value=>{context=value.contextId;},context:()=>context};
  }
- const initial=await initialize('Research Workspace 1');let root=initial.root,api=await open(root);
+ const initial=await initialize('Research Workspace 1');let root=initial.root;
+ // An earlier version could nest projects; that tree must keep working. New
+ // projects are created at the top level, so the nested child is made directly.
+ const creation=new ProjectCreation(new ProjectRegistry(new Workspace(root,initial.key),initial.id),device);
+ const createProject=async(title,parentId=null)=>(await creation.create({id:randomUUID(),username:'',password:'',project:{id:randomUUID(),title,parentId,description:'',share:false,logoId:null}})).project;
+ const parent=await createProject('Field Project 1'),child=await createProject('Nested Project \u00c5 2',parent.projectId),sibling=await createProject('Independent Project 3');
+ let api=await open(root);
  const projectRoute=id=>'/api/projects/'+id;
  const bookRoute=book=>projectRoute(book.projectId)+'/lab-books/'+book.labBookId;
- const createProject=async(title,parentId=null)=>(await api.call('/api/projects/create',{id:randomUUID(),username:'',password:'',project:{id:randomUUID(),title,parentId,description:'',share:false,logoId:null}})).project;
- const parent=await createProject('Field Project 1'),child=await createProject('Nested Project \u00c5 2',parent.projectId),sibling=await createProject('Independent Project 3');
  const projects=[parent,child,sibling],books=[];
  for(const [owner,title] of [[parent,'Observations 1'],[child,'Observations caf\u00e9 2']]){
   const book=(await api.call(projectRoute(owner.projectId)+'/lab-books/create',{id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:owner.projectId,title}})).book;
@@ -117,8 +123,9 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  assert.equal((await api.call('/api/projects/reference',retained)).value.body,'Original observation 1');
  await api.call(projectRoute(parent.projectId)+'/storage/copy',{id:randomUUID(),parent:projectCopies});
  const copiedProject=path.join(projectCopies,path.basename(parent.root)),beforePlacement=parent.root;
- await api.call(projectRoute(parent.projectId)+'/storage/move',{id:randomUUID(),parentId:sibling.projectId,expectedParentId:null});
- relocate(beforePlacement,path.join(sibling.root,path.basename(beforePlacement)));await assert.rejects(stat(beforePlacement),{code:'ENOENT'});
+ // A project is never moved inside another project.
+ const refused=await api.raw(projectRoute(parent.projectId)+'/storage/move',{method:'POST',body:JSON.stringify({id:randomUUID(),parentId:sibling.projectId,expectedParentId:null}),headers:{'Content-Type':'application/json'}});
+ assert.equal(refused.status,422);assert.equal((await refused.json()).code,'PROJECT_NESTING');assert.equal((await stat(beforePlacement)).isDirectory(),true);
  for(const [index,book] of books.entries())assert.equal((await api.call(bookRoute(book)+'/research/records/writing/read',address(index))).value.body,'Later observation '+index);
  t.diagnostic('Workspace, project and book renamed; selected book and complete project copied and moved');
  await server.close();server=null;await restartDatabases();

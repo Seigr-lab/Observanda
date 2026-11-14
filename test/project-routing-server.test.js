@@ -37,12 +37,13 @@ import {seedModuleCurrent} from './module-current-fixture.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 
-async function fixture(t,{publishingOptions,diagnostics}={}){
+async function fixture(t,{publishingOptions,diagnostics,nestedB=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-http-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let app;
  t.after(async()=>{await app?.close();await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-http-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,'workspace'),book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
- const create=async(name,password='')=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(f.workspace.root,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage,vault};};
- const a=await create('a'),b=await create('b'),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
+ // nestedB keeps b inside a, as an earlier version could; new projects are never nested.
+ const create=async(name,password='',parent=null)=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(parent?parent.storage.root:f.workspace.root,name),id,book,access,vault);await registry.attach(storage,{...(parent?{parentId:parent.id}:{}),expected:(await registry.read()).revision});return {id,book,storage,vault};};
+ const a=await create('a'),b=await create('b','',nestedB?a:null),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0];
  const context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
  const call=(route,data={},headers={},options={})=>fetch(app.origin+route,{signal:options.signal??AbortSignal.timeout(30000),method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1',...headers},body:JSON.stringify(data)});
@@ -165,7 +166,7 @@ test('locking a project cancels its queued save without locking other owners or 
 });
 
 test('HTTP creation uses a durable project identity and opens it through the same authoring route',async t=>{
- const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:f.a.id,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),project,username:'',password:''};
+ const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:null,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),project,username:'',password:''};
  const before=await result(await f.call('/api/projects/list',{offset:0,limit:2,revision:null}));assert.equal(before.projects.length,2);assert.equal(before.total,3);
  const attach=ProjectRegistry.prototype.attach;let created,release,entered;const held=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),busy=f.workspace.withLock(async()=>{entered();await held;});await ready;
  try{
@@ -179,7 +180,8 @@ test('HTTP creation uses a durable project identity and opens it through the sam
   assert.deepEqual(await result(await f.call('/api/projects/create/pending',{after:null,limit:20})),{items:[],next:null});
   await assertIdle(f);
  }finally{ProjectRegistry.prototype.attach=attach;release();await busy;}
- assert.equal(created.project.projectId,project.id);assert.equal(created.project.parentId,f.a.id);
+ assert.equal(created.project.projectId,project.id);assert.equal(created.project.parentId,null);
+ const nested=await f.call('/api/projects/create',{...command,id:randomUUID(),project:{...project,id:randomUUID(),title:'Never nested',parentId:f.a.id}});assert.equal(nested.status,422);assert.equal((await nested.json()).code,'PROJECT_NESTING');
  assert.deepEqual(await result(await f.call('/api/projects/create',command)),created);
  await result(await f.call('/api/projects/list',{offset:2,limit:2,revision:before.revision}),409);
  const listed=await result(await f.call('/api/projects/list',{offset:0,limit:100,revision:null}));assert.equal(listed.total,4);
@@ -245,16 +247,18 @@ test('selected module readers use the project owner while an unrelated project w
 });
 
 test('HTTP project move keeps sibling authoring available and follows the adopted owner',async t=>{
- const f=await fixture(t),before=await result(await f.project(f.a,'research/records/writing/read',target(f.a))),id=randomUUID(),destination=path.join(f.b.storage.root,path.basename(f.a.storage.root)),command={id,parentId:f.b.id,expectedParentId:null};
- const moving=f.project(f.a,'storage/move',command);
- const sibling=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));
- await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:sibling.revision,value:{body:'Still authoring B during A move'}}));
- assert.equal((await result(await moving)).project.parentId,f.b.id);
- assert.equal((await f.registry.locate(f.a.id)).root,destination);
- assert.equal((await result(await f.project(f.a,'research/records/writing/read',target(f.a)))).value.body,before.value.body);
- assert.equal((await result(await f.project(f.a,'storage/move',command))).project.root,destination);
- assert.equal((await result(await f.project(f.a,'storage/move/resume',{id}))).project.root,destination);assert.equal((await result(await f.project(f.a,'storage/move/status'))).move.phase,'complete');
- assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,'Still authoring B during A move');
+ // b was nested in a by an earlier version; it moves to the top level while another project keeps authoring.
+ const f=await fixture(t,{nestedB:true});await result(await f.project(f.locked,'access/unlock',{password:'A separate project password'}));
+ const before=await result(await f.project(f.b,'research/records/writing/read',target(f.b))),id=randomUUID(),destination=path.join(f.workspace.root,path.basename(f.b.storage.root)),command={id,parentId:null,expectedParentId:f.a.id};
+ const moving=f.project(f.b,'storage/move',command);
+ const sibling=await result(await f.project(f.locked,'research/records/writing/read',target(f.locked)));
+ await result(await f.project(f.locked,'research/records/writing/save',{...target(f.locked),expectedRevision:sibling.revision,value:{body:'Still authoring during the move'}}));
+ assert.equal((await result(await moving)).project.parentId,null);
+ assert.equal((await f.registry.locate(f.b.id)).root,destination);
+ assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,before.value.body);
+ assert.equal((await result(await f.project(f.b,'storage/move',command))).project.root,destination);
+ assert.equal((await result(await f.project(f.b,'storage/move/resume',{id}))).project.root,destination);assert.equal((await result(await f.project(f.b,'storage/move/status'))).move.phase,'complete');
+ assert.equal((await result(await f.project(f.locked,'research/records/writing/read',target(f.locked)))).value.body,'Still authoring during the move');
 });
 test('a project move out of its workspace is refused before it starts and the project stays usable',async t=>{
  const f=await fixture(t),id=randomUUID(),destination=path.join(f.directory,'Outside location',path.basename(f.a.storage.root)),moves=new ProjectMoves(f.registry);await mkdir(path.dirname(destination));
@@ -267,7 +271,7 @@ test('a project move out of its workspace is refused before it starts and the pr
 
 
 test('the paged project directory reads summaries and hierarchy while every project database is unavailable',async t=>{
- const f=await fixture(t);await result(await f.project(f.b,'directory/reparent',{id:randomUUID(),parentId:f.a.id,expectedParentId:null}));
+ const f=await fixture(t,{nestedB:true});
  const {ProjectStorage}=await import('../src/project-storage.js'),outline=ProjectStorage.prototype.outline;ProjectStorage.prototype.outline=async()=>{throw Error('A directory request must not open a project database');};
  try{
   const root=await result(await f.call('/api/projects/list',{offset:0,limit:1,parentId:null,revision:null}));assert.equal(root.total,2);assert.equal(root.projects.length,1);assert.equal(root.projects[0].summary.title,f.a.book.projects[0].title);
@@ -277,13 +281,15 @@ test('the paged project directory reads summaries and hierarchy while every proj
 });
 
 
-test('project hierarchy placement is independent, retryable and rejects cycles and stale parent changes',async t=>{
- const f=await fixture(t),before=(await f.b.storage.outline()).etag;
- const command={id:randomUUID(),parentId:f.a.id,expectedParentId:null},placed=await result(await f.project(f.b,'directory/reparent',command));assert.equal(placed.project.parentId,f.a.id);
- assert.deepEqual(await result(await f.project(f.b,'directory/reparent',command)),placed);assert.equal(placed.project.root,path.join(f.a.storage.root,'b'));assert.equal((await result(await f.project(f.b,'workspace/read/start',{}))).etag,before);
- await result(await f.project(f.a,'directory/reparent',{id:randomUUID(),parentId:f.b.id,expectedParentId:null}),422);
+test('projects stay at the top level: nesting is refused and a project nested by an earlier version moves out retryably',async t=>{
+ const f=await fixture(t,{nestedB:true}),before=(await f.b.storage.outline()).etag;
+ const refused=await f.project(f.a,'directory/reparent',{id:randomUUID(),parentId:f.locked.id,expectedParentId:null});assert.equal(refused.status,422);assert.equal((await refused.json()).code,'PROJECT_NESTING');
+ const moved=await f.project(f.locked,'storage/move',{id:randomUUID(),parentId:f.a.id,expectedParentId:null});assert.equal((await moved.json()).code,'PROJECT_NESTING');
+ assert.equal((await f.registry.locate(f.a.id)).parentId,null);assert.equal((await f.registry.locate(f.locked.id)).parentId,null);
+ const command={id:randomUUID(),parentId:null,expectedParentId:f.a.id},placed=await result(await f.project(f.b,'directory/reparent',command));assert.equal(placed.project.parentId,null);
+ assert.deepEqual(await result(await f.project(f.b,'directory/reparent',command)),placed);assert.equal(placed.project.root,path.join(f.workspace.root,'b'));assert.equal((await result(await f.project(f.b,'workspace/read/start',{}))).etag,before);
  await result(await f.project(f.b,'directory/reparent',{id:randomUUID(),parentId:null,expectedParentId:f.locked.id}),409);
- assert.equal((await f.registry.locate(f.b.id)).parentId,f.a.id);
+ assert.equal((await f.registry.locate(f.b.id)).parentId,null);
 });
 
 
@@ -472,7 +478,7 @@ test('addressed evidence routes admit exact read commands without mutation or im
 });
 
 test('addressed evidence reads enforce the owning project grant and retain exact bytes after relocation',async t=>{
- const f=await fixture(t),bytes=Buffer.from('Independent evidence address\n5,8,13\n'),materials=new ResearchMaterials(f.b.storage);
+ const f=await fixture(t,{nestedB:true}),bytes=Buffer.from('Independent evidence address\n5,8,13\n'),materials=new ResearchMaterials(f.b.storage);
  const upload=await materials.startImport({recordId:f.b.book.entries[0].id,name:'addressed.csv',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);
  const artifact=await materials.finishImport(upload.id),ref={...artifact,workspaceId:f.b.book.id},read=(operation,data={ref})=>f.call('/api/projects/material-reference/'+operation,data);
  const rootRef={workspaceId:f.book.id,kind:'record',id:f.book.entries[0].id,revision:recordRevision(f.book.entries[0])};
@@ -498,7 +504,7 @@ test('addressed evidence reads enforce the owning project grant and retain exact
  await result(await read('read',{ref:{...ref,workspaceId:undefined}}),422);
  await result(await read('read',{ref:{...ref,workspaceId:randomUUID()}}),404);
  assert.equal((await result(await read('read',{ref:{...ref,id:randomUUID()}}),422)).code,'MATERIAL_MISSING');
- const destination=path.join(f.a.storage.root,path.basename(f.b.storage.root));await result(await f.project(f.b,'storage/move',{id:randomUUID(),parentId:f.a.id,expectedParentId:null}));
+ const destination=path.join(f.workspace.root,path.basename(f.b.storage.root));await result(await f.project(f.b,'storage/move',{id:randomUUID(),parentId:null,expectedParentId:f.a.id}));
  await f.owner.closeProject(destination);
  const reopened=await read('download');assert.equal(reopened.status,200);assert.deepEqual(Buffer.from(await reopened.arrayBuffer()),bytes);
  const receipt=await result(await f.project(f.b,'storage/delete',{id:randomUUID(),expectedRoot:destination}));assert.ok(receipt);

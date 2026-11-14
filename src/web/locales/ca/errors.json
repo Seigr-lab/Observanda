@@ -220,6 +220,7 @@
   "ENCRYPT_COPY": "Crea una còpia xifrada en una carpeta nova per protegir aquest espai de treball existent. L'original es conserva fins que decideixis què en vols fer.",
   "ENCRYPT_PASSWORD": "Un espai de treball xifrat requereix una contrasenya. Introdueix una contrasenya nova per canviar-la.",
   "STORAGE_PATH": "Tria un camí absolut a una carpeta dedicada a l'espai de treball. La carpeta mare ja ha d'existir. Munta o connecta primer els recursos compartits de xarxa a través del sistema operatiu.",
+  "PROJECT_NESTING": "Els projectes es mantenen al nivell superior d’un espai de treball. Els llibres de laboratori van dins dels projectes; un projecte no es pot posar dins d’un altre projecte.",
   "STORAGE_INCOMPLETE": "Aquesta carpeta conté una creació o còpia incompleta d'un espai de treball. Tria una altra destinació o obre l'original si estàs copiant.",
   "STORAGE_COPY": "La verificació de la còpia de l'espai de treball ha fallat. L'espai de treball original no ha canviat; la destinació incompleta no s'ha obert.",
   "STORAGE_PORTABLE_PROJECT_ACCESS": "Estableix una contrasenya o una clau de recuperació per a aquest projecte abans d'exportar-lo per a un altre ordinador.",

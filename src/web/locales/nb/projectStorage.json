@@ -33,7 +33,7 @@
   "cancelTransfer": "Avbryt overføringen og behold filene",
   "cancelled": "Overføringen er avbrutt. Målfilene er beholdt på {path}",
   "inside": "Flytt inn i",
-  "moveTree": "Flytter dette prosjektet sammen med underprosjektene og labbøkene.",
+  "moveTree": "Flytter dette prosjektet sammen med labbøkene til øverste nivå i det valgte arbeidsområdet.",
   "movingTree": "Flytter prosjekt...",
   "movedTree": "Prosjektet er flyttet.",
   "chooseParent": "Velg et mål",

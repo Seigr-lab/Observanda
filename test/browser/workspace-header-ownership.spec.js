@@ -18,7 +18,7 @@ import {readAccess,verifyAccess} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
 import {editWorkspace} from './preferences-helper.js';
 
-test('copying workspace details creates a dedicated project at the selected parent without growing the workspace header',async({page})=>{
+test('copying workspace details creates a dedicated top-level project without growing the workspace header',async({page})=>{
  test.setTimeout(180000);
  const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-header-route-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[],errors=[],requests=[];let app;
  try{
@@ -29,9 +29,9 @@ test('copying workspace details creates a dedicated project at the selected pare
   await page.goto(app.url);await editWorkspace(page);await page.getByText('Workspace reference and organization',{exact:true}).click();await page.getByRole('button',{name:'Copy workspace details to a project',exact:true}).click();
   const dialog=page.locator('#dialog');await dialog.getByRole('button',{name:'Create a new project',exact:true}).click();
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue(before.metadata.title);await expect(dialog.getByLabel('Description',{exact:true})).toHaveValue(before.metadata.description);
-  await dialog.getByLabel('Name',{exact:true}).fill('Copied observations');await dialog.getByLabel('Description',{exact:true}).fill('Source introduction, deliberately edited before creation.');await dialog.locator('[name="parentId"]').selectOption(parentProject.id);
+  await dialog.getByLabel('Name',{exact:true}).fill('Copied observations');await dialog.getByText('Optional project details and template',{exact:true}).click();await dialog.getByLabel('Description',{exact:true}).fill('Source introduction, deliberately edited before creation.');await expect(dialog.locator('[name="parentId"]')).toHaveCount(0);
   await dialog.getByRole('button',{name:'Create project',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:90000});await expect(page.locator('main h1')).toHaveText('Copied observations');
-  const entries=(await registry.read()).value.projects;expect(entries).toHaveLength(2);const entry=entries.find(value=>value.projectId!==parentProject.id);expect(entry.parentId).toBe(parentProject.id);expect(entry.root).toBe(path.join(registered.project.root,'Copied observations'));expect((await catalogueBinding(entry.root)).placement).toBe('project');
+  const entries=(await registry.read()).value.projects;expect(entries).toHaveLength(2);const entry=entries.find(value=>value.projectId!==parentProject.id);expect(entry.parentId).toBe(null);expect(entry.root).toBe(path.join(f.workspace.root,'Copied observations'));expect((await catalogueBinding(entry.root)).placement).toBe('project');
   const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(key);const storage=new ProjectStorage(entry.root,entry.projectId,key),owned=await storage.outline();
   expect(owned.metadata.projects).toHaveLength(1);expect(owned.metadata.projects[0]).toMatchObject({id:entry.projectId,title:'Copied observations',description:'Source introduction, deliberately edited before creation.',parentId:null});expect(owned.metadata.notebooks).toEqual([]);expect(owned.metadata.id).not.toBe(before.metadata.id);expect(entry.vaultId).not.toBe(f.vault.id);
   expect(await f.workspace.outline()).toEqual(before);expect(requests.filter(route=>route==='/api/projects/create')).toHaveLength(1);expect(requests.filter(route=>route.startsWith('/api/workspace/reorganize'))).toEqual([]);expect(errors).toEqual([]);

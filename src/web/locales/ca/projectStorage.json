@@ -33,7 +33,7 @@
   "cancelTransfer": "Cancel·la la transferència i conserva els fitxers",
   "cancelled": "S'ha cancel·lat la transferència. Fitxers de destinació conservats a {path}",
   "inside": "Mou a",
-  "moveTree": "Mou aquest projecte juntament amb els seus projectes fills i llibres de laboratori.",
+  "moveTree": "Mou aquest projecte juntament amb els seus llibres de laboratori al nivell superior de l’espai de treball triat.",
   "movingTree": "S'està movent el projecte...",
   "movedTree": "S'ha mogut el projecte.",
   "chooseParent": "Tria una destinació",

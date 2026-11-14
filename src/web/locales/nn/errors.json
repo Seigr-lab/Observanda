@@ -220,6 +220,7 @@
   "ENCRYPT_COPY": "Opprett ein kryptert kopi i ei ny mappe for å verne dette eksisterande arbeidsområdet. Originalen blir bevart til du avgjer kva du vil gjere med han.",
   "ENCRYPT_PASSWORD": "Eit kryptert arbeidsområde krev eit passord. Skriv inn eit nytt passord for å endre det.",
   "STORAGE_PATH": "Vel ein absolutt sti til ei eiga arbeidsområdemappe. Den overordna mappa må finnast frå før. Monter eller kople til nettverksdelingar gjennom operativsystemet først.",
+  "PROJECT_NESTING": "Prosjekt ligg på øvste nivå i eit arbeidsområde. Labbøker ligg i prosjekt; eit prosjekt kan ikkje plasserast i eit anna prosjekt.",
   "STORAGE_INCOMPLETE": "Denne mappa inneheld ei ufullstendig arbeidsområdeoppretting eller ein ufullstendig kopi. Vel eit anna mål, eller opne originalen når du kopierer.",
   "STORAGE_COPY": "Kontrollen av arbeidsområdekopien feila. Det opphavlege arbeidsområdet er uendra; det ufullstendige målet er ikkje opna.",
   "STORAGE_PORTABLE_PROJECT_ACCESS": "Set eit passord eller ein gjenopprettingsnøkkel for dette prosjektet før du eksporterer det til ei anna datamaskin.",

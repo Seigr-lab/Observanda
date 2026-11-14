@@ -270,3 +270,5 @@ dialog:has(#edition-selection) .button{white-space:normal}
 .notice[data-notice-docked]{position:static;inset:auto;transform:none;display:flex;flex-direction:column;flex-wrap:nowrap;gap:.4rem;flex:1 0 100%;width:100%;max-width:100%;min-height:0;margin-top:.75rem;box-shadow:none;overflow-wrap:anywhere}.notice[data-notice-docked] .notice-message{min-height:0;overflow:auto}.notice[data-notice-docked] button{flex:none;align-self:flex-start;margin-left:0;white-space:nowrap}
 /* Exact identifiers and digests read character by character. */
 input.exact-text{font-family:ui-monospace,monospace;font-size:.9rem;letter-spacing:0}
+/* Projects nested by earlier versions are listed only while some remain; new projects are never nested. */
+.project-nested:not(:has(.project-grid:not([hidden]) > *)){display:none}

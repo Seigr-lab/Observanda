@@ -220,6 +220,7 @@
   "ENCRYPT_COPY": "Crea una copia cifrada en una carpeta nueva para proteger este espacio de trabajo existente. El original se conserva hasta que decidas qué hacer con él.",
   "ENCRYPT_PASSWORD": "Un espacio de trabajo cifrado requiere una contraseña. Introduce una contraseña nueva para cambiarla.",
   "STORAGE_PATH": "Elige una ruta absoluta a una carpeta dedicada del espacio de trabajo. Su carpeta superior debe existir. Monta o conecta primero los recursos de red mediante tu sistema operativo.",
+  "PROJECT_NESTING": "Los proyectos permanecen en el nivel superior de un espacio de trabajo. Los cuadernos de laboratorio van dentro de los proyectos; un proyecto no puede colocarse dentro de otro proyecto.",
   "STORAGE_INCOMPLETE": "Esta carpeta contiene una creación o copia incompleta de un espacio de trabajo. Elige otro destino o abre el original al copiar.",
   "STORAGE_COPY": "La verificación de la copia del espacio de trabajo ha fallado. El original permanece intacto; el destino incompleto no se ha abierto.",
   "STORAGE_PORTABLE_PROJECT_ACCESS": "Establece una contraseña o clave de recuperación para este proyecto antes de exportarlo para otro ordenador.",

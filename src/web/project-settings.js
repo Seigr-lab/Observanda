@@ -11,7 +11,7 @@ import {availableLocationTools} from './modules/location-tools.js';
 import {enabledLabBookTypes} from './feature-modules.js';
 import {emptyConfiguration} from './notebook-schema.js';
 import {projectTypeChoices,projectTypeChoice,recommendedProfile,starterTemplate,copyConfiguration,templateChoices,templateAvailable,validLabBookTemplate} from './project-templates.js';
-import {locationName,descendants} from './workspace-structure.js';
+import {locationName} from './workspace-structure.js';
 import {sectionDetails,sectionInput,sectionAction} from './laboratory/section-editor.js';
 
 export function projectSettings(services){
@@ -49,9 +49,10 @@ export function projectSettings(services){
  }
  const isDirty=()=>{capture();return !!draft&&(JSON.stringify(draft)!==JSON.stringify(base)||JSON.stringify(creation)!==JSON.stringify(creationBase)||configuration.isDirty());};
  function parentOptions(value=creation?draft.parentId??'':placementParent??''){
-  const entries=services.projectDirectory.entries(),blocked=descendants(services.projectDirectory.navigation(state.book),draft.id),rows=directoryChoices.rows('parents',entries).filter(entry=>!blocked.has(entry.projectId));
-  if(value&&!rows.some(entry=>entry.projectId===value))rows.unshift(directoryChoices.known(value)??entries.find(entry=>entry.projectId===value)??{projectId:value,summary:null});
-  return option('',services.rootBook().title,value)+rows.map(entry=>option(entry.projectId,entry.summary?.title??entry.projectId,value)).join('');
+  // Workspace > Project > Lab book: a project sits at the top level. A project nested by an
+  // earlier version keeps its current parent as a choice only so it can move to the top level.
+  const entries=services.projectDirectory.entries(),current=value?directoryChoices.known(value)??entries.find(entry=>entry.projectId===value)??{projectId:value,summary:null}:null;
+  return option('',services.rootBook().title,value)+(current?option(current.projectId,current.summary?.title??current.projectId,value):'');
  }
  function sourceOptions(){
   const profiles=enabledLabBookTypes(state.dashboardSettings),query=directoryChoices.query('templates').normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('en'),matches=value=>value.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase('en').includes(query);
@@ -106,10 +107,10 @@ export function projectSettings(services){
     '</section></div><div class="inline-actions">'+button(msg('removeDefault'),'remove','','subtle')+'</div>');
  }
  function projectFields(){
-  const blocked=descendants(services.projectDirectory.navigation(state.book),draft.id),tools=availableLocationTools(state.dashboardSettings);
+  const tools=availableLocationTools(state.dashboardSettings);
   return field(msg('name'),'<input name="title" value="'+esc(draft.title)+'" required maxlength="160">')+
    '<div class="form-grid">'+field(msg('projectType'),'<select data-project-type>'+option('none',msg('noType'),type)+projectTypeChoices(state.dashboardSettings).map(c=>option(c.id,labBookProfileLabel(c.id.slice(8),c.label),type)).join('')+option('custom',msg('customType'),type)+'</select>')+
-   (creation||state.projectOwner?field(projectText('inside'),'<select name="parentId" '+(state.projectOwner&&!creation?'data-project-parent':'')+'>'+parentOptions()+'</select>'+directoryChoices.view('parents')):field(msg('inside'),'<select name="parentId">'+option('',state.book.title,draft.parentId??'')+state.book.projects.filter(p=>!blocked.has(p.id)).map(p=>option(p.id,locationName(state.book,p.id),draft.parentId)).join('')+'</select>'))+'</div>'+
+   (!creation&&state.projectOwner&&placementParent?field(projectText('inside'),'<select name="parentId" data-project-parent>'+parentOptions()+'</select>'):!creation&&!state.projectOwner&&draft.parentId?field(msg('inside'),'<select name="parentId">'+option('',state.book.title,draft.parentId)+option(draft.parentId,locationName(state.book,draft.parentId),draft.parentId)+'</select>'):'')+'</div>'+
    (creation?'<fieldset><legend>'+esc(ux('accessProject'))+'</legend><div class="form-grid">'+field(projectText('username'),'<input name="projectUsername" autocomplete="username" maxlength="80" value="'+esc(creation.username)+'">')+field(projectText('password')+' <small>'+esc(projectText(state.access?.deviceAvailable?'passwordHint':'passwordRequired'))+'</small>','<input name="projectPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" '+(state.access?.deviceAvailable?'':'required')+' value="'+esc(creation.password)+'">')+'</div></fieldset>':'')+
    (type==='custom'?field(msg('customProjectType'),'<input name="customKind" required maxlength="80" value="'+esc(draft.kind)+'">'):'')+
    '<details data-project-optional><summary>'+esc(ux('optionalProject'))+'</summary>'+field(msg('description'),'<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
@@ -131,12 +132,12 @@ export function projectSettings(services){
   directoryChoices.reset();saveRequest=null;remoteTemplates=new Map();creation=current?null:{id:crypto.randomUUID(),username:'',password:''};creationBase=structuredClone(creation);
   placementParent=current&&state.projectOwner?services.projectDirectory.entries().find(entry=>entry.projectId===current.id)?.parentId??null:null;
   mode=editingTemplate?'template':'project';
-  const initial=current??{id:crypto.randomUUID(),title:details?.title??'',description:details?.description??'',share:false,logoId:null,parentId:parentId??null,kind:'Project'};
+  const initial=current??{id:crypto.randomUUID(),title:details?.title??'',description:details?.description??'',share:false,logoId:null,parentId:null,kind:'Project'};
   if(native()){const {labBookTemplate,...header}=initial;draft=structuredClone(header);if(labBookTemplate)draft.labBookTemplate={name:labBookTemplate.name};}else draft=structuredClone(initial);
   draft.tools??=[];draft.kind??='Project';
   if(editingTemplate&&!draft.labBookTemplate)draft.labBookTemplate=native()?{name:''}:{name:'',configuration:emptyConfiguration()};
   base=structuredClone(draft);etag=state.etag;type=projectTypeChoice(draft.kind,state.dashboardSettings);
-  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id,{parents:!editingTemplate&&!!(creation||state.projectOwner)});
+  source=editingTemplate?'choose':draft.labBookTemplate?'current':'blank';templateChosen=!!current;selected=null;busy=false;error='';replace=false;draw(editingTemplate?'[name="templateName"]':'[name="title"]');directoryChoices.start(draft.id,{parents:false});
   if(native()&&!editingTemplate&&current?.labBookTemplate)void loadSavedTypes(current.id);
   if(native()&&editingTemplate){
    const selection=draft,initialName=draft.labBookTemplate.name;

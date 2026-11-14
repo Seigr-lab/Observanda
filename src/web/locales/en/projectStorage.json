@@ -33,7 +33,7 @@
   "cancelTransfer": "Cancel transfer and keep files",
   "cancelled": "Transfer cancelled. Destination files kept at {path}",
   "inside": "Move into",
-  "moveTree": "Moves this project together with its child projects and lab books.",
+  "moveTree": "Moves this project together with its lab books to the top level of the chosen workspace.",
   "movingTree": "Moving project...",
   "movedTree": "Project moved.",
   "chooseParent": "Choose a destination",

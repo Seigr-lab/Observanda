@@ -297,6 +297,8 @@ export class ProjectApplication{
     });
    }
    else if(selected.operation==='choices')result=await projectDirectoryChoices(registry,data,{signal});
+   // Workspace > Project > Lab book: a project is created at the workspace's top level.
+   else if(selected.operation==='create'&&data?.project?.parentId!=null)throw new AppError('PROJECT_NESTING');
    else if(selected.operation==='create')result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).create(data,{check});
    else if(selected.operation==='create/resume')result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).resume(data,{check});
    else if(selected.operation==='create/pending'){if(!data||Object.keys(data).sort().join()!=='after,limit')throw new AppError('INVALID');result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).pending(data);}
@@ -307,6 +309,8 @@ export class ProjectApplication{
    }
    await check();return result;
   },selected.operation==='create'?data?.project?.id:undefined);
+  // Projects move to a workspace's top level only; they are never placed inside another project.
+  if(['directory/reparent','storage/move'].includes(selected.operation)&&data?.parentId!=null)throw new AppError('PROJECT_NESTING');
   if(selected.operation==='storage/move'&&Object.hasOwn(data??{},'target'))return this.tracked(()=>this.workspaceMoves.run(client,selected.projectId,data,{check}),selected.projectId);
   if(['directory/reparent','storage/move'].includes(selected.operation))return this.tracked(()=>this.renames.reparent(client,selected.projectId,data,{check}),selected.projectId);
   if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;}
