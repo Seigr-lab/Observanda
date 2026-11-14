@@ -263,11 +263,16 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
   }
   return db;
  }catch(error){
+  // Read before clean-up below ends this client on purpose.
+  const lost=!!(error?.syscall||typeof error?.errno==='number'||client&&databaseConnectionEnded(client));
   // The activation lock is released below on this same client: never park it.
   if(db){if(created&&!published)db.temporary=true;db.reusable=false;await db.close().catch(()=>{});}
   else await client.end().catch(()=>{});
   const requestSignal=signal??databaseRequestSignal();
   if(error instanceof AppError||requestSignal?.aborted&&error===requestSignal.reason)throw error;
+  // A failed disk or network read, or a lost database connection, says nothing
+  // about the catalogue: report it as an access failure, never as damage.
+  if(lost)throw new AppError('IO');
   throw new AppError('CATALOGUE_DAMAGED');
  }finally{
   if(restoreLock)await databaseQuery(client,'SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1,0))',[restoreLock]).catch(()=>{});

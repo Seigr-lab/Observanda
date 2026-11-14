@@ -22,6 +22,18 @@ async function fixture(t){
  return {directory,source,vault,workspace,before,backup};
 }
 
+// A network share that stops answering during verification is an access
+// failure: the archive stays, nothing is bound, and a later open succeeds.
+test('a disk or network failure during activation is reported as an access failure, not damage',async t=>{
+ const f=await fixture(t),archive=await readFile(path.join(f.backup,CATALOGUE_ARCHIVE));
+ const lost=()=>{throw Object.assign(new Error('UNKNOWN: unknown error, open'),{code:'UNKNOWN',errno:-4094,syscall:'open'});};
+ await assert.rejects(openCatalogue(f.backup,{vault:f.vault,validate:lost}),{code:'IO'});
+ await assert.rejects(openCatalogue(f.backup,{vault:f.vault,validate:()=>{throw new Error('record does not verify');}}),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await readFile(path.join(f.backup,CATALOGUE_ARCHIVE)),archive);
+ await assert.rejects(access(path.join(f.backup,CATALOGUE_FILE)),{code:'ENOENT'});
+ assert.deepEqual(await new Workspace(f.backup,f.vault).read(),f.before);
+});
+
 test('a killed restore resumes its committed catalogue instead of abandoning it',async t=>{
  const f=await fixture(t),archive=await readFile(path.join(f.backup,CATALOGUE_ARCHIVE));
  const stopped=await interrupt(f.backup,f.vault,'commit');
