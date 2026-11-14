@@ -144,7 +144,7 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
         wantedNotebooks.add(notebook.id);let node=notebooks.get(notebook.id);
         if(!node){node=button('filter-notebook',notebook.title,'book');node.classList.add('notebook-link');node.dataset.id=notebook.id;node.append(element('span','count'));notebooks.set(notebook.id,node);}
         text(node.querySelector('.tree-title'),notebook.title);text(node.querySelector('.count'),notebook.count??'');
-        active(node,['entries','editor','record-reader'].includes(state.page)&&(state.projectOwner?.labBookId??state.notebook)===notebook.id);ordered.push(node);
+        active(node,(state.page==='entries'?state.notebook:['editor','record-reader'].includes(state.page)&&(state.projectOwner?.labBookId??state.notebook))===notebook.id);ordered.push(node);
       }
       orderNavigationNodes(item.node,ordered);
     }
@@ -174,7 +174,7 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
       if(initial)mount(sidebar,topbar,key);
       root.querySelector('nav').setAttribute('aria-label',t('navigation','dashboard'));
       text(dashboard.querySelector('.tree-title'),t('navigation','dashboard'));
-      for(const [action,key] of [['entries','find'],['tools','tools'],['help','help']]){const node=root.querySelector('[data-action="'+action+'"]');text(node.querySelector('.tree-title'),ux(key));active(node,state.page===action);attr(node,'lang',language());}
+      for(const [action,key] of [['entries','find'],['tools','tools'],['help','help']]){const node=root.querySelector('[data-action="'+action+'"]');text(node.querySelector('.tree-title'),ux(key));active(node,state.page===action&&(action!=='entries'||(!state.notebook||state.notebook==='all')&&!state.project));attr(node,'lang',language());}
       for(const [action,key] of [['storage-workspaces','workspaces'],['preferences','preferences']]){
         const node=settings.querySelector('[data-action="'+action+'"]');text(node.querySelector('.tree-title'),t('navigation',key));attr(node,'lang',language());
       }
