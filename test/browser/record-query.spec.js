@@ -29,7 +29,12 @@ test('combined browsing survives reading, back/forward and reload, and resets wh
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.documentElement.style.fontSize='20px';});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect((await page.getByRole('searchbox',{name:'Search records',exact:true}).boundingBox()).width).toBeGreaterThan(180);
-  await page.getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(5);
+  // The button shows how many filters are active, as in "Clear filters (6)".
+  await page.getByRole('button',{name:/^Clear filters/}).first().click();await expect(rows).toHaveCount(5);
+  // Experiments are found by their outcome, in their own words.
+  await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Outcome contains',{exact:true}).fill('stopped early');
+  await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Summer take 2');
+  await page.getByRole('button',{name:/^Clear filters/}).first().click();await expect(rows).toHaveCount(5);
   await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Tags',{exact:true}).fill('unknown tag');await expect(page.getByRole('heading',{name:'No records match these filters'})).toBeVisible();
   await page.locator('.workspace-empty').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(5);
   // New scope starts clean; history filters never become workspace content.
