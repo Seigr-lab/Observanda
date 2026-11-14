@@ -15,7 +15,9 @@ const post=new Set([
  ...['owners','query','labels','resolve','incoming'].map(name=>'/api/modules/references/'+name),
  '/api/calendars/page','/api/calendars/event','/api/sharing/configuration','/api/sharing/figure',
  '/api/modules/drafts/read',
- '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
+ '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list',
+ // Listing server logins reads one small settings file; changes still wait for the writer.
+ '/api/server-logins/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
  const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;

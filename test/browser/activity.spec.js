@@ -52,7 +52,7 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    expect(configuration.opened.status).toBe(200);expect(configuration.window.status).toBe(200);expect(configuration.window.value.rows.length).toBeLessThanOrEqual(20);expect(configuration.invalidReview.status).toBe(422);expect(configuration.invalidReview.value.code).toBe('INVALID');
    await preferences(page,'Integrations');
    await expect(page.locator('#github-connection')).toBeVisible();
-   await expect(page.locator('#destination-status')).toBeVisible();
+   await expect(page.locator('#server-logins')).toBeVisible();
    await expect(page.locator('#notice.error')).toBeHidden();
    await preferences(page,'Your profile');await expect(page.getByLabel('Display name',{exact:true})).toBeVisible();
    await page.getByLabel('Display name',{exact:true}).fill('Profile during copy');await page.getByRole('button',{name:'Save profile',exact:true}).click();await expect(page.locator('#notice')).toContainText('Profile saved.');
