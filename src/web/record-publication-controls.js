@@ -37,6 +37,8 @@ export function publicationAvailability(record,book,esc,{editing=false,draft=fal
   return draft?'<label class="checkbox"><input type="checkbox" data-entry="'+field+'"'+(allowed?' checked':'')+'>'+esc(text(field))+'</label>'+(bookOff?'<p class="muted">'+esc(targetLabel(target)+' · '+text('publicationBookBlocked'))+'</p>':''):
    '<div><dt>'+esc(targetLabel(target))+'</dt><dd>'+esc(status)+(editing?' '+edit(field):'')+'</dd></div>';
  }).join('');
- const parts=draft?'<details><summary>'+esc(text('publicationParts'))+'</summary>'+publicationPartsFields(record.publication,esc,record.figures)+'</details>':editing?edit('publication'):'';
- return '<section class="panel" data-record-publication><h3>'+esc(text('publicationOutputs'))+'</h3>'+(draft?choices:'<dl class="record-edit-details">'+choices+'</dl>')+parts+'<p class="muted">'+esc(text('publicationHelp'))+'</p></section>';
+ const parts=draft?'<details><summary>'+esc(text('publicationParts'))+'</summary>'+publicationPartsFields(record.publication,esc,record.figures)+'</details>':'';
+ // Which parts of the record go out is its own labelled row, beside Website and PDF.
+ const partsRow=editing&&!draft?'<div><dt>'+esc(text('publicationParts'))+'</dt><dd>'+edit('publication')+'</dd></div>':'';
+ return '<section class="panel" data-record-publication><h3>'+esc(text('publicationOutputs'))+'</h3>'+(draft?choices:'<dl class="record-edit-details">'+choices+partsRow+'</dl>')+parts+'<p class="muted">'+esc(text('publicationHelp'))+'</p></section>';
 }

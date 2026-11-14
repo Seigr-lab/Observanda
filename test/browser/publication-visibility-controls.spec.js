@@ -30,6 +30,8 @@ test('book, entry and section controls update an existing website placement and 
   await page.goto(app.url);await bookSetting(true,true);
   const entryURL=app.origin+'/#/records/'+record.id;
   await page.goto(entryURL+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
+  // The parts control is a labelled row of its own, not a stray Edit button.
+  await expect(page.locator('[data-record-publication] dl > div').filter({has:page.locator('[data-value-field="publication"]')}).locator('dt')).toHaveText('Entry parts');
   await edit('publication');await dialog.getByRole('checkbox',{name:'PDF · Summary / context',exact:true}).uncheck();
   await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
   await expect(dialog).not.toContainText('Lab book saved.');
