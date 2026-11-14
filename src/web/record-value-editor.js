@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+const reasonKeys=new Set(['otherRecord','duplicateRelation','workflowOneParent']);
 import {revisionId} from './revision-model.js';
 import {captureFocus,requestFocusRestore} from './focus-management.js';
 import {ux} from './experience-ui.js';
@@ -153,7 +154,11 @@ export function recordValueEditor({state,api,esc,notify,onOpen,onSaved,onClosed,
    if(owner!==savingOwner)return;
    if(failure.code==='RECORD_CHANGED'||adapter.conflictCodes?.includes(failure.code)){
     const expected=target(base),current=readReply(await api('/api/research/records/'+adapter.route+'/read',expected,{adopt:false}),expected);if(owner!==savingOwner)return;await view.prepare?.(current,value,{});if(owner!==savingOwner)return;conflict=current;error=text('conflict');draw();
-   }else error=failure.message||text('failed');
+   }else{
+    // A refused value names its reason; the generic message only says fields are invalid.
+    const reasons=(failure.details??[]).map(detail=>reasonKeys.has(detail?.message)?t('recordEditors',detail.message):'').filter(Boolean);
+    error=reasons.length?reasons.join(' '):failure.message||text('failed');status='';
+   }
   }finally{if(owner===savingOwner){busy=false;paint();}}
  }
  dialog.addEventListener('input',event=>{

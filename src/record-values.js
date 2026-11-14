@@ -164,10 +164,10 @@ export class RecordValues{
     }
     if(selected.collection?.kind==='relation'&&command.value.value!==null){
      const value=command.value.value,target=parseResearchReference(value.reference);
-     if(target?.workspaceId===command.workspaceId&&target.kind==='record'&&target.id===row.id)throw new AppError('INVALID',[{field:'Choose another record to link.',recordId:row.id}]);
+     if(target?.workspaceId===command.workspaceId&&target.kind==='record'&&target.id===row.id)throw new AppError('INVALID',[{field:'Choose another record to link.',message:'otherRecord',recordId:row.id}]);
      for await(const item of original.items(['relations'])){
       const link=await original.tree.read(item.value);
-      if(link.id!==selected.collection.id&&link.type===value.type&&researchReference(link.target)===value.reference)throw new AppError('INVALID',[{field:'That relationship is already linked.',recordId:row.id}]);
+      if(link.id!==selected.collection.id&&link.type===value.type&&researchReference(link.target)===value.reference)throw new AppError('INVALID',[{field:'That relationship is already linked.',message:'duplicateRelation',recordId:row.id}]);
      }
     }
     let document=await replaceRecordValue(original,command.field,command.value,selected);
@@ -176,7 +176,7 @@ export class RecordValues{
     let member=membershipChanged?await new RecordMemberCollections(store).changed(row,selected.collection.name,document):row;
     if(selected.collection?.kind==='relation'){
      const runOf=[];for await(const item of document.items(['relations']))if((await document.tree.selected(item.value,['role'])).value==='run-of'){
-      if(runOf.length)throw new AppError('INVALID',[{field:'Choose one investigation or creative series for this run.',recordId:row.id}]);
+      if(runOf.length)throw new AppError('INVALID',[{field:'Choose one investigation or creative series for this run.',message:'workflowOneParent',recordId:row.id}]);
       runOf.push((await document.tree.selected(item.value,['target'])).value);
      }
      member={...member,runOf};
