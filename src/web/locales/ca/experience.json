@@ -9,7 +9,7 @@
   "open": "Obre",
   "enableOpen": "Activa i obre",
   "firstTitle": "Comença el primer registre",
-  "firstHelp": "Un projecte conté els llibres; un llibre conté els registres. Crea un projecte, després un llibre i escriu una nota.",
+  "firstHelp": "Un projecte conté els llibres de laboratori; un llibre de laboratori conté els registres. Crea un projecte, després un llibre de laboratori i escriu un registre.",
   "createProject": "Crea un projecte",
   "createBook": "Crea un llibre",
   "writeRecord": "Escriu un registre",

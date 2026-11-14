@@ -9,7 +9,7 @@
   "open": "Opne",
   "enableOpen": "Aktiver og opne",
   "firstTitle": "Start den første oppføringa di",
-  "firstHelp": "Eit prosjekt inneheld bøker, og ei bok inneheld oppføringar. Opprett eit prosjekt og ei bok, og skriv eit notat.",
+  "firstHelp": "Eit prosjekt inneheld labbøker, og ei labbok inneheld oppføringar. Opprett eit prosjekt og ei labbok, og skriv ei oppføring.",
   "createProject": "Opprett eit prosjekt",
   "createBook": "Opprett ei bok",
   "writeRecord": "Skriv ei oppføring",

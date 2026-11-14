@@ -145,6 +145,7 @@
   "websitePreparations": "Website preparations",
   "noRecords": "No records in this view",
   "openBook": "Open a lab book to add records.",
+  "emptyBook": "Choose New record to add the first record to this lab book.",
   "dataRetained": "Your data and settings are retained.",
   "manageModules": "Manage modules",
   "searchPlaceholder": "Search records...",

@@ -9,7 +9,7 @@
   "open": "Open",
   "enableOpen": "Enable and open",
   "firstTitle": "Start your first record",
-  "firstHelp": "A project holds your books; a book holds your records. Start with a project, create a book, then write a note.",
+  "firstHelp": "A project holds your lab books; a lab book holds your records. Start with a project, create a lab book, then write a record.",
   "createProject": "Create a project",
   "createBook": "Create a book",
   "writeRecord": "Write a record",

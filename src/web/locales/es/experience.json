@@ -9,7 +9,7 @@
   "open": "Abrir",
   "enableOpen": "Activar y abrir",
   "firstTitle": "Empieza tu primer registro",
-  "firstHelp": "Un proyecto contiene los libros; un libro contiene los registros. Crea un proyecto, después un libro y escribe una nota.",
+  "firstHelp": "Un proyecto contiene los cuadernos de laboratorio; un cuaderno de laboratorio contiene los registros. Crea un proyecto, después un cuaderno de laboratorio y escribe un registro.",
   "createProject": "Crear un proyecto",
   "createBook": "Crear un libro",
   "writeRecord": "Escribir un registro",
