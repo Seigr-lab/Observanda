@@ -30,7 +30,7 @@ import {assertNotMoving} from './workspace-move-state.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
 import {catalogueBinding,publishCatalogueBinding} from './postgres-activation.js';
 
-export const defaultLocation=()=>path.join(os.homedir(),'Observanda','notebooks','default');
+export const defaultLocation=()=>path.join(os.homedir(),'Observanda','workspaces','default');
 export const preferencesLocation=()=>path.join(os.homedir(),'.observanda','preferences.json');
 export {readPreferences,readPreference,rememberLocation,rememberInterface} from './preferences.js';
 export async function currentAccessReplacement(source,vault,{deviceStore}={}){
