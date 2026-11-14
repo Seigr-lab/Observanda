@@ -19,6 +19,7 @@ export function remoteAddress(config){
   const {owner,repository,branch,directory}=config.github;
   return [owner+'/'+repository,branch,directory].filter(Boolean).join(' / ');
  }
+ if(config.kind==='sftp'||config.kind==='ftp'){const {user,host,port,directory}=config[config.kind];return config.kind+'://'+(user?user+'@':'')+host+(port&&port!==(config.kind==='ftp'?21:22)?':'+port:'')+directory;}
  const {user,host,port,directory}=config.ssh;
  return (user?user+'@':'')+host+(port&&port!==22?':'+port:'')+':'+directory+'/current';
 }
@@ -39,7 +40,7 @@ export function remoteReceiptView(destination,revision,{esc,t,tr,button}){
    (same?button('remoteResume','publish-retry'):'<p>'+esc(tr('remoteChanged'))+'</p>')+
    button('remoteSettle','publish-settle'):'')+
   (transfer?.state==='settled'?'<p role="status">'+esc(tr('remoteSettled'))+'</p>':'')+
-  (receipt?'<p>'+esc(status)+'</p><dl>'+line(tr('remoteRelease'),receipt.releaseId)+line(tr('remoteCommit'),receipt.commit)+line(tr('remoteRecorded'),date(receipt.at))+'</dl>'+
+  (receipt?'<p>'+esc(status)+'</p><dl>'+line(tr('remoteRelease'),receipt.releaseId)+(config.kind==='sftp'||config.kind==='ftp'?'':line(tr('remoteCommit'),receipt.commit))+line(tr('remoteRecorded'),date(receipt.at))+'</dl>'+
    (same&&transfer?.state==='completed'&&receipt.status==='uploaded-pages-setup-required'?button('remoteRetryPages','publish-pages'):'')+
    (live?'<p>'+esc(live.failed?tr('remoteLiveFailed'):t('publication','liveVerified',{count:live.files,removed:live.removed??0}))+'</p>':'')+
    (config.publicUrl||config.kind==='github'&&config.github.pages!==false?button('remoteVerify','publish-verify'):''):'')+'</section>';

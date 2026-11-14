@@ -3,6 +3,7 @@ import {admitGithubPlan,writeGithubOwnership} from './github-publication-plan.js
 import {recordDeploymentInventory} from './publication-live.js';
 import {reviewedManifest} from './publication-live-budget.js';
 import {settleSSHTransfer} from './ssh-deployment.js';
+import {writeRemoteFiles} from './publishing.js';
 import {LocalExportManifest} from './local-export-manifest.js';
 import {contentHash,contentSize} from './file-content.js';
 import {operationStage,operationAdvance,operationTransfer,operationTransferred} from './operation-progress.js';
@@ -50,7 +51,7 @@ export async function publishWebsiteTransfer(target,candidate,{configEtag,id,val
    if(value&&needsSettlement(value))throw new AppError('PUBLISH_PENDING');
    const plan=saved.config.kind==='github'?await target.readDestinationPlan(candidate,configEtag,{destinationReview:id,destinationReviewed:true}):null;
    let fileInventory;
-   if(saved.config.kind==='ssh')fileInventory=(await validateSSH()).inventory;
+   if(['ssh','sftp','ftp'].includes(saved.config.kind))fileInventory=(await validateSSH()).inventory;
    else{
     const builder=new LocalExportManifest(target.workspace).builder('files');
     await operationStage('remoteIndexFiles',{unit:'files',total:candidate.files.size},async()=>{for(const [path,content] of candidate.files){signal?.throwIfAborted();await builder.append({path,bytes:contentSize(content),sha256:contentHash(content)});operationAdvance();}});
@@ -85,6 +86,11 @@ export async function settleWebsiteTransfer(target,{configEtag,id,signal}){
    const inventory=new LocalExportManifest(target.workspace);
    const checksums=async function*(){for await(const row of inventory.entries(value.fileInventory)){signal?.throwIfAborted();yield row.sha256+'  '+row.path+'\n';}};
    active=await settleSSHTransfer(target.ssh,saved.config.ssh,owner,value,{signal,checksums});
+  }else if(['sftp','ftp'].includes(value.kind)&&journal.lockAttempted){
+   // Files already put in place stay recorded, so a later publication removes
+   // or replaces them; the publication counts as delivered only with its receipt.
+   if(journal.remote)await writeRemoteFiles(target.workspace,value.destination,journal.remote);
+   active=!!journal.receipt;
   }else if(value.kind==='github'&&(journal.pushAttempted||journal.archiveAttempted)){
    const c=saved.config.github,base='/repos/'+c.owner+'/'+c.repository,plan=admitGithubPlan(value.plan);
    const repo=await target.github(base,'GET',undefined,false,signal);
@@ -102,7 +108,7 @@ export async function settleWebsiteTransfer(target,{configEtag,id,signal}){
   if(journal.receipt&&!active)throw new AppError('PUBLISH_STALE');
   return target.workspace.withPublicationMetadataBatch(async()=>{
    if(active){
-    journal.receipt??={releaseId:value.releaseId,commit:journal.commit,at:new Date().toISOString(),status:value.kind==='ssh'?'uploaded-remote-verified':saved.config.github.pages===false?'uploaded-repository-only':'uploaded',...value.manifest};
+    journal.receipt??={releaseId:value.releaseId,commit:journal.commit,at:new Date().toISOString(),status:value.kind==='ssh'?'uploaded-remote-verified':value.kind==='sftp'||value.kind==='ftp'?'uploaded-remote':saved.config.github.pages===false?'uploaded-repository-only':'uploaded',...value.manifest};
     journal.receipt.fileInventory=value.fileInventory;
     if(value.kind==='github')await writeGithubOwnership(target.workspace,value.destination,journal);
     await recordDeploymentInventory(target.workspace,value.destination,journal.receipt,journal.liveInventory);

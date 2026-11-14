@@ -14,7 +14,7 @@ export function websiteFilesReleases({request,site,esc,tr,t,signal}){
  const code=value=>'<code title="'+esc(value)+'">'+esc(short(value))+'</code>';
  function destinationLabel(destination){
   if(destination.kind==='folder')return esc(destination.directory);
-  if(destination.kind==='github'||destination.kind==='ssh')return esc((destination.kind==='github'?'GitHub':'SSH')+' · '+remoteAddress(destination.config));
+  if(['github','ssh','sftp','ftp'].includes(destination.kind))return esc({github:'GitHub',ssh:'SSH',sftp:'SFTP',ftp:'FTP'}[destination.kind]+' · '+remoteAddress(destination.config));
   return esc(tr('releaseNoDestination'));
  }
  function editionLabel(edition){return esc(tr(edition==='withdrawal'?'releaseEditionWithdrawal':'releaseEditionWebsite'));}
@@ -50,7 +50,7 @@ export function websiteFilesReleases({request,site,esc,tr,t,signal}){
   return '<section class="website-release-history"><h3>'+esc(tr('releaseHistory'))+'</h3><p class="hint">'+esc(tr('releaseRestoreHelp'))+'</p><ol>'+items+'</ol></section>';
  }
  function actions(value){
-  const controllable=['folder','github','ssh'].includes(value.destination.kind);
+  const controllable=['folder','github','ssh','sftp','ftp'].includes(value.destination.kind);
   const unfinished=value.transfer?.uncertain||value.pending;
   const withdraw=controllable&&value.delivered&&value.delivered.edition!=='withdrawal'&&!unfinished;
   return '<div class="inline-actions">'+button('publishUpdate','update')+(withdraw?button('releaseWithdraw','withdraw'):'')+button('releaseRefresh','refresh')+button('closePreview','close')+'</div>'+

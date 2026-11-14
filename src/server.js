@@ -213,7 +213,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const diagnostics=providedDiagnostics??new OperationalDiagnostics({directory:preferencesFile?path.join(path.dirname(preferencesFile),'diagnostics'):null});
   diagnostics.record('service-start');
   const {GithubConnections}=await import('./github/connections.js');
+  const {HostCredentials,hostCredentialsFile}=await import('./host-credentials.js');
   const github=githubConnections??(preferencesFile?new GithubConnections({file:preferencesFile+'.github.json',request:publishingOptions?.request}):null);
+  // FTP passwords belong to this computer, beside its device key, never to a workspace.
+  publishingOptions={...publishingOptions,hostCredentials:publishingOptions?.hostCredentials??new HostCredentials({file:hostCredentialsFile(preferencesFile??deviceStore.file),deviceStore})};
   const picker=folderPicker??createFolderPicker({headless}),folderRequests=new Set(),inventoryRequests=new Set();
   const websiteFolderPicker={
    capabilities:()=>picker.capabilities(),

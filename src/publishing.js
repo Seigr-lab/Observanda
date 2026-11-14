@@ -17,16 +17,33 @@ import {randomUUID} from 'node:crypto';
 import { Workspace, digest, serialize } from './storage.js';
 import { AppError } from './errors.js';
 import { SSHHost } from './ssh-host.js';
+import {deployRemoteSite,validRemoteFiles} from './remote-site-publishing.js';
+import {SFTPTransport,sftpPath} from './sftp-transfer.js';
+import {FTPTransport,FTP_SECURITY} from './ftp-transfer.js';
 import {publicHttpsRequest} from './public-https.js';
 
-export const defaultPublishing = () => ({ kind: 'github', github: { owner: '', repository: '', branch: 'main', pages: false, directory: '' }, ssh: { host: '', port: 22, user: '', directory: '', identityFile: '' }, publicUrl: '' });
+export const defaultPublishing = () => ({ kind: 'github', github: { owner: '', repository: '', branch: 'main', pages: false, directory: '' }, ssh: { host: '', port: 22, user: '', directory: '', identityFile: '' }, sftp: { host: '', port: 22, user: '', directory: '', identityFile: '', allowExisting: false }, ftp: { host: '', port: 21, user: '', directory: '', security: 'explicit', allowExisting: false }, publicUrl: '' });
+// Hosts reached over SFTP (no server shell needed) or FTP/FTPS publish into
+// their web folder in place (remote-site-publishing.js).
+export const REMOTE_SITE_KINDS=['sftp','ftp'];
+const hostName=value=>/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(value);
+const hostUser=value=>typeof value==='string'&&value.length>0&&value.length<=128&&!/[\x00-\x1f@:\/\\]/.test(value);
+function validRemoteSite(kind,v,selected){
+  if(kind==='sftp'&&!keys(v,['host','port','user','directory','identityFile','allowExisting']))return false;
+  if(kind==='ftp'&&!keys(v,['host','port','user','directory','security','allowExisting']))return false;
+  if(!['host','user','directory'].every(k=>string(v[k],1000))||!Number.isInteger(v.port)||v.port<1||v.port>65535||typeof v.allowExisting!=='boolean')return false;
+  if(kind==='sftp'&&!string(v.identityFile,1000)||kind==='ftp'&&!FTP_SECURITY.includes(v.security))return false;
+  if(!selected)return true;
+  return hostName(v.host)&&hostUser(v.user)&&sftpPath(v.directory)&&v.directory.split('/').every(p=>p!=='.'&&p!=='..')&&(kind!=='sftp'||!v.identityFile||path.isAbsolute(v.identityFile));
+}
 export const pagesSource = pages => pages ? {build_type:pages.build_type,branch:pages.source?.branch??null,path:pages.source?.path??null,cname:pages.cname??null} : null;
 const keys = (v, list) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === list.length && list.every(k => Object.hasOwn(v, k));
 const string = (s, n = 500) => typeof s === 'string' && s.length <= n && !/[\x00-\x1f]/.test(s);
 const part = s => string(s, 100) && /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(s) && !['.', '..'].includes(s);
 export function validatePublishing(c) {
-  if(c?.limits){if(!keys(c.limits,['github','ssh'])||!Object.values(c.limits).every(v=>keys(v,['maxFileBytes','maxTotalBytes'])&&Object.values(v).every(n=>Number.isSafeInteger(n)&&n>=0)))throw new AppError('PUBLISH_CONFIG');}
-  if (!keys(c.limits?Object.fromEntries(Object.entries(c).filter(([key])=>key!=='limits')):c, ['kind', 'github', 'ssh', 'publicUrl']) || !['github', 'ssh'].includes(c.kind) || !c.github || !['owner','repository','branch'].every(k=>Object.hasOwn(c.github,k)) || Object.keys(c.github).some(k=>!['owner','repository','branch','pages','directory'].includes(k)) || Object.hasOwn(c.github,'pages')&&typeof c.github.pages!=='boolean' || Object.hasOwn(c.github,'directory')&&!githubDirectory(c.github.directory) || !keys(c.ssh, ['host', 'port', 'user', 'directory', 'identityFile']) || !['owner','repository','branch'].every(k => string(c.github[k], 100)) || !['host', 'user', 'directory', 'identityFile'].every(k => string(c.ssh[k], 1000)) || !Number.isInteger(c.ssh.port) || c.ssh.port < 1 || c.ssh.port > 65535 || !string(c.publicUrl, 1000)) throw new AppError('PUBLISH_CONFIG');
+  if(c?.limits){if(!['github','ssh'].every(k=>Object.hasOwn(c.limits,k))||Object.keys(c.limits).some(k=>!['github','ssh',...REMOTE_SITE_KINDS].includes(k))||!Object.values(c.limits).every(v=>keys(v,['maxFileBytes','maxTotalBytes'])&&Object.values(v).every(n=>Number.isSafeInteger(n)&&n>=0)))throw new AppError('PUBLISH_CONFIG');}
+  const fields=Object.keys(c??{}).filter(key=>key!=='limits'&&!REMOTE_SITE_KINDS.includes(key));
+  if (!c || typeof c!=='object' || fields.length!==4 || !['kind', 'github', 'ssh', 'publicUrl'].every(k=>Object.hasOwn(c,k)) || !['github', 'ssh', ...REMOTE_SITE_KINDS].includes(c.kind) || REMOTE_SITE_KINDS.some(kind=>(Object.hasOwn(c,kind)||c.kind===kind)&&!validRemoteSite(kind,c[kind],c.kind===kind)) || !c.github || !['owner','repository','branch'].every(k=>Object.hasOwn(c.github,k)) || Object.keys(c.github).some(k=>!['owner','repository','branch','pages','directory'].includes(k)) || Object.hasOwn(c.github,'pages')&&typeof c.github.pages!=='boolean' || Object.hasOwn(c.github,'directory')&&!githubDirectory(c.github.directory) || !keys(c.ssh, ['host', 'port', 'user', 'directory', 'identityFile']) || !['owner','repository','branch'].every(k => string(c.github[k], 100)) || !['host', 'user', 'directory', 'identityFile'].every(k => string(c.ssh[k], 1000)) || !Number.isInteger(c.ssh.port) || c.ssh.port < 1 || c.ssh.port > 65535 || !string(c.publicUrl, 1000)) throw new AppError('PUBLISH_CONFIG');
   if (c.kind === 'github' && (!part(c.github.owner) || !part(c.github.repository) || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(c.github.branch))) throw new AppError('PUBLISH_CONFIG');
   if (c.kind === 'ssh' && (!/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(c.ssh.host) || !/^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$/.test(c.ssh.user) || !/^\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+$/.test(c.ssh.directory) || c.ssh.directory.split('/').some(p => p === '.' || p === '..') || (c.ssh.identityFile && !path.isAbsolute(c.ssh.identityFile)))) throw new AppError('PUBLISH_CONFIG');
   if (c.publicUrl) {
@@ -37,8 +54,9 @@ export function validatePublishing(c) {
 }
 
 export class Publisher {
-  constructor(root, { request = fetch, liveRequest = publicHttpsRequest, ssh = new SSHHost(), connection=null, workspace=null, authorizeCandidate=null } = {}, vault = null) {
+  constructor(root, { request = fetch, liveRequest = publicHttpsRequest, ssh = new SSHHost(), sftp=null, ftp=new FTPTransport(), hostCredentials=null, connection=null, workspace=null, authorizeCandidate=null } = {}, vault = null) {
     this.workspace = workspace??new Workspace(root,vault); this.request = request; this.liveRequest = liveRequest; this.ssh = ssh; this.token = null; this.connection=connection;
+    this.sftp=sftp; this.ftp=ftp; this.hostCredentials=hostCredentials;
     this.authorizeCandidate=authorizeCandidate;
     this.settingsFile = path.join(root, '.observanda', 'publishing.json');
     this.receiptsFile = path.join(root, '.observanda', 'publishing-receipts.json');
@@ -57,7 +75,8 @@ export class Publisher {
     // the historical receipt on disk, but do not present it as current proof.
     if(receipt?.verification?.configEtag!==etag&&receipt)delete receipt.verification;
     const account=this.connection?await this.connection.summary():null;
-    return { receipt, config: config ?? defaultPublishing(), etag, destinationKey:config?this.destinationKey(config):null, configured: !!config, connected: !!this.token||!!account?.connected, temporaryToken:!!this.token, account:account?.selected??null };
+    const host=config?.kind==='ftp'&&this.hostCredentials?{saved:await this.hostCredentials.has(this.hostPasswordFor(config)),persistent:this.hostCredentials.persistent()}:null;
+    return { receipt, config: config ?? defaultPublishing(), etag, destinationKey:config?this.destinationKey(config):null, configured: !!config, connected: !!this.token||!!account?.connected, temporaryToken:!!this.token, account:account?.selected??null, hostPassword:host };
   }
   async save(config, etag) {
     validatePublishing(config);
@@ -158,6 +177,7 @@ export class Publisher {
     const saved = await this.read(); if (!saved.configured) throw new AppError('PUBLISH_CONFIG');
     const c = saved.config;
     if (c.kind === 'ssh') { await this.ssh.check(c.ssh); return { message: 'SSH authentication and required server tools verified. Upload has not started.' }; }
+    if (REMOTE_SITE_KINDS.includes(c.kind)) return this.checkRemoteSite(c);
     const base = `/repos/${c.github.owner}/${c.github.repository}`;
     const repo = await this.github(base);
     const ref = await this.github(`${base}/git/ref/heads/${c.github.branch}`, 'GET', undefined, true);
@@ -205,10 +225,38 @@ export class Publisher {
     }
   }
 
+  // The protocol access of an SFTP or FTP destination. An FTP password is read
+  // from this computer's credentials only when a session opens.
+  remoteSite(config){
+    const c=config[config.kind];
+    if(config.kind==='sftp')return {c,transport:this.sftp??new SFTPTransport({staging:this.staging()})};
+    if(config.kind==='ftp'){const ftp=this.ftp,credentials=this.hostCredentials;return {c,transport:{open:async(value,options)=>{if(!credentials)throw new AppError('PUBLISH_PASSWORD');return ftp.open(value,{...options,password:await credentials.read({protocol:'ftp',host:value.host,port:value.port,user:value.user})});}}};}
+    throw new AppError('PUBLISH_CONFIG');
+  }
   // Local copies made for an upload stay inside this workspace.
   staging(){return path.join(this.workspace.root,'.observanda','publishing-staging');}
+  hostPasswordFor(config){const c=config.ftp;return {protocol:'ftp',host:c.host,port:c.port,user:c.user};}
+  // The password of the saved FTP destination, kept on this computer only.
+  async saveHostPassword(password,{remember=true}={}){
+    const saved=await this.read();if(!saved.configured||saved.config.kind!=='ftp'||!this.hostCredentials)throw new AppError('PUBLISH_CONFIG');
+    return this.hostCredentials.save(this.hostPasswordFor(saved.config),password,{remember});
+  }
+  async forgetHostPassword(){const saved=await this.read();if(!saved.configured||saved.config.kind!=='ftp'||!this.hostCredentials)throw new AppError('PUBLISH_CONFIG');await this.hostCredentials.forget(this.hostPasswordFor(saved.config));}
+  async deployRemote(config,candidate,owner,options){
+    const {c,transport}=this.remoteSite(config),previousFiles=options.journal?.nonce?null:await readRemoteFiles(this.workspace,this.destinationKey(config));
+    return deployRemoteSite(transport,c,candidate,owner,{...options,previousFiles,allowExisting:c.allowExisting});
+  }
+  async checkRemoteSite(config){
+    const {c,transport}=this.remoteSite(config),session=await transport.open(c);
+    try{
+      const marker=await session.readText(c.directory+'/.observanda-owner',{missing:true});
+      const entries=marker===null?await session.list(c.directory).catch(()=>[]):[];
+      if(marker===null&&entries.length&&!c.allowExisting)throw new AppError('PUBLISH_OWNERSHIP');
+      return {message:publicationText(marker===null?entries.length?'remoteCheckExisting':'remoteCheckEmpty':'remoteCheckOwned')};
+    }finally{await session.close();}
+  }
   destinationKey(config) {
-    const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):config.ssh;
+    const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):REMOTE_SITE_KINDS.includes(config.kind)?{host:config[config.kind].host.toLowerCase(),port:config[config.kind].port,user:config[config.kind].user,directory:config[config.kind].directory}:config.ssh;
     return digest(serialize({kind:config.kind,destination}));
   }
   async deploy(candidate, expectedConfigEtag, workspaceId, review={},transfer) {
@@ -247,15 +295,30 @@ export class Publisher {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
         receipt=await this.ssh.deploy(config.ssh,candidate,owner,{...options,indexedFiles:!!transfer,staging:this.staging()});
       }
+      else if (REMOTE_SITE_KINDS.includes(config.kind)) {
+        const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
+        receipt=await this.deployRemote(config,candidate,owner,options);
+        await writeRemoteFiles(this.workspace,key,journal.remote);
+      }
       else {
         receipt=await deployGithub(this,candidate,config,{...options,plan,pushed:persist});
       }
-      if(config.kind==='ssh')await persist(receipt);
+      if(config.kind==='ssh'||REMOTE_SITE_KINDS.includes(config.kind))await persist(receipt);
       return receipt;
     };
     return transfer?this.workspace.withTransferLease(run):this.workspace.withLock(run);
   }
 }
+
+// What a website's SFTP or FTP destination holds from Observanda, kept with
+// that website's own publishing settings (website-workspace.js): each
+// published path with the hash and size confirmed in place. It decides which
+// files need no transfer and which earlier files may be removed.
+export async function readRemoteFiles(workspace,key){
+ const raw=await workspace.readMetadata('.observanda/publishing-remote-files/'+key+'.json',64*1024*1024);if(raw===null)return {};
+ let value;try{value=JSON.parse(raw);}catch{throw new AppError('JOB_DAMAGED');}if(!validRemoteFiles(value))throw new AppError('JOB_DAMAGED');return value;
+}
+export async function writeRemoteFiles(workspace,key,files){if(!validRemoteFiles(files))throw new AppError('JOB_DAMAGED');await workspace.writeMetadata('.observanda/publishing-remote-files/'+key+'.json',serialize(files));}
 
 export function enforcePublishingLimits(candidate,config){
  const policy=config.limits?.[config.kind]??{maxFileBytes:0,maxTotalBytes:0};let total=0;

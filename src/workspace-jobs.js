@@ -16,7 +16,7 @@ import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
 import {workspaceMoveJobDefinitions,recoverWorkspaceMove} from './workspace-move-jobs.js';
 export function websitePublisher(publisher,workspace){
  if(publisher.workspace===workspace)return publisher;
- const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,liveRequest:publisher.liveRequest,ssh:publisher.ssh,connection:publisher.connection},workspace.vault);
+ const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,liveRequest:publisher.liveRequest,ssh:publisher.ssh,sftp:publisher.sftp,ftp:publisher.ftp,hostCredentials:publisher.hostCredentials,connection:publisher.connection},workspace.vault);
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
 function publicationDefinitions(workspace,publisher,current,services){

@@ -49,6 +49,7 @@
     "@noble/hashes": "2.4.0",
     "@peculiar/x509": "2.1.0",
     "@resvg/resvg-wasm": "2.6.2",
+    "basic-ftp": "6.2.4",
     "fontkit": "2.0.4",
     "ical.js": "2.2.1",
     "katex": "0.19.0",

@@ -52,9 +52,11 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 
 const prefix='/api/website-files/';
-const writes=new Set(['create','import/folder','downloads/remove','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
+const writes=new Set(['create','import/folder','downloads/remove','save','insert-source','insert-sources','feed/save','feed/remove','gallery/source-save','library/saved-searches/save','library/saved-searches/remove','destination/save','destination/host-password','destination/host-password-forget','plan','publish','publish/settle','publish/verify','folder/plan','folder/apply','folder/discard']);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const sshReviewKey='.observanda/website-ssh-review.json';
+// Hosts reached over SSH, SFTP or FTP are reviewed by the files they will receive.
+const hostKinds=['ssh','sftp','ftp'];
 // A design upload is length-prefixed JSON followed by the package bytes.
 async function designUpload(req,signal){
  const parts=[];let size=0;
@@ -381,10 +383,15 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   }
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-sources'){json(await store.insertSources(siteId,{...options,expectedRevision,signal}));return true;}
-  if(operation==='destination'||operation==='destination/save'){
+  if(operation==='destination'||operation==='destination/save'||operation==='destination/host-password'||operation==='destination/host-password-forget'){
    json(await store.withSite(siteId,undefined,async()=>{
     const target=await publisher(siteId);
     if(operation==='destination'){const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};}
+    // An FTP password stays on this computer; it is never sent back.
+    if(operation==='destination/host-password'||operation==='destination/host-password-forget'){
+     if(operation==='destination/host-password')await target.saveHostPassword(options.password,{remember:options.remember!==false});else await target.forgetHostPassword();
+     const saved=await target.read();return {...saved,transfer:await remoteTransferStatus(target,saved)};
+    }
     return target.workspace.withLock(async()=>{
      const previous=await target.read(),transfer=await remoteTransferStatus(target,previous);
      if(transfer?.uncertain)throw new AppError('PUBLISH_PENDING');
@@ -399,7 +406,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
     const target=await publisher(siteId);
     if(options.kind==='included'){
      const saved=await target.read();
-     if(saved.config.kind!=='ssh'||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
+     if(!hostKinds.includes(saved.config.kind)||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
      const review=await sshReview(target.workspace,options.id,expectedRevision,saved.etag);
      const offset=options.offset,rows=await new LocalExportManifest(target.workspace).page(review.inventory,{offset,limit:32});
      return {items:rows.map(row=>row.path),offset,next:offset+rows.length<review.files?offset+rows.length:null};
@@ -462,12 +469,12 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
     const candidate=await websiteEdition(store,siteId,expectedRevision,edition,{blockedValues});await check();
     if(operation==='publish'&&prior?.id!==options.destinationReview)await assertPublicationApproval(target.workspace,candidate);
     const saved=await target.read();if(!saved.configured||saved.etag!==options.configEtag)throw new AppError('PUBLISH_STALE');
-    if(operation==='plan'&&saved.config.kind==='ssh'){
+    if(operation==='plan'&&hostKinds.includes(saved.config.kind)){
      await operationStage('remoteCheckFiles',{unit:'files',total:candidate.files.size},()=>candidate.verify({signal,onFile:bytes=>{operationAdvance();operationWork({bytes});}}));
      const list=new LocalExportManifest(target.workspace),files=list.builder('files');
      await operationStage('remoteIndexFiles',{unit:'files',total:candidate.files.size},async()=>{for(const [name,content] of candidate.files){signal.throwIfAborted();await files.append({path:name,bytes:contentSize(content),sha256:contentHash(content)});operationAdvance();}});
      const inventory=await files.finish(),count=candidate.files.size;
-     const review={id:randomUUID(),kind:'ssh',requiresReview:true,files:count,revision:expectedRevision,configEtag:options.configEtag};
+     const review={id:randomUUID(),kind:saved.config.kind,requiresReview:true,files:count,revision:expectedRevision,configEtag:options.configEtag};
      await store.withSite(siteId,expectedRevision,()=>target.workspace.writeMetadata(sshReviewKey,JSON.stringify({...review,inventory})));
      const rows=await list.page(inventory,{offset:0,limit:32});
      return {...review,counts:{included:count},included:rows.map(row=>row.path),windows:{included:{offset:0,next:count>rows.length?rows.length:null}}};

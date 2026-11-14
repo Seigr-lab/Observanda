@@ -13,6 +13,9 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {WebsiteSites} from '../src/website-sites.js';
 import {newElement} from '../src/web/composition-tree.js';
+import {memoryHost} from './remote-host-fixture.js';
+import {HostCredentials} from '../src/host-credentials.js';
+import {readRemoteFiles} from '../src/publishing.js';
 const sha = (type, bytes) => createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 const token = 'synthetic_session_secret_1234567890';
 async function setup(t,options) {
@@ -133,4 +136,32 @@ test('a changed main branch or Pages source invalidates approval before any uplo
   await assert.rejects(s.publisher.deploy(s.candidate,saved.etag,s.owner,{destinationReview:plan.id,destinationReviewed:true}),{code:'PUBLISH_STALE'});
   assert.equal(remote.calls.filter(c=>c.method!=='GET').length,0);
  }
+});
+
+// Shared hosting: FTP/FTPS and SFTP publish in place through the publisher.
+// The FTP password is required, stays on this computer and is never returned.
+test('FTP and SFTP destinations publish in place, keep their file record and keep the password on this computer only', async t => {
+  const host = memoryHost(), passwords = [];
+  const ftp = { open: async (c, options) => { passwords.push(options.password); return host.transport.open(c, options); } };
+  const credentials = new HostCredentials({ file: path.join(os.tmpdir(), 'observanda-host-'+randomUUID()+'.json'), deviceStore: { available: () => false } });
+  const s = await setup(t, { ftp, sftp: host.transport, hostCredentials: credentials }), config = defaultPublishing();
+  config.kind = 'ftp'; Object.assign(config.ftp, { host: 'shared.example', user: 'site', directory: '/public_html' });
+  let saved = await s.publisher.save(config, 'new');
+  assert.deepEqual(saved.hostPassword, { saved: false, persistent: false });
+  await assert.rejects(s.publisher.deploy(s.candidate, saved.etag, s.owner), { code: 'PUBLISH_PASSWORD' });
+  await s.publisher.saveHostPassword('host secret', { remember: true });
+  saved = await s.publisher.read(); assert.deepEqual(saved.hostPassword, { saved: true, persistent: false });
+  assert.equal(JSON.stringify(saved).includes('host secret'), false);
+  const receipt = await s.publisher.deploy(s.candidate, saved.etag, s.owner);
+  assert.equal(receipt.releaseId, s.candidate.id); assert.deepEqual(passwords, ['host secret']);
+  for (const [name, content] of s.candidate.files) assert.ok(host.files.get('/public_html/' + name)?.equals(Buffer.from(content)), name);
+  const key = s.publisher.destinationKey(saved.config), files = await readRemoteFiles(s.ws, key);
+  assert.deepEqual(Object.keys(files).sort(), [...s.candidate.files.keys()].sort());
+  assert.equal((await s.publisher.read()).receipt.releaseId, s.candidate.id);
+  const sent = host.counts.upload; await s.publisher.deploy(s.candidate, saved.etag, s.owner); assert.equal(host.counts.upload, sent, 'unchanged files are not sent again');
+  const sftp = defaultPublishing(); sftp.kind = 'sftp'; Object.assign(sftp.sftp, { host: 'shared.example', user: 'site', directory: '/public_html' });
+  assert.notEqual(s.publisher.destinationKey(sftp), key);
+  saved = await s.publisher.save(sftp, saved.etag); assert.equal(saved.hostPassword, null);
+  await assert.rejects(s.publisher.saveHostPassword('x'), { code: 'PUBLISH_CONFIG' });
+  await s.publisher.deploy(s.candidate, saved.etag, s.owner); assert.equal(host.counts.upload, sent + s.candidate.files.size, 'another destination has no record of these files, so every file is sent');
 });

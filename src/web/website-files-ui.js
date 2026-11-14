@@ -859,12 +859,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function publishUpdateView(){
   const title='<h2>'+esc(tr('publishUpdate'))+'</h2>';
   if(mode==='publish-choose')return '<section class="panel website-files-publish">'+title+'<p>'+esc(tr('choosePublishTarget'))+'</p><div class="inline-actions">'+button('folderPublish','folder')+button('destination','destination')+button('checkWebsite','check-website')+button('closePreview','visual')+'</div></section>';
-  return '<section class="panel website-files-publish">'+title+'<p>'+esc(opened.site.name)+' · '+esc(destination.config.kind==='github'?'GitHub':'SSH')+'</p>'+(!plan?'<p>'+esc(remoteAddress(destination.config))+'</p>':'')+transferView()+reviewView()+
+  return '<section class="panel website-files-publish">'+title+'<p>'+esc(opened.site.name)+' · '+esc({github:'GitHub',ssh:'SSH',sftp:'SFTP',ftp:'FTP'}[destination.config.kind]??'')+'</p>'+(!plan?'<p>'+esc(remoteAddress(destination.config))+'</p>':'')+transferView()+reviewView()+
    '<div class="inline-actions">'+(plan||destination.transfer?.uncertain?'':button('review','plan'))+button('destination','destination')+button('checkWebsite','check-website')+button('closePreview','visual')+'</div></section>';
  }
  function transferView(){return remoteReceiptView(destination,opened.site.revision,{esc,t,tr,button});}
  function destinationView(){if(!destination)return '<p role="status">'+esc(tr('loading'))+'</p>';const config=destination.config;
-  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>SSH</option></select></label>'+(config.kind==='github'?github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>':['host','port','user','directory','identity'].map(key=>field(key,config.ssh[key==='identity'?'identityFile':key]??'','data-destination-group="ssh"')).join(''))+field('publicUrl',config.publicUrl??'')+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+(destinationDirty?'':transferView())+reviewView()+'</section>';
+  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>SSH</option><option value="sftp" '+(config.kind==='sftp'?'selected':'')+'>'+esc(tr('kindSftp'))+'</option><option value="ftp" '+(config.kind==='ftp'?'selected':'')+'>'+esc(tr('kindFtp'))+'</option></select></label>'+(config.kind==='sftp'||config.kind==='ftp'?hostView(config):config.kind==='github'?github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>':['host','port','user','directory','identity'].map(key=>field(key,config.ssh[key==='identity'?'identityFile':key]??'','data-destination-group="ssh"')).join(''))+field('publicUrl',config.publicUrl??'')+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+(destinationDirty?'':transferView())+reviewView()+'</section>';
  }
  function reviewView(){
   if(!plan)return '';
@@ -878,6 +878,23 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    :'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
   const withdrawal=remoteEdition==='withdrawal'?'<p role="note" data-release-withdrawal>'+esc(tr('releaseWithdrawRemoteIntro'))+'</p>':'';
   return '<section data-website-files-review><h3>'+esc(tr(remoteEdition==='withdrawal'?'releaseWithdrawReview':'review'))+'</h3>'+withdrawal+'<p>'+esc(address)+'</p>'+lists.join('')+confirm+'</section>';
+ }
+ // SFTP and FTP hosts publish into their web folder. An FTP password is kept
+ // on this computer and entered once the destination is saved.
+ function hostView(config){
+  const kind=config.kind,v=config[kind],state=destination?.hostPassword;
+  const input=(label,name,value,type='text')=>'<label>'+esc(tr(label))+'<input type="'+type+'" data-website-file-field="'+name+'" data-destination-group="'+kind+'" value="'+esc(value??'')+'"></label>';
+  const security=kind!=='ftp'?'':'<label>'+esc(tr('ftpSecurity'))+'<select data-website-file-field="security" data-destination-group="ftp">'+[['explicit','ftpExplicit'],['implicit','ftpImplicit'],['none','ftpPlain']].map(([value,label])=>'<option value="'+value+'" '+(v.security===value?'selected':'')+'>'+esc(tr(label))+'</option>').join('')+'</select></label>'+(v.security==='none'?'<p class="guard-error" role="note">'+esc(tr('ftpPlainWarning'))+'</p>':'');
+  const password=kind!=='ftp'?'':!destination?.configured||destinationDirty?'<p class="muted">'+esc(tr('hostPasswordAfterSave'))+'</p>':'<label>'+esc(tr('hostPassword'))+'<input type="password" autocomplete="off" maxlength="1024" data-website-host-password></label>'+(state?.persistent?'<label class="checkbox"><input type="checkbox" data-website-host-remember checked> '+esc(tr('hostPasswordRemember'))+'</label>':'')+'<p class="muted">'+esc(tr(state?.saved?(state.persistent?'hostPasswordSaved':'hostPasswordSession'):'hostPasswordMissing'))+'</p><div class="inline-actions">'+button('hostPasswordSave','host-password')+(state?.saved?button('hostPasswordForget','host-password-forget'):'')+'</div>';
+  return input('hostName','host',v.host)+input('hostPort','port',v.port,'number')+input('hostUser','user',v.user)+input('hostDirectory','directory',v.directory)+'<p class="muted">'+esc(tr('hostDirectoryHelp'))+'</p>'+(kind==='sftp'?input('sftpKey','identity',v.identityFile)+'<p class="muted">'+esc(tr('sftpHelp'))+'</p>':'')+security+'<label class="checkbox"><input type="checkbox" data-website-file-field="allowExisting" data-destination-group="'+kind+'" '+(v.allowExisting?'checked':'')+'> '+esc(tr('allowExisting'))+'</label><p class="muted">'+esc(tr('allowExistingHelp'))+'</p>'+password;
+ }
+ async function hostPassword(operation){
+  const entry=document.querySelector('[data-website-host-password]');
+  try{
+   if(operation==='host-password'){if(!entry?.value)throw Error(tr('hostPasswordMissing'));destination=await request('destination/host-password',{siteId:siteId(),password:entry.value,remember:document.querySelector('[data-website-host-remember]')?.checked!==false});}
+   else destination=await request('destination/host-password-forget',{siteId:siteId()});
+  }finally{if(entry)entry.value='';}
+  render();
  }
  async function saveDestination(){if(!destination)return;destination=await request('destination/save',{siteId:siteId(),config:destination.config,etag:destination.etag});destinationDirty=false;onDirty(dirty);plan=null;render();}
  async function remoteAction(operation){
@@ -919,7 +936,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   await save();if(!opened||stale||dirty)throw Error(tr('changed'));
   const target=releases.destination();releases.reset();plan=null;form=null;
   if(target?.kind==='folder'){folder.reset(target.directory,{withdrawal:true});mode='folder';render();await folder.action('plan');await folder.loadChooser();return;}
-  if(target?.kind!=='github'&&target?.kind!=='ssh')throw Error(tr('releaseManualRemediation'));
+  if(!['github','ssh','sftp','ftp'].includes(target?.kind))throw Error(tr('releaseManualRemediation'));
   destination=await request('destination',{siteId:siteId()},{signal:controller.signal});destinationDirty=false;
   if(destination.config.kind!==target.kind)throw Error(tr('changed'));
   remoteEdition='withdrawal';mode='publish-review';render();
@@ -1127,6 +1144,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='destination')await showDestination();
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
+   else if(operation==='host-password'||operation==='host-password-forget')await hostPassword(operation);
    else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
    else if(['publish','publish-retry','publish-pages','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
@@ -1181,7 +1199,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const id=element.matches('[data-website-file-site]')?element.value:siteId(),path=element.matches('[data-website-file-page]')?element.value:'index.html';void run(async()=>{if(await beforeLeave(true)){if(mode==='preview'&&id===siteId()){navigatePreview({path,hash:''});return;}mode='visual';await open(id,path);}else render();}).catch(()=>{});return true;
   }
   if(element.dataset.websiteFileField&&destination&&mode==='destination'){
-   const key=element.dataset.websiteFileField==='identity'?'identityFile':element.dataset.websiteFileField,target=element.dataset.destinationGroup?destination.config[element.dataset.destinationGroup]:destination.config;target[key]=element.type==='checkbox'?element.checked:key==='port'?Number(element.value):element.value;destinationDirty=true;onDirty(true);plan=null;if(key==='kind'){render();if(element.value==='github')void github.refresh().catch(reason=>notify(reason.message,true));}else document.querySelector('[data-website-files-review]')?.remove();return true;
+   if(element.dataset.websiteFileField==='kind'&&element.value==='sftp')destination.config.sftp??={host:'',port:22,user:'',directory:'',identityFile:'',allowExisting:false};
+   if(element.dataset.websiteFileField==='kind'&&element.value==='ftp')destination.config.ftp??={host:'',port:21,user:'',directory:'',security:'explicit',allowExisting:false};
+   const key=element.dataset.websiteFileField==='identity'?'identityFile':element.dataset.websiteFileField,target=element.dataset.destinationGroup?destination.config[element.dataset.destinationGroup]:destination.config;target[key]=element.type==='checkbox'?element.checked:key==='port'?Number(element.value):element.value;destinationDirty=true;onDirty(true);plan=null;if(key==='kind'||key==='security'){render();if(element.value==='github')void github.refresh().catch(reason=>notify(reason.message,true));}else document.querySelector('[data-website-files-review]')?.remove();return true;
   }
   return element.closest('[data-website-files-form]')!==null;
  }

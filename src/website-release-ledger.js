@@ -8,7 +8,7 @@ const key='.observanda/website-releases.json';
 export const maxReleaseEntries=50;
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const absolute=value=>typeof value==='string'&&value.length<=4096&&(value.startsWith('/')||/^[A-Za-z]:[\\/]/.test(value)||value.startsWith('\\\\'));
-const kinds=new Set(['folder','github','ssh']);
+const kinds=new Set(['folder','github','ssh','sftp','ftp']);
 function valid(entry){
  if(!entry||typeof entry!=='object'||!hash(entry.releaseId)||!hash(entry.revision)||entry.version!==null&&!researchId(entry.version))return false;
  if(!['website','withdrawal'].includes(entry.edition)||!Number.isFinite(Date.parse(entry.completedAt)))return false;
