@@ -11,6 +11,7 @@ import {RecordValues} from '../../src/record-values.js';
 import {RecordContent} from '../../src/record-content.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
+import {revealInEditor} from './record-editor-helper.js';
 
 test('reader contributor authoring recovers additions and removals, reviews conflicts and handles a lost save acknowledgement',async({page},info)=>{
  test.setTimeout(240000);
@@ -20,13 +21,13 @@ test('reader contributor authoring recovers additions and removals, reviews conf
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  const read=ResearchCatalogue.prototype.record,errors=[],requests=[];ResearchCatalogue.prototype.record=()=>{throw Error('Contributor UI reconstructed a whole record');};
  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);});
- const values=new RecordValues(f.workspace),target=id=>({workspaceId:book.id,recordId:record.id,field:'contributor:'+id}),dialog=page.getByRole('dialog',{name:'Edit Contributor',exact:true});
+ const values=new RecordValues(f.workspace),target=id=>({workspaceId:book.id,recordId:record.id,field:'contributor:'+id}),dialog=page.getByRole('dialog',{name:/^(Add|Edit) contributor$/});
  const save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click();
  const recover=async()=>{await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();};
- const tail=async()=>{await page.locator('[data-collection-position="contributors"]').fill('9');await page.locator('[data-action="content-collection-go"][data-collection="contributors"]').click();await expect(page.locator('[data-record-contributor="'+record.contributors[8].id+'"]')).toBeVisible();};
+ const tail=async()=>{await (await revealInEditor(page,page.locator('[data-collection-position="contributors"]'),'Record details')).fill('9');await page.locator('[data-action="content-collection-go"][data-collection="contributors"]').click();await expect(page.locator('[data-record-contributor="'+record.contributors[8].id+'"]')).toBeVisible();};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
-  await page.getByRole('button',{name:'Add contributor',exact:true}).click();await dialog.getByLabel('Role or contribution',{exact:true}).fill('Field work');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add contributor',exact:true}),'Record details')).click();await dialog.getByLabel('Role or contribution',{exact:true}).fill('Field work');
   await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();await recover();
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('');await expect(dialog.getByLabel('Role or contribution',{exact:true})).toHaveValue('Field work');
   await save();await expect(dialog).toBeVisible();await dialog.getByLabel('Name',{exact:true}).fill('Recovered contributor');
@@ -59,7 +60,7 @@ test('an empty reader offers contributor creation without entering the full reco
  const read=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=()=>{throw Error('Empty contributor UI reconstructed a whole record');};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.locator('.record-contributor-values')).toContainText('No contributors listed.');
-  await page.getByRole('button',{name:'Add contributor',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit Contributor',exact:true});
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add contributor',exact:true}),'Record details')).click();const dialog=page.getByRole('dialog',{name:/^(Add|Edit) contributor$/});
   await dialog.getByLabel('Name',{exact:true}).fill('First contributor');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('button',{name:'Edit contributor First contributor',exact:true})).toBeVisible();
  }finally{ResearchCatalogue.prototype.record=read;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

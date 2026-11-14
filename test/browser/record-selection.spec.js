@@ -32,7 +32,7 @@ test('relationship search pages summaries and exact method links survive later e
  try{
   await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);
   const titleEdit=await openRecordDetail(page);await titleEdit.getByLabel('Record title',{exact:true}).fill('Unfinished listening interpretation');await titleEdit.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(titleEdit).not.toBeVisible();
-  await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();const dialog=page.getByRole('dialog',{name:/^(Add|Edit) research link$/}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
   await dialog.getByLabel('Relationship purpose',{exact:true}).selectOption('uses-method');await expect(dialog.getByLabel('Version to choose')).toHaveValue('exact');await expect(dialog.getByLabel('Version to choose')).toBeDisabled();await dialog.getByRole('button',{name:'Choose target',exact:true}).click();
   await expect(choices).toHaveCount(25);await expect(choices.first()).toContainText('Observation 01');expect(bodies).toEqual([]);
   await dialog.getByRole('button',{name:'Next results',exact:true}).focus();await page.keyboard.press('Enter');await expect(choices.first()).toBeFocused();await expect(choices.first()).toContainText('Observation 26');
@@ -61,7 +61,7 @@ test('cancelled linking ignores late pin replies and malformed searches can be r
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/notebook'))fullReads.push(r.url());});
  try{
   await page.goto(f.app.url);await openRecord(page,f.book.entries[0].id);await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();
-  const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
+  const dialog=page.getByRole('dialog',{name:/^(Add|Edit) research link$/}),choices=dialog.locator('[data-action="research-target-choose"]'),picker=dialog.locator('[data-research-picker]');
   await dialog.getByLabel('Version to choose').selectOption('exact');await dialog.getByRole('button',{name:'Choose target',exact:true}).click();await expect(choices).toHaveCount(25);
   const gate=new Promise(resolve=>release=resolve);let started;const pending=new Promise(resolve=>started=resolve);
   await page.context().route('**/api/research/materials/pin',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});});

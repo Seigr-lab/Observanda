@@ -1,4 +1,6 @@
 import {recordValueLabel as label,recordValueEditLabel as editLabel} from './record-value-controls.js';
+// A link, contributor or figure that is not saved yet is being added, not edited.
+const newItemHeading=field=>relationValueId(field)?text('addRelation'):contributorValueId(field)?text('addContributor'):figureValueId(field)?text('addFigure'):null;
 import {PUBLICATION_PARTS} from './record-publication-privacy.js';
 import {publicationPartsFields,updatePublicationPart,figureSharingFields,publicationChoices} from './record-publication-controls.js';
 import {recordPreparationUI} from './record-preparation-ui.js';
@@ -36,7 +38,7 @@ export function recordValuesView(options,lifecycle){
   checkpoint:options=>figures.checkpoint(options),
   rebase(base,value){if(attemptValueField(base.field))attempts.rebase(base,value);},
   bind:dialog=>{choices.bind(dialog);relations.bind(dialog);figures.bind(dialog);attempts.bind(dialog);results.bind(dialog);},release:()=>{choices.release();relations.release();figures.release();attempts.release();results.release();},busy:()=>relations.busy()||figures.busy()||attempts.busy()||results.busy(),
-  heading:base=>base?editLabel(base.field,base.definition):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
+  heading:base=>base?(base.value?.value==null&&newItemHeading(base.field)||editLabel(base.field,base.definition)):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
   fields(base,value,changed){
    const name=base.field,item=value.value;
    if(figureSharingId(name))return figureSharingFields(item,base.definition.title,esc);

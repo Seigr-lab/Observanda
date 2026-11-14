@@ -7,7 +7,7 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 const target=(f,id)=>({workspaceId:f.book.id,recordId:f.record.id,field:'result:'+id});
-const dialogFor=page=>page.getByRole('dialog',{name:'Edit Result statement',exact:true});
+const dialogFor=page=>page.getByRole('dialog',{name:'Edit result statement',exact:true});
 async function start(f){return testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')});}
 
 test('reader result tables recover unfinished selections and preserve exact source values without full-record editing',async({page},info)=>{

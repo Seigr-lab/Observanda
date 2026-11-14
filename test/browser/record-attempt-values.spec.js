@@ -10,7 +10,7 @@ import {RecordContent} from '../../src/record-content.js';
 import {preparation,event} from '../fixtures/attempts.js';
 const target=(f,kind,id)=>({workspaceId:f.book.id,recordId:f.record.id,field:'attempt:'+kind+':'+id});
 async function append(f,kind,item){const base=await f.values.read(target(f,kind,item.id));return f.values.save({...target(f,kind,item.id),expectedRevision:base.revision,value:{value:item}});}
-const dialogFor=page=>page.getByRole('dialog',{name:'Edit Preparation, events and assessments',exact:true});
+const dialogFor=page=>page.getByRole('dialog',{name:'Edit preparation, events and assessments',exact:true});
 
 test('reader preparations recover incomplete inputs, pin a method and assess an acquisition without whole-record editing',async({page},info)=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),method={...structuredClone(f.record),id:randomUUID(),title:'Independent decoding method',type:'protocol',sections:[],figures:[],body:'Exact decoder instructions',relations:[]};delete method.results;

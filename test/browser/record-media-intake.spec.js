@@ -25,7 +25,7 @@ test('reader uploads and removes media with acknowledgement retries, retained or
   const [received]=await imports.list(),id=received.id,block=page.locator('[data-record-media="'+id+'"]');
   await expect(block.locator('audio')).toBeVisible();expect((await reader.read({...target,windows:{attachments:9}})).collections.attachments.total).toBe(10);
   await page.context().unroute('**/api/research/records/media');
-  await block.getByRole('button',{name:'Edit media details for Audio',exact:true}).click();const details=page.getByRole('dialog',{name:'Edit Media details',exact:true});
+  await block.getByRole('button',{name:'Edit media details for Audio',exact:true}).click();const details=page.getByRole('dialog',{name:'Edit media details',exact:true});
   await details.getByLabel('Caption',{exact:true}).fill('Intake tone');await details.getByRole('button',{name:'Save changes',exact:true}).click();await expect(details).not.toBeVisible();
   await page.getByRole('button',{name:'Media imports',exact:true}).click();const library=page.getByRole('dialog',{name:'Media imports',exact:true});
   await expect(library).toContainText('attaches a prepared copy to this record immediately');

@@ -11,7 +11,7 @@ import {revealInEditor} from './record-editor-helper.js';
 test('create plots and multi-panel figures from record editing and recover an unfinished new figure',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=()=>{throw Error('Figure creation reconstructed the full record');};const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);});
- const dialog=page.getByRole('dialog',{name:'Edit Figure',exact:true}),save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:/^(Add|Edit) figure$/}),save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click();
  const idle=()=>expect(dialog.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');
  const area=async value=>{await expect(dialog.locator('[data-fe-part]')).toBeEnabled();await dialog.locator('[data-fe-part]').selectOption(value);await idle();};
  const property=async(name,value)=>{const control=await figureProperty(dialog,name),changed=page.waitForResponse(r=>r.url().endsWith('/drafts/figures/change'));await control.fill(value);await changed;await idle();await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');};

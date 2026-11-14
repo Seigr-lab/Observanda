@@ -12,7 +12,7 @@ import {workspaceReachFixture} from './workspace-reach-fixture.js';
 test('a lab book record links and opens records of other projects in the same workspace',async({page})=>{
  test.setTimeout(240000);page.setDefaultTimeout(15000);
  const fixture=await workspaceReachFixture('workspace-record-links'),{f,host,apiary,sealed}=fixture,record=host.entries[0],errors=[];let app;
- const dialog=page.getByRole('dialog',{name:'Edit Research link',exact:true}),owners=page.locator('dialog[data-workspace-owner-picker]'),reference=()=>dialog.getByLabel('Observanda reference',{exact:true});
+ const dialog=page.getByRole('dialog',{name:/^(Add|Edit) research link$/}),owners=page.locator('dialog[data-workspace-owner-picker]'),reference=()=>dialog.getByLabel('Observanda reference',{exact:true});
  const openRecord=async()=>{await page.goto(app.origin+'/#/records/'+record.id+'/read');await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();await expect(dialog).toBeVisible();};
  try{
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(fixture.directory,'preferences.json')});

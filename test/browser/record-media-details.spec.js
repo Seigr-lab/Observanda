@@ -19,7 +19,7 @@ test('media details show technical facts and offer camera details without changi
  const file=path.join(f.directory,'camera.jpg');execFileSync('ffmpeg',['-v','error','-n','-f','lavfi','-i','color=c=green:s=96x64','-frames:v','1',file],{windowsHide:true,stdio:'pipe',timeout:30000});
  const photo=await f.media.import(withExif(await readFile(file)),'image');
  const ready=await f.workspace.read(),record=ready.book.entries.find(item=>item.id===f.record.id);record.attachments.unshift({...photo,caption:'Camera photograph',alt:'',transcript:'',share:false});await f.workspace.save(ready.book,ready.etag);
- const dialog=page.getByRole('dialog',{name:'Edit Media details',exact:true});
+ const dialog=page.getByRole('dialog',{name:'Edit media details',exact:true});
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();

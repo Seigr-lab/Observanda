@@ -12,7 +12,7 @@ test('a video gets a caption track in the media dialog, plays it in the reader, 
  test.setTimeout(150000);
  const f=await mediaValueFixture({count:3}),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- const dialog=page.getByRole('dialog',{name:'Edit Media details',exact:true}),video=f.record.attachments[2];
+ const dialog=page.getByRole('dialog',{name:'Edit media details',exact:true}),video=f.record.attachments[2];
  try{
   expect(video.kind).toBe('video');
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();

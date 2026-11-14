@@ -11,7 +11,7 @@ import {revealInEditor} from './record-editor-helper.js';
 test('multi-panel editing selects late saved plots, recovers copied results and retries a lost save once',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=ResearchCatalogue.prototype.record,errors=[],requests=[];
  ResearchCatalogue.prototype.record=()=>{throw Error('Panel copying loaded an entire record');};page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push(new URL(request.url()).pathname));page.on('dialog',dialog=>dialog.accept());
- const editor=page.getByRole('dialog',{name:'Edit Figure',exact:true}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});let release;
+ const editor=page.getByRole('dialog',{name:/^(Add|Edit) figure$/}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});let release;
  const area=async value=>{await expect(editor.locator('[data-fe-part]')).toBeEnabled();await editor.locator('[data-fe-part]').selectOption(value);await expect(editor.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');};
  const copy=()=>editor.getByRole('button',{name:'Copy saved plot',exact:true}).click();
  try{

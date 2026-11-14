@@ -7,7 +7,7 @@ test('a photograph records its creator, licence, capture date with uncertain pre
  test.setTimeout(120000);
  const f=await mediaValueFixture({count:3}),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- const dialog=page.getByRole('dialog',{name:'Edit Media details',exact:true}),image=f.record.attachments[0];
+ const dialog=page.getByRole('dialog',{name:'Edit media details',exact:true}),image=f.record.attachments[0];
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();

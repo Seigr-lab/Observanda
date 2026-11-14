@@ -99,7 +99,7 @@ test('people define their structure and every lab uses the same notebook and rec
   await expect(await revealInEditor(page,page.getByRole('button',{name:'Add contributor',exact:true}),'Record details')).toBeVisible();
   await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();
   // A lab book of another project has its own store, so its reference is pasted as the app copies it, rather than found in this lab book.
-  const link=page.getByRole('dialog',{name:'Edit Research link',exact:true});await link.getByLabel('Link label',{exact:true}).fill('IT investigations');
+  const link=page.getByRole('dialog',{name:/^(Add|Edit) research link$/});await link.getByLabel('Link label',{exact:true}).fill('IT investigations');
   await link.getByLabel('Observanda reference',{exact:true}).fill(researchReference({workspaceId:it.storeId,kind:'notebook',id:it.id}));
   await link.getByRole('button',{name:'Save changes',exact:true}).click();await expect(link).not.toBeVisible({timeout:30000});
   saved=await readBooks();const record=saved.entries.find(e=>e.title==='First session');

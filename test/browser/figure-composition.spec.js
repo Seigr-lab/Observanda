@@ -24,7 +24,7 @@ test('author, annotate, compare, save and restore multi-panel figures through th
  try{
   // The multi-panel figure is edited in the retained property editor ("Edit Figure"): one editing area,
   // property and panel at a time; panels are saved plots copied into it.
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const compound=page.getByRole('dialog',{name:'Edit Figure',exact:true}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const compound=page.getByRole('dialog',{name:/^(Add|Edit) figure$/}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});
   const idle=()=>expect(compound.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');
   const area=async value=>{await expect(compound.locator('[data-fe-part]')).toBeEnabled();await compound.locator('[data-fe-part]').selectOption(value);await idle();};
   const apply=async()=>{await compound.locator('[data-fe="apply"]').click();await idle();await expect(compound.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');};

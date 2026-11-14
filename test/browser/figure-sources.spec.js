@@ -22,7 +22,7 @@ test('copy a calculated plot into panels and inspect its exact source chain whil
  const calculation=await materials.plot({recordId:record.id,title:'Calculated response',dataset,mapping});
  const expectedRevision=recordRevision(record);record.figures=[calculation.figure];await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:record.id,expectedRevision,record}]});
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),errors=[],writes=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- const dialog=page.locator('#dialog'),editor=page.getByRole('dialog',{name:'Edit Figure',exact:true}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});page.on('request',r=>{if(new URL(r.url()).pathname==='/api/research/records/values/save')writes.push(r);});
+ const dialog=page.locator('#dialog'),editor=page.getByRole('dialog',{name:/^(Add|Edit) figure$/}),picker=page.getByRole('dialog',{name:'Copy saved plot',exact:true});page.on('request',r=>{if(new URL(r.url()).pathname==='/api/research/records/values/save')writes.push(r);});
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
   await (await revealInEditor(page,page.getByRole('button',{name:'Add multi-panel figure',exact:true}),'Evidence and results')).click();const area=async value=>{await expect(editor.locator('[data-fe-part]')).toBeEnabled();await editor.locator('[data-fe-part]').selectOption(value);await expect(editor.locator('[data-authored-editor]')).toHaveAttribute('aria-busy','false');};
