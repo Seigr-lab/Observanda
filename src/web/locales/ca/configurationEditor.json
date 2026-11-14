@@ -35,6 +35,7 @@
   "cancel": "Cancel·la",
   "templateName": "Nom de la plantilla",
   "noTypes": "No hi ha tipus de registre actius.",
+  "noMatches": "Cap tipus de registre coincideix amb aquesta cerca.",
   "chooseMore": "Tria un tipus de registre",
   "search": "Troba tipus de registre",
   "sourceChanged": "La plantilla guardada ha canviat. Torna a obrir el selector de tipus.",

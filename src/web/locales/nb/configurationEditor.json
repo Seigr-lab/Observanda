@@ -35,6 +35,7 @@
   "cancel": "Avbryt",
   "templateName": "Malnavn",
   "noTypes": "Ingen aktive oppføringstyper.",
+  "noMatches": "Ingen oppføringstyper samsvarer med dette søket.",
   "chooseMore": "Velg oppføringstype",
   "search": "Finn oppføringstyper",
   "sourceChanged": "Den lagrede malen er endret. Åpne typevelgeren igjen.",

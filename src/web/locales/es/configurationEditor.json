@@ -35,6 +35,7 @@
   "cancel": "Cancelar",
   "templateName": "Nombre de la plantilla",
   "noTypes": "No hay tipos de registro activos.",
+  "noMatches": "Ningún tipo de registro coincide con esta búsqueda.",
   "chooseMore": "Elegir tipo de registro",
   "search": "Buscar tipos de registro",
   "sourceChanged": "La plantilla guardada ha cambiado. Vuelve a abrir el selector de tipos.",

@@ -35,6 +35,7 @@
  "cancel":"Cancel",
  "templateName":"Template name",
  "noTypes":"No active record types.",
+ "noMatches":"No record types match this search.",
  "chooseMore":"Choose record type",
  "search":"Find record types",
  "sourceChanged":"The saved template changed. Reopen the type chooser.",
