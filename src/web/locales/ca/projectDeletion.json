@@ -1,7 +1,7 @@
 {
   "delete": "Elimina el projecte",
   "confirm": "Vols eliminar {title}?",
-  "effect": "Elimina permanentment aquest projecte, els seus llibres de laboratori i les seves bases de dades, registres, historial i fitxers. Els subprojectes es conserven a l'arrel de l'espai de treball.",
+  "effect": "Elimina permanentment aquest projecte, els seus llibres de laboratori i les seves bases de dades, registres, historial i fitxers.",
   "cancel": "Cancel·la",
   "resume": "Acaba l'eliminació",
   "pending": "Eliminació del projecte",

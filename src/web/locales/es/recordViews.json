@@ -51,7 +51,7 @@
   "missingProject": "Este proyecto ya no está disponible. Edita la vista y elige un nuevo ámbito.",
   "unavailableNotebook": "Cuaderno de laboratorio no disponible",
   "unavailableProject": "Proyecto no disponible",
-  "projectScope": "{name} (incluidos los subproyectos)",
+  "projectScope": "{name}",
   "allRecords": "Todos los registros del espacio de trabajo",
   "certaintyValues.known": "conocida",
   "certaintyValues.estimated": "estimada",

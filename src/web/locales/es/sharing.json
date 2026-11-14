@@ -13,7 +13,7 @@
   "recipient": "Miembro o equipo",
   "books": "Cuadernos de laboratorio que compartir",
   "projects": "Proyectos completos que compartir",
-  "projectScope": "El acceso al proyecto incluye sus subproyectos y futuros cuadernos de laboratorio. También puedes seleccionar cuadernos individuales a continuación.",
+  "projectScope": "El acceso al proyecto incluye todos sus cuadernos de laboratorio, también los futuros. También puedes seleccionar cuadernos individuales a continuación.",
   "reader": "Leer investigación",
   "editor": "Editar y devolver cambios",
   "role": "Permiso",

@@ -1,7 +1,7 @@
 {
   "delete": "Slett prosjekt",
   "confirm": "Slette {title}?",
-  "effect": "Fjern dette prosjektet, labbøkene og tilhørende databaser, oppføringer, historikk og filer permanent. Underprosjekter beholdes på rotnivået i arbeidsområdet.",
+  "effect": "Fjern dette prosjektet, labbøkene og tilhørende databaser, oppføringer, historikk og filer permanent.",
   "cancel": "Avbryt",
   "resume": "Fullfør slettingen",
   "pending": "Sletting av prosjekt",

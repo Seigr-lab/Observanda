@@ -13,7 +13,7 @@
   "recipient": "Medlem eller team",
   "books": "Labbøker som skal delast",
   "projects": "Heile prosjekt som skal delast",
-  "projectScope": "Prosjekttilgang omfattar underprosjekt og framtidige labbøker. Du kan òg velje einskilde labbøker nedanfor.",
+  "projectScope": "Prosjekttilgang omfattar alle labbøkene, òg framtidige. Du kan òg velje einskilde labbøker nedanfor.",
   "reader": "Les forsking",
   "editor": "Rediger og returner endringar",
   "role": "Løyve",

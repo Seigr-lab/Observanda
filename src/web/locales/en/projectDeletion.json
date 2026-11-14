@@ -1,7 +1,7 @@
 {
   "delete": "Delete project",
   "confirm": "Delete {title}?",
-  "effect": "Permanently remove this project, its lab books and their databases, records, history and files. Subprojects are kept at the workspace root.",
+  "effect": "Permanently remove this project, its lab books and their databases, records, history and files.",
   "cancel": "Cancel",
   "resume": "Finish deletion",
   "pending": "Project deletion",

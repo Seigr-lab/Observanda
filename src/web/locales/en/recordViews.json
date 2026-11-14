@@ -51,7 +51,7 @@
   "missingProject": "This project is no longer available. Edit the view and choose a new scope.",
   "unavailableNotebook": "Unavailable lab book",
   "unavailableProject": "Unavailable project",
-  "projectScope": "{name} (including subprojects)",
+  "projectScope": "{name}",
   "allRecords": "All workspace records",
   "certaintyValues.known": "known",
   "certaintyValues.estimated": "estimated",

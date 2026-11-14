@@ -13,7 +13,7 @@
   "recipient": "Member or team",
   "books": "Lab books to share",
   "projects": "Entire projects to share",
-  "projectScope": "Project access includes its subprojects and future lab books. You can also select individual lab books below.",
+  "projectScope": "Project access includes all its lab books, also future ones. You can also select individual lab books below.",
   "reader": "Read research",
   "editor": "Edit and return changes",
   "role": "Permission",

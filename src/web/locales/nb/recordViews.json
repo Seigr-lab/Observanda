@@ -51,7 +51,7 @@
   "missingProject": "Dette prosjektet er ikke lenger tilgjengelig. Rediger visningen og velg et nytt område.",
   "unavailableNotebook": "Utilgjengelig labbok",
   "unavailableProject": "Utilgjengelig prosjekt",
-  "projectScope": "{name} (inkludert underprosjekter)",
+  "projectScope": "{name}",
   "allRecords": "Alle arbeidsområdeoppføringer",
   "certaintyValues.known": "kjent",
   "certaintyValues.estimated": "anslått",

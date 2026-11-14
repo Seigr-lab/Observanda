@@ -51,7 +51,7 @@
   "missingProject": "Aquest projecte ja no està disponible. Edita la vista i tria un àmbit nou.",
   "unavailableNotebook": "Llibre de laboratori no disponible",
   "unavailableProject": "Projecte no disponible",
-  "projectScope": "{name} (inclosos els subprojectes)",
+  "projectScope": "{name}",
   "allRecords": "Tots els registres de l'espai de treball",
   "certaintyValues.known": "coneguda",
   "certaintyValues.estimated": "estimada",

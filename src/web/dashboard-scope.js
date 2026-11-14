@@ -25,13 +25,13 @@ export function dashboardScopeSettings(c,options={},panel={}){
  const selection=dashboardSelection(options,panel.config);
  return [
   {key:'scopeMode',label:dt("dataFrom"),type:'select',default:selection.scopeMode,choices:[{value:'all',label:dt("allProjects")},{value:'selected',label:dt("chooseProjects")}]},
-  ...(selection.scopeMode==='selected'?[dashboardCollection(c)?dashboardScopeChoices('projects',{label:t('dashboardChoices','projects'),searchLabel:t('dashboardChoices','searchProjects'),selected:selection.projectIds}):{key:'projectIds',label:dt("projectsToInclude"),type:'multi',default:selection.projectIds,choices:c.book.projects.map(p=>({value:p.id,label:locationName(c.book,p.id)}))},{key:'includeDescendants',label:dt("includeSubprojects"),type:'checkbox',default:selection.includeDescendants}]:[]),
+  ...(selection.scopeMode==='selected'?[dashboardCollection(c)?dashboardScopeChoices('projects',{label:t('dashboardChoices','projects'),searchLabel:t('dashboardChoices','searchProjects'),selected:selection.projectIds}):{key:'projectIds',label:dt("projectsToInclude"),type:'multi',default:selection.projectIds,choices:c.book.projects.map(p=>({value:p.id,label:locationName(c.book,p.id)}))}]:[]),
   {key:'includeWorkspace',label:dt("includeWorkspace"),type:'checkbox',default:selection.includeWorkspace,help:dt('workspaceScopeHelp',{title:c.book.title})}
  ];
 }
 export function dashboardScopeLabel(book,options={},legacy={},labels={}){
  const s=dashboardSelection(options,legacy),names=s.scopeMode==='all'?[dt("allProjects")]:s.projectIds.map(id=>labels[id]||locationName(book,id)||dt("unavailableProject"));
- if(s.scopeMode==='selected'&&s.includeDescendants&&names.length)names.push(dt("includingSubprojects"));
+
  if(s.includeWorkspace)names.push(dt('workspaceScope',{title:book.title}));
  return names.join(' · ')||dt("noScope");
 }

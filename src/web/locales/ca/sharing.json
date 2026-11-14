@@ -13,7 +13,7 @@
   "recipient": "Membre o equip",
   "books": "Llibres de laboratori per compartir",
   "projects": "Projectes complets per compartir",
-  "projectScope": "L'accés al projecte inclou els seus subprojectes i futurs llibres de laboratori. També pots seleccionar llibres de laboratori individuals a continuació.",
+  "projectScope": "L'accés al projecte inclou tots els seus llibres de laboratori, també els futurs. També pots seleccionar llibres de laboratori individuals a continuació.",
   "reader": "Llegeix la recerca",
   "editor": "Edita i retorna els canvis",
   "role": "Permís",
