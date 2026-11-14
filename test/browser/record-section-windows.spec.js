@@ -50,19 +50,31 @@ test('long records page their sections in windows for reading, editing, finding 
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
-test('conflict review keeps choices across windows and cancellation preserves the recoverable draft',async({page})=>{
+test('draft review names section changes, keeps choices when closed and saves the recovered record',async({page})=>{
  test.setTimeout(120000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-conflict-windows-')),book=upgradeNotebook(sampleNotebook()),base=book.entries[0];base.sections=Array.from({length:45},(_,i)=>({id:randomUUID(),title:'Section '+(i+1),body:'Original '+(i+1)}));
  const f=await encryptedFixture(directory,book),mine=structuredClone(base),remote=structuredClone(base);
  for(let i=0;i<17;i++){mine.sections[i].body='My observation '+(i+1);remote.sections[i].body='Other observation '+(i+1);}
  const drafts=new ResearchDrafts(f.workspace),id=randomUUID();await drafts.write({id,workspaceId:book.id,expectedRevision:null,changes:[{base,record:mine,expectedRevision:recordRevision(base)}]});await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:remote}]});
  const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- try{
-  await page.goto(app.url);const open=async()=>{const listing=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true});if(!await listing.isVisible())await page.getByRole('button',{name:'Review drafts',exact:true}).click();await listing.getByRole('button',{name:'Review draft',exact:true}).click();};await open();const dialog=page.getByRole('dialog',{name:'Recover record draft',exact:true});
-  await expect(dialog.locator('.record-conflict')).toHaveCount(1);await expect(dialog.getByRole('status')).toContainText('Field 1 of 17');await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect((await drafts.read(id)).draft.changes[0].record).toEqual(mine);
-  await open();await dialog.getByLabel('Write a combined version',{exact:true}).check();await dialog.locator('[data-combined]').fill('Combined precise observation');await dialog.getByRole('button',{name:'Next field',exact:true}).click();await dialog.getByLabel('Saved version',{exact:false}).check();await dialog.getByRole('button',{name:'Previous field',exact:true}).click();await expect(dialog.getByLabel('Write a combined version',{exact:true})).toBeChecked();await expect(dialog.locator('[data-combined]')).toHaveValue('Combined precise observation');
-  await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();await expect(dialog.getByRole('status')).toContainText('Field 3 of 17');await expect(dialog.getByRole('alert')).toContainText('Choose a version');
-  for(let i=2;i<17;i++){await expect(dialog.locator('.record-conflict')).toHaveCount(1);await dialog.getByLabel('Your version',{exact:false}).check();if(i<16)await dialog.getByRole('button',{name:'Next unresolved field',exact:true}).click();}
-  await expect(dialog.getByRole('status')).toContainText('17 choices made');await dialog.getByRole('button',{name:'Continue editing',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.locator('[data-record-checkpoint]')).toContainText('Record draft checkpointed');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  const saved=(await f.workspace.read()).book.entries[0];expect(saved.sections[0].body).toBe('Combined precise observation');expect(saved.sections[1].body).toBe('Other observation 2');expect(saved.sections.slice(2,17)).toEqual(mine.sections.slice(2,17));expect(saved.sections.slice(17)).toEqual(base.sections.slice(17));
+  try{
+  await page.goto(app.url);
+  const dialog=page.locator('dialog.record-draft-review'),status=dialog.getByText(/overlapping changes reviewed$/),position=dialog.getByText(/^Change \d+ of 17$/);
+  const open=async()=>{const listing=page.getByRole('dialog',{name:'Recoverable record drafts',exact:true});if(!await listing.isVisible())await page.getByRole('button',{name:'Review drafts',exact:true}).click();await listing.getByRole('button',{name:'Review draft',exact:true}).click();await page.getByRole('button',{name:'Recover this draft',exact:true}).click();await expect(status).toBeVisible();};
+  const keep=async version=>{await dialog.locator('.record-conflict-versions section',{hasText:version}).getByRole('button',{name:'Keep this version',exact:true}).click();};
+  await open();await expect(status).toHaveText('0 of 17 overlapping changes reviewed');await expect(position).toHaveText('Change 1 of 17');
+  // The change is named by its section, never by an internal id.
+  await expect(dialog.locator('h3')).toHaveText('Sections / Section 1 / Section text');
+  await dialog.getByRole('button',{name:'Close review',exact:true}).click();await expect(dialog).not.toBeVisible();expect((await drafts.read(id)).draft.changes[0].record).toEqual(mine);
+  // Choices are kept when the review is closed and reopened.
+  await open();await keep('Your draft');await expect(status).toHaveText('1 of 17 overlapping changes reviewed');
+  await dialog.getByRole('button',{name:'Next change',exact:true}).click();await expect(position).toHaveText('Change 2 of 17');await keep('Current saved version');await expect(status).toHaveText('2 of 17 overlapping changes reviewed');
+  await dialog.getByRole('button',{name:'Close review',exact:true}).click();await open();await expect(status).toHaveText('2 of 17 overlapping changes reviewed');
+  await expect(dialog.getByRole('button',{name:'Save recovered record',exact:true})).toBeDisabled();await expect(position).toHaveText('Change 1 of 17');await dialog.getByRole('button',{name:'Next change',exact:true}).click();await expect(position).toHaveText('Change 2 of 17');
+  for(let i=2;i<17;i++){await dialog.getByRole('button',{name:'Next change',exact:true}).click();await expect(position).toHaveText('Change '+(i+1)+' of 17');await keep('Your draft');await expect(status).toHaveText((i+1)+' of 17 overlapping changes reviewed');}
+  await dialog.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const writing=new RecordWriting(f.workspace),body=async i=>JSON.stringify((await writing.read({workspaceId:book.id,recordId:base.id,sectionId:base.sections[i].id})).value.body);
+  expect(await body(0)).toContain('My observation 1');expect(await body(1)).toContain('Other observation 2');
+  for(let i=2;i<17;i++)expect(await body(i)).toContain('My observation '+(i+1));expect(await body(17)).toContain('Original 18');
+  await expect.poll(async()=>(await drafts.list({workspaceId:book.id})).drafts.length).toBe(0);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

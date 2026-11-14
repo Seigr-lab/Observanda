@@ -30,6 +30,17 @@ import {resultFigureRootTarget,resultFigureTargetPage} from './record-result-val
 
 const prefix='record-draft-review:',natural=value=>Number.isSafeInteger(value)&&value>=0;
 const indexFor=store=>new ObjectIndex(store,{namespace:prefix+'index:',immutable:true});
+// A change inside a collection item is named by that item's own title or label,
+// never by its internal id; an item missing from the saved version stays unnamed.
+async function pathLabels(document,path){
+ const labels=path.map(()=>null);if(path.length<2||!['sections','figures','attachments','relations','contributors'].includes(path[0]))return labels;
+ for await(const item of document.items([path[0]])){
+  if((await document.tree.selected(item.value,['id'])).value!==path[1])continue;
+  for(const field of ['title','label','name','caption']){const value=(await document.tree.selected(item.value,[field])).value;if(typeof value==='string'&&value.trim()){labels[1]=value;break;}}
+  labels[1]??='';break;
+ }
+ if(labels[1]===null)labels[1]='';return labels;
+}
 const revision=plan=>{const {saved,...value}=plan;void saved;return digest(serialize(value));},pathKey=path=>digest(JSON.stringify(path));
 const invalid=()=>{throw new AppError('INVALID');};
 export class RecordDraftReview{
@@ -172,7 +183,7 @@ export class RecordDraftReview{
    const items=[],index=indexFor(store);
    for(let position=command.offset;position<Math.min(plan.count,command.offset+4);position++){
     const item=await this.conflict(document,plan,position),entry=await index.find({root:plan.choices},pathKey(item.path)),choice=entry?await document.tree.read(entry.revision):null;
-    items.push({position,path:item.path,choice:choice?.version??null});
+    items.push({position,path:item.path,labels:await pathLabels(document,item.path),choice:choice?.version??null});
    }return {...this.summary(plan),offset:command.offset,items};
   }));
  }

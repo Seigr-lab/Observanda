@@ -64,6 +64,7 @@
   "field.chart": "Figura de datos",
   "field.figures": "Figuras",
   "field.sections": "Secciones",
+  "field.sectionBody": "Texto de la sección",
   "field.attachments": "Archivos multimedia",
   "field.caption": "Pie de figura",
   "field.alt": "Texto alternativo",

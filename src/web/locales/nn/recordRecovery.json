@@ -64,6 +64,7 @@
   "field.chart": "Datafigur",
   "field.figures": "Figurar",
   "field.sections": "Delar",
+  "field.sectionBody": "Seksjonstekst",
   "field.attachments": "Medium",
   "field.caption": "Bilettekst",
   "field.alt": "Alternativ tekst",

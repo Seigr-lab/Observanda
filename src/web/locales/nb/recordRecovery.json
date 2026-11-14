@@ -64,6 +64,7 @@
   "field.chart": "Datafigur",
   "field.figures": "Figurer",
   "field.sections": "Deler",
+  "field.sectionBody": "Seksjonstekst",
   "field.attachments": "Medier",
   "field.caption": "Bildetekst",
   "field.alt": "Alternativ tekst",

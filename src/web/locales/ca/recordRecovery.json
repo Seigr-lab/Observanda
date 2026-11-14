@@ -64,6 +64,7 @@
   "field.chart": "Figura de dades",
   "field.figures": "Figures",
   "field.sections": "Seccions",
+  "field.sectionBody": "Text de la secció",
   "field.attachments": "Multimèdia",
   "field.caption": "Peu",
   "field.alt": "Text alternatiu",

@@ -1,6 +1,12 @@
 import {t} from './i18n/index.js';
 import {recordConflictLabel} from './record-recovery-messages.js';
 const text=(key,args)=>t('recordDraftReview',key,args);
+// Collection items show their title; their internal ids are never shown. An item
+// without a title is left out of the heading, and section text has its own name.
+function pathLabel(item){
+ const label=key=>recordConflictLabel(key,(name,args)=>t('recordRecovery',name,args));
+ return item.path.map((part,i)=>{const own=item.labels?.[i];if(typeof own==='string')return own;if(part==='body'&&item.path[0]==='sections'&&i===2)return label('sectionBody');return label(part);}).filter(Boolean).join(' / ');
+}
 export function recordDraftReviewUI(options){
  const {api,esc,onSaved}=options;
  let activeClose=null;
@@ -17,7 +23,7 @@ export function recordDraftReviewUI(options){
   function render(error=''){
    dialog.innerHTML='<h2 id="record-draft-review-title" tabindex="-1">'+esc(plan?.title??text('title'))+'</h2><p>'+esc(text('description'))+'</p><p role="status">'+esc(plan?text('progress',{decided:plan.decided,total:plan.count}):text('loading'))+'</p>'+
     (plan?.removedRecord?'<p>'+esc(text('removedRecord'))+'</p>':'')+
-    (item?'<h3>'+(item.path.length?item.path.map(part=>esc(recordConflictLabel(part,(key,args)=>t('recordRecovery',key,args)))).join(' / '):esc(text('wholeRecord')))+'</h3><div class="record-conflict-versions">'+['mine','stored','base'].map(version=>{
+    (item?'<h3>'+esc(item.path.length?pathLabel(item):text('wholeRecord'))+'</h3><div class="record-conflict-versions">'+['mine','stored','base'].map(version=>{
      const value=values[version];return '<section><h4>'+esc(text(version))+'</h4><pre tabindex="0">'+esc(value?.missing?text('missing'):value?.text??'')+'</pre><div class="inline-actions">'+button('previousPart','value-'+version+'-previous',busy||!offsets[version])+button('nextPart','value-'+version+'-next',busy||value?.next==null)+'</div>'+(version==='base'?'':button(item.choice===version?'chosen':'choose','choose-'+version,busy))+'</section>';
     }).join('')+'</div><nav class="inline-actions" aria-label="'+esc(text('navigation'))+'">'+button('previous','previous',busy||position===0)+button('next','next',busy||position+1>=plan.count)+'<span>'+esc(text('position',{current:position+1,total:plan.count}))+'</span></nav>':plan?'<p>'+esc(text(plan.newRecord?'newRecord':'noConflicts'))+'</p>':'')+
     '<p role="alert">'+esc(error)+'</p><div class="dialog-actions">'+button('close','close',busy)+button('edit','edit',busy||!plan||!!plan.saved)+button('save','save',busy||!plan||plan.decided!==plan.count)+'</div>';
