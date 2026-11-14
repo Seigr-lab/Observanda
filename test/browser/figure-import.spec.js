@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {Workspace} from '../../src/storage.js';
@@ -6,7 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 const cars='Year,Make,Model,Description,Price\n1997,Ford,E350,"ac, abs, moon",3000.00\n1999,Chevy,"Venture ""Extended Edition""",,4900.00\n1999,Chevy,"Venture ""Extended Edition, Very Large""",,5000.00\n1996,Jeep,Grand Cherokee,"MUST SELL!\nair, moon roof, loaded",4799.00';
 test('mixed source data can be reviewed, mapped, grouped and saved without replacing the figure during preview',async({page})=>{
- const directory=await mkdtemp(path.resolve('.local/ux-review/figure-import-')),root=path.join(directory,'notebook'),book=sampleNotebook(),ws=new Workspace(root);
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'figure-import-')),root=path.join(directory,'notebook'),book=sampleNotebook(),ws=new Workspace(root);
  await ws.create(book);
  const app=await startServer({root,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));

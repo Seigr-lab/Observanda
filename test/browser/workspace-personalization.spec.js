@@ -48,12 +48,9 @@ test('app text scales menus, fields, dialogs and tables independently of website
   expect(await page.frameLocator('#design-preview').locator('body').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);
   await page.locator('.section-save [data-action=save]').click();
   await page.reload();expect(await navSize(page,'Dashboard')).toBeCloseTo(enlargedMenuSize,1);
-  await mkdir('.local/screenshots',{recursive:true});
-  await page.screenshot({path:'.local/screenshots/app-text-24-desktop.png'});
   await page.setViewportSize({width:390,height:844});await noOverflow(page);
   await noOverflow(page);
   await expect(page.locator('main').getByRole('slider',{name:/App text size/})).toHaveValue('24');
-  await page.screenshot({path:'.local/screenshots/app-text-24-phone-dialog.png'});
 
   expect(await navSize(page,'Dashboard')).toBeCloseTo(enlargedMenuSize,1);
   await editWorkspace(page);await noOverflow(page);

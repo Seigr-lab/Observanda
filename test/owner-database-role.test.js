@@ -11,7 +11,7 @@ import {workDirectory} from '../scripts/work-directory.js';
 
 const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??''};delete env.OBSERVANDA_DATABASE_URL;return env;};
 async function using(options,operation){const client=new Client(options);client.on('error',()=>{});await client.connect();try{return await operation(client);}finally{await client.end();}}
-// A workspace cluster inside the repository's git-ignored .local/test-work.
+// A workspace cluster inside the repository's git-ignored test/run/work.
 async function cluster(t){
  const parent=await mkdtemp(path.join(await workDirectory('test-work'),'observanda-owner-role-')),root=path.join(parent,'workspace'),vault={id:randomUUID(),key:randomBytes(32)};
  await mkdir(path.join(root,'.observanda'),{recursive:true});

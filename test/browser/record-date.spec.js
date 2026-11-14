@@ -56,12 +56,10 @@ test('record dates can be unknown or estimated through editing, history, browsin
   await expect(precision).toHaveValue('month');await expect(page.getByLabel('Estimated date',{exact:true})).toBeChecked();
   await expect(page.getByLabel('Include in website',{exact:false})).not.toBeChecked();
   await page.getByLabel('Include in website',{exact:false}).check();await save();
-  await mkdir('.local/ux-review',{recursive:true});await page.locator('.record-date-fields').scrollIntoViewIfNeeded();
-  await page.screenshot({path:'.local/ux-review/record-date-desktop.png'});
+  await page.locator('.record-date-fields').scrollIntoViewIfNeeded();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
   await page.locator('.record-date-fields').scrollIntoViewIfNeeded();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
-  await page.screenshot({path:'.local/ux-review/record-date-mobile.png'});
   await precision.focus();await expect(precision).toBeFocused();
   await page.keyboard.press('Tab');await expect(page.getByLabel('Month',{exact:true})).toBeFocused();
   await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page.locator('.record-reader')).toContainText('Estimated: February 2024');

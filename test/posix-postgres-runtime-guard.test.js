@@ -9,7 +9,7 @@ import net from 'node:net';
 import {fileURLToPath} from 'node:url';
 import {acquirePosixPostgresRuntimeGuard} from '../src/posix-postgres-runtime-guard.js';
 
-const linux=process.platform==='linux',launcher=fileURLToPath(new URL('../.local/native-filesystem/linux-'+process.arch+'/postgres-confinement',import.meta.url));
+const linux=process.platform==='linux',launcher=fileURLToPath(new URL('../dist/native/linux-'+process.arch+'/postgres-confinement',import.meta.url));
 function command(file,args,options={}){return new Promise((resolve,reject)=>{const child=spawn(file,args,{stdio:['ignore','pipe','pipe'],...options});let out='',err='';child.stdout?.on('data',x=>out+=x);child.stderr?.on('data',x=>err+=x);child.once('error',reject);child.once('close',code=>code===0?resolve(out.trim()):reject(Object.assign(Error(err||'Command failed'),{exitCode:code})));});}
 const probe=`#define _GNU_SOURCE
 #include <errno.h>

@@ -21,7 +21,7 @@ const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process
 async function using(env,operation){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL,statement_timeout:5000});client.on('error',()=>{});await client.connect();try{return await operation(client);}finally{await client.end();}}
 const query=(env,sql,...values)=>using(env,async client=>(await client.query(sql,values)).rows);
 const schemaOf=id=>'obs_'+id.replaceAll('-','');
-// One workspace runtime per test, inside the repository's git-ignored .local/test-work.
+// One workspace runtime per test, inside the repository's git-ignored test/run/work.
 async function fixture(t,{projectRuntime={}}={}){
  const parent=await mkdtemp(path.join(await workDirectory('test-work'),'observanda-project-postgres-')),vaults=[];
  const owner=new WorkspaceDatabases({directory:path.join(parent,'application'),ownerId:randomUUID(),env:environment(),projectRuntime}),detach=installDatabaseProvider(owner);

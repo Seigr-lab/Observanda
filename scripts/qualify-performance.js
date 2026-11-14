@@ -75,7 +75,7 @@ async function main(){
  const {values}=parseArgs({options:{profile:{type:'string',default:'work'},repetitions:{type:'string',default:'1'},'storage-class':{type:'string',default:'unspecified'}}});
  const profiles=values.profile==='all'?Object.keys(performanceProfiles):[values.profile],repetitions=Number(values.repetitions);
  if(profiles.some(name=>!Object.hasOwn(performanceProfiles,name))||!Number.isSafeInteger(repetitions)||repetitions<1||repetitions>100||!['unspecified','local','network'].includes(values['storage-class']))throw Error('Use --profile=work|native|heavy|mixed|all, --repetitions=1..100 and --storage-class=unspecified|local|network.');
- const relative='.local/performance-qualification/'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID();
+ const relative='docs/performance-qualification/'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID();
  // Refuse to create audit material if the checkout does not keep it ignored.
  await git('git',['check-ignore','-q',relative+'/receipt.json'],{cwd:root});const directory=path.join(root,relative);await mkdir(directory,{recursive:true,mode:0o700});
  const controller=new AbortController(),abort=()=>controller.abort();process.once('SIGINT',abort);process.once('SIGTERM',abort);

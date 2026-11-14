@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {Workspace} from '../../src/storage.js';
@@ -25,7 +26,7 @@ const geometry=page=>page.evaluate(()=>{
  };
 });
 async function openFixture(page,layout,many=false){
- const directory=await mkdtemp(path.resolve('.local/ux-review/card-settings-'));
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'card-settings-'));
  const book=sampleNotebook();book.title='Example workspace';book.projects[0].title='Example project';book.notebooks[0].title='Research records';
  book.entries=book.entries.slice(0,1);
  book.entries[0].title='Comparing observations across different light conditions, materials and repeated measurements over time';

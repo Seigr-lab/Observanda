@@ -6,7 +6,7 @@ import {workDirectory} from './work-directory.js';
 
 export async function preparePostgresConfinement({out,run}={}){
  if(process.platform!=='linux')return;
- out??=fileURLToPath(new URL('../.local/native-filesystem/linux-'+process.arch+'/postgres-confinement',import.meta.url));
+ out??=fileURLToPath(new URL('../dist/native/linux-'+process.arch+'/postgres-confinement',import.meta.url));
  run??=(command,args,cwd)=>new Promise((resolve,reject)=>{const child=spawn(command,args,{cwd,stdio:'inherit',shell:false});child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('PostgreSQL confinement compilation failed')));});
  const parent=await workDirectory(),temporary=await mkdtemp(path.join(parent,'observanda-confinement-'));
  try{

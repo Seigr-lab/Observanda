@@ -54,9 +54,7 @@ test('SVG logo upload, return to Appearance, header alignment and order persist 
  await preferences(page,'General');await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
  await appLayout(page);await positioned();
  await page.evaluate(()=>window.scrollTo(0,0));
- await mkdir('.local/screenshots',{recursive:true});await page.screenshot({path:'.local/screenshots/branding-appearance-desktop.png'});
  await page.setViewportSize({width:390,height:844});await noOverflow(page);await positioned();
- await page.screenshot({path:'.local/screenshots/branding-appearance-phone.png'});
 });
 test('General directly edits workspace details and protects unsaved form changes',async({page})=>{
  await preferences(page,'General');
@@ -79,7 +77,6 @@ test('General directly edits workspace details and protects unsaved form changes
  await expect(page.locator('#leave-dialog [role=alert]')).toContainText('required fields');
  await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();
  await preferences(page,'General');await page.setViewportSize({width:390,height:844});await noOverflow(page);
- await page.screenshot({path:'.local/screenshots/general-settings-phone.png'});
 });
 test('branding returns to the website draft and explicit discard removes its unsaved logo',async({page})=>{
  // Website logos are edited from Website design; they stay a website draft until saved.

@@ -89,7 +89,6 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
   await expect(owned.locator('.operation-progress')).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   expect(await owned.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
-  await page.screenshot({path:'.local/activity-'+kind+'.png'});
   const unauthorized=await fetch(app.origin+'/api/activity');expect(unauthorized.status).toBe(401);
   await page.locator('.app-activity [data-toggle]').click();
   release();await expect(panel.locator('[data-status]')).toHaveText(kind==='failed-record'?'Failed':'Completed',{timeout:45000});

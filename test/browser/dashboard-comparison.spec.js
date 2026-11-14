@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -11,7 +12,7 @@ import {startServer} from '../../src/server.js';
 
 test('one inventory card compares chosen wings and items, retains exact quantities and saves every setting',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(12000);
- const directory=await mkdtemp(path.resolve('.local/ux-review/dashboard-comparison-')),root=path.join(directory,'workspace'),book=createNotebook('Seigr');
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'dashboard-comparison-')),root=path.join(directory,'workspace'),book=createNotebook('Seigr');
  const wing=name=>({id:randomUUID(),title:name,parentId:null,kind:'Wing',description:'',share:false,logoId:null,tools:['resources']});
  const a=wing('Field Lab'),b=wing('Sound Studio'),c=wing('Nature Archive');book.projects=[a,b,c];
  const ws=new Workspace(root);await ws.create(book);const store=workspaceModules(ws);

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -11,7 +12,7 @@ import {startServer} from '../../src/server.js';
 
 test('location inventory, combined calendars, save/discard and persistent navigation work together',async({page})=>{
  test.setTimeout(120000);
- const directory=await mkdtemp(path.resolve('.local/ux-review/project-operations-')),root=path.join(directory,'workspace'),book=sampleNotebook(),wing=book.projects[0];
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'project-operations-')),root=path.join(directory,'workspace'),book=sampleNotebook(),wing=book.projects[0];
  const parent={...wing,id:randomUUID(),title:'Creative collective',parentId:null},other={...wing,id:randomUUID(),title:'Field team',parentId:parent.id};wing.parentId=parent.id;wing.title='Music studio';book.projects.push(parent,other);
  for(const project of book.projects)project.tools=['planning','resources'];
  const workspace=new Workspace(root);await workspace.create(book);const store=workspaceModules(workspace);

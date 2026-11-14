@@ -10,7 +10,7 @@ export async function acquirePosixPostgresRuntimeGuard({directory,create=true,pa
  // A pathname sandbox is not an inode-bound substitute on unsupported hosts.
  if(process.platform!=='linux')throw unavailable();
  signal?.throwIfAborted();directory=path.resolve(directory);
- const packaged=new URL('../runtime/postgres-confinement',import.meta.url),development=new URL('../.local/native-filesystem/'+process.platform+'-'+process.arch+'/postgres-confinement',import.meta.url);
+ const packaged=new URL('../runtime/postgres-confinement',import.meta.url),development=new URL('../dist/native/'+process.platform+'-'+process.arch+'/postgres-confinement',import.meta.url);
  let launcher;try{await access(packaged);launcher=fileURLToPath(packaged);}catch(error){if(error.code!=='ENOENT')throw error;launcher=fileURLToPath(development);try{await access(launcher);}catch{throw unavailable();}}
  const files=await posixMutationFiles();let parent,root,closed=false;
  try{

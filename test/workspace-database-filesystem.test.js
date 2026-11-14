@@ -12,10 +12,11 @@ import {Workspace} from '../src/storage.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
+import {workDirectory} from '../scripts/work-directory.js';
 
 test('selected filesystem supports owned database creation, exclusive access, shutdown and folder relocation',{skip:!process.env.OBSERVANDA_QUALIFY_STORAGE_ROOT},async t=>{
  const base=await realpath(process.env.OBSERVANDA_QUALIFY_STORAGE_ROOT),directory=await mkdtemp(path.join(base,'.observanda-database-qualification-'));
- const owner=new WorkspaceDatabases({directory:path.resolve('.local','postgresql'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let f;
+ const owner=new WorkspaceDatabases({directory:path.join(await workDirectory('test-work'),'qualification-runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let f;
  t.after(async()=>{await owner.close();detach();await clearVault(f?.vault);if(path.relative(base,await realpath(path.dirname(directory)))!==''||!path.basename(directory).startsWith('.observanda-database-qualification-'))throw Error('Unexpected qualification path');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  // Scratch state stays in the system temp directory. Only this disposable
  // workspace's database and files are written to the selected filesystem.

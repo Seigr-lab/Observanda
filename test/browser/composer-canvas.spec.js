@@ -72,17 +72,15 @@ test('compose an editorial page with nested media and typography, review unsaved
  await expect(canvas(page).locator('.section-asset img')).toHaveCSS('aspect-ratio','3 / 4');
  await canvas(page).locator('.section-asset img').scrollIntoViewIfNeeded();
  await expect(page.getByLabel('Image proportions')).toBeInViewport();
- if(await page.locator('#notice').isVisible())await page.locator('#notice button').click();await page.evaluate(()=>scrollTo(0,0));await mkdir('.local/ux-review/canvas',{recursive:true});await page.screenshot({path:'.local/ux-review/canvas/editor-desktop.png',fullPage:true});
+ if(await page.locator('#notice').isVisible())await page.locator('#notice button').click();await page.evaluate(()=>scrollTo(0,0));
  const before=await readFile(path.join(root,'observanda.json'),'utf8');
  await page.getByRole('button',{name:'Prepare edition'}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website'})).toBeVisible();
  expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(before);
  await page.getByLabel('Preview page',{exact:true}).selectOption(first);
  const href=await page.locator('#full-public-preview').getAttribute('href'),visitor=await page.context().newPage();
  await visitor.setViewportSize({width:1440,height:1000});await visitor.goto(new URL(href,app.url).href);await visitor.locator('.section-asset img').waitFor();await visitor.evaluate(()=>document.fonts.ready);
- await visitor.screenshot({path:'.local/ux-review/canvas/export-desktop.png',fullPage:true});
  await visitor.setViewportSize({width:390,height:844});
  await expect.poll(()=>visitor.locator('main').evaluate(main=>{const image=main.querySelector('.section-asset img').getBoundingClientRect(),next=main.querySelectorAll('.page-composition>.section-container')[1].getBoundingClientRect();return next.top>=image.bottom;})).toBe(true);
- await visitor.screenshot({path:'.local/ux-review/canvas/export-mobile.png',fullPage:true});
  expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await visitor.close();
  await page.getByRole('button',{name:'Back to website editor'}).click();await expect(page.getByLabel('Image proportions')).toHaveValue('portrait');
  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('A second page');await task(page,'Add');await expect(page.locator('[data-palette-kind=text]')).toBeEnabled();await page.locator('[data-palette-kind=text]').click();await canvas(page).locator('.section-text>.canvas-section-edit').click();

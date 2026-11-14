@@ -22,7 +22,7 @@ async function using(env,operation){const client=new Client({connectionString:en
 const query=(env,sql,...values)=>using(env,async client=>(await client.query(sql,values)).rows);
 const schemaOf=id=>'obs_'+id.replaceAll('-','');
 // A workspace with one project; lab books live in the project folder. Every
-// folder is inside the repository's git-ignored .local/test-work.
+// folder is inside the repository's git-ignored test/run/work.
 async function fixture(t){
  const parent=await mkdtemp(path.join(await workDirectory('test-work'),'observanda-lab-book-owner-')),vaults=[];
  const owner=new WorkspaceDatabases({directory:path.join(parent,'application'),ownerId:randomUUID(),env:environment()}),detach=installDatabaseProvider(owner);

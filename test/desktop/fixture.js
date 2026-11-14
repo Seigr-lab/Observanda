@@ -12,7 +12,7 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
  const packaged=process.env.OBSERVANDA_DESKTOP_EXECUTABLE;
  const sourceExecutable=process.env.OBSERVANDA_DESKTOP_SOURCE_EXECUTABLE?path.resolve(process.env.OBSERVANDA_DESKTOP_SOURCE_EXECUTABLE):undefined;
  const screenshots=process.env.OBSERVANDA_DESKTOP_SCREENSHOTS==='1';
- const env={...process.env,OBSERVANDA_DESKTOP_TEST_HOME:directory,OBSERVANDA_DESKTOP_NODE:process.execPath,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??path.resolve('.local/postgresql/runtime/pgsql/bin'),OBSERVANDA_DATABASE_URL:'',USERPROFILE:directory,HOME:directory,APPDATA:path.join(directory,'roaming'),LOCALAPPDATA:path.join(directory,'local')};
+ const env={...process.env,OBSERVANDA_DESKTOP_TEST_HOME:directory,OBSERVANDA_DESKTOP_NODE:process.execPath,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??path.resolve('test/run/runtime/runtime-17.11/pgsql/bin'),OBSERVANDA_DATABASE_URL:'',USERPROFILE:directory,HOME:directory,APPDATA:path.join(directory,'roaming'),LOCALAPPDATA:path.join(directory,'local')};
  delete env.ELECTRON_RUN_AS_NODE;
  async function close(app){
   const child=app.process(),status=()=>({code:child.exitCode,signal:child.signalCode});

@@ -32,7 +32,6 @@ test('existing workspace name, rename form, reopen and delete confirmation follo
    await expect(page.locator('.topbar .workspace-name')).toContainText(name,{timeout:45000});
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   }
-  await page.screenshot({path:'.local/workspace-name-mobile.png'});
   await page.reload();await preferences(page,'General');await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue('Research Workspace 1 – café');
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Delete workspace',exact:true}).click();
   const dialog=page.locator('#dialog');await expect(dialog.getByText('Research Workspace 1 – café',{exact:true})).toBeVisible();

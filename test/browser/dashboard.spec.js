@@ -153,10 +153,8 @@ test('edits during an in-flight save are saved afterwards and a failing card sta
 });
 
 test('dashboard and preferences fit narrow screens and large text, without settings in the home header',async({page})=>{
- await page.screenshot({path:'.local/screenshots/dashboard-desktop.png',fullPage:true});
- await navigate(page,'Preferences');await preferences(page,'Modules');await page.screenshot({path:'.local/screenshots/dashboard-preferences.png',fullPage:true});
+ await navigate(page,'Preferences');await preferences(page,'Modules');
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await fits(page)).toBe(true);
- await page.screenshot({path:'.local/screenshots/dashboard-preferences-mobile.png',fullPage:true});
  await navigate(page,'Dashboard');await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await expect(page.locator('.topbar')).not.toContainText('Save');expect(await fits(page)).toBe(true);
  await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();await expect(inspector(page)).toBeVisible();expect(await fits(page)).toBe(true);
 });
@@ -183,7 +181,6 @@ test('section navigation keeps the workspace header and page origin stable witho
   await navigate(page,name);await expect(main.getByRole('heading',{name:heading,exact:true})).toBeVisible();await expect(header).not.toContainText(heading);expect(await geometry()).toEqual(baseline);
  }
  await navigate(page,'Preferences');await expect(page.locator('.preferences-heading')).toBeVisible();await expect(header).not.toContainText('Preferences');expect(await geometry()).toEqual(baseline);
- await page.screenshot({path:'.local/screenshots/workspace-header-preferences.png',fullPage:true});
  await navigate(page,'Dashboard');await expect(header).not.toContainText('Dashboard');expect(await geometry()).toEqual(baseline);
 });
 
@@ -211,7 +208,6 @@ test('two record cards keep independent saved filters, previews and creation con
  await expect(kitchen).toContainText('Soup trial');await expect(kitchen).not.toContainText('Watching a seed unfold');await expect(garden).toContainText('Watching a seed unfold');
  expect(await research()).toBe(original);
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await fits(page)).toBe(true);
- await page.screenshot({path:'.local/screenshots/panel-filters-mobile.png',fullPage:true});
  await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
  // A card scoped to one lab book creates its new records there. Product gap: the records card's
  // "New record" action carries no lab book (src/web/research-data.js:72), so chooseEntry
@@ -270,7 +266,7 @@ test('cards resize with the keyboard or pointer, cancel a resize with Escape, mo
  await settled(page);expect((await panel()).column).toBe(1);
  await page.reload();await page.locator('.desk-desktop[data-placed]').waitFor();
  expect(await panel()).toMatchObject({width:7,height:dragged.height,column:1});await expect(recent).toHaveAttribute('data-height',String(dragged.height));await expect(recent).toHaveAttribute('data-column','1');
- await page.screenshot({path:'.local/screenshots/dashboard-spatial-layout.png'});expect(await research()).toBe(original);
+ expect(await research()).toBe(original);
  await page.getByRole('button',{name:'Resize Recent records',exact:true}).focus();await page.keyboard.press('Home');await settled(page);expect((await panel()).height).toBe(0);
 });
 

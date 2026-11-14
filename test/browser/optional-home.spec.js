@@ -72,10 +72,8 @@ test('an existing homepage is labelled Home and remains independent when renamin
  await expect(page.getByLabel('Homepage heading',{exact:true})).toHaveValue('Original public identity');
  await expect(page.getByLabel('Homepage introduction')).toHaveValue('Original introduction');
  await expect(frame(page).locator('.site-name')).toHaveText('New identity');
- await mkdir('.local/screenshots',{recursive:true});await page.screenshot({path:'.local/screenshots/optional-home-desktop.png'});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='24px');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
- await page.screenshot({path:'.local/screenshots/optional-home-mobile.png'});
  await save(page);expect(errors).toEqual([]);
 });
 

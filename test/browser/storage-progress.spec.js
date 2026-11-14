@@ -30,7 +30,7 @@ test('portable copy exposes measured verification progress inline and completes 
   await expect(dialog.locator('button[type="submit"]')).toBeDisabled();
   await page.setViewportSize({width:760,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='24px');
   expect(await progress.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
-  await progress.locator('[data-wait]').scrollIntoViewIfNeeded();await expect(progress.locator('[data-wait]')).toBeInViewport();await page.screenshot({path:'.local/storage-progress.png'});
+  await progress.locator('[data-wait]').scrollIntoViewIfNeeded();await expect(progress.locator('[data-wait]')).toBeInViewport();
   release();await expect(dialog.getByRole('heading',{name:'Portable copy ready'})).toBeVisible();await expect(progress).toHaveCount(0);
   await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('.storage-path').first()).toHaveText(f.workspace.root);
  }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

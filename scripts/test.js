@@ -15,7 +15,7 @@ try{
  const args=process.argv.slice(2),browser=args[0]==='--browser';if(browser)args.shift();
  const commandArgs=browser?['node_modules/@playwright/test/cli.js','test',...args]:['--test','--test-reporter=tap','--test-concurrency=4',...await nativeTestArguments(args)];
  // Every test file, fixture workspace and the test database live inside this
- // checkout (the git-ignored .local/test-work), never in the system temporary
+ // checkout (the git-ignored test/run/work), never in the system temporary
  // folder, so a run's material stays with the repository and survives a crash.
  // Tests read os.tmpdir(), which follows TMPDIR/TMP/TEMP. Fixtures compare
  // canonical workspace paths, so the root is resolved before owners are made.
@@ -24,7 +24,7 @@ try{
  if(!env.OBSERVANDA_DATABASE_URL){
   temporaryRuntime=await mkdtemp(path.join(temporaryRoot,'observanda-postgres-test-'));directory=path.join(temporaryRuntime,'database');
   if(env.OBSERVANDA_TEST_POSTGRES_BIN)env.OBSERVANDA_POSTGRES_BIN=env.OBSERVANDA_TEST_POSTGRES_BIN;
-  // The PostgreSQL runtime is unpacked once per checkout into .local/test-runtime
+  // The PostgreSQL runtime is unpacked once per checkout into test/run/runtime
   // and reused by every run; each run still gets its own fresh database.
   service=await startManagedPostgres({directory,runtimeDirectory:await workDirectory('test-runtime'),env,signal:controller.signal,onProgress:({stage,percent})=>{if(stage==='download'&&percent%10===0)console.log('Installing test PostgreSQL: '+percent+'%');}});
   env.OBSERVANDA_TEST_POSTGRES_BIN=service.bin;

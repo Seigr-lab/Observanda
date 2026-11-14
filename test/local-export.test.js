@@ -172,9 +172,9 @@ test('recovery rejects edits to installed files and preserves both the manual ed
 test('paths, links and non-regular destinations cannot redirect an export',async t=>{
  const f=await fixture(t);for(const name of ['../secret','/index.html','assets/../../x','C:/x','.git/HEAD','a\\b','a:stream','a/CON.txt','a./b'])assert.throws(()=>outputName(name),{code:'UNSAFE'});
  await assert.rejects(planFor(f,f.first,f.workspace.root),{code:'UNSAFE'});await assert.rejects(planFor(f,f.first,f.directory),{code:'UNSAFE'});
- // The application's own folder is refused, including a checkout's .local folder itself; only a destination
- // strictly inside .local (local working material, where this fixture's destination lives) is allowed.
- const application=fileURLToPath(new URL('..',import.meta.url));for(const target of [application,path.join(application,'src'),path.join(application,'.local')])await assert.rejects(planFor(f,f.first,target),{code:'UNSAFE'});
+ // The application's own folder is refused, including a checkout's test/run folder itself; only a destination
+ // strictly inside test/run (test run material, where this fixture's destination lives) is allowed.
+ const application=fileURLToPath(new URL('..',import.meta.url));for(const target of [application,path.join(application,'src'),path.join(application,'test','run')])await assert.rejects(planFor(f,f.first,target),{code:'UNSAFE'});
  const external=path.join(f.directory,'outside');await mkdir(external);await writeFile(path.join(external,'private.txt'),'Original');
  const junction=path.join(f.destination,'projects');await symlink(external,junction,process.platform==='win32'?'junction':'dir');await assert.rejects(planFor(f),{code:'UNSAFE'});await unlink(junction);
  await link(path.join(external,'private.txt'),path.join(f.destination,'index.html'));await assert.rejects(planFor(f),{code:'UNSAFE'});assert.equal(await readFile(path.join(external,'private.txt'),'utf8'),'Original');

@@ -72,7 +72,6 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(editor.getByRole('radio',{name:'All eligible entries'})).toBeChecked();
   await editor.locator('[data-feed-heading]').fill('Released instrument observations');
   await editor.locator('[data-feed-page-size]').fill('1');
-  if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await page.screenshot({path:path.resolve('.local/website-library-proof/08-automatic-feed.png')});
   await editor.locator('[data-feed-apply]').click();await expect(editor).toHaveCount(0);
   await expect(canvas().locator('[data-website-feed]')).toContainText('withdraw-this-result');
 
@@ -136,7 +135,6 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(reader.getByText(note,{exact:true})).toBeVisible();
   await expect(reader.locator('body')).toHaveCSS('color','rgb(25, 51, 55)');
   await expect(reader.locator('.website-feed-item').first()).toHaveCSS('background-color','rgb(255, 255, 255)');
-  if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/09-published-feed.png')});
   const html=[await reader.content()];
   await reader.locator('[data-website-feed] a[rel=next]').click();
   await expect(reader.locator('[data-website-feed] a[rel=prev]')).toBeVisible();
@@ -159,7 +157,6 @@ test('an authored feed republishes new lab grants, changed writing and section w
   for(const file of names.filter(name=>/\.(?:html|css|json|svg|csv|vtt|js)$/i.test(name))){
    expect(await readFile(path.join(output,file),'utf8'),file).not.toMatch(/never-export-this-canary|internal-serial-canary|Internal calibration canary|withdraw-this-result/);
   }
-  if(process.env.OBSERVANDA_FEED_SCREENSHOTS==='1')await reader.screenshot({path:path.resolve('.local/website-library-proof/10-published-plates.png'),fullPage:true});
   for(const database of sentinels)expect((await stat(database)).isFile()).toBe(true);
   expect(unexpected).toEqual([]);
   for(const [op,stage] of [['feed/save','feedRender'],['folder/plan','folderCompare'],['folder/apply','folderWrite']]){

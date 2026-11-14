@@ -7,7 +7,7 @@ import {preparePostgresConfinement} from './prepare-postgres-confinement.js';
 export async function prepareFilesystem({out,headers=process.env.OBSERVANDA_NODE_HEADERS??path.resolve(path.dirname(process.execPath),'../include/node'),run}={}){
  if(process.platform==='win32')return;
  if(!['linux','darwin'].includes(process.platform))throw Error('Unsupported filesystem target');
- out??=fileURLToPath(new URL('../.local/native-filesystem/'+process.platform+'-'+process.arch+'/mutation-files.node',import.meta.url));
+ out??=fileURLToPath(new URL('../dist/native/'+process.platform+'-'+process.arch+'/mutation-files.node',import.meta.url));
  run??=(command,args,cwd)=>new Promise((resolve,reject)=>{const child=spawn(command,args,{cwd,stdio:'inherit',shell:false});child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('Filesystem bridge compilation failed')));});
  const parent=await workDirectory(),temporary=await mkdtemp(path.join(parent,'observanda-filesystem-'));
  try{

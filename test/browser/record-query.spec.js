@@ -17,7 +17,6 @@ test('combined browsing survives reading, back/forward and reload, and resets wh
   await page.getByLabel('Sort records',{exact:true}).selectOption('date-asc');
   const rows=page.locator('.records-table tbody tr');
   await expect(rows).toHaveCount(2);await expect(rows.first()).toContainText('Summer take 1');await expect(rows.last()).toContainText('Summer take 2');
-  await mkdir('.local/ux-review',{recursive:true});await page.screenshot({path:'.local/ux-review/record-browse-desktop.png',fullPage:true});
   await page.getByRole('button',{name:'Summer take 2',exact:true}).click();
   await expect(page.locator('.record-reader')).toContainText('Recorder stopped early');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();
@@ -30,7 +29,6 @@ test('combined browsing survives reading, back/forward and reload, and resets wh
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.documentElement.style.fontSize='20px';});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect((await page.getByRole('searchbox',{name:'Search records',exact:true}).boundingBox()).width).toBeGreaterThan(180);
-  await page.screenshot({path:'.local/ux-review/record-browse-mobile.png',fullPage:true});
   await page.getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(5);
   await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Tags',{exact:true}).fill('unknown tag');await expect(page.getByRole('heading',{name:'No records match these filters'})).toBeVisible();
   await page.locator('.workspace-empty').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(5);

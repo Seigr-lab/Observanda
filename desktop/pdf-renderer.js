@@ -16,7 +16,7 @@ const pressGeometry=()=>pressModule??=import(app.isPackaged?pathToFileURL(path.j
 const printer=()=>printModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-print-output.js')).href:new URL('../src/pdf-print-output.js',import.meta.url).href);
 const archival=()=>archivalModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-archival.js')).href:new URL('../src/pdf-archival.js',import.meta.url).href);
 const accessibility=()=>accessibilityModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-accessibility-output.js')).href:new URL('../src/pdf-accessibility-output.js',import.meta.url).href);
-const validationRuntime=()=>({directory:app.isPackaged?path.join(process.resourcesPath,'pdf-validation'):fileURLToPath(new URL('../.local/pdf-validation/',import.meta.url))});
+const validationRuntime=()=>({directory:app.isPackaged?path.join(process.resourcesPath,'pdf-validation'):fileURLToPath(new URL('../dist/pdf-validation/',import.meta.url))});
 export async function pdfOutputCapabilities(){const {pdfArchivalAvailable}=await archival();return {archival:await pdfArchivalAvailable({runtime:validationRuntime()})};}
 export async function renderPdfDocument(input,options={}){
  options.signal?.throwIfAborted();if(active)throw fail('PDF_BUSY');active=true;

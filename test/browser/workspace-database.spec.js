@@ -41,7 +41,7 @@ test('workspace owns its database, locks it and moves the whole workspace in the
   await access(path.join(destination,'.observanda','postgresql','data','PG_VERSION'));
   await page.setViewportSize({width:760,height:950});await page.evaluate(()=>document.documentElement.style.fontSize='24px');
   expect(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
-  await page.screenshot({path:'.local/workspace-database-ui.png'});expect(errors).toEqual([]);
+  expect(errors).toEqual([]);
  }finally{await app.close();await owner.close();detach();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 

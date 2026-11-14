@@ -13,7 +13,7 @@ import {clearVault} from '../../src/encryption.js';
 
 // One workspace with an openable project, a password-locked project and a
 // separate second workspace. Every project has a shared and a private record
-// in its own lab book. Folders live under .local/test-work, never the system
+// in its own lab book. Folders live under test/run/work, never the system
 // temporary folder.
 async function project(f,host,title,password,keys){
  const book=sampleNotebook();book.title=book.projects[0].title=title;book.notebooks[0].title=title+' lab book';

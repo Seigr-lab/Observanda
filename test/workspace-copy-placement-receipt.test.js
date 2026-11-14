@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {workDirectory} from '../scripts/work-directory.js';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {Workspace,serialize} from '../src/storage.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';

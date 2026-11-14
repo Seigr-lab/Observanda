@@ -2,13 +2,14 @@
 import {test,expect} from '@playwright/test';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {Workspace} from '../../src/storage.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
 import {startServer} from '../../src/server.js';
 test('formatted research links and multiple series survive save, reopen and export',async({page})=>{
- const directory=await mkdtemp(path.resolve('.local/ux-review/shared-content-')),root=path.join(directory,'notebook'),book=sampleNotebook(),ws=new Workspace(root);
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'shared-content-')),root=path.join(directory,'notebook'),book=sampleNotebook(),ws=new Workspace(root);
  await ws.create(book);const preferencesFile=path.join(directory,'preferences.json'),settings=defaultDashboard();settings.enabledModules.push('planning');await saveDashboard(preferencesFile,settings,dashboardSnapshot(defaultDashboard()).etag);const app=await startServer({root,port:0,preferencesFile});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -10,7 +11,7 @@ import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
 import {startServer} from '../../src/server.js';
 
 test('individual equipment and software use dedicated inventory forms and placement history',async({page})=>{
- const directory=await mkdtemp(path.resolve('.local/ux-review/inventory-assets-')),root=path.join(directory,'workspace'),book=createNotebook('Creative collective'),studio=randomUUID();
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'inventory-assets-')),root=path.join(directory,'workspace'),book=createNotebook('Creative collective'),studio=randomUUID();
  book.projects.push({id:studio,title:'Studio',parentId:null,kind:'Team',description:'',share:false,logoId:null,tools:['resources']});
  const workspace=new Workspace(root);await workspace.create(book);
  const settings=defaultDashboard(),preferencesFile=path.join(directory,'preferences.json');settings.enabledModules.push('resources');

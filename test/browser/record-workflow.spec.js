@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -9,8 +10,7 @@ import {buildPublication} from '../../src/publication.js';
 import {contentBuffer} from '../../src/file-content.js';
 test('investigation and creative take journeys retain methods, separate outcomes and stable links',async({page,browser})=>{
  test.setTimeout(120000);page.setDefaultTimeout(12000);
- await mkdir('.local/ux-review',{recursive:true});
- const directory=await mkdtemp(path.resolve('.local/ux-review/run-navigation-')),root=path.join(directory,'workspace'),book=sampleNotebook();
+ const directory=await mkdtemp(path.join(await workDirectory('test-work'),'run-navigation-')),root=path.join(directory,'workspace'),book=sampleNotebook();
  const [experiment,method,series]=book.entries;
  experiment.type='experiment';experiment.title='Pigment stability';experiment.figures=[];experiment.body='Question: does the colour fade?';
  experiment.sections=[{id:randomUUID(),title:'Rationale',body:'Compare two papers under the same light.'},{id:randomUUID(),title:'Limitations',body:'Two runs are not a reliability study.'}];

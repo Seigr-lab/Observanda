@@ -49,10 +49,10 @@ export class LocalExport {
  }
  async directory(value){
   const directory=await destinationDirectory(value),workspace=await destinationDirectory(this.workspace.root),application=fileURLToPath(new URL('..',import.meta.url));
-  // A source checkout's git-ignored .local folder holds local working material
-  // (test runs, logs), not application files, so a destination strictly inside
-  // it is not part of the application. The folder itself stays protected.
-  const localArea=path.join(application,'.local'),applicationFiles=within(application,directory)&&!(directory!==localArea&&within(localArea,directory));
+  // A source checkout's git-ignored test/run folder holds what test runs
+  // create, not application files, so a destination strictly inside it is
+  // not part of the application. The folder itself stays protected.
+  const localArea=path.join(application,'test','run'),applicationFiles=within(application,directory)&&!(directory!==localArea&&within(localArea,directory));
   if(within(workspace,directory)||within(directory,workspace)||applicationFiles||within(directory,application)||path.resolve(os.homedir())===directory)throw new AppError('UNSAFE');
   return directory;
  }

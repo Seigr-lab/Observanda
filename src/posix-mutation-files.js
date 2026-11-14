@@ -8,7 +8,7 @@ import {mutationFilesClient} from './mutation-files-client.js';
 export async function posixMutationFiles(){
  // Packaged and development artifacts are built from the same reviewed source.
  // Missing native support fails closed, never back to pathname mutations.
- const packaged=new URL('../runtime/mutation-files.node',import.meta.url),development=new URL('../.local/native-filesystem/'+process.platform+'-'+process.arch+'/mutation-files.node',import.meta.url);
+ const packaged=new URL('../runtime/mutation-files.node',import.meta.url),development=new URL('../dist/native/'+process.platform+'-'+process.arch+'/mutation-files.node',import.meta.url);
  let library;try{await access(packaged);library=fileURLToPath(packaged);}catch(error){if(error.code!=='ENOENT')throw error;library=fileURLToPath(development);}
  const worker=fork(new URL('./security/mutation-files-posix-worker.js',import.meta.url),[library],{serialization:'advanced',stdio:['ignore','ignore','ignore','ipc'],windowsHide:true,execArgv:[]});let receiver,failed,serial=Promise.resolve();
  const exited=new Promise(resolve=>{worker.once('exit',resolve);worker.once('error',resolve);});
