@@ -205,6 +205,8 @@ export class Publisher {
     }
   }
 
+  // Local copies made for an upload stay inside this workspace.
+  staging(){return path.join(this.workspace.root,'.observanda','publishing-staging');}
   destinationKey(config) {
     const destination=config.kind==='github'?Object.fromEntries(Object.entries(config.github).filter(([key,value])=>key!=='pages'&&(key!=='directory'||value!==''))):config.ssh;
     return digest(serialize({kind:config.kind,destination}));
@@ -243,7 +245,7 @@ export class Publisher {
       let receipt;
       if (config.kind === 'ssh') {
         const owner=this.workspace.deploymentOwnerId?await this.workspace.deploymentOwnerId():this.workspace.websiteId??workspaceId;
-        receipt=await this.ssh.deploy(config.ssh,candidate,owner,{...options,indexedFiles:!!transfer});
+        receipt=await this.ssh.deploy(config.ssh,candidate,owner,{...options,indexedFiles:!!transfer,staging:this.staging()});
       }
       else {
         receipt=await deployGithub(this,candidate,config,{...options,plan,pushed:persist});

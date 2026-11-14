@@ -8,9 +8,11 @@ import path from 'node:path';
 import {SSHHost} from '../src/ssh-host.js';
 const exec=promisify(execFile);
 export async function sshFixture(t){
- // A POSIX /tmp has a shared writable ancestor, unlike a dedicated hosting directory.
- const windows=process.platform==='win32',base=windows?os.tmpdir():process.env.XDG_CACHE_HOME||path.join(os.homedir(),'.cache');
- if(!windows)await mkdir(base,{recursive:true,mode:0o700});
+ // The simulated server folder must be a dedicated hosting directory: a POSIX
+ // /tmp has a shared writable ancestor, and SSH folder names admit no spaces,
+ // which a checkout path may contain. The user's cache folder serves both.
+ const windows=process.platform==='win32',base=process.env.XDG_CACHE_HOME||path.join(os.homedir(),'.cache');
+ await mkdir(base,{recursive:true,mode:0o700});
  const directory=await mkdtemp(path.join(await realpath(base),'observanda-ssh-protocol-')),shell=windows?'C:/Program Files/Git/bin/bash.exe':'/bin/sh',env={...process.env,MSYS:'winsymlinks:nativestrict'};
  t.after(()=>rm(directory,{recursive:true,force:true}));
  const root=windows?(await exec(shell,['-c','cygpath -u "$1"','sh',directory],{env,windowsHide:true})).stdout.trim():directory;
@@ -25,5 +27,7 @@ export async function sshFixture(t){
   }else throw Error('Unexpected executable');
   await hook?.(call,'after');return output;
  };
- return {directory,root,run,host:new SSHHost(run),config:{host:'synthetic.example',user:'research',port:22,directory:root+'/site',identityFile:''},calls,setHook:value=>hook=value,current:()=>readlink(path.join(directory,'site','current'))};
+ // Upload copies stay in this fixture's own folder, as in a workspace.
+ const staging=path.join(directory,'staging'),host=new SSHHost(run),deploy=host.deploy.bind(host);host.deploy=(c,candidate,owner,options={})=>deploy(c,candidate,owner,{staging,...options});
+ return {directory,root,run,staging,host,config:{host:'synthetic.example',user:'research',port:22,directory:root+'/site',identityFile:''},calls,setHook:value=>hook=value,current:()=>readlink(path.join(directory,'site','current'))};
 }

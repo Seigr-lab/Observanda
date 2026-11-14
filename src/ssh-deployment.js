@@ -1,6 +1,5 @@
 import {mkdtemp,mkdir,unlink,rmdir} from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {writePublicFile,contentHash,contentSize} from './file-content.js';
@@ -66,8 +65,11 @@ export async function settleSSHTransfer(host,c,owner,attempt,{signal,checksums}=
 // The operation's symlink is an atomic remote claim. It is retained on any
 // uncertain result and only its owner may resume or release it. A durable local
 // checkpoint precedes every possible current-link switch.
-export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal,indexedFiles=false,uploads}={}){
+// Upload batches are copied into the workspace's own staging folder, never
+// the system temporary folder, and removed after each batch.
+export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=>{},guard=async()=>{},progress=async()=>{},signal,indexedFiles=false,uploads,staging}={}){
  await verifyPublicationCandidate(candidate,{signal,remoteProgress:!!uploads});if(!/^[a-f0-9-]{36}$/.test(owner))throw new AppError('PUBLISH_CONFIG');
+ if(typeof staging!=='string'||!path.isAbsolute(staging))throw new AppError('INVALID');
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);signal?.throwIfAborted();await save(structuredClone(journal));};
  const indexed=candidate.version===3||indexedFiles;
  const report=key=>progress({stage:publicationText(key),done:journal.uploadedCount??journal.uploaded?.length??0,total:candidate.files.size});
@@ -127,7 +129,7 @@ export async function deploySSH(host,c,candidate,owner,{journal={},save=async()=
  if(exists==='new'){if(indexed)journal.uploadedCount=0;else journal.uploaded=[];await checkpoint();uploads?.start(0,candidate.files.size);}
  if(exists!=='sealed'){
   const upload=async batch=>{
-   const temp=await mkdtemp(path.join(os.tmpdir(),'observanda-publish-')),directories=new Set(),written=[];
+   await mkdir(staging,{recursive:true,mode:0o700});const temp=await mkdtemp(path.join(staging,'ssh-')),directories=new Set(),written=[];
    try{
     const commands=[];await report('sshUpload');
     for(const [name,content] of batch){
