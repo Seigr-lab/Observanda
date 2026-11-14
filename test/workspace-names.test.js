@@ -43,6 +43,6 @@ test('creation resolves the parent while retaining the literal final name',async
   await assert.rejects(namedWorkspaceLocation({root:path.join(parent,'Research-Workspace-1'),name}),{code:'WORKSPACE_NAME_MISMATCH'});
   assert.deepEqual(await readdir(parent),[]);
   const same=await namedWorkspaceLocation({root,name});assert.equal(same,root);
-  await assert.rejects(namedWorkspaceLocation({parent:path.join(parent,'Missing mount'),name}),{code:'ENOENT'});assert.deepEqual(await readdir(parent),[]);
+  await assert.rejects(namedWorkspaceLocation({parent:path.join(parent,'Missing mount'),name}),{code:'STORAGE_PATH'});assert.deepEqual(await readdir(parent),[]);
  }finally{if(path.dirname(parent)!==path.resolve(os.tmpdir())||!path.basename(parent).startsWith('observanda-name-contract-'))throw Error('Unexpected test root');await rm(parent,{recursive:true,force:true});}
 });

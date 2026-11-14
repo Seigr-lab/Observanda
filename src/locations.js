@@ -48,7 +48,8 @@ export async function resolveLocation(input){
   const stat=await assertRegular(location,{missing:true,directory:true});
   if(stat)return realpath(location);
   // A missing share/mount must never be silently replaced by recursively created folders.
-  const parent=await realpath(path.dirname(location));return path.join(parent,path.basename(location));
+  // A missing parent folder is the author's path to correct, not a disk failure.
+  const parent=await realpath(path.dirname(location)).catch(error=>{if(['ENOENT','ENOTDIR'].includes(error.code))throw new AppError('STORAGE_PATH');throw error;});return path.join(parent,path.basename(location));
 }
 export async function namedWorkspaceLocation({parent,root,name}){
  validateWorkspaceName(name);

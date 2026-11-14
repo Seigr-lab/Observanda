@@ -11,7 +11,7 @@ import {browseFolders,createFolder,initializeLocation,inspectLocation,probeLocat
 test('storage checks leave no probes, reject occupied destinations and never invent missing network parents',async()=>{
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-location-')),root=path.join(parent,'new');
   assert.equal((await probeLocation(root)).kind,'new');assert.deepEqual(await readdir(parent),[]);
-  await assert.rejects(initializeLocation(path.join(parent,'missing','workspace'),sampleNotebook(),await createAccess()),{code:'ENOENT'});
+  await assert.rejects(initializeLocation(path.join(parent,'missing','workspace'),sampleNotebook(),await createAccess()),{code:'STORAGE_PATH'});
   await writeFile(path.join(parent,'unrelated.txt'),'keep');
   await assert.rejects(initializeLocation(parent,sampleNotebook(),await createAccess()),{code:'EXISTS'});
   assert.equal(await readFile(path.join(parent,'unrelated.txt'),'utf8'),'keep');
