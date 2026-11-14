@@ -1,5 +1,5 @@
 import {projectDirectoryChoices} from './project-directory-choices.js';
-import {localizedText} from './i18n/index.js';
+import {localizedText,language} from './i18n/index.js';
 const text=localizedText('recordAuthoring');
 
 // Directory reads choose an owner; the editor only opens that book afterwards.
@@ -26,9 +26,11 @@ export function recordDestinationUI({state,api,esc,field,showDialog,rootBook,acc
   const confirm=node.querySelector('[data-action="record-destination-project"]');
   if(confirm)confirm.disabled=!active.projectId;
  }
+ // A lab book is shown by its name; its folder name stands in until the name is known.
+ const bookName=book=>rootBook().notebooks.find(n=>n.id===book.labBookId)?.title??book.directory;
  function paintBooks(){
   const node=host(),entry=active;if(!node||!entry)return;
-  node.querySelector('[data-record-destination-books]').innerHTML=entry.items.filter(book=>!entry.filter||entry.filter(book,entry.projectId)).map(book=>'<button type="button" class="record-type-option" data-action="record-destination-book" data-id="'+esc(book.labBookId)+'"><strong>'+esc(book.directory)+'</strong></button>').join('');
+  node.querySelector('[data-record-destination-books]').innerHTML=entry.items.filter(book=>!entry.filter||entry.filter(book,entry.projectId)).map(book=>[bookName(book),book]).sort(([a],[b])=>a.localeCompare(b,language(),{sensitivity:'base',numeric:true})).map(([name,book])=>'<button type="button" class="record-type-option" data-action="record-destination-book" data-id="'+esc(book.labBookId)+'"><strong>'+esc(name)+'</strong></button>').join('');
   const status=node.querySelector('[data-record-destination-status]');
   status.textContent=entry.error||(entry.loading?text('loadingBooks'):entry.projectId&&!entry.items.some(book=>!entry.filter||entry.filter(book,entry.projectId))?text('noBooks'):'');status.setAttribute('role',entry.error?'alert':'status');
   const retry=node.querySelector('[data-action=record-destination-retry]');retry.hidden=!entry.error;retry.textContent=text(entry.locked?'unlockBooks':'retryBooks');retry.disabled=entry.loading;

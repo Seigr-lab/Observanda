@@ -4,7 +4,7 @@ import {labBookCreationRecoveryUI} from './lab-book-creation-recovery-ui.js';
 import {labBookDeletionUI} from './lab-book-deletion-ui.js';
 import {labBookDirectoryState} from './lab-book-directory-state.js';
 import {placeAt,updateText,updateProperty} from './progress-dom.js';
-import {t} from './i18n/index.js';
+import {t,language} from './i18n/index.js';
 const text=key=>t('labBookDirectory',key);
 // A project lists book identities and names without opening sibling databases.
 export function labBookDirectory({state,api,esc,changed,directoryChanged=changed,access=operation=>operation()}){
@@ -33,7 +33,7 @@ export function labBookDirectory({state,api,esc,changed,directoryChanged=changed
  return {
   deleteBook:(projectId,item)=>deletions.start(projectId,item),
   entries,owner(id){const entry=entries().find(entry=>entry.labBookId===id);return entry?{projectId:entry.projectId,labBookId:id}:null;},
-  navigation(book){const shown=book.projects.map(p=>p.id);queueMicrotask(()=>cache.ensure(shown));const combined=new Map(book.notebooks.map(n=>[n.id,n]));for(const entry of entries())if(!combined.has(entry.labBookId))combined.set(entry.labBookId,{id:entry.labBookId,projectId:entry.projectId,title:entry.directory,dedicated:true});return {...book,notebooks:[...combined.values()]};},
+  navigation(book){const shown=book.projects.map(p=>p.id);queueMicrotask(()=>cache.ensure(shown));const combined=new Map(book.notebooks.map(n=>[n.id,n]));for(const entry of entries())if(!combined.has(entry.labBookId))combined.set(entry.labBookId,{id:entry.labBookId,projectId:entry.projectId,title:entry.directory,dedicated:true});return {...book,notebooks:[...combined.values()].sort((a,b)=>String(a.title).localeCompare(String(b.title),language(),{sensitivity:'base',numeric:true})||a.id.localeCompare(b.id))};},
   view(projectId){const value=cache.page(projectId);return imports.view(projectId)+creations.view(projectId)+deletions.view(projectId)+moves.view(projectId)+'<div data-lab-book-directory="'+projectId+'"><div class="notebook-grid">'+items(projectId).map(card).join('')+'</div>'+
    '<p role="alert" data-directory-error '+(value.error?'':'hidden')+'>'+esc(value.error)+'</p><button class="button" data-action="lab-book-directory-retry" data-project="'+projectId+'" '+(value.error?'':'hidden')+'>'+esc(text('retry'))+'</button><p role="status" data-directory-loading '+(value.loading?'':'hidden')+'>'+esc(text('loading'))+'</p><p class="muted" data-directory-empty '+(value.loaded&&!value.total&&!value.error&&!value.loading?'':'hidden')+'>'+esc(text('empty'))+'</p>'+
    '<button class="button" data-action="lab-book-directory-more" data-project="'+projectId+'" '+(value.loading?'disabled ':'')+(value.next?'':'hidden')+'>'+esc(text('more'))+'</button></div>';},
