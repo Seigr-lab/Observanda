@@ -146,6 +146,8 @@
   "noRecords": "No records in this view",
   "openBook": "Open a lab book to add records.",
   "emptyBook": "Choose New record to add the first record to this lab book.",
+  "lengthCount": "{count} of {limit} characters",
+  "lengthOver": "{count} of {limit} characters: shorten the text to save it",
   "dataRetained": "Your data and settings are retained.",
   "manageModules": "Manage modules",
   "searchPlaceholder": "Search records...",

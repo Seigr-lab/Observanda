@@ -1,4 +1,5 @@
 import {recordValueLabel as label,recordValueEditLabel as editLabel} from './record-value-controls.js';
+import {lengthCount} from './length-count.js';
 // A link, contributor or figure that is not saved yet is being added, not edited.
 const newItemHeading=field=>relationValueId(field)?text('addRelation'):contributorValueId(field)?text('addContributor'):figureValueId(field)?text('addFigure'):null;
 import {PUBLICATION_PARTS} from './record-publication-privacy.js';
@@ -60,7 +61,7 @@ export function recordValuesView(options,lifecycle){
    else if(name==='type')control='<select data-record-value>'+RECORD_TYPES.map(type=>option(type.id,recordTypeLabel(type.id),item)).join('')+'</select><p class="muted">'+esc(text('typeHelp'))+'</p>';
    else if(name==='status')control='<select data-record-value>'+STATUSES.map(id=>option(id,text('status_'+id),item)).join('')+'</select>';
    else if(name==='share'||name==='sharePdf')control='<select data-record-value>'+option('false',text('private'),String(item===true))+option('true',text('public'),String(item===true))+'</select>';
-   else if(name==='outcome')control='<textarea data-record-value maxlength="500" rows="3">'+esc(item??'')+'</textarea>';
+   else if(name==='outcome')control='<textarea data-record-value data-length-limit="500" rows="3">'+esc(item??'')+'</textarea>'+lengthCount(item,500,esc);
    else control='<input data-record-value required maxlength="180" value="'+esc(item??'')+'">';
    return field(esc(label(name,base.definition)),control);
   },

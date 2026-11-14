@@ -146,6 +146,8 @@
   "noRecords": "Ingen oppføringer i denne visningen",
   "openBook": "Åpne en labbok for å legge til oppføringer.",
   "emptyBook": "Velg Ny oppføring for å legge til den første oppføringen i denne labboken.",
+  "lengthCount": "{count} av {limit} tegn",
+  "lengthOver": "{count} av {limit} tegn: forkort teksten for å lagre den",
   "dataRetained": "Dataene og innstillingene dine beholdes.",
   "manageModules": "Administrer moduler",
   "searchPlaceholder": "Søk i oppføringer...",

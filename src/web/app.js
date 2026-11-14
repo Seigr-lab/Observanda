@@ -1,3 +1,4 @@
+import {lengthCount} from './length-count.js';
 import {noticeLayout} from './notice-layout.js';
 import {recordCaptionTracks} from './record-media-captions.js';
 import {sessionHeaders,sessionCredential} from './session-store.js';
@@ -970,7 +971,7 @@ function renderEditor() {
     <details class="record-edit-group" data-disclosure="draft-details"><summary>${esc(ux('details'))}</summary><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
       ${e.template?'<p class="scope-kicker">'+esc(templateText(e.template.label))+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
       ${field(esc(appText('progress')),`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,LIFECYCLE_STATUSES.includes(status)?recordStatus(status):appText('legacyStatus',{status:recordStatus(status)}),e.status)).join('')}</select>`)}
-      ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" maxlength="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`)}
+      ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" data-length-limit="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>${lengthCount(e.outcome,500,esc)}`)}
       <p class="muted">${esc(appText('progressHelp'))}</p>
       ${recordDateFields(e.occurredOn,{field,option,esc})}
       ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}

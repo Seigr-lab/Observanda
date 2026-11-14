@@ -146,6 +146,8 @@
   "noRecords": "No hi ha registres en aquesta vista",
   "openBook": "Obre un llibre de laboratori per afegir registres.",
   "emptyBook": "Tria Registre nou per afegir el primer registre a aquest llibre de laboratori.",
+  "lengthCount": "{count} de {limit} caràcters",
+  "lengthOver": "{count} de {limit} caràcters: escurça el text per desar-lo",
   "dataRetained": "Es conserven les dades i la configuració.",
   "manageModules": "Gestiona els mòduls",
   "searchPlaceholder": "Cerca registres...",

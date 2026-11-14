@@ -146,6 +146,8 @@
   "noRecords": "No hay registros en esta vista",
   "openBook": "Abre un cuaderno de laboratorio para añadir registros.",
   "emptyBook": "Elige Nuevo registro para añadir el primer registro a este cuaderno de laboratorio.",
+  "lengthCount": "{count} de {limit} caracteres",
+  "lengthOver": "{count} de {limit} caracteres: acorta el texto para guardarlo",
   "dataRetained": "Se conservan los datos y la configuración.",
   "manageModules": "Gestionar los módulos",
   "searchPlaceholder": "Buscar registros...",

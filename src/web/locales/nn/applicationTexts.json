@@ -146,6 +146,8 @@
   "noRecords": "Ingen oppføringar i denne visinga",
   "openBook": "Opne ei labbok for å leggje til oppføringar.",
   "emptyBook": "Vel Ny oppføring for å leggje til den første oppføringa i denne labboka.",
+  "lengthCount": "{count} av {limit} teikn",
+  "lengthOver": "{count} av {limit} teikn: kort ned teksten for å lagre han",
   "dataRetained": "Dataa og innstillingane dine blir tekne vare på.",
   "manageModules": "Administrer modular",
   "searchPlaceholder": "Søk i oppføringar...",
