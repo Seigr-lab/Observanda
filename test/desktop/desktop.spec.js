@@ -98,8 +98,8 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   const firstReading=readerReady();await page.evaluate(route=>location.hash=route,recordRoute);expect((await firstReading).ok()).toBe(true);
   await expect(page.locator('.record-sections')).toContainText('Retained observation 129');
   await page.getByRole('button',{name:'Edit record',exact:true}).click();
-  await page.getByRole('button',{name:'Edit Record title',exact:true}).click();
-  const titleEditor=page.getByRole('dialog',{name:'Edit Record title',exact:true});
+  await page.getByRole('button',{name:'Edit record title',exact:true}).click();
+  const titleEditor=page.getByRole('dialog',{name:'Edit record title',exact:true});
   await titleEditor.getByLabel('Record title',{exact:true}).fill('Amended packaged block record');
   // This retained record save is streamed and may outlast a DOM assertion's
   // default five seconds. Wait for its actual response, then check the UI and
@@ -135,8 +135,8 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   },{...retained,projectId});
   expect(reopened.sections).toEqual(retained.record.sections);
   if(previous){
-   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Edit Record title',exact:true}).click();
-   const editor=page.getByRole('dialog',{name:'Edit Record title',exact:true});await editor.getByLabel('Record title',{exact:true}).fill('Continued after application update');
+   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Edit record title',exact:true}).click();
+   const editor=page.getByRole('dialog',{name:'Edit record title',exact:true});await editor.getByLabel('Record title',{exact:true}).fill('Continued after application update');
    const continued=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/projects/'+projectId+'/lab-books/'+externalBook.id+'/research/records/values/save'&&response.request().method()==='POST');
    await editor.getByRole('button',{name:'Save changes',exact:true}).click();expect((await continued).ok()).toBe(true);await expect(editor).not.toBeVisible();
    await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Continued after application update',{timeout:30000});

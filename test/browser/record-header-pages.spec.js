@@ -27,10 +27,10 @@ test('reader collection windows are independent and late fields remain editable 
   await expect(figures).toContainText('1–4 of 13');await expect(page.locator('.book-figure-placement #record-figure-'+record.figures[12].id)).toBeVisible();
   await contributors.getByRole('button',{name:'Next items',exact:true}).click();await expect(contributors).toContainText('5–8 of 13');await expect(figures).toContainText('1–4 of 13');
   await fields.getByLabel('Go to item',{exact:true}).fill('13');await fields.getByRole('button',{name:'Go',exact:true}).click();await expect(fields).toContainText('13–13 of 13');
-  await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('template:v12');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();
+  await (await revealInEditor(page,page.locator('main [data-action=record-value-edit][data-value-field="template:v12"]').first(),'Record details')).click();
   const dialog=page.getByRole('dialog',{name:'Edit Value 12',exact:true});await expect(dialog.getByLabel('Value 12',{exact:true})).toHaveValue('9007199254740993');
   await dialog.getByLabel('Value 12',{exact:true}).fill('9007199254740995');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
-  await expect(fields).toContainText('13–13 of 13');await expect(contributors).toContainText('5–8 of 13');await expect(page.locator('[data-record-detail-field]')).toHaveValue('template:v12');
+  await expect(fields).toContainText('13–13 of 13');await expect(contributors).toContainText('5–8 of 13');
   expect((await new RecordValues(f.workspace).read({workspaceId:book.id,recordId:record.id,field:'template:v12'})).value.value).toBe('9007199254740995');
   await (await revealInEditor(page,figures,'Evidence and results')).getByLabel('Go to item',{exact:true}).fill('13');await figures.getByRole('button',{name:'Go',exact:true}).click();await expect(figures).toContainText('13–13 of 13');
   await expect(page.locator('#record-figure-'+record.figures[12].id)).toHaveCount(1);

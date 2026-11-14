@@ -26,7 +26,6 @@
   "details": "Detalles del registro",
   "activity": "Actividad e historial",
   "actions": "Acciones del registro",
-  "editField": "Editar {name}",
   "draftHelp": "Un punto de recuperación conserva el borrador. Guardar cambios actualiza el registro; cerrar con un punto de recuperación conserva el borrador para más tarde.",
   "noItems": "Todavía no hay elementos. Crea un elemento para empezar.",
   "noMatches": "No hay resultados con estos filtros.",

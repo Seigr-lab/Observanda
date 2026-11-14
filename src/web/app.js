@@ -1077,7 +1077,7 @@ async function rawAction(button) {
   if(name?.startsWith('project-storage-'))return structureUI.projectStorage.action(button);
   if(['workflow-new-run','material-repeat'].includes(name)&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){await runCreation.open(state.selected);return;}
   if(await recordContent.action(button))return;
-  if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField??document.querySelector('[data-record-detail-field]').value,focusTarget:button});
+  if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField,focusTarget:button});
   if(button.dataset.action==='record-value-add-contributor')return recordValues.open({recordId:state.selected,field:'contributor:'+crypto.randomUUID()});
   if(button.dataset.action==='record-value-add-relation')return recordValues.open({recordId:state.selected,field:'relation:'+crypto.randomUUID()});
   if(button.dataset.action==='record-value-add-figure')return recordValues.open({recordId:state.selected,field:'figure:'+crypto.randomUUID(),create:button.dataset.kind==='panels'?'panels':'plot'});

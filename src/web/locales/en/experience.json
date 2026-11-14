@@ -26,7 +26,6 @@
   "details": "Record details",
   "activity": "Activity and history",
   "actions": "Record actions",
-  "editField": "Edit {name}",
   "draftHelp": "A recovery checkpoint keeps your draft. Save changes updates the record; closing with a checkpoint keeps the draft for later.",
   "noItems": "No items yet. Create an item to get started.",
   "noMatches": "No results for these filters.",

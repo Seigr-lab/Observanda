@@ -30,7 +30,7 @@ export function publicationChoices(website,pdf,esc){
 }
 
 export function publicationAvailability(record,book,esc,{editing=false,draft=false,busy=false}={}){
- const edit=field=>'<button class="button subtle" type="button" data-action="record-value-edit" data-value-field="'+field+'"'+(busy?' disabled':'')+'>'+esc(t('experience','editField',{name:text(field)}))+'</button>';
+ const edit=field=>'<button class="button subtle" type="button" data-action="record-value-edit" data-value-field="'+field+'"'+(busy?' disabled':'')+' aria-label="'+esc(text('edit_'+field))+'">'+esc(text('edit_editButton'))+'</button>';
  const choices=targets.map(target=>{
   const field=entryField(target),allowed=record[field]===true,bookOff=book&&!sourceNotebookAllowed(book,target);
   const status=text(!allowed?'private':bookOff?'publicationBookBlocked':'public');

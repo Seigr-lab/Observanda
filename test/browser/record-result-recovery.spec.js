@@ -42,7 +42,7 @@ test('analysis record drafts recover after a rejected checkpoint, restart and co
   await page.context().unroute('**/api/research/drafts/values/write');await page.reload();
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();
   await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
-  edit=page.getByRole('dialog',{name:'Edit Record title',exact:true});await expect(edit.locator('.record-writing-conflict')).toHaveCount(0);
+  edit=page.getByRole('dialog',{name:'Edit record title',exact:true});await expect(edit.locator('.record-writing-conflict')).toHaveCount(0);
   await expect(edit.getByLabel('Record title',{exact:true})).toHaveValue('Recoverable analysis edit');
   await edit.getByRole('button',{name:'Save changes',exact:true}).click();await expect(edit).not.toBeVisible();
   const saved=(await f.workspace.read()).book.entries[0];expect(saved.title).toBe('Recoverable analysis edit');expect(saved.results).toEqual(remote.results);expect(errors.filter(message=>!message.includes('net::ERR_FAILED'))).toEqual([]);

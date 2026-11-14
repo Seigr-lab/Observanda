@@ -16,8 +16,8 @@ test('record type edits recover and resolve conflicts without replacing research
  test.setTimeout(120000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-type-ui-')),book=sampleNotebook(),record=book.entries[2];book.entries=[record];record.type='note';record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained body '+i}));
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),service=new RecordValues(f.workspace),target={workspaceId:book.id,recordId:record.id,field:'type'},requests=[],errors=[],read=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=()=>{throw Error('Type editing reconstructed an entire record');};page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));
- const open=async()=>{await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('type');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();};
- const dialog=page.getByRole('dialog',{name:'Edit Record type',exact:true});
+ const open=async()=>{await (await revealInEditor(page,page.locator('main [data-action=record-value-edit][data-value-field="type"]').first(),'Record details')).click();};
+ const dialog=page.getByRole('dialog',{name:'Edit record type',exact:true});
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await open();await expect(dialog.getByLabel('Record type',{exact:true})).toHaveValue('note');
   await dialog.getByLabel('Record type',{exact:true}).selectOption('observation');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();

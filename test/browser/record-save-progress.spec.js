@@ -50,7 +50,7 @@ test('new record save progress stays readable, preserves newer typing and closes
   // The retry saves the newer edit. Once nothing remains unsaved, the record continues in its saved
   // field-by-field editor, which saves each field on its own and has no record-wide save footer.
   fail=false;await save.click();await expect(page.locator('#notice')).toContainText('Changes saved.',{timeout:15000});await expect(page.locator('.record-editing h1')).toHaveText('Newer typing');
-  await expect(page.getByRole('button',{name:'Edit Record title',exact:true})).toBeVisible();await expect(title).toBeHidden();await expect(page.locator('#save-status')).toHaveCount(0);await expect(progress).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Edit record title',exact:true})).toBeVisible();await expect(title).toBeHidden();await expect(page.locator('#save-status')).toHaveCount(0);await expect(progress).toHaveCount(0);
   expect((await f.workspace.read()).book.entries.find(record=>record.id===recordId).title).toBe('Newer typing');expect(errors).toEqual([]);
  }finally{release();ResearchCatalogue.prototype.historyIndex=historyIndex;await page.close();await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

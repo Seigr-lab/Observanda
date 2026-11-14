@@ -51,7 +51,7 @@ test('normal record reading pages stored sections without selection hydration an
   await page.screenshot({path:info.outputPath('stored-section-reading.png')});
   await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.removeProperty('font-size'));
   await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();
-  await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();const edit=page.getByRole('dialog',{name:'Edit Record title',exact:true});
+  await (await revealInEditor(page,page.locator('main [data-action=record-value-edit][data-value-field="title"]').first(),'Record details')).click();const edit=page.getByRole('dialog',{name:'Edit record title',exact:true});
   await edit.getByLabel('Record title',{exact:true}).fill('Amended title');
   await edit.getByRole('button',{name:'Save changes',exact:true}).click();await expect(edit).not.toBeVisible();
   await expect(page.locator('.record-reader h1')).toHaveText('Amended title');

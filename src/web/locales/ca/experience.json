@@ -26,7 +26,6 @@
   "details": "Detalls del registre",
   "activity": "Activitat i historial",
   "actions": "Accions del registre",
-  "editField": "Edita {name}",
   "draftHelp": "Un punt de recuperació conserva l’esborrany. Guarda els canvis actualitza el registre; tancar amb un punt de recuperació conserva l’esborrany per a més tard.",
   "noItems": "Encara no hi ha elements. Crea un element per començar.",
   "noMatches": "Cap resultat amb aquests filtres.",

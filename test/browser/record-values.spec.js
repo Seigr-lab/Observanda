@@ -21,11 +21,11 @@ test('reader details save and recover independently, preserve exact custom value
  const read=ResearchCatalogue.prototype.record,errors=[],requests=[];ResearchCatalogue.prototype.record=()=>{throw Error('Detail editing reconstructed a whole record');};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);});
  const service=new RecordValues(f.workspace),target=field=>({workspaceId:book.id,recordId:record.id,field});
- const open=async field=>{await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption(field);await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();};
+ const open=async field=>{await (await revealInEditor(page,page.locator('main [data-action=record-value-edit][data-value-field="'+field+'"]').first(),'Record details')).click();};
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
-  await expect(page.locator('[data-record-detail-field] option[value="type"]')).toHaveCount(0);
-  await open('title');let dialog=page.getByRole('dialog',{name:'Edit Record title',exact:true});
+  await expect(page.locator('main [data-action=record-value-edit][data-value-field="type"]')).toHaveCount(0);
+  await open('title');let dialog=page.getByRole('dialog',{name:'Edit record title',exact:true});
   await page.context().route('**/api/research/drafts/values/write',async route=>{await route.fetch();await route.abort('failed');},{times:1});
   await dialog.getByLabel('Record title',{exact:true}).fill('Earlier value with lost acknowledgement');await expect(dialog.locator('[data-writing-error]')).not.toBeEmpty();
   // Closing must retry the ambiguous write and then persist the later edit.
@@ -34,7 +34,7 @@ test('reader details save and recover independently, preserve exact custom value
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
   await expect(dialog.getByLabel('Record title',{exact:true})).toHaveValue('Recovered title');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.locator('.record-reader h1')).toHaveText('Recovered title');
-  await open('outcome');dialog=page.getByRole('dialog',{name:'Edit Outcome',exact:true});await dialog.getByLabel('Outcome',{exact:true}).fill('My result');
+  await open('outcome');dialog=page.getByRole('dialog',{name:'Edit outcome',exact:true});await dialog.getByLabel('Outcome',{exact:true}).fill('My result');
   const base=await service.read(target('outcome'));await service.save({...target('outcome'),expectedRevision:base.revision,value:{value:'Other result'}});
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog.locator('.record-writing-conflict')).toContainText('Other result');
   await dialog.getByRole('button',{name:'Keep my edit after review',exact:true}).click();await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
@@ -45,7 +45,7 @@ test('reader details save and recover independently, preserve exact custom value
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('record-value-mobile.png')});
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();expect((await service.read(target('template:count'))).value.value).toBe('9007199254740995');
   await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
-  await open('occurredOn');dialog=page.getByRole('dialog',{name:'Edit Record date',exact:true});await dialog.getByLabel('Date precision',{exact:true}).selectOption('range');
+  await open('occurredOn');dialog=page.getByRole('dialog',{name:'Edit record date',exact:true});await dialog.getByLabel('Date precision',{exact:true}).selectOption('range');
   await dialog.getByLabel('Start date',{exact:true}).fill('2025-05-01');await dialog.getByLabel('End date',{exact:true}).fill('2025-04-01');
   await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog.locator('[data-record-date-error]')).toContainText('start date must be on or before');
   await dialog.getByLabel('End date',{exact:true}).fill('2025-06-01');await dialog.getByLabel('Estimated date range',{exact:true}).check();

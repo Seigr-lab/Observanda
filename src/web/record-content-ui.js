@@ -9,7 +9,7 @@ import {renderProse} from './prose-model.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
 import {recordFigureRenderer} from './book-reading.js';
 import {recordSectionActions} from './record-section-actions.js';
-import {recordValueControls,recordContributorControls,recordFigureAction,recordAttemptControls,recordResultControls} from './record-value-controls.js';
+import {recordValueEditLabel,recordContributorControls,recordFigureAction,recordAttemptControls,recordResultControls} from './record-value-controls.js';
 import {recordHeaderControls} from './record-header-controls.js';
 import {recordMediaControls} from './record-media-values-ui.js';
 import {recordMediaActions} from './record-media-actions.js';
@@ -28,14 +28,14 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
  const assetUrl=id=>ownedAssetURL(state,'/api/media/'+id);
  const text=(key,args)=>t('recordContent',key,args);
  let initialRead=null;
- let owner=null,reading=null,controller=null,busy=false,error=null,offset=0,search='',lastSearch=null,focus=null,lastAnchor=null,pending=null,progress=null,windows={},detailField='title',resultFigure=null,collectionFocus=null,pendingCollection=null;
+ let owner=null,reading=null,controller=null,busy=false,error=null,offset=0,search='',lastSearch=null,focus=null,lastAnchor=null,pending=null,progress=null,windows={},resultFigure=null,collectionFocus=null,pendingCollection=null;
  const identity=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable&&state.book?JSON.stringify([state.storage?.contextId,state.book.id,state.selected,state.etag]):null;
  const sectionActions=recordSectionActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,edit:editWriting,render,report});
  const mediaActions=recordMediaActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,attachments:Math.max(0,position)};await load();},render,report});
  const figureCommands=recordFigureActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,figures:Math.max(0,position)};await load();},render,report});
  const inputChecks=attemptInputChecks({api,esc,render});
  const tags=recordTagActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,tags:Math.max(0,position)};await load();},render,report});
- function clear(){inputChecks.clear();sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};detailField='title';resultFigure=null;collectionFocus=null;pendingCollection=null;}
+ function clear(){inputChecks.clear();sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};resultFigure=null;collectionFocus=null;pendingCollection=null;}
  async function load(extra={},retry=false){
   const key=identity();if(!key)return;
   controller?.abort();const request=new AbortController();controller=request;busy=true;error=null;
@@ -77,8 +77,9 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   const figureReference={kind:'record',id:reading.recordId,revision:reading.revision,workspaceId:reading.workspaceId};
   const figureResults=figure=>figureResultLinks(figure,reading.resultFigures,esc);
   const record={...reading.header,sections:reading.sections.values},inlineRecord={...record,figures:[...record.figures,...reading.inline?.figures??[]],attachments:[...record.attachments,...reading.inline?.attachments??[]]},figureActions=editing?f=>'<div class="inline-actions">'+recordFigureAction(f,esc,busy)+figureCommands.controls(f)+'</div>':undefined,figure=recordFigureRenderer(inlineRecord,esc,{translate:t,assetUrl,figureActions,figureResults,figureReference});
+  const templateFieldEdit=f=>'<button class="button subtle" type="button" data-action="record-value-edit" data-value-field="'+esc('template:'+f.key)+'" aria-label="'+esc(recordValueEditLabel('template:'+f.key,f))+'"'+(busy?' disabled':'')+'>'+esc(t('recordValues','edit_editButton'))+'</button>';
   const fieldsHtml={};for(const [name,page] of Object.entries(reading.collections??{}))if(!name.startsWith('preparation:')&&!['relations','preparations','events','assessments','results'].includes(name)){
-   const key=name==='fields'?'template':name;fieldsHtml[key]=page.total?recordHeaderControls(name,page,esc,busy)+recordRevisionField(key,record,esc,{assetUrl,figureActions,figureResults,figureReference}):'';
+   const key=name==='fields'?'template':name;fieldsHtml[key]=page.total?recordHeaderControls(name,page,esc,busy)+recordRevisionField(key,record,esc,{assetUrl,figureActions,figureResults,figureReference,templateFieldAction:editing?templateFieldEdit:null}):'';
   }
   if(editing){
   fieldsHtml.contributors=recordHeaderControls('contributors',reading.collections?.contributors,esc,busy)+recordContributorControls(record,esc,busy);
@@ -93,7 +94,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   }
   const sections=()=>'<section class="record-sections">'+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'>'+(editing?'<button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button>':'')+'</div>'+publicationChoices(s.share!==false,s.sharePdf===true,esc)+(editing?sectionActions.controls(s,reading.sections.offset+i,reading.sections.total):'')+renderProse(s.body,{figure,headingBase:editing?3:2})+'</section>').join('')+'</section>';
   const notebook=state.book.notebooks.find(item=>item.id===record.notebookId);
-  if(editing)return controls+recordEditingView({record,book:notebook,esc,status,busy,details:recordValueControls(record,esc,detailField),summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before({readonly:false}),evidence:after({readonly:false}),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:false})});
+  if(editing)return controls+recordEditingView({record,book:notebook,esc,status,busy,details:'',summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before({readonly:false}),evidence:after({readonly:false}),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:false})});
   return controls+'<article class="record-reader" aria-busy="'+busy+'"><h1>'+esc(record.title)+'</h1>'+status+publicationAvailability(record,notebook,esc)+recordRevisionView(record,esc,{relations:false,anchors:true,sectionsHtml:sections,fieldsHtml,inlineRecord,attemptReference,resultReference,figureActions,figureResults,figureReference,assetUrl})+before({readonly:true})+after({readonly:true})+recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:true})+'</article>';
  }
  function bind(){
@@ -101,7 +102,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   const key=identity();if(!key){clear();return;}
   if(key!==owner){
    const previous=owner&&JSON.parse(owner),current=JSON.parse(key),sameRecord=previous&&previous.slice(0,3).every((v,i)=>v===current[i]),anchor=state.recordSection??(sameRecord?reading?.sections.values[0]?.id:null);
-   const previousWindows=windows,previousDetail=detailField,previousFigure=resultFigure,previousOffset=offset;clear();if(sameRecord){windows=previousWindows;detailField=previousDetail;resultFigure=previousFigure;offset=previousOffset;}owner=key;lastAnchor=state.recordSection;initialRead=load(anchor?{anchor,...(resultStatementAnchor(anchor)?{resultFigure:null}:{})}:{});render();return;
+   const previousWindows=windows,previousFigure=resultFigure,previousOffset=offset;clear();if(sameRecord){windows=previousWindows;resultFigure=previousFigure;offset=previousOffset;}owner=key;lastAnchor=state.recordSection;initialRead=load(anchor?{anchor,...(resultStatementAnchor(anchor)?{resultFigure:null}:{})}:{});render();return;
   }
   if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor,...(resultStatementAnchor(lastAnchor)?{resultFigure:null}:{})});render();return;}
   if(busy)return;
@@ -161,5 +162,5 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   state.recordSection=anchor;lastAnchor=anchor;focus=null;collectionFocus=null;
   const task=load({anchor,resultFigure:null});render();await task;return true;
  },captureTarget:()=>identity()?{native:true,id:state.selected,snapshotId:owner===identity()&&reading?reading.etag:state.etag}:null,
- savedRevision:()=>reading&&owner===identity()?reading.revision:null,removalTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,expectedRevision:reading.revision,title:reading.header.title}:null,attachMedia:mediaActions.attach,locationTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,sourceNotebookId:reading.header.notebookId,expectedStorageRevision:reading.storageRevision,title:reading.header.title}:null,async revealFigure(target,position){if(state.page!=='record-reader'||state.book?.id!==target.workspaceId||state.selected!==target.recordId||!Number.isSafeInteger(position)||position<0)return;windows={...windows,figures:position};await load();},current:()=>reading&&owner===identity()?{...reading.header,sections:reading.sections.values,relations:[...reading.header.relations,...reading.contextRelations??[]],figures:[...reading.header.figures,...reading.inline?.figures??[]],attachments:[...reading.header.attachments,...reading.inline?.attachments??[]]}:null,input(el){if(tags.input(el))return true;if(el.hasAttribute('data-record-detail-field')){detailField=el.value;return true;}if(!el.hasAttribute('data-content-search'))return false;search=el.value;return true;}};
+ savedRevision:()=>reading&&owner===identity()?reading.revision:null,removalTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,expectedRevision:reading.revision,title:reading.header.title}:null,attachMedia:mediaActions.attach,locationTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,sourceNotebookId:reading.header.notebookId,expectedStorageRevision:reading.storageRevision,title:reading.header.title}:null,async revealFigure(target,position){if(state.page!=='record-reader'||state.book?.id!==target.workspaceId||state.selected!==target.recordId||!Number.isSafeInteger(position)||position<0)return;windows={...windows,figures:position};await load();},current:()=>reading&&owner===identity()?{...reading.header,sections:reading.sections.values,relations:[...reading.header.relations,...reading.contextRelations??[]],figures:[...reading.header.figures,...reading.inline?.figures??[]],attachments:[...reading.header.attachments,...reading.inline?.attachments??[]]}:null,input(el){if(tags.input(el))return true;if(!el.hasAttribute('data-content-search'))return false;search=el.value;return true;}};
 }

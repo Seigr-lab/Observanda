@@ -33,7 +33,7 @@ test('saved editing opens directly, browses areas and retains late writing acros
   await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page).toHaveURL(new RegExp(record.id+'$'));await expect(section).toBeVisible();
   await section.getByRole('button',{name:'Edit section',exact:true}).click();const writing=page.getByRole('dialog',{name:'Edit writing section',exact:true});
   await writing.locator('.ProseMirror').fill('Edited acquisition 129');await writing.getByRole('button',{name:'Save changes',exact:true}).click();await expect(writing).not.toBeVisible();await expect(section).toContainText('Edited acquisition 129');
-  await nav.getByRole('button',{name:'Record details',exact:true}).click();await editor.getByRole('button',{name:'Edit selected detail',exact:true}).click();const title=page.getByRole('dialog',{name:'Edit Record title',exact:true});
+  await nav.getByRole('button',{name:'Record details',exact:true}).click();await page.getByRole('button',{name:'Edit record title',exact:true}).click();const title=page.getByRole('dialog',{name:'Edit record title',exact:true});
   await title.getByLabel('Record title',{exact:true}).fill('Amended field record');await title.getByRole('button',{name:'Save changes',exact:true}).click();await expect(title).not.toBeVisible();await expect(editor.locator('h1')).toHaveText('Amended field record');
   await page.reload();await expect(nav).toBeVisible();await expect(editor.locator('h1')).toHaveText('Amended field record');
   await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page).toHaveURL(new RegExp('/read$'));

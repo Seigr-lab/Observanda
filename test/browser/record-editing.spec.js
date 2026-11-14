@@ -28,8 +28,8 @@ async function fixture(page){
   scoped(){expect(requests.filter(route=>['/api/workspace/read/selection','/api/workspace/read/page','/api/research/records/save'].includes(route))).toEqual([]);expect(errors).toEqual([]);}
  };
 }
-const dialogFor=page=>page.getByRole('dialog',{name:'Edit Record title',exact:true});
-async function openTitle(page){await (await revealInEditor(page,page.locator('[data-record-detail-field]'),'Record details')).selectOption('title');await (await revealInEditor(page,page.getByRole('button',{name:'Edit selected detail',exact:true}),'Record details')).click();return dialogFor(page);}
+const dialogFor=page=>page.getByRole('dialog',{name:'Edit record title',exact:true});
+async function openTitle(page){await (await revealInEditor(page,page.locator('main [data-action=record-value-edit][data-value-field="title"]').first(),'Record details')).click();return dialogFor(page);}
 async function alterReply(route,change){
  const response=await route.fetch();
  if(response.headers()['content-type']?.includes('application/x-ndjson')){

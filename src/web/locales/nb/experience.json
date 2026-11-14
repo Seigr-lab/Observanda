@@ -26,7 +26,6 @@
   "details": "Oppføringsdetaljer",
   "activity": "Aktivitet og historikk",
   "actions": "Oppføringshandlinger",
-  "editField": "Rediger {name}",
   "draftHelp": "Et gjenopprettingspunkt beholder utkastet. Lagre endringer oppdaterer oppføringen; lukking med et gjenopprettingspunkt beholder utkastet til senere.",
   "noItems": "Ingen elementer ennå. Opprett et element for å komme i gang.",
   "noMatches": "Ingen resultater med disse filtrene.",
