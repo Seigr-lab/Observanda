@@ -945,7 +945,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   if(operation==='check-access'){await poll();return true;}
   if(operation==='resume-preparation'){const result=await request('preparation/resume',{},{signal:controller.signal});session.preparation=result.preparation?.state==='cancelled'?{...result.preparation,state:'preparing'}:result.preparation;render();waitForPreparation();return true;}
-  if(sourcePane.pending&&!['discard','reopen','undo','redo','html','css'].includes(operation)&&!await sourcePane.check())return true;
+  // A pending source check holds the editor busy, so a second click waits visibly
+  // instead of being accepted and then silently dropped.
+  if(sourcePane.pending&&!['discard','reopen','undo','redo','html','css'].includes(operation)){busy='sourceChecking';paintStatus();let accepted=false;try{accepted=await sourcePane.check();}finally{busy=null;paintStatus();}if(!accepted)return true;}
   await run(async()=>{
    if(mode==='media'&&recordings.dirty()&&!operation.startsWith('recovery-')&&!['save','reopen'].includes(operation)){if(!await confirmAction(tr('recordingDiscard'),{action:'discard'}))return;await recovery.forget();recordings.reset();mode='visual';}
    if(mode==='pages'&&pagesPanel.dirty()&&!operation.startsWith('pages-')&&operation!=='discard')await pagesPanel.save();
