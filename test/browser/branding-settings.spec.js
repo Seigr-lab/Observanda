@@ -69,7 +69,7 @@ test('General directly edits workspace details and protects unsaved form changes
  await form.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue(before.title);
  await form.getByLabel('Workspace name',{exact:true}).fill('Creative collective');await form.getByLabel('Workspace type').selectOption('custom');await form.getByLabel('Your own label').fill('Sound studio');
  await form.getByRole('button',{name:'Save workspace',exact:true}).click();
- await expect(form.getByRole('status')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await sessionRequest(page,'get',app.origin+'/api/storage')).json()).root;expect((await fixture.workspace.read()).book.title).toBe('Creative collective');
+ await expect(form.locator('[data-workspace-status]')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await sessionRequest(page,'get',app.origin+'/api/storage')).json()).root;expect((await fixture.workspace.read()).book.title).toBe('Creative collective');
  await page.reload();await expect(form.getByLabel('Your own label')).toHaveValue('Sound studio');
  const after=(await savedBook());expect(after.website).toEqual(before.website);expect(after.projects).toEqual(before.projects);
  await form.getByLabel('Workspace name',{exact:true}).fill('');
