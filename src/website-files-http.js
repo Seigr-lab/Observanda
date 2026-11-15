@@ -194,6 +194,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    json({workspaceId:workspace.vault?.id,title,contextId,sites:result.items,next:result.next,preparation:progress,defaultSiteId:progress.defaultSiteId});return true;
   }
   if(operation==='preparation'){json({preparation:await preparation()});return true;}
+  // An export is checked before it is downloaded, so a refused website (a private
+  // path, an unpublishable file) is explained instead of ending as a cancelled download.
+  if(operation==='export/check'&&req.method==='POST'){
+   if(!researchId(data.siteId)||!revision(data.revision)||Object.keys(data).length!==2)throw new AppError('INVALID');
+   await store.withSite(data.siteId,data.revision,async()=>{await check();const candidate=await WebsiteFilesCandidate.open(store,data.siteId,data.revision,{blockedValues});await candidate.verify({signal});});
+   json({ready:true});return true;
+  }
   if((operation==='preparation/cancel'||operation==='preparation/resume')&&req.method==='POST'){if(!preparationControl)throw new AppError('INVALID');json({preparation:await preparationControl[operation.slice(12)]()});return true;}
   if(operation==='list'){json(await store.list(data));return true;}
   if(operation==='recovery/list'){json(await listWebsiteRecovery(store,{...data,signal}));return true;}

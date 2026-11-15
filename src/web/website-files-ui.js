@@ -1112,7 +1112,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    }
    else if(operation==='preview'){if(menu.dirty())await menu.save();await save();if(stale)throw Error(tr('changed'));resetPreview();mode='preview';navigatePreview({path:opened.path,hash:''});}
    else if(operation==='preview-back'||operation==='preview-forward'){const next=step+(operation==='preview-back'?-1:1);if(trail[next]){step=next;navigatePreview(trail[next],false);}}
-   else if(operation==='download'){await save();if(stale)throw Error(tr('changed'));await downloadResource('/api/website-files/export?siteId='+siteId()+'&revision='+opened.site.revision,'observanda-site.zip');}
+   else if(operation==='download'){await save();if(stale)throw Error(tr('changed'));await request('export/check',{siteId:siteId(),revision:opened.site.revision},{signal:controller.signal});await downloadResource('/api/website-files/export?siteId='+siteId()+'&revision='+opened.site.revision,'observanda-site.zip');}
    else if(operation==='add-block'||operation==='paragraph'||operation==='heading')await addElement(operation==='add-block'?element.dataset.block:operation,element);
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page'){
