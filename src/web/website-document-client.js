@@ -134,7 +134,11 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
    else for(const value of operation.type==='append'?operation.values:[operation.value])items.set(operation.collection+':'+keyOf(operation.collection,value),value);
   }
   for(const key of new Set([...Object.keys(base.document.website),...Object.keys(next.document.website)]))if(!sameJSONData(base.document.website[key],next.document.website[key]))operations.push({type:'settings',path:['document','website',key],...(next.document.website[key]===undefined?{remove:true}:{value:copy(next.document.website[key])})});
-  for(const key of ['appearance','themes','activeThemeId'])if(!sameJSONData(base.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
+  // Each operation is validated as it applies: the active theme must name a
+  // saved theme at every step, so it moves before the themes when it leaves a
+  // theme being deleted and after them when it names a newly saved one.
+  const activeFirst=next.document.activeThemeId===null||(base.document.themes??[]).some(theme=>theme.id===next.document.activeThemeId);
+  for(const key of activeFirst?['appearance','activeThemeId','themes']:['appearance','themes','activeThemeId'])if(!sameJSONData(base.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
   for(const key of ['projects','selection'])if(!sameJSONData(base[key],next[key]))operations.push({type:'settings',path:[key],value:copy(next[key])});
   for(const collection of collections)for(const [key,saved] of selected.get(collection)){
    const value=values(state.book,collection).find(value=>keyOf(collection,value)===key);
