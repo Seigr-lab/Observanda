@@ -12,6 +12,7 @@ import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-r
 import {createBlock,duplicateBlock} from './website-files-blocks.js';
 import {websiteElementLibrary} from './website-element-library.js';
 import {websiteToolRail} from './website-tool-rail.js';
+import {sectionTemplates,createSection,sectionCSS} from './website-section-templates.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink} from './website-files-dialogs.js';
 import {openDownloadDialog} from './website-files-downloads.js';
@@ -771,7 +772,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(type==='image'){gallery.open(selected);mode='gallery';gallery.action('new-image',element);return;}
   if(type==='video'){await save();await recordings.open(null);mode='media';render();return;}
   documentChange(doc=>{if(type==='columns'&&!css.includes('.website-columns{')){ensureStyle(doc);css+='\n.website-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}\n';}
-   const created=createBlock(doc,type,tr),at=blockAt(doc,selected);
+   // Ready-made sections bring their shared styles into the site once, like columns.
+   if(sectionTemplates.includes(type)){if(!css.includes('.ow-hero,')){ensureStyle(doc);css+=sectionCSS;}if(!css.includes('.website-button{')){ensureStyle(doc);css+=buttonCSS;}}
+   const created=sectionTemplates.includes(type)?createSection(doc,type,tr):createBlock(doc,type,tr),at=blockAt(doc,selected);
    if(movable(at)&&main(doc).contains(at)){if(node&&where==='before')at.before(created);else at.after(created);}else main(doc).append(created);});
  }
  function editorView(panel=''){

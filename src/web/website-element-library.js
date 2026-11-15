@@ -6,6 +6,12 @@ const dragType='application/x-observanda-element';
 
 const icon=paths=>'<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg>';
 const icons={
+ heroSection:icon('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M7 9h10M9 12h6"/><rect x="9" y="15" width="6" height="2.5" rx="1"/>'),
+ featuresSection:icon('<rect x="3" y="7" width="5" height="10" rx="1"/><rect x="9.5" y="7" width="5" height="10" rx="1"/><rect x="16" y="7" width="5" height="10" rx="1"/>'),
+ ctaSection:icon('<rect x="3" y="6" width="18" height="12" rx="2" fill="currentColor" opacity=".18"/><path d="M7 10h10"/><rect x="9" y="13" width="6" height="2.5" rx="1"/>'),
+ quoteSection:icon('<path d="M4 5v14"/><path d="M8 9h11M8 13h9M8 17h5"/>'),
+ stepsSection:icon('<circle cx="5.5" cy="6" r="1.8"/><circle cx="5.5" cy="12" r="1.8"/><circle cx="5.5" cy="18" r="1.8"/><path d="M10 6h10M10 12h10M10 18h8"/>'),
+ contactSection:icon('<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 7l9 6 9-6"/>'),
  heading:icon('<path d="M5 5v14M14 5v14M5 12h9"/><path d="M18 9l2-1v11"/>'),
  paragraph:icon('<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>'),
  quote:icon('<path d="M7 8c-2 1-3 3-3 6h4v-4H6M17 8c-2 1-3 3-3 6h4v-4h-2"/>'),
@@ -23,6 +29,7 @@ const icons={
  feed:icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>')
 };
 export const elementGroups=[
+ ['sections',['heroSection','featuresSection','ctaSection','quoteSection','stepsSection','contactSection']],
  ['text',['heading','paragraph','quote','details','table','equationEdit']],
  ['layout',['section','columns','divider']],
  ['media',['image','gallery','video']],
