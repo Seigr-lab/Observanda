@@ -114,7 +114,7 @@ test('workspace forms translate in every supported language without changing sav
    await expect(form.getByRole('button',{name:messages.save,exact:true})).toBeDisabled();
    if(!await page.locator('.workspace-reference').evaluate(element=>element.open))await page.locator('.workspace-reference summary').click();
    await page.locator('[data-action="workspace-reorganize"]').click();
-   await expect(page.locator('#workspace-organize-form input[name="copyLogos"]')).toHaveCount(1);
+   await expect(page.locator('#workspace-organize-form input[name="copyLogos"]')).toHaveCount(0);
    await expect(page.locator('#workspace-organize-form').getByRole('button',{name:messages.review,exact:true})).toBeVisible();
    await page.locator('#dialog').getByRole('button',{name:messages.cancel,exact:true}).click();
   }

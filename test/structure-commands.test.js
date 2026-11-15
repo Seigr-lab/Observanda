@@ -181,7 +181,9 @@ test('identity collisions, invalid metadata, stale forms and interrupted commits
 
 test('reorganization preview is read-only and counts only selected metadata branches',async t=>{
  const f=await fixture(t),p=f.base.book.projects[0],source=f.base.book.notebooks[0],empty=f.base.book.notebooks[2];
- const change={workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id,copyLogos:true};
+ // Website documents own every logo; the workspace has none to copy.
+ await assert.rejects(f.service.execute('reorganize',{etag:f.base.etag,change:{workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id,copyLogos:true}},{preview:true}),{code:'INVALID'});
+ const change={workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id,copyLogos:false};
  const {result:plan}=await bounded(new Set([source.id,empty.id]),new Set(),()=>f.service.execute('reorganize',{etag:f.base.etag,change},{preview:true}));
  assert.equal(plan.summary.records,3);assert.equal(plan.summary.notebooks,2);assert.equal((await f.ws.outline()).etag,f.base.etag);
  await assert.rejects(f.service.execute('reorganize',{etag:plan.etag,change}),{code:'INVALID'});
