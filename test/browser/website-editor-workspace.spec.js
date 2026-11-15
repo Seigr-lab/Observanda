@@ -22,7 +22,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),commands=page.locator('.website-page-controls');
+  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),commands=page.locator('.website-page-controls'),tools=page.getByRole('navigation',{name:'Site tools',exact:true});
   await expect(paragraph).toBeVisible();
   const finder=page.getByRole('button',{name:'Find pages and tools'});await finder.click();
   const search=page.getByRole('combobox',{name:'Search by name or path'});await search.fill('Themes');await expect(page.getByRole('option',{name:'Themes',exact:true})).toBeVisible();await search.press('Escape');
@@ -36,7 +36,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   await expect(canvas.locator('article p')).toHaveText(label+' Check the reference slide.');
   const save=page.getByRole('button',{name:'Save website',exact:true});await expect(save).toBeEnabled();await save.click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   expect((await store.open(id)).html).toContain('Check the reference slide.');
-  await expect(commands.getByRole('button',{name:'Themes',exact:true})).toBeVisible();
+  await expect(tools.getByRole('button',{name:'Themes',exact:true})).toBeVisible();
   await expect(commands.getByRole('button',{name:'Publish to folder',exact:true})).toBeVisible();
   for(const width of [1148,1440]){
    await page.setViewportSize({width,height:width===1148?759:900});
@@ -45,7 +45,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-document.documentElement.clientHeight)).toBeLessThanOrEqual(1);
   }
   if(process.env.OBSERVANDA_WORKSPACE_SCREENSHOT)await page.screenshot({path:process.env.OBSERVANDA_WORKSPACE_SCREENSHOT});
-  await commands.getByRole('button',{name:'Website menu',exact:true}).click();
+  await tools.getByRole('button',{name:'Website menu',exact:true}).click();
   await expect(page.locator('.website-workspace-identity')).toContainText('Website menu');await expect(save).toHaveCount(0);
   await page.locator('[data-action="website-files-menu-cancel"]').click();
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();

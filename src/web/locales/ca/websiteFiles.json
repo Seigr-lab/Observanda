@@ -1629,5 +1629,6 @@
   "element_downloadText": "Un fitxer que els visitants poden baixar.",
   "element_feed": "Registres del llibre de laboratori",
   "element_feedText": "Una llista de registres dels teus llibres de laboratori que s’actualitza sola.",
-  "backToPrevious": "Torna on eres"
+  "backToPrevious": "Torna on eres",
+  "siteTools": "Eines del lloc"
 }

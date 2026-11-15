@@ -1,0 +1,28 @@
+// Site tools in a rail beside the page, each with a picture and its name, so an
+// author reaches pages, menus, design and media without leaving the page.
+const icon=paths=>'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg>';
+const TOOLS=[
+ ['pages','pagePanel',icon('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>')],
+ ['menu','menu',icon('<path d="M4 6h16M4 12h16M4 18h16"/>')],
+ ['regions','regions',icon('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 16h18"/>')],
+ ['appearance','siteAppearance',icon('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>')],
+ ['themes','designThemes',icon('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.1-2.2H17a4 4 0 0 0 4-4c0-5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>')],
+ ['styles','styleLibrary',icon('<path d="M5 19L19 5M7 5h4M5 7v4M13 19h6v-6"/>')],
+ ['galleries','gallery',icon('<rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 18l5-5 4 4 3-3 4 4"/>')],
+ ['media','recordings',icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>')],
+ ['feeds','feedEditor',icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>')],
+ ['exchange','designExchange',icon('<path d="M7 7h11l-3-3M17 17H6l3 3"/>')],
+ ['versions','versionsTitle',icon('<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>')]
+];
+// Tools whose open state is a docked panel are marked as the current tool.
+const PANEL={pages:'pages',menu:'menu',regions:'regions',galleries:'gallery',media:'media',exchange:'exchange',versions:'versions'};
+
+export function websiteToolRail({t,esc}){
+ function view({mode,label}){
+  return '<nav class="website-tool-rail" aria-label="'+esc(label)+'">'+TOOLS.map(([action,key,picture])=>{
+   const current=PANEL[action]&&PANEL[action]===mode;
+   return '<button type="button" class="website-tool" data-action="website-files-'+action+'"'+(current?' aria-current="true"':'')+'>'+picture+'<span>'+esc(t(key))+'</span></button>';
+  }).join('')+'</nav>';
+ }
+ return {view};
+}

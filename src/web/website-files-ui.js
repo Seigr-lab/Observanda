@@ -11,6 +11,7 @@ import {destinationPlanRows,destinationConflictCount} from './publication-review
 import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
 import {createBlock,duplicateBlock} from './website-files-blocks.js';
 import {websiteElementLibrary} from './website-element-library.js';
+import {websiteToolRail} from './website-tool-rail.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink} from './website-files-dialogs.js';
 import {openDownloadDialog} from './website-files-downloads.js';
@@ -155,7 +156,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const library=websiteElementLibrary({t:tr,esc});
+ const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -639,8 +640,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function siteToolbar(){
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
-  return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site')+button('versionsTitle','versions'))+extraTools('page',page+button('pagePanel','pages')+button('addPage','new-page'))+
-   extraTools('siteDesignTools',button('menu','menu')+button('regions','regions')+button('siteAppearance','appearance')+button('designThemes','themes')+button('styleLibrary','styles')+button('designExchange','exchange'))+
+  return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site'))+extraTools('page',page+button('addPage','new-page'))+
    extraTools('siteReleaseTools',button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
  }
  function unopenedView(){
@@ -778,13 +778,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes=viewport.controls()+button('breakpointManage','breakpoints');
-  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'&&!panel?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
-  if(mode!=='visual'&&!panel)return toolbar+sourcePane.view(mode);
+  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div>'+(mode==='visual'&&!panel?'<div class="website-command-set">'+button('placementTitle','presentation')+'</div>':'')+'<div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
+  if(mode!=='visual'&&!panel)return toolbar+'<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools')})+'<div>'+sourcePane.view(mode)+'</div></div>';
   const blocks=library.view();
   // An open site tool takes the left column; the page stays in view beside it.
   const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head"><h2>'+esc(tr(taskLabel()))+'</h2>'+button('closePanel','visual')+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
    :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+blocks+components.tabs()+components.view()+'<section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
-  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
+  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools')})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
