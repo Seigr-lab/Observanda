@@ -90,7 +90,7 @@
 .website-selection-trail button:hover { text-decoration:underline }
 .website-selection-trail [aria-current] { font-weight:650 }
 @media(min-width:761px){
- .website-files-app .website-page-controls:has(.website-task-group) { display:grid; grid-template-columns:minmax(9rem,.85fr) minmax(12rem,1.23fr) minmax(11rem,1.12fr) minmax(14rem,1.5fr); align-items:stretch; gap:0; padding:.4rem .55rem }
+ .website-files-app .website-page-controls:has(.website-task-group) { display:grid; grid-template-columns:minmax(9rem,.85fr) minmax(11rem,1fr) minmax(16rem,2.6fr); align-items:stretch; gap:0; padding:.4rem .55rem }
  .website-page-controls .website-task-group:not(:first-child) { padding-inline-start:.55rem; margin-inline-start:.55rem; border-inline-start:1px solid var(--border,var(--ui-border)) }
  .website-task-group .website-extra-tools { gap:.16rem .25rem; min-width:0 }
  .website-page-controls .website-file-select { max-width:100%; min-height:1.7rem; height:1.85rem; font-size:.85rem }
@@ -444,7 +444,9 @@
 .website-tool:hover,.website-tool:focus-visible { color:var(--ui-accent); background:var(--ui-tint) }
 .website-tool[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
 .website-tool svg { width:1.25rem; height:1.25rem }
-@media (max-width:1100px){ .website-files-editor,.website-files-editor[data-panel-open],.website-files-editor[data-source-open] { grid-template-columns:1fr } .website-tool-rail { position:static; grid-template-columns:repeat(auto-fill,minmax(5rem,1fr)) } }
+/* Narrower windows keep every column, slimmer; the stacked layout below 62rem lays the rail out as a row. */
+@media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.62rem } }
+@media (max-width:61.999rem),(max-height:37.999rem){ .website-tool-rail { position:static; max-height:none; grid-template-columns:repeat(auto-fill,minmax(4.75rem,1fr)) } .website-files-code-layout { grid-template-columns:1fr } }
 /* Properties of the selected part, in tabs. */
 .inspector-tabs { display:flex; gap:.2rem; margin:.5rem 0 .75rem; padding:.2rem; background:var(--ui-soft); border:1px solid var(--ui-border); border-radius:var(--ui-control-radius) }
 .inspector-tabs [role=tab] { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:600; color:var(--ui-muted); background:transparent; border:0; border-radius:calc(var(--ui-control-radius) * .8); cursor:pointer }
