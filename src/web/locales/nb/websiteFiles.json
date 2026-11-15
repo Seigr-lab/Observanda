@@ -650,6 +650,7 @@
   "replacement": "Se gjennom erstatning av eksisterende målfiler",
   "conflicts": "Publiseringsmålet har filkonflikter. Gjennomgå erstatning før publisering.",
   "closePreview": "Tilbake til redigering",
+  "closePanel": "Tilbake til siden",
   "libraryNotice": "Innsatt innhold beholder plasseringen når synligheten endres.",
   "pdf": "Lagre siden som PDF",
   "working": "Arbeider …",

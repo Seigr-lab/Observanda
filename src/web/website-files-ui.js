@@ -331,7 +331,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const controls=document.querySelector('[data-website-file-controls]');
   if(controls){controls.disabled=!!busy;controls.setAttribute('aria-busy',String(!!busy));}
   const canvas=document.querySelector('#website-files-canvas');
-  if(canvas)canvas.inert=!!busy||stale||sourcePane.pending;
+  if(canvas)canvas.inert=!!busy||stale||sourcePane.pending||docked();
   const back=document.querySelector('[data-action="website-files-back"]');
   if(back)back.disabled=!!busy;
   for(const node of document.querySelectorAll('[data-website-file-requires-clean]'))node.disabled=stale;
@@ -651,6 +651,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   return '<section class="panel"><p>'+esc(tr('noWebsite'))+'</p>'+button('create','new')+'</section>';
  }
+ // The name of the task on screen, for the heading and an open tool panel.
+ function taskLabel(){return ({menu:'menu',regions:'regions',exchange:'designExchange',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';}
  function view(){
   flushCanvas();
   if(!session)return '<p role="status">'+esc(tr('loading'))+'</p>';
@@ -658,7 +660,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const composing=mode==='source-gallery';
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
   const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','regions','exchange','destination','folder'].includes(mode);
-  const currentTask=({menu:'menu',regions:'regions',exchange:'designExchange',preview:'preview',pages:'pagePanel',gallery:'gallery',media:'recordings',destination:'destination',folder:'folderPublish','source-gallery':'galleryFromEntries','publish-review':remoteEdition==='withdrawal'?'releaseWithdraw':'publishUpdate','publish-choose':'publishUpdate',releases:'releasesTitle',discovery:'discoveryTitle',review:'reviewTitle'})[mode]??'title';
+  const currentTask=taskLabel();
   const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
@@ -669,21 +671,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(mode==='folder')body=button('closePreview','visual')+folder.view();
   else if(choosingTarget)body=publishUpdateView();
   else if(mode==='destination')body=destinationView();
-  else if(mode==='menu')body=menu.view();
-  else if(mode==='regions')body=regions.view();
-  else if(mode==='exchange')body=exchange.view();
-  else if(mode==='pages')body=pagesPanel.view();
-  else if(mode==='versions')body=versions.view();
-  else if(mode==='releases')body=releases.view();
-  else if(mode==='discovery')body=discovery.view();
-  else if(mode==='review')body=review.view();
-  else if(mode==='media')body=recordings.view();
+  else if(docked())body=editorView(panelView());
   else if(composing)body=figures.view(picker.view());
-  else if(mode==='gallery'){
-   const groups=[...websiteHTML(html).querySelectorAll('[data-website-source-gallery]')];
-   body='<section class="panel"><h2>'+esc(tr('galleryFromEntries'))+'</h2>'+button('galleryChooseFigures','figures-new')+
-    groups.map((node,i)=>'<button type="button" class="button" data-action="website-files-figures-edit" data-gallery="'+esc(node.dataset.websiteSourceGallery)+'">'+esc(node.querySelector('h2,h3')?.textContent||tr('galleryNumber',{number:i+1}))+'</button>').join('')+'</section>'+gallery.view();
-  }
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+viewport.controls()+'</div>'+viewport.frame('website-files-preview',tr('preview'));
   else body=editorView();
   const toolbar=authoring?siteToolbar():!opened&&!form?siteSelector():'';
@@ -746,14 +735,39 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function designs(action,options={}){
   return request('page-designs',{siteId:siteId(),expectedRevision:opened.site.revision,path:opened.path,action,...options},{signal:controller.signal});
  }
- function editorView(){
+ // Site tools open in a panel beside the page instead of replacing it, so the
+ // author never loses the page they are building. The page is shown read-only
+ // while a tool is open, because tools such as the menu and pages write into it.
+ const DOCKED=new Set(['menu','regions','exchange','pages','versions','releases','discovery','review','media','gallery']);
+ function docked(){return DOCKED.has(mode)&&!!opened&&!form&&!stale;}
+ function panelView(){
+  if(mode==='menu')return menu.view();
+  else if(mode==='regions')return regions.view();
+  else if(mode==='exchange')return exchange.view();
+  else if(mode==='pages')return pagesPanel.view();
+  else if(mode==='versions')return versions.view();
+  else if(mode==='releases')return releases.view();
+  else if(mode==='discovery')return discovery.view();
+  else if(mode==='review')return review.view();
+  else if(mode==='media')return recordings.view();
+  else if(mode==='gallery'){
+   const groups=[...websiteHTML(html).querySelectorAll('[data-website-source-gallery]')];
+   return '<section class="panel"><h2>'+esc(tr('galleryFromEntries'))+'</h2>'+button('galleryChooseFigures','figures-new')+
+    groups.map((node,i)=>'<button type="button" class="button" data-action="website-files-figures-edit" data-gallery="'+esc(node.dataset.websiteSourceGallery)+'">'+esc(node.querySelector('h2,h3')?.textContent||tr('galleryNumber',{number:i+1}))+'</button>').join('')+'</section>'+gallery.view();
+  }
+  return '';
+ }
+ function editorView(panel=''){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes=viewport.controls()+button('breakpointManage','breakpoints');
-  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'?sizes:'')+'</div></div>';
-  if(mode!=='visual')return toolbar+sourcePane.view(mode);
+  const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'&&!panel?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
+  if(mode!=='visual'&&!panel)return toolbar+sourcePane.view(mode);
   const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option><option value="download">'+esc(tr('downloadBlock'))+'</option></select></label>'+button('addBlock','add-block');
-  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open':'')+'><aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside><section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside></div>';
+  // An open site tool takes the left column; the page stays in view beside it.
+  const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head"><h2>'+esc(tr(taskLabel()))+'</h2>'+button('closePanel','visual')+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
+   :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
+  return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
  function structure(doc=websiteHTML(html)){return [...main(doc).children].filter(node=>!['SCRIPT','STYLE','LINK'].includes(node.tagName));}
@@ -807,7 +821,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   const frame=document.getElementById('website-files-canvas'),historyFocus=pendingHistoryFocus;pendingHistoryFocus=null;if(frame){frame.onload=()=>{
    const doc=frame.contentDocument;if(!doc||!frame.isConnected||!opened)return;
-   const draft=sourcePane.accepted();loadWebsiteCanvas(doc,draft.html,draft.css,canvasURL(opened.site.cssPath),recoveredResource);frame.inert=!!busy||stale||sourcePane.pending;gallery.paint(doc);editWebsiteCanvas(doc);
+   const draft=sourcePane.accepted();loadWebsiteCanvas(doc,draft.html,draft.css,canvasURL(opened.site.cssPath),recoveredResource);frame.inert=!!busy||stale||sourcePane.pending||docked();gallery.paint(doc);
+   // With a site tool open the page is shown for reference only; editing binds when it closes.
+   if(docked())return;
+   editWebsiteCanvas(doc);
    components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
    visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,uploadPicture:file=>gallery.addPicture(file),resource:recoveredResource,
@@ -1061,6 +1078,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation.startsWith('gallery-'))gallery.action(operation.slice(8),element);
    else if(['visual','html','css','split-source'].includes(operation)){
     if(mode==='menu'&&!await beforeLeave(true))return;
+    // Closing a docked tool clears what it held, as its own close does.
+    if(mode==='versions')versions.reset();else if(mode==='releases')releases.reset();else if(mode==='discovery')discovery.reset();else if(mode==='review')review.reset();
     if(sourcePane.pending&&['html','css'].includes(operation)){mode=operation;render();void sourcePane.check();return;}
     if(sourcePane.pending&&!await sourcePane.check())return;
     const next=mode==='preview'?trail[step]:null;

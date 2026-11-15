@@ -650,6 +650,7 @@
   "replacement": "Revisa la substitució dels fitxers de destinació existents",
   "conflicts": "La destinació conté fitxers en conflicte. Revisa’n la substitució abans de publicar.",
   "closePreview": "Torna a editar",
+  "closePanel": "Torna a la pàgina",
   "libraryNotice": "El contingut inserit manté la posició quan canvia la visibilitat.",
   "pdf": "Desa la pàgina com a PDF",
   "working": "Operació en curs…",

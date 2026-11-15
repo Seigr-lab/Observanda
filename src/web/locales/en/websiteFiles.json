@@ -650,6 +650,7 @@
   "replacement": "Review replacing existing destination files",
   "conflicts": "The destination has conflicting files. Review replacement before publishing.",
   "closePreview": "Return to editing",
+  "closePanel": "Back to the page",
   "libraryNotice": "Inserted content keeps its place when its visibility changes.",
   "pdf": "Save page as PDF",
   "working": "Working…",

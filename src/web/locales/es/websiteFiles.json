@@ -650,6 +650,7 @@
   "replacement": "Revisar sustitución de los archivos existentes del destino",
   "conflicts": "El destino contiene archivos en conflicto. Revisa su sustitución antes de publicar.",
   "closePreview": "Volver a editar",
+  "closePanel": "Volver a la página",
   "libraryNotice": "El contenido insertado mantiene su posición cuando cambia su visibilidad.",
   "pdf": "Guardar página como PDF",
   "working": "Operación en curso…",
