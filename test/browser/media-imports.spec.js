@@ -36,13 +36,14 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
   await dialog.getByRole('button',{name:'Retry processing',exact:true}).click();await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});
   expect((await f.workspace.read()).book.entries[0].attachments).toEqual([]);
   await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(dialog).not.toBeVisible();
-  const media=page.locator('[data-record-media] img');await expect(media).toHaveCount(1);await expect(media).toBeVisible();
+  // One tile per attachment: its thumbnail opens a full-size copy.
+  await expect(page.locator('[data-record-media] .record-media-tile')).toHaveCount(1);const media=page.locator('[data-record-media] .record-media-tile summary img');await expect(media).toBeVisible();
   expect((await f.workspace.read()).book.entries[0].attachments).toHaveLength(1);expect((await new MediaImports(f.workspace).list())).toHaveLength(1);
   // Attaching media may already have opened the editor.
   const editRecord=page.getByRole('button',{name:'Edit record',exact:true});if(await editRecord.isVisible())await editRecord.click();
   await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();await expect(media).toBeVisible();
   await page.getByRole('button',{name:'Read record',exact:true}).click();await page.reload();
-  await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);const reading=page.locator('.record-reader figure img');await expect(reading).toHaveCount(1);await expect(reading).toBeVisible();expect(errors).toEqual([]);
+  await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);await expect(page.locator('.record-reader .record-media-tile')).toHaveCount(1);const reading=page.locator('.record-reader .record-media-tile summary img');await expect(reading).toBeVisible();expect(errors).toEqual([]);
  }finally{MediaStore.prototype.prepare=prepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
@@ -62,27 +63,29 @@ test('durable SVG branding upload adds a draft, persists on Save and can be insp
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
-test('an interrupted upload can be reselected and used in the website editor without duplication',async({page})=>{
+// The website editor uploads its pictures directly; resumable imports belong
+// to record media, where reusing an import must never attach it twice.
+test('an interrupted upload can be reselected and attached to a record without duplication',async({page})=>{
  test.setTimeout(45000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-resume-')),f=await encryptedFixture(directory,sampleNotebook()),imports=new MediaImports(f.workspace);
+ const book=sampleNotebook();book.entries[0].attachments=[];
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-resume-')),f=await encryptedFixture(directory,book),imports=new MediaImports(f.workspace);
  const session=await imports.start({name:'reselect.svg',size:bytes.length,kind:'image'});await imports.receive(session.id,[bytes.subarray(0,12)]).catch(error=>{expect(error.code).toBe('MATERIAL_INCOMPLETE');});
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  try{
-  const {navigate}=await import('./preferences-helper.js'),{editorTab}=await import('./composer-helper.js');
-  await page.goto(app.url);await navigate(page,'Website editor');await editorTab(page,'Media');
-  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
+  const openImports=async()=>(await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click(),dialog=page.locator('#dialog');
+  await openImports();
   await expect(dialog).toContainText('Upload interrupted');await dialog.getByLabel('Reselect original file',{exact:true}).setInputFiles({name:'reselect.svg',mimeType:'image/svg+xml',buffer:bytes});
   await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});
   await expect(dialog.getByRole('button',{name:'Cancel upload',exact:true})).toHaveCount(0);
-  await page.screenshot({path:test.info().outputPath('media-imports-website.png')});
-  await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(page.locator('.website-media-library img')).toHaveCount(1);
-  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();await editorTab(page,'Media');await expect(page.locator('.website-media-library img')).toHaveCount(1);
-  await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();await dialog.getByRole('button',{name:'Use media',exact:true}).click();
-  await expect(page.locator('.website-media-library img')).toHaveCount(1);
-  await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();await expect(page.locator('#save-status')).toHaveText('Saved');
-  expect((await f.workspace.read()).book.website.assets).toHaveLength(1);
-  expect((await imports.list()).map(s=>s.id)).toEqual([session.id]);expect((await f.workspace.read()).book.website.assets[0].id).toBe(session.id);
+  await page.screenshot({path:test.info().outputPath('media-imports-record.png')});
+  const tiles=page.locator('[data-record-media] .record-media-tile');
+  await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(tiles).toHaveCount(1);
+  await page.reload();await expect(tiles).toHaveCount(1);
+  await openImports();await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(dialog).not.toBeVisible();
+  await expect(tiles).toHaveCount(1);
+  const attachments=(await f.workspace.read()).book.entries[0].attachments;expect(attachments).toHaveLength(1);expect(attachments[0].id).toBe(session.id);
+  expect((await imports.list()).map(s=>s.id)).toEqual([session.id]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
