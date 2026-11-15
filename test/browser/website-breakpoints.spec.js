@@ -34,7 +34,7 @@ test('author a 1100 px scientific grid, follow its cascade and independently rea
   const viewport=page.locator('[data-website-file-viewport]');
   const option=viewport.locator('option').filter({hasText:'Instrument grid'}),breakpoint=await option.getAttribute('value');await viewport.selectOption(breakpoint);
   await canvas.getByRole('heading',{name:'Characterization'}).click();
-  const inspector=page.locator('.website-layout-inspector');await inspector.locator('summary').first().click();
+  const inspector=page.locator('.website-layout-inspector');await page.getByRole('tab',{name:'Layout',exact:true}).click();
   const field=key=>inspector.locator('[data-layout-property="'+key+'"]');
   const applyLayout=inspector.getByRole('button',{name:'Apply layout',exact:true});
   await field('grid-template-columns').fill('2');await field('order').fill('2');await field('visibility').selectOption('visible');await applyLayout.click();

@@ -30,12 +30,13 @@ test('name a live website page design, use its scientific layout in a nested fol
   const donor=canvas.locator('main section');
   await donor.click({position:{x:4,y:4}});
   const appearance=page.locator('[data-website-visual-inspector]'),layout=appearance.locator('.website-layout-inspector');
+  await page.getByRole('tab',{name:'Style',exact:true}).click();
   await appearance.locator('[data-visual-property="font-family"]').selectOption({label:family});
   await appearance.locator('[data-visual-property="letter-spacing"]').fill('2');
   await appearance.getByRole('button',{name:'Apply styles',exact:true}).click();
   await expect(donor).toHaveClass(/ow-visual-/);
   await expect(donor).toHaveCSS('letter-spacing','2px');
-  await layout.locator(':scope > summary').click();
+  await page.getByRole('tab',{name:'Layout',exact:true}).click();
   for(const [view,gap] of [['desktop','27px'],['tablet','19px'],['phone','7px']]){
    await page.locator('[data-website-file-viewport]').selectOption(view);
    if(view==='desktop'){

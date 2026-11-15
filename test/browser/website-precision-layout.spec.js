@@ -33,7 +33,7 @@ test('arrange six scientific panels by keyboard and mouse, keep narrow overrides
   const size=inspector.getByRole('group',{name:'Size and position'}),arrange=inspector.getByRole('group',{name:'Alignment and distribution'});
   const b=(host,name)=>host.getByRole('button',{name,exact:true});
   const open=async()=>{
-   if(!await layout.evaluate(el=>el.open))await layout.locator(':scope > summary').click();
+   await page.getByRole('tab',{name:'Layout',exact:true}).click();
    if(!await inspector.evaluate(el=>el.open))await inspector.locator(':scope > summary').click();
   };
   await board.click({position:{x:3,y:3}});await open();

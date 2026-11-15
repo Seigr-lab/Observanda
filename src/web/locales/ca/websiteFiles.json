@@ -1630,5 +1630,9 @@
   "element_feed": "Registres del llibre de laboratori",
   "element_feedText": "Una llista de registres dels teus llibres de laboratori que s’actualitza sola.",
   "backToPrevious": "Torna on eres",
-  "siteTools": "Eines del lloc"
+  "siteTools": "Eines del lloc",
+  "inspectorTabs": "Propietats",
+  "inspectorTab_content": "Contingut",
+  "inspectorTab_style": "Estil",
+  "inspectorTab_layout": "Disposició"
 }

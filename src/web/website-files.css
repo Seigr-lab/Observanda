@@ -445,3 +445,9 @@
 .website-tool[aria-current=true] { color:var(--ui-accent); background:var(--ui-tint); border-color:var(--ui-accent) }
 .website-tool svg { width:1.25rem; height:1.25rem }
 @media (max-width:1100px){ .website-files-editor,.website-files-editor[data-panel-open],.website-files-editor[data-source-open] { grid-template-columns:1fr } .website-tool-rail { position:static; grid-template-columns:repeat(auto-fill,minmax(5rem,1fr)) } }
+/* Properties of the selected part, in tabs. */
+.inspector-tabs { display:flex; gap:.2rem; margin:.5rem 0 .75rem; padding:.2rem; background:var(--ui-soft); border:1px solid var(--ui-border); border-radius:var(--ui-control-radius) }
+.inspector-tabs [role=tab] { flex:1; padding:.4rem .5rem; font:inherit; font-size:.8rem; font-weight:600; color:var(--ui-muted); background:transparent; border:0; border-radius:calc(var(--ui-control-radius) * .8); cursor:pointer }
+.inspector-tabs [role=tab][aria-selected=true] { color:var(--ui-text); background:var(--ui-surface); box-shadow:0 1px 2px var(--ui-shadow) }
+.inspector-tabs [role=tab]:focus-visible { outline:2px solid var(--ui-accent); outline-offset:1px }
+.inspector-panel[hidden] { display:none }

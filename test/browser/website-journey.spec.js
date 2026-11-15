@@ -41,9 +41,10 @@ test('a designed page is reused in a nested folder, a private page is included a
   await pages.selectOption('methods.html');const plates=canvas().locator('main section');
   await plates.click({position:{x:4,y:4}});
   const appearance=page.locator('[data-website-visual-inspector]'),layout=appearance.locator('.website-layout-inspector');
+  await page.getByRole('tab',{name:'Style',exact:true}).click();
   await appearance.locator('[data-visual-property="letter-spacing"]').fill('2');await appearance.getByRole('button',{name:'Apply styles',exact:true}).click();
   await expect(plates).toHaveCSS('letter-spacing','2px');
-  await layout.locator(':scope > summary').click();
+  await page.getByRole('tab',{name:'Layout',exact:true}).click();
   for(const [view,gap] of [['desktop','24px'],['phone','6px']]){
    await page.locator('[data-website-file-viewport]').selectOption(view);
    if(view==='desktop'){await layout.locator('[data-layout-property="display"]').selectOption('grid');await layout.locator('[data-layout-property="grid-template-columns"]').fill('2');}

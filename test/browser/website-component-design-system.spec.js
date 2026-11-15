@@ -33,6 +33,7 @@ test('configure reusable title fields, use visual main styling and publish a cus
   await d.getByLabel('Field name',{exact:true}).fill('Specimen name');await b(d,'Save field').click();
   await b(d,'Add a linked entry area').click();
   await main.locator('article').click({position:{x:3,y:3}});
+  await d.getByRole('tab',{name:'Style',exact:true}).click();
   await d.locator('[data-visual-property="font-size"]').fill('24');await b(d,'Apply styles').click();
   await b(d,'Review component changes').click();await expect(d).toContainText('Placements 1 · Pages 1 · Local values to clear 0');
   await d.locator('[data-main-apply]').click();await expect(d).toHaveCount(0);await expect(canvas.locator('article')).toHaveCSS('font-size','24px');

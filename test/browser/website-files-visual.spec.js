@@ -54,7 +54,7 @@ test('the inspector explains effective typography and shows a transparent backgr
 test('responsive inspector publishes distinct grid and stack layouts at desktop tablet and phone widths',async({page})=>{
  const {frame,publish}=await fixture(page),selector='[data-section-id="text"]';
  const row=await page.evaluate(()=>window.rows().find(r=>r.name==='text').path);
- await page.evaluate(path=>window.visual.select(path),row);await page.locator('.website-layout-inspector > summary').click();
+ await page.evaluate(path=>window.visual.select(path),row);await page.getByRole('tab',{name:'inspectorTab_layout',exact:true}).click();
  const field=property=>page.locator('[data-layout-property="'+property+'"]'),apply=()=>page.getByRole('button',{name:'layoutApply',exact:true}).click();
  const device=async(name,width)=>{
   await page.evaluate(({name,width})=>{window.canvasViewport=name;document.querySelector('iframe').style.width=width+'px';window.visual.viewportChanged();},{name,width});
@@ -89,22 +89,22 @@ test('nested edit, rich text and visual styles survive saved HTML, external CSS 
  await page.keyboard.type('Authored ');
  await expect(frame.locator('[data-section-id="text"] p').first()).toHaveText('Authored Nested original wording');
  const property=name=>page.locator('[data-visual-property="'+name+'"]');
- await property('font-size').fill('23');await property('line-height').fill('1.75');await property('letter-spacing').fill('1.2');
+ await page.getByRole('tab',{name:'inspectorTab_style',exact:true}).click();await property('font-size').fill('23');await property('line-height').fill('1.75');await property('letter-spacing').fill('1.2');
  await page.getByRole('button',{name:'sectionApply',exact:true}).click();
  await expect(frame.locator('[data-section-id="text"]')).toHaveCSS('font-size','23px');
  const first=frame.locator('[data-section-id="text"] em');
  await first.dblclick();
- await page.locator('[data-visual-command="bold"]').click();
+ await page.getByRole('tab',{name:'inspectorTab_content',exact:true}).click();await page.locator('[data-visual-command="bold"]').click();
  // Chromium's double-click may also select the following space outside the
  // emphasis element. The word must stay inside its original emphasis.
  await expect(first.locator('b,strong')).toHaveText('original');
  await first.dblclick();
- await page.locator('[data-visual-scope]').selectOption('selection');
+ await page.getByRole('tab',{name:'inspectorTab_style',exact:true}).click();await page.locator('[data-visual-scope]').selectOption('selection');
  await property('font-weight').fill('500');await page.getByRole('button',{name:'sectionApply',exact:true}).click();
  await expect(first.locator('span')).toHaveCSS('font-weight','500');
  await frame.locator('[data-observanda-part] p').dblclick();
  await page.keyboard.type('Visible');
- await page.locator('[data-visual-scope]').selectOption('page');
+ await page.getByRole('tab',{name:'inspectorTab_style',exact:true}).click();await page.locator('[data-visual-scope]').selectOption('page');
  await property('padding').fill('17');await page.getByRole('button',{name:'sectionApply',exact:true}).click();
  await page.locator('[data-visual-scope]').selectOption('site');
  await property('font-family').selectOption({label:'sectionSerif'});await page.getByRole('button',{name:'sectionApply',exact:true}).click();

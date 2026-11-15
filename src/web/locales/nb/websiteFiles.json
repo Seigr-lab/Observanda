@@ -1630,5 +1630,9 @@
   "element_feed": "Oppføringer fra labboka",
   "element_feedText": "En liste over oppføringer fra labbøkene dine som holder seg oppdatert.",
   "backToPrevious": "Tilbake dit du var",
-  "siteTools": "Nettstedsverktøy"
+  "siteTools": "Nettstedsverktøy",
+  "inspectorTabs": "Egenskaper",
+  "inspectorTab_content": "Innhold",
+  "inspectorTab_style": "Stil",
+  "inspectorTab_layout": "Oppsett"
 }

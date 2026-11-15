@@ -31,6 +31,8 @@ test('scientists retain notation and paste instrument rows across saved pages be
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';await expect(fixture.workspace.catalogue(db=>db.head())).rejects.toMatchObject({code:'DATABASE_UNAVAILABLE'});
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(id);
+  // The chosen site's page must be bound in the editor before the author selects text in it.
+  await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   const canvas=page.frameLocator('#website-files-canvas'),source=canvas.locator('#notation');
   await source.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');
   const copied=await source.evaluate(node=>{const selection=node.ownerDocument.getSelection(),div=node.ownerDocument.createElement('div');div.append(selection.getRangeAt(0).cloneContents());return {text:selection.toString(),html:div.innerHTML};});

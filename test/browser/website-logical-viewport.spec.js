@@ -86,7 +86,7 @@ test('fitted canvas, saved preview and a published website agree with an indepen
   // Place the selected article using physical window coordinates while zoomed.
   await canvas.locator('#second').click();
   const layout=page.locator('.website-layout-inspector');
-  await layout.locator(':scope > summary').click();
+  await page.getByRole('tab',{name:'Layout',exact:true}).click();
   const coordinates=layout.locator('.website-layout-composer > details').filter({hasText:'Anchor corner'});
   await coordinates.locator(':scope > summary').click();
   await coordinates.getByLabel('Coordinate units').selectOption('px');

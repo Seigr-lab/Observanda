@@ -27,7 +27,7 @@ test('author a named figure grid and position a scientific annotation visually i
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);const canvas=page.frameLocator('#website-files-canvas');
-  await canvas.locator('#plates').click({position:{x:4,y:4}});const layout=page.locator('.website-layout-inspector');await layout.locator(':scope > summary').click();
+  await canvas.locator('#plates').click({position:{x:4,y:4}});const layout=page.locator('.website-layout-inspector');await page.getByRole('tab',{name:'Layout',exact:true}).click();
   const open=async(key)=>{const summary=layout.getByText(key,{exact:true}).filter({hasNot:page.locator('option')}).first();if(!await summary.locator('..').evaluate(d=>d.open))await summary.click();};
   await open('Arrange children');const arrangement=layout.locator('select').filter({has:page.locator('option[value=tiles]')});await arrangement.selectOption('columns');
   const grid=layout.locator('.website-layout-composer > details').first();await grid.locator('input[type=number]').first().fill('3');await grid.getByLabel('Space between items (px)').fill('12');

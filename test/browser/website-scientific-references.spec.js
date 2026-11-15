@@ -27,7 +27,7 @@ test('captions, descriptive links and a bibliography survive native file save, r
    throw Error('Unexpected request '+route);
   });
   await mountFilesEditor(page);const canvas=page.frameLocator('#website-files-canvas'),panel=page.locator('.website-science-inspector');
-  await expect(canvas.locator('h1')).toHaveText('Counts');await panel.locator('summary').click();
+  await expect(canvas.locator('h1')).toHaveText('Counts');await page.getByRole('tab',{name:'Content',exact:true}).click();await panel.locator('summary').click();
   const task=panel.getByLabel('Task',{exact:true}),target=panel.getByLabel('Page target'),status=panel.getByRole('status');
   await expect(canvas.getByText('Released sample figure',{exact:true})).toBeVisible();
   await expect(target.getByRole('option',{name:/Released sample/})).toHaveCount(0);

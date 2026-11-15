@@ -78,6 +78,8 @@ function styleRange(range, body) {
 
 /** All editor decorations are outside the saved tree or marked for removal by
  * websiteCanvasValue. Selection and pointer events are delegated once per frame. */
+// The properties tab the author chose stays while they select other parts.
+let inspectorTab='style';
 export function bindWebsiteVisual({document, inspector, t, beforeChange, change, getCSS, setCSS, onSelect, stylesheet, getViewport,getWidth,previewWidth,getRanges,manageRanges,layerDrag,menuTarget,openMenu,component=false,pictures=[],stylesheetPath='style.css',uploadPicture=null,resource=null}) {
   const win=document.defaultView, body=document.body, host=inspector.ownerDocument;
   const controller=new AbortController(), signal=controller.signal;
@@ -172,16 +174,34 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
     listen(control,'input',touch);listen(control,'change',touch);
   }
   const edit=make('button',t('sectionEditText')), apply=make('button',t('sectionApply')), reset=make('button',t('sectionReset'));
-  edit.type=reset.type='button';apply.type='submit';
+  edit.type=reset.type='button';apply.type='submit';edit.className=reset.className='button';apply.className='button primary';
   const styleActions=make('div');styleActions.className='website-visual-actions';styleActions.append(apply,reset);
   const rich=websiteRichText({document,host,t,listen,make,beforeChange,change,safeRange:range=>safeRange(range,body)});
   const tableHost=make('div');
   const table=websiteTableTools({document,inspector:tableHost,translate:t,beforeChange,changed:change,
    addCSS:rule=>{if(!getCSS().includes(rule))persistStyle(getCSS()+'\n'+rule,savedStyle.textContent+'\n'+rule);}});
-  form.append(title,prompt,edit,rich.toolbar,tableHost,labelled(t('sectionScope'),scope),grid,...(extraGrid.children.length?[extra]:[]),styleActions);
-  const responsive=responsiveLayout({document,host:form,before:rich.toolbar,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,getWidth,previewWidth,getRanges,manageRanges,beforeChange,change,make,listen,signal,
+  // The selected part's properties in three tabs: what it says, how it looks, where it sits.
+  const tabList=make('div');tabList.className='inspector-tabs';tabList.setAttribute('role','tablist');tabList.setAttribute('aria-label',t('inspectorTabs'));
+  const panels={content:make('div'),style:make('div'),layout:make('div')};
+  for(const [name,panel] of Object.entries(panels)){
+   const tab=make('button',t('inspectorTab_'+name));tab.type='button';tab.setAttribute('role','tab');tab.id='inspector-tab-'+name;tab.dataset.inspectorTab=name;
+   panel.setAttribute('role','tabpanel');panel.id='inspector-panel-'+name;panel.setAttribute('aria-labelledby',tab.id);tab.setAttribute('aria-controls',panel.id);panel.className='inspector-panel';
+   listen(tab,'click',()=>showTab(name,true));tabList.append(tab);
+  }
+  listen(tabList,'keydown',event=>{const order=Object.keys(panels),at=order.indexOf(inspectorTab),step=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;if(!step)return;event.preventDefault();showTab(order[(at+step+order.length)%order.length],true);});
+  function showTab(name,focus=false){
+   inspectorTab=name;
+   for(const tab of tabList.children){const on=tab.dataset.inspectorTab===name;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1;if(on&&focus)tab.focus();}
+   for(const [key,panel] of Object.entries(panels))panel.hidden=key!==name;
+  }
+  panels.content.append(edit);
+  panels.style.append(labelled(t('sectionScope'),scope),grid,...(extraGrid.children.length?[extra]:[]),styleActions);
+  // Text formatting and table tools stay above the tabs: they follow the cursor in text and tables.
+  form.append(title,prompt,rich.toolbar,tableHost,tabList,panels.content,panels.style,panels.layout);showTab(inspectorTab);
+  const responsive=responsiveLayout({document,host:panels.layout,before:null,t,scope,selected:()=>selected,selectNode:node=>setSelected(node,true,true),getCSS,getViewport,getWidth,previewWidth,getRanges,manageRanges,beforeChange,change,make,listen,signal,
     write:(css,transform)=>{persistStyle(css,transform(savedStyle.textContent));schedule();}});
-  websiteScientificReferences({document,host:form,t,listen,beforeChange,change,selected:()=>selected});
+  for(const details of panels.layout.querySelectorAll(':scope > details'))details.open=true;
+  websiteScientificReferences({document,host:panels.content,t,listen,beforeChange,change,selected:()=>selected});
   inspector.replaceChildren(form);
 
   function position() {
