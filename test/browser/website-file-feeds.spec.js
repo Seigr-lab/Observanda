@@ -59,7 +59,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const unexpected=[];page.on('request',r=>{const p=new URL(r.url()).pathname;if(p.startsWith('/api/')&&!p.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/interface','/api/language'].includes(p))unexpected.push(p);});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await page.locator('[data-website-file-site]').selectOption(id);
   const canvas=page.frameLocator('#website-files-canvas'),feed=canvas.locator('section[data-website-feed]'),dialog=page.locator('dialog[data-website-feed-dialog]');
-  const add=async()=>{await page.locator('[data-website-file-block]').selectOption('feed');await page.getByRole('button',{name:'Insert element',exact:true}).click();await expect(dialog).toBeVisible();};
+  const add=async()=>{await page.getByRole('button',{name:/^Lab book records/}).click();await expect(dialog).toBeVisible();};
   const save=async()=>{await dialog.locator('[data-feed-apply]').click();await expect(dialog).not.toBeVisible({timeout:30000});};
   const edit=async(title,expected=title)=>{await feed.getByRole('heading',{name:title,exact:true}).click();await page.locator('[data-feed-context]').click();await expect(dialog.locator('[data-feed-heading]')).toHaveValue(expected);};
   await add();await expect(dialog.getByRole('radio',{name:'All eligible entries'})).toBeChecked();

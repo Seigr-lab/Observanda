@@ -31,7 +31,7 @@ const savedPage=async id=>(await new WebsiteFileStore(fixture.workspace).open(id
 const occurrences=(html,text)=>html.split(text).length-1;
 async function openWebsite(page){await navigate(page,'Website editor');return openDefaultWebsite(page);}
 async function write(page,text){
- await files(page).locator('[data-website-file-block]').selectOption('paragraph');await files(page).getByRole('button',{name:'Insert element',exact:true}).click();
+ await files(page).locator('.element-card[data-block="paragraph"]').click();
  const paragraph=canvas(page).getByText('Write your text here.',{exact:true});await expect(paragraph).toHaveCount(1);
  await paragraph.click();await page.keyboard.press('End');await page.keyboard.type(' '+text);
  await expect(canvas(page).getByText(text)).toBeVisible();await expect(filesStatus(page)).toHaveText('Unsaved website changes');

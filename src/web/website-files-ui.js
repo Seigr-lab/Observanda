@@ -9,7 +9,8 @@ import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
 import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-remote-receipt.js';
-import {createBlock,duplicateBlock,blockTypes} from './website-files-blocks.js';
+import {createBlock,duplicateBlock} from './website-files-blocks.js';
+import {websiteElementLibrary} from './website-element-library.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink} from './website-files-dialogs.js';
 import {openDownloadDialog} from './website-files-downloads.js';
@@ -154,6 +155,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
+ const library=websiteElementLibrary({t:tr,esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -757,16 +759,31 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   return '';
  }
+ // Adds an element after the selected part of the page, or at the spot it was
+ // dropped. Elements made in a tool (pictures, recordings, feeds...) open that tool there.
+ async function addElement(type,element,{node=null,where=null}={}){
+  if(node)selected=layerPath(node);
+  if(type==='feed'){await openFeed(element,true);return;}
+  if(type==='download'){downloadDialog();return;}
+  if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
+  if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
+  if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
+  if(type==='image'){gallery.open(selected);mode='gallery';gallery.action('new-image',element);return;}
+  if(type==='video'){await save();await recordings.open(null);mode='media';render();return;}
+  documentChange(doc=>{if(type==='columns'&&!css.includes('.website-columns{')){ensureStyle(doc);css+='\n.website-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}\n';}
+   const created=createBlock(doc,type,tr),at=blockAt(doc,selected);
+   if(movable(at)&&main(doc).contains(at)){if(node&&where==='before')at.before(created);else at.after(created);}else main(doc).append(created);});
+ }
  function editorView(panel=''){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');
   const sizes=viewport.controls()+button('breakpointManage','breakpoints');
   const toolbar='<div class="website-files-toolbar website-authoring-tools" role="group" aria-label="'+esc(tr('title'))+'">'+tools+'<div class="website-command-set">'+history+button('discard','discard')+'</div><div class="website-command-set">'+button('gallery','galleries')+button('recordings','media')+(mode==='visual'&&!panel?button('feedEditor','feeds')+button('placementTitle','presentation'):'')+'</div><div class="website-canvas-tools">'+button('checkPage','check-page')+(mode==='visual'||panel?sizes:'')+'</div></div>';
   if(mode!=='visual'&&!panel)return toolbar+sourcePane.view(mode);
-  const blocks='<label>'+esc(tr('block'))+' <select data-website-file-block>'+blockTypes.map(key=>'<option value="'+key+'">'+esc(tr(key==='heading'?'addHeading':key==='paragraph'?'addText':key))+'</option>').join('')+'<option value="feed">'+esc(tr('feedBlock'))+'</option><option value="download">'+esc(tr('downloadBlock'))+'</option></select></label>'+button('addBlock','add-block');
+  const blocks=library.view();
   // An open site tool takes the left column; the page stays in view beside it.
   const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head"><h2>'+esc(tr(taskLabel()))+'</h2>'+button('closePanel','visual')+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
-   :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+components.tabs()+components.view()+'<div class="website-files-toolbar">'+blocks+'</div><section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
+   :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+blocks+components.tabs()+components.view()+'<section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
   return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }
  const main=doc=>doc.querySelector('main:not([hidden])')??doc.body;
@@ -796,7 +813,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
-  hierarchy.bindHost(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
   if(mode==='exchange')exchange.bind();
@@ -825,7 +842,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    // With a site tool open the page is shown for reference only; editing binds when it closes.
    if(docked())return;
    editWebsiteCanvas(doc);
-   components.bindCanvas(doc);bindNavigation(doc,opened.path,false);
+   components.bindCanvas(doc);library.bindCanvas(doc,{main,place:(type,node,where)=>void run(()=>addElement(type,document.querySelector('.element-card[data-block="'+type+'"]'),{node,where}))});bindNavigation(doc,opened.path,false);
    const inspector=document.querySelector('[data-website-visual-inspector]');
    visual=bindWebsiteVisual({document:doc,inspector,t:tr,layerDrag:hierarchy.canvasDrag,pictures:opened.site.pictures??[],stylesheetPath:opened.site.cssPath,uploadPicture:file=>gallery.addPicture(file),resource:recoveredResource,
     menuTarget:menuCanvasTarget,openMenu:nav=>void run(()=>openMenu(nav.dataset.websiteMenuId??null)),
@@ -1093,18 +1110,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='preview'){if(menu.dirty())await menu.save();await save();if(stale)throw Error(tr('changed'));resetPreview();mode='preview';navigatePreview({path:opened.path,hash:''});}
    else if(operation==='preview-back'||operation==='preview-forward'){const next=step+(operation==='preview-back'?-1:1);if(trail[next]){step=next;navigatePreview(trail[next],false);}}
    else if(operation==='download'){await save();if(stale)throw Error(tr('changed'));await downloadResource('/api/website-files/export?siteId='+siteId()+'&revision='+opened.site.revision,'observanda-site.zip');}
-   else if(operation==='add-block'||operation==='paragraph'||operation==='heading'){
-    const type=operation==='add-block'?document.querySelector('[data-website-file-block]').value:operation;
-    if(type==='feed'){await openFeed(element,true);return;}
-    if(type==='download'){downloadDialog();return;}
-    if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
-    if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
-    if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
-    if(type==='image'){gallery.open(selected);mode='gallery';gallery.action('new-image',element);return;}
-    if(type==='video'){await save();await recordings.open(null);mode='media';render();return;}
-    documentChange(doc=>{if(type==='columns'&&!css.includes('.website-columns{')){ensureStyle(doc);css+='\n.website-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}\n';}
-    const node=createBlock(doc,type,tr);const at=blockAt(doc,selected);if(movable(at)&&main(doc).contains(at))at.after(node);else main(doc).append(node);});
-   }
+   else if(operation==='add-block'||operation==='paragraph'||operation==='heading')await addElement(operation==='add-block'?element.dataset.block:operation,element);
    else if(operation==='edit-block'){visual?.select(element.dataset.path,{edit:true});}
    else if(operation==='check-page'){
     const checked=opened,original=html,sheet=css;

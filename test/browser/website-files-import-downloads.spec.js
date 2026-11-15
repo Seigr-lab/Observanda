@@ -60,7 +60,7 @@ test('an author imports a website ZIP after correcting every listed file, then o
   expect(imported).toBeTruthy();
   // Offer a paper for download from the new website.
   await canvas.getByText('Hourly readings from the mast.').click();
-  await page.locator('[data-website-file-block]').selectOption('download');await page.getByRole('button',{name:'Insert element',exact:true}).click();
+  await page.getByRole('button',{name:/^Download A file/}).click();
   const dialog=page.getByRole('dialog',{name:'Download'});
   await expect(dialog).toContainText('Observanda cannot check its contents for private lab book information');
   await dialog.getByLabel('File',{exact:true}).setInputFiles({name:'Station paper.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.7 station paper')});

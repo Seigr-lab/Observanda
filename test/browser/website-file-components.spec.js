@@ -27,7 +27,7 @@ test('drag a reusable section onto the canvas, edit scientific notation in the m
   await page.setViewportSize({width:1360,height:900});await mountFilesEditor(page);
   const canvas=page.frameLocator('#website-files-canvas'),library=page.locator('[data-website-components]');
   await expect(canvas.getByRole('heading',{name:'Methods'})).toBeVisible();
-  await page.locator('[data-website-file-block]').selectOption('section');await page.locator('[data-action="website-files-add-block"]').click();
+  await page.locator('.element-card[data-block="section"]').click();
   const section=canvas.locator('main > section');await expect(section).toHaveAttribute('data-section-id',/^ow-section-[\da-f-]{36}$/);
   const identity=await section.getAttribute('data-section-id');
   await page.getByRole('button',{name:'Save website',exact:true}).click();
