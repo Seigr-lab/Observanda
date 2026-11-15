@@ -1,0 +1,34 @@
+/* Editor and panel stylesheets were written against short variable names that
+   were never defined, so they always fell back to fixed colours. They follow
+   the interface tokens here (the app only; published websites never load this). */
+:root{--border:var(--ui-border);--accent:var(--ui-accent);--muted:var(--ui-muted);--surface:var(--ui-surface);--text:var(--ui-text)}
+
+/* Every form control in the app shares one look from the interface tokens,
+   whatever view built it. :where() keeps these rules at zero specificity, so a
+   view's own deliberate styling still wins; controls nobody styled no longer
+   fall back to raw browser defaults. */
+:where(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=hidden],[type=image],[type=submit],[type=button],[type=reset]),select,textarea){
+ box-sizing:border-box;min-height:38px;padding:7px 11px;border:1px solid var(--ui-control-border);border-radius:var(--ui-control-radius);
+ background:var(--ui-surface);color:var(--ui-text);font:inherit;font-size:0.8824rem;line-height:1.4;max-width:100%;
+}
+:where(select){padding-right:32px;cursor:pointer}
+:where(textarea){min-height:96px;resize:vertical}
+:where(input,select,textarea)::placeholder{color:var(--ui-muted);opacity:.8}
+:where(input,select,textarea):disabled{background:var(--ui-soft);color:var(--ui-muted);cursor:not-allowed}
+:where(input,select,textarea)[aria-invalid=true]{border-color:#b42318}
+
+/* File pickers read as buttons, with the chosen file name beside them. */
+:where(input[type=file]){font:inherit;font-size:0.8235rem;color:var(--ui-muted);max-width:100%}
+:where(input[type=file])::file-selector-button{
+ margin-right:10px;min-height:36px;padding:8px 14px;border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);
+ background:var(--ui-surface);color:var(--ui-text);font:inherit;font-size:0.8235rem;font-weight:600;cursor:pointer;
+}
+:where(input[type=file]):hover::file-selector-button{background:var(--ui-tint);border-color:var(--ui-accent)}
+
+:where(input[type=checkbox],input[type=radio]){accent-color:var(--ui-accent);width:16px;height:16px;margin:0;flex-shrink:0;cursor:pointer}
+:where(input[type=range]){accent-color:var(--ui-accent)}
+:where(input[type=color]){min-height:38px;padding:4px;border:1px solid var(--ui-control-border);border-radius:var(--ui-control-radius);background:var(--ui-surface);cursor:pointer}
+
+:where(fieldset){border:1px solid var(--ui-border);border-radius:var(--ui-radius);padding:14px 16px 16px;margin:0 0 16px;min-width:0}
+:where(legend){padding:0 6px;font-weight:600;font-size:0.8824rem;color:var(--ui-text)}
+:where(label){color:var(--ui-text)}

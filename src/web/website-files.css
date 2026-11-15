@@ -297,6 +297,9 @@
 .website-page-form h2,.website-page-form p,.website-page-form fieldset { margin:0 }
 .website-page-form .website-page-form-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr)); gap:.85rem }
 .website-page-form label { display:grid; gap:.3rem; font-weight:600 }
+/* A label around a radio or checkbox keeps the control beside its text. */
+.website-page-form label:not(.website-starter):has(> input[type=radio]),.website-page-form label:not(.website-starter):has(> input[type=checkbox]) { display:flex; align-items:center; gap:.6rem; font-weight:500 }
+.website-import-choices { display:flex; flex-wrap:wrap; gap:.5rem 1.5rem }
 .website-import-choices { display:grid; gap:.4rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.6rem .8rem }
 .website-page-form .website-import-choices label { display:flex; gap:.5rem; align-items:center; font-weight:400 }
 .website-import-issues { border-inline-start:3px solid var(--danger,#a62020); padding:.2rem .8rem }
@@ -309,7 +312,7 @@
 .website-download-list li { display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.35rem 0; border-block-end:1px solid var(--border,#cbd3df) }
 .website-download-list label { display:flex; align-items:baseline; gap:.4rem; min-width:0; overflow-wrap:anywhere }
 .website-download-list small { color:var(--muted,CanvasText) }
-.website-page-form :is(input,select) { width:100%; min-width:0; padding:.45rem .6rem; color:inherit; font:inherit; font-weight:normal; background:var(--surface,#fff); border:1px solid var(--border,#bac5d4); border-radius:.25rem }
+.website-page-form :is(input:not([type=radio],[type=checkbox]),select) { width:100%; min-width:0; padding:.45rem .6rem; color:inherit; font:inherit; font-weight:normal; background:var(--surface,#fff); border:1px solid var(--border,#bac5d4); border-radius:.25rem }
 .website-page-form fieldset { display:grid; gap:.7rem; border:1px solid var(--border,#cbd3df); border-radius:.4rem; padding:.75rem .9rem }
 .website-page-form legend { font-weight:650; padding-inline:.3rem }
 .website-page-form .website-page-design-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.4rem; align-items:end }

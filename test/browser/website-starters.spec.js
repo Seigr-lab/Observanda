@@ -24,7 +24,7 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   const canvas=page.frameLocator('#website-files-canvas');
   await expect(canvas.getByRole('heading',{name:'Existing'})).toBeVisible();
   await page.getByRole('button',{name:'New website',exact:true}).first().click();
-  const form=page.locator('[data-website-files-form]'),starters=form.getByRole('group',{name:'Start from'});
+  const form=page.locator('[data-website-files-form]'),starters=form.getByRole('group',{name:'Starting layout'});
   await expect(starters.getByRole('radio',{name:/Blank website/})).toBeChecked();
   await form.getByLabel('Website name',{exact:true}).fill('Beekeeping basics');
   await starters.getByRole('radio',{name:/^Course/}).check();
