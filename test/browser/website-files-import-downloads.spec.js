@@ -21,13 +21,13 @@ function zip(entries){
  const directory=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);
  return Buffer.concat([...locals,directory,end]);
 }
-const page=(title,body='')=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
+const sitePage=(title,body='')=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="style.css"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
 
 async function workspace(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-import-'));
  const book=sampleNotebook();book.entries=[];const fixture=await encryptedFixture(directory,book);
  const store=new WebsiteFileStore(fixture.workspace),id=randomUUID();
- await store.importFiles(id,{name:'Existing atlas',files:new Map([['index.html',page('Existing atlas','<p>Working notes.</p>')],['style.css','body{margin:0}']])});
+ await store.importFiles(id,{name:'Existing atlas',files:new Map([['index.html',sitePage('Existing atlas','<p>Working notes.</p>')],['style.css','body{margin:0}']])});
  const app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
  return {store,id,app,close:async()=>{try{await app.close();await clearVault(fixture.vault);}finally{await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});}}};
 }
@@ -46,14 +46,14 @@ test('an author imports a website ZIP after correcting every listed file, then o
   await page.getByRole('radio',{name:'A website ZIP file'}).check();
   await expect(page.getByText(/Research from your lab books is never copied/)).toBeVisible();
   const placed='<section data-observanda-source="'+'a'.repeat(64)+'" data-observanda-source-revision="'+'b'.repeat(64)+'"><p>Withheld assay</p></section>';
-  await page.locator('[data-website-import-zip]').setInputFiles({name:'station.zip',mimeType:'application/zip',buffer:zip([['station/index.html',page('Weather station','\n<script>track()</script>')],['station/results.html',page('Results',placed)],['station/style.css','body{margin:0}']])});
+  await page.locator('[data-website-import-zip]').setInputFiles({name:'station.zip',mimeType:'application/zip',buffer:zip([['station/index.html',sitePage('Weather station','\n<script>track()</script>')],['station/results.html',sitePage('Results',placed)],['station/style.css','body{margin:0}']])});
   await page.getByRole('button',{name:'Import website',exact:true}).click();
   const problems=page.getByRole('alert').filter({hasText:'The website was not imported'});
   await expect(problems).toContainText('index.html, line 2');
   await expect(problems).toContainText('Only approved website scripts may run');
   await expect(problems).toContainText('This page contains research placed by Observanda');
   expect((await ws.store.list({limit:100})).items.length).toBe(before);
-  await page.locator('[data-website-import-zip]').setInputFiles({name:'station.zip',mimeType:'application/zip',buffer:zip([['station/index.html',page('Weather station','<p>Hourly readings from the mast.</p>')],['station/style.css','body{margin:0}'],['station/.DS_Store','x']])});
+  await page.locator('[data-website-import-zip]').setInputFiles({name:'station.zip',mimeType:'application/zip',buffer:zip([['station/index.html',sitePage('Weather station','<p>Hourly readings from the mast.</p>')],['station/style.css','body{margin:0}'],['station/.DS_Store','x']])});
   await page.getByRole('button',{name:'Import website',exact:true}).click();
   await expect(canvas.getByRole('heading',{name:'Weather station'})).toBeVisible();
   const imported=(await ws.store.list({limit:100})).items.find(site=>site.name==='Weather station');
