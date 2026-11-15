@@ -40,9 +40,16 @@ export function chosenLogos(chain,{override,fallback}){
  return [];
 }
 
+// A page's own logos are pictures of the website kept in an inert template in
+// the page, so they move, version and leave with the page. They come first in
+// the page's automatic place; the template itself is never published.
+export const PAGE_LOGOS_ATTRIBUTE='data-observanda-page-logos';
+export const maxPageLogos=4;
 function markers(html){
- const document=parse(html,{sourceCodeLocationInfo:true});
- return {document,nodes:[...descendants(document)].filter(node=>node.tagName&&attr(node,LOGOS_ATTRIBUTE)!==undefined)};
+ const document=parse(html,{sourceCodeLocationInfo:true}),all=[...descendants(document)];
+ const templates=all.filter(node=>node.tagName==='template'&&attr(node,PAGE_LOGOS_ATTRIBUTE)!==undefined);
+ const own=templates.slice(0,1).flatMap(node=>[...descendants(node.content??{})]).filter(node=>node.tagName==='img'&&attr(node,'src')).slice(0,maxPageLogos).map(node=>({src:attr(node,'src'),alt:attr(node,'alt')??''}));
+ return {document,templates,own,nodes:all.filter(node=>node.tagName&&attr(node,LOGOS_ATTRIBUTE)!==undefined)};
 }
 
 // Branding is kept with the research it presents; a website file store without
@@ -109,7 +116,13 @@ export async function websiteLogoPlan(store,manifest,entries,{signal}={}){
   const scopes=[...new Set(markers(html).nodes.map(node=>attr(node,LOGOS_ATTRIBUTE)).filter(validLogoScope))];
   planned.push({name,html,page,scopes});
  }
- if(!planned.length||!await hasBranding(store.workspace))return {pages:new Map(),files:new Map()};
+ if(!planned.length)return {pages:new Map(),files:new Map()};
+ // Without research storage there is no Branding, but a page's own logos remain.
+ const files=new Map(),names=new Map(),result=new Map();
+ if(!await hasBranding(store.workspace)){
+  for(const row of planned)result.set(row.name,{logos:{auto:[]},names});
+  return {pages:result,files};
+ }
  const records=await presentedRecords(store,store.workspace,manifest,[...new Set(planned.map(row=>row.page))],{signal});
  const chains=new Map();
  for(const row of planned){
@@ -117,7 +130,7 @@ export async function websiteLogoPlan(store,manifest,entries,{signal}={}){
   for(const scope of row.scopes)if(scope!=='auto')targets.add(scope);
  }
  const branding=await readBranding(store.workspace,manifest.id,targets,{signal});
- const media=new MediaStore(store.workspace),files=new Map(),names=new Map(),result=new Map();
+ const media=new MediaStore(store.workspace);
  const logosOf=chain=>{const key=chain.join(' ');if(!chains.has(key))chains.set(key,chosenLogos(chain,branding));return chains.get(key);};
  for(const row of planned){
   const logos={auto:logosOf(row.chain)};for(const scope of row.scopes)if(scope!=='auto')logos[scope]=logosOf([scope]);
@@ -135,17 +148,20 @@ export async function websiteLogoPlan(store,manifest,entries,{signal}={}){
 // Fills each Logos block, or adds the automatic one at the top of the page,
 // keeping every authored byte around them.
 export function applyPageLogos(html,file,{logos,names}){
- const {document,nodes}=markers(html),prefix='../'.repeat(file.split('/').length-1);
+ const {document,nodes,templates,own}=markers(html),prefix='../'.repeat(file.split('/').length-1);
  const used=new Set(),images=list=>list.filter(logo=>names.get(logo.id)).map(logo=>{used.add(names.get(logo.id));return '<img src="'+esc(prefix+names.get(logo.id))+'" alt="'+esc(logo.alt)+'">';}).join('');
- const edits=[];let shown=false;
+ // The page's own pictures are already written relative to the page.
+ const ownMarkup=own.map(logo=>'<img src="'+esc(logo.src)+'" alt="'+esc(logo.alt)+'">').join('');
+ const automatic=()=>ownMarkup||images(logos.auto??[]);
+ const edits=templates.flatMap(node=>node.sourceCodeLocation?[[node.sourceCodeLocation.startOffset,node.sourceCodeLocation.endOffset,'']]:[]);let shown=false;
  for(const node of nodes){
   const location=node.sourceCodeLocation,scope=attr(node,LOGOS_ATTRIBUTE);if(!location?.startTag||!location.endTag)continue;
-  const markup=validLogoScope(scope)?images(logos[scope]??[]):'';if(markup)shown=true;
+  const markup=scope==='auto'?automatic():validLogoScope(scope)?images(logos[scope]??[]):'';if(markup)shown=true;
   edits.push([location.startTag.endOffset,location.endTag.startOffset,markup]);
  }
  const body=[...descendants(document)].find(node=>node.tagName==='body');
  if(!nodes.length&&body?.sourceCodeLocation?.startTag){
-  const markup=images(logos.auto??[]);
+  const markup=automatic();
   if(markup){
    const first=(body.childNodes??[]).find(node=>node.tagName),skip=first?.tagName==='a'&&(attr(first,'href')??'').startsWith('#');
    const at=skip?first.sourceCodeLocation.endOffset:body.sourceCodeLocation.startTag.endOffset;
@@ -165,13 +181,13 @@ export async function applyWebsiteLogos(store,manifest,files,descriptors,{signal
   if(!name.endsWith('.html'))continue;signal?.throwIfAborted();
   entries.push({name,feedPage:descriptors.get(name)?.feedPage,html:(await contentBuffer(content,{signal,maxBytes:websiteHTMLByteLimit})).toString('utf8')});
  }
- const plan=await websiteLogoPlan(store,manifest,entries,{signal}),used=new Set();
+ const plan=await websiteLogoPlan(store,manifest,entries,{signal}),used=new Set();let shown=false;
  for(const entry of entries){
   const row=plan.pages.get(entry.name);if(!row)continue;
   const output=applyPageLogos(entry.html,entry.name,row);if(output.html===entry.html)continue;
-  files.set(entry.name,Buffer.from(output.html));for(const name of output.used)used.add(name);
+  files.set(entry.name,Buffer.from(output.html));for(const name of output.used)used.add(name);shown||=output.shown;
  }
- if(!used.size)return [];
+ if(!shown)return [];
  const added=[...used,LOGOS_STYLESHEET];
  if(added.some(name=>files.has(name)||descriptors.has(name)))throw new AppError('CONFLICT');
  for(const name of used)files.set(name,plan.files.get(name));

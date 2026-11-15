@@ -1678,12 +1678,16 @@
   "element_logos": "Logoer",
   "element_logosText": "Logoene som er valgt i Logoer og profilering, for denne siden eller en annen del av arbeidet ditt.",
   "logosTitle": "Logoer",
-  "logosHelp": "Viser logoene som er valgt i Logoer og profilering. Automatisk følger hver side: oppføringen den viser, deretter oppføringens labbok og prosjekt, og til slutt nettstedet. En side uten logoblokk viser logoene sine øverst.",
+  "logosHelp": "Viser logoene som er valgt i Logoer og profilering. Automatisk følger hver side: sidens egne logoer, deretter oppføringen den viser, deretter oppføringens labbok og prosjekt, og til slutt nettstedet. En side uten logoblokk viser logoene sine øverst.",
   "logosScope": "Vis logoene til",
   "logosAuto": "Denne siden (automatisk)",
   "logosHome": "Nettstedet",
   "logosProject": "Prosjekt: {title}",
   "logosLabBook": "Labbok: {title}",
   "logosApply": "Bruk",
-  "logosPlaceholder": "Logoer fra Logoer og profilering vises her når siden forhåndsvises eller publiseres."
+  "logosPlaceholder": "Logoer fra Logoer og profilering vises her når siden forhåndsvises eller publiseres.",
+  "pageLogos": "Sidens logoer",
+  "pageLogosHelp": "Bilder som vises øverst på denne siden, og i en logoblokk satt til denne siden, i stedet for logoene fra Logoer og profilering. De publiseres med siden.",
+  "pageLogosAdd": "Legg til en logo",
+  "pageLogosFull": "Denne siden har så mange logoer som den kan vise (4)."
 }

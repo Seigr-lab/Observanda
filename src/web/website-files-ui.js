@@ -139,7 +139,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const recoveredPicture=name=>opened?recovery.restoreURL(name,directory(opened.assetStamp)):null;
  const recoveredResource=url=>{const base=directory(opened.historyAssetStamp??opened.assetStamp).href;return url.startsWith(base)?recoveredPicture(url.slice(base.length))??gallery.pendingURL(url.slice(base.length)):null;};
  const gallery=websiteFilesGallery({t:tr,esc,recoveredPicture,path:()=>opened.path,url:canvasURL,read:()=>websiteHTML(html),update:doc=>{html=authoredHTML(doc);changed();},checkpoint:(force=true)=>checkpoint(force),render,run,notify,getCSS:()=>css,setCSS:value=>{css=value;changed();}});
- const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,request,adopt:adoptRelated,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();}});
+ const pagesPanel=websiteFilesPages({site:()=>opened,esc,tr,render,request,adopt:adoptRelated,openPage:async path=>{if(await beforeLeave(true)){mode='visual';await open(siteId(),path);}},edit:documentChange,save,changed:()=>onDirty(dirty||pagesPanel.dirty()),close:()=>{mode='visual';render();},notify,addPicture:file=>gallery.addPicture(file),pictureURL:name=>gallery.pendingURL(name)??recoveredPicture(name)??canvasURL(name)});
  const lifecycle=websiteFilesLifecycle({active:()=>opened,esc,tr,render,request,close:()=>{mode='visual';render();},updated:async value=>{
   mode='visual';
   if(value.archived){

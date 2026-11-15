@@ -1678,12 +1678,16 @@
   "element_logos": "Logotipos",
   "element_logosText": "Los logotipos elegidos en Logotipos e identidad visual, para esta página u otra parte de tu trabajo.",
   "logosTitle": "Logotipos",
-  "logosHelp": "Muestra los logotipos elegidos en Logotipos e identidad visual. Automático sigue cada página: el registro que presenta, después el cuaderno de laboratorio y el proyecto de ese registro y, por último, el sitio web. Una página sin bloque de logotipos los muestra en la parte superior.",
+  "logosHelp": "Muestra los logotipos elegidos en Logotipos e identidad visual. Automático sigue cada página: los logotipos propios de la página, después el registro que presenta, después el cuaderno de laboratorio y el proyecto de ese registro y, por último, el sitio web. Una página sin bloque de logotipos los muestra en la parte superior.",
   "logosScope": "Mostrar los logotipos de",
   "logosAuto": "Esta página (automático)",
   "logosHome": "El sitio web",
   "logosProject": "Proyecto: {title}",
   "logosLabBook": "Cuaderno de laboratorio: {title}",
   "logosApply": "Aplicar",
-  "logosPlaceholder": "Los logotipos de Logotipos e identidad visual aparecen aquí cuando la página se previsualiza o se publica."
+  "logosPlaceholder": "Los logotipos de Logotipos e identidad visual aparecen aquí cuando la página se previsualiza o se publica.",
+  "pageLogos": "Logotipos de la página",
+  "pageLogosHelp": "Imágenes que se muestran en la parte superior de esta página, y en un bloque de logotipos definido para esta página, en lugar de los logotipos de Logotipos e identidad visual. Se publican con la página.",
+  "pageLogosAdd": "Añadir un logotipo",
+  "pageLogosFull": "Esta página ya tiene el máximo de logotipos que puede mostrar (4)."
 }

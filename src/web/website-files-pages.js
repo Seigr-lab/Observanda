@@ -15,11 +15,20 @@ export function suggestedPagePath(title,taken){
 const ownsMetadata=element=>Boolean(element?.closest('[data-observanda-source],[data-observanda-link]'));
 const description=head=>Array.from(head.children).filter(node=>node.localName==='meta'&&node.getAttribute('name')?.toLowerCase()==='description');
 const titleElement=head=>Array.from(head.children).find(node=>node.localName==='title');
+// A page's own logos are website pictures kept in an inert template; they are
+// shown only when the page is previewed or published (src/website-logos.js).
+const logoTemplates=doc=>[...doc.querySelectorAll('template[data-observanda-page-logos]')];
+export const maxPageLogos=4;
+function pageLogos(doc){
+ const template=logoTemplates(doc)[0];
+ return template?[...template.content.querySelectorAll('img[src]')].slice(0,maxPageLogos).map(image=>({src:image.getAttribute('src'),alt:image.getAttribute('alt')??''})):[];
+}
 function properties(doc){
  const title=titleElement(doc.head),descriptions=description(doc.head);
- return {title:title?.textContent??'',description:descriptions[0]?.getAttribute('content')??'',language:doc.documentElement.getAttribute('lang')??'',
+ return {title:title?.textContent??'',description:descriptions[0]?.getAttribute('content')??'',language:doc.documentElement.getAttribute('lang')??'',logos:pageLogos(doc),
   titleManaged:ownsMetadata(title),descriptionManaged:descriptions.some(ownsMetadata)};
 }
+const sameLogos=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function validLanguage(language){
  if(!language||/^x(?:-[a-z0-9]{1,8})+$/i.test(language))return true;
  // The HTML lang attribute also accepts registered grandfathered tags that
@@ -40,6 +49,14 @@ function applyProperties(doc,original,draft){
  if(draft.language!==original.language){
   const language=draft.language.trim();if(language)documentElement.setAttribute('lang',language);else documentElement.removeAttribute('lang');
  }
+ if(!sameLogos(draft.logos,original.logos)){
+  for(const template of logoTemplates(doc))template.remove();
+  if(draft.logos.length){
+   const template=doc.createElement('template');template.setAttribute('data-observanda-page-logos','');
+   for(const logo of draft.logos){const image=doc.createElement('img');image.setAttribute('src',logo.src);image.setAttribute('alt',logo.alt.trim());template.content.append(image);}
+   head.append(template);
+  }
+ }
 }
 export function websitePageRows(pages){
  return pages.map(page=>({...page,query:normalize(page.title+' '+page.path)}));
@@ -55,7 +72,7 @@ export function websitePageWindow(rows,{search='',state='all',offset=0}={}){
  const start=Math.min(wanted,Math.max(0,Math.ceil(total/windowSize)-1)*windowSize);
  return {rows:start===wanted?selected:last,total,start,end:Math.min(start+windowSize,total),previous:Math.max(0,start-windowSize)};
 }
-export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDocument,request,adopt,changed=()=>{},close}){
+export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDocument,request,adopt,changed=()=>{},close,addPicture,pictureURL,notify=()=>{}}){
  let signature='',pageSignature='',base=null,draft=null,rows=[],search='',state='all',offset=0,touched=false;
  let review=null,delivery=null;
  const key=()=>{const current=site();return current?current.site.id+'/'+current.site.revision+'/'+current.path:'';};
@@ -65,7 +82,7 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
   const listKey=current.site.id+'/'+current.site.revision;
   if(signature!==listKey){rows=websitePageRows(current.site.pages);signature=listKey;}
   if(pageSignature!==key()&&!touched){
-   base=properties(websiteHTML(current.html));draft={...base};pageSignature=key();review=delivery=null;
+   base=properties(websiteHTML(current.html));draft={...base,logos:base.logos.map(logo=>({...logo}))};pageSignature=key();review=delivery=null;
   }
  }
  function open(){sync();render();}
@@ -77,6 +94,19 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
   return pages.map(option).join('');
  }
  const button=(key,id,disabled=false)=>'<button type="button" class="button" data-action="website-files-pages-'+id+'"'+(disabled?' disabled':'')+'>'+esc(tr(key))+'</button>';
+ const differs=()=>['title','description','language'].some(k=>draft[k]!==base[k])||!sameLogos(draft.logos,base.logos);
+ function markTouched(){touched=differs();changed();const save=document.querySelector('[data-action="website-files-pages-save"]');if(save)save.disabled=!touched;}
+ const pictureName=src=>{try{return new URL(src,new URL(site().path,'https://website.invalid/')).pathname.slice(1);}catch{return '';}};
+ function logosView(){
+  const rows=draft.logos.map((logo,index)=>'<li data-page-logo="'+index+'"><img alt="" src="'+esc(pictureURL?.(pictureName(logo.src))??'')+'"><label>'+esc(tr('altText'))+'<input data-page-logo-alt="'+index+'" maxlength="160" value="'+esc(logo.alt)+'"></label><div class="inline-actions"><button type="button" class="button" data-action="website-files-pages-logo-up" data-index="'+index+'"'+(index?'':' disabled')+'>'+esc(tr('up'))+'</button><button type="button" class="button" data-action="website-files-pages-logo-remove" data-index="'+index+'">'+esc(tr('remove'))+'</button></div></li>').join('');
+  const add=draft.logos.length<maxPageLogos&&addPicture?'<label>'+esc(tr('pageLogosAdd'))+'<input type="file" data-page-logo-file accept="image/png,image/jpeg,image/webp,image/gif,image/avif"></label>':'<p>'+esc(tr('pageLogosFull'))+'</p>';
+  return '<section class="website-page-logos" aria-labelledby="website-page-logos-title"><h3 id="website-page-logos-title">'+esc(tr('pageLogos'))+'</h3><p class="muted">'+esc(tr('pageLogosHelp'))+'</p>'+(rows?'<ol>'+rows+'</ol>':'')+add+'</section>';
+ }
+ async function addLogo(file){
+  const stamp=key();if(!file||!draft||draft.logos.length>=maxPageLogos)return;
+  const name=await addPicture(file);if(stamp!==key()||!draft||draft.logos.length>=maxPageLogos)return;
+  draft.logos.push({src:'../'.repeat(site().path.split('/').length-1)+name,alt:''});markTouched();render();
+ }
  function inclusionView(){
   const page=site().site.pages.find(p=>p.path===site().path);if(!page)return '';
   const status=delivery?'<p role="status">'+esc(tr('pageDelivery_'+delivery.state))+'</p>':'';
@@ -106,6 +136,7 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
    '<label>'+esc(tr('pageTitle'))+'<input data-page-setting="title" value="'+esc(draft.title)+'" maxlength="200"'+(base.titleManaged?' readonly':'')+'></label>'+
    '<label>'+esc(tr('pageDescription'))+'<textarea data-page-setting="description"'+(base.descriptionManaged?' readonly':'')+'>'+esc(draft.description)+'</textarea></label>'+
    '<label>'+esc(tr('pageLanguage'))+'<input data-page-setting="language" value="'+esc(draft.language)+'" placeholder="en" autocapitalize="none" spellcheck="false"></label>'+
+   logosView()+
    (base.titleManaged||base.descriptionManaged?'<p>'+esc(tr('pageManaged'))+'</p>':'')+button('savePageSettings','save',!touched))+
    (!site().site.pages.find(p=>p.path===site().path)?.draft?'<button type="button" class="button" data-action="website-files-design-manage">'+esc(tr('designManage'))+'</button>':'')+button('closePages','close')+'</section>';
  }
@@ -113,10 +144,11 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
  function input(el){
   if(el.matches('[data-pages-search]')){search=el.value;offset=0;repaintResults();return true;}
   if(el.matches('[data-pages-state]')){state=el.value;offset=0;repaintResults();return true;}
+  if(el.matches('[data-page-logo-alt]')){const logo=draft?.logos[Number(el.dataset.pageLogoAlt)];if(logo&&pageSignature===key()){logo.alt=el.value;markTouched();}return true;}
+  if(el.matches('[data-page-logo-file]')){const file=el.files?.[0];el.value='';if(pageSignature===key())addLogo(file).catch(error=>notify(error.message,true));return true;}
   const field=el.dataset.pageSetting;if(!['title','description','language'].includes(field))return false;
   if(!draft||pageSignature!==key()||field==='title'&&base.titleManaged||field==='description'&&base.descriptionManaged)return true;
-  draft[field]=el.value;touched=['title','description','language'].some(k=>draft[k]!==base[k]);changed();
-  const save=document.querySelector('[data-action="website-files-pages-save"]');if(save)save.disabled=!touched;
+  draft[field]=el.value;markTouched();
   return true;
  }
  async function save(){
@@ -149,6 +181,11 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
    if(key()===stamp){review={...result,offset};render();}return true;
   }
   if(action==='save'){await save();return true;}
+  if(action==='logo-up'||action==='logo-remove'){
+   const index=Number(el.dataset.index),logos=draft?.logos;if(!logos?.[index]||pageSignature!==key())return true;
+   if(action==='logo-remove')logos.splice(index,1);else if(index>0)[logos[index-1],logos[index]]=[logos[index],logos[index-1]];
+   markTouched();render();return true;
+  }
   if(action==='close'||action==='reload'){
    if(touched&&!await confirmAction(tr('discardConfirm'),{action:'discard'}))return true;
    touched=false;pageSignature='';changed();

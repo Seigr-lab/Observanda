@@ -1,7 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtemp,rm,realpath} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,rm,realpath} from 'node:fs/promises';
+import {randomBytes} from 'node:crypto';
+import {Workspace} from '../src/storage.js';
+import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
@@ -12,7 +15,7 @@ import {WebsiteSites} from '../src/website-sites.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
 import {MediaStore} from '../src/media.js';
 import {contentBuffer} from '../src/file-content.js';
-import {applyPageLogos,chosenLogos,LOGOS_STYLESHEET} from '../src/website-logos.js';
+import {applyPageLogos,chosenLogos,LOGOS_STYLESHEET,PAGE_LOGOS_ATTRIBUTE} from '../src/website-logos.js';
 
 const svg=fill=>Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="'+fill+'"/></svg>');
 const text=async content=>(await contentBuffer(content)).toString('utf8');
@@ -70,4 +73,39 @@ test('a website made in the website editor publishes and previews the logos its 
  await assert.rejects(store.file(websiteId,'logos/'+other.id+'.'+other.extension,{revision:exported.revision}),{code:'NOT_FOUND'});
  // The editor keeps the authored page: logos are never saved into it.
  assert.ok(!(await text((await store.file(websiteId,'index.html',{revision:exported.revision,editor:true})).content)).includes('site-logos'));
+});
+
+test('a page\'s own logos come first in its automatic place and their template is never published',()=>{
+ const id=randomUUID(),names=new Map([[id,'logos/'+id+'.png']]),logos={auto:[{id,alt:'Branding'}]};
+ const own='<template '+PAGE_LOGOS_ATTRIBUTE+'=""><img src="../pictures/a.png" alt="Station &quot;mark&quot;"><img src="../pictures/b.png"></template>';
+ const plain='<html><head><title>A</title>'+own+'</head><body><main><p>Text</p></main></body></html>';
+ const top=applyPageLogos(plain,'guide/a.html',{logos,names});
+ assert.equal(top.html,'<html><head><title>A</title><link rel="stylesheet" href="../website-logos.css"></head><body><div class="site-logos" data-observanda-logos="auto"><img src="../pictures/a.png" alt="Station &quot;mark&quot;"><img src="../pictures/b.png" alt=""></div><main><p>Text</p></main></body></html>');
+ assert.deepEqual([...top.used],[]);
+ // A Logos block set to this page shows them; one set to the website still shows Branding.
+ const blocks='<html><head>'+own+'</head><body><div class="site-logos" data-observanda-logos="auto"></div><div class="site-logos" data-observanda-logos="home"></div></body></html>';
+ const filled=applyPageLogos(blocks,'guide/a.html',{logos:{...logos,home:[{id,alt:'Website'}]},names}).html;
+ assert.ok(filled.includes('data-observanda-logos="auto"><img src="../pictures/a.png"')&&filled.includes('data-observanda-logos="home"><img src="../logos/'+id+'.png" alt="Website">')&&!filled.includes('<template'));
+ // An empty template is removed and adds nothing else.
+ assert.equal(applyPageLogos('<html><head><template '+PAGE_LOGOS_ATTRIBUTE+'=""></template></head><body></body></html>','a.html',{logos:{auto:[]},names}).html,'<html><head></head><body></body></html>');
+});
+
+test('page logos saved in the website editor publish and preview without research storage',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-page-logos-'));await mkdir(path.join(root,'.observanda'));
+ t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const workspace=new Workspace(root,{key:randomBytes(32),id:randomUUID()});
+ const store=new WebsiteFileStore(workspace),id=randomUUID(),created=await store.create({id,name:'Field station'});
+ const png=await readFile(new URL('../src/preview-assets/image.png',import.meta.url)),picture='pictures/'+randomUUID()+'.png';
+ const html='<!doctype html><html><head><title>Home</title><template '+PAGE_LOGOS_ATTRIBUTE+'=""><img src="'+picture+'" alt="Station mark"></template></head><body><main><h1>Home</h1></main></body></html>';
+ const saved=await store.save(id,{expectedRevision:created.site.revision,path:'index.html',html,css:'',receivePictures:async function*(){yield {name:picture,bytes:png};}});
+ const exported=await store.export(id,{expectedRevision:saved.site.revision}),page=await text(exported.files.get('index.html'));
+ assert.ok(page.includes('<body><div class="site-logos" data-observanda-logos="auto"><img src="'+picture+'" alt="Station mark"></div><main>'),page);
+ assert.ok(!page.includes('<template')&&exported.files.has(picture)&&exported.files.has(LOGOS_STYLESHEET));
+ assert.ok((await store.publicationInventory(id)).files.includes(LOGOS_STYLESHEET));
+ assert.equal((await store.file(id,'index.html',{revision:saved.site.revision})).content.toString('utf8'),page);
+ assert.ok((await text((await store.file(id,'index.html',{revision:saved.site.revision,editor:true})).content)).includes('<template '+PAGE_LOGOS_ATTRIBUTE));
+ // Removing the page's logos retires their picture.
+ const cleared=await store.save(id,{expectedRevision:saved.site.revision,path:'index.html',html:html.replace(/<template[\s\S]*<\/template>/,''),css:''});
+ const after=(await store.export(id,{expectedRevision:cleared.site.revision})).files;
+ assert.ok(!after.has(picture)&&!after.has(LOGOS_STYLESHEET));
 });

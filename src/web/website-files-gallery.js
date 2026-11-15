@@ -44,8 +44,10 @@ export function websiteFilesGallery({t,esc,path,url,read,update,checkpoint,rende
  const inspectorPictures=new Set();
  const reset=()=>{pending.clear();inspectorPictures.clear();doc=null;index=offset=0;};
  function usedPictures(document,ownerPath){
-  const used=new Set();
-  for(const node of document.querySelectorAll('img[src],img[srcset],picture>source[srcset],a[href]')){
+  const used=new Set(),selector='img[src],img[srcset],picture>source[srcset],a[href]';
+  // A page's own logos are pictures held in an inert template (website-files-pages.js).
+  const nodes=[...document.querySelectorAll(selector),...[...document.querySelectorAll('template')].flatMap(template=>[...template.content.querySelectorAll(selector)])];
+  for(const node of nodes){
    for(const attr of ['src','srcset','href'])if(node.hasAttribute(attr)){
     for(const candidate of imageResourceURLs(attr,node.getAttribute(attr))){
      try{const name=publicName(candidate,ownerPath);if(name.startsWith('pictures/'))used.add(name);}catch{}

@@ -1678,12 +1678,16 @@
   "element_logos": "Logos",
   "element_logosText": "The logos chosen in Logos & branding, for this page or another part of your work.",
   "logosTitle": "Logos",
-  "logosHelp": "Shows the logos chosen in Logos & branding. Automatic follows each page: the record it presents, then that record's lab book and project, then the website. A page without a Logos block shows its logos at the top.",
+  "logosHelp": "Shows the logos chosen in Logos & branding. Automatic follows each page: its own page logos, then the record it presents, then that record's lab book and project, then the website. A page without a Logos block shows its logos at the top.",
   "logosScope": "Show the logos of",
   "logosAuto": "This page (automatic)",
   "logosHome": "The website",
   "logosProject": "Project: {title}",
   "logosLabBook": "Lab book: {title}",
   "logosApply": "Apply",
-  "logosPlaceholder": "Logos from Logos & branding appear here when the page is previewed or published."
+  "logosPlaceholder": "Logos from Logos & branding appear here when the page is previewed or published.",
+  "pageLogos": "Page logos",
+  "pageLogosHelp": "Pictures shown at the top of this page, and in a Logos block set to this page, instead of the logos from Logos & branding. They are published with the page.",
+  "pageLogosAdd": "Add a logo",
+  "pageLogosFull": "This page has the most logos it can show (4)."
 }

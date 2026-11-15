@@ -1678,12 +1678,16 @@
   "element_logos": "Logotips",
   "element_logosText": "Els logotips triats a Logotips i identitat visual, per a aquesta pàgina o una altra part de la teva feina.",
   "logosTitle": "Logotips",
-  "logosHelp": "Mostra els logotips triats a Logotips i identitat visual. Automàtic segueix cada pàgina: el registre que presenta, després el llibre de laboratori i el projecte d’aquest registre i, finalment, el lloc web. Una pàgina sense bloc de logotips els mostra a la part superior.",
+  "logosHelp": "Mostra els logotips triats a Logotips i identitat visual. Automàtic segueix cada pàgina: els logotips propis de la pàgina, després el registre que presenta, després el llibre de laboratori i el projecte d’aquest registre i, finalment, el lloc web. Una pàgina sense bloc de logotips els mostra a la part superior.",
   "logosScope": "Mostra els logotips de",
   "logosAuto": "Aquesta pàgina (automàtic)",
   "logosHome": "El lloc web",
   "logosProject": "Projecte: {title}",
   "logosLabBook": "Llibre de laboratori: {title}",
   "logosApply": "Aplica",
-  "logosPlaceholder": "Els logotips de Logotips i identitat visual apareixen aquí quan es previsualitza o es publica la pàgina."
+  "logosPlaceholder": "Els logotips de Logotips i identitat visual apareixen aquí quan es previsualitza o es publica la pàgina.",
+  "pageLogos": "Logotips de la pàgina",
+  "pageLogosHelp": "Imatges que es mostren a la part superior d’aquesta pàgina, i en un bloc de logotips definit per a aquesta pàgina, en lloc dels logotips de Logotips i identitat visual. Es publiquen amb la pàgina.",
+  "pageLogosAdd": "Afegeix un logotip",
+  "pageLogosFull": "Aquesta pàgina ja té el màxim de logotips que pot mostrar (4)."
 }

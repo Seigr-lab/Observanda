@@ -42,3 +42,45 @@ test('large saved sites search by folder, title and publication state and edit l
  await page.locator('[data-page-setting="description"]').fill('unsaved');
  await page.evaluate(()=>{window.state.page.site.revision='other';window.state.panel.open();});await expect(page.locator('[data-page-setting]')).toHaveCount(0);
 });
+
+test('page settings keep up to four page logos as website pictures in the page, in order and with their descriptions',async({page})=>{
+ await page.context().route('http://page-panel.test/**',async route=>{
+  const name=new URL(route.request().url()).pathname.slice(1);
+  if(name==='')return route.fulfill({contentType:'text/html',body:'<main></main>'});
+  if(!/^[\w/.-]+\.(?:js|json)$/.test(name)||name.split('/').includes('..'))return route.abort();
+  try{return route.fulfill({contentType:name.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web/'+name,import.meta.url),'utf8')});}
+  catch{return route.abort();}
+ });
+ await page.goto('http://page-panel.test/');
+ await page.evaluate(async()=>{
+  const {websiteFilesPages}=await import('/website-files-pages.js');
+  const page={site:{id:'site',revision:'1',pages:[{path:'guide/a.html',title:'Guide'}]},path:'guide/a.html',html:'<!doctype html><html><head><title>Guide</title></head><body><h1>Guide</h1></body></html>'};
+  const esc=text=>String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let count=0;
+  const panel=websiteFilesPages({site:()=>page,esc,tr:key=>key,render:()=>{document.querySelector('main').innerHTML=panel.view();},
+   edit:work=>{const document=new DOMParser().parseFromString(page.html,'text/html');work(document);page.html='<!doctype html>'+document.documentElement.outerHTML;},
+   save:async()=>{page.site.revision=String(Number(page.site.revision)+1);},openPage(){},close(){},
+   addPicture:async()=>'pictures/logo-'+(++count)+'.png',pictureURL:name=>'data:,'+name});
+  document.addEventListener('input',event=>panel.input(event.target));
+  document.addEventListener('click',async event=>{const button=event.target.closest('[data-action]');if(!button)return;
+   try{await panel.handle(button.dataset.action.slice('website-files-'.length),button);}catch(e){window.failure=e.message;}
+  });
+  window.state={page};panel.open();
+ });
+ const file={name:'mark.png',mimeType:'image/png',buffer:Buffer.from('png')},rows=page.locator('.website-page-logos li');
+ for(let i=1;i<=4;i++){await page.locator('[data-page-logo-file]').setInputFiles(file);await expect(rows).toHaveCount(i);}
+ await expect(page.locator('[data-page-logo-file]')).toHaveCount(0);await expect(page.locator('.website-page-logos')).toContainText('pageLogosFull');
+ await expect(rows.first().locator('img')).toHaveAttribute('src','data:,pictures/logo-1.png');
+ await page.locator('[data-page-logo-alt="1"]').fill('Station "mark"');
+ await rows.nth(1).getByRole('button',{name:'up'}).click();
+ await rows.nth(3).getByRole('button',{name:'remove'}).click();await rows.nth(2).getByRole('button',{name:'remove'}).click();
+ await expect(rows).toHaveCount(2);
+ await page.locator('[data-action="website-files-pages-save"]').click();
+ const html=await page.evaluate(()=>window.state.page.html);
+ expect(html).toContain('<template data-observanda-page-logos=""><img src="../pictures/logo-2.png" alt="Station &quot;mark&quot;"><img src="../pictures/logo-1.png" alt=""></template></head>');
+ expect(html).toContain('<h1>Guide</h1>');
+ // Removing every logo removes the template.
+ for(let i=0;i<2;i++)await rows.first().getByRole('button',{name:'remove'}).click();
+ await page.locator('[data-action="website-files-pages-save"]').click();
+ expect(await page.evaluate(()=>window.state.page.html)).not.toContain('<template');
+});
