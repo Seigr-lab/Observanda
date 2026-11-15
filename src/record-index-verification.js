@@ -27,7 +27,7 @@ async function audit(index,oldRoot,newRoot,changes,keys){
   }
   for await(const change of changes)for(const side of ['before','after']){
    const row=change[side];if(!row)continue;const revision=hash(row);
-   for await(const id of await keys(row)){
+   for await(const id of await keys(row,side)){
     expectedCount+=side==='before'?-1:1;
     const value=pending.get(id)??{id,before:null,after:null};if(value[side]!==null)fail();
     value[side]=revision;pending.set(id,value);if(pending.size===2048)await flush();
@@ -82,6 +82,6 @@ export async function verifyDerivedRecordChange(store,index,field,before,after){
   if(before[field].workspaceId!==after[field].workspaceId)return false;
  }
  const members=new SnapshotIndex(store,{cacheSize:4096});
- await audit(index,before[field].root,after[field].root,records(members,before,after),async row=>{if(index.keys)return index.keys(row,after[field].version,after.metadata.id);const key=await index.key(row);return key===null?[]:[key];});
+ await audit(index,before[field].root,after[field].root,records(members,before,after),async (row,side)=>{const snapshot=side==='before'?before:after;if(index.keys)return index.keys(row,snapshot[field].version,snapshot.metadata.id,snapshot.metadata);const key=await index.key(row);return key===null?[]:[key];});
  return true;
 }

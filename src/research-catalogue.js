@@ -263,7 +263,7 @@ export class ResearchCatalogue{
   snapshot.recentIndex=current?.recentIndex?await recent.replace(current.recentIndex,before,after):await recent.build(snapshot);
   const reading=new RecordReadingIndex(this);
   snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
-  const facets=new RecordFacetIndex(this,{metadata});
+  const facets=new RecordFacetIndex(this,{metadata,previousMetadata:current?.metadata??null});
   snapshot.facetIndex=current?.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
@@ -428,7 +428,7 @@ export class ResearchCatalogue{
    const reading=new RecordReadingIndex(this);
    snapshot.readingIndex=current.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
    operationAdvance();
-   const facets=new RecordFacetIndex(this,{metadata});
+   const facets=new RecordFacetIndex(this,{metadata,previousMetadata:current?.metadata??null});
    snapshot.facetIndex=current.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
    operationAdvance();
    const publication=new RecordPublicationIndex(this);
