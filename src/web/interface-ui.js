@@ -1,22 +1,25 @@
 import {t} from './i18n/index.js';
 import {orderNavigationNodes} from './navigation-dom.js';
 import {ux} from './experience-ui.js';
+import {validAppThemes,activeAppTheme,appThemeChoice} from './app-themes.js';
+import {appThemeEditor} from './app-theme-editor.js';
 const message=(key,parameters)=>t('interface',key,parameters);
 const NAVIGATION_GROUPS = ['research','projects','website','workspace'];
-export const DEFAULT_INTERFACE = Object.freeze({appTheme:'research',pinnedTools:[],fontSize:17,lineHeight:1.6,navigationPosition:'left',navigationWidth:272,navigationCollapsed:false,headerAlignment:'center',headerOrder:'logo-first',navigationOrder:['research','projects','website','workspace']});
+export const DEFAULT_INTERFACE = Object.freeze({appTheme:'research',appThemes:[],pinnedTools:[],fontSize:17,lineHeight:1.6,navigationPosition:'left',navigationWidth:272,navigationCollapsed:false,headerAlignment:'center',headerOrder:'logo-first',navigationOrder:['research','projects','website','workspace']});
 export const normalizeInterface = value => ({...structuredClone(DEFAULT_INTERFACE),...structuredClone(value)});
 export function validInterface(value) {
   if(!value || typeof value !== 'object' || Array.isArray(value))return false;
   const keys=Object.keys(value),legacy=keys.length===2&&keys.every(key=>['fontSize','lineHeight'].includes(key));
-  const required=Object.keys(DEFAULT_INTERFACE).filter(key=>!['appTheme','pinnedTools','headerAlignment','headerOrder'].includes(key));
+  const required=Object.keys(DEFAULT_INTERFACE).filter(key=>!['appTheme','appThemes','pinnedTools','headerAlignment','headerOrder'].includes(key));
   const shape=legacy||(required.every(key=>keys.includes(key))&&keys.every(key=>Object.hasOwn(DEFAULT_INTERFACE,key)));
   const v=normalizeInterface(value);
-  return shape && Array.isArray(v.pinnedTools)&&v.pinnedTools.length<=80&&new Set(v.pinnedTools).size===v.pinnedTools.length&&v.pinnedTools.every(id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id))&&['research','studio'].includes(v.appTheme)&&['left','center','right'].includes(v.headerAlignment)&&['logo-first','title-first'].includes(v.headerOrder)&&Number.isInteger(v.fontSize) && v.fontSize>=16 && v.fontSize<=24 &&
+  return shape && Array.isArray(v.pinnedTools)&&v.pinnedTools.length<=80&&new Set(v.pinnedTools).size===v.pinnedTools.length&&v.pinnedTools.every(id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id))&&validAppThemes(v.appThemes)&&appThemeChoice(v,v.appTheme)&&['left','center','right'].includes(v.headerAlignment)&&['logo-first','title-first'].includes(v.headerOrder)&&Number.isInteger(v.fontSize) && v.fontSize>=16 && v.fontSize<=24 &&
     Number.isFinite(v.lineHeight)&&v.lineHeight>=1.4&&v.lineHeight<=2&&
     ['left','right','top'].includes(v.navigationPosition)&&Number.isInteger(v.navigationWidth)&&v.navigationWidth>=220&&v.navigationWidth<=640&&
     typeof v.navigationCollapsed==='boolean'&&Array.isArray(v.navigationOrder)&&v.navigationOrder.length>0&&new Set(v.navigationOrder).size===v.navigationOrder.length&&v.navigationOrder.every(id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id));
 }
 export function interfaceUI({api,field,showDialog,notify,onChange}) {
+  const themeEditor=appThemeEditor();
   let settings=normalizeInterface(DEFAULT_INTERFACE),saved=normalizeInterface(DEFAULT_INTERFACE),version=0,pending=null,widthQueue=Promise.resolve();
   const isDirty=()=>JSON.stringify(settings)!==JSON.stringify(saved);
   function apply() {
@@ -74,7 +77,7 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
   function changed(){version++;apply();displayStatus(status());onChange();}
   const text=(key,parameters)=>escapeLabel(message(key,parameters));
   function controls() {
-    return `<p class="muted">${text('textHelp')}</p>` + field(escapeLabel(ux('appTheme')),`<select data-interface="appTheme">${['research','studio'].map(id=>`<option value="${id}" ${settings.appTheme===id?'selected':''}>${escapeLabel(t('appearance',id+'Name'))}</option>`).join('')}</select>`)+
+    return `<p class="muted">${text('textHelp')}</p>` + themeEditor.view(settings)+
       field(text('fontSize')+' <output>' + settings.fontSize + ' px</output>', `<input data-interface="fontSize" type="range" min="16" max="24" step="1" value="${settings.fontSize}">`) +
       field(text('lineHeight')+' <output>' + settings.lineHeight + '</output>', `<input data-interface="lineHeight" type="range" min="1.4" max="2" step="0.1" value="${settings.lineHeight}">`) +
       `<div class="interface-sample"><strong>${text('sampleTitle')}</strong><p>${text('sampleBody')}</p><label>${text('sampleField')}<input value="${text('sampleValue')}" readonly tabindex="-1"></label></div><p class="muted" data-interface-status role="status">${status()}</p><div class="inline-actions"><button class="button" type="button" data-action="interface-reset">${text('resetText')}</button><button class="button primary" type="button" data-action="interface-save">${text('save')}</button></div>`;
@@ -83,6 +86,8 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
     const select=(key,label,choices)=>field(label,`<select data-interface="${key}">${choices.map(([id,text])=>`<option value="${id}" ${settings[key]===id?'selected':''}>${text}</option>`).join('')}</select>`);
     return `<p class="muted">${text('headerHelp')}</p><div class="form-grid">${select('headerAlignment',message('headerAlignment'),[['left',message('left')],['center',message('center')],['right',message('right')]])}${select('headerOrder',message('headerOrder'),[['logo-first',message('logoFirst')],['title-first',message('titleFirst')]])}</div>`;
   }
+  // Choosing, creating or deleting a theme redraws the theme section in place.
+  function rerenderThemes(){const host=document.querySelector('.app-theme-chooser');if(!host)return;host.outerHTML=themeEditor.view(settings);themeEditor.paint();}
   function displayStatus(text) { for (const el of document.querySelectorAll('[data-interface-status]')) el.textContent=text; }
   async function save(){
     if(pending){await pending;return save();}if(!isDirty())return;
@@ -97,8 +102,9 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
   function layoutControls(){return `<p>${text('layoutHelp')}</p>${field(message('navigationPosition'),`<select data-interface="navigationPosition">${[['left',message('left')],['right',message('right')],['top',message('top')]].map(([id,label])=>`<option value="${id}" ${settings.navigationPosition===id?'selected':''}>${label}</option>`).join('')}</select>`)}${field(text('navigationWidth')+' <output>'+settings.navigationWidth+' px</output>',`<input type="range" data-interface="navigationWidth" min="220" max="640" step="1" value="${settings.navigationWidth}">`)}<label class="checkbox"><input type="checkbox" data-interface="navigationCollapsed" ${settings.navigationCollapsed?'checked':''}><span>${text('collapsed')}</span></label><h3>${text('order')}</h3><div data-navigation-order>${orderControls()}</div><p class="muted" data-interface-status role="status">${status()}</p><div class="dialog-actions"><button class="button" data-action="interface-layout-reset">${text('resetLayout')}</button><button class="button" data-action="close-dialog">${text('done')}</button><button class="button primary" data-action="interface-save">${text('save')}</button></div>`;}
   const groupLabel=id=>NAVIGATION_GROUPS.includes(id)?message(id):document.querySelector('[data-nav-section="'+id+'"]')?.getAttribute('aria-label')??id;
   function orderControls(){const order=navigationOrder();return order.map((id,index)=>`<div class="menu-order-row"><span>${escapeLabel(groupLabel(id))}</span><button class="button" data-action="interface-order" data-id="${id}" data-direction="-1" aria-label="${text('earlier',{name:groupLabel(id)})}" ${index===0?'disabled':''}>${text('up')}</button><button class="button" data-action="interface-order" data-id="${id}" data-direction="1" aria-label="${text('later',{name:groupLabel(id)})}" ${index===order.length-1?'disabled':''}>${text('down')}</button></div>`).join('');}
-  function input(el) { if(!el.dataset.interface)return false;settings[el.dataset.interface]=el.type==='checkbox'?el.checked:el.tagName==='SELECT'?el.value:Number(el.value);changed();return true; }
+  function input(el) { if(themeEditor.input(el,settings)){changed();return true;}if(!el.dataset.interface)return false;settings[el.dataset.interface]=el.type==='checkbox'?el.checked:el.tagName==='SELECT'?el.value:Number(el.value);changed();return true; }
   async function action(button) {
+    if(await themeEditor.action(button,settings)){changed();rerenderThemes();return true;}
     if(button.dataset.action==='interface-reset'){settings.fontSize=DEFAULT_INTERFACE.fontSize;settings.lineHeight=DEFAULT_INTERFACE.lineHeight;changed();return true;}
     if(button.dataset.action==='interface-layout'){showDialog(`<h2 id="dialog-title">${text('layout')}</h2>${layoutControls()}`);return true;}
     if(button.dataset.action==='interface-toggle-menu'){settings.navigationCollapsed=!settings.navigationCollapsed;changed();return true;}
@@ -113,5 +119,5 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
     if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id))return;
     const operation=widthQueue.then(async()=>{if(pending)await pending;const pins=saved.pinnedTools.includes(id)?saved.pinnedTools.filter(value=>value!==id):[...saved.pinnedTools,id];const value={...structuredClone(saved),pinnedTools:pins};pending=api('/api/interface',value);try{await pending;saved.pinnedTools=pins;settings.pinnedTools=[...pins];onChange();}finally{pending=null;}});widthQueue=operation.catch(()=>{});return operation;
   }
-  return {controls,headerControls,input,action,load,save,discard,settle,isDirty,applyLayout,theme:()=>settings.appTheme,pinnedTools:()=>[...settings.pinnedTools],togglePinnedTool};
+  return {controls,headerControls,input,action,load,save,discard,settle,isDirty,applyLayout,theme:()=>settings.appTheme,appearance:()=>activeAppTheme(settings),paintThemes:()=>themeEditor.paint(),pinnedTools:()=>[...settings.pinnedTools],togglePinnedTool};
 }

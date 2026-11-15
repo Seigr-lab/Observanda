@@ -1,0 +1,26 @@
+/* App theme chooser and editor. Everything here follows the active theme; the
+   swatches show each theme's own colours, set as custom properties from its data. */
+.app-theme-chooser{margin:0 0 1.25rem}
+.app-theme-chooser h3{margin:0 0 .25rem}
+.app-theme-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr));gap:.6rem;margin:.75rem 0 1rem}
+.app-theme-card{display:grid;gap:.5rem;justify-items:start;padding:.7rem;text-align:start;font:inherit;color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);cursor:pointer}
+.app-theme-card:hover,.app-theme-card:focus-visible{border-color:var(--ui-accent)}
+.app-theme-card[aria-pressed=true]{border-color:var(--ui-accent);box-shadow:0 0 0 2px var(--ui-accent)}
+.app-theme-card small{display:block;color:var(--ui-muted);font-size:.75rem}
+.app-theme-create{place-content:center;justify-items:center;min-height:5.5rem;border-style:dashed;color:var(--ui-accent);font-weight:600}
+.app-theme-swatches{display:flex;width:100%;height:2.2rem;overflow:hidden;border-radius:calc(var(--ui-control-radius) * .7);border:1px solid var(--ui-border)}
+.app-theme-swatches span{flex:1}
+.app-theme-swatches [data-swatch=background]{background:var(--swatch-background)}
+.app-theme-swatches [data-swatch=surface]{background:var(--swatch-surface)}
+.app-theme-swatches [data-swatch=accent]{background:var(--swatch-accent)}
+.app-theme-swatches [data-swatch=text]{background:var(--swatch-text)}
+.app-theme-editor{display:grid;gap:.75rem;padding:1rem;background:var(--ui-soft);border:1px solid var(--ui-border);border-radius:var(--ui-radius)}
+.app-theme-colors{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.6rem}
+.app-theme-color{display:flex;align-items:center;gap:.6rem;padding:.4rem;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);cursor:pointer}
+.app-theme-color input[type=color]{width:2.6rem;height:2.6rem;flex-shrink:0;padding:2px}
+.app-theme-color span{display:grid;gap:.1rem}
+.app-theme-color strong{font-size:.85rem}
+.app-theme-color small{font-size:.75rem;color:var(--ui-muted)}
+.app-theme-contrast{list-style:none;margin:.6rem 0 0;padding:0;display:grid;gap:.2rem;font-size:.8rem}
+.app-theme-contrast [data-contrast-ok=true]{color:var(--ui-success)}
+.app-theme-contrast [data-contrast-ok=false]{color:var(--ui-danger);font-weight:600}
