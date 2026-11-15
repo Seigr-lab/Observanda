@@ -82,7 +82,7 @@ export class StructureCommands{
   const current=complete?source:await completeSnapshotOwnership(store,source,{signal}),index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),change=structuredClone(data.change);
   let configuration=null;
   if(data.configurationDraft!==undefined||data.configurationPin!==undefined){
-   const owner=configurationOwner(data.configurationPin);if(kind!=='structure'||!['project','notebook'].includes(change.kind)||change.kind==='notebook'&&(owner.slot!=='configuration'||owner.notebookId!==change.value?.id||owner.projectId!==change.value?.projectId)||change.kind==='project'&&(owner.slot!=='labBookTemplate'||owner.projectId!==change.value?.id))throw new AppError('INVALID');
+   const owner=configurationOwner(data.configurationPin);if(kind!=='structure'||!['project','notebook'].includes(change.kind)||change.kind==='notebook'&&(owner.slot!=='configuration'||owner.notebookId!==change.value?.id||owner.projectId!==source.metadata.notebooks.find(n=>n.id===change.value?.id)?.projectId)||change.kind==='project'&&(owner.slot!=='labBookTemplate'||owner.projectId!==change.value?.id))throw new AppError('INVALID');
    configuration={owner,...await configurationCheckpoint(store,owner,data.configurationDraft,data.configurationPin,{signal,validate:false})};
    if(configuration.absent)delete change.value[owner.slot];else if(change.kind==='notebook')change.value.configuration=configuration.configuration;else change.value.labBookTemplate={name:configuration.name,configuration:configuration.configuration};
   }
