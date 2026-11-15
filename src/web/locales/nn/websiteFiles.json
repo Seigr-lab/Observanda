@@ -1674,5 +1674,16 @@
   "template_contactPlace": "Stad",
   "template_contactPlaceValue": "Gate, stad",
   "template_contactHours": "Opningstider",
-  "template_contactHoursValue": "Måndag til fredag"
+  "template_contactHoursValue": "Måndag til fredag",
+  "element_logos": "Logoar",
+  "element_logosText": "Logoane som er valde i Logoar og profilering, for denne sida eller ein annan del av arbeidet ditt.",
+  "logosTitle": "Logoar",
+  "logosHelp": "Viser logoane som er valde i Logoar og profilering. Automatisk følgjer kvar side: oppføringa ho viser, deretter labboka og prosjektet til oppføringa, og til slutt nettstaden. Ei side utan logoblokk viser logoane sine øvst.",
+  "logosScope": "Vis logoane til",
+  "logosAuto": "Denne sida (automatisk)",
+  "logosHome": "Nettstaden",
+  "logosProject": "Prosjekt: {title}",
+  "logosLabBook": "Labbok: {title}",
+  "logosApply": "Bruk",
+  "logosPlaceholder": "Logoar frå Logoar og profilering blir viste her når sida blir førehandsvist eller publisert."
 }

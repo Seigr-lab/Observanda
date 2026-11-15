@@ -7,6 +7,27 @@ function dialog(title,build){
 }
 function control(parent,label,node){const field=document.createElement('label');field.append(label,node);parent.append(field);return node;}
 function action(parent,text,click){const button=document.createElement('button');button.className='button';button.type='button';button.textContent=text;button.onclick=click;parent.append(button);return button;}
+// A Logos block shows the logos Branding gives one scope. Automatic follows each
+// page: the record it presents, then its lab book and project, then the website.
+export function editLogos({doc,at,t,choices,apply}){
+ const current=at?.closest?.('[data-observanda-logos]')??null;
+ dialog(t('logosTitle'),modal=>{
+  const form=document.createElement('form');modal.append(form);
+  const help=document.createElement('p');help.className='hint';help.textContent=t('logosHelp');form.append(help);
+  const scope=control(form,t('logosScope'),document.createElement('select'));
+  for(const [value,label] of choices)scope.add(new Option(label,value));
+  const saved=current?.getAttribute('data-observanda-logos');scope.value=choices.some(([value])=>value===saved)?saved:'auto';
+  const submit=document.createElement('button');submit.type='submit';submit.className='button primary';submit.textContent=t('logosApply');form.append(submit);action(form,t('cancel'),()=>modal.close());
+  form.onsubmit=e=>{
+   e.preventDefault();let node=current;
+   if(!node){
+    node=doc.createElement('div');node.className='site-logos';node.dataset.sectionId='ow-section-'+crypto.randomUUID();
+    const main=doc.querySelector('main:not([hidden])')??doc.body;if(at&&at!==main&&main.contains(at))at.after(node);else main.append(node);
+   }
+   node.setAttribute('data-observanda-logos',scope.value);modal.close();apply(doc);
+  };
+ });
+}
 export const buttonCSS='\n.website-button{display:inline-flex;align-items:center;justify-content:center;padding:.65em 1.15em;border:2px solid currentColor;border-radius:.35em;text-decoration:none;font-weight:600}.website-button:hover{text-decoration:underline}.website-button:focus-visible{outline:3px solid currentColor;outline-offset:3px}\n';
 export function editActionLink({doc,at,t,path,directory,pages,apply}){
  const scope=at&&!at.closest('[data-observanda-source],[data-observanda-link]')?at:null;

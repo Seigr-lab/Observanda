@@ -1,4 +1,6 @@
 import {readWebsiteZip} from '../../src/website-import.js';
+import {WebsiteFileStore} from '../../src/website-file-store.js';
+import {contentBuffer} from '../../src/file-content.js';
 import {answerConfirmation} from './confirm-helper.js';
 import {sessionRequest} from './session-fixture.js';
 import {task,editorTab,openPageSettings} from './composer-helper.js';
@@ -448,9 +450,30 @@ test('logos at workspace, project, lab book, custom page and record scopes are s
   expect(errors).toEqual([]);
 });
 
-// Open gap (2026-11-15): the visual website editor's pages and exports do not use
-// scoped logos yet; only the older edition pipeline reads them.
-test.fixme('scoped logos appear on the matching pages of a website made in the website editor', async () => {});
+// A Logos block in the website editor shows the logos Branding gives a scope;
+// they are added when the website is previewed or published, never saved in the page.
+test('Branding logos reach a Logos block on a page made in the website editor', async ({ page }) => {
+  test.setTimeout(150000);
+  const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'site-logos-')));
+  await encryptedSample();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(app.url);await navigate(page,'Website editor');const id=await openDefaultWebsite(page);
+  const files=page.locator('#main[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas');
+  await files.locator('.element-card[data-block="logos"]').click();
+  const dialog=page.locator('dialog.website-author-dialog');await expect(dialog.getByRole('heading',{name:'Logos',exact:true})).toBeVisible();
+  await dialog.getByRole('combobox',{name:'Show the logos of',exact:true}).selectOption({label:'The website'});
+  await dialog.getByRole('button',{name:'Apply',exact:true}).click();
+  await expect(canvas.locator('[data-observanda-logos="home"]')).toHaveCount(1);
+  await files.getByRole('button',{name:'Save website',exact:true}).click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await files.getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();
+  await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
+  await page.getByLabel('Add logo',{exact:true}).setInputFiles(fixtures.image.file);
+  await page.getByLabel('Logo 1 alternative text').fill('Website emblem');
+  await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  const exported=await new WebsiteFileStore(new Workspace(root,workspaceVault)).export(id);
+  const html=(await contentBuffer(exported.files.get('index.html'))).toString('utf8'),logo=/data-observanda-logos="home"[^>]*><img src="(logos\/[a-f0-9-]{36}\.\w+)" alt="Website emblem"><\/div>/.exec(html);
+  expect(logo).not.toBeNull();expect(exported.files.has(logo[1])).toBe(true);
+  expect(errors).toEqual([]);
+});
 
 // A server login is set up once in Integrations; a website then chooses it and
 // its own folder in its own publishing destination.

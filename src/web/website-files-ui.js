@@ -14,7 +14,7 @@ import {websiteElementLibrary} from './website-element-library.js';
 import {websiteToolRail} from './website-tool-rail.js';
 import {sectionTemplates,createSection,sectionCSS} from './website-section-templates.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
-import {buttonCSS,editActionLink} from './website-files-dialogs.js';
+import {buttonCSS,editActionLink,editLogos} from './website-files-dialogs.js';
 import {openDownloadDialog} from './website-files-downloads.js';
 import {showPageAccessibility} from './website-access-review.js';
 import {applyAccessRepair} from './website-access-repairs.js';
@@ -767,6 +767,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(type==='feed'){await openFeed(element,true);return;}
   if(type==='download'){downloadDialog();return;}
   if(type==='actionLink'){blockDialog(editActionLink,buttonCSS);return;}
+  if(type==='logos'){blockDialog(options=>editLogos({...options,choices:logoChoices()}));return;}
   if(type==='equationEdit'){await blockDialog(editWebsiteEquation);return;}
   if(type==='gallery'){gallery.open(selected);mode='gallery';gallery.action('new',element);return;}
   if(type==='image'){gallery.open(selected);mode='gallery';gallery.action('new-image',element);return;}
@@ -776,6 +777,11 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(sectionTemplates.includes(type)){if(!css.includes('.ow-hero,')){ensureStyle(doc);css+=sectionCSS;}if(!css.includes('.website-button{')){ensureStyle(doc);css+=buttonCSS;}}
    const created=sectionTemplates.includes(type)?createSection(doc,type,tr):createBlock(doc,type,tr),at=blockAt(doc,selected);
    if(movable(at)&&main(doc).contains(at)){if(node&&where==='before')at.before(created);else at.after(created);}else main(doc).append(created);});
+ }
+ // Whose Branding logos a Logos block can show: the page's own, the website's, or a project's or lab book's.
+ function logoChoices(){
+  const book=state?.book;
+  return [['auto',tr('logosAuto')],['home',tr('logosHome')],...(book?.projects??[]).map(p=>['project:'+p.id,tr('logosProject',{title:p.title})]),...(book?.notebooks??[]).map(n=>['notebook:'+n.id,tr('logosLabBook',{title:n.title})])];
  }
  function editorView(panel=''){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';

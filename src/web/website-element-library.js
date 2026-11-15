@@ -26,13 +26,14 @@ const icons={
  video:icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>'),
  actionLink:icon('<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h8"/>'),
  download:icon('<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/>'),
+ logos:icon('<rect x="3" y="6" width="7" height="7" rx="1.5"/><circle cx="17" cy="9.5" r="3.5"/><path d="M3 18h18"/>'),
  feed:icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>')
 };
 export const elementGroups=[
  ['sections',['heroSection','featuresSection','ctaSection','quoteSection','stepsSection','contactSection']],
  ['text',['heading','paragraph','quote','details','table','equationEdit']],
  ['layout',['section','columns','divider']],
- ['media',['image','gallery','video']],
+ ['media',['image','gallery','video','logos']],
  ['actions',['actionLink','download']],
  ['labBook',['feed']]
 ];
@@ -65,6 +66,8 @@ export function websiteElementLibrary({t,esc}){
  // under the pointer, with a line showing where it will go.
  function bindCanvas(doc,{main,place}){
   const sheet=doc.createElement('style');sheet.dataset.observandaEditor='';doc.head.append(sheet);
+  // A Logos block is filled when the page is previewed or published; here it shows where.
+  const marks=doc.createElement('style');marks.dataset.observandaEditor='';marks.textContent='[data-observanda-logos]:empty{display:block;min-height:3rem;border:1px dashed '+uiTheme('accent')+'}[data-observanda-logos]:empty::before{content:'+JSON.stringify(t('logosPlaceholder'))+';display:block;padding:.75rem}';doc.head.append(marks);
   const top=e=>{const root=main(doc);let node=e.target?.nodeType===1?e.target:e.target?.parentElement;while(node&&node.parentElement!==root)node=node.parentElement;return node&&root.contains(node)?node:null;};
   const side=(node,e)=>e.clientY<node.getBoundingClientRect().top+node.getBoundingClientRect().height/2?'before':'after';
   // The line is drawn by a stylesheet only: the page document itself is never marked.

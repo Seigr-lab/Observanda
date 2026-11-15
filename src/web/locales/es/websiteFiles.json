@@ -1674,5 +1674,16 @@
   "template_contactPlace": "Lugar",
   "template_contactPlaceValue": "Calle, localidad",
   "template_contactHours": "Horario",
-  "template_contactHoursValue": "De lunes a viernes"
+  "template_contactHoursValue": "De lunes a viernes",
+  "element_logos": "Logotipos",
+  "element_logosText": "Los logotipos elegidos en Logotipos e identidad visual, para esta página u otra parte de tu trabajo.",
+  "logosTitle": "Logotipos",
+  "logosHelp": "Muestra los logotipos elegidos en Logotipos e identidad visual. Automático sigue cada página: el registro que presenta, después el cuaderno de laboratorio y el proyecto de ese registro y, por último, el sitio web. Una página sin bloque de logotipos los muestra en la parte superior.",
+  "logosScope": "Mostrar los logotipos de",
+  "logosAuto": "Esta página (automático)",
+  "logosHome": "El sitio web",
+  "logosProject": "Proyecto: {title}",
+  "logosLabBook": "Cuaderno de laboratorio: {title}",
+  "logosApply": "Aplicar",
+  "logosPlaceholder": "Los logotipos de Logotipos e identidad visual aparecen aquí cuando la página se previsualiza o se publica."
 }

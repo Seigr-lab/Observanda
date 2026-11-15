@@ -1674,5 +1674,16 @@
   "template_contactPlace": "Place",
   "template_contactPlaceValue": "Street, town",
   "template_contactHours": "Hours",
-  "template_contactHoursValue": "Monday to Friday"
+  "template_contactHoursValue": "Monday to Friday",
+  "element_logos": "Logos",
+  "element_logosText": "The logos chosen in Logos & branding, for this page or another part of your work.",
+  "logosTitle": "Logos",
+  "logosHelp": "Shows the logos chosen in Logos & branding. Automatic follows each page: the record it presents, then that record's lab book and project, then the website. A page without a Logos block shows its logos at the top.",
+  "logosScope": "Show the logos of",
+  "logosAuto": "This page (automatic)",
+  "logosHome": "The website",
+  "logosProject": "Project: {title}",
+  "logosLabBook": "Lab book: {title}",
+  "logosApply": "Apply",
+  "logosPlaceholder": "Logos from Logos & branding appear here when the page is previewed or published."
 }
