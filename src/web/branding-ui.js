@@ -1,6 +1,6 @@
 import {websitePagePicker} from './website-page-picker.js';
 import {websiteDocumentPages} from './website-document-pages.js';
-import {websiteSnapshot} from './website-context.js';
+import {websiteSnapshot,websiteContext} from './website-context.js';
 import {ownedAssetURL} from './project-context.js';
 import {logosFor} from './branding.js';
 import {researchTargetPicker} from './research-target-picker.js';
@@ -31,7 +31,15 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   const upload=panel.querySelector('input[data-upload="branding"]');if(upload){upload.disabled=uploading()||!ready;const imports=upload.parentElement.querySelector('[data-action="media-import-open"]');if(imports)imports.disabled=upload.disabled;}
  }
 
- async function changeScope(scope){const stamp=key();if(native())await documents.flush();if(!active()||stamp!==key())return;state.brandTarget=scope;render();}
+ // Saving the website draft first changes its revision, never the place: only
+ // leaving the workspace, owner, website or scope abandons the choice. The
+ // panel is held meanwhile so nothing is added to the scope being left.
+ async function changeScope(scope){
+  const place=JSON.stringify([websiteContext(state),state.book?.id,target()]),panel=document.querySelector('[data-branding-panel]');
+  if(panel){panel.inert=true;panel.setAttribute('aria-busy','true');}
+  try{if(native())await documents.flush();}finally{if(panel){panel.inert=false;panel.removeAttribute('aria-busy');}}
+  if(!active()||place!==JSON.stringify([websiteContext(state),state.book?.id,target()]))return;state.brandTarget=scope;render();
+ }
  function stop(){controller?.abort();controller=null;label=null;overrideController?.abort();overrideController=null;override=null;picker.stop();pages.close();}
  function sync(){picker.sync();pages.sync();if(!active()){stop();return;}if(label?.key!==key()){controller?.abort();controller=null;label=null;}if(override?.key!==key()){overrideController?.abort();overrideController=null;override=null;}}
  function editableLogos(scope=target()){
