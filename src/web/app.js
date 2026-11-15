@@ -813,7 +813,10 @@ async function action(button){
   if(name?.startsWith('site-'))return leave.run(async()=>{await projectOwners.beforeAction(button);return sites.action(button);});
   if(['material-home','material-close','material-draft-back'].includes(name))return leave.run(()=>rawAction(button),{scope:'dialog'});
   if(name==='close-dialog')return leave.run(async()=>await localExport.close()||($('#dialog[open] .folder-browser')?storageControls.action({dataset:{action:'storage-browse-cancel'}}):rawAction(button)),{scope:'dialog'});
-  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!activeWebsite(state))||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){if(name==='open-issue')$('#dialog').close();return;}
+  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!activeWebsite(state))||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){
+    // Choosing the page already shown still supersedes a slower navigation in progress.
+    if(navigationActions.has(name))navigationChoice={action:name};
+    if(name==='open-issue')$('#dialog').close();return;}
   if(name==='preview'||name==='website'&&state.page==='review')return rawAction(button);
   if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Automatic settings remain available for retry in their section. */}const scope=['storage-new','storage-open-dialog','storage-open-recent','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-lock','storage-reset-dialog'].includes(name)?'all':'navigation';return leave.run(()=>rawAction(button),{scope});}
   return rawAction(button);
