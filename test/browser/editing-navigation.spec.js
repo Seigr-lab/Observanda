@@ -82,9 +82,12 @@ test('Back, Forward and direct hash navigation keep the editor route on Cancel a
 });
 
 test('publishing and local access forms cannot silently lose or carry unsaved fields',async({page})=>{
-  await preferences(page,'Integrations');await page.getByLabel('GitHub owner / organization').fill('discard-me');
-  await navigate(page,'Projects');await choose(page,'Stay here');await expect(page.getByLabel('GitHub owner / organization')).toHaveValue('discard-me');
-  await navigate(page,'Projects');await choose(page,'Discard changes');await preferences(page,'Integrations');await expect(page.getByLabel('GitHub owner / organization')).toHaveValue('');
+  // A server login being added on Integrations is an unsaved form like any other.
+  const login=()=>page.locator('#server-login-form').getByLabel('Name',{exact:true});
+  await preferences(page,'Integrations');await page.getByRole('button',{name:'Add server login',exact:true}).click();await login().fill('discard-me');
+  await navigate(page,'Projects');await choose(page,'Stay here');await expect(login()).toHaveValue('discard-me');
+  await navigate(page,'Projects');await choose(page,'Discard changes');await preferences(page,'Integrations');
+  if(!await page.locator('#server-login-form').count())await page.getByRole('button',{name:'Add server login',exact:true}).click();await expect(login()).toHaveValue('');
   await preferences(page,'Storage & access');await page.getByLabel('Username (optional)').fill('Unsubmitted account');
   await navigate(page,'Projects');await choose(page,'Stay here');await expect(page.getByLabel('Username (optional)')).toHaveValue('Unsubmitted account');
   await navigate(page,'Projects');await choose(page,'Discard changes');await preferences(page,'Storage & access');await expect(page.getByLabel('Username (optional)')).toHaveValue('');

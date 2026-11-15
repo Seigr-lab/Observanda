@@ -742,6 +742,7 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
   if(scope==='all'){
     if(state.dirty&&savedBook){const latest=websiteDocuments.enabled()?await websiteDocuments.discard():await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});if(latest.saveCompleted)notify(t('websiteEditor','documentSaveAlreadyCompleted'));state.book=latest.book;state.etag=latest.etag;if(latest.site)websiteSelection.load(latest.site.selection,latest.selectionProjects);else websiteSelection.reset();state.dirty=false;changeVersion++;state.preview=null;designUI.resetUndo();await recordDrafts.clear();initialRecordSave=null;}
     if(state.publishing?.dirty)await publishUI.discard();
+    if(forms.some(form=>form.id==='server-login-form'))publishUI.discardServerLogin();
     if(modules.isDirty())await modules.discard();
     if(dashboard.isDirty())await (navigation?dashboard.discardNavigation():dashboard.discard());
     if(userProfile.isDirty())await userProfile.discard();

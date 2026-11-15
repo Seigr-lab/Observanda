@@ -248,5 +248,5 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
     return true;
   }
   async function submit(form,data){if(await servers.submit(form))return true;if(form.id!=='publish-token-form')return false;const token=data.get('token'),context=websiteContext(state);form.querySelector('[name=token]').value='';if(pending)await pending;if(context!==websiteContext(state))return true;const result=await api('/api/publishing/connect',{token});if(context!==websiteContext(state))return true;state.publishing.connected=result.connected;state.publishing.temporaryToken=true;destinations.invalidate();notify(publicationText('connectedNotice'));render();return true;}
-  return {view,load,input,action,submit,save,discard,restorePlan};
+  return {view,load,input,action,submit,save,discard,discardServerLogin:()=>servers.discard(),restorePlan};
 }

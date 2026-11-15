@@ -66,9 +66,12 @@ export function formDrafts(){
   const snapshots=new WeakMap();
   const values=form=>[...form.elements].filter(el=>el.name&&!['button','submit','reset'].includes(el.type)).map(el=>({el,value:el.value,checked:el.checked}));
   function track(){for(const form of document.querySelectorAll('form'))if(!snapshots.has(form))snapshots.set(form,values(form));}
-  function dirty(form){return (snapshots.get(form)??[]).some(item=>item.el.value!==item.value||item.el.checked!==item.checked);}
+  // A form a panel added after the page was drawn has no snapshot yet; it is
+  // compared with the values it was created with, so its typing is protected too.
+  const initial=form=>[...form.elements].filter(el=>el.name&&!['button','submit','reset'].includes(el.type)).map(el=>({el,value:el.tagName==='SELECT'?([...el.options].find(option=>option.defaultSelected)??(el.multiple?null:el.options[0]))?.value??'':el.defaultValue,checked:el.defaultChecked}));
+  function dirty(form){return (snapshots.get(form)??initial(form)).some(item=>item.el.value!==item.value||item.el.checked!==item.checked);}
   function changed(scope){return [...document.querySelectorAll(scope==='dialog'?'#dialog[open] form':'main form, #dialog[open] form')].filter(form=>!form.hasAttribute('data-module-form')&&!form.hasAttribute('data-no-draft')&&dirty(form));}
-  function reset(forms){for(const form of forms)for(const item of snapshots.get(form)??[]){if(item.el.type!=='file')item.el.value=item.value;item.el.checked=item.checked;}}
+  function reset(forms){for(const form of forms)for(const item of snapshots.get(form)??initial(form)){if(item.el.type!=='file')item.el.value=item.value;item.el.checked=item.checked;}}
   function accept(form){snapshots.set(form,values(form));}
   return {track,changed,reset,accept};
 }
