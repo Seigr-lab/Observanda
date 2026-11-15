@@ -49,7 +49,7 @@ test('upload, play and replace an authored recording and captions using portable
   async function checkPlayback(kind){
    await page.goto(base+'/site/index.html');
    const media=page.locator(kind);await expect(media).toHaveAttribute('preload','none');await expect(media).toHaveAttribute('controls','');
-   await media.evaluate(async el=>{el.muted=true;await el.play();});await expect.poll(()=>media.evaluate(el=>el.currentTime)).toBeGreaterThan(0);
+   await media.evaluate(async el=>{el.muted=true;await el.play().catch(error=>{if(error.name!=='AbortError')throw error;});});await expect.poll(()=>media.evaluate(el=>el.currentTime)).toBeGreaterThan(0);
    await media.evaluate(el=>{el.textTracks[0].mode='showing';});
    await expect.poll(()=>media.evaluate(el=>el.textTracks[0].cues?.[0]?.text)).toBe('[Recorded tone]');
    await page.locator('summary').click();await expect(page.getByText('Described instrument observation')).toBeVisible();
