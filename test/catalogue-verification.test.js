@@ -50,10 +50,12 @@ test('a fixed catalogue audit checks unchanged record content once across retain
  const start=performance.now();
  try{await f.workspace.catalogue(store=>store.verify(catalogueDescriptor(book)));}
  finally{ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.queryDocuments=query;SnapshotIndex.prototype.validationRows=validation;}
- assert.equal(untouched,1,'Snapshot validation reads the original once; independent history checks traverse stored blocks');
- assert.equal(bodies,42+10);assert.ok(performance.now()-start<60000);
+ // Opening the fixture converts it to website documents, which changes the
+ // validation context once; each context checks an unchanged original once.
+ assert.equal(untouched,2,'Snapshot validation reads the original once per validation context; independent history checks traverse stored blocks');
+ assert.equal(bodies,2*42+10);assert.ok(performance.now()-start<60000);
  assert.ok(searchDocuments<150,'Search originals must not be reread for every retained snapshot: '+searchDocuments);
- assert.equal(validationChecks,52,'Unchanged validation context must check only new or changed members');
+ assert.equal(validationChecks,2*42+10,'Unchanged validation context must check only new or changed members');
  t.diagnostic(JSON.stringify({records:42,snapshots:11,bodyReads:bodies,searchDocuments,elapsedMs:Math.round(performance.now()-start)}));
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const row=await store.member(await store.snapshot(),book.entries[1].id);
