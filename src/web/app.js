@@ -156,6 +156,7 @@ const state = { book: null, etag: null, websitePin: null, websiteId: null, page:
 const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
 // Where the author was when the website editor opened, so Back returns there.
 let websiteFiles=null,fileEditorEpoch=0,websiteReturn=null;
+let ownerSwitch=null;
 const recoveryHub=recoveryCenter({state,api,esc,notify,
  showRecords:()=>recordDrafts.show(),
  selectPublicationOwner:async(action,done)=>{
@@ -194,7 +195,7 @@ const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
 let changeVersion = 0;
-let restoringRoute = false, workspaceOpening=false,routeRestoreVersion=0;
+let restoringRoute = false, workspaceOpening=false,routeRestoreVersion=0,ownerBeforeRestore=null;
 let completingWorkspace=null;
 let removingRecord=false;
 let routeIndex=Number.isInteger(history.state?.observandaIndex)?history.state.observandaIndex:0;
@@ -891,7 +892,7 @@ function render() {
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
   if(state.page==='website'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/editor':'#/website',replace:true}).catch(report);return;}
-  accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
+  accessHelp.close();clearOwnerSwitch();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
@@ -1033,6 +1034,18 @@ let navigationChoice={action:null};
 const websiteNavigation=['website','publishing','integrations','appearance','preview','branding','branding-back','publication-jobs-open-review'];
 async function rawAction(button) {
   const choice=navigationActions.has(button.dataset.action)?navigationChoice={action:button.dataset.action}:navigationChoice;
+  // A page chosen while an earlier address is still opening replaces it: the earlier
+  // opening is abandoned, so it neither blocks this page nor returns later.
+  if(choice===navigationChoice&&navigationActions.has(button.dataset.action)&&restoringRoute){
+   routeRestoreVersion++;restoringRoute=false;projectOwners.cancelPending();clearOwnerSwitch();
+   // An abandoned opening may already have entered the new owner: return to the one the author was in.
+   const before=ownerBeforeRestore;ownerBeforeRestore=null;
+   if(before&&((state.projectOwner?.projectId??null)!==before.projectId||(state.projectOwner?.labBookId??null)!==before.labBookId)){
+    markOwnerSwitch(before.labBookId?'openingLabBook':'openingProject');
+    try{await projectOwners.enter(before.projectId,before.labBookId);}catch(error){if(error?.name!=='AbortError')throw error;}finally{clearOwnerSwitch();}
+    if(choice!==navigationChoice)return;
+   }
+  }
   if(invalidatesResearchReturn(button))invalidateResearchReturn();
   if(activeWebsite(state)&&button.closest?.('#main-navigation')&&['website','publishing','integrations','appearance'].includes(button.dataset.action))await sites.exit();
   if(activeWebsite(state)&&navigationActions.has(button.dataset.action)&&!['website','publishing','integrations','appearance','preview','branding','branding-back','publication-jobs-open-review'].includes(button.dataset.action))await sites.exit();
@@ -1488,8 +1501,12 @@ function syncRoute(){
   if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
   else markHistory();
 }
+// One busy mark while another project or lab book opens. A newer navigation or a
+// redraw for another page releases it, so an abandoned switch never blocks the page.
+function markOwnerSwitch(key){clearOwnerSwitch();const main=document.querySelector('#main');if(!main)return;const status=document.createElement('p');status.setAttribute('role','status');status.textContent=appText(key);main.inert=true;main.setAttribute('aria-busy','true');main.before(status);ownerSwitch={main,status};}
+function clearOwnerSwitch(){if(!ownerSwitch)return;const {main,status}=ownerSwitch;ownerSwitch=null;status.remove();main.inert=false;main.removeAttribute('aria-busy');}
 async function restoreRoute({websiteReady=false}={}){
-  invalidateResearchReturn();
+  invalidateResearchReturn();clearOwnerSwitch();
   if(!state.access?.locked&&fileEditorHash(location.hash)){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
   if(!state.access?.locked&&!state.newWorkspace&&(state.storageUnavailable||!state.book))state.page=location.hash==='#/workspaces'?'workspaces':'workspace';
   if(state.access?.locked||state.storageUnavailable&&!state.newWorkspace||!state.book||state.newWorkspace){render();markHistory();return;}
@@ -1502,9 +1519,9 @@ async function restoreRoute({websiteReady=false}={}){
     // Opening another project or lab book keeps the previous page on screen until it is ready;
     // it is marked busy and cannot be used, so nothing acts on the owner being left.
     const owner=projectRoute(requestedRoute),switching=(state.projectOwner?.projectId??null)!==(owner.projectId??null)||(state.projectOwner?.labBookId??null)!==(owner.labBookId??null);
-    const main=switching?document.querySelector('#main'):null,status=document.createElement('p');
-    if(main){status.setAttribute('role','status');status.textContent=appText(owner.labBookId?'openingLabBook':'openingProject');main.inert=true;main.setAttribute('aria-busy','true');main.before(status);}
-    try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}finally{if(main){status.remove();main.inert=false;main.removeAttribute('aria-busy');}}
+    ownerBeforeRestore=switching?{projectId:state.projectOwner?.projectId??null,labBookId:state.projectOwner?.labBookId??null}:null;
+    if(switching)markOwnerSwitch(owner.labBookId?'openingLabBook':'openingProject');
+    try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}finally{if(switching&&request===routeRestoreVersion)clearOwnerSwitch();}
     if(!current())return;ownerOperation.clear();
     await sites.restore(projectRoute(requestedRoute).hash);if(!current())return;
     const recordRoute=/^#\/records\/([a-f0-9-]{36})(?:\/read(?:\/[a-f0-9-]{36})?)?$/.exec(projectRoute(location.hash).hash);
