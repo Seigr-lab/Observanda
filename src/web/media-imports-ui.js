@@ -81,7 +81,7 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
    const session=resume??await call('start',{name:file.name,size:file.size,kind});guard();uploadId=session.id;
    const credential=await sessionCredential();
    await new Promise((resolve,reject)=>{
-    const request=xhr=new XMLHttpRequest();request.open('POST',ownedAssetURL(state,endpoint+'receive/'+session.id));request.setRequestHeader('Content-Type','application/octet-stream');request.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);if(credential)request.setRequestHeader('X-Observanda-Session',credential);
+    const request=xhr=new XMLHttpRequest();request.open('POST',ownedAssetURL(state,endpoint+'receive/'+session.id));request.setRequestHeader('Content-Type','application/octet-stream');request.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);request.setRequestHeader('X-Observanda-Wait','1');if(credential)request.setRequestHeader('X-Observanda-Session',credential);
     request.upload.onprogress=e=>status(tr('mediaUploadProgress',{done:e.loaded.toLocaleString(language()),total:file.size.toLocaleString(language())}),true);
     request.onload=()=>{try{const result=JSON.parse(request.responseText);request.status>=200&&request.status<300?resolve(result):reject(result);}catch{reject(Error(tr('mediaUploadInterrupted')));}};
     request.onerror=()=>reject(Error(tr('mediaUploadInterrupted')));
