@@ -22,9 +22,9 @@
 .text-more .button{min-width:32px;min-height:32px;padding:4px}
 .text-more .rich-color{display:flex;align-items:center;gap:4px}
 .text-more input[type=color]{width:30px;height:30px;padding:2px}
-dialog.rich-link-panel{position:fixed;inset:0;margin:auto;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:1.25rem;display:block;border:1px solid color-mix(in srgb,var(--ui-accent) 25%,var(--ui-border));border-radius:12px;background:color-mix(in srgb,var(--ui-accent) 7%,var(--ui-surface));color:var(--ui-text);box-shadow:0 16px 60px #14243a30;z-index:100}
+dialog.rich-link-panel{position:fixed;inset:0;margin:auto;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:1.25rem;display:block;border:1px solid color-mix(in srgb,var(--ui-accent) 25%,var(--ui-border));border-radius:12px;background:color-mix(in srgb,var(--ui-accent) 7%,var(--ui-surface));color:var(--ui-text);box-shadow:0 16px 60px color-mix(in srgb,var(--ui-accent) 20%,transparent);z-index:100}
 dialog.rich-link-panel[hidden]{display:none}
-dialog.rich-link-panel::backdrop{background:#1b294630}
+dialog.rich-link-panel::backdrop{background:color-mix(in srgb,var(--ui-accent) 19%,transparent)}
 .rich-link-panel header{display:flex;align-items:center;justify-content:space-between}
 .rich-link-panel h3{margin:0 0 .5rem}
 .rich-link-panel label{display:block;font-size:.85rem;margin:.7rem 0}

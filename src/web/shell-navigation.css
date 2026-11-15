@@ -41,14 +41,14 @@ html[data-context-navigation=open][data-navigation=top] .shell{grid-template-col
 html[data-context-navigation=open][data-navigation=top] #main-navigation{inset:var(--shell-topbar-height,64px) 0 auto;width:auto;max-height:45dvh;display:block;border-bottom:1px solid var(--ui-border)}
 html[data-context-navigation=open][data-navigation=top] .navigation-resizer{display:none}
 #main-navigation .workspace-tree{max-height:none;overflow:visible}
-html[data-context-navigation=drawer] #main-navigation{display:flex;position:fixed;inset:var(--shell-topbar-height,64px) auto 0 0;width:min(var(--app-navigation-width,272px),88vw);height:auto;z-index:101;box-shadow:4px 0 28px #0002;overflow-y:auto;overscroll-behavior:contain}
+html[data-context-navigation=drawer] #main-navigation{display:flex;position:fixed;inset:var(--shell-topbar-height,64px) auto 0 0;width:min(var(--app-navigation-width,272px),88vw);height:auto;z-index:101;box-shadow:4px 0 28px var(--ui-shadow);overflow-y:auto;overscroll-behavior:contain}
 html[data-context-navigation=drawer][data-navigation=right] #main-navigation{inset:var(--shell-topbar-height,64px) 0 0 auto}
 html[data-context-navigation=drawer] #workspace-navigation{display:flex;flex-direction:column;grid-column:auto}
 html[data-context-navigation=drawer] .nav-group-label,html[data-context-navigation=drawer] .workspace-label{display:flex}
 html[data-context-navigation=drawer] .workspace-navigation nav{display:grid;overflow:visible}
 html[data-context-navigation=drawer] .workspace-navigation .nav-button{width:100%;white-space:normal}
 .shell-menu-backdrop{display:none}
-html[data-context-navigation=drawer] .shell-menu-backdrop{display:block;position:fixed;inset:var(--shell-topbar-height,64px) 0 0;z-index:100;border:0;background:#0003;cursor:default}
+html[data-context-navigation=drawer] .shell-menu-backdrop{display:block;position:fixed;inset:var(--shell-topbar-height,64px) 0 0;z-index:100;border:0;background:var(--ui-overlay);cursor:default}
 html[data-context-navigation=drawer] .topbar{z-index:102}
 html[data-editor-page=website] .main{max-width:none;width:100%;margin:0;padding-block:1rem}
 html[data-editor-page=website] .section-save{margin-top:.65rem;padding-top:.65rem}

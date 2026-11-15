@@ -1,4 +1,5 @@
 import {bindWebsiteVisual} from './website-files-visual.js';
+import {uiTheme} from './ui-theme-values.js';
 import {confirmAction} from './confirm-action.js';
 import {componentMainControls} from './website-component-controls.js';
 import {componentFragment,componentReviewView,instanceForm} from './website-component-forms.js';
@@ -240,7 +241,7 @@ export function websiteFilesComponents({request,t,tr,esc,site,selected,save,adop
    const node=target(e);clearDrop();if(!node&&e.target!==doc.body&&!e.target.matches?.('main'))return;
    e.preventDefault();e.dataTransfer.dropEffect='copy';if(node){
     const selector=layerPath(node).split('/').map(i=>':nth-child('+(Number(i)+1)+')').join('>');
-    sheet.textContent='body>'+selector+'{box-shadow:inset 0 '+(dropAt(node,e)==='before'?'3px':'-3px')+' #315ac1!important}';
+    sheet.textContent='body>'+selector+'{box-shadow:inset 0 '+(dropAt(node,e)==='before'?'3px':'-3px')+' '+uiTheme('accent')+'!important}';
    }
   });
   doc.addEventListener('dragleave',e=>{if(!e.relatedTarget)clearDrop();});

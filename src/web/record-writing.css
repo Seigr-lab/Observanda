@@ -31,8 +31,8 @@
 .record-contributor-values .button{white-space:normal;overflow-wrap:anywhere;max-width:100%}
 .record-tags{max-width:48rem;container-type:inline-size}
 .record-tags ul{padding:0;margin:.4rem 0 .7rem;list-style:none}
-.record-tags li{display:grid;grid-template-columns:minmax(8rem,1fr) auto;align-items:center;gap:.75rem;padding:.45rem .25rem;border-bottom:1px solid var(--border,#c6cfdb);overflow-wrap:anywhere}
-.record-tags li>span{justify-self:start;border:1px solid var(--border,#c6cfdb);border-radius:.3rem;padding:.14rem .5rem;background:var(--surface-alt,#f0f3f8);font-size:.92rem;line-height:1.4}
+.record-tags li{display:grid;grid-template-columns:minmax(8rem,1fr) auto;align-items:center;gap:.75rem;padding:.45rem .25rem;border-bottom:1px solid var(--border,var(--ui-border));overflow-wrap:anywhere}
+.record-tags li>span{justify-self:start;border:1px solid var(--border,var(--ui-border));border-radius:.3rem;padding:.14rem .5rem;background:var(--surface-alt,var(--ui-surface));font-size:.92rem;line-height:1.4}
 .record-tags .inline-actions{display:flex;align-items:end;flex-wrap:wrap;gap:.4rem;margin:0}
 .record-tags label{min-width:0;max-width:100%;margin:0;font-size:.85rem}.record-tags input{display:block;height:2.1rem;max-width:100%;min-width:0}
 .record-tags .button{min-height:2rem;padding:.2rem .65rem;font-size:.85rem;white-space:normal}

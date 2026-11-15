@@ -9,13 +9,13 @@
 dialog:has(.storage-progress){max-height:calc(100dvh - 2rem);overflow:auto;scrollbar-gutter:stable}
 .app-activity{position:relative;max-width:100%;text-align:start}
 .app-activity>button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
-.app-activity>section{position:absolute;inset:calc(100% + .5rem) 0 auto auto;width:min(34rem,calc(100vw - 2rem));max-height:calc(100dvh - var(--shell-topbar-height,64px) - 1rem);overflow:auto;overscroll-behavior:contain;background:var(--ui-surface);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:var(--ui-radius);padding:1rem;box-shadow:0 3px 18px #0003}
+.app-activity>section{position:absolute;inset:calc(100% + .5rem) 0 auto auto;width:min(34rem,calc(100vw - 2rem));max-height:calc(100dvh - var(--shell-topbar-height,64px) - 1rem);overflow:auto;overscroll-behavior:contain;background:var(--ui-surface);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:var(--ui-radius);padding:1rem;box-shadow:0 3px 18px var(--ui-shadow)}
 html[data-navigation=right] .app-activity>section{left:0;right:auto}
 @media(max-width:760px){html[data-navigation=right] .app-activity>section{left:auto;right:0}}
 .app-activity header{display:flex;align-items:center;justify-content:space-between;gap:1rem}.app-activity header h2{margin:0}
 .app-activity [data-close]{border:0;background:transparent;color:inherit;font-size:1.6rem;padding:.2rem .6rem}
 .app-activity article{margin-block:1rem;border-top:1px solid var(--ui-border);padding-top:1rem}.app-activity [data-title]{margin:0}
-.app-activity .operation-progress{margin-block:.5rem}.app-activity [data-status]{font-weight:600}.app-activity [data-error]{color:var(--ui-danger,#a32d21)}
+.app-activity .operation-progress{margin-block:.5rem}.app-activity [data-status]{font-weight:600}.app-activity [data-error]{color:var(--ui-danger,var(--ui-danger))}
 .writer-recovery {width:min(36rem,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);overflow:auto;}
 .writer-recovery form {margin-block:1rem;padding-block:1rem;border-bottom:1px solid var(--ui-border);}
 .writer-recovery .storage-path {overflow-wrap:anywhere;}
@@ -29,7 +29,7 @@ html[data-navigation=right] .app-activity>section{left:0;right:auto}
 [data-owned-activity]:empty{display:none}
 [data-owned-activity] article{margin-block:1rem;min-width:0}
 [data-owned-activity] [data-status]{font-weight:600}
-[data-owned-activity] [data-error]{color:var(--ui-danger,#a32d21)}
+[data-owned-activity] [data-error]{color:var(--ui-danger,var(--ui-danger))}
 
 .operation-sequence{margin-block:0 .65rem;font-size:.875rem}
 .operation-sequence summary{font-weight:600;cursor:pointer}

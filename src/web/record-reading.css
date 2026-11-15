@@ -36,7 +36,7 @@
 .record-media-tile summary{list-style:none;cursor:zoom-in;border-radius:.25rem}
 .record-media-tile summary::-webkit-details-marker{display:none}
 .record-media-tile summary:focus-visible{outline:3px solid currentColor;outline-offset:2px}
-.record-media-tile summary img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:.25rem;background:#00000010}
+.record-media-tile summary img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:.25rem;background:var(--ui-overlay)}
 .record-media-tile:has(.record-media-open[open]){grid-column:1/-1}
 .record-media-open[open] summary{cursor:zoom-out}
 .record-media-full{display:block;max-width:100%;height:auto;margin-top:.5rem}

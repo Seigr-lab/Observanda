@@ -5,6 +5,7 @@ import {websiteTableTools} from './website-files-table.js';
 import {responsiveLayout} from './website-files-responsive.js';
 import {pinStyleText,websiteTextRuns} from './website-text-style.js';
 import {websiteScientificReferences} from './website-files-science.js';
+import {uiTheme} from './ui-theme-values.js';
 
 const chrome = '[data-observanda-editor]';
 const source = '[data-observanda-source]';
@@ -97,7 +98,9 @@ export function bindWebsiteVisual({document, inspector, t, beforeChange, change,
   const outline=document.createElement('div'), actions=document.createElement('div'), action=document.createElement('button'), grip=document.createElement('button');
   const overlayStyle=document.createElement('style');
   outline.className='outline';actions.className='actions';grip.className='grip';
-  overlayStyle.textContent='.outline{position:fixed;box-sizing:border-box;border:2px solid #3859b2;pointer-events:none}.actions{display:flex;position:fixed;gap:2px}.actions button{pointer-events:auto;border:1px solid #25428b;border-radius:4px;background:white;color:#182e65;font:600 13px/1.4 system-ui;padding:4px 8px;white-space:nowrap;cursor:pointer}.actions .grip{cursor:grab}.actions .grip:active{cursor:grabbing}button:focus-visible{outline:3px solid #cf7600}[hidden]{display:none!important}';
+  // The selection marks are app chrome: they take the author's app theme, not the website's.
+  const accent=uiTheme('accent'),onAccent=uiTheme('on-accent'),surface=uiTheme('surface'),ink=uiTheme('text'),font=uiTheme('font'),radius=uiTheme('control-radius')||'4px';
+  overlayStyle.textContent='.outline{position:fixed;box-sizing:border-box;border:2px solid '+accent+';pointer-events:none}.actions{display:flex;position:fixed;gap:2px}.actions button{pointer-events:auto;border:1px solid '+accent+';border-radius:'+radius+';background:'+surface+';color:'+ink+';font:600 13px/1.4 '+font+';padding:4px 8px;white-space:nowrap;cursor:pointer}.actions button:hover{background:'+accent+';color:'+onAccent+'}.actions .grip{cursor:grab}.actions .grip:active{cursor:grabbing}button:focus-visible{outline:3px solid '+accent+';outline-offset:1px}[hidden]{display:none!important}';
   action.type='button'; action.textContent=t('sectionEdit');
   grip.type='button';grip.style.touchAction='none';grip.textContent='⠿ '+t('layerDrag');grip.hidden=true;
   overlayStyle.textContent+='.actions.moving button{pointer-events:none}';

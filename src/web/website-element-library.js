@@ -1,3 +1,4 @@
+import {uiTheme} from './ui-theme-values.js';
 // The elements an author can add to a page, shown as cards with a picture and a
 // plain description, grouped by purpose and searchable. A card is clicked to add
 // the element after the selected part of the page, or dragged to the exact spot.
@@ -65,7 +66,7 @@ export function websiteElementLibrary({t,esc}){
   doc.addEventListener('dragover',e=>{
    if(!e.dataTransfer.types.includes(dragType))return;e.preventDefault();e.dataTransfer.dropEffect='copy';clear();
    const node=top(e);if(!node)return;
-   sheet.textContent=selector(node)+'{box-shadow:inset 0 '+(side(node,e)==='before'?'3px':'-3px')+' 0 #315ac1!important}';
+   sheet.textContent=selector(node)+'{box-shadow:inset 0 '+(side(node,e)==='before'?'3px':'-3px')+' 0 '+uiTheme('accent')+'!important}';
   });
   doc.addEventListener('dragleave',e=>{if(!e.relatedTarget)clear();});
   doc.addEventListener('drop',e=>{

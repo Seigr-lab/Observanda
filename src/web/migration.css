@@ -1,9 +1,9 @@
 .inventory-report { margin-top: 1.5rem; }
-.external-logbook-inspection { border-top:1px solid var(--ui-border,#ced5e4); padding-top:1rem; }
+.external-logbook-inspection { border-top:1px solid var(--ui-border,var(--ui-border)); padding-top:1rem; }
 dialog:has(.external-logbook-inspection) .dialog-actions { flex-wrap:wrap; }
 .inventory-report dd, .inventory-objects small { overflow-wrap:anywhere; }
 .inventory-objects { display:grid; gap:1rem; margin-block:1rem; }
-.inventory-objects article { border-bottom:1px solid var(--line,#ced5e4); padding-block:1rem; }
+.inventory-objects article { border-bottom:1px solid var(--line,var(--ui-border)); padding-block:1rem; }
 .inventory-objects article > strong, .inventory-objects article > span, .inventory-objects article > small { display:block; }
 .inventory-objects pre { max-height:28rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 #inventory-form { max-width:65rem; }
@@ -24,4 +24,4 @@ dialog:has(.external-logbook-inspection) .dialog-actions { flex-wrap:wrap; }
 .migration-reconciliation dd { margin:0; }
 .migration-table-preview { overflow:auto; max-height:24rem; margin-block:1rem; }
 .migration-table-preview table { width:100%; }
-.migration-table-preview th, .migration-table-preview td { padding:.5rem; text-align:start; border-bottom:1px solid var(--line,#ced5e4); }
+.migration-table-preview th, .migration-table-preview td { padding:.5rem; text-align:start; border-bottom:1px solid var(--line,var(--ui-border)); }
