@@ -154,7 +154,8 @@ const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 const fileEditorHash=hash=>/^#\/(?:website|websites|publishing)$/.test(hash)||/^#\/websites\/(?:default|[a-f0-9-]{36})\/(?:editor|website|publishing)$/.test(projectRoute(hash).hash);
-let websiteFiles=null,fileEditorEpoch=0;
+// Where the author was when the website editor opened, so Back returns there.
+let websiteFiles=null,fileEditorEpoch=0,websiteReturn=null;
 const recoveryHub=recoveryCenter({state,api,esc,notify,
  showRecords:()=>recordDrafts.show(),
  selectPublicationOwner:async(action,done)=>{
@@ -1394,10 +1395,11 @@ function renderWebsiteFiles(){
   workspaceLive.bind();
   const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
   const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view()??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
-  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
+  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(websiteReturn?text('backToPrevious',appText('workspace')):text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
   document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
 }
 async function enterWebsiteFiles({hash='#/website',replace=false}={}){
+  if(!state.filesMode&&location.hash.startsWith('#/')&&!fileEditorHash(location.hash))websiteReturn={hash:location.hash,context:state.storage?.contextId};
   activity.pause();
   const epoch=++fileEditorEpoch;state.filesMode=true;state.fileError=null;state.page='website';state.dirty=false;
   if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
@@ -1408,7 +1410,8 @@ async function enterWebsiteFiles({hash='#/website',replace=false}={}){
   try{await websiteFiles.load({id,publishing:hash.endsWith('/publishing')});if(epoch!==fileEditorEpoch)return;const session=websiteFiles.session();if(!state.storage&&session?.contextId)state.storage={contextId:session.contextId};}
   catch(error){if(epoch!==fileEditorEpoch||error.name==='AbortError')return;if(error.code==='ACCESS_LOCKED'){state.filesMode=false;state.access={...state.access,locked:true};render();return;}state.fileError=error.message??t('websiteFiles','failed');renderWebsiteFiles();}
 }
-async function leaveWebsiteFiles({hash='#/workspace',replace=false}={}){
+async function leaveWebsiteFiles({hash=null,replace=false}={}){
+  hash??=websiteReturn?.context===state.storage?.contextId?websiteReturn.hash:'#/workspace';websiteReturn=null;
   fileEditorEpoch++;websiteFiles?.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
   if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
   await loadWorkspace();

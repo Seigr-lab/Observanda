@@ -38,7 +38,7 @@ async function write(page,text){
 }
 async function saveWebsite(page){await files(page).getByRole('button',{name:'Save website',exact:true}).click();await expect(filesStatus(page)).toHaveText('Website saved.');}
 async function editWebsite(page){const id=await openWebsite(page);await write(page,'Navigation page');await saveWebsite(page);expect(await savedPage(id)).toContain('Navigation page');return id;}
-async function backToWorkspace(page){await files(page).getByRole('button',{name:'Back to workspace',exact:true}).click();}
+async function backToWorkspace(page){await files(page).getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();}
 async function discardEdits(page){
  await files(page).locator('.website-authoring-tools').getByRole('button',{name:'Discard changes',exact:true}).click();
  await page.getByRole('dialog',{name:'Discard your unsaved website changes?',exact:true}).getByRole('button',{name:'Discard changes',exact:true}).click();

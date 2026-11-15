@@ -1628,5 +1628,6 @@
   "element_download": "Descarga",
   "element_downloadText": "Un archivo que los visitantes pueden descargar.",
   "element_feed": "Registros del cuaderno de laboratorio",
-  "element_feedText": "Una lista de registros de tus cuadernos de laboratorio que se actualiza sola."
+  "element_feedText": "Una lista de registros de tus cuadernos de laboratorio que se actualiza sola.",
+  "backToPrevious": "Volver a donde estabas"
 }

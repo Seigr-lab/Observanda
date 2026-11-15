@@ -73,7 +73,7 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
    const files=page.locator('#main[data-website-files-app]');await expect(files.getByRole('alert')).toHaveText('Another operation is currently using this writer.');await expect(files.getByRole('button',{name:'Retry',exact:true})).toBeVisible();
    const activity=await page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations);
    expect(activity.map(entry=>entry.kind)).toEqual(['/api/storage/copy']);
-   await files.getByRole('button',{name:'Back to workspace',exact:true}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
+   await files.getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
   }
   await preferences(page,kind==='copy'?'Storage & access':'General');
   const panel=page.locator('#app-activity-panel'),owned=page.locator('#main [data-owned-activity]');
