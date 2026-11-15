@@ -52,6 +52,7 @@ test('reset preserves all research files, invalidates stale writes and preview U
  const app=await startServer({root,port:0,preferencesFile:file,expectedExisting:true});t.after(()=>app.close());const c=await client(app),old=await client(app);
  const book=await (await c.request('/api/notebook')).json(),responsePreview=await c.request('/api/design-preview',{mode:'examples',book:book.book});
  assert.equal(responsePreview.status,200);const preview=await responsePreview.json();assert.ok(preview.url);assert.equal((await c.request(preview.url)).status,200);
+ await prepared(c);
  const before=await workspaceManifest(root),prefs=await readFile(file),setting=await (await c.request('/api/preferences')).json();assert.equal(setting.file,file);
  assert.equal((await c.request('/api/preferences/reset',{etag:setting.etag})).status,422);
  assert.equal((await c.request('/api/preferences/reset',{etag:setting.etag,confirmed:true},{Origin:'https://foreign.invalid'})).status,403);
@@ -73,10 +74,15 @@ test('locked workspaces reject preference reset without modifying protection or 
  assert.equal((await c.request('/api/preferences/reset',{etag:prefs.etag,confirmed:true})).status,401);assert.deepEqual(await readFile(file),prefs.raw);assert.deepEqual(await workspaceManifest(root),before);
 });
 
+// Opening a workspace prepares its default website in the background; its files are
+// written once, so snapshots of the workspace are taken after preparation settles.
+async function prepared(c){for(let i=0;i<600;i++){const value=await (await c.request('/api/website-files/preparation')).json();if(['ready','failed','cancelled'].includes(value.preparation?.state))return value.preparation;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('Website preparation did not settle');}
 async function launchCLI(t,file,args=[]){
  const child=spawn(process.execPath,['src/cli.js','open','--no-browser','--port','0','--preferences',file,...args],{cwd:process.cwd(),windowsHide:true,stdio:['ignore','pipe','pipe']});
  t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill();await done;}});
- const url=await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(new Error('CLI startup timed out')),15000);timer.unref();child.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/http:\/\/127\.0\.0\.1:\d+\/#([a-f0-9]{64})/);if(match){clearTimeout(timer);resolve(match[0]);}});child.on('error',error=>{clearTimeout(timer);reject(error);});child.on('exit',code=>{clearTimeout(timer);reject(new Error('CLI exited before ready: '+code));});});
+ const url=await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(new Error('CLI startup timed out')),15000);timer.unref();child.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/open ([0-9a-f-]+\.html) in the browser-launch folder/);if(match){clearTimeout(timer);
+  // The CLI never prints the launch token; it writes a one-use launch page beside the preferences file.
+  readFile(path.join(path.dirname(file),'browser-launch',match[1]),'utf8').then(page=>{const url=page.match(/http:\/\/127\.0\.0\.1:\d+\/#[a-f0-9]{64}/);if(url)resolve(url[0]);else reject(new Error('Launch page has no address'));},reject);}});child.on('error',error=>{clearTimeout(timer);reject(error);});child.on('exit',code=>{clearTimeout(timer);reject(new Error('CLI exited before ready: '+code));});});
  return {origin:new URL(url).origin,launchToken:new URL(url).hash.slice(1)};
 }
 
