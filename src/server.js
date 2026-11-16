@@ -92,6 +92,8 @@ import {DashboardDiscovery} from './dashboard-discovery.js';
 import {workspaceJobs,websitePublisher} from './workspace-jobs.js';
 import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './inventory-maintenance-jobs.js';
 import {websiteFilesHttp} from './website-files-http.js';
+import {websiteAnalysisCheck} from './website-analysis-check.js';
+import {WebsiteFileStore} from './website-file-store.js';
 import {WorkspaceWebsitePreparation} from './workspace-website-preparation.js';
 import {PublicationConversion} from './publication-conversion.js';
 import {websiteWorkspace,websiteRequest} from './website-workspace.js';
@@ -586,6 +588,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const historyProjects=projectApplication(selectedContext);
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
+      // Checks the analyses behind an editor website's placed research before it is published.
+      if(req.method==='POST'&&url.pathname==='/api/website-analysis/check'){
+        const data=await body(req);if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join()!=='expectedRevision,siteId')throw new AppError('INVALID');
+        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+        try{return json(await websiteAnalysisCheck(new WebsiteFileStore(workspace),data.siteId,{expectedRevision:data.expectedRevision,sourceReader,signal:controller.signal}));}finally{res.off('close',abort);}
+      }
       const selectedProject=projectRequest(url.pathname,req.method);
       if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis||selectedProject.review)&&req.method==='GET')){
         if(!workspace||req.method==='POST'&&req.headers['x-observanda-workspace']!==selectedContext.id)throw new AppError('WORKSPACE_CHANGED');

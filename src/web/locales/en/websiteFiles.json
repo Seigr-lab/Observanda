@@ -1718,5 +1718,17 @@
   "repositoryReady": "The repository is ready. Review and publish the website.",
   "repositoryFailed": "The repository could not be set up.",
   "repositoryRetry": "Try again",
-  "repositoryStop": "Stop"
+  "repositoryStop": "Stop",
+  "analysisTitle": "Analyses behind placed research",
+  "analysisChecking": "Checking the analyses behind the research placed on this website…",
+  "analysisUnavailable": "The analyses could not be checked now. Publishing still uses the website's saved files.",
+  "analysisCheckAgain": "Check again",
+  "analysisCurrent": "The analyses behind the placed research still match their inputs.",
+  "analysisNone": "This website has no placed research to check.",
+  "analysisChanged": "Analyses to review before publishing: {count}",
+  "analysisMore": "More not shown: {count}",
+  "analysisInputsChanged": "Inputs changed since the cited revision: {count}",
+  "analysisFigureEdited": "This figure no longer matches the calculation it cites.",
+  "analysisGuidance": "Open the record to retain a new analysis revision or update the result, or publish the current text if it still holds.",
+  "analysisAcknowledge": "I have reviewed these analysis changes"
 }

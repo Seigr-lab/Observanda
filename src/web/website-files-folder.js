@@ -17,7 +17,8 @@ function labelFor(file,pages,msg){
  return file.path;
 }
 
-export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
+// gate: the analysis review that must also be ready before the folder is written.
+export function websiteFilesFolder({request,site,current=()=>true,esc,render,gate={view:()=>'',ready:()=>true}}){
  const msg=(key,args)=>t('localExport',key,args),text=(key,args)=>esc(msg(key,args));
  let directory='',review=null,acknowledged=null,page=null,offset=0,native=false,session=0,epoch=0,edition='website';
  const button=(key,op,disabled=false)=>'<button type="button" class="button'+(op==='apply'?' primary':'')+'" data-action="website-files-folder-'+op+'" '+(disabled?'disabled':'')+'>'+text(key)+'</button>';
@@ -30,6 +31,7 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
   finally{progress?.close();}
  };
  const ready=()=>review&&page&&matches(review.scope)&&page.id===review.id&&page.reviewId===review.currentReviewId&&directory===page.directory&&!page.counts.conflict&&page.state!=='discarded'&&!(page.state==='completed'&&page.cleaned);
+ const canApply=()=>Boolean(ready()&&acknowledged===review&&gate.ready());
  const clearReview=()=>{epoch++;review=acknowledged=page=null;offset=0;};
  const focus=selector=>requestAnimationFrame(()=>document.querySelector('[data-folder-review-panel] '+selector)?.focus({preventScroll:true}));
  function view(){
@@ -62,7 +64,7 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
   const examples=page.files.flatMap((file,i)=>file.kind==='conflict'?[{file,i}]:[]).slice(0,3);
   const conflict='<div role="alert"><p>'+text('conflictHelp')+'</p>'+examples.map(({file,i})=>'<button type="button" class="button" data-action="website-files-folder-conflict-'+i+'">'+text('inspectConflict',{name:labelFor(file,pages,msg)})+'</button>').join('')+'</div>';
   const canDiscard=['planned','staging'].includes(page.state);
-  const confirm=complete?'<p>'+text('finished')+'</p>':page.state==='discarded'?'':previous?'<p role="alert">'+text(canDiscard?'discardEarlierFolder':'earlierFolder')+'</p>':counts.conflict?conflict:'<div class="website-folder-approval"><label><input type="checkbox" data-website-file-folder-confirm '+(acknowledged===review?'checked':'')+'>'+text('confirm')+'</label>'+button(page.state==='planned'?'apply':'resume','apply',!ready()||acknowledged!==review)+'</div>';
+  const confirm=complete?'<p>'+text('finished')+'</p>':page.state==='discarded'?'':previous?'<p role="alert">'+text(canDiscard?'discardEarlierFolder':'earlierFolder')+'</p>':counts.conflict?conflict:gate.view()+'<div class="website-folder-approval"><label><input type="checkbox" data-website-file-folder-confirm '+(acknowledged===review?'checked':'')+'>'+text('confirm')+'</label>'+button(page.state==='planned'?'apply':'resume','apply',!canApply())+'</div>';
   const discard=canDiscard?button('discard','discard'):'';
   const receipt=complete?page.releaseId:review.lastRecordedRelease;
   const identities='<details><summary>'+text('releaseDetails')+'</summary><dl><dt>'+text('savedWebsiteRevision')+'</dt><dd><code>'+esc(review.scope.expectedRevision)+'</code></dd><dt>'+text('reviewedRelease')+'</dt><dd><code>'+esc(page.releaseId)+'</code></dd><dt>'+text('recordedFolderRelease')+'</dt><dd>'+(receipt?'<code>'+esc(receipt)+'</code>':text('noFolderReceipt'))+'</dd></dl></details>';
@@ -82,12 +84,12 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
  },input(element){
   if(element.matches('[data-website-file-folder-confirm]')){
    acknowledged=element.checked&&ready()?review:null;
-   const write=element.closest('[data-folder-plan]')?.querySelector('[data-action="website-files-folder-apply"]');if(write)write.disabled=!acknowledged;return true;
+   const write=element.closest('[data-folder-plan]')?.querySelector('[data-action="website-files-folder-apply"]');if(write)write.disabled=!canApply();return true;
   }
   if(!element.matches('[data-website-file-folder]'))return false;
   if(directory!==element.value){directory=element.value;clearReview();element.closest('[data-folder-review-panel]')?.querySelector('[data-folder-plan]')?.remove();}
   const plan=element.closest('[data-folder-review-panel]')?.querySelector('[data-action="website-files-folder-plan"]');if(plan)plan.disabled=!directory.trim()||!current();return true;
- },async action(op){
+ },canApply,async action(op){
   const scope=pin(),ticket=epoch;
   if(op==='choose'){
    if(!native)return true;
@@ -123,7 +125,7 @@ export function websiteFilesFolder({request,site,current=()=>true,esc,render}){
    if(!await readPage(scope,id,0,ticket))return true;
    render();focus('[data-action="website-files-folder-plan"]');
   }else if(op==='apply'){
-   if(!ready()||acknowledged!==review)throw Error(msg('confirmRequired'));
+   if(!canApply())throw Error(msg('confirmRequired'));
    const id=review.id;acknowledged=null;render();
    try{await command('apply',{id,reviewed:true},scope);if(ticket===epoch&&matches(scope))await readPage(scope,id,0,ticket);}
    catch(error){clearReview();throw error;}

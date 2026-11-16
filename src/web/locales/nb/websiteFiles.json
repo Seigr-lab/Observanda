@@ -1718,5 +1718,17 @@
   "repositoryReady": "Repositoriet er klart. Gå gjennom og publiser nettstedet.",
   "repositoryFailed": "Repositoriet kunne ikke gjøres klart.",
   "repositoryRetry": "Prøv igjen",
-  "repositoryStop": "Stopp"
+  "repositoryStop": "Stopp",
+  "analysisTitle": "Analyser bak plassert forskning",
+  "analysisChecking": "Sjekker analysene bak forskningen som er plassert på dette nettstedet …",
+  "analysisUnavailable": "Analysene kunne ikke sjekkes nå. Publiseringen bruker fortsatt nettstedets lagrede filer.",
+  "analysisCheckAgain": "Sjekk på nytt",
+  "analysisCurrent": "Analysene bak den plasserte forskningen stemmer fortsatt med inndataene sine.",
+  "analysisNone": "Dette nettstedet har ingen plassert forskning å sjekke.",
+  "analysisChanged": "Analyser som må gjennomgås før publisering: {count}",
+  "analysisMore": "Flere som ikke vises: {count}",
+  "analysisInputsChanged": "Inndata endret siden den siterte revisjonen: {count}",
+  "analysisFigureEdited": "Denne figuren stemmer ikke lenger med beregningen den siterer.",
+  "analysisGuidance": "Åpne posten for å beholde en ny analyserevisjon eller oppdatere resultatet, eller publiser den nåværende teksten hvis den fortsatt holder.",
+  "analysisAcknowledge": "Jeg har gjennomgått disse analyseendringene"
 }

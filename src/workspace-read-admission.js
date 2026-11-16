@@ -17,7 +17,9 @@ const post=new Set([
  '/api/modules/drafts/read',
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list',
  // Listing server logins reads one small settings file; changes still wait for the writer.
- '/api/server-logins/list'
+ '/api/server-logins/list',
+ // Checking an editor website's analyses reads its placed records; it changes nothing.
+ '/api/website-analysis/check'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
  const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;

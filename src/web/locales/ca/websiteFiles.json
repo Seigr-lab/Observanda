@@ -1718,5 +1718,17 @@
   "repositoryReady": "El repositori està a punt. Revisa i publica el lloc web.",
   "repositoryFailed": "No s’ha pogut preparar el repositori.",
   "repositoryRetry": "Torna-ho a provar",
-  "repositoryStop": "Atura"
+  "repositoryStop": "Atura",
+  "analysisTitle": "Anàlisis darrere la recerca col·locada",
+  "analysisChecking": "S'estan comprovant les anàlisis darrere la recerca col·locada en aquest lloc web…",
+  "analysisUnavailable": "Ara no s'han pogut comprovar les anàlisis. La publicació continua fent servir els fitxers desats del lloc web.",
+  "analysisCheckAgain": "Torna a comprovar",
+  "analysisCurrent": "Les anàlisis darrere la recerca col·locada encara coincideixen amb les seves entrades.",
+  "analysisNone": "Aquest lloc web no té recerca col·locada per comprovar.",
+  "analysisChanged": "Anàlisis per revisar abans de publicar: {count}",
+  "analysisMore": "Més elements no mostrats: {count}",
+  "analysisInputsChanged": "Entrades canviades des de la revisió citada: {count}",
+  "analysisFigureEdited": "Aquesta figura ja no coincideix amb el càlcul que cita.",
+  "analysisGuidance": "Obre el registre per conservar una nova revisió de l'anàlisi o actualitzar el resultat, o publica el text actual si encara és vàlid.",
+  "analysisAcknowledge": "He revisat aquests canvis en les anàlisis"
 }

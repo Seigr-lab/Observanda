@@ -1718,5 +1718,17 @@
   "repositoryReady": "El repositorio está listo. Revisa y publica el sitio web.",
   "repositoryFailed": "No se pudo preparar el repositorio.",
   "repositoryRetry": "Intentar de nuevo",
-  "repositoryStop": "Detener"
+  "repositoryStop": "Detener",
+  "analysisTitle": "Análisis detrás de la investigación colocada",
+  "analysisChecking": "Comprobando los análisis detrás de la investigación colocada en este sitio web…",
+  "analysisUnavailable": "Ahora no se han podido comprobar los análisis. La publicación sigue usando los archivos guardados del sitio web.",
+  "analysisCheckAgain": "Volver a comprobar",
+  "analysisCurrent": "Los análisis detrás de la investigación colocada siguen coincidiendo con sus entradas.",
+  "analysisNone": "Este sitio web no tiene investigación colocada que comprobar.",
+  "analysisChanged": "Análisis que revisar antes de publicar: {count}",
+  "analysisMore": "Más elementos no mostrados: {count}",
+  "analysisInputsChanged": "Entradas cambiadas desde la revisión citada: {count}",
+  "analysisFigureEdited": "Esta figura ya no coincide con el cálculo que cita.",
+  "analysisGuidance": "Abre el registro para conservar una nueva revisión del análisis o actualizar el resultado, o publica el texto actual si sigue siendo válido.",
+  "analysisAcknowledge": "He revisado estos cambios en los análisis"
 }

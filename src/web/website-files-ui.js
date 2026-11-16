@@ -5,6 +5,7 @@ import {t} from './i18n/index.js';
 import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,applyCanvasCSS,websiteCanvasValue,canvasSelection,restoreCanvasSelection,editWebsiteCanvas,rebaseWebsitePlacements} from './website-html-document.js';
 import {websiteFilesRecovery} from './website-files-recovery.js';
 import {websiteFilesFolder} from './website-files-folder.js';
+import {websiteAnalysisReview} from './website-analysis-review.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
@@ -111,7 +112,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   mode='publish-choose';render();
  }
  
- const folder=websiteFilesFolder({request,site:()=>opened,esc,render,current:()=>!stale&&!dirty});
+ const analysis=websiteAnalysisReview({api,esc,site:()=>opened,render,onChange:()=>paintStatus()});
+ const folder=websiteFilesFolder({request,site:()=>opened,esc,render,current:()=>!stale&&!dirty,gate:analysis});
  const directory=(stamp=opened.site.revision,route='preview')=>new URL('/api/website-files/'+route+'/'+siteId()+'/'+stamp+'/',location.origin);
  const baseURL=(path=opened.path)=>new URL(path,directory()).href;
  const canvasURL=(path=opened.path)=>new URL(path,directory(opened.historyAssetStamp??opened.assetStamp)).href;
@@ -347,7 +349,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(back)back.disabled=!!busy;
   for(const node of document.querySelectorAll('[data-website-file-requires-clean]'))node.disabled=stale;
   const transfer=document.querySelector('[data-action="website-files-publish"]');
-  if(transfer)transfer.disabled=stale||dirty||destinationDirty||!plan||!document.querySelector('[data-website-files-confirm]')?.checked;
+  if(transfer)transfer.disabled=stale||dirty||destinationDirty||!plan||!document.querySelector('[data-website-files-confirm]')?.checked||!analysis.ready();
+  const folderWrite=document.querySelector('[data-action="website-files-folder-apply"]');
+  if(folderWrite)folderWrite.disabled=!folder.canApply();
   const saveButton=document.querySelector('[data-action="website-files-save"]');
   if(saveButton)saveButton.disabled=!(dirty||pagesPanel.dirty()||menu.dirty())||stale;
   const discardButton=document.querySelector('[data-action="website-files-discard"]');
@@ -947,7 +951,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const archive='<details class="website-files-replacement"><summary>'+esc(t('publication','replacementOptions'))+'</summary><p>'+esc(t('publication','replacementGuidance'))+'</p><label for="website-replacement-archive">'+esc(t('publication','replacementArchiveLabel'))+'</label><input id="website-replacement-archive" data-replacement-archive maxlength="100" placeholder="before-observanda" value="'+esc(review.replacement?.archiveBranch??'')+'"><p>'+esc(t('publication','replacementArchiveGuidance'))+'</p></details>';
   const archived=review.replacement?.archiveBranch?'<p data-replacement-archived>'+esc(t('publication','replacementArchive',{branch:review.replacement.archiveBranch,commit:review.head}))+'</p>':'';
   const confirm=destinationConflictCount(review)?'<p role="alert">'+esc(tr('conflicts'))+'</p>'+archive+button('replacement','replacement-plan')
-   :'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
+   :analysis.view()+'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
   const withdrawal=remoteEdition==='withdrawal'?'<p role="note" data-release-withdrawal>'+esc(tr('releaseWithdrawRemoteIntro'))+'</p>':'';
   return '<section data-website-files-review><h3>'+esc(tr(remoteEdition==='withdrawal'?'releaseWithdrawReview':'review'))+'</h3>'+withdrawal+'<p>'+esc(address)+'</p>'+archived+lists.join('')+confirm+'</section>';
  }
@@ -974,7 +978,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   try{
    if(operation==='publish'||operation==='publish-retry'||operation==='publish-pages'){
     const retry=operation!=='publish';
-    if(retry?(!transfer||transfer.revision!==data.expectedRevision||transfer.configEtag!==data.configEtag):(!plan||!document.querySelector('[data-website-files-confirm]')?.checked))throw Error(tr('confirm'));
+    if(retry?(!transfer||transfer.revision!==data.expectedRevision||transfer.configEtag!==data.configEtag):(!plan||!document.querySelector('[data-website-files-confirm]')?.checked||!analysis.ready()))throw Error(tr('confirm'));
     const result=await remoteRequest('publish',{...data,destinationReview:retry?transfer.id:(plan.plan??plan).id,destinationReviewed:true,...(operation==='publish-pages'?{retryPages:true}:{})},{signal});
     if(!active())return;
     destination={...destination,receipt:result.receipt,transfer:result.transfer};
@@ -1201,6 +1205,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    }
    else if(operation==='folder'){await save();folder.reset();mode='folder';render();await folder.loadChooser();}
    else if(operation.startsWith('folder-'))await folder.action(operation.slice(7));
+   else if(operation==='analysis-check')await analysis.check();
    else if(operation==='publish-update')await showPublishUpdate();
    else if(operation==='destination')await showDestination();
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
@@ -1236,6 +1241,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    sourcePane.queue();changed();return true;
   }
   if(element.matches('[data-website-files-confirm]')){paintStatus();return true;}
+  if(analysis.input(element))return true;
   if(form?.type==='new'&&element.closest('[data-website-files-form]')){
    if(element.dataset.websiteFileField==='name')form.name=element.value;
    else if(element.matches('[data-website-import-source]')){form.source=element.value;form.issues=null;render();if(form.source==='folder'&&form.native===undefined)void run(loadImportChooser);}

@@ -1718,5 +1718,17 @@
   "repositoryReady": "Kodelageret er klart. Sjå gjennom og publiser nettstaden.",
   "repositoryFailed": "Kodelageret kunne ikkje gjerast klart.",
   "repositoryRetry": "Prøv igjen",
-  "repositoryStop": "Stopp"
+  "repositoryStop": "Stopp",
+  "analysisTitle": "Analysar bak plassert forsking",
+  "analysisChecking": "Sjekkar analysane bak forskinga som er plassert på denne nettstaden …",
+  "analysisUnavailable": "Analysane kunne ikkje sjekkast no. Publiseringa brukar framleis dei lagra filene til nettstaden.",
+  "analysisCheckAgain": "Sjekk på nytt",
+  "analysisCurrent": "Analysane bak den plasserte forskinga stemmer framleis med inndataa sine.",
+  "analysisNone": "Denne nettstaden har inga plassert forsking å sjekke.",
+  "analysisChanged": "Analysar som må gjennomgåast før publisering: {count}",
+  "analysisMore": "Fleire som ikkje blir viste: {count}",
+  "analysisInputsChanged": "Inndata endra sidan den siterte revisjonen: {count}",
+  "analysisFigureEdited": "Denne figuren stemmer ikkje lenger med utrekninga han siterer.",
+  "analysisGuidance": "Opne posten for å halde på ein ny analyserevisjon eller oppdatere resultatet, eller publiser den noverande teksten om han framleis held.",
+  "analysisAcknowledge": "Eg har gått gjennom desse analyseendringane"
 }
