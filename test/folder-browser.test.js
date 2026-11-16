@@ -5,9 +5,9 @@ import path from 'node:path';
 import os from 'node:os';
 import {readFolder,createFolderBrowser} from '../src/folder-browser.js';
 import {AppError} from '../src/errors.js';
-import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {startServer} from '../src/server.js';
+import {testServer as startServer} from './device-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
 
 async function fixture(t,code){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-folder-worker-')),file=path.join(root,'worker.cjs');
@@ -52,10 +52,9 @@ test('folder navigation reuses optional shortcuts briefly, refreshes after expir
 });
 
 async function service(t,folderBrowser){
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-folder-service-'));
- await new Workspace(root).create(sampleNotebook());
- const app=await startServer({root,port:0,headless:true,folderBrowser});
- t.after(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-folder-service-')),fixture=await encryptedFixture(directory,sampleNotebook()),root=fixture.workspace.root;
+ const app=await startServer({root,port:0,headless:true,folderBrowser,deviceStore:fixture.deviceStore});
+ t.after(async()=>{await app.close();await rm(directory,{recursive:true,force:true});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  return {...app,root,headers,post:(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers,body:JSON.stringify(data),...extra})};

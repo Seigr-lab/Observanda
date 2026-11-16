@@ -9,7 +9,7 @@ import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {MediaStore,mediaCapabilities} from '../src/media.js';
-import {startServer} from '../src/server.js';
+import {testServer as startServer} from './device-fixture.js';
 import {enforcePublishingLimits} from '../src/publishing.js';
 function wavHeader(size){const h=Buffer.alloc(44);h.write('RIFF');h.writeUInt32LE(size+36,4);h.write('WAVEfmt ',8);h.writeUInt32LE(16,16);h.writeUInt16LE(1,20);h.writeUInt16LE(1,22);h.writeUInt32LE(48000,24);h.writeUInt32LE(96000,28);h.writeUInt16LE(2,32);h.writeUInt16LE(16,34);h.write('data',36);h.writeUInt32LE(size,40);return h;}
 test('policy defaults are the shipped ceilings, persist privately and reject stale updates',async()=>{const root=await mkdtemp(path.join(os.tmpdir(),'observanda-policy-'));await new Workspace(root).create(sampleNotebook());const store=new MediaPolicy(root);assert.deepEqual((await store.read()).policy,defaultMediaPolicy());const saved=await store.save({...defaultMediaPolicy(),maxUploadBytes:12},'new');await assert.rejects(store.save(defaultMediaPolicy(),'new'),e=>e.code==='CONFLICT');assert.equal((await new MediaPolicy(root).read()).policy.maxUploadBytes,12);await assert.rejects(store.save({...saved.policy,maxUploadBytes:-1},saved.etag),e=>e.code==='INVALID');await assert.rejects(new MediaStore(root).import(Buffer.alloc(20),'audio'),e=>e.code==='MEDIA_LIMIT');assert.deepEqual(await readdir(path.join(root,'.observanda/media')),[]);});

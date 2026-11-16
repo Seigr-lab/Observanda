@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { startServer } from '../src/server.js';
+import {testServer as startServer} from './device-fixture.js';
 import { Workspace } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
 

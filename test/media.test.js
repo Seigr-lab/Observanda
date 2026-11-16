@@ -9,7 +9,7 @@ import { MediaStore, mediaCapabilities } from '../src/media.js';
 import { Workspace, digest } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
 import { buildPublication, writePublication, publicationZip } from '../src/publication.js';
-import { startServer } from '../src/server.js';
+import {testServer as startServer} from './device-fixture.js';
 
 let available, fixtures;
 before(async () => {
