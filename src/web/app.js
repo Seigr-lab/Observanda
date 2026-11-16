@@ -770,7 +770,7 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['tool-return','tools','tool-launch','interface','module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['tool-return','tools','tool-launch','interface','fonts','module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 const websiteEditPages=new Set(['website','appearance','branding']);
 const brandingReturnRoute=()=>state.brandReturn??routeFor({...state,page:'appearance'});
 function sameWebsiteEditRoute(hash){
@@ -824,7 +824,6 @@ async function action(button){
     // Choosing the page already shown still supersedes a slower navigation in progress.
     if(navigationActions.has(name))navigationChoice={action:name};
     if(name==='open-issue')$('#dialog').close();return;}
-  if(name==='preview'||name==='website'&&state.page==='review')return rawAction(button);
   if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Automatic settings remain available for retry in their section. */}const scope=['storage-new','storage-open-dialog','storage-open-recent','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-lock','storage-reset-dialog'].includes(name)?'all':'navigation';return leave.run(()=>rawAction(button),{scope});}
   return rawAction(button);
 }
@@ -884,7 +883,6 @@ function render() {
     void ensureCompleteWorkspace().then(render).catch(report);return;
   }
   migration.bind();attempts.bind();reviews.release();migrationProvenance.release();
-  if(state.page!=='appearance'||state.access?.locked||state.storageUnavailable||state.newWorkspace)designPreview.stop();
   if(state.page!=='entries'||state.access?.locked||state.newWorkspace)recordList.stop();
   figures.release();
   documents.release();
@@ -897,6 +895,7 @@ function render() {
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
   if(state.page==='website'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/editor':'#/website',replace:true}).catch(report);return;}
+  if(state.page==='publishing'){void enterWebsiteFiles({hash:state.websiteId?'#/websites/'+state.websiteId+'/publishing':'#/publishing',replace:true}).catch(report);return;}
   accessHelp.close();clearOwnerSwitch();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
@@ -906,7 +905,6 @@ function render() {
   reviewFrame?.addEventListener('load',()=>{if(state.preview)publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message));});
   syncRoute();storageControls.workspaces.bind();storageControls.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();configurationRecord?.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
-  if (state.page === 'appearance') void designPreview.update();
 }
 
 function renderGeneralPreferences(){return storageControls.recoveryPanel()||structureUI.generalPreferences();}
@@ -927,19 +925,16 @@ function renderPage(){
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
  case 'templates':content=dashboard.templates();break;
+ // The workspace font library: fonts for PDFs and the app, kept with the workspace.
+ case 'fonts':content=fontLibrary.view();break;
  case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
  case 'project':content=structureUI.projectView();break;
  case 'laboratory':content=labUI.view();break;
- case 'publishing':content=publishUI.view();break;
- case 'branding':content=branding.view();break;
  case 'projects':content=structureUI.overview();break;
- case 'websites':content=sites.view();break;
  case 'record-reader':content=recordContent.view();break;
  case 'editor':content=renderEditor();break;
- case 'appearance':content=renderAppearance();break;
- case 'review':content=renderReview();break;
  default:content=renderEntries();
  }
  if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext()+content;
@@ -948,7 +943,7 @@ function renderPage(){
  const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records',editor:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];
  if(helpTopic)content='<div class="task-guidance"><button class="button subtle" data-action="context-help" data-topic="'+helpTopic+'">'+esc(ux('contextHelp'))+'</button>'+(['editor','record-reader','project','entries'].includes(state.page)?'<button class="button subtle" data-action="tools">'+esc(ux('tools'))+'</button>':'')+'</div>'+content;
  if(['tools','module'].includes(state.page)&&toolOrigin?.context===state.storage?.contextId)content='<button class="button task-return" data-action="tool-return">'+esc(ux('returnTask',{name:toolOrigin.title}))+'</button>'+content;
- content=sites.header()+content+sectionActions();if(explicitWebsite(state))return content;if(state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')))return preferencesFrame('appearance',content,state.dashboardSettings);return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
+ content=content+sectionActions();return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
 }
 
 function renderEntries() {
@@ -1063,7 +1058,7 @@ async function rawAction(button) {
   if(name==='open-recovery-center'){recoveryHub.show();return;}
   if(name==='context-help'){await taskHelp.open(button.dataset.topic,button);return;}
   if(name==='tool-return'&&toolOrigin?.context===state.storage?.contextId){const origin=toolOrigin;toolOrigin=null;history.pushState({...origin.history,observandaIndex:++routeIndex},'',origin.route);await restoreRoute();requestAnimationFrame(()=>window.scrollTo(0,origin.scroll));return;}
-  if(name==='interface'||name==='tools'){if(name==='tools')rememberToolOrigin();state.page=name;render();return;}
+  if(name==='interface'||name==='tools'||name==='fonts'){if(name==='tools')rememberToolOrigin();state.page=name;render();return;}
   if(name==='tool-pin'){await textControls.togglePinnedTool(button.dataset.moduleId);render();return;}
   if(name==='tool-enable'){await dashboard.enableModule(button.dataset.moduleId);render();return;}
   if(name==='tool-launch'){
@@ -1071,7 +1066,6 @@ async function rawAction(button) {
    rememberToolOrigin();button.disabled=true;try{if(!enabledModule(state.dashboardSettings,module.id)){state.page='tools';render();return;}const entry=module.navigation?.[0];return await rawAction({dataset:module.createUI?{action:'module-open',moduleId:module.id,modulePath:''}:{...entry},closest:()=>null});}finally{if(button.isConnected)button.disabled=false;}return;
   }
   if(name==='operational-diagnostics')return (await import('./diagnostics-ui.js')).openDiagnostics({api,esc,showDialog,activity,currentContext:()=>state.storage?.contextId});
-  if(name==='website'&&button.closest?.('#main-navigation')){await sites.manager();return;}
   if(state.page==='entries'&&state.bookReading&&name?.startsWith('material-')){await materials.action(button);return;}
   if(name==='laboratory-open-owned'){
     const {workspaceId,projectId,labBookId,kind,id}=button.dataset;
@@ -1152,7 +1146,6 @@ async function rawAction(button) {
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:moduleLabel(module)}));return;}
-  if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state)){await sites.enter(null,{preferences:['appearance','integrations'].includes(name)&&Boolean(button.closest?.('.preferences-tabs')||button.dataset.preferences==='true')});if(choice!==navigationChoice){if(activeWebsite(state)&&!websiteNavigation.includes(navigationChoice.action)){await sites.exit();render();}return;}}
 
   if(name==='preferences'){state.page='preferences';render();return;}
   if(await branding.action(button))return;
@@ -1192,7 +1185,6 @@ async function rawAction(button) {
   }
   if (name === 'edit-entry' || name === 'open-issue') { if(supportsRecordSelection()&&(!state.recordScope||!state.book.entries.some(e=>e.id===button.dataset.id))&&!await selectRecord(button.dataset.id))return;$('#dialog').close(); if (state.book.entries.some(e => e.id === button.dataset.id)) { state.recordReturn = {bookReading:!!state.bookReading,page:state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id}; state.selected = button.dataset.id; state.recordReading=button.dataset.reading==='true';state.recordSection=null; const n=state.book.notebooks.find(n=>n.id===entry().notebookId); state.project=n.projectId; state.notebook=n.id; state.page = 'editor'; render(); } else { state.page = 'website'; render(); } }
   if (name === 'back-to-records') return returnNavigation.back();
-  if (name === 'appearance') { state.page = 'appearance'; render(); }
 
   if (name === 'delete-entry') {
     if(uploading||figures.isBusy()||materials.isBusy())return notify(t('recordAuthoring','operationBusy'),true);
@@ -1387,7 +1379,6 @@ async function extendedAction(button) {
   const name = button.dataset.action, id = button.dataset.id, index = Number(button.dataset.index);
   if(name==='branding-back'){location.hash=brandingReturnRoute();return true;}
   if(name==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
-  if (name === 'branding') { state.brandReturn=routeFor(state); state.brandTarget = button.dataset.target ?? 'home'; state.page = 'branding'; $('#dialog').close(); render(); return true; }
   if(recordSections.action(button))return true;
   if (name === 'remove-media') { if (await confirmAction(appText('removeMedia'),{action:'remove'})) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
   if (name === 'delete-page') { if (await confirmAction(appText('removePage'),{action:'remove'})) { state.book.pages = state.book.pages.filter(p => p.id !== id); state.book.branding = state.book.branding.filter(b => b.target !== 'page:' + id); state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='page:'+id); state.book.website.navigation = state.book.website.navigation.filter(item => item.target !== 'page:' + id).map(item=>item.parent==='page:'+id?{...item,parent:null}:item); dirty(); render(); } return true; }
@@ -1540,7 +1531,6 @@ async function restoreRoute({websiteReady=false}={}){
       if(state.page==='review'&&state.reviewId){const preview=await publicationJobs.read(state.reviewId);preview.currentPage=preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;await (await publishUI.ready()).restorePlan(preview);}
       if(state.page==='laboratory'){if(state.labSampleRoute){await labUI.action({dataset:{action:'laboratory-samples'}});return;}state.page=moduleDestination('laboratory');history.replaceState(history.state,'',routeFor(state));}
       if(state.page==='integrations')await publishUI.load();
-      if(state.page==='publishing'){await publishUI.action({dataset:{action:'publishing'}});return;}
     }
     render();
   }finally{if(request===routeRestoreVersion){restoringRoute=false;if(state.book&&!location.hash.startsWith('#/'))history.replaceState(null,'',routeFor(state));markHistory();}}

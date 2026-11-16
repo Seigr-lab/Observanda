@@ -28,6 +28,7 @@
   "coverageTitle": "Cobertura de la traducció",
   "loadFailed": "No s’ha pogut carregar la llengua guardada. Aquesta sessió utilitza l’anglès.",
   "templates": "Plantilles",
+  "fonts": "Tipus de lletra",
   "diagnostics": "Diagnòstic local",
   "diagnosticsSummary": "Revisa els temps de les operacions recents, el recompte de recursos i els codis d’error. El diagnòstic exclou continguts dels registres, noms de fitxers, credencials i adreces. No s’envia res automàticament.",
   "diagnosticsReview": "Revisa el diagnòstic",

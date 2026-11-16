@@ -28,6 +28,7 @@
   "coverageTitle": "Translation coverage",
   "loadFailed": "The saved language could not be loaded. English is being used for this session.",
   "templates": "Templates",
+  "fonts": "Fonts",
   "diagnostics": "Local diagnostics",
   "diagnosticsSummary": "Review recent operation timings, resource counts and error codes. Diagnostics exclude record contents, filenames, credentials and addresses. Nothing is sent automatically.",
   "diagnosticsReview": "Review diagnostics",
