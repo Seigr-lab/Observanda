@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {createNotebook} from '../../src/model.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('the editor moves, copies, archives and restores saved pages and sites offline, then publishes the reviewed site to a folder',async({page,browser})=>{
  test.setTimeout(120000);
@@ -35,11 +36,11 @@ test('the editor moves, copies, archives and restores saved pages and sites offl
   await expect(page.locator('[data-website-file-page]')).toHaveValue('index.html');
   await managePage();await button('Archived pages').click();await button('Private field copy private-field-copy.html').click();await apply();
   await expect(page.locator('[data-website-file-page]')).toHaveValue('private-field-copy.html');
-  await button('Manage website').click();await field('operation').selectOption('duplicate');await field('title').fill('Independent atlas');await review();await apply();
+  await (await siteMenu(page)).getByRole('button',{name:'Manage website',exact:true}).click();await field('operation').selectOption('duplicate');await field('title').fill('Independent atlas');await review();await apply();
   await expect(page.getByRole('heading',{name:'Independent atlas',exact:true})).toBeVisible();
-  await button('Manage website').click();await field('operation').selectOption('archive');await review();await apply();
+  await (await siteMenu(page)).getByRole('button',{name:'Manage website',exact:true}).click();await field('operation').selectOption('archive');await review();await apply();
   await expect(page.getByRole('heading',{name:'Station atlas',exact:true})).toBeVisible();
-  await button('Manage website').click();await button('Archived websites').click();await button('Independent atlas').click();await apply();
+  await (await siteMenu(page)).getByRole('button',{name:'Manage website',exact:true}).click();await button('Archived websites').click();await button('Independent atlas').click();await apply();
   await expect(page.getByRole('heading',{name:'Independent atlas',exact:true})).toBeVisible();
   await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();

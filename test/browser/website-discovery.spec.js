@@ -9,6 +9,7 @@ import {pageInclusion} from '../../src/website-page-inclusion.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('a bilingual project publishes search and sharing declarations for its public pages without contacting the address',async({page})=>{
  test.setTimeout(150000);
@@ -26,13 +27,13 @@ test('a bilingual project publishes search and sharing declarations for its publ
   const errors=[],remote=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(15000);
   page.on('request',request=>{if(new URL(request.url()).hostname.endsWith('example.org'))remote.push(request.url());});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  const canvas=page.frameLocator('#website-files-canvas'),tools=page.getByRole('navigation',{name:'Website'}),panel=page.locator('[data-website-discovery]');
+  const canvas=page.frameLocator('#website-files-canvas'),panel=page.locator('[data-website-discovery]');
   await expect(canvas.getByRole('heading',{name:'Estuary survey'})).toBeVisible();
   expect(opened.site.pages.length).toBe(3);
 
   await page.locator('[data-website-file-page]').selectOption('index.html');
   await expect(canvas.getByRole('heading',{name:'Estuary survey'})).toBeVisible();
-  await tools.getByRole('button',{name:'Search and sharing',exact:true}).click();
+  await (await siteMenu(page)).getByRole('button',{name:'Search and sharing',exact:true}).click();
   await expect(panel.getByRole('heading',{name:'Search and sharing'})).toBeFocused();
   const address=panel.getByLabel('Public address');await address.fill('https://example.org/estuary');
   await panel.getByRole('button',{name:'Save settings'}).click();
@@ -43,7 +44,7 @@ test('a bilingual project publishes search and sharing declarations for its publ
   // Link the Catalan page as a language version of the home page.
   await page.locator('[data-website-file-page]').selectOption('ca/index.html');
   await expect(canvas.getByRole('heading',{name:'Estudi de l’estuari'})).toBeVisible();
-  await tools.getByRole('button',{name:'Search and sharing',exact:true}).click();
+  await (await siteMenu(page)).getByRole('button',{name:'Search and sharing',exact:true}).click();
   await panel.getByLabel('Language version of').selectOption({label:'Estuary survey · index.html'});
   await panel.getByLabel('Translation status').selectOption('outdated');
   const link=panel.getByRole('button',{name:'Link language version'});await link.focus();await link.press('Enter');
@@ -51,7 +52,7 @@ test('a bilingual project publishes search and sharing declarations for its publ
   await expect(group.first()).toContainText('en · Original');await expect(group.last()).toContainText('ca · Needs update');
   await panel.getByRole('button',{name:'Return to editing'}).click();
 
-  await tools.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();
   await page.getByRole('button',{name:'Write reviewed files'}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
 

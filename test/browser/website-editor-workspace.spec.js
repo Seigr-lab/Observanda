@@ -8,6 +8,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('a desktop author selects nested writing, saves it and navigates the saved site tools',async({page})=>{
  test.setTimeout(100000);page.setDefaultTimeout(12000);await page.setViewportSize({width:1440,height:900});
@@ -22,7 +23,7 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/unavailable';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),commands=page.locator('.website-page-controls'),tools=page.getByRole('navigation',{name:'Site tools',exact:true});
+  const canvas=page.frameLocator('#website-files-canvas'),label='Log the instrument serial number.',paragraph=canvas.getByText(label,{exact:true}),tools=page.getByRole('navigation',{name:'Site tools',exact:true});
   await expect(paragraph).toBeVisible();
   const finder=page.getByRole('button',{name:'Find pages and tools'});await finder.click();
   const search=page.getByRole('combobox',{name:'Search by name or path'});await search.fill('Themes');await expect(page.getByRole('option',{name:'Themes',exact:true})).toBeVisible();await search.press('Escape');
@@ -37,7 +38,10 @@ test('a desktop author selects nested writing, saves it and navigates the saved 
   const save=page.getByRole('button',{name:'Save website',exact:true});await expect(save).toBeEnabled();await save.click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   expect((await store.open(id)).html).toContain('Check the reference slide.');
   await expect(tools.getByRole('button',{name:'Themes',exact:true})).toBeVisible();
-  await expect(commands.getByRole('button',{name:'Publish to folder',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Publish to folder',exact:true})).toBeVisible();
+  // Less frequent tasks wait in one menu, which Escape closes.
+  const menu=await siteMenu(page);await expect(menu.getByRole('button',{name:'Releases',exact:true})).toBeVisible();
+  await page.keyboard.press('Escape');await expect(menu.getByRole('button',{name:'Releases',exact:true})).toBeHidden();await expect(menu.locator('summary')).toBeFocused();
   for(const width of [1148,1440]){
    await page.setViewportSize({width,height:width===1148?759:900});
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);

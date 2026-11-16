@@ -12,6 +12,7 @@ import {remoteAddress,remoteReceiptView,remoteProgressRequest} from './website-r
 import {createBlock,duplicateBlock} from './website-files-blocks.js';
 import {websiteElementLibrary} from './website-element-library.js';
 import {websiteToolRail} from './website-tool-rail.js';
+import {websiteSiteMenu} from './website-site-menu.js';
 import {sectionTemplates,createSection,sectionCSS} from './website-section-templates.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,editLogos} from './website-files-dialogs.js';
@@ -157,7 +158,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc});
+ const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -460,7 +461,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   },2000);
  }
  async function load({id=null,publishing=false}={}){
-  clear();compactViewport.addEventListener('change',resizeTools);const epoch=generation;controller=new AbortController();
+  clear();const epoch=generation;controller=new AbortController();
   const result=await request('session',undefined,{signal:controller.signal});
   if(epoch!==generation)return;
   session=result;onSession(session);sites=session.sites??[];nextSite=session.next??null;
@@ -475,7 +476,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   feeds.clear();
   figures.reset();
   conflictingPage=null;awaitingAccess=false;conflicts.select(null);
-  compactViewport.removeEventListener('change',resizeTools);clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
+  clearTimeout(preparationTimer);preparationTimer=null;missingSite=false;requestedSite=null;openPublishing=false;pendingCanvas=null;clearTimeout(canvasTimer);canvasTimer=null;generation++;folder.reset();menu.reset();siteMenu.reset();components.reset();recordings.reset();pagesPanel.reset();gallery.reset();picker.reset();forgetSelection();resetPreview();controller?.abort();controller=null;clearInterval(timer);timer=null;mode='visual';session=null;opened=null;sites=[];nextSite=null;destination=null;destinationDirty=false;plan=null;form=null;dirty=busy=stale=false;html=css=error='';undo=[];redo=[];historyBytes=0;onDirty(false);
  }
  function historyEntry(){return {html,css,sourceStamp:opened?.sourceStamp,selection:canvasSelection(document.getElementById('website-files-canvas')?.contentDocument)};}
  function checkpoint(force=false){const now=Date.now();if(force||now-lastCheckpoint>350||!undo.length){flushCanvas();undo.push(historyEntry());historyBytes+=html.length+css.length;while(undo.length>50||historyBytes>8*1024*1024&&undo.length>1){const oldest=undo.shift();historyBytes-=oldest.html.length+oldest.css.length;}lastCheckpoint=now;}redo=[];gallery.trimHistory(html,undo.toReversed());}
@@ -632,17 +633,17 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const select='<select class="website-file-select" data-website-file-site aria-label="'+esc(tr('site'))+'">'+choose+options+'</select>';
   return (inGroup?select:'<label>'+esc(tr('site'))+' '+select+'</label>')+(nextSite?button('more','sites-more'):'');
  }
- const compactViewport=window.matchMedia('(max-width:760px)');
- function extraTools(title,content){
-  const label=esc(tr(title));
-  return '<details class="website-task-group" data-website-tools aria-label="'+label+'" '+(compactViewport.matches?'':'open')+'><summary>'+label+'</summary><span class="website-task-label" aria-hidden="true">'+label+'</span><div class="website-extra-tools">'+content+'</div></details>';
- }
- function resizeTools(){for(const group of document.querySelectorAll('[data-website-tools]'))group.open=!compactViewport.matches;}
+ // The places in the bar: which website and which page is open.
  function siteToolbar(){
   const options=mode==='preview'?'<option>'+esc(trail[step]?.path??opened.path)+'</option>':pagesPanel.options();
   const page='<select class="website-file-select" data-website-file-page aria-label="'+esc(tr('page'))+'">'+options+'</select>';
-  return extraTools('site',siteSelector(true)+button('create','new')+button('lifeManageSite','manage-site'))+extraTools('page',page+button('addPage','new-page'))+
-   extraTools('siteReleaseTools',button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('folderPublish','folder')+button('download','download','data-website-file-requires-clean'));
+  return '<div class="website-bar-places">'+siteSelector(true)+page+button('addPage','new-page')+'</div>';
+ }
+ function siteMenuView(){
+  return siteMenu.view({label:tr('manageAndPublish'),groups:[
+   {label:tr('site'),items:button('create','new')+button('lifeManageSite','manage-site')},
+   {label:tr('siteReleaseTools'),items:button('reviewTitle','review')+button('releasesTitle','releases')+button('discoveryTitle','discovery')+button('checkWebsite','check-website')+button('destination','destination')+button('download','download','data-website-file-requires-clean')}
+  ]});
  }
  function unopenedView(){
   const state=session.preparation?.state;
@@ -664,7 +665,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const choosingTarget=mode==='publish-choose'||mode==='publish-review';
   const authoring=opened&&!form&&!stale&&!composing&&!choosingTarget&&!['menu','regions','exchange','destination','folder'].includes(mode);
   const currentTask=taskLabel();
-  const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+'</div>':'';
+  const headerActions=authoring?'<div class="website-primary-actions">'+button('save','save','data-website-file-requires-clean')+button('preview','preview','data-website-file-requires-clean')+button('publishUpdate','publish-update','data-website-file-requires-clean')+button('folderPublish','folder')+'</div>':'';
   const guideButton='<button type="button" class="button subtle" data-action="context-help" data-saved-website-guide>'+esc(tr('websiteGuide'))+'</button>';
   let body;
   if(stale)body=conflictingPage?conflicts.view():awaitingAccess?'<section class="panel"><h2>'+esc(tr('savedPageWaiting'))+'</h2><p>'+esc(tr('savedPageWaitingDetail'))+'</p>'+button('retry','check-access')+'</section>':'';
@@ -678,8 +679,12 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   else if(composing)body=figures.view(picker.view());
   else if(mode==='preview')body='<div class="website-files-toolbar">'+button('prevPage','preview-back',step>0?'':'disabled')+button('nextPage','preview-forward',step<trail.length-1?'':'disabled')+button('closePreview','visual')+viewport.controls()+'</div>'+viewport.frame('website-files-preview',tr('preview'));
   else body=editorView();
-  const toolbar=authoring?siteToolbar():!opened&&!form?siteSelector():'';
-  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading"><div class="website-workspace-identity"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div><p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'<div class="website-workspace-utilities">'+guideButton+'</div></header>'+
+  // While authoring, one bar holds the website, the page, the save state,
+  // publishing and a menu for everything else.
+  const places=authoring?'<nav class="website-page-controls" aria-label="'+esc(tr('site'))+'">'+siteToolbar()+'</nav>':'';
+  const utilities=(authoring?siteMenuView():'')+guideButton;
+  const toolbar=!authoring&&!opened&&!form?siteSelector():'';
+  return '<fieldset class="website-file-controls" data-website-file-controls><header class="website-workspace-heading'+(authoring?' website-editor-bar':'')+'"><div class="website-workspace-identity"><span class="website-task-label">'+esc(tr(currentTask))+'</span><h1>'+esc(title)+'</h1></div>'+places+'<p class="website-files-status" role="status" data-website-files-status></p>'+headerActions+'<div class="website-workspace-utilities">'+utilities+'</div></header>'+
    (toolbar?'<nav class="website-files-toolbar website-page-controls" aria-label="'+esc(tr('site'))+'">'+toolbar+'</nav>':'')+
    (opened&&!stale&&!form?'<div data-website-recovery></div>':'')+
    (!form&&draftPage()?'<p class="hint">'+esc(tr('draftNotice'))+'</p>':'')+
@@ -819,7 +824,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
-  hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  siteMenu.bind(document);hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
   if(mode==='exchange')exchange.bind();

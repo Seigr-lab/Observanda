@@ -135,7 +135,7 @@ test('create, edit, persist, customize, review, and download an independent note
   await expect(page.frameLocator('#design-preview').locator('body')).toBeVisible();
   await saveChanges(page);
   await navigate(page,'Website editor');
-  const downloadEvent=page.waitForEvent('download');await files.getByRole('button',{name:'Download website ZIP',exact:true}).click();
+  const downloadEvent=page.waitForEvent('download');await (await siteMenu(page)).getByRole('button',{name:'Download website ZIP',exact:true}).click();
   const download=await downloadEvent;
   const zip = await readFile(await download.path());
   expect(zip.readUInt32LE(0)).toBe(0x04034b50);
@@ -155,7 +155,7 @@ test('private-path detection blocks website export and names no private path', a
   await html.fill((await html.inputValue()).replace('</body>','<p>/home/imaginary-person/private-log</p></body>'));
   await files.getByRole('button',{name:'Save website',exact:true}).click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
   let downloaded=false;page.on('download',()=>{downloaded=true;});
-  await files.getByRole('button',{name:'Download website ZIP',exact:true}).click();
+  await (await siteMenu(page)).getByRole('button',{name:'Download website ZIP',exact:true}).click();
   // The export is checked first and refused with an explanation; nothing is downloaded and the path is never shown.
   const status=files.locator('[data-website-files-status]');await expect(status).toHaveAttribute('role','alert',{timeout:30000});
   await expect(status).not.toContainText('imaginary-person');expect(downloaded).toBe(false);
@@ -327,7 +327,7 @@ test('build a project with structured research and playable media, place it on a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1)).toBeTruthy();
   await page.setViewportSize({ width: 1440, height: 1000 });
   const downloading = page.waitForEvent('download');
-  await files.getByRole('button', { name: 'Download website ZIP', exact: true }).click();
+  await (await siteMenu(page)).getByRole('button', { name: 'Download website ZIP', exact: true }).click();
   const zip = await readFile(await (await downloading).path());
   // Read the archive as files: page text is compressed inside it.
   const archive=readWebsiteZip(zip),text=archive.filter(entry=>/\.html$/.test(entry.name)).map(entry=>entry.bytes.toString('utf8')).join(' '),names=archive.map(entry=>entry.name).join(' ');
@@ -766,3 +766,4 @@ test('an unavailable remembered folder offers recovery instead of first-run crea
   await expect(page.locator('.workspace-name')).toHaveText('A closer look');
 });
 import {chooseFont} from './font-helper.js';
+import {siteMenu} from './website-site-menu-helper.js';

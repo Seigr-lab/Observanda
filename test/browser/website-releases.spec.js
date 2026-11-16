@@ -9,6 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 import {withdrawalNotice} from '../../src/website-withdrawal-edition.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('the release view tracks a folder edition, withdraws it after review and reopens the released version',async({page})=>{
  test.setTimeout(150000);
@@ -25,15 +26,15 @@ test('the release view tracks a folder edition, withdraws it after review and re
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const canvas=page.frameLocator('#website-files-canvas'),status=page.locator('[data-website-files-status]');
   await expect(canvas.getByRole('heading',{name:'Estuary survey'})).toBeVisible();
-  const tools=page.getByRole('navigation',{name:'Website'}),panel=page.locator('[data-website-releases]');
-  const openReleases=async()=>{await tools.getByRole('button',{name:'Releases',exact:true}).click();await expect(panel.getByRole('heading',{name:'Releases',exact:true})).toBeFocused();};
+  const panel=page.locator('[data-website-releases]');
+  const openReleases=async()=>{await (await siteMenu(page)).getByRole('button',{name:'Releases',exact:true}).click();await expect(panel.getByRole('heading',{name:'Releases',exact:true})).toBeFocused();};
 
   await openReleases();
   await expect(panel).toContainText('No destination chosen');await expect(panel).toContainText('Choose a folder or a remote destination');
   await panel.getByRole('button',{name:'Return to editing'}).click();
 
   // Publish the website to a folder through the ordinary review.
-  await tools.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
+  await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();
   await page.getByRole('button',{name:'Write reviewed files'}).click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Return to editing'}).click();

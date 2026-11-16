@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 const documentHTML=(title,body,css='style.css')=>'<!doctype html><html lang="en"><head><title>'+title+'</title><link rel="stylesheet" href="'+css+'"></head><body><main><h1>'+title+'</h1>'+body+'</main></body></html>';
 test('repair an ambiguous scientific target, describe a figure and follow the published reference with research offline',async({page,browser})=>{
@@ -42,7 +43,7 @@ test('repair an ambiguous scientific target, describe a figure and follow the pu
   await page.getByRole('button',{name:'Check page',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('draft/protocol.html');await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const routes=[],record=r=>routes.push(new URL(r.url()));page.on('request',record);
-  const check=async()=>{await page.getByRole('button',{name:'Check website',exact:true}).click();const d=page.getByRole('dialog',{name:'Check website'});await expect(d.getByRole('status',{name:'Check website'})).toContainText('findings');return d;};
+  const check=async()=>{await (await siteMenu(page)).getByRole('button',{name:'Check website',exact:true}).click();const d=page.getByRole('dialog',{name:'Check website'});await expect(d.getByRole('status',{name:'Check website'})).toContainText('findings');return d;};
   let d=await check();
   await expect(d.getByRole('status',{name:'Check website'})).toContainText('5 findings in 3 files');
   expect(routes.some(url=>/spectrum\.svg$|absent\.png$/.test(url.pathname))).toBe(false);

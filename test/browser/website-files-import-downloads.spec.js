@@ -9,6 +9,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 function zip(entries){
  const locals=[],central=[];let offset=0;
@@ -38,10 +39,10 @@ test('an author imports a website ZIP after correcting every listed file, then o
  try{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(ws.app.url);await page.evaluate(hash=>location.hash=hash,'#/websites/'+ws.id+'/editor');
-  const canvas=page.frameLocator('#website-files-canvas'),commands=page.locator('.website-page-controls');
+  const canvas=page.frameLocator('#website-files-canvas');
   await expect(canvas.getByRole('heading',{name:'Existing atlas'})).toBeVisible();
   const before=(await ws.store.list({limit:100})).items.length;
-  await commands.getByRole('button',{name:'New website',exact:true}).click();
+  await (await siteMenu(page)).getByRole('button',{name:'New website',exact:true}).click();
   await page.getByLabel('Website name',{exact:true}).fill('Weather station');
   await page.getByRole('radio',{name:'A website ZIP file'}).check();
   await expect(page.getByText(/Research from your lab books is never copied/)).toBeVisible();

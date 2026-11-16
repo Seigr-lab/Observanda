@@ -9,6 +9,7 @@ import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {websiteFilesHttp} from '../../src/website-files-http.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {mountFilesEditor} from './mount-files-editor.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('an author starts a course website and gets linked lessons, a lesson sidebar and a menu',async({page})=>{
  test.setTimeout(45000);page.setDefaultTimeout(10000);
@@ -23,7 +24,7 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   await page.setViewportSize({width:1360,height:850});await mountFilesEditor(page);
   const canvas=page.frameLocator('#website-files-canvas');
   await expect(canvas.getByRole('heading',{name:'Existing'})).toBeVisible();
-  await page.getByRole('button',{name:'New website',exact:true}).first().click();
+  await (await siteMenu(page)).getByRole('button',{name:'New website',exact:true}).click();
   const form=page.locator('[data-website-files-form]'),starters=form.getByRole('group',{name:'Starting layout'});
   await expect(starters.getByRole('radio',{name:/Blank website/})).toBeChecked();
   await form.getByLabel('Website name',{exact:true}).fill('Beekeeping basics');
