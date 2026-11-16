@@ -1701,5 +1701,22 @@
   "pageLogosAdd": "Añadir un logotipo",
   "pageLogosFull": "Esta página ya tiene el máximo de logotipos que puede mostrar (4).",
   "websiteLogos": "Logotipos del sitio web",
-  "websiteLogosHelp": "Los logotipos del sitio web: se muestran en la parte superior de la página de inicio y de cada página sin logotipos propios, y en los bloques de logotipos definidos para el sitio web."
+  "websiteLogosHelp": "Los logotipos del sitio web: se muestran en la parte superior de la página de inicio y de cada página sin logotipos propios, y en los bloques de logotipos definidos para el sitio web.",
+  "repositoryTitle": "Repositorio de GitHub",
+  "repositoryCreateHelp": "¿Todavía no hay repositorio? Observanda puede crear {name} en GitHub, iniciarlo en la rama main y guardarlo como destino de este sitio web.",
+  "repositoryVisibility": "Quién puede ver el repositorio",
+  "repositoryPublic": "Público",
+  "repositoryPrivate": "Privado",
+  "repositoryCreateConfirm": "Crear {name} en GitHub",
+  "repositoryCreate": "Crear repositorio",
+  "repositoryEmptyHelp": "Este repositorio está vacío. Necesita una primera confirmación antes de poder publicar el sitio web en él.",
+  "repositoryCheck": "Comprobar repositorio",
+  "repositoryReviewText": "{name} está vacío. Observanda añadirá un archivo .nojekyll vacío y usará {branch} como rama del sitio web.",
+  "repositoryInitializeConfirm": "Inicializar {name} para este sitio web",
+  "repositoryInitialize": "Inicializar repositorio",
+  "repositoryRunning": "Preparando el repositorio…",
+  "repositoryReady": "El repositorio está listo. Revisa y publica el sitio web.",
+  "repositoryFailed": "No se pudo preparar el repositorio.",
+  "repositoryRetry": "Intentar de nuevo",
+  "repositoryStop": "Detener"
 }

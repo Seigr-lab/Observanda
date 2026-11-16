@@ -1701,5 +1701,22 @@
   "pageLogosAdd": "Afegeix un logotip",
   "pageLogosFull": "Aquesta pàgina ja té el màxim de logotips que pot mostrar (4).",
   "websiteLogos": "Logotips del lloc web",
-  "websiteLogosHelp": "Els logotips del lloc web: es mostren a la part superior de la pàgina d’inici i de cada pàgina sense logotips propis, i en els blocs de logotips definits per al lloc web."
+  "websiteLogosHelp": "Els logotips del lloc web: es mostren a la part superior de la pàgina d’inici i de cada pàgina sense logotips propis, i en els blocs de logotips definits per al lloc web.",
+  "repositoryTitle": "Repositori de GitHub",
+  "repositoryCreateHelp": "Encara no hi ha cap repositori? Observanda pot crear {name} a GitHub, iniciar-lo a la branca main i desar-lo com a destinació d’aquest lloc web.",
+  "repositoryVisibility": "Qui pot veure el repositori",
+  "repositoryPublic": "Públic",
+  "repositoryPrivate": "Privat",
+  "repositoryCreateConfirm": "Crea {name} a GitHub",
+  "repositoryCreate": "Crea el repositori",
+  "repositoryEmptyHelp": "Aquest repositori és buit. Necessita una primera confirmació abans de poder-hi publicar el lloc web.",
+  "repositoryCheck": "Comprova el repositori",
+  "repositoryReviewText": "{name} és buit. Observanda hi afegirà un fitxer .nojekyll buit i utilitzarà {branch} com a branca del lloc web.",
+  "repositoryInitializeConfirm": "Inicialitza {name} per a aquest lloc web",
+  "repositoryInitialize": "Inicialitza el repositori",
+  "repositoryRunning": "S’està preparant el repositori…",
+  "repositoryReady": "El repositori està a punt. Revisa i publica el lloc web.",
+  "repositoryFailed": "No s’ha pogut preparar el repositori.",
+  "repositoryRetry": "Torna-ho a provar",
+  "repositoryStop": "Atura"
 }

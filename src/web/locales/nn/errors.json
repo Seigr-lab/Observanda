@@ -236,7 +236,7 @@
   "ACCESS_LOCKED": "Lås opp dette arbeidsområdet for å halde fram.",
   "ACCESS_WAIT": "For mange påloggingsforsøk. Vent eitt minutt før du prøver på nytt.",
   "PUBLISH_PENDING": "Avklar den tidlegare utrullinga i Publisering før du startar ei ny opplasting til dette målet. Sendinga kan ha lukkast sjølv om svaret vart avbrote.",
-  "PUBLISH_EMPTY_REPO": "Dette GitHub-kodelageret er tomt. Opne Set opp mål og bruk Kontroller tilkopling for å sjå gjennom og klargjere nettstadgreina.",
+  "PUBLISH_EMPTY_REPO": "Dette GitHub-kodelageret er tomt. Opne publiseringsmålet og bruk Klargjer kodelageret for å gje det ei første innsjekking, og sjå deretter gjennom nettstaden på nytt.",
   "PUBLISH_REPO_EXISTS": "Eit kodelager med dette namnet finst allereie. Vel Bruk eit eksisterande kodelager for å sjå gjennom det, eller vel eit anna namn. Ingen eksisterande filer vart endra.",
   "PUBLISH_PAGES": "GitHub Pages-kjelda er endra. Sjå gjennom målet på nytt før du set det opp for denne nettstaden.",
   "PUBLISH_POLICY": "Denne utgjevinga overskrid fil- eller nettstadstorleiken som er sett opp for dette publiseringsmålet.",

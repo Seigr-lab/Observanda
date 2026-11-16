@@ -25,6 +25,8 @@ import {LocalExportManifest} from './local-export-manifest.js';
 import {serveContent,contentHash,contentSize} from './file-content.js';
 import {publicationExportHttp} from './publication-export-http.js';
 import {researchId} from './web/research-reference.js';
+import {jobSummary} from './jobs.js';
+import {fileSiteRepositorySetup,fileSiteJobQueue} from './website-files-repository.js';
 import {componentOperation} from './website-component-storage.js';
 import {regionOperation} from './website-region-storage.js';
 import {validateWebsiteLibraryRows,websiteLibraryFacets} from './website-file-library.js';
@@ -79,7 +81,7 @@ async function sshReview(metadata,id,revision,etag){
 const previewPolicy=directory=>"default-src 'none'; style-src "+directory+" 'unsafe-inline'; img-src "+directory+" data:; media-src "+directory+"; font-src "+directory+"; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Runs after ordinary workspace authentication, before any research routing.
-export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,actor,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,preparationControl,githubAccount,folderPicker,withPublication=work=>work()}={}){
+export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,actor,body,json,check,publisherOptions={},blockedValues=[],onWrite=()=>{},preparation,preparationControl,githubAccount,folderPicker,repositoryJobs=null,withPublication=work=>work()}={}){
  if(!url.pathname.startsWith(prefix))return false;
  if(!workspace)throw new AppError('MISSING');
  await check();
@@ -395,6 +397,23 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   }
   if(operation==='insert-source'){json(await store.insertSource(siteId,{...options,expectedRevision,signal}));return true;}
   if(operation==='insert-sources'){json(await store.insertSources(siteId,{...options,expectedRevision,signal}));return true;}
+  if(operation.startsWith('repository/')){
+   // Create this website's GitHub repository, or initialize an empty one, as a
+   // durable job that survives restarts and lost provider replies.
+   if(!repositoryJobs)throw new AppError('INVALID');
+   const step=operation.slice('repository/'.length),setup=fileSiteRepositorySetup({base:workspace,store,siteId,publisher:await publisher(siteId),queue:repositoryJobs.queue()});
+   if(step==='review'){json(await setup.review({configEtag:options.configEtag}));return true;}
+   if(step==='current'){json({job:jobSummary(await setup.current())});return true;}
+   if(step==='initialize'||step==='start'){
+    const job=step==='initialize'?await setup.initialize({review:options.review,configEtag:options.configEtag,confirmed:options.confirmed}):await setup.start({config:options.config,etag:options.etag,visibility:options.visibility,confirmed:options.confirmed});
+    repositoryJobs.wake();json({job:jobSummary(job)});return true;
+   }
+   const queue=fileSiteJobQueue(repositoryJobs.queue(),siteId),job=researchId(options.id)?await queue.read(options.id):null;
+   if(!job||job.type!=='publication.repository')throw new AppError('NOT_FOUND');await queue.authorize(job);
+   if(step==='status'){json({job:jobSummary(job)});return true;}
+   if(step==='retry'||step==='cancel'){const next=await queue.control(job.id,step);repositoryJobs[step==='cancel'?'cancel':'wake'](job.id);json({job:jobSummary(next)});return true;}
+   throw new AppError('INVALID');
+  }
   if(operation==='destination'||operation==='destination/save'){
    json(await store.withSite(siteId,undefined,async()=>{
     const target=await publisher(siteId);

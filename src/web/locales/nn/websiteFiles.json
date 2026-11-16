@@ -1701,5 +1701,22 @@
   "pageLogosAdd": "Legg til ein logo",
   "pageLogosFull": "Denne sida har så mange logoar som ho kan vise (4).",
   "websiteLogos": "Logoane til nettstaden",
-  "websiteLogosHelp": "Logoane til nettstaden: blir viste øvst på startsida og på kvar side utan eigne logoar, og i logoblokker sette til nettstaden."
+  "websiteLogosHelp": "Logoane til nettstaden: blir viste øvst på startsida og på kvar side utan eigne logoar, og i logoblokker sette til nettstaden.",
+  "repositoryTitle": "GitHub-kodelager",
+  "repositoryCreateHelp": "Ikkje noko kodelager enno? Observanda kan opprette {name} på GitHub, starte det på main-greina og lagre det som målet for denne nettstaden.",
+  "repositoryVisibility": "Kven kan sjå kodelageret",
+  "repositoryPublic": "Offentleg",
+  "repositoryPrivate": "Privat",
+  "repositoryCreateConfirm": "Opprett {name} på GitHub",
+  "repositoryCreate": "Opprett kodelager",
+  "repositoryEmptyHelp": "Dette kodelageret er tomt. Det treng ei første innsjekking før nettstaden kan publiserast til det.",
+  "repositoryCheck": "Kontroller kodelageret",
+  "repositoryReviewText": "{name} er tomt. Observanda legg til éi tom .nojekyll-fil og brukar {branch} som nettstadgrein.",
+  "repositoryInitializeConfirm": "Klargjer {name} for denne nettstaden",
+  "repositoryInitialize": "Klargjer kodelageret",
+  "repositoryRunning": "Gjer klar kodelageret …",
+  "repositoryReady": "Kodelageret er klart. Sjå gjennom og publiser nettstaden.",
+  "repositoryFailed": "Kodelageret kunne ikkje gjerast klart.",
+  "repositoryRetry": "Prøv igjen",
+  "repositoryStop": "Stopp"
 }

@@ -1701,5 +1701,22 @@
   "pageLogosAdd": "Add a logo",
   "pageLogosFull": "This page has the most logos it can show (4).",
   "websiteLogos": "Website logos",
-  "websiteLogosHelp": "The website's logos: shown at the top of the home page and of every page without logos of its own, and in Logos blocks set to the website."
+  "websiteLogosHelp": "The website's logos: shown at the top of the home page and of every page without logos of its own, and in Logos blocks set to the website.",
+  "repositoryTitle": "GitHub repository",
+  "repositoryCreateHelp": "No repository yet? Observanda can create {name} on GitHub, start it on the main branch and save it as this website’s destination.",
+  "repositoryVisibility": "Who can see the repository",
+  "repositoryPublic": "Public",
+  "repositoryPrivate": "Private",
+  "repositoryCreateConfirm": "Create {name} on GitHub",
+  "repositoryCreate": "Create repository",
+  "repositoryEmptyHelp": "This repository is empty. It needs a first commit before the website can be published to it.",
+  "repositoryCheck": "Check repository",
+  "repositoryReviewText": "{name} is empty. Observanda will add one empty .nojekyll file and use {branch} as the website branch.",
+  "repositoryInitializeConfirm": "Initialize {name} for this website",
+  "repositoryInitialize": "Initialize repository",
+  "repositoryRunning": "Setting up the repository…",
+  "repositoryReady": "The repository is ready. Review and publish the website.",
+  "repositoryFailed": "The repository could not be set up.",
+  "repositoryRetry": "Try again",
+  "repositoryStop": "Stop"
 }

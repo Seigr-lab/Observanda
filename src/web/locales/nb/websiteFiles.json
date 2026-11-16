@@ -1701,5 +1701,22 @@
   "pageLogosAdd": "Legg til en logo",
   "pageLogosFull": "Denne siden har så mange logoer som den kan vise (4).",
   "websiteLogos": "Nettstedets logoer",
-  "websiteLogosHelp": "Nettstedets logoer: vises øverst på startsiden og på hver side uten egne logoer, og i logoblokker satt til nettstedet."
+  "websiteLogosHelp": "Nettstedets logoer: vises øverst på startsiden og på hver side uten egne logoer, og i logoblokker satt til nettstedet.",
+  "repositoryTitle": "GitHub-repositorium",
+  "repositoryCreateHelp": "Ikke noe repositorium ennå? Observanda kan opprette {name} på GitHub, starte det på main-grenen og lagre det som målet for dette nettstedet.",
+  "repositoryVisibility": "Hvem kan se repositoriet",
+  "repositoryPublic": "Offentlig",
+  "repositoryPrivate": "Privat",
+  "repositoryCreateConfirm": "Opprett {name} på GitHub",
+  "repositoryCreate": "Opprett repositorium",
+  "repositoryEmptyHelp": "Dette repositoriet er tomt. Det trenger en første innsjekking før nettstedet kan publiseres til det.",
+  "repositoryCheck": "Kontroller repositoriet",
+  "repositoryReviewText": "{name} er tomt. Observanda legger til én tom .nojekyll-fil og bruker {branch} som nettstedsgren.",
+  "repositoryInitializeConfirm": "Initialiser {name} for dette nettstedet",
+  "repositoryInitialize": "Initialiser repositoriet",
+  "repositoryRunning": "Gjør klar repositoriet …",
+  "repositoryReady": "Repositoriet er klart. Gå gjennom og publiser nettstedet.",
+  "repositoryFailed": "Repositoriet kunne ikke gjøres klart.",
+  "repositoryRetry": "Prøv igjen",
+  "repositoryStop": "Stopp"
 }

@@ -39,6 +39,7 @@ import {websiteFilesDiscovery} from './website-files-discovery.js';
 import {websiteFilesReview} from './website-files-review.js';
 import {websiteFilesMenu} from './website-files-menu.js';
 import {websiteFilesRegions} from './website-files-regions.js';
+import {websiteFilesRepository} from './website-files-repository.js';
 import {websiteFilesDesignExchange} from './website-files-design-exchange.js';
 import {menuCanvasTarget} from './website-menu-canvas.js';
 import {websiteFilesPicker} from './website-files-picker.js';
@@ -89,7 +90,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  let requestedSite=null,openPublishing=false;
  const connectionState={get storage(){return session?{contextId:session.contextId}:null;},publishing:{}};
  const github=githubConnectionUI({state:connectionState,api:(route,data)=>api(route,data,{owner:null,adopt:false,signal:controller?.signal}),endpoint:'/api/website-files/connection/',esc,field:(label,control)=>'<label>'+esc(label)+' '+control+'</label>',notify,temporaryCredentials:false,onConnectionChange:()=>{plan=null;document.querySelector('[data-website-files-review]')?.remove();}});
- async function showDestination(){await save();remoteEdition='website';destination=await request('destination',{siteId:siteId()});destinationDirty=false;form=null;mode='destination';render();if(destination.config.kind==='github')await github.refresh();}
+ async function showDestination(){await save();remoteEdition='website';destination=await request('destination',{siteId:siteId()});destinationDirty=false;form=null;mode='destination';render();if(destination.config.kind==='github'){await github.refresh();await repository.refresh();render();}}
  async function showPublishUpdate(){
   await save();if(!opened||stale||dirty)throw Error(tr('changed'));
   const target=await request('publish-target',{siteId:siteId()},{signal:controller.signal});
@@ -102,7 +103,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    destination=target.destination;destinationDirty=false;mode='publish-review';render();
    const prior=destination.transfer;
    if(prior&&(['running','failed'].includes(prior.state)||prior.revision===opened.site.revision&&prior.configEtag===destination.etag))return;
-   plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag});render();return;
+   // An empty repository needs a first commit; open the destination ready to give it one.
+   try{plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag});}
+   catch(error){if(error.code!=='PUBLISH_EMPTY_REPO')throw error;repository.markEmpty();mode='destination';render();await repository.refresh();return;}
+   render();return;
   }
   mode='publish-choose';render();
  }
@@ -156,6 +160,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const discovery=websiteFilesDiscovery({request,site:()=>opened,esc,tr,signal:()=>controller?.signal,adopt:value=>adoptRelated(value)});
  const versions=websiteFilesVersions({site:()=>opened,esc,tr,request,signal:()=>controller?.signal,render,run,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const menu=websiteFilesMenu({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,baseURL,run,close:()=>{mode='visual';render();},changed:()=>{onDirty(dirty||destinationDirty||menu.dirty());paintStatus();}});
+ const repository=websiteFilesRepository({request,siteId:()=>siteId(),destination:()=>destination,reload:async()=>{destination=await request('destination',{siteId:siteId()});destinationDirty=false;render();},esc,tr,render});
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
@@ -558,7 +563,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const current=opened,replacement=await request('open',{siteId:siteId(),path:opened.path},{signal:controller?.signal});if(opened!==current)return false;
   await recovery.forget();
   menu.reset();pagesPanel.reset();components.reset();picker.reset();gallery.reset();recordings.reset();forgetSelection();resetPreview();
-  figures.reset();destinationDirty=false;destination=null;mode='visual';adopt(replacement);render();return true;
+  figures.reset();repository.reset();destinationDirty=false;destination=null;mode='visual';adopt(replacement);render();return true;
  }
  function updateFromSaved(value){
   flushCanvas();
@@ -928,7 +933,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  function transferView(){return remoteReceiptView(destination,opened.site.revision,{esc,t,tr,button});}
  function destinationView(){if(!destination)return '<p role="status">'+esc(tr('loading'))+'</p>';const config=destination.config;
-  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>'+esc(tr('kindSsh'))+'</option><option value="sftp" '+(config.kind==='sftp'?'selected':'')+'>'+esc(tr('kindSftp'))+'</option><option value="ftp" '+(config.kind==='ftp'?'selected':'')+'>'+esc(tr('kindFtp'))+'</option></select></label>'+(config.kind!=='github'?hostView(config):github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>')+field('publicUrl',config.publicUrl??'')+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+(destinationDirty?'':transferView())+reviewView()+'</section>';
+  return '<section class="panel website-files-publish"><h2>'+esc(tr('destination'))+'</h2><label>'+esc(tr('destination'))+'<select data-website-file-field="kind"><option value="github" '+(config.kind==='github'?'selected':'')+'>GitHub</option><option value="ssh" '+(config.kind==='ssh'?'selected':'')+'>'+esc(tr('kindSsh'))+'</option><option value="sftp" '+(config.kind==='sftp'?'selected':'')+'>'+esc(tr('kindSftp'))+'</option><option value="ftp" '+(config.kind==='ftp'?'selected':'')+'>'+esc(tr('kindFtp'))+'</option></select></label>'+(config.kind!=='github'?hostView(config):github.view()+['owner','repository','branch','directory'].map(key=>field(key,config.github[key]??'','data-destination-group="github"')).join('')+'<label><input type="checkbox" data-website-file-field="pages" data-destination-group="github" '+(config.github.pages?'checked':'')+'>'+esc(tr('pages'))+'</label>')+field('publicUrl',config.publicUrl??'')+repository.view()+'<div class="inline-actions">'+button('saveDestination','save-destination')+button('review','plan','data-website-file-requires-clean')+button('closePreview','visual')+'</div>'+(destinationDirty?'':transferView())+reviewView()+'</section>';
  }
  function reviewView(){
   if(!plan)return '';
@@ -1197,11 +1202,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='destination')await showDestination();
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
+   else if(operation.startsWith('repository-'))await repository.action(operation.slice('repository-'.length));
    else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
    else if(['publish','publish-retry','publish-pages','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){
+  if(mode==='destination'&&repository.input(element))return true;
   // Starter previews show the website's name as it is typed.
   if(element.matches('[data-website-file-field="name"]')&&document.querySelector('[data-starter-preview]')){clearTimeout(starterTimer);starterTimer=setTimeout(paintStarterPreviews,400);}
   if(form?.type==='page'&&element.matches('[data-website-file-field="pageStarter"]'))form.pageStarter=element.value;
@@ -1256,7 +1263,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   if(element.dataset.websiteFileField&&destination&&mode==='destination'){
    if(element.dataset.websiteFileField==='kind'&&element.value!=='github')destination.config[element.value]??=element.value==='ssh'?{login:'',directory:''}:{login:'',directory:'',allowExisting:false};
-   const key=element.dataset.websiteFileField==='identity'?'identityFile':element.dataset.websiteFileField,target=element.dataset.destinationGroup?destination.config[element.dataset.destinationGroup]:destination.config;target[key]=element.type==='checkbox'?element.checked:key==='port'?Number(element.value):element.value;destinationDirty=true;onDirty(true);plan=null;if(key==='kind'||key==='login'){render();if(element.value==='github')void github.refresh().catch(reason=>notify(reason.message,true));}else document.querySelector('[data-website-files-review]')?.remove();return true;
+   const key=element.dataset.websiteFileField==='identity'?'identityFile':element.dataset.websiteFileField,target=element.dataset.destinationGroup?destination.config[element.dataset.destinationGroup]:destination.config;target[key]=element.type==='checkbox'?element.checked:key==='port'?Number(element.value):element.value;destinationDirty=true;onDirty(true);plan=null;if(key==='kind'||key==='login'){render();if(element.value==='github')void github.refresh().catch(reason=>notify(reason.message,true));}else{document.querySelector('[data-website-files-review]')?.remove();repository.paint();}return true;
   }
   return element.closest('[data-website-files-form]')!==null;
  }

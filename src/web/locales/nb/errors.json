@@ -236,7 +236,7 @@
   "ACCESS_LOCKED": "Lås opp dette arbeidsområdet for å fortsette.",
   "ACCESS_WAIT": "For mange innloggingsforsøk. Vent ett minutt før du prøver igjen.",
   "PUBLISH_PENDING": "Avklar den tidligere utrullingen i Publisering før du starter en ny opplasting til dette målet. Push kan ha lykkes selv om svaret ble avbrutt.",
-  "PUBLISH_EMPTY_REPO": "Dette GitHub-repositoriet er tomt. Åpne Konfigurer mål og bruk Kontroller tilkobling for å gjennomgå og initialisere nettstedsgrenen.",
+  "PUBLISH_EMPTY_REPO": "Dette GitHub-repositoriet er tomt. Åpne publiseringsmålet og bruk Initialiser repositoriet for å gi det en første innsjekking, og gå deretter gjennom nettstedet på nytt.",
   "PUBLISH_REPO_EXISTS": "Et repositorium med dette navnet finnes allerede. Velg Bruk et eksisterende repositorium for å gjennomgå det, eller velg et annet navn. Ingen eksisterende filer ble endret.",
   "PUBLISH_PAGES": "GitHub Pages-kilden er endret. Gjennomgå målet på nytt før du konfigurerer det for dette nettstedet.",
   "PUBLISH_POLICY": "Denne utgaven overskrider fil- eller nettstedsstørrelsen som er konfigurert for dette publiseringsmålet.",

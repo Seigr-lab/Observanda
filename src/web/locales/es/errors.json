@@ -236,7 +236,7 @@
   "ACCESS_LOCKED": "Desbloquea este espacio de trabajo para continuar.",
   "ACCESS_WAIT": "Demasiados intentos de inicio de sesión. Espera un minuto antes de volver a intentarlo.",
   "PUBLISH_PENDING": "Resuelve el despliegue anterior en Publicación antes de iniciar otra subida a este destino. El envío puede haber tenido éxito aunque se interrumpiera la respuesta.",
-  "PUBLISH_EMPTY_REPO": "Este repositorio de GitHub está vacío. Abre Configurar destino y utiliza Comprobar conexión para revisar e inicializar su rama del sitio web.",
+  "PUBLISH_EMPTY_REPO": "Este repositorio de GitHub está vacío. Abre el destino de publicación y usa Inicializar repositorio para hacer una primera confirmación; después revisa de nuevo el sitio web.",
   "PUBLISH_REPO_EXISTS": "Ya existe un repositorio con este nombre. Elige Utilizar un repositorio existente para revisarlo o elige otro nombre. No se ha modificado ningún archivo existente.",
   "PUBLISH_PAGES": "El origen de GitHub Pages ha cambiado. Revisa de nuevo el destino antes de configurarlo para este sitio web.",
   "PUBLISH_POLICY": "Esta versión supera el tamaño de archivo o sitio configurado para este destino de publicación.",

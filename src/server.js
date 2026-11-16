@@ -595,6 +595,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        return await websiteFilesHttp(req,res,{url,workspace,contextId:selectedContext.id,title:workspaceFolderName(selectedContext.root),body,json,check:req.checkWriter,blockedValues,folderPicker:websiteFolderPicker,
         actor:accessState.access.value?.username?{kind:'user',label:accessState.access.value.username}:{kind:'workspace'},
         publisherOptions:{...publishingOptions,connection:github?.forWorkspace(selectedContext.root)},
+        repositoryJobs:{queue:()=>{startJobs(selectedContext);if(!selectedContext.jobs)throw new AppError('ACCESS_LOCKED');return selectedContext.jobs.queue;},wake:()=>selectedContext.jobs?.worker.wake(),cancel:id=>selectedContext.jobs?.worker.cancel(id)},
         withPublication:async work=>{if(publishing)throw new AppError('GITHUB_PUBLICATION_BUSY');publishing=true;try{return await work();}finally{publishing=false;}},
         githubAccount:async(operation,data)=>{
          const connection=publisher?.connection;

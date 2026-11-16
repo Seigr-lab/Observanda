@@ -236,7 +236,7 @@
   "ACCESS_LOCKED": "Unlock this workspace to continue.",
   "ACCESS_WAIT": "Too many sign-in attempts. Wait a minute before trying again.",
   "PUBLISH_PENDING": "Resolve the earlier deployment in Publishing before starting another upload to this destination. Its push may have succeeded even if the response was interrupted.",
-  "PUBLISH_EMPTY_REPO": "This GitHub repository is empty. Open Configure destination and use Check connection to review and initialize its website branch.",
+  "PUBLISH_EMPTY_REPO": "This GitHub repository is empty. Open Publishing destination and use Initialize repository to give it a first commit, then review the website again.",
   "PUBLISH_REPO_EXISTS": "A repository with this name already exists. Choose Use an existing repository to review it, or choose another name. No existing files were changed.",
   "PUBLISH_PAGES": "The GitHub Pages source changed. Review the destination again before configuring it for this website.",
   "PUBLISH_POLICY": "This release exceeds the file or site size configured for this publishing destination.",

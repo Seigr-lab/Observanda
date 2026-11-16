@@ -236,7 +236,7 @@
   "ACCESS_LOCKED": "Desbloqueja aquest espai de treball per continuar.",
   "ACCESS_WAIT": "Massa intents d'inici de sessió. Espera un minut abans de tornar-ho a provar.",
   "PUBLISH_PENDING": "Resol el desplegament anterior a Publicació abans d'iniciar una altra càrrega a aquesta destinació. L'enviament pot haver tingut èxit encara que la resposta s'hagi interromput.",
-  "PUBLISH_EMPTY_REPO": "Aquest repositori de GitHub és buit. Obre Configura la destinació i utilitza Comprova la connexió per revisar i inicialitzar la branca del lloc web.",
+  "PUBLISH_EMPTY_REPO": "Aquest repositori de GitHub és buit. Obre la destinació de publicació i utilitza Inicialitza el repositori per fer-hi una primera confirmació; després torna a revisar el lloc web.",
   "PUBLISH_REPO_EXISTS": "Ja existeix un repositori amb aquest nom. Tria Utilitza un repositori existent per revisar-lo o tria un altre nom. No s'ha modificat cap fitxer existent.",
   "PUBLISH_PAGES": "La font de GitHub Pages ha canviat. Torna a revisar la destinació abans de configurar-la per a aquest lloc web.",
   "PUBLISH_POLICY": "Aquesta versió supera la mida de fitxer o de lloc configurada per a aquesta destinació de publicació.",

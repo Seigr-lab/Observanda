@@ -13,6 +13,8 @@ import {researchJobDefinitions} from './research-jobs.js';
 import {mediaJobDefinitions} from './media-imports.js';
 import {intakeJobDefinitions} from './intake/jobs.js';
 import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
+import {WebsiteFileStore} from './website-file-store.js';
+import {fileSiteWorkspace,fileSiteJobQueue} from './website-files-repository.js';
 import {workspaceMoveJobDefinitions,recoverWorkspaceMove} from './workspace-move-jobs.js';
 export function websitePublisher(publisher,workspace){
  if(publisher.workspace===workspace)return publisher;
@@ -23,6 +25,11 @@ function publicationDefinitions(workspace,publisher,current,services){
  const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q,services),...analysisPublicationReviewDefinitions(w,p,q,services),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q),...githubPlanJobDefinitions(w,p,q,services)});
  const defaultWorkspace=websiteWorkspace(workspace,null),normal=definitions(defaultWorkspace,websitePublisher(publisher,defaultWorkspace),()=>websiteJobQueue(current(),null)),result={};
  for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
+  if(job.input.fileSiteId){
+   // A website made in the website editor keeps its publication state with its own files.
+   const scoped=fileSiteWorkspace(workspace,new WebsiteFileStore(workspace),job.input.fileSiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>fileSiteJobQueue(current(),job.input.fileSiteId));
+   return services[type][method](job,...args);
+  }
   if(!job.input.websiteId)return definition[method](job,...args);
   const scoped=websiteWorkspace(workspace,job.input.websiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>websiteJobQueue(current(),job.input.websiteId));
   return services[type][method](job,...args);
