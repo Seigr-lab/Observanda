@@ -292,7 +292,7 @@
   "ORIGIN": "This request did not come from the local Observanda application.",
   "LIMIT": "This request exceeds the supported request size.",
   "STALE": "The workspace changed after preview. Create a new preview before exporting.",
-  "NOT_FOUND": "This item is unavailable. Create a new preview if needed.",
+  "NOT_FOUND": "This item is unavailable. It may have been moved or removed.",
   "IO": "The operation could not be completed. Check access and available disk space; your existing workspace is preserved.",
   "LOCAL_EXPORT_CHANGED": "The destination changed or contains files this export does not own. No conflicting file was replaced. Review the listed paths, restore the expected files or choose another folder.",
   "LOCAL_EXPORT_DAMAGED": "The local export receipt is damaged. Keep the destination files and restore the workspace from a verified backup.",

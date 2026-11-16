@@ -292,7 +292,7 @@
   "ORIGIN": "Aquesta petició no prové de l'aplicació local d'Observanda.",
   "LIMIT": "Aquesta petició supera la mida de petició admesa.",
   "STALE": "L'espai de treball ha canviat després de la previsualització. Crea una previsualització nova abans d'exportar.",
-  "NOT_FOUND": "Aquest element no està disponible. Crea una previsualització nova si cal.",
+  "NOT_FOUND": "Aquest element no està disponible. Pot ser que s'hagi mogut o suprimit.",
   "IO": "No s'ha pogut completar l'operació. Comprova l'accés i l'espai de disc disponible; l'espai de treball existent es conserva.",
   "LOCAL_EXPORT_CHANGED": "La destinació ha canviat o conté fitxers que no pertanyen a aquesta exportació. No s'ha substituït cap fitxer en conflicte. Revisa els camins indicats, restaura els fitxers esperats o tria una altra carpeta.",
   "LOCAL_EXPORT_DAMAGED": "El justificant d'exportació local està malmès. Conserva els fitxers de destinació i restaura l'espai de treball des d'una còpia de seguretat verificada.",

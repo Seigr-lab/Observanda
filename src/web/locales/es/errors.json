@@ -292,7 +292,7 @@
   "ORIGIN": "Esta solicitud no procede de la aplicación local de Observanda.",
   "LIMIT": "Esta solicitud supera el tamaño de solicitud admitido.",
   "STALE": "El espacio de trabajo ha cambiado después de la vista previa. Crea una vista previa nueva antes de exportar.",
-  "NOT_FOUND": "Este elemento no está disponible. Crea una vista previa nueva si es necesario.",
+  "NOT_FOUND": "Este elemento no está disponible. Puede que se haya movido o eliminado.",
   "IO": "No se ha podido completar la operación. Comprueba el acceso y el espacio disponible en disco; se conserva el espacio de trabajo existente.",
   "LOCAL_EXPORT_CHANGED": "El destino ha cambiado o contiene archivos que no pertenecen a esta exportación. No se ha sustituido ningún archivo en conflicto. Revisa las rutas indicadas, restaura los archivos esperados o elige otra carpeta.",
   "LOCAL_EXPORT_DAMAGED": "El recibo de exportación local está dañado. Conserva los archivos de destino y restaura el espacio de trabajo desde una copia de seguridad verificada.",

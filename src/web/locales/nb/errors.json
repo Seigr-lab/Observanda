@@ -292,7 +292,7 @@
   "ORIGIN": "Denne forespørselen kom ikke fra det lokale Observanda-programmet.",
   "LIMIT": "Denne forespørselen overskrider støttet forespørselsstørrelse.",
   "STALE": "Arbeidsområdet er endret etter forhåndsvisningen. Opprett en ny forhåndsvisning før eksport.",
-  "NOT_FOUND": "Dette elementet er utilgjengelig. Opprett en ny forhåndsvisning ved behov.",
+  "NOT_FOUND": "Dette elementet er utilgjengelig. Det kan ha blitt flyttet eller fjernet.",
   "IO": "Operasjonen kunne ikke fullføres. Kontroller tilgang og ledig diskplass; det eksisterende arbeidsområdet er bevart.",
   "LOCAL_EXPORT_CHANGED": "Målet er endret eller inneholder filer som denne eksporten ikke eier. Ingen fil i konflikt ble erstattet. Gjennomgå de oppførte banene, gjenopprett de forventede filene eller velg en annen mappe.",
   "LOCAL_EXPORT_DAMAGED": "Den lokale eksportkvitteringen er skadet. Behold målfilene og gjenopprett arbeidsområdet fra en verifisert sikkerhetskopi.",

@@ -292,7 +292,7 @@
   "ORIGIN": "Denne førespurnaden kom ikkje frå det lokale Observanda-programmet.",
   "LIMIT": "Denne førespurnaden overskrid den støtta førespurnadsstorleiken.",
   "STALE": "Arbeidsområdet er endra etter førehandsvisinga. Opprett ei ny førehandsvising før eksport.",
-  "NOT_FOUND": "Dette elementet er ikkje tilgjengeleg. Opprett ei ny førehandsvising ved behov.",
+  "NOT_FOUND": "Dette elementet er ikkje tilgjengeleg. Det kan ha blitt flytta eller fjerna.",
   "IO": "Operasjonen kunne ikkje fullførast. Kontroller tilgang og ledig diskplass; det eksisterande arbeidsområdet ditt er bevart.",
   "LOCAL_EXPORT_CHANGED": "Målet er endra eller inneheld filer som denne eksporten ikkje eig. Ingen fil i konflikt vart erstatta. Sjå gjennom dei oppførte stiane, gjenopprett dei forventa filene eller vel ei anna mappe.",
   "LOCAL_EXPORT_DAMAGED": "Den lokale eksportkvitteringa er skadd. Behald målfilene og gjenopprett arbeidsområdet frå ein stadfesta tryggingskopi.",
