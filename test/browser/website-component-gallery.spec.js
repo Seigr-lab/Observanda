@@ -47,7 +47,7 @@ test('an authored gallery becomes a linked library section with edited pictures 
   await added.locator('[data-gallery-field=caption]').fill('Reference signal');
   await added.getByRole('button',{name:'Move up'}).click();await editor.locator('[data-gallery-columns]').selectOption('2');
   const wording=dialog.frameLocator('iframe').getByRole('heading').first();
-  await wording.click();await dialog.getByRole('button',{name:'Edit text in the page',exact:true}).click();
+  await wording.click();await dialog.getByRole('tab',{name:'Content',exact:true}).click();await dialog.getByRole('button',{name:'Edit text in the page',exact:true}).click();
   await page.keyboard.press('End');await page.keyboard.type(' plates');
   await expect(wording).toHaveText('Image gallery plates');
   await expect(dialog.locator('[data-main-source]')).toHaveValue(/Image gallery plates/);
