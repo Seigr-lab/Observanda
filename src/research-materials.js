@@ -600,8 +600,21 @@ export class ResearchMaterials {
    const inputsIndex=await this.retainReferences(refs,options),outputsIndex=await this.retainReferences(outputs,{...options,outputs:true});
    return {...identity,kind:'analysis',content:{inputsIndex,tool,version,parameters,outputsIndex,...(method?{method}:{}),...(toolSha256?{toolSha256}:{})}};
  }
+ // Recalculating keeps the presentation of the figure it revises. A retained
+ // figure keeps that presentation in its document header, read from the exact
+ // analysis revision being replaced.
+ async plotBase({base,id,expectedRevision}){
+  if(base?.kind!=='retained')return base;
+  if(!researchId(id)||!revisionId(expectedRevision))fail();
+  const {withRetainedFigure}=await import('./retained-figures.js');
+  return withRetainedFigure(this,{ref:{kind:'analysis',id,revision:expectedRevision}},async(reader,{figure})=>{
+   if(figure.document?.presentation?.root!==base.document?.presentation?.root||figure.document?.data?.root!==base.document?.data?.root)fail('MATERIAL_CHANGED');
+   const {header}=await reader.header({});const {plotId,source,computation,...presentation}=header;void plotId;void source;void computation;
+   return {...presentation,series:createFigure().series};
+  });
+ }
  async validatePlot(command){
-  const {recordId,title,id,expectedRevision,dataset,mapping,base}=command;assertPlotResourcePolicy(mapping);
+  const {recordId,title,id,expectedRevision,dataset,mapping}=command,base=await this.plotBase(command);assertPlotResourcePolicy(mapping);
   if(mapping?.numericPolicy!==undefined&&!['safe','approximate'].includes(mapping.numericPolicy))fail();
   if(!required(title,300)||id!==undefined&&!researchId(id)||expectedRevision!==undefined&&expectedRevision!==null&&!revisionId(expectedRevision)||dataset?.kind!=='dataset'||!materialRef(dataset)||!mapping||!Array.isArray(mapping.values)||mapping.values.length>50||mapping.values.some(v=>!v||!Number.isInteger(v.column)||v.error!==null&&!Number.isInteger(v.error)||[...INTERVAL_FIELDS,'count'].some(k=>v[k]!=null&&!Number.isInteger(v[k]))))fail();
   await this.assertOwner(recordId);const doc=await this.read(dataset);
@@ -642,7 +655,7 @@ export class ResearchMaterials {
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
   void prefix;
   const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels,requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);if(mapping.resourcePolicy)await requireFigureProjectionPolicies(store.db);});return withWorkspaceMetadataBatch(this.workspace,operation);});
-  const result=await prepareRetainedPlot(this,doc,command,selection,{write:retainedWrite,signal,progress});
+  const result=await prepareRetainedPlot(this,doc,{...command,base:await this.plotBase(command)},selection,{write:retainedWrite,signal,progress});
   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:mapping.resourcePolicy?'10':'9',parameters:JSON.stringify(mapping),mapping,numericTransform:plotNumericalMetadata(mapping),...result}};
   });
  }
