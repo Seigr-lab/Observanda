@@ -1,19 +1,14 @@
-import {executePublicationJobControl} from './publication-job-control.js';
-import {publicationJobControlRequest} from './publication-job-policy.js';
 import {RequestAdmission,requestLane} from './request-admission.js';
 import {projectPublicationRequest} from './project-publication-requests.js';
 import {onResponseClose} from './response-close.js';
 import {jsonBody} from './request-body.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
 import {nativeResources} from './native-resource-budget.js';
-import {websiteThemeRequest} from './website-theme-requests.js';
-import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
 import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
-import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {websiteRequestContext} from './website-request-context.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
@@ -21,12 +16,10 @@ import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
 import {moduleReferenceFactory} from './module-reference-access.js';
 import {planningTaskAccessFactory} from './planning-task-access.js';
 import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
-import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
 import {discoverEligibleWebsiteSources} from './website-library-discovery.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
 import {withWorkspaceDeletionSession} from './workspace-deletion-session.js';
-import {publicationDesignPreview} from './publication-design-preview.js';
 import {projectContentHttp} from './project-content-http.js';
 import {withWorkspaceMoveSession} from './workspace-move-session.js';
 import {checkWorkspaceMoveDestination,finishWorkspaceProjectMove} from './workspace-project-move.js';
@@ -78,30 +71,16 @@ import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
 import {operationResponse} from './operation-response.js';
 import {createApplicationAssets} from './application-assets.js';
-import {GithubPlanJobs} from './github-plan-jobs.js';
-import {PublicationVerificationJobs} from './publication-verification-jobs.js';
 import {readBOMSource} from './bom-import.js';
-import {DesignCandidates} from './design-candidates.js';
-import {AppearancePreviewSessions} from './appearance-preview-sessions.js';
 import {WorkspaceReader} from './workspace-reader.js';
 import {RecordContent} from './record-content.js';
 import {RecordSelectors} from './record-selectors.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
-import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {inspectSource} from './migration/runner.js';
 import {MigrationImport} from './migration/import-service.js';
 import {intakeCommand} from './intake/commands.js';
 import {executeReviewRequest,reviewRequest} from './review-requests.js';
 import {reviewHttp} from './review-http.js';
-import {DeploymentJobs} from './deployment-jobs.js';
-import {PublicationJobs} from './publication-jobs.js';
-import {AnalysisPublicationReviewJobs,analysisPublicationOperationSummary} from './analysis-publication-review-jobs.js';
-import {PublicationRollback} from './publication-rollback.js';
-import {PublicationLinks} from './publication-links.js';
-import {publicationReferences} from './publication-revisions.js';
-import {publicationSelection} from './publication-selection.js';
-import {LocalExport} from './local-export.js';
-import {GithubRepositorySetup} from './github-repository.js';
 import {MediaImports} from './media-imports.js';
 import {TimelineQuery} from './timeline-query.js';
 import {RecordQuery} from './record-query.js';
@@ -112,12 +91,10 @@ import {RecordTypeQuery} from './record-type-query.js';
 import {DashboardDiscovery} from './dashboard-discovery.js';
 import {workspaceJobs,websitePublisher} from './workspace-jobs.js';
 import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './inventory-maintenance-jobs.js';
-import {WebsiteSites} from './website-sites.js';
-import {WebsiteEditor} from './website-editor.js';
 import {websiteFilesHttp} from './website-files-http.js';
 import {WorkspaceWebsitePreparation} from './workspace-website-preparation.js';
 import {PublicationConversion} from './publication-conversion.js';
-import {websiteWorkspace,websiteJobQueue,websiteRequest} from './website-workspace.js';
+import {websiteWorkspace,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
 import {databaseStatus,databaseCapacity} from './postgres.js';
 import {databaseProvider} from './workspace-database-context.js';
@@ -147,14 +124,10 @@ import {RecordValues} from './record-values.js';
 import {figureCopyChoices,figureCopySource} from './record-figure-copy-values.js';
 import {RecordLocation} from './record-location.js';
 import {RecordRunCreation} from './record-run-creation.js';
-import {validSections} from './web/website-model.js';
-import {assertPublicFields} from './privacy.js';
 import {validDashboard,defaultDashboard} from './web/dashboard-model.js';
 import {validLabBookTypeSelection} from './web/feature-modules.js';
 import {MediaPolicy} from './media-policy.js';
 import {serveContent,diskSpace} from './file-content.js';
-import {publicationExportHttp} from './publication-export-http.js';
-import {publicationText} from './web/publication-messages.js';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createFolderPicker} from './native-folder-picker.js';
@@ -163,8 +136,8 @@ import {defaultLocation} from './locations.js';
 import {CalendarSources} from './calendar/service.js';
 import {calendarPage} from './calendar/pages.js';
 import {cloneVault,clearVault} from './encryption.js';
-import { identityLabel } from './web/workspace-identity.js';
-import { validInterface } from './web/interface-ui.js';
+import {identityLabel} from './web/workspace-identity.js';
+import {validInterface} from './web/interface-ui.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {readAccess,resolveAccess,verifyAccess,changeAccess,takeCreatedVault} from './access.js';
@@ -173,8 +146,6 @@ import {keyringFingerprint} from './security/access-trust.js';
 import {unlockKeyring} from './security/keyring.js';
 import {exportAccessCheckpoint,inspectAccessCheckpoint,importAccessCheckpoint} from './security/access-checkpoint.js';
 import {resolveLocation,inspectLocation,probeLocation,browseFolders,createFolder,storageMap,initializeLocation,namedWorkspaceLocation,readPreferences,rememberInterface} from './locations.js';
-import { buildDesignExamples } from './design-preview.js';
-import {appearancePreviewSource} from './appearance-preview.js';
 import {OperationActivity} from './operation-activity.js';
 import {reviewWriterRecovery,recoverWriter} from './writer-recovery.js';
 import {DashboardEdits} from './dashboard-edits.js';
@@ -182,23 +153,20 @@ import {requestWriterWait,waitForWriter,withoutWriterWait,writerCapacity} from '
 import {WorkspaceReadAdmission,workspaceSnapshotRequest} from './workspace-read-admission.js';
 import {StructureCommands,assertExistingNativeStructure} from './structure-commands.js';
 import {WorkspaceEdits} from './workspace-edits.js';
-import {WebsiteResearch} from './website-research.js';
-import { Laboratory } from './laboratory.js';
+import {Laboratory} from './laboratory.js';
 import {SampleAnalysisReader} from './sample-analysis-reader.js';
-import { Publisher } from './publishing.js';
-import {githubDestinations} from './github/destinations.js';
+import {Publisher} from './publishing.js';
 import {githubSerializedRequest} from './github/request-policy.js';
 import http from 'node:http';
-import { randomBytes, randomUUID } from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
-import { Workspace, workspaceFile, assertRegular } from './storage.js';
-import { createNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
+import {Workspace,workspaceFile,assertRegular} from './storage.js';
+import {createNotebook,upgradeNotebook,MAX_BYTES} from './model.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 import {admitResearchBytes} from './research-capacity.js';
 import {MODULE_BYTES,MODULE_CHECKPOINT_BYTES} from './modules/capacity.js';
-import {verifyPublication} from './publication.js';
-import { AppError, safeError } from './errors.js';
-import { MediaStore, mediaCapabilities } from './media.js';
+import {AppError,safeError} from './errors.js';
+import {MediaStore,mediaCapabilities} from './media.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
 import {MAX_FONT_BYTES} from './font-inspector.js';
 
@@ -229,7 +197,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   };
   const cancelFolderRequests=()=>{for(const controller of [...folderRequests,...inventoryRequests])controller.abort();};
   const responseBook = result => {const book=upgradeNotebook(result.book);return {...result,book,recordRevisions:recordRevisions(book)};};
-  const makeContext=(location,required=false,vault={id:null,key:null})=>({readers:new WorkspaceReadAdmission(),calendarSources:new CalendarSources(),vault,id:randomBytes(24).toString('hex'),root:location,expectedExisting:!!location&&required,workspace:location?new Workspace(location,vault):null,media:location?new MediaStore(location,vault):null,laboratory:location?new Laboratory(location,vault):null,publisher:location?new Publisher(location,{...publishingOptions,connection:github?.forWorkspace(location)},vault):null,candidates:new Map(),designCandidates:new DesignCandidates(),appearancePreviews:new AppearancePreviewSessions()});
+  const makeContext=(location,required=false,vault={id:null,key:null})=>({readers:new WorkspaceReadAdmission(),calendarSources:new CalendarSources(),vault,id:randomBytes(24).toString('hex'),root:location,expectedExisting:!!location&&required,workspace:location?new Workspace(location,vault):null,media:location?new MediaStore(location,vault):null,laboratory:location?new Laboratory(location,vault):null,publisher:location?new Publisher(location,{...publishingOptions,connection:github?.forWorkspace(location)},vault):null});
   const activities=new OperationActivity();
   const dashboardEdits=new DashboardEdits((preferencesFile??deviceStore.file)+'.pending-settings');
   const workspaceDirectory=new WorkspaceDirectory((preferencesFile??deviceStore.file)+'.workspace-directory.json',{seed:async()=>preferencesFile?(await readPreferences(preferencesFile)).recent.map(item=>item.path):[]});
@@ -482,7 +450,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       req.waitForWriter=req.headers['x-observanda-wait']==='1'&&(snapshotRead||req.method==='POST'&&!['/api/storage/','/api/access/','/api/security/','/api/writer-recovery','/api/preferences/reset','/api/notebook/create'].some(prefix=>url.pathname.startsWith(prefix)));
       req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
       let {workspace,publisher}=selectedContext;
-      const {media,laboratory,candidates,designCandidates,appearancePreviews}=selectedContext;
+      const {media,laboratory}=selectedContext;
       if(req.method==='POST'&&['/api/workspaces/portable-restore/review','/api/workspaces/portable-restore/apply'].includes(url.pathname)){
         const data=await body(req,32768);
         if(context!==selectedContext||contextRequired&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
@@ -514,7 +482,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(!Object.hasOwn(paths,data.kind)||!paths[data.kind])throw new AppError('INVALID');
         changing=true;try{return json(await recoverWriter(paths[data.kind],data));}finally{changing=false;}
       }
-      const publicationQueue=()=>websiteJobQueue(context.jobs.queue,workspace.websiteId);
       const blockedValues=[selectedContext.root,os.homedir(),os.hostname()].filter(Boolean);
       // Personal display preferences are independent of a workspace's lock and contents.
       if(url.pathname==='/api/language'&&['GET','POST'].includes(req.method)){
@@ -573,7 +540,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}if(data.filesOnly!==true)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;if(data.filesOnly!==true)startJobs(context);return json({ok:true});}
         finally{selectedContext.readers.open();loginBusy=false;}
       }
-      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;await context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
+      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;await context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;return json({ok:true});}
       const accessState=await status(client);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(accessState.locked)throw new AppError('ACCESS_LOCKED');
       // Reading observations never opens the catalogue or competes for its lock.
       if(req.method==='GET'&&url.pathname==='/api/activity')return json({contextId:context.id,busy:changing||loginBusy||activeWrites>0,readable:context.readers.accepting&&!loginBusy&&(!changing||!!context.concurrentReads),operations:activities.list(context.id)});
@@ -735,7 +702,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const result=await resetPreferences(preferencesFile,data.etag);
           cancelFolderRequests();
           if(context.publisher)context.publisher.token=null;
-          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);context.candidates.clear();context.designCandidates.clear();context.appearancePreviews.clear();plans.clear();
+          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);plans.clear();
           context=makeContext(null);contextRequired=true;Object.assign(localPreferences,result.value);
           for(const session of sessions.values())session.access=null;
           client.access='none';client.expires=Date.now()+8*60*60*1000;
@@ -1031,33 +998,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // An unavailable prior location blocks operations on it, but must not block an
       // explicit request to create a workspace in a folder selected by the user.
       if(requiredWorkspaceMissing&&!(req.method==='POST'&&url.pathname==='/api/notebook/create'))throw new AppError('STORAGE_UNAVAILABLE');
-      if((websiteRequest(url.pathname)||url.pathname.startsWith('/api/websites/'))&&await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
+      if(websiteRequest(url.pathname)&&await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
       if(websiteRequest(url.pathname)){
         const {websiteId,websitePin}=websiteRequestContext(req.headers);
         workspace=websiteWorkspace(workspace,websiteId,{websitePin});publisher=websitePublisher(publisher,workspace);
-      }
-      if(await websiteThemeRequest(req,res,{workspace,url,body:()=>body(req),json,blockedValues,check:async()=>{
-        if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
-        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
-        if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
-      }}))return;
-      if(req.method==='POST'&&url.pathname.startsWith('/api/websites/')){
-        const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');const sites=new WebsiteSites(workspace),operation=url.pathname.slice('/api/websites/'.length);
-        if(operation.startsWith('editor/')){
-          const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-          try{
-            const phase=operation==='editor/change'?'website-checkpoint':operation==='editor/save'?'website-save':operation==='editor/open'?'website-open':['editor/undo','editor/redo'].includes(operation)?'website-history':'website-read';
-            const result=await diagnosticPhase(phase,()=>new WebsiteEditor(workspace,{sourceReader}).execute(operation.slice(7),data,{signal:controller.signal}));
-            if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
-            return json(result);
-          }finally{res.off('close',abort);}
-        }
-        if(operation==='list')return json(await sites.list(data));
-        if(operation==='open')return json(await sites.read(data.id,{websitePin:data.websitePin}));
-        if(operation==='version')return json(await sites.version(data.id,{websitePin:data.websitePin}));
-        if(operation==='change')return json(await sites.change(data));
-        if(operation==='save')return json(await sites.save(data.id,data.command));
-        throw new AppError('NOT_FOUND');
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/v1/intake/')){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
@@ -1308,10 +1252,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{return json(await executeResearchRequest(workspace,url.pathname,data,{signal:controller.signal}));}finally{res.off('close',abort);}
       }
       if(req.method==='POST'&&url.pathname==='/api/workspace/save'){const data=await body(req);requireCurrentWorkspaceName(workspace,data.metadata?.title);return json(await new WorkspaceEdits(workspace,media,{publicationConversion:selectedContext.publicationConversion??=new PublicationConversion(workspace)}).save(data));}
-      if(req.method==='POST'&&url.pathname.startsWith('/api/website/research/')){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{return json(await new WebsiteResearch(workspace).run(url.pathname.slice('/api/website/research/'.length),await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
       if (req.method === 'POST' && url.pathname === '/api/notebook/save') {
         const data = await body(req);
         requireCurrentWorkspaceName(workspace,data.book?.title);await assertExistingNativeStructure(workspace,data.book,data.etag);const conversion=selectedContext.publicationConversion??=new PublicationConversion(workspace);return json(responseBook(await conversion.mutate(workspace,{route:'/api/notebook/save',data},()=>workspace.save(data.book,data.etag))));
@@ -1335,76 +1275,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'GET' && resultSheet) return sendBytes(req, res, await laboratory.report(resultSheet[1], url.searchParams.get('revision'), blockedValues, {language:url.searchParams.get('language')}), 'text/html; charset=utf-8');
       const issuedSheet=/^\/api\/laboratory\/issued\/([a-f0-9-]{36})$/.exec(url.pathname);
       if(req.method==='GET'&&issuedSheet)return sendBytes(req,res,await laboratory.report(issuedSheet[1],url.searchParams.get('revision'),blockedValues,{retained:true,language:url.searchParams.get('language')}),'text/html; charset=utf-8');
-      const retainedCandidate=async(id,{signal}={})=>{
-        signal?.throwIfAborted();
-        if(!/^[a-f0-9]{64}$/.test(id??''))return null;
-        if(req.method==='GET'&&!req.headers['x-observanda-website']){
-          const owner=await selectedContext.workspace.readMetadata('.observanda/website-editions/'+id+'.json',4096);
-          if(owner){workspace=websiteWorkspace(selectedContext.workspace,JSON.parse(owner).websiteId);publisher=websitePublisher(selectedContext.publisher,workspace);}
-        }
-        if(candidates.has(id)){const candidate=candidates.get(id);if((candidate.websiteId??null)!==(workspace.websiteId??null))return null;await new PublicationJobs(workspace,{sourceReader}).assertSourcePermissions(candidate,{signal});return candidate;}
-        const candidate=await new PublicationJobs(workspace,{sourceReader}).read(id,{signal});if(!candidate)return null;
-        // One verified immutable edition serves its page, stylesheet and assets.
-        // This private cache is bounded and cleared with the workspace key.
-        candidates.set(id,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);return candidate;
-      };
-      if(req.method==='POST'&&url.pathname.startsWith('/api/local-export/')){
-        if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        const data=await body(req),operation=url.pathname.slice('/api/local-export/'.length),exports=new LocalExport(workspace,{sourceReader});
-        if(!['plan','current','page','apply','discard'].includes(operation))throw new AppError('INVALID');
-        if(['current','page'].includes(operation))return json(await exports[operation](data));
-        if(publishing||changing)throw new AppError('LOCKED');
-        publishing=true;
-        try{return json(await exports[operation](data));}finally{publishing=false;}
-      }
-      if(req.method==='POST'&&['/api/publication-links/read','/api/publication-links/save'].includes(url.pathname)){
-        const links=new PublicationLinks(workspace),data=await body(req);return json(url.pathname.endsWith('/save')?await links.save(data):await links.read());
-      }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/publication-selections/'))return json(await new PublicationEditionSelections(workspace).operate(url.pathname.slice(28),await body(req)));
-      if(req.method==='POST'&&['/api/publication-selection','/api/publication-references'].includes(url.pathname)){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{return json(await (url.pathname==='/api/publication-references'?publicationReferences:publicationSelection)(workspace,await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}
-      }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/publication-jobs/')){
-        if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:context.publicationSourceAccess}),queue=publicationQueue(),data=await body(req,publicationJobControlRequest(url.pathname)?.limit??MAX_BYTES),operation=url.pathname.slice('/api/publication-jobs/'.length);
-        if(operation==='start')return operationResponse(req,res,async()=>{const job=await releases.startRequest({...data,websitePin:data.websitePin??websiteRequestContext(req.headers).websitePin,blockedValues},queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
-        if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        if(['pages','references','analysis-review-window'].includes(operation)){
-          let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
-          if(data.rollbackReview){const owner=new PublicationRollback(workspace,publisher,{sourceReader});candidate=owner.project(candidate,await owner.authorize(candidate,data.rollbackReview));}
-          return json(operation==='pages'?await releases.pageChoices(candidate,data):operation==='references'?await releases.referenceChoices(candidate,data):await new AnalysisPublicationReview(workspace,{sourceReader}).window(candidate,data));
-        }
-        if(operation==='open'){
-          // Only bounded retained metadata shares this snapshot. Cached lazy
-          // file readers keep the live workspace, and no database lease escapes.
-          const read=async()=>{const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return {...await releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,undefined,queue)),stale:!await publicationRevisionCurrent(workspace,candidate)};};
-          const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
-          return json({...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag});
-        }
-        if(operation==='rollback-review'){
-          const read=()=>retainedCandidate(data.id),candidate=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();if(!candidate)throw new AppError('NOT_FOUND');
-          // Keep retained-tree reads in owned snapshots, with the approval
-          // mutation admitted separately by its existing write transaction.
-          const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
-          const reviewed=new PublicationRollback(workspace,publisher,{sourceReader}).project(candidate,approval.review);
-          const summarize=async()=>({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,approval.review.id,queue)),stale:false});
-          return json(await workspace.storageKind()==='catalogue'?await workspace.catalogue(summarize):await summarize());
-        }
-        if(operation==='analysis-review')return operationResponse(req,res,async()=>{const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data,queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
-        if(publicationJobControlRequest(url.pathname))return json(await executePublicationJobControl(operation,data,{queue,releases,reviews:new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}),worker:context.jobs.worker,check:async()=>{if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');}}));
-        throw new AppError('INVALID');
-      }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/deployment-jobs/')){
-        if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const queue=publicationQueue(),deployments=new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:context.publicationSourceAccess}),data=await body(req),operation=url.pathname.slice('/api/deployment-jobs/'.length);
-        if(operation==='start'){const job=await deployments.start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
-        if(operation==='list'){const page=await deployments.page(data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        const job=await queue.read(data.id);if(!job||job.type!=='publication.deploy')throw new AppError('NOT_FOUND');await queue.authorize(job);
-        if(operation==='status')return json({...deployments.summary(await deployments.read(job.id)),job:jobSummary(job)});
-        if(['cancel','retry'].includes(operation)){const next=await deployments.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
-        throw new AppError('INVALID');
-      }
       if (req.method === 'GET' && url.pathname === '/api/publishing') return json(await publisher.read());
       if(req.method==='POST'&&url.pathname.startsWith('/api/github-connection/')){
         const data=await body(req),operation=url.pathname.slice('/api/github-connection/'.length),connection=publisher.connection;
@@ -1417,18 +1287,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation==='disconnect'){publisher.token=null;return json(await connection.disconnect({forget:data.forget===true}));}
         throw new AppError('INVALID');
       }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/repository-setup/')){
-        if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const queue=publicationQueue(),setup=new GithubRepositorySetup(workspace,publisher,queue),data=await body(req),operation=url.pathname.slice('/api/repository-setup/'.length);
-        if(operation==='start'){const job=await setup.start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
-        if(operation==='review')return json(await setup.review(data));
-        if(operation==='initialize'){const job=await setup.initialize(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
-        if(operation==='current')return json({job:jobSummary(await setup.current())});
-        const job=await queue.read(data.id);if(!job||job.type!=='publication.repository')throw new AppError('NOT_FOUND');await queue.authorize(job);
-        if(operation==='status')return json({job:jobSummary(job)});
-        if(['retry','cancel'].includes(operation)){const next=await queue.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
-        throw new AppError('INVALID');
-      }
       const maintenance=inventoryMaintenanceRequest(url.pathname,req.method);
       if(maintenance){
         const data=await body(req,maintenance.limit);startJobs(context);if(!context.jobs)throw new AppError('ACCESS_LOCKED');
@@ -1439,49 +1297,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data = await body(req),{serverLoginRequest}=await import('./server-login-requests.js');
         return json(await serverLoginRequest(url.pathname.slice('/api/server-logins/'.length),data,{workspace:selectedContext.workspace,hostCredentials:publishingOptions.hostCredentials,...(publishingOptions.ssh?{ssh:publishingOptions.ssh}:{}),...(publishingOptions.ftp?{ftp:publishingOptions.ftp}:{}),...(publishingOptions.sftp?{sftp:publishingOptions.sftp}:{})}));
       }
-      if (req.method === 'POST' && url.pathname.startsWith('/api/publishing/')) {
-        const data = await body(req);
-        if (publishing) throw new AppError('LOCKED');
-        if (url.pathname === '/api/publishing/save') { await workspace.outline(); return json(await publisher.save(data.config, data.etag)); }
-        if (url.pathname === '/api/publishing/connect') {await assertGithubIdle();await publisher.connection?.cancel();return json(await publisher.connect(data.token));}
-        if (url.pathname === '/api/publishing/disconnect') {await assertGithubIdle();publisher.token = null;return json(await publisher.read());}
-        if (url.pathname === '/api/publishing/check') return json(await publisher.check({reviewExisting:true}));
-        if (url.pathname === '/api/publishing/destinations') return json(await githubDestinations(publisher,data));
-        if(url.pathname==='/api/publishing/plan-operation'||url.pathname==='/api/publishing/plan'&&data.background===true){
-          startJobs(context);const plans=new GithubPlanJobs(workspace,publisher,publicationQueue(),{sourceReader,sourceAccess:context.publicationSourceAccess});
-          const result=url.pathname.endsWith('/plan')?{job:jobSummary(await plans.start(data))}:await plans.operation(data);
-          if(data.action==='cancel')context.jobs.worker.cancel(data.id);else context.jobs.worker.wake();return json(result,url.pathname.endsWith('/plan')?202:200);
-        }
-        if (url.pathname === '/api/publishing/plan-page') return json(await publisher.destinationPlanPage(data));
-        if (url.pathname === '/api/publishing/plan') {
-          const candidate=await retainedCandidate(data.id);
-          if(!candidate)throw new AppError('PUBLISH_STALE');
-          if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(candidate,data.rollbackReview);
-          else if(candidate.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,candidate))throw new AppError('PUBLISH_STALE');
-          const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-          try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal,replaceExisting:data.replaceExisting,archiveBranch:data.archiveBranch}));}
-          finally{res.removeListener('close',abort);}
-        }
-        if(['/api/publishing/verify','/api/publishing/verification','/api/publishing/verification-cancel','/api/publishing/verification-retry'].includes(url.pathname)){
-          if(await workspace.storageKind()!=='catalogue'){if(url.pathname==='/api/publishing/verify')return json(await publisher.verifyLive(data));return json({job:null});}
-          startJobs(context);const queue=publicationQueue(),checks=new PublicationVerificationJobs(workspace,publisher,queue);
-          if(url.pathname==='/api/publishing/verify'){const job=await checks.start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
-          const job=await checks.current();if(url.pathname==='/api/publishing/verification')return json({job:jobSummary(job),receipt:(await publisher.read()).receipt});
-          if(!job||job.id!==data.id)throw new AppError('PUBLISH_STALE');
-          const cancel=url.pathname.endsWith('-cancel'),next=await queue.control(job.id,cancel?'cancel':'retry');if(cancel)context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});
-        }
-        if (url.pathname === '/api/publishing/deploy') {
-          let candidate = await retainedCandidate(data.id);
-          if (!candidate || data.reviewed !== true || !data.rollbackReview&&candidate.configEtag !== data.configEtag) throw new AppError('PUBLISH_STALE');
-          if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
-          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
-          if(workspace.vault?.key){
-            startJobs(context);const job=await new DeploymentJobs(workspace,publisher,publicationQueue(),{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);
-          }
-          publishing = true;
-          try { return json(await publisher.deploy(candidate, data.configEtag, (await workspace.outline()).metadata.id, data)); }
-          finally { publishing = false; }
-        }
+      // Integrations: a temporary GitHub token for this session, or forget it.
+      if(req.method==='POST'&&['/api/publishing/connect','/api/publishing/disconnect'].includes(url.pathname)){
+        const data=await body(req);if(publishing)throw new AppError('LOCKED');await assertGithubIdle();
+        if(url.pathname==='/api/publishing/connect'){await publisher.connection?.cancel();return json(await publisher.connect(data.token));}
+        publisher.token=null;return json(await publisher.read());
       }
       const mediaOriginal=/^\/api\/media-imports\/original\/([a-f0-9-]{36})$/.exec(url.pathname);
       if(req.method==='GET'&&mediaOriginal){
@@ -1586,68 +1406,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data = await body(req);
         return json(responseBook(await workspace.restore(data.id, data.etag)));
       }
-      if (req.method === 'POST' && url.pathname === '/api/preview') {
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{
-          const data=await body(req),releases=new PublicationJobs(workspace,{sourceReader}),candidate=await releases.inline({...data,blockedValues},{signal:controller.signal});
-          candidates.set(candidate.reviewId,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);
-          return json(await releases.summary(candidate));
-        }finally{res.removeListener('close',abort);}
-      }
-      if(req.method==='POST'&&url.pathname==='/api/layout-check'){
-        const data=await body(req);if(data.format!=='observanda-page-layout'||![1,2].includes(data.version)||typeof data.name!=='string'||!data.name.trim()||data.name.length>80||!validSections(data.sections))throw new AppError('INVALID');
-        assertPublicFields([{field:'page layout',value:JSON.stringify(data)}],blockedValues);return json({ok:true});
-      }
-      if(req.method==='POST'&&url.pathname==='/api/design-preview'){
-        const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await diagnosticPhase('website-preview',()=>publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader})),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
-      }
-      if(req.method==='POST'&&url.pathname==='/api/appearance-preview'){
-        const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{
-          const {book,source,websitePin,websiteDraft}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
-          if(source==='website')return json(await appearancePreviews.create(workspace,{...data,websitePin,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
-          const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=await buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
-          controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,websitePin,...(websiteDraft?{websiteDraft}:{}),pages:result.candidate.pages});
-        }finally{res.off('close',abort);}
-      }
-      if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {
-        const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};
-        req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view']});
-        return await publicationExportHttp(req,res,async({signal,onProgress})=>{
-         let analysesChecked=0,filesChecked=0;
-         const candidate=await workspace.catalogue(async()=>{
-          let value=await retainedCandidate(data.id,{signal});if(!value)throw new AppError('STALE');
-          if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});value=rollback.project(value,await rollback.authorize(value,data.rollbackReview));}
-          else if(!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');
-          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value,{signal,onCheck:()=>onProgress({stage:publicationText('exportChecking'),completed:++analysesChecked,unit:'items'})});
-          await verifyPublicationCandidate(value,{signal,onFile:()=>onProgress({stage:publicationText('exportVerifying'),completed:++filesChecked,unit:'files'})});return value;
-         });
-         signal.throwIfAborted();await req.checkWriter();return candidate.files;
-        });
-      }
-      const appearanceChoices=/^\/api\/appearance-preview\/([a-f0-9]{64})\/pages$/.exec(url.pathname),appearanceFile=/^\/appearance-preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
-      if(req.method==='GET'&&(appearanceChoices||appearanceFile)){
-        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{
-          if(appearanceChoices)return json(await appearancePreviews.choices(appearanceChoices[1],{cursor:url.searchParams.get('cursor'),path:url.searchParams.get('path'),signal:controller.signal,client}));
-          const file=await appearancePreviews.file(appearanceFile[1],appearanceFile[2]+url.search,{signal:controller.signal,client});
-          return await serveContent(req,res,file.content,mime(file.name),{signal:controller.signal});
-        }finally{res.removeListener('close',abort);}
-      }
-      const preview = /^\/preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
-      if (req.method === 'GET' && preview) {
-        // One selected file traverses several immutable metadata trees. Keep
-        // those reads and current permission admission in one owned snapshot;
-        // close it before streaming any response to the browser.
-        const content=await workspace.catalogue(async()=>{
-          const candidate = designCandidates.get(preview[1]) ?? await retainedCandidate(preview[1]);
-          if (!candidate || !await candidate.files.has(preview[2])) throw new AppError('NOT_FOUND');
-          if(candidate.version!==3)verifyPublication(candidate,{allowDesign:designCandidates.get(preview[1])===candidate});
-          return candidate.files.get(preview[2]);
-        });
-        return await serveContent(req, res, content, mime(preview[2]));
-      }
       throw new AppError('NOT_FOUND');
       },{check:()=>req.checkWriter()});
     } catch (error) {
@@ -1679,7 +1437,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    for(const id of sessions.keys())liveSession(id);
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
-   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);await expiring.calendarSources.clear();await clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
+   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);await expiring.calendarSources.clear();await clearVault(expiring.vault);if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
   },30000);expiry.unref();
   const shutdownStatus=()=>{
    const operations=activities.list(context.id);

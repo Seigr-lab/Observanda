@@ -1,148 +1,26 @@
-import {executePublicationJobControl} from './publication-job-control.js';
-import {publicationJobControlRequest} from './publication-job-policy.js';
-import {PublicationEditionSelections} from './publication-edition-selections.js';
-import {AppearancePreviewSessions} from './appearance-preview-sessions.js';
-import {appearancePreviewSource} from './appearance-preview.js';
-import {WorkspaceFonts} from './workspace-fonts.js';
-import {buildDesignExamples} from './design-preview.js';
-import {publicationRevisionCurrent} from './publication-freshness.js';
-// A project publication session owns its previews, editions and durable jobs.
-// Website selection is an argument of each request, never mutable server state.
-import os from 'node:os';
-import {randomBytes} from 'node:crypto';
-import {WebsiteSites} from './website-sites.js';
-import {WebsiteEditor} from './website-editor.js';
-import {WebsiteResearch} from './website-research.js';
 import {WorkspaceEdits} from './workspace-edits.js';
 import {MediaStore} from './media.js';
-import {PublicationJobs} from './publication-jobs.js';
-import {AnalysisPublicationReviewJobs,analysisPublicationOperationSummary} from './analysis-publication-review-jobs.js';
-import {PublicationRollback} from './publication-rollback.js';
-import {AnalysisPublicationReview} from './analysis-publication-review.js';
-import {PublicationLinks} from './publication-links.js';
-import {publicationReferences} from './publication-revisions.js';
-import {publicationSelection} from './publication-selection.js';
-import {LocalExport} from './local-export.js';
-import {DeploymentJobs} from './deployment-jobs.js';
-import {GithubRepositorySetup} from './github-repository.js';
-import {GithubPlanJobs} from './github-plan-jobs.js';
-import {PublicationVerificationJobs} from './publication-verification-jobs.js';
-import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
+import {websiteWorkspace} from './website-workspace.js';
 import {websitePublisher} from './workspace-jobs.js';
-import {publicationDesignPreview} from './publication-design-preview.js';
-import {DesignCandidates} from './design-candidates.js';
-import {verifyPublication} from './publication.js';
-import {verifyPublicationCandidate} from './retained-publication-files.js';
-import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-import {githubDestinations} from './github/destinations.js';
-import {publicationText} from './web/publication-messages.js';
+
+// Publication requests for a project or lab book owner: saving its workspace
+// edits, its GitHub connection and the publishing settings Integrations reads.
+// Websites are made and published in the website editor.
 export class ProjectPublications{
- constructor(entry){this.entry=entry;this.candidates=new Map();this.designs=new DesignCandidates();this.appearancePreviews=new AppearancePreviewSessions();}
- clear(){this.candidates.clear();this.designs.clear();this.appearancePreviews.clear();}
- previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
- appearanceUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/appearance-preview/'+id+'/'+file;}
- async summary(releases,candidate){return {...await releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
+ constructor(entry){this.entry=entry;}
+ clear(){}
  run(request,data,options){
   // Publication sessions retain their own authenticated owner, distinct from
   // the short-lived router owner. Scope its connections to this request too.
   return this.entry.storage.withCatalogueConnections(()=>this.runConnected(request,data,options));
  }
- async runConnected(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,onProgress,headless=true,check=async()=>{},binary,sourceReader}={}){
-  const {storage,publisher:basePublisher,queue:baseQueue,worker}=this.entry,operation=request.publication;
+ async runConnected(request,data,{websiteId=null,websitePin,signal,headless=true,check=async()=>{}}={}){
+  const {storage,publisher:basePublisher,queue:baseQueue}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
-  // Iframe and download requests carry their edition identity in their own URL.
-  // Resolve its saved website owner only within this authorized project.
-  if(request.id&&!websiteContext&&websiteId===null&&['file','export'].includes(operation)){const raw=await storage.readMetadata('.observanda/website-editions/'+request.id+'.json',4096);if(raw)websiteId=JSON.parse(raw).websiteId;}
-  const workspace=websiteWorkspace(storage,websiteId,{websitePin});
-  const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:this.entry.sourceAccess}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
-  // Retained editions hold indexed file descriptors, not buffered design files.
-  const remember=value=>{this.candidates.set(cacheKey(value.reviewId),value);while(this.candidates.size>5)this.candidates.delete(this.candidates.keys().next().value);return value;};
-  const candidate=async id=>{
-   if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
-   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id,{signal});if(value)remember(value);}else await releases.assertSourcePermissions(value,{signal});return value;
-  };
-  const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
-  const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;
-  const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):type==='publication.prepare'?releases.control(queue,job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
-  if(operation.startsWith('websites/')){
-   const sites=new WebsiteSites(storage),method=operation.slice(9);
-   if(method.startsWith('editor/')){const result=await new WebsiteEditor(storage,{sourceReader}).execute(method.slice(7),data,{signal});await check();return result;}
-   if(method==='list')return sites.list(data);if(method==='open')return sites.read(data.id,{signal,websitePin:data.websitePin});if(method==='version')return sites.version(data.id,{websitePin:data.websitePin});if(method==='change')return sites.change(data);return sites.save(data.id,data.command);
-  }
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);
-  if(operation.startsWith('website/research/'))return new WebsiteResearch(workspace).run(operation.slice(17),data,{signal});
-  if(operation==='design-preview'){
-   const result=await publicationDesignPreview(workspace,data,{signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');this.designs.set(id,result.candidate);
-   return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})};
-  }
-  if(operation==='appearance-preview'){
-   const source=await appearancePreviewSource(workspace,data,{signal,sourceReader}),fonts=new WorkspaceFonts(workspace);
-   if(source.source==='website'){
-    const result=await this.appearancePreviews.create(workspace,{...data,websitePin:source.websitePin,mode:'website'},{signal,media:new MediaStore(workspace),fonts,blockedValues,sourceReader});
-    const id=result.baseUrl.split('/').filter(Boolean).at(-1);
-    return {...result,baseUrl:this.appearanceUrl(id),url:this.appearanceUrl(id,result.defaultPage),pagesUrl:this.appearanceUrl(id,'pages')};
-   }
-   const fontFiles=await fonts.files(source.book.appearance,{preview:true,signal}),result=await buildDesignExamples(source.book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
-   signal?.throwIfAborted();this.designs.set(id,result.candidate);return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:source.source,websitePin:source.websitePin,...(source.websiteDraft?{websiteDraft:source.websiteDraft}:{}),pages:result.candidate.pages};
-  }
-  if(operation==='appearance-pages')return this.appearancePreviews.choices(request.id,{cursor:query.cursor??null,path:query.path??null,signal});
-  if(operation==='appearance-file'){
-   const search=new URLSearchParams(query);for(const key of ['workspace','context'])search.delete(key);
-   const file=await this.appearancePreviews.file(request.id,request.file+(search.size?'?'+search:''),{signal});await check();return binary(file);
-  }
-  if(operation==='preview'){const value=await releases.inline({...data,blockedValues},{signal});remember(value);return this.summary(releases,value);}
-  if(operation==='file'){
-   const content=await storage.catalogue(async()=>{
-    const design=this.designs.get(request.id),value=design??await retained(request.id);if(!await value.files.has(request.file))throw new AppError('NOT_FOUND');if(design||value.version!==3)verifyPublication(value,{allowDesign:!!design});return value.files.get(request.file);
-   });
-   await check();return binary({name:request.file,content});
-  }
-  if(operation==='export'){
-   let analysesChecked=0,filesChecked=0;
-   const value=await workspace.catalogue(async()=>{
-    const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value,{signal,onCheck:()=>onProgress?.({stage:publicationText('exportChecking'),completed:++analysesChecked,unit:'items'})});await verifyPublicationCandidate(value,{signal,onFile:()=>onProgress?.({stage:publicationText('exportVerifying'),completed:++filesChecked,unit:'files'})});return value;
-   });
-   signal?.throwIfAborted();await check();return binary({archive:value.files});
-  }
-  if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
-  if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}
-  if(operation.startsWith('publication-selections/'))return new PublicationEditionSelections(workspace).operate(operation.slice(23),data,{signal});
-  if(operation==='publication-selection'||operation==='publication-references')return (operation==='publication-selection'?publicationSelection:publicationReferences)(workspace,data,{signal});
-  if(operation.startsWith('publication-jobs/')){
-   const method=operation.slice(17);
-   if(method==='start'){const job=await releases.startRequest({...data,websitePin:data.websitePin??websitePin,blockedValues},queue);worker.wake();return {job:jobSummary(job)};}
-   if(method==='list'){const page=await releases.page(queue,data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
-   if(method==='open'){
-    const read=async()=>{const value=await retained(data.id);return {...await this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,undefined,queue)),stale:!await publicationRevisionCurrent(workspace,value)};};
-    const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
-    return {...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag};
-   }
-   if(method==='rollback-review'){
-    const read=()=>retained(data.id),value=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
-    const owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);
-    const summarize=async()=>({...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,approval.review.id,queue)),stale:false});
-    return await workspace.storageKind()==='catalogue'?workspace.catalogue(summarize):summarize();
-   }
-   if(method==='pages')return releases.pageChoices(await retained(data.id),{...data,signal});
-   if(method==='references')return releases.referenceChoices(await retained(data.id),{...data,signal});
-   if(method==='analysis-review-window')return new AnalysisPublicationReview(workspace,{sourceReader}).window(await rollback(await retained(data.id)),{...data,signal});
-   if(method==='analysis-review'){const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}).start(data,queue);worker.wake();return {job:jobSummary(job)};}
-   if(publicationJobControlRequest('/api/'+operation))return executePublicationJobControl(method,data,{queue,releases,reviews:new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}),worker,signal,check});
-   throw new AppError('INVALID');
-  }
-  if(operation.startsWith('deployment-jobs/')){
-   const method=operation.slice(16),deployments=new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});
-   if(method==='start'){const job=await deployments.start(data);worker.wake();return {job:jobSummary(job)};}
-   if(method==='list'){const page=await deployments.page(data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
-   const job=await control('publication.deploy',method);return method==='status'?{...deployments.summary(await deployments.read(data.id)),job}:{job};
-  }
-  if(operation.startsWith('repository-setup/')){
-   const method=operation.slice(17),setup=new GithubRepositorySetup(workspace,publisher,queue);
-   if(['start','initialize'].includes(method)){const job=await setup[method](data);worker.wake();return {job:jobSummary(job)};}
-   if(method==='review')return setup.review(data);if(method==='current')return {job:jobSummary(await setup.current())};return {job:await control('publication.repository',method)};
-  }
+  const publisher=websitePublisher(basePublisher,websiteWorkspace(storage,websiteId,{websitePin}));
   const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   if(operation.startsWith('github-connection/')){
    const method=operation.slice(18),connection=publisher.connection;
@@ -153,26 +31,8 @@ export class ProjectPublications{
    throw new AppError('INVALID');
   }
   if(operation==='publishing')return publisher.read();
-  const method=operation.slice(11);
-  if(method==='save')return publisher.save(data.config,data.etag);
-  if(method==='connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
-  if(method==='disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
-  if(method==='check')return publisher.check({reviewExisting:true});
-  if(method==='destinations')return githubDestinations(publisher,data);
-  if(method==='plan-operation'||method==='plan'&&data.background===true){
-   const plans=new GithubPlanJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});
-   const result=method==='plan'?{job:jobSummary(await plans.start(data))}:await plans.operation(data);
-   if(data.action==='cancel')worker.cancel(data.id);else worker.wake();return result;
-  }
-  if(method==='plan-page')return publisher.destinationPlanPage(data);
-  if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,value))throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal,replaceExisting:data.replaceExisting,archiveBranch:data.archiveBranch});}
-  if(['verify','verification','verification-cancel','verification-retry'].includes(method)){
-   const checks=new PublicationVerificationJobs(workspace,publisher,queue);
-   if(method==='verify'){const job=await checks.start(data);worker.wake();return {job:jobSummary(job)};}
-   const job=await checks.current();if(method==='verification')return {job:jobSummary(job),receipt:(await publisher.read()).receipt};
-   if(!job||job.id!==data.id)throw new AppError('PUBLISH_STALE');return {job:await control('publication.verify',method==='verification-cancel'?'cancel':'retry')};
-  }
-  if(method==='deploy'){const value=await rollback(await retained(data.id));if(data.reviewed!==true||!data.rollbackReview&&value.configEtag!==data.configEtag)throw new AppError('PUBLISH_STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);const job=await new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).start(data);worker.wake();return {job:jobSummary(job)};}
+  if(operation==='publishing/connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
+  if(operation==='publishing/disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
   throw new AppError('NOT_FOUND');
  }
 }

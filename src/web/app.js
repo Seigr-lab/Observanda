@@ -248,7 +248,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
     const result=await newWorkspaceReader().read({signal,onProgress});
     if(adopt&&result.book&&result.etag)adoptSnapshot(result);return result;
   }
-  const requestResearch=researchContext(state),requestContext=state.storage?.contextId,requestWebsite=websiteContext(state),scopedWebsite=websiteRequest(route)||route==='/api/websites/save'||websitePin!==undefined;
+  const requestResearch=researchContext(state),requestContext=state.storage?.contextId,requestWebsite=websiteContext(state),scopedWebsite=websiteRequest(route)||websitePin!==undefined;
   const outlineWrite=Boolean(state.workspaceOutline||state.recordScope)&&['/api/workspace/structure','/api/workspace/notebook','/api/workspace/reorganize','/api/workspace/save'].includes(route);
   const structureSelection=outlineWrite&&state.recordScope?state.recordScope.ids:null;
   if(outlineWrite)data={...data,response:'outline'};
