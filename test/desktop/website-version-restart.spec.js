@@ -40,7 +40,7 @@ test('a named design survives desktop shutdown and an offline restore survives a
   await button('Version history').click();await page.getByLabel('Checkpoint name').fill('Field review');
   await button('Name current checkpoint').click();
   await expect(page.locator('[data-versions=version] option:checked')).toContainText('Field review');
-  await button('Return to editing').click();
+  await button('Back to the page').click();
   await saveHeading('Winter transect');
   await fixture.close(app);app=null;
   await disableWebsiteResearch(fixture.directory,[path.join(fixture.directory,workspace)]);
