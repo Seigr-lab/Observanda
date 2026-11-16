@@ -42,7 +42,7 @@ export function websiteFileViewport({esc,t,changed,getRanges=defaultBreakpoints}
   const label=customRanges?applicable.map(r=>breakpointLabel(r,t)+' '+breakpointCondition(r)).join(', '):range==='desktop'?'> '+websiteLayoutWidths.tablet+' px':range==='phone'?'≤ '+websiteLayoutWidths.phone+' px':(websiteLayoutWidths.phone+1)+'–'+websiteLayoutWidths.tablet+' px';
   const text=t('viewportMeasured',{width,height,percent:Math.round(scale*100),range:label});
   const readout=document.querySelector('[data-viewport-readout]');
-  if(readout&&readout.textContent!==text)readout.textContent=text;
+  if(readout&&readout.textContent!==text){readout.textContent=text;readout.title=text;}
  }
  function change(input){
   if(input.matches('[data-website-file-viewport]')){

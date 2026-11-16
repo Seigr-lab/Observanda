@@ -28,6 +28,8 @@
 .website-files-app [data-viewport-custom][hidden] { display:none }
 .website-files-app [data-viewport-width] { width:6em }
 .website-files-app [data-viewport-readout] { color:var(--muted,CanvasText);font-variant-numeric:tabular-nums;font-size:.83em }
+/* The readout changes with every resize: a fixed share of the row keeps it from rewrapping the toolbar and moving the page. */
+.website-files-app .website-canvas-tools [data-viewport-readout] { flex:1 1 11rem;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
 .website-files-structure li[draggable=true] { cursor:grab }
 .website-files-structure li[data-level="1"] { padding-inline-start:.6rem }
 .website-files-structure li:is([data-level="2"],[data-level="3"]) { padding-inline-start:1.2rem }
