@@ -16,6 +16,8 @@ export async function createWebsiteWorkspace(page,directory,name){
 }
 
 // Only disposable fixture runtimes may be moved, after a confirmed shutdown.
+// Takes workspace roots: each workspace keeps one research database, which
+// also holds its projects and lab books.
 export async function disableWebsiteResearch(directory,roots){
  const parent=await realpath(directory),databases=[];
  for(const root of roots){

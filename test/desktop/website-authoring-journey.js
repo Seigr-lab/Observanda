@@ -11,6 +11,7 @@ export async function authorSite(page){
  await expect.poll(()=>paragraph.evaluate(node=>node.ownerDocument.getSelection().toString())).toBe('Edited with PostgreSQL offline.');
  await page.locator('[data-visual-command="bold"]').click();
  await expect(paragraph.locator('strong,b')).toHaveCount(1);
+ await page.getByRole('tab',{name:'Style',exact:true}).click();
  await page.locator('[data-visual-scope]').selectOption('section');
  await page.locator('[data-visual-property="letter-spacing"]').fill('2');
  await page.getByRole('button',{name:'Apply styles',exact:true}).click();
@@ -33,7 +34,9 @@ export async function authorSite(page){
  await click('media');const form=page.locator('[data-recording-form]');
  await form.locator('[name=kind]').selectOption('audio');await form.locator('[name=upload]').setInputFiles(path.resolve('src/preview-assets/audio.wav'));
  await form.locator('[name=title]').fill('Field recording');await form.locator('[name=transcript]').fill('A recording of the instrument.');
- await form.locator('button[type=submit]').click();await expect(canvas.locator('audio[controls]')).toHaveCount(1,{timeout:60000});
+ // The form ends below the fold of the docked panel; bring the button into view first.
+ const submit=form.locator('button[type=submit]');await submit.scrollIntoViewIfNeeded();await submit.click();
+ await expect(canvas.locator('audio[controls]')).toHaveCount(1,{timeout:60000});
 }
 
 export async function selectLine(page,locator){
@@ -45,8 +48,7 @@ export async function selectLine(page,locator){
 export async function authorScientificContent(page){
  const canvas=page.frameLocator('#website-files-canvas');
  async function insert(type){
-  await page.locator('[data-website-file-block]').selectOption(type);
-  await page.getByRole('button',{name:'Insert element',exact:true}).click();
+  await page.locator('[data-action="website-files-add-block"][data-block="'+type+'"]').click();
  }
  await insert('section');
  const placeholder=canvas.getByText('Write your text here.',{exact:true});
@@ -62,6 +64,7 @@ export async function authorScientificContent(page){
  await equation.getByLabel('Accessible description').fill('Ratio of incident to transmitted intensity');
  await equation.getByRole('button',{name:'Apply equation'}).click();
  await expect(canvas.locator('math mfrac')).toHaveCount(1);
+ await page.getByRole('tab',{name:'Content',exact:true}).click();
  const references=page.locator('.website-science-inspector');await references.locator('summary').click();
  await references.getByLabel('Task',{exact:true}).selectOption('scienceReference');
  await references.getByLabel('Author or authors').fill('Laboratory team');

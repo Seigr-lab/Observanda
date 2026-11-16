@@ -5,6 +5,7 @@ import path from 'node:path';
 import {websiteDesktopFixture} from './installed-website-app.js';
 import {selectEntry,createWebsiteWorkspace,disableWebsiteResearch} from './website-workspace-fixture.js';
 import {authorSite,authorScientificContent,selectLine} from './website-authoring-journey.js';
+import {siteMenu} from '../browser/website-site-menu-helper.js';
 
 async function updateVisibility(page,{context,prefix,workspaceId,recordId,sections}){
  await page.evaluate(async({context,prefix,workspaceId,recordId,sections})=>{
@@ -30,13 +31,13 @@ test('desktop website editing, persistence, preview and folder publication with 
   // Every path below belongs solely to the private disposable test fixture.
   // Block the exact PostgreSQL runtime location after graceful shutdown. A file
   // at its original path also prevents startup from creating a replacement.
-  const databases=await disableWebsiteResearch(fixture.directory,[workspace,...source.roots]);
+  const databases=await disableWebsiteResearch(fixture.directory,[workspace]);
   phase='open offline file editor';const coldStart=performance.now();app=await fixture.start(undefined,{website:true});page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));
   app.context().on('request',request=>{const url=new URL(request.url());if(url.pathname.startsWith('/api/'))requests.push(url.pathname);});
   await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Saved HTML acceptance',{timeout:60000});
   const coldOpenMs=Math.round(performance.now()-coldStart);
   requests.push(...await page.evaluate(()=>performance.getEntriesByType('resource').map(row=>new URL(row.name).pathname).filter(route=>route.startsWith('/api/'))));
-  await page.locator('[data-website-file-block]').selectOption('paragraph');await page.getByRole('button',{name:'Insert element',exact:true}).click();const canvas=page.frameLocator('#website-files-canvas');
+  await page.locator('[data-action="website-files-add-block"][data-block="paragraph"]').click();const canvas=page.frameLocator('#website-files-canvas');
   phase='type in visual editor';const paragraph=canvas.locator('main > p').last();await selectLine(page,paragraph);await page.keyboard.type('Edited with PostgreSQL offline.');await expect(paragraph).toHaveText('Edited with PostgreSQL offline.');
   phase='save visual and CSS edits';
   await page.getByRole('button',{name:'CSS',exact:true}).click();await page.getByRole('textbox',{name:'CSS',exact:true}).fill('main > p { color: rgb(21, 43, 65); }');
@@ -70,7 +71,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   await page.locator('[data-gallery-files]').setInputFiles(path.resolve('src/preview-assets/image.png'));
   await page.locator('[data-gallery-field="alt"]').fill('Test photograph');await page.locator('[data-gallery-field="caption"]').fill('Recorded observation');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  phase='review saved public files before publication';await page.getByRole('button',{name:'Check website',exact:true}).click();
+  phase='review saved public files before publication';await (await siteMenu(page)).getByRole('button',{name:'Check website',exact:true}).click();
   const check=page.getByRole('dialog',{name:'Check website'});await expect(check.getByRole('status')).toContainText(/public pages and stylesheets/);await check.getByRole('button',{name:'Close checks'}).click();
   const previewStart=performance.now();await page.getByRole('button',{name:'Preview saved website',exact:true}).click();const saved=page.frameLocator('.website-files-canvas');await expect(saved.locator('main > p')).toHaveCSS('color','rgb(21, 43, 65)');const previewMs=Math.round(performance.now()-previewStart);await saved.getByRole('img',{name:'Test photograph'}).click();await expect(saved.getByRole('dialog')).toBeVisible();await saved.getByRole('button',{name:'Close gallery'}).click();
   const previewUrl=await page.locator('iframe.website-files-canvas').getAttribute('src');const previewBytes=await page.evaluate(async url=>{const response=await fetch(url);if(!response.ok)throw Error('Preview unavailable');return response.text();},previewUrl);
