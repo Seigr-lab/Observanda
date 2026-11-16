@@ -98,7 +98,7 @@
  "investigationRevision": "Investigation revision",
  "calibrationId": "Calibration identity",
  "calibrationRevision": "Calibration revision",
- "columnWindow": "Columns {first}?{last} of {total}. Selected columns remain available.",
+ "columnWindow": "Columns {first}–{last} of {total}. Selected columns remain available.",
  "previousColumns": "Previous columns",
  "nextColumns": "Next columns",
  "retainedColumns": "Input columns to retain",
