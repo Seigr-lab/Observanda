@@ -8,6 +8,9 @@ const policy=new AsyncLocalStorage();
 const writers=new WriterAdmission();
 export const writerCapacity=()=>writers.stats();
 export const withoutWriterWait=operation=>policy.run(null,operation);
+// True when the caller waits under a request or background writer policy, so a
+// busy resource is waited for with that policy's cancellation, checks and limit.
+export const writerWaitEnabled=()=>Boolean(policy.getStore()?.enabled());
 // A durable job owns its cancellation and lease checks independently of the
 // HTTP request that started it. Its queue already serializes job writes; poll
 // database acquisition here so a lease is checked even behind a long writer.

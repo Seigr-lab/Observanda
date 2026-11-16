@@ -52,6 +52,19 @@ test('disconnecting a queued request cancels before mutation and releases its qu
   assert.equal((await f.writing.read({workspaceId:f.book.id,recordId:f.book.entries[0].id,sectionId:null})).value.body,'next valid save');
  }finally{await holder.close();}
 });
+test('a save waiting behind another save of the same owner is shown as waiting and cancels when disconnected',async t=>{
+ const f=await fixture(t),holder=await openCatalogue(f.workspace.root);await holder.run('BEGIN');await holder.lock();
+ const queued=async()=>(await(await f.call('/api/activity')).json()).operations.filter(item=>item.kind==='/api/research/records/writing/save');
+ try{
+  // The first save holds its owner's producer lease while it waits for the database.
+  const first=f.call('/api/research/records/writing/save',f.save('kept value'));await until(async()=>(await queued()).some(item=>item.state==='queued'));
+  const controller=new AbortController(),second=f.call('/api/research/records/writing/save',f.save('must not commit'),controller.signal),rejected=assert.rejects(second,{name:'AbortError'});
+  await until(async()=>(await queued()).filter(item=>item.state==='queued').length===2);
+  controller.abort();await rejected;await until(async()=>(await queued()).some(item=>item.state==='cancelled'));
+  await holder.run('ROLLBACK');assert.equal((await first).status,200);
+  assert.equal((await f.writing.read({workspaceId:f.book.id,recordId:f.book.entries[0].id,sectionId:null})).value.body,'kept value');
+ }finally{await holder.close();}
+});
 
 test('a waiting record edit cannot replay against the destination after a verified workspace copy',async t=>{
  const f=await fixture(t),destination=path.join(f.directory,'copy'),before=await f.writing.read({workspaceId:f.book.id,recordId:f.book.entries[0].id,sectionId:null});

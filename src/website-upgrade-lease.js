@@ -1,6 +1,7 @@
 import {setTimeout as delay} from 'node:timers/promises';
 import {withNativeDestination} from './native-destination.js';
 import {AppError} from './errors.js';
+import {waitForWriter,writerWaitEnabled} from './writer-wait.js';
 
 const folder='.observanda/website-files/upgrades',running=new Map();
 export const upgradeControl=name=>folder+'/'+name+'.json';
@@ -25,6 +26,11 @@ export async function runWebsiteUpgrade(store,name,operation,{signal,shareResult
   await store.scope(scope=>scope.ensure(folder),{write:true,signal});
   return withNativeDestination(store.workspace.root,async scope=>{
    await scope.admit();let lease;const member=store.absolute(upgradeLease(name));
+   // A saving person waits here as for any writer: shown as waiting, cancelled
+   // when they leave and limited in time. Website preparation holds this lease
+   // while it imports the pages bound to an owner's records.
+   const take=()=>scope.member(member,(dir,file)=>dir.lease(file)).catch(error=>{throw error.code==='EBUSY'?new AppError('LOCKED'):error;});
+   if(writerWaitEnabled())lease=await waitForWriter(take);
    while(!lease){
     signal?.throwIfAborted();try{lease=await scope.member(member,(dir,file)=>dir.lease(file));}
     catch(error){if(error.code!=='EBUSY')throw error;await delay(200,undefined,{signal});}
