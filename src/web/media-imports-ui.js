@@ -1,6 +1,5 @@
 import {researchContext,ownedAssetURL} from './project-context.js';
 import {sessionHeaders,sessionCredential} from './session-store.js';
-import {downloadSize} from './website-file.js';
 // Upload intents remain local to the open editor. Durable jobs never edit a record.
 import {t,language} from './i18n/index.js';
 import './i18n/catalogues/supportEditors.js';
@@ -13,8 +12,7 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
  const stateText=state=>states.has(state)?tr('state_'+state):state;
  // Worker stages and error codes stay canonical; only their display changes.
  const stages={queued:'state_queued',preparing:'stage_preparing',completed:'state_completed','Checking original file':'stage_checking','Converting a display copy':'stage_converting','Verifying the display copy':'stage_verifying'};
- const progressText=(job,file)=>file&&job.progress.stage==='Checking original file'?t('websiteMedia','fileProgress',{done:downloadSize(job.progress.done),total:downloadSize(job.progress.total)}):Object.hasOwn(stages,job.progress.stage)?tr(stages[job.progress.stage]):job.progress.stage;
- const fileTarget=intent=>['website-file','website-file-library'].includes(intent?.purpose);
+ const progressText=job=>Object.hasOwn(stages,job.progress.stage)?tr(stages[job.progress.stage]):job.progress.stage;
  const endpoint='/api/media-imports/',call=(op,data={})=>api(endpoint+op,data,{adopt:false});
  let timer,watch=0,target=null,context=null,xhr=null,items=[],uploadId=null,receiving=false,cursor=null,next=null,previous=[];
  const button=(label,action,id='',extra='')=>`<button type="button" class="button" data-action="media-import-${action}" data-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
@@ -27,14 +25,14 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
   if(!state.storage?.encrypted)return;
   for(const input of document.querySelectorAll('input[data-upload]')){
    if(input.parentElement.querySelector('[data-action="media-import-open"]'))continue;
-   const b=document.createElement('button');b.type='button';b.className='button';b.dataset.action='media-import-open';b.textContent=fileTarget(destination(input))?t('websiteMedia','fileImports'):tr('mediaTitle');
+   const b=document.createElement('button');b.type='button';b.className='button';b.dataset.action='media-import-open';b.textContent=tr('mediaTitle');
    input.after(b);
   }
  }
  function row(s){
-  const j=s.job,ready=j?.state==='completed',compatible=fileTarget(target)?s.kind==='file':s.kind!=='file'&&(['attachment','record-attachment','website','website-library'].includes(target.purpose)||s.kind==='image');
-  const status=j?j.state==='running'?tr('mediaRunning',{state:stateText(j.state),stage:progressText(j,s.kind==='file')}):stateText(j.state):s.source?tr('mediaReceived'):tr('mediaInterrupted');
-  return `<li data-media-import-row="${s.id}"><strong>${esc(s.name)}</strong><p role="status">${esc(j?.cancelRequested&&j.state==='running'?tr('mediaStoppingStatus',{status}):status)}</p>${j&&jobMessage(j)?`<p>${esc(jobMessage(j))}</p>`:''}<div class="inline-actions">${ready&&compatible?button(s.kind==='file'?t('websiteMedia','useFile'):tr('mediaUse'),'use',s.id):''}${j&&['queued','running'].includes(j.state)?button(tr('mediaCancelProcessing'),'cancel',s.id,j.cancelRequested?'disabled':''):''}${j&&['failed','cancelled'].includes(j.state)?button(tr('mediaRetry'),'retry',s.id):''}${!j&&s.source?button(tr('mediaPrepare'),'finish',s.id):''}${!s.source?`<label>${text('mediaReselect')}<input type="file" data-media-resume="${s.id}"></label>`:''}${s.source?`<a class="button" href="${esc(ownedAssetURL(state,endpoint+'original/'+s.id))}?context=${encodeURIComponent(state.storage.contextId)}" download>${text('mediaDownload')}</a>`:''}</div></li>`;
+  const j=s.job,ready=j?.state==='completed',compatible=s.kind!=='file'&&(['attachment','record-attachment'].includes(target.purpose)||s.kind==='image');
+  const status=j?j.state==='running'?tr('mediaRunning',{state:stateText(j.state),stage:progressText(j)}):stateText(j.state):s.source?tr('mediaReceived'):tr('mediaInterrupted');
+  return `<li data-media-import-row="${s.id}"><strong>${esc(s.name)}</strong><p role="status">${esc(j?.cancelRequested&&j.state==='running'?tr('mediaStoppingStatus',{status}):status)}</p>${j&&jobMessage(j)?`<p>${esc(jobMessage(j))}</p>`:''}<div class="inline-actions">${ready&&compatible?button(tr('mediaUse'),'use',s.id):''}${j&&['queued','running'].includes(j.state)?button(tr('mediaCancelProcessing'),'cancel',s.id,j.cancelRequested?'disabled':''):''}${j&&['failed','cancelled'].includes(j.state)?button(tr('mediaRetry'),'retry',s.id):''}${!j&&s.source?button(tr('mediaPrepare'),'finish',s.id):''}${!s.source?`<label>${text('mediaReselect')}<input type="file" data-media-resume="${s.id}"></label>`:''}${s.source?`<a class="button" href="${esc(ownedAssetURL(state,endpoint+'original/'+s.id))}?context=${encodeURIComponent(state.storage.contextId)}" download>${text('mediaDownload')}</a>`:''}</div></li>`;
  }
  async function library(token){
   const result=await call('list',{cursor});if(!live(token)||!document.querySelector('#dialog[open] #media-import-list'))return;items=result.items;next=result.next;
@@ -47,7 +45,7 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
  async function open(input){
   if(receiving){notify(tr('mediaFinishFirst'),true);return;}
   stop();cursor=null;next=null;previous=[];target=destination(input);context=researchContext(state);
-  showDialog(`<section class="job-library"><h2 id="dialog-title">${fileTarget(target)?esc(t('websiteMedia','fileImports')):text('mediaTitle')}</h2><p>${fileTarget(target)?esc(t('websiteMedia','fileHelp')):target.purpose==='record-attachment'?esc(t('recordContent','mediaLibraryHelp')):text('mediaPrivateHelp')}</p><div id="media-upload-status" hidden></div><div id="media-import-pages" class="inline-actions" aria-label="${text('mediaPages')}">${button(tr('mediaNewer'),'previous','','disabled')}<span role="status">${text('mediaPage',{number:1})}</span>${button(tr('mediaOlder'),'next','','disabled')}</div><ul id="media-import-list" class="material-list job-library-items" tabindex="0" aria-label="${text('mediaImported')}"><li>${text('mediaLoading')}</li></ul><div class="dialog-actions">${button(tr('refresh'),'refresh')}${button(tr('close'),'close')}</div></section>`);
+  showDialog(`<section class="job-library"><h2 id="dialog-title">${text('mediaTitle')}</h2><p>${target.purpose==='record-attachment'?esc(t('recordContent','mediaLibraryHelp')):text('mediaPrivateHelp')}</p><div id="media-upload-status" hidden></div><div id="media-import-pages" class="inline-actions" aria-label="${text('mediaPages')}">${button(tr('mediaNewer'),'previous','','disabled')}<span role="status">${text('mediaPage',{number:1})}</span>${button(tr('mediaOlder'),'next','','disabled')}</div><ul id="media-import-list" class="material-list job-library-items" tabindex="0" aria-label="${text('mediaImported')}"><li>${text('mediaLoading')}</li></ul><div class="dialog-actions">${button(tr('refresh'),'refresh')}${button(tr('close'),'close')}</div></section>`);
   await library(watch);
  }
  function status(text,cancel=false){
@@ -58,16 +56,16 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
  async function observe(id,token,intent){
   const {job}=await call('job',{id});if(!live(token))return;
   if(job.state==='completed'){
-   if(currentDestination(intent)){await apply(intent,job.result);status(intent.purpose==='record-attachment'?t('recordContent','mediaAttached'):intent.purpose.startsWith('website-file')?t('websiteMedia','fileAdded'):tr('mediaAdded'));}
+   if(currentDestination(intent)){await apply(intent,job.result);status(intent.purpose==='record-attachment'?t('recordContent','mediaAttached'):tr('mediaAdded'));}
    else notify(tr('mediaReady'));return;
   }
-  status(jobMessage(job)??(job.cancelRequested?tr('mediaStopping'):job.state==='running'?progressText(job,fileTarget(intent)):job.state==='queued'?tr('mediaWaiting'):tr('mediaCancelled')),['queued','running'].includes(job.state)&&!job.cancelRequested);
+  status(jobMessage(job)??(job.cancelRequested?tr('mediaStopping'):job.state==='running'?progressText(job):job.state==='queued'?tr('mediaWaiting'):tr('mediaCancelled')),['queued','running'].includes(job.state)&&!job.cancelRequested);
   if(['queued','running'].includes(job.state))timer=setTimeout(()=>observe(id,token,intent).catch(error=>notify(errorText(error),true)),500);
  }
  async function upload(input,resume=null){
   const file=input.files[0];if(!file||receiving)return;
-  const intent=resume?target:destination(input),kind=resume?.kind??(fileTarget(intent)?'file':!['attachment','record-attachment','website','website-library'].includes(intent.purpose)?'image':file.type==='image/gif'?'video':/\.svg$/i.test(file.name)?'image':file.type.split('/')[0]);
-  if(!['image','audio','video','file'].includes(kind))throw Error(tr('mediaChoose'));
+  const intent=resume?target:destination(input),kind=resume?.kind??(!['attachment','record-attachment'].includes(intent.purpose)?'image':file.type==='image/gif'?'video':/\.svg$/i.test(file.name)?'image':file.type.split('/')[0]);
+  if(!['image','audio','video'].includes(kind))throw Error(tr('mediaChoose'));
   if(resume&&(file.name!==resume.name||file.size!==resume.size))throw Error(tr('mediaSameOriginal'));
   stop();context=researchContext(state);target=intent;const token=watch;receiving=true;busy(true);input.disabled=true;
   if(!resume){document.getElementById('media-upload-status')?.remove();const node=document.createElement('div');node.id='media-upload-status';input.parentElement.after(node);}
@@ -75,7 +73,7 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
    // Older unencrypted workspaces retain their existing immediate upload API.
    // All newly created workspaces use the durable encrypted path below.
    if(!state.storage.encrypted){
-    const response=await fetch(ownedAssetURL(state,'/api/media/'+kind)+(kind==='file'?'?name='+encodeURIComponent(file.name):''),{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId}),body:file});
+    const response=await fetch(ownedAssetURL(state,'/api/media/'+kind),{method:'POST',headers:await sessionHeaders({'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId}),body:file});
     if(!response.ok)throw await response.json();const asset=await response.json();guard();busy(false);if(currentDestination(intent))await apply(intent,asset);return;
    }
    const session=resume??await call('start',{name:file.name,size:file.size,kind});guard();uploadId=session.id;
@@ -100,7 +98,7 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
   if(op==='active-cancel'){if(xhr)xhr.abort();else{await call('cancel',{id});status(tr('mediaStopping'));}return true;}
   if(op==='close'){if(receiving){notify(tr('mediaFinishFirst'),true);return true;}stop();document.getElementById('dialog').close();return true;}
   guard();
-  if(op==='use'){const s=items.find(s=>s.id===id);if(!currentDestination(target)||s?.job?.state!=='completed'||(fileTarget(target)?s.kind!=='file':s.kind==='file'))throw Error(tr('mediaNotReady'));if(target.purpose==='record-attachment')document.getElementById('dialog').close();await apply(target,s.job.result);stop();document.getElementById('dialog').close();return true;}
+  if(op==='use'){const s=items.find(s=>s.id===id);if(!currentDestination(target)||s?.job?.state!=='completed'||s.kind==='file')throw Error(tr('mediaNotReady'));if(target.purpose==='record-attachment')document.getElementById('dialog').close();await apply(target,s.job.result);stop();document.getElementById('dialog').close();return true;}
   if(['cancel','retry','finish'].includes(op))await call(op,{id});
   if(op==='next'&&next){previous.push(cursor);cursor=next;}
   if(op==='previous'&&previous.length)cursor=previous.pop();

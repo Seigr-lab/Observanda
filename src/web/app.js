@@ -1371,14 +1371,10 @@ async function applyMedia(intent,asset) {
   if (purpose === 'attachment') {
     const current=editableRecord(state.book,recordId);if(!current)throw Error(appText('reopenRecord'));
     if(!current.attachments.some(a=>a.id===asset.id))current.attachments.push({...asset,caption:'',alt:'',transcript:'',share:false});
-  } else if(purpose?.startsWith('website')){throw Error(t('supportEditors','mediaDestinationChanged'));}
-  else if(purpose==='branding'){
+  } else if(purpose==='branding'){
     branding.acceptAsset(brandTarget,asset);
-  } else if(purpose==='site-logo'){
-    state.book.website.logoId=asset.id;const b=state.book.branding.find(item=>item.target==='home');
-    if(b){if(b.logos.length)b.logos[0]={id:asset.id,alt:state.book.website.logoAlt};else b.logos.push({id:asset.id,alt:state.book.website.logoAlt});}
   } else {const project=state.book.projects.find(p=>p.id===projectId);if(!project)throw Error(appText('reopenProject'));project.logoId=asset.id;}
-  dirty();notify(purpose.startsWith('website-file')?t('websiteMedia','fileAdded'):appText('mediaAdded'));render();
+  dirty();notify(appText('mediaAdded'));render();
 }
 function extendedInput(el) {
   if(recordContent.input(el))return true;
