@@ -11,7 +11,7 @@
   "stylepdf": "PDF",
   "styleSize": "Text size (px)",
   "styleWeight": "Font weight",
-  "styleInherit": "Inherit",
+  "styleInherit": "Default",
   "styleColor": "Text colour (hex)",
   "styleItalic": "Italic",
   "styleUpright": "Upright",

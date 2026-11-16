@@ -19,8 +19,8 @@ test('a named design survives desktop shutdown and an offline restore survives a
   expect(await start(true)).not.toBe(previous);
  }
  async function saveHeading(value){
-  await button('HTML').click();
-  const html=page.getByRole('textbox',{name:'HTML',exact:true});
+  await button('Page code (HTML)').click();
+  const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   const content=await html.inputValue();
   expect(content).toMatch(/<h1\b[^>]*>[^<]*<\/h1>/);
   await html.fill(content.replace(/(<h1\b[^>]*>)[^<]*(<\/h1>)/,(_match,open,close)=>open+value+close));

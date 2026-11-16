@@ -34,7 +34,7 @@ test('repair an ambiguous scientific target, describe a figure and follow the pu
   await guide.locator('[data-context-help-close]').click();await expect(guideButton).toBeFocused();
   const selectPage=page.locator('[data-website-file-page]');
   await selectPage.selectOption('methods/assays.html');await expect(canvas.getByRole('heading',{name:'Calibration'})).toBeVisible();
-  await page.getByRole('button',{name:'HTML',exact:true}).click();const source=page.getByLabel('HTML',{exact:true});
+  await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const source=page.getByLabel('Page code (HTML)',{exact:true});
   const targets=Array.from({length:90},(_,i)=>'<li id="run-'+i+'">Run '+i+'</li>').join('');
   const moved='<h2 id="calibration">First instrument</h2><h2 id="calibration">Second instrument</h2><ul>'+targets+'</ul><figure id="μ-526"><figcaption>Optical response at 526 nm<span hidden>Hidden caption canary</span></figcaption></figure><div hidden id="hidden-canary">Hidden calibration</div>';
   await source.fill((await source.inputValue()).replace('<h2 id="calibration">Calibration</h2>',moved));

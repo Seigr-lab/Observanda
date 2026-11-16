@@ -30,11 +30,11 @@ test('a site header region appears on every page, survives page edits and can be
   const canvas=page.frameLocator('#website-files-canvas'),panel=page.locator('.website-files-regions');
   await expect(canvas.getByRole('heading',{name:'Hives'})).toBeVisible();
 
-  await page.getByRole('button',{name:'Site regions',exact:true}).click();
+  await page.getByRole('button',{name:'Header, footer and sidebar',exact:true}).click();
   const whole=panel.locator('section',{has:page.getByRole('heading',{name:'Whole website'})}),header=whole.locator('[data-region-slot="header"]');
   await header.getByRole('combobox',{name:'Component',exact:true}).selectOption({label:'Banner'});
   await header.getByRole('button',{name:'Apply to the whole website'}).click();
-  await expect(panel.getByRole('status')).toHaveText('Site regions updated.');
+  await expect(panel.getByRole('status')).toHaveText('Header, footer and sidebar updated.');
   await expect(panel.getByText('Shown on this page: Header: Banner')).toBeVisible();
   for(const file of ['index.html','notes/one.html'])expect((await store.open(id,{path:file})).html).toMatch(/<body><header data-website-region="header"><section data-website-instance="[^"]+"><p>Apiary log banner<\/p><\/section><\/header>/);
 
@@ -46,7 +46,7 @@ test('a site header region appears on every page, survives page edits and can be
   const saved=(await store.open(id)).html;
   expect(saved).toContain('two frames of brood');expect(saved).toMatch(/data-website-region="header"/);
 
-  await page.getByRole('button',{name:'Site regions',exact:true}).click();
+  await page.getByRole('button',{name:'Header, footer and sidebar',exact:true}).click();
   const here=panel.locator('section',{has:page.getByRole('heading',{name:'This page (index.html)'})});
   await here.locator('[data-region-slot="header"]').getByRole('combobox',{name:'Header',exact:true}).selectOption({label:'None'});
   await here.locator('[data-region-slot="header"]').getByRole('button',{name:'Apply',exact:true}).click();

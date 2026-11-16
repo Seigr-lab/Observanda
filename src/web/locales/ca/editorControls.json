@@ -11,7 +11,7 @@
   "stylepdf": "PDF",
   "styleSize": "Mida del text (px)",
   "styleWeight": "Gruix de la lletra",
-  "styleInherit": "Hereta",
+  "styleInherit": "Per defecte",
   "styleColor": "Color del text (hex)",
   "styleItalic": "Cursiva",
   "styleUpright": "Rodona",

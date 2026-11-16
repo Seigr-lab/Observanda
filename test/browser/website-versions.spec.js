@@ -29,8 +29,8 @@ test('name, reopen, compare and restore a website version with current permissio
   await go();await button('Version history').click();
   await page.getByLabel('Checkpoint name').fill('Site review');await button('Name current checkpoint').click();
   await expect(page.locator('[data-versions=version] option:checked')).toContainText('Site review');
-  await button('Back to the page').click();await button('HTML').click();
-  const html=page.getByRole('textbox',{name:'HTML',exact:true});
+  await button('Back to the page').click();await button('Page code (HTML)').click();
+  const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   await html.fill((await html.inputValue()).replace('Earlier observations','Later observations'));await button('Save website').click();
   await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   const deliver=async()=>{await button('Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await button('Write reviewed files').click();await expect(page.getByText('Edition written and verified.',{exact:true})).toBeVisible();};

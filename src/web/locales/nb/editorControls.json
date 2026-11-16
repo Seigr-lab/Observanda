@@ -11,7 +11,7 @@
   "stylepdf": "PDF",
   "styleSize": "Tekststørrelse (px)",
   "styleWeight": "Skrifttykkelse",
-  "styleInherit": "Arv",
+  "styleInherit": "Standard",
   "styleColor": "Tekstfarge (heksadesimal)",
   "styleItalic": "Kursiv",
   "styleUpright": "Opprett",

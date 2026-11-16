@@ -11,7 +11,7 @@
   "stylepdf": "PDF",
   "styleSize": "Tamaño del texto (px)",
   "styleWeight": "Grosor de letra",
-  "styleInherit": "Heredar",
+  "styleInherit": "Predeterminado",
   "styleColor": "Color del texto (hex)",
   "styleItalic": "Cursiva",
   "styleUpright": "Redonda",

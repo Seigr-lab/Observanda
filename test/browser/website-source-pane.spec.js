@@ -25,7 +25,7 @@ test('edit scientific HTML and CSS alongside the canvas, correct invalid source,
     return result;
    }catch(reason){return {errorCode:reason.code,message:reason.message};}
   });
-  await mountFilesEditor(page);await page.getByRole('button',{name:'Canvas and code',exact:true}).click();const canvas=page.frameLocator('#website-files-canvas'),code=page.getByRole('textbox',{name:'HTML',exact:true});
+  await mountFilesEditor(page);await page.getByRole('button',{name:'Page and code side by side',exact:true}).click();const canvas=page.frameLocator('#website-files-canvas'),code=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   await expect(canvas.locator('#depth')).toHaveText('Depth at station 1.');
   await code.fill(html.replace('Depth at station 1.','<iframe src="https://example.invalid"></iframe>'));
   await expect(page.locator('[data-source-status]')).toContainText('last valid draft');await expect(canvas.locator('iframe')).toHaveCount(0);
@@ -33,7 +33,7 @@ test('edit scientific HTML and CSS alongside the canvas, correct invalid source,
   await code.fill(html.replace('Depth at station 1.','Depth 2 × 10<sup>3</sup> m.'));await expect(canvas.locator('#depth sup')).toHaveText('3');
   await canvas.locator('#depth').click();await page.keyboard.press('End');await page.keyboard.type(' Verified.');
   await expect(code).toHaveValue(/Verified\./);await page.getByRole('combobox',{name:'Source language'}).selectOption('css');
-  const css=page.getByRole('textbox',{name:'CSS',exact:true});await css.fill('#depth{color:rgb(24,92,81)}');
+  const css=page.getByRole('textbox',{name:'Style code (CSS)',exact:true});await css.fill('#depth{color:rgb(24,92,81)}');
   await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(24, 92, 81)');expect(await store.siteVersion(id)).toBe(initial);
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await page.reload();await expect(canvas.locator('#depth')).toContainText('Verified.');

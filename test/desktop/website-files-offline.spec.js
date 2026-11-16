@@ -40,7 +40,7 @@ test('desktop website editing, persistence, preview and folder publication with 
   await page.locator('[data-action="website-files-add-block"][data-block="paragraph"]').click();const canvas=page.frameLocator('#website-files-canvas');
   phase='type in visual editor';const paragraph=canvas.locator('main > p').last();await selectLine(page,paragraph);await page.keyboard.type('Edited with PostgreSQL offline.');await expect(paragraph).toHaveText('Edited with PostgreSQL offline.');
   phase='save visual and CSS edits';
-  await page.getByRole('button',{name:'CSS',exact:true}).click();await page.getByRole('textbox',{name:'CSS',exact:true}).fill('main > p { color: rgb(21, 43, 65); }');
+  await page.getByRole('button',{name:'Style code (CSS)',exact:true}).click();await page.getByRole('textbox',{name:'Style code (CSS)',exact:true}).fill('main > p { color: rgb(21, 43, 65); }');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');await page.reload();
   await expect(page.frameLocator('#website-files-canvas').locator('main > p')).toHaveText('Edited with PostgreSQL offline.');
   phase='author a multipage site offline';await authorSite(page);
@@ -61,8 +61,8 @@ test('desktop website editing, persistence, preview and folder publication with 
   await themes.getByRole('combobox',{name:'Heading font',exact:true}).selectOption('serif');await themes.getByRole('combobox',{name:'Apply to',exact:true}).selectOption('folder');
   await themes.getByRole('button',{name:'Save theme',exact:true}).click();await expect(themes).not.toBeVisible();
   await expect(canvas.locator('body')).toHaveCSS('background-color','rgb(24, 35, 44)');
-  phase='edit an instrument note in split view';await page.getByRole('button',{name:'Canvas and code',exact:true}).click();
-  const sourceCode=page.getByRole('textbox',{name:'HTML',exact:true}),markup=await sourceCode.inputValue();
+  phase='edit an instrument note in split view';await page.getByRole('button',{name:'Page and code side by side',exact:true}).click();
+  const sourceCode=page.getByRole('textbox',{name:'Page code (HTML)',exact:true}),markup=await sourceCode.inputValue();
   await sourceCode.fill(markup.replace('</main>','<aside id="instrument-note"><p>Detection limit at 526 nm.</p></aside></main>'));
   await expect(canvas.locator('#instrument-note')).toContainText('Detection limit at 526 nm.');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');

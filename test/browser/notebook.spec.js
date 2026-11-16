@@ -151,7 +151,7 @@ test('private-path detection blocks website export and names no private path', a
   await navigate(page,'Website editor');
   const files=page.locator('#main[data-website-files-app]');
   // A private folder path typed into a page is saved, but the website is never exported with it.
-  await files.getByRole('button',{name:'HTML',exact:true}).click();const html=page.getByRole('textbox',{name:'HTML',exact:true});
+  await files.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
   await html.fill((await html.inputValue()).replace('</body>','<p>/home/imaginary-person/private-log</p></body>'));
   await files.getByRole('button',{name:'Save website',exact:true}).click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
   let downloaded=false;page.on('download',()=>{downloaded=true;});

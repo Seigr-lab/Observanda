@@ -60,7 +60,7 @@ test('concurrent website authors resolve individual changes against current gran
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const button=name=>page.getByRole('button',{name,exact:true}),input=kind=>page.locator('[data-website-file-code="'+kind+'"]');
   const edit=async(kind,replacements)=>{
-   await button(kind.toUpperCase()).click();
+   await button({html:'Page code (HTML)',css:'Style code (CSS)'}[kind]).click();
    const field=input(kind);let text=await field.inputValue();
    for(const [a,b] of replacements){expect(text).toContain(a);text=text.replace(a,b);}
    await field.fill(text);
@@ -95,7 +95,7 @@ test('concurrent website authors resolve individual changes against current gran
   expect(saves).toHaveLength(2);const final=await store.open(id);expect(final.html).toContain('Local findings');expect(final.html).not.toContain('Temporary measurement');
   expect(final.css).toContain('color:green');expect(final.css).toContain('margin:2em');expect(final.css).toContain('font-weight:600');
   await button('Undo').click();await expect(input('css')).toHaveValue(/margin:1em/);
-  await button('HTML').click();await expect(input('html')).toHaveValue(/Revised peer findings/);await expect(input('html')).not.toHaveValue(/Temporary measurement/);
+  await button('Page code (HTML)').click();await expect(input('html')).toHaveValue(/Revised peer findings/);await expect(input('html')).not.toHaveValue(/Temporary measurement/);
  }finally{
   if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;
   try{await app?.close();if(fixture)await clearVault(fixture.vault);}finally{await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

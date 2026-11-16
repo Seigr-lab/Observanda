@@ -116,7 +116,7 @@ test('unfinished source reopens as text and a subsequently withdrawn grant offer
   async function interrupt(){
    const url=page.url(),channel=await context.newCDPSession(page),crash=page.waitForEvent('crash');void channel.send('Page.crash').catch(()=>{});await crash;await page.close();return url;
   }
-  await button('HTML').click();const field=()=>page.locator('[data-website-file-code=html]'),text=(await field().inputValue())+'<img src="/unfinished">';
+  await button('Page code (HTML)').click();const field=()=>page.locator('[data-website-file-code=html]'),text=(await field().inputValue())+'<img src="/unfinished">';
   await field().fill(text);await expect(page.getByText(/Recovery copy saved at/)).toBeVisible();
   let url=await interrupt();page=await context.newPage();await page.goto(url);await button('Recover draft').click();await expect(field()).toHaveValue(text);
   await button('Visual editor').click();await expect(field()).toBeVisible();await expect(page.locator('#website-files-canvas')).toHaveCount(0);

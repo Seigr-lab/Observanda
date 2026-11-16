@@ -14,7 +14,7 @@ test('author scientific source, locate and repair a refused edit, undo a saved C
  test.setTimeout(80000);page.setDefaultTimeout(8500);
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-source-')),out=path.join(root,'edition'),database=process.env.OBSERVANDA_DATABASE_URL;
  const b=name=>page.getByRole('button',{name,exact:true}),canvas=page.frameLocator('#website-files-canvas');
- const htmlField=page.getByRole('textbox',{name:'HTML',exact:true}),note=page.locator('[data-source-note]'),status=page.locator('[data-source-status]');
+ const htmlField=page.getByRole('textbox',{name:'Page code (HTML)',exact:true}),note=page.locator('[data-source-note]'),status=page.locator('[data-source-status]');
  let fixture,app,reader;
  try{
   await mkdir(out);fixture=await encryptedFixture(root,createNotebook('Seismic lab'));
@@ -28,7 +28,7 @@ test('author scientific source, locate and repair a refused edit, undo a saved C
   process.env.OBSERVANDA_DATABASE_URL='postgresql://unavailable:unavailable@127.0.0.1:1/offline';
   app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'prefs.json'),port:0});
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
-  await b('HTML').click();await expect(htmlField).toHaveValue(granted.html.replace(/\r\n?/g,'\n'));
+  await b('Page code (HTML)').click();await expect(htmlField).toHaveValue(granted.html.replace(/\r\n?/g,'\n'));
   await expect(page.locator('pre[data-source-highlight] .source-markup').first()).toBeVisible();
   const invalid=granted.html.replace("data-unit='m'","data-unit='m' formaction='draft'");
   await htmlField.fill(invalid);await expect(note).toContainText("formaction='draft'");await expect(note).toContainText('Line ');
@@ -48,7 +48,7 @@ test('author scientific source, locate and repair a refused edit, undo a saved C
   await canvas.locator('h1').click();await expect.poll(()=>htmlField.evaluate(el=>el.value.slice(el.selectionStart,el.selectionEnd))).toBe('<H1>');
   await b('Format source').click();await expect(htmlField).toHaveValue(/<P\n  id='depth'\n  data-unit='m'>/);
   await expect(status).toContainText('same draft');await b('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await b('CSS').click();const source=page.getByRole('textbox',{name:'CSS',exact:true});await source.fill('#depth{color:rgb(83,41,73)}');
+  await b('Style code (CSS)').click();const source=page.getByRole('textbox',{name:'Style code (CSS)',exact:true});await source.fill('#depth{color:rgb(83,41,73)}');
   await expect(note).toContainText('#depth matches 1 · p#depth');await b('Save website').click();
   await b('Visual editor').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(83, 41, 73)');
   await b('Undo').click();await expect(canvas.locator('#depth')).toHaveCSS('color','rgb(24, 92, 81)');

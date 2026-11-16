@@ -26,11 +26,11 @@ test('author a 1100 px scientific grid, follow its cascade and independently rea
   const button=name=>page.getByRole('button',{name,exact:true}),canvas=page.frameLocator('#website-files-canvas'),grid=canvas.locator('#plates');
   const columns=layer=>layer.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(/\s+/).length);
   await page.goto(app.origin+'/?view=website#'+app.launchToken);await expect(grid).toBeVisible();
-  await button('Breakpoints').first().click();const d=page.locator('dialog[data-website-ranges]');
-  await d.getByRole('button',{name:'Add breakpoint',exact:true}).click();
-  await d.getByLabel('Breakpoint name').fill('Instrument grid');await d.getByLabel('Through width (px)').fill('1100');
-  await d.getByRole('button',{name:'Keep breakpoint'}).click();await d.getByRole('button',{name:'Review website changes'}).click();
-  await expect(d).toContainText('0 stylesheets will change');await d.getByRole('button',{name:'Save website breakpoints'}).click();await expect(d).toHaveCount(0);
+  await button('Screen sizes').first().click();const d=page.locator('dialog[data-website-ranges]');
+  await d.getByRole('button',{name:'Add screen size',exact:true}).click();
+  await d.getByLabel('Screen size name').fill('Instrument grid');await d.getByLabel('Through width (px)').fill('1100');
+  await d.getByRole('button',{name:'Keep screen size'}).click();await d.getByRole('button',{name:'Review website changes'}).click();
+  await expect(d).toContainText('0 stylesheets will change');await d.getByRole('button',{name:'Save website screen sizes'}).click();await expect(d).toHaveCount(0);
   const viewport=page.locator('[data-website-file-viewport]');
   const option=viewport.locator('option').filter({hasText:'Instrument grid'}),breakpoint=await option.getAttribute('value');await viewport.selectOption(breakpoint);
   await canvas.getByRole('heading',{name:'Characterization'}).click();

@@ -50,8 +50,8 @@ test('name a live website page design, use its scientific layout in a nested fol
   const donorClasses=await donor.getAttribute('class');
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await page.getByRole('button',{name:'CSS',exact:true}).click();
-  const sourceCSS=page.getByRole('textbox',{name:'CSS',exact:true});
+  await page.getByRole('button',{name:'Style code (CSS)',exact:true}).click();
+  const sourceCSS=page.getByRole('textbox',{name:'Style code (CSS)',exact:true});
   await sourceCSS.fill(await sourceCSS.inputValue()+'\n.website-columns {letter-spacing: 3px;}');
   await page.getByRole('button',{name:'Save website',exact:true}).click();
   await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
