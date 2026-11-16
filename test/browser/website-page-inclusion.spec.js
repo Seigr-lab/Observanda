@@ -10,6 +10,7 @@ import {createNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
+import {siteMenu} from './website-site-menu-helper.js';
 
 test('save a private page, review its navigation, publish, withdraw and verify the delivery receipts with research offline',async({page,browser})=>{
  test.setTimeout(120000);
@@ -38,7 +39,7 @@ test('save a private page, review its navigation, publish, withdraw and verify t
   await page.locator('[data-gallery-field=alt]').fill('Draft calibration image');await page.locator('[data-action=website-files-gallery-close]').click();
   await button('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   const zip=async()=>{
-   const next=page.waitForEvent('download');await button('Download website ZIP').click();
+   const next=page.waitForEvent('download');await (await siteMenu(page)).getByRole('button',{name:'Download website ZIP',exact:true}).click();
    const download=await next;return unzipSync(await readFile(await download.path()));
   };
   const privateZIP=await zip();expect(privateZIP[name]).toBeUndefined();expect(Object.keys(privateZIP).some(k=>k.startsWith('pictures/'))).toBe(false);
