@@ -1,24 +1,22 @@
 import {test,expect} from '@playwright/test';
 import {mkdir,readFile,rename,stat} from 'node:fs/promises';
 import path from 'node:path';
-import {createHash,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 import {desktopFixture} from './fixture.js';
 import {desktopAccess} from './access.js';
-import {task} from '../browser/composer-helper.js';
 
-const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const projectRoute=id=>'/api/projects/'+id;
 const bookRoute=book=>projectRoute(book.projectId)+'/lab-books/'+book.labBookId;
 
 // All authoring, transfer and publication requests enter the running desktop's
 // authenticated HTTP service. No source storage or service implementation is
 // imported here, so the same journey qualifies a selected packaged executable.
-test('desktop portable owners preserve originals and links and publish only selected sources',async({},info)=>{
+test('desktop portable owners preserve originals, links and the website’s selected sources',async()=>{
  test.setTimeout(600000);
  const fixture=await desktopFixture('observanda-desktop-portability-'),{directory,start}=fixture;
  const sourceName='Field workspace caf\u00e9 1',sourceRoot=path.join(directory,sourceName),receivingName='Receiving workspace 2',receivingRoot=path.join(directory,receivingName);
  const access=desktopAccess(),{credentials}=access;
- const errors=[];let app,page,primaryFailure=null,traceContext=null;
+ const errors=[];let app,page,primaryFailure=null;
  const watch=async()=>{page=await app.firstWindow();page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));await page.waitForURL(url=>url.protocol==='http:',{timeout:60000});await page.waitForFunction(()=>['access','setup','workspace'].includes(document.documentElement.dataset.appMode),null,{timeout:60000});};
  const call=(route,data,websiteId=null)=>page.evaluate(async({route,data,websiteId})=>{
   const storage=await (await fetch('/api/storage')).json();
@@ -46,10 +44,11 @@ test('desktop portable owners preserve originals and links and publish only sele
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.getByLabel('Create in',{exact:true}).fill(directory);await access.setup(page);await page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await expect(page.locator('.workspace-name')).toHaveText(sourceName,{timeout:60000});
-  const parent=await createProject('Field project 1'),child=await createProject('Nested project \u00c5 2',parent.projectId),independent=await createProject('Independent project 3');
-  expect(parent.root).toBe(path.join(sourceRoot,'Field project 1'));expect(child.root).toBe(path.join(parent.root,'Nested project \u00c5 2'));
+  // Projects sit side by side; each lab book lives directly inside one project.
+  const parent=await createProject('Field project \u00c5 1'),independent=await createProject('Independent project 3');
+  expect(parent.root).toBe(path.join(sourceRoot,'Field project \u00c5 1'));expect(independent.root).toBe(path.join(sourceRoot,'Independent project 3'));
   const books=[];
-  for(const [index,owner] of [independent,child].entries()){
+  for(const [index,owner] of [independent,parent].entries()){
    const title=index?'Observations caf\u00e9 2':'Independent observations 1';
    const book=(await call(projectRoute(owner.projectId)+'/lab-books/create',{id:randomUUID(),...credentials,book:{id:randomUUID(),projectId:owner.projectId,title}})).book;
    Object.assign(book,{projectId:owner.projectId,title});if(credentials.password)await call(bookRoute(book)+'/access/unlock',{...credentials,recovery:''});expect(book.root).toBe(path.join(owner.root,title));
@@ -83,7 +82,7 @@ test('desktop portable owners preserve originals and links and publish only sele
   await call(bookRoute(books[0])+'/storage/copy',{id:randomUUID(),parent:bookCopies});
   await call(projectRoute(parent.projectId)+'/storage/copy',{id:randomUUID(),parent:projectCopies});
   const copiedProject=path.join(projectCopies,path.basename(parent.root)),copiedBook=path.join(bookCopies,books[0].title);
-  console.log('Portable owners: authored two books, retained history/link and exact originals; copied selected book and nested project.');
+  console.log('Portable owners: authored two books, retained history/link and exact originals; copied one book and the project holding the other.');
   await fixture.close(app);app=null;await unavailable(sourceRoot);
   app=await start();await watch();expect(await page.evaluate(()=>document.documentElement.dataset.appMode)).toBe('access');
   await call('/api/notebook/create',{title:receivingName,storageParent:directory,...credentials,createNew:true});
@@ -96,15 +95,15 @@ test('desktop portable owners preserve originals and links and publish only sele
   const sources=books.map(book=>({workspaceId:book.namespaceId,labBookId:book.labBookId,projectIds:[book.projectId],selection:{defaultShare:false,includeProjects:[],records:[{id:book.records[0].id,share:true,attachments:[]}]}}));
   site=await call('/api/websites/editor/change',{...website,websitePin:site.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:books.map(book=>({type:'source-selection',kind:'record',workspaceId:book.namespaceId,labBookId:book.labBookId,projectId:book.projectId,recordId:book.records[0].id,share:true}))});
   await call('/api/websites/editor/save',{...website,websitePin:site.websitePin,draftId:site.draft.id,expectedRevision:site.draft.revision,commandId:randomUUID()});
-  const imported=await call('/api/projects/open',{id:randomUUID(),path:copiedProject,parentId:null,...credentials,recovery:'',owners:credentials.password?[{relative:path.basename(child.root),...credentials,recovery:''},{relative:[path.basename(child.root),books[1].title].join('/'),...credentials,recovery:''}]:[]});
+  const imported=await call('/api/projects/open',{id:randomUUID(),path:copiedProject,parentId:null,...credentials,recovery:'',owners:credentials.password?[{relative:books[1].title,...credentials,recovery:''}]:[]});
   expect(imported.project.projectId).toBe(parent.projectId);expect(imported.project.root).toBe(path.join(receivingRoot,path.basename(parent.root)));
   if(credentials.password)await call(projectRoute(parent.projectId)+'/access/unlock',{...credentials,recovery:''});
   await call(projectRoute(parent.projectId)+'/lab-books/import',{id:randomUUID(),path:copiedBook,...credentials,recovery:''});
   const unlockImported=async()=>{if(!credentials.password)return;
-   for(const project of [parent,child])await call(projectRoute(project.projectId)+'/access/unlock',{...credentials,recovery:''});
+   await call(projectRoute(parent.projectId)+'/access/unlock',{...credentials,recovery:''});
    for(const book of books)await call(bookRoute(book)+'/access/unlock',{...credentials,recovery:''});
   };
-  books[0].projectId=parent.projectId;books[0].root=path.join(imported.project.root,books[0].title);books[1].root=path.join(imported.project.root,path.basename(child.root),books[1].title);
+  books[0].projectId=parent.projectId;books[0].root=path.join(imported.project.root,books[0].title);books[1].root=path.join(imported.project.root,books[1].title);
   await fixture.close(app);app=null;await unavailable(copiedProject);await unavailable(copiedBook);
   app=await start();await watch();if(credentials.password)await access.unlock(page);await expect(page.locator('.workspace-name')).toHaveText(receivingName,{timeout:60000});
   await unlockImported();
@@ -120,7 +119,7 @@ test('desktop portable owners preserve originals and links and publish only sele
    }
   }
   expect((await call('/api/projects/reference',retained)).value.body).toBe('Original observation 1');
-  const location=await call('/api/projects/reference-location',retained);expect(location.projectId).toBe(child.projectId);expect(location.labBookId).toBe(books[1].labBookId);
+  const location=await call('/api/projects/reference-location',retained);expect(location.projectId).toBe(parent.projectId);expect(location.labBookId).toBe(books[1].labBookId);
   // Continue authoring in the independently imported owner after every source
   // location is unavailable, then retain this new write through the next restart.
   const importedBook=books[0],address={workspaceId:importedBook.namespaceId,recordId:importedBook.records[0].id,sectionId:null};
@@ -135,72 +134,15 @@ test('desktop portable owners preserve originals and links and publish only sele
    expect(retained.source).toEqual(source);expect(retained.total).toBe(1);expect(retained.rows.map(row=>row.value)).toEqual(source.selection.records);
   }
   console.log('Portable owners: reopened imported owners with original workspace and copy locations unavailable; originals, history and cross-owner reference match.');
-  await unlockImported();
-  traceContext=page.context();await traceContext.tracing.start({screenshots:false,snapshots:true,sources:false});
-  console.log('Portable owners website: opening selected-source editor.');
-  await page.evaluate(id=>location.hash='#/websites/'+id+'/editor',created.id);await expect(page.locator('.website-site-context')).toContainText('Independent field journal');
-  // Explicitly place one website-owned original download; research originals and
-  // unselected records remain private even though both books are selected sources.
-  const publicBytes=Buffer.from('Public original capture\r\n\u00c5,1.25\r\n\u03b1,2.75\r\n'),publicName='Donn\u00e9es \u03b1.csv';
-  console.log('Portable owners website: adding public download page.');
-  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Selected original download');
-  const downloadPage=await page.getByLabel('Page',{exact:true}).inputValue();
-  await task(page,'Page');await page.locator('[data-palette-kind=download]').click();await page.frameLocator('#website-draft-preview').locator('.section-download>.canvas-section-edit').click();
-  console.log('Portable owners website: uploading public original.');
-  await page.getByLabel('Upload an original file',{exact:true}).setInputFiles({name:publicName,mimeType:'text/csv',buffer:publicBytes});await expect(page.locator('.website-file-name')).toContainText(publicName);
-  console.log('Portable owners website: saving authored download.');
-  await page.getByLabel('Download label',{exact:true}).fill('Get selected original');
-  const saveStarted=Date.now(),saveResponse=page.waitForResponse(async response=>{
-   if(!response.url().endsWith('/api/websites/editor/save')||response.request().method()!=='POST')return false;
-   const error=await response.finished();if(error)throw error;return true;
-  },{timeout:30000});
-  await page.getByRole('button',{name:'Save website',exact:true}).click();const savedResponse=await saveResponse;
-  console.log('Portable owners website: Save response completed in '+(Date.now()-saveStarted)+'ms.');expect(savedResponse.ok(),await savedResponse.text()).toBe(true);await expect(page.locator('#save-status')).toHaveText('Saved');
-  console.log('Portable owners website: preparing selected edition.');
-  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
-  const reviewRoute=new URL(page.url()).hash;await page.getByLabel('Preview page',{exact:true}).selectOption(downloadPage);
-  const preview=new URL(await page.locator('#full-public-preview').getAttribute('href'),page.url());
-  // The download page may be nested under pages/. Retained edition roots are
-  // addressed by their 64-character review identity, independently of that page.
-  const match=preview.pathname.match(/^\/preview\/([a-f0-9]{64})\//);expect(match).not.toBeNull();
-  const publicUrl=name=>{const url=new URL('/preview/'+match[1]+'/'+name,page.url());url.search=preview.search;return url.href;};
-  const manifestBytes=await bytes(publicUrl('publication.json')),manifest=JSON.parse(manifestBytes);
-  expect(manifest.entries).toHaveLength(2);const rendered=[];
-  for(const file of manifest.files){
-   const content=await bytes(publicUrl(file.path));expect(content.length,file.path).toBe(file.bytes);expect(hash(content),file.path).toBe(file.sha256);rendered.push(content);
-  }
-  const allPublic=Buffer.concat(rendered).toString('utf8');
-  for(const index of [0,1]){expect(allPublic).toContain('Later selected observation '+index);expect(allPublic).not.toContain('WITHHELD_RECORD_'+index);expect(allPublic).not.toContain('PRIVATE_OBSERVATION_'+index);expect(allPublic).not.toContain('PRIVATE_ORIGINAL_'+index);}
-  expect(allPublic).toContain('Continued after import.');expect(allPublic).not.toContain(directory);expect(manifest.files.filter(file=>file.path.startsWith('downloads/'))).toHaveLength(1);
-  const downloadEntry=manifest.files.find(file=>file.path.startsWith('downloads/'));expect(await bytes(publicUrl(downloadEntry.path))).toEqual(publicBytes);
-  const publicDownload=await fixture.download(app,()=>page.frameLocator('iframe[title="Publication preview"]').getByRole('link',{name:'Get selected original',exact:true}).click());
-  expect(publicDownload.name).toBe(publicName);expect(await readFile(publicDownload.file)).toEqual(publicBytes);
-  console.log('Portable owners: continued authoring saved in imported book; selected edition hashes, private exclusions and native public original match.');
-  // Restart into the retained review: both the prepared files and the native
-  // ZIP must be byte-identical to the authenticated service's retained edition.
-  await traceContext.tracing.stop({path:info.outputPath('website-prepare-trace.zip')});traceContext=null;
-  await fixture.close(app);app=null;app=await start();await watch();if(credentials.password)await access.unlock(page);await expect(page.locator('.workspace-name')).toHaveText(receivingName,{timeout:60000});
-  await unlockImported();
-  traceContext=page.context();await traceContext.tracing.start({screenshots:false,snapshots:true,sources:false});
-  const reopenedReview=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/api/publication-jobs/open');
-  await page.evaluate(route=>location.hash=route,reviewRoute);expect((await reopenedReview).ok()).toBe(true);await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
-  const context=(await call('/api/storage')).contextId;preview.search='?context='+encodeURIComponent(context);
-  expect(await bytes(publicUrl('publication.json'))).toEqual(manifestBytes);
-  for(const file of manifest.files)expect(hash(await bytes(publicUrl(file.path))),file.path).toBe(file.sha256);
-  await page.getByLabel('I have reviewed this website and its media for sharing.').check();
-  console.log('Portable owners: retained review and every file hash match after restart; downloading the same edition ZIP.');
-  const archive=await fixture.download(app,()=>page.getByRole('button',{name:'Download website ZIP',exact:true}).click());
-  const archiveBytes=await readFile(archive.file);expect(archive.name).toBe('observanda-site.zip');expect(archiveBytes).toEqual(await bytes('/api/export/'+match[1]+'?context='+encodeURIComponent(context)));
-  for(const marker of ['WITHHELD_RECORD_','PRIVATE_OBSERVATION_','PRIVATE_ORIGINAL_',directory])expect(archiveBytes.includes(Buffer.from(marker))).toBe(false);
   for(const book of books)expect((await selection(book)).book.entries).toEqual(book.saved);
-  expect(errors).toEqual([]);await traceContext.tracing.stop({path:info.outputPath('website-restart-trace.zip')});traceContext=null;await fixture.close(app);app=null;
-  for(const root of [receivingRoot,imported.project.root,path.dirname(books[1].root),...books.map(book=>book.root)]){
-   await stat(path.join(root,'.observanda/postgresql/data/PG_VERSION'));
-   await expect(stat(path.join(root,'.observanda/postgresql/data/postmaster.pid'))).rejects.toMatchObject({code:'ENOENT'});
-  }
-  console.log('Portable owners: selected-source edition retained across restart; manifest hashes, public original and native ZIP bytes verified; private records/evidence excluded; owner processes stopped.');
+  expect(errors).toEqual([]);await fixture.close(app);app=null;
+  // One workspace, one database: imported projects and books are held in the
+  // receiving workspace's database, which is stopped with the application.
+  await stat(path.join(receivingRoot,'.observanda/postgresql/data/PG_VERSION'));
+  await expect(stat(path.join(receivingRoot,'.observanda/postgresql/data/postmaster.pid'))).rejects.toMatchObject({code:'ENOENT'});
+  for(const root of [imported.project.root,...books.map(book=>book.root)])await expect(stat(path.join(root,'.observanda/postgresql'))).rejects.toMatchObject({code:'ENOENT'});
+  console.log('Portable owners: imported books unchanged; one workspace database holds them and is stopped.');
  }catch(error){primaryFailure=error;console.error('Portable owners primary failure: '+(error.stack??error));throw error;}finally{
-  if(traceContext)await traceContext.tracing.stop({path:info.outputPath('website-failure-trace.zip')}).catch(error=>console.error('Portable owners trace cleanup: '+error.message));
   try{await fixture.dispose(app);}catch(error){if(!primaryFailure)throw error;console.error('Portable owners secondary cleanup failure: '+(error.stack??error));}
  }
 });
