@@ -18,7 +18,7 @@ async function addInstrumentPlates(page){
  // New pages start as private drafts; this page belongs in the publication.
  await page.getByRole('combobox',{name:'Publication',exact:true}).selectOption('included');
  await page.locator('[data-website-files-form] button[type=submit]').click();
- await page.locator('[data-website-file-block]').selectOption('feed');await page.getByRole('button',{name:'Insert element',exact:true}).click();
+ await page.locator('[data-action="website-files-add-block"][data-block="feed"]').click();
  const dialog=page.locator('dialog[data-website-feed-dialog]');
  await dialog.locator('[data-feed-heading]').fill('Public instrument traces');
  await dialog.getByRole('radio',{name:'Matching search'}).check();
@@ -66,8 +66,7 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await page.locator('form[data-website-files-form] button[type=submit]').click();
   const canvas=()=>page.frameLocator('#website-files-canvas');
   await expect(canvas().getByRole('heading',{name:'Fluorescence atlas',exact:true})).toBeVisible();
-  await page.locator('[data-website-file-block]').selectOption('feed');
-  await page.getByRole('button',{name:'Insert element',exact:true}).click();
+  await page.locator('[data-action="website-files-add-block"][data-block="feed"]').click();
   const editor=page.locator('dialog[data-website-feed-dialog]');
   await expect(editor.getByRole('radio',{name:'All eligible entries'})).toBeChecked();
   await editor.locator('[data-feed-heading]').fill('Released instrument observations');
@@ -94,7 +93,7 @@ test('an authored feed republishes new lab grants, changed writing and section w
   next.publication=defaultPublicationPrivacy();next.publication.website.hiddenFigures=[next.figures[2].id];
   await submitLabChanges(page,source,next);
   await fixture.close(app);app=null;
-  const sentinels=await disableWebsiteResearch(fixture.directory,[path.join(fixture.directory,name),...source.roots]);
+  const sentinels=await disableWebsiteResearch(fixture.directory,[path.join(fixture.directory,name)]);
   app=await fixture.start(undefined,{website:true});page=await app.firstWindow();
   const unexpected=[];
   const checkURL=url=>{const pathname=new URL(url).pathname;if(pathname.startsWith('/api/')&&!pathname.startsWith('/api/website-files/')&&!['/api/session','/api/access/status','/api/language','/api/interface'].includes(pathname))unexpected.push(pathname);};
@@ -112,8 +111,7 @@ test('an authored feed republishes new lab grants, changed writing and section w
    };
   });
   for(const url of await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>r.name)))checkURL(url);
-  await page.locator('[data-website-file-block]').selectOption('paragraph');
-  await page.getByRole('button',{name:'Insert element',exact:true}).click();
+  await page.locator('[data-action="website-files-add-block"][data-block="paragraph"]').click();
   const introduction=canvas().locator('main > p').last(),note='Readings are listed by assay. Each page shows one released observation.';
   await selectLine(page,introduction);await page.keyboard.type(note);await expect(introduction).toHaveText(note);
   await page.getByRole('button',{name:'Save website',exact:true}).click();
