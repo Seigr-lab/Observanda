@@ -943,10 +943,13 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const label=key==='included'?t('localExport','files')+' ('+count+')':t('publication',key,{count});
    return '<details class="website-files-diff"><summary>'+esc(label)+'</summary><div data-file-plan-rows>'+destinationPlanRows(review,key,{esc,action:'website-files-plan-page'})+'</div></details>';
   });
-  const confirm=destinationConflictCount(review)?'<p role="alert">'+esc(tr('conflicts'))+'</p>'+button('replacement','replacement-plan')
+  // Replacing an existing site can first keep it on a branch of its own.
+  const archive='<details class="website-files-replacement"><summary>'+esc(t('publication','replacementOptions'))+'</summary><p>'+esc(t('publication','replacementGuidance'))+'</p><label for="website-replacement-archive">'+esc(t('publication','replacementArchiveLabel'))+'</label><input id="website-replacement-archive" data-replacement-archive maxlength="100" placeholder="before-observanda" value="'+esc(review.replacement?.archiveBranch??'')+'"><p>'+esc(t('publication','replacementArchiveGuidance'))+'</p></details>';
+  const archived=review.replacement?.archiveBranch?'<p data-replacement-archived>'+esc(t('publication','replacementArchive',{branch:review.replacement.archiveBranch,commit:review.head}))+'</p>':'';
+  const confirm=destinationConflictCount(review)?'<p role="alert">'+esc(tr('conflicts'))+'</p>'+archive+button('replacement','replacement-plan')
    :'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
   const withdrawal=remoteEdition==='withdrawal'?'<p role="note" data-release-withdrawal>'+esc(tr('releaseWithdrawRemoteIntro'))+'</p>':'';
-  return '<section data-website-files-review><h3>'+esc(tr(remoteEdition==='withdrawal'?'releaseWithdrawReview':'review'))+'</h3>'+withdrawal+'<p>'+esc(address)+'</p>'+lists.join('')+confirm+'</section>';
+  return '<section data-website-files-review><h3>'+esc(tr(remoteEdition==='withdrawal'?'releaseWithdrawReview':'review'))+'</h3>'+withdrawal+'<p>'+esc(address)+'</p>'+archived+lists.join('')+confirm+'</section>';
  }
  // A server destination: one of the workspace's server logins, set up once in
  // Preferences → Integrations, and this website's own folder on that server.
@@ -1203,7 +1206,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
    else if(operation==='save-destination')await saveDestination();
    else if(operation.startsWith('repository-'))await repository.action(operation.slice('repository-'.length));
-   else if(operation==='plan'||operation==='replacement-plan'){await save();if(destinationDirty)await saveDestination();plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),...(operation==='replacement-plan'?{replaceExisting:true}:{})});render();}
+   else if(operation==='plan'||operation==='replacement-plan'){const archiveBranch=operation==='replacement-plan'?document.querySelector('[data-replacement-archive]')?.value.trim()||null:null;await save();if(destinationDirty)await saveDestination();plan=await remoteRequest('plan',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),...(operation==='replacement-plan'?{replaceExisting:true,archiveBranch}:{})});render();}
    else if(['publish','publish-retry','publish-pages','publish-settle','publish-verify'].includes(operation))await remoteAction(operation);
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
