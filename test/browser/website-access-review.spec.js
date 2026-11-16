@@ -27,7 +27,7 @@ test('repair rendered accessibility findings, then read and operate the exported
   await expect(canvas.getByRole('heading',{name:'Transect report'})).toBeVisible();
   async function review(width=768){
    await check.focus();await check.press('Enter');const panel=page.getByRole('dialog',{name:'Check page'});
-   await expect(panel).toBeVisible();await panel.getByLabel('Viewport width in pixels').selectOption(String(width));
+   await expect(panel).toBeVisible();await panel.getByLabel('Preview width in pixels').selectOption(String(width));
    await expect(panel.getByRole('status')).toContainText('at '+width+' px');return panel;
   }
   async function repair(panel,pattern,change,matching={}){

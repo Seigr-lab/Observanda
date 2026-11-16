@@ -39,12 +39,12 @@ test('author scientific source, locate and repair a refused edit, undo a saved C
   await page.getByRole('textbox',{name:'Replace with',exact:true}).fill('station 3');await b('Next match').click();await b('Replace').click();
   await expect(htmlField).toHaveValue(/station 3/);await expect(status).toContainText('same draft');
   await htmlField.evaluate(el=>el.setSelectionRange(el.value.indexOf('station 3'),el.value.indexOf('station 3')));
-  await b('Locate on canvas').click();await expect(canvas.locator('#depth')).toHaveText('Depth at station 3.');
+  await b('Locate on the page').click();await expect(canvas.locator('#depth')).toHaveText('Depth at station 3.');
   await canvas.locator('#depth').click();await page.keyboard.press('End');await page.keyboard.type(' Verified.');
   await expect(htmlField).toHaveValue(/Verified\./);
   expect(await htmlField.inputValue()).toContain("<P id='depth' data-unit='m'>Depth at station 3. Verified.</P>");
   const position=(await htmlField.inputValue()).indexOf('Permitted result');await htmlField.evaluate((el,at)=>el.setSelectionRange(at,at),position);
-  await b('Locate on canvas').click();await expect(note).toContainText('Managed content.');
+  await b('Locate on the page').click();await expect(note).toContainText('Managed content.');
   await canvas.locator('h1').click();await expect.poll(()=>htmlField.evaluate(el=>el.value.slice(el.selectionStart,el.selectionEnd))).toBe('<H1>');
   await b('Format source').click();await expect(htmlField).toHaveValue(/<P\n  id='depth'\n  data-unit='m'>/);
   await expect(status).toContainText('same draft');await b('Save website').click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');

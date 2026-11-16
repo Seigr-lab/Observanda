@@ -52,7 +52,7 @@ test('author a named figure grid and position a scientific annotation visually i
   const percentages=await marker.evaluate(n=>{const s=getComputedStyle(n),p=n.parentElement;return [parseFloat(s.right)*100/p.clientWidth,parseFloat(s.bottom)*100/p.clientHeight];});
   expect(percentages[0]).toBeCloseTo(10,0);expect(percentages[1]).toBeCloseTo(20,0);
   await coords.getByRole('button',{name:'Return to normal flow'}).click();await expect(marker).toHaveCSS('position','static');
-  await coords.getByLabel('Anchor corner').selectOption('tl');await coords.getByLabel('Coordinate units').selectOption('px');await coords.getByRole('button',{name:'Choose a point in the canvas'}).click();
+  await coords.getByLabel('Anchor corner').selectOption('tl');await coords.getByLabel('Coordinate units').selectOption('px');await coords.getByRole('button',{name:'Choose a point in the page'}).click();
   const spectrum=canvas.locator('#plate0 img');await spectrum.scrollIntoViewIfNeeded();const image=await spectrum.boundingBox();
   const peak={x:image.x+image.width*130/320,y:image.y+image.height*32/160};
   await page.mouse.click(peak.x,peak.y);

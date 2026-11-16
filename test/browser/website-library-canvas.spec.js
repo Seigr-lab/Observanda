@@ -42,7 +42,7 @@ test('dock the library and drop a permitted entry between authored sections in t
   await page.getByRole('button',{name:'Browse available content'}).click();
   const dialog=page.getByRole('dialog');
   await expect(dialog.locator('[data-picker-row]')).toHaveCount(6);
-  await dialog.getByRole('button',{name:'Place on canvas'}).click();
+  await dialog.getByRole('button',{name:'Place on the page'}).click();
   await expect(dialog).toHaveAttribute('data-placement-dock','');
   const dock=await dialog.boundingBox(),frame=await page.locator('#website-files-canvas').boundingBox();
   expect(dock.x+dock.width).toBeLessThanOrEqual(frame.x+1);

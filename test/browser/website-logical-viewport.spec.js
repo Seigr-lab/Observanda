@@ -90,7 +90,7 @@ test('fitted canvas, saved preview and a published website agree with an indepen
   const coordinates=layout.locator('.website-layout-composer > details').filter({hasText:'Anchor corner'});
   await coordinates.locator(':scope > summary').click();
   await coordinates.getByLabel('Coordinate units').selectOption('px');
-  await coordinates.getByRole('button',{name:'Choose a point in the canvas'}).click();
+  await coordinates.getByRole('button',{name:'Choose a point in the page'}).click();
   const grid=await canvas.locator('#plots').boundingBox(),point={x:grid.x+grid.width*.24,y:grid.y+grid.height*.64};
   await page.mouse.click(point.x,point.y);
   await expect(canvas.locator('#second')).toHaveCSS('position','absolute');
