@@ -32,9 +32,11 @@ test('website editor labels and accessibility names follow the selected language
    await expect(page.locator('html')).toHaveAttribute('lang',locale);
    await expect(page.getByRole('button',{name:text('save'),exact:true})).toBeDisabled();
    await expect(page.getByRole('button',{name:text('preview'),exact:true})).toBeVisible();
-   for(const key of ['site','page','siteReleaseTools'])await expect(commands.getByRole('group',{name:text(key),exact:true})).toBeVisible();
+   // The editor bar: website and page pickers, and the Manage and publish menu.
+   for(const key of ['site','page'])await expect(commands.getByRole('combobox',{name:text(key),exact:true})).toBeVisible();
+   await expect(page.locator('[data-website-site-menu] summary')).toHaveText(text('manageAndPublish'));
    await expect(page.getByRole('navigation',{name:text('siteTools'),exact:true}).getByRole('button',{name:text('designThemes'),exact:true})).toBeVisible();
-   await expect(commands.getByRole('button',{name:text('folderPublish'),exact:true})).toBeVisible();
+   await expect(page.getByRole('button',{name:text('folderPublish'),exact:true})).toBeVisible();
    // Formatting controls appear, with translated names, once the cursor is in the page.
    await paragraph.click();
    await expect(page.locator('[data-visual-command="subscript"]')).toHaveAccessibleName(text('richSubscript'));
