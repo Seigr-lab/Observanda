@@ -1,4 +1,5 @@
 import {contributorValueId,relationValueId,mediaValueId,figureValueId,figureSharingId} from './record-value-model.js';
+import {recordValueHeading} from './record-value-heading.js';
 import {attemptValueField} from './record-attempt-value.js';
 import {resultValueId} from './record-result-value.js';
 import {customFieldLabel as templateFieldLabel} from './custom-field-presentation.js';
@@ -14,7 +15,7 @@ export const recordValueLabel=(name,definition)=>figureSharingId(name)?text('fig
 // "Edit record title", worded per language; a template field keeps the label
 // its author wrote.
 const editKey=name=>figureSharingId(name)?'figureSharing':resultValueId(name)?'result':attemptValueField(name)?'attempts':contributorValueId(name)?'contributor':relationValueId(name)?'relation':mediaValueId(name)?'media':figureValueId(name)?'figure':name;
-export const recordValueEditLabel=(name,definition)=>{const key=editKey(name);return ['title','type','status','outcome','occurredOn','share','sharePdf','publication','figureSharing','result','contributor','relation','media','figure','attempts'].includes(key)&&!(definition&&key===name)?text('edit_'+key):text('heading',{field:recordValueLabel(name,definition)});};
+export const recordValueEditLabel=(name,definition)=>{const key=editKey(name);return ['title','type','status','outcome','occurredOn','share','sharePdf','publication','figureSharing','result','contributor','relation','media','figure','attempts'].includes(key)&&!(definition&&key===name)?text('edit_'+key):recordValueHeading(recordValueLabel(name,definition),{authored:Boolean(definition)});};
 export function recordContributorControls(record,esc,busy=false){
  const button=(name,field)=>'<button type="button" class="button" data-action="record-value-edit" data-value-field="'+esc(field)+'" aria-label="'+esc(name)+'"'+(busy?' disabled':'')+'>'+esc(text('editContributorButton'))+'</button>';
  return '<div class="record-contributor-values">'+(record.contributors.length?'<ul>'+record.contributors.map(person=>'<li data-record-contributor="'+person.id+'"><p>'+esc(person.name)+(person.role?' &middot; '+esc(person.role):'')+'</p>'+button(text('editContributor',{name:person.name}),'contributor:'+person.id)+'</li>').join('')+'</ul>':'<p>'+esc(text('noContributors'))+'</p>')+'<button type="button" class="button" data-action="record-value-add-contributor"'+(busy?' disabled':'')+'>'+esc(text('addContributor'))+'</button></div>';
