@@ -462,3 +462,14 @@
 .inspector-tabs [role=tab][aria-selected=true] { color:var(--ui-text); background:var(--ui-surface); box-shadow:0 1px 2px var(--ui-shadow) }
 .inspector-tabs [role=tab]:focus-visible { outline:2px solid var(--ui-accent); outline-offset:1px }
 .inspector-panel[hidden] { display:none }
+/* The application's navigation as a drawer over the full-screen editor. */
+.website-files-app>nav { display:flex; flex-wrap:wrap; gap:.3rem; align-items:center }
+.website-files-drawer-toggle { display:inline-flex; align-items:center; gap:.35rem }
+dialog.website-files-drawer { margin:0; inset-block:0; inset-inline:0 auto; width:min(20rem,88vw); max-width:none; height:100dvh; max-height:none; padding:0; border:0; background:none; overflow:hidden }
+dialog.website-files-drawer[open] { display:flex; flex-direction:column }
+.website-files-drawer::backdrop { background:color-mix(in srgb,var(--ui-text) 40%,transparent) }
+.website-files-drawer-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; margin-block-end:1rem }
+.website-files-drawer-head .workspace-heading { grid-column:auto; grid-row:auto; justify-self:start; min-width:0 }
+.website-files-drawer-head .workspace-identity { justify-content:flex-start; color:inherit }
+.website-files-drawer-head [data-website-files-drawer-close] { order:1 }
+.website-files-drawer .website-files-drawer-navigation { position:static; flex:1; height:100%; min-height:0; overflow-y:auto }

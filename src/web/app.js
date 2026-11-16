@@ -86,6 +86,7 @@ import {ux} from './experience-ui.js';
 import {toolDirectoryView,filterToolDirectory,discoverableTools} from './tool-directory-ui.js';
 import {recoveryCenter} from './recovery-center.js';
 import {workspaceNavigation} from './workspace-navigation.js';
+import {websiteFilesDrawer} from './website-files-drawer.js';
 import {websiteSitesUI} from './website-sites-ui.js';
 import {activeWebsite,explicitWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
 import {moduleLinks} from './module-links.js';
@@ -221,7 +222,8 @@ const icons = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const mark = applicationMark;
 
-const navigation=workspaceNavigation({state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():sites.root())):target[key]}),icon,logosFor,pinnedTools:()=>textControls.pinnedTools()});
+const navigationOptions={state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():sites.root())):target[key]}),icon,logosFor,pinnedTools:()=>textControls.pinnedTools()};
+const navigation=workspaceNavigation(navigationOptions),websiteDrawer=websiteFilesDrawer({navigation:workspaceNavigation(navigationOptions),esc});
 
 const websiteSelection=websiteSelectionDraft();
 const websiteDocuments=websiteDocumentClient({state,api,selection:websiteSelection,onStatus:({dirty,error,busy,structuralBusy=false})=>{websiteEditingGuard(document,structuralBusy);if(state.websiteEditor){state.dirty=dirty;updateSaveStatus();const status=document.querySelector('[data-website-draft-status]');if(status)status.textContent=error||t('websiteEditor',busy?'documentBusy':dirty?'documentDraftSaved':'documentSaved');const retry=document.querySelector('[data-action=website-draft-retry]');if(retry)retry.hidden=!error;}}});
@@ -790,6 +792,9 @@ async function action(button){
   const fileAction=button.dataset.action;
   if(state.filesMode){
     if(fileAction==='context-help'&&button.hasAttribute('data-saved-website-guide')){await taskHelp.open('publishing',button,['project-websites','design','appearance','local-export','release']);return;}
+    if(fileAction==='website-files-drawer'){websiteDrawer.open(button);return;}
+    // A place chosen in the drawer leaves the editor, after its unsaved work is settled.
+    if(websiteDrawer.contains(button)){websiteDrawer.close();if(fileAction!=='website'&&await websiteFiles?.beforeLeave()){await leaveWebsiteFiles();await action(button);}return;}
     if(fileAction==='website-files-back'){if(await websiteFiles?.beforeLeave())await leaveWebsiteFiles();return;}
     if(fileAction==='website-files-retry'){await enterWebsiteFiles({hash:location.hash,replace:true});return;}
     if(fileAction?.startsWith('website-files-')||fileAction?.startsWith('github-')){await websiteFiles?.action(button);return;}
@@ -1412,7 +1417,7 @@ function renderWebsiteFiles(){
   workspaceLive.bind();
   const text=(key,fallback)=>websiteFiles?t('websiteFiles',key):fallback;
   const view=state.fileError?'<p role="alert">'+esc(state.fileError)+'</p><button type="button" class="button" data-action="website-files-retry">'+esc(text('retry',appText('workspace')))+'</button>':websiteFiles?.view()??'<p role="status">'+esc(text('loading',t('supportEditors','moduleOpening')))+'</p>';
-  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav><button type="button" class="button subtle" data-action="website-files-back">'+esc(websiteReturn?text('backToPrevious',appText('workspace')):text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
+  appShell.showStandalone('<main class="website-files-app" id="main" data-website-files-app><nav>'+(state.book?websiteDrawer.toggle():'')+'<button type="button" class="button subtle" data-action="website-files-back">'+esc(websiteReturn?text('backToPrevious',appText('workspace')):text('workspace',appText('workspace')))+'</button></nav>'+view+'</main>');
   document.documentElement.dataset.appMode='website';document.title=text('title',appText('saveWebsite'))+' · Observanda';if(!state.fileError)websiteFiles?.bind();
 }
 async function enterWebsiteFiles({hash='#/website',replace=false}={}){
@@ -1429,7 +1434,7 @@ async function enterWebsiteFiles({hash='#/website',replace=false}={}){
 }
 async function leaveWebsiteFiles({hash=null,replace=false}={}){
   hash??=websiteReturn?.context===state.storage?.contextId?websiteReturn.hash:'#/workspace';websiteReturn=null;
-  fileEditorEpoch++;websiteFiles?.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
+  fileEditorEpoch++;websiteDrawer.remove();websiteFiles?.clear();state.filesMode=false;state.fileError=null;state.dirty=false;
   if(location.hash!==hash){if(!replace)routeIndex++;history[replace?'replaceState':'pushState']({...history.state,observandaIndex:routeIndex},'',hash);}
   await loadWorkspace();
 }
