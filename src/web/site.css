@@ -168,3 +168,6 @@ footer{padding-block:28px;border-top:1px solid var(--page-border);color:var(--pa
 .site-masthead{box-sizing:border-box;max-width:var(--site-width,1200px);margin-inline:auto;border-bottom:1px solid var(--page-border)}
 .site-masthead .page-composition{margin:0}
 @media print{.site-masthead{display:none}}
+
+/* Pictures carry their intrinsic size so space is reserved while they load; a rule that sets a height still wins. */
+:where(img[width][height]){height:auto}

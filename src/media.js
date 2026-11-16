@@ -228,7 +228,9 @@ export class MediaStore {
     const relative=path.relative(this.root,file).split(path.sep).join('/');let content=await retiredMediaContent(this.workspace,relative,metadata.bytes,metadata.sha256);
     if(!content){await assertRegular(file);content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
     let bytes;
-    if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.readChunks(0,headerBytes-1,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
+    // An image's header also carries its PNG size (24 bytes) for the published markup.
+    const headerLength=metadata.kind==='image'?Math.min(Math.max(headerBytes,24),metadata.bytes):headerBytes;
+    if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.readChunks(0,headerLength-1,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
     else{bytes=await contentBuffer(content,{signal,maxBytes:metadata.bytes});if(includeHeader&&metadata.kind!=='file')content.header=Buffer.from(bytes.subarray(0,headerBytes));}
     return { id, kind: metadata.kind, extension: metadata.extension, mime: metadata.mime, bytes,...(metadata.kind==='file'?downloadInfo(metadata):{}) };
   }

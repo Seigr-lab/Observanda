@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {buildPublication,publicProjection,renderPublication} from '../src/publication.js';
+import {pngSize} from '../src/canonical-png.js';
+import {FileContent} from '../src/file-content.js';
 const image=()=>({id:randomUUID(),kind:'image',caption:'A research image',alt:'A leaf',transcript:'',share:true});
 test('format 10 migration preserves old excluded pages and original research without mutating source',()=>{
  const b=legacyRecords(sampleNotebook());b.formatVersion=10;delete b.website.presentation;delete b.website.palette;b.pages.push({id:randomUUID(),title:'Excluded page',body:'Private notes',share:false,sections:[]});const raw=JSON.stringify(b),next=upgradeNotebook(b);assert.equal(JSON.stringify(b),raw);assert.deepEqual(next.entries,b.entries.map(upgradeRecord));assert.equal(next.pages[0].share,false);assert.deepEqual(next.website.presentation,{media:[],covers:[]});
@@ -21,6 +23,16 @@ test('only approved images become record covers; per-use presentation leaves ori
 });
 
 
+test('published images carry their PNG size so browsers reserve their space before loading',()=>{
+ const b=sampleNotebook(),e=b.entries[0],a=image();e.attachments=[a];const bytes=readFileSync('src/preview-assets/image.png');
+ assert.deepEqual(pngSize(bytes),{width:480,height:280});assert.equal(pngSize(Buffer.from('not a picture, not a picture')),null);
+ // In memory, and as streamed content that holds only its first 24 bytes.
+ for(const content of [bytes,Object.assign(Object.create(FileContent.prototype),{header:bytes.subarray(0,24)})]){
+  const html=renderPublication(publicProjection(b),{mediaFiles:new Map([[a.id,{kind:'image',extension:'png',bytes:content}]])}).files.get('entries/'+e.id+'.html')??'';
+  assert.match(html,/<img src="[^"]*media\/[^"]+\.png" width="480" height="280" alt="A leaf" loading="lazy">/);
+ }
+ assert.match(readFileSync('src/web/site.css','utf8'),/:where\(img\[width\]\[height\]\)\{height:auto\}/);
+});
 test('saved layouts and duplicates keep independent image settings and excluded uses never enter the public projection',async()=>{
  const {copySectionPresentation,clearSectionPresentation}=await import('../src/web/media-presentation.js');
  const b=sampleNotebook(),asset={id:randomUUID(),kind:'image',caption:'Shared image',alt:'A leaf',transcript:''},section={id:randomUUID(),kind:'asset',assetId:asset.id,title:'',show:true};b.website.assets=[asset];b.website.home.sections=[section];

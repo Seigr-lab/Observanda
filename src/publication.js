@@ -1,4 +1,5 @@
 import {websiteRootStyle} from './web/website-root-style.js';
+import {pngSize} from './canonical-png.js';
 import {hasRetainedFigure} from './record-retained-figures.js';
 import {retainedTableView} from './web/retained-table-model.js';
 import {downloadPath,validDownloadInfo} from './web/website-file.js';
@@ -191,7 +192,9 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
       // Cues that cannot be read are left out; a track without any is not published.
       const readable=(attachment.kind==='video'?attachment.captions??[]:[]).flatMap(track=>{const vtt=readableCaptions(track.vtt);return vtt.includes('-->')?[{...track,vtt}]:[];});
       const tracks=readable.map((track,i)=>{const name=`media/${attachment.id}.${track.language}.vtt`;files.set(name,track.vtt);return `<track kind="captions" src="${prefix}${name}" srclang="${esc(track.language)}" label="${esc(track.label)}"${i===0?' default':''}>`;}).join('');
-      let player = attachment.kind === 'image' ? `<img src="${src}" alt="${esc(attachment.alt || attachment.caption)}" loading="lazy">` : `<${attachment.kind} controls preload="metadata" src="${src}" aria-label="${esc(attachment.alt || attachment.caption || 'Recording')}"${attachment.alt || attachment.caption ? '' : ' data-observanda-aria="websiteRecordText:recording"'}>${tracks}<span data-observanda-label="websiteRecordText:mediaUnsupported">This browser cannot play this recording.</span> <a href="${src}" data-observanda-label="websiteRecordText:downloadRecording">Download the recording</a></${attachment.kind}>`;
+      const size = attachment.kind === 'image' ? pngSize(Buffer.isBuffer(asset.bytes) ? asset.bytes : asset.bytes.header) : null;
+      // Intrinsic size lets browsers reserve the picture's space before it loads.
+      let player = attachment.kind === 'image' ? `<img src="${src}"${size ? ` width="${size.width}" height="${size.height}"` : ''} alt="${esc(attachment.alt || attachment.caption)}" loading="lazy">` : `<${attachment.kind} controls preload="metadata" src="${src}" aria-label="${esc(attachment.alt || attachment.caption || 'Recording')}"${attachment.alt || attachment.caption ? '' : ' data-observanda-aria="websiteRecordText:recording"'}>${tracks}<span data-observanda-label="websiteRecordText:mediaUnsupported">This browser cannot play this recording.</span> <a href="${src}" data-observanda-label="websiteRecordText:downloadRecording">Download the recording</a></${attachment.kind}>`;
       const href=resolveMediaLink(display.link,prefix);
       if(href&&attachment.kind==='image')player=`<a href="${esc(href)}" target="${display.target}" rel="noopener noreferrer">${player}</a>`;
       if(viewer&&!href&&attachment.kind==='image')player='<a href="'+esc(src)+'" data-gallery-image aria-haspopup="dialog">'+player+'</a>';

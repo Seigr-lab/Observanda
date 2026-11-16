@@ -2,6 +2,12 @@ import {AppError} from './errors.js';
 import {PDF_IMAGE_MAX_BYTES,PDF_IMAGE_MAX_PIXELS} from './web/pdf-image-model.js';
 const fail=(code='MEDIA_INVALID')=>{throw new AppError(code);};
 export const pngSignature=Buffer.from([137,80,78,71,13,10,26,10]);
+// Width and height from a PNG's first 24 bytes (signature, then the IHDR
+// chunk), or null when the bytes do not begin a PNG.
+export function pngSize(bytes){
+ if(!Buffer.isBuffer(bytes)||bytes.length<24||!bytes.subarray(0,8).equals(pngSignature)||bytes.toString('latin1',12,16)!=='IHDR')return null;
+ const width=bytes.readUInt32BE(16),height=bytes.readUInt32BE(20);return width>0&&height>0?{width,height}:null;
+}
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let i=0;i<8;i++)n=(n>>>1)^((n&1)?0xedb88320:0);return n>>>0;});
 const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes)crc=(crc>>>8)^crcTable[(crc^byte)&255];return (crc^0xffffffff)>>>0;};
 export function canonicalPNG(bytes,{strict=false}={}){
