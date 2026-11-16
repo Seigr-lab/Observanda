@@ -239,9 +239,6 @@
 .website-files-editor>aside:has([data-placement-dock])>:not([data-website-picker]),[data-website-picker]:has([data-placement-dock])>:not(dialog) {display:none}
 .website-files-editor [data-website-picker]:has([data-placement-dock]) {height:100%;padding:0;border:0;margin:0}
 .website-files-editor dialog[data-placement-dock][open] {position:static;inset:auto;margin:0;width:100%;max-width:100%;height:100%;max-height:none;display:grid;grid-template-rows:auto auto minmax(0,1fr);box-shadow:none}
-@media(min-width:62rem) {
- .website-files-editor:has([data-placement-dock]) {grid-template-columns:minmax(16rem,26%) minmax(0,1fr) minmax(13rem,20%)}
-}
 @media(max-height:37.999rem),(max-width:61.999rem) {
  .website-files-editor [data-website-picker]:has([data-placement-dock]) {height:clamp(18rem,60dvh,38rem)}
 }
@@ -454,6 +451,9 @@
 .website-tool svg { width:1.25rem; height:1.25rem }
 /* Narrower windows keep every column, slimmer; the stacked layout below 62rem lays the rail out as a row. */
 @media (max-width:1100px){ .website-files-editor { grid-template-columns:4.75rem minmax(13rem,24%) minmax(0,1fr) minmax(12rem,20%) } .website-files-editor[data-panel-open] { grid-template-columns:4.75rem minmax(18rem,38%) minmax(0,1fr) } .website-tool { font-size:.62rem } }
+/* The docked content library takes the library column; the rail keeps its own. */
+@media (min-width:62rem){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:5.75rem minmax(16rem,26%) minmax(0,1fr) minmax(13rem,20%) } }
+@media (min-width:62rem) and (max-width:1100px){ .website-files-editor:has([data-placement-dock]) { grid-template-columns:4.75rem minmax(14rem,28%) minmax(0,1fr) minmax(12rem,20%) } }
 @media (max-width:61.999rem),(max-height:37.999rem){ .website-tool-rail { position:static; max-height:none; grid-template-columns:repeat(auto-fill,minmax(4.75rem,1fr)) } .website-files-code-layout { grid-template-columns:1fr } }
 /* Properties of the selected part, in tabs. */
 .inspector-tabs { display:flex; gap:.2rem; margin:.5rem 0 .75rem; padding:.2rem; background:var(--ui-soft); border:1px solid var(--ui-border); border-radius:var(--ui-control-radius) }
