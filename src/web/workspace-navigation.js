@@ -7,7 +7,6 @@ import {moduleChildren,enabledModule,FEATURE_MODULES} from './feature-modules.js
 import {preferencePage} from './preferences-ui.js';
 import {t,language} from './i18n/index.js';
 import {orderNavigationNodes} from './navigation-dom.js';
-import {explicitWebsite} from './website-context.js';
 import {ux} from './experience-ui.js';
 
 const text = (node, value) => { if(node.textContent !== String(value))node.textContent = value; };
@@ -102,7 +101,7 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
         attr(node,'data-module-path',entry.moduleId?entry.modulePath??'':null);
         active(node,entry.action==='module-open'
           ?state.page==='module'&&state.moduleId===entry.moduleId&&parseScope(state.modulePath).projectId===parseScope(entry.modulePath).projectId&&(!entry.modulePath||state.modulePath===entry.modulePath||state.modulePath?.startsWith(entry.modulePath+'/'))
-          :entry.action==='website'?state.page==='website'||state.page==='websites'||explicitWebsite(state)&&['appearance','branding'].includes(state.page):entry.action==='publishing'?state.page==='publishing'||explicitWebsite(state)&&['integrations','review'].includes(state.page):state.page===entry.action);
+          :state.page===entry.action);
         ordered.push(node);
       }
       for(const [key,node] of item.buttons)if(!keys.has(key)){node.remove();item.buttons.delete(key);}
@@ -188,7 +187,7 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
       updateTree(initial);updateIdentity();
       active(dashboard,state.page==='workspace');
       active(settings.querySelector('[data-action="storage-workspaces"]'),state.page==='workspaces');
-      active(settings.querySelector('[data-action="preferences"]'),!explicitWebsite(state)&&(preferencePage(state.page)||state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences'))));
+      active(settings.querySelector('[data-action="preferences"]'),preferencePage(state.page));
       if(state.access?.protected){if(!lock.isConnected)settings.append(lock);}else lock.remove();
       return initial||structureChanged;
     }

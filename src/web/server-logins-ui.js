@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteAuthoring.js';
 import {t} from './i18n/index.js';
 
 // Preferences → Integrations: the workspace's server logins. Each web server is

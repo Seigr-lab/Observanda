@@ -18,21 +18,3 @@ export function reviewsUI(options) {
   isBusy:()=>ui.loading()||Boolean(ui.current()?.isBusy())
  };
 }
-
-export function publicationJobsUI(options) {
- const ui=deferred(options,()=>import('./publication-jobs-ui.js').then(m=>()=>m.publicationJobsUI(options)));
- return {
-  start:(...args)=>ui.invoke('start',...args),
-  read:(...args)=>ui.invoke('read',...args),
-  action:node=>node.dataset.action?.startsWith('publication-jobs-')?ui.invoke('action',node):Promise.resolve(false)
- };
-}
-
-export function publicationSelectionUI(options) {
- const ui=deferred(options,()=>import('./publication-selection-ui.js').then(m=>()=>m.publicationSelectionUI(options)));
- return {
-  open:(...args)=>ui.invoke('open',...args),
-  input:node=>ui.current()?.input(node)??false,
-  action:node=>node.dataset.action?.startsWith('edition-')?ui.invoke('action',node):Promise.resolve(false)
- };
-}

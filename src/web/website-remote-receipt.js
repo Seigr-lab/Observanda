@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteAuthoring.js';
 import {operationProgress} from './operation-progress-ui.js';
 import {progressUnit} from './progress-units.js';
 
