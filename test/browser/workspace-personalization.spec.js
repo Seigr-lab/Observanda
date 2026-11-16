@@ -53,10 +53,7 @@ test('app text scales menus, fields, dialogs and tables independently of website
   expect(await size(prose.locator('.rt-size-32'))).toBe(32);
   // App text never changes the workspace's research.
   expect(JSON.stringify((await fixture.workspace.read()).book)).toBe(original);
-  // Website themes are separate: choosing one leaves the app text size as saved.
-  await preferences(page,'Appearance');
-  await page.getByRole('button',{name:/Studio/}).first().click();
-  await preferences(page,'App appearance');await page.getByRole('dialog',{name:'Unsaved changes',exact:true}).getByRole('button',{name:'Discard changes',exact:true}).click();
+  await preferences(page,'App appearance');
   await expect(page.locator('main').getByRole('slider',{name:/App text size/})).toHaveValue('24');
   await page.reload();expect(await navSize(page,'Dashboard')).toBeCloseTo(enlargedMenuSize,1);
   await page.setViewportSize({width:390,height:844});await noOverflow(page);

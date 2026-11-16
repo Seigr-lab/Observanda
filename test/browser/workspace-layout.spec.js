@@ -35,17 +35,13 @@ test('record footer saves and discards only the current section and policy forms
 });
 
 test('right-side dragging saves only width while appearance edits still require an explicit save',async({page})=>{
- // App settings and the website design are separate pages: open App appearance from Website design.
- await preferences(page,'Appearance');await expect(page.getByRole('heading',{level:1,name:'Website design',exact:true})).toBeVisible();await page.locator('main .workspace-tabs').getByRole('button',{name:'App appearance',exact:true}).click();await page.locator('[data-disclosure=app-layout] summary').click();await page.getByRole('button',{name:'App layout',exact:true}).click();await page.getByLabel('Menu position',{exact:true}).selectOption('right');await page.getByRole('dialog').getByRole('button',{name:'Save app settings',exact:true}).click();await page.getByRole('button',{name:'Done',exact:true}).click();
+ await preferences(page,'App appearance');await page.locator('[data-disclosure=app-layout] summary').click();await page.getByRole('button',{name:'App layout',exact:true}).click();await page.getByLabel('Menu position',{exact:true}).selectOption('right');await page.getByRole('dialog').getByRole('button',{name:'Save app settings',exact:true}).click();await page.getByRole('button',{name:'Done',exact:true}).click();
  // Done waits for the save already sent, then closes the dialog; the page behind it is editable only after that.
  await expect(page.locator('#dialog')).not.toBeVisible();
  const original=(await workspace.read()).book.appearance.accent;await page.locator('[data-interface=fontSize]').fill('20');
  // The menu stays as the author left it; open it only when it is closed.
  const handle=page.getByRole('separator',{name:'Resize navigation'});if(!await handle.isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click();const box=await handle.boundingBox();await page.mouse.move(box.x+4,200);await page.mouse.down();await page.mouse.move(box.x-60,200,{steps:6});await page.mouse.up();await expect(handle).toHaveAttribute('aria-valuenow','336');await expect.poll(async()=>JSON.parse(await readFile(preferencesFile,'utf8').catch(()=>'{"interface":{}}')).interface.navigationWidth).toBe(336);expect(JSON.parse(await readFile(preferencesFile,'utf8')).interface.fontSize).toBe(17);
  await navigate(page,'Projects');await page.getByRole('dialog',{name:'Unsaved changes'}).getByRole('button',{name:'Discard changes'}).click();await expect(page.locator('#main-navigation')).toBeVisible();await expect(handle).toHaveAttribute('aria-valuenow','336');
- // A pending website design edit is likewise left unsaved by a width change.
- await preferences(page,'Appearance');await page.getByLabel('Accent',{exact:true}).fill('#345678');if(!await handle.isVisible())await page.getByRole('button',{name:'Menu',exact:true}).click();const wider=await handle.boundingBox();await page.mouse.move(wider.x+4,200);await page.mouse.down();await page.mouse.move(wider.x-28,200,{steps:6});await page.mouse.up();await expect(handle).toHaveAttribute('aria-valuenow','368');await expect.poll(async()=>JSON.parse(await readFile(preferencesFile,'utf8')).interface.navigationWidth).toBe(368);expect((await workspace.read()).book.appearance.accent).toBe(original);
- await navigate(page,'Projects');await page.getByRole('dialog',{name:'Unsaved changes'}).getByRole('button',{name:'Discard changes'}).click();expect((await workspace.read()).book.appearance.accent).toBe(original);
 });
 
 test('a failed record removal leaves the record editable instead of stranding an unsaved list',async({page})=>{

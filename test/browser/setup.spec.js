@@ -83,16 +83,6 @@ test('headless server folder navigation creates a folder and retains setup detai
  await dialog.getByRole('button',{name:'Use this folder',exact:true}).click();await expect(page.getByLabel('Create in',{exact:true})).toHaveValue(path.join(root,'Archive'));await expect(page.getByLabel('Password',{exact:true})).toHaveValue('retained private password');
  await page.getByRole('button',{name:'Browse server folders',exact:true}).click();await dialog.getByRole('button',{name:'Up one folder',exact:true}).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.getByLabel('Create in',{exact:true})).toHaveValue(path.join(root,'Archive'));
 });
-
-test('appearance is reached from its own section after setup and offers a full-size component preview',async({page})=>{
- await page.goto(app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Independent work');await next(page);await next(page);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
- await expect(page.locator('.workspace-name')).toHaveText('Independent work');await expect(page.locator('.first-work [data-action="new-project"]')).toHaveCount(1);await expect(page.locator('.topbar [data-action="interface-layout"],.topbar [data-action="interface-text"],main [data-action="branding"],main [data-action="website"],main [data-action="laboratory"]')).toHaveCount(0);
- await page.screenshot({path:test.info().outputPath('workspace-empty.png')});
- await preferences(page,'Appearance');await page.getByRole('button',{name:/Studio/}).click();await page.locator('.section-save [data-action=save]').click();
- await expect(page.frameLocator('#design-preview').getByRole('heading',{name:'Projects',exact:true})).toBeVisible();await page.getByRole('button',{name:'Expand preview',exact:true}).click();await expect(page.frameLocator('iframe[title="Expanded design preview"]').getByRole('heading',{name:'Projects',exact:true})).toBeVisible();await page.screenshot({path:test.info().outputPath('theme-preview-expanded.png')});await page.getByRole('button',{name:'Close preview',exact:true}).click();
- root=path.join(parent,'Independent work');const vault=await verifyAccess(await readAccess(root),'','',{deviceStore:new DeviceStore({file:path.join(parent,'preferences.json.device-key')})});const saved=(await new Workspace(root,vault).read()).book;expect(saved.projects).toHaveLength(0);await page.reload();await expect(page.getByRole('button',{name:/Studio/})).toHaveAttribute('aria-pressed','true');await preferences(page,'App appearance');await expect(page.getByLabel('App theme',{exact:true})).toHaveValue('research');
-});
-
 test('setup and module preferences govern the same project and lab-book template choices',async({page})=>{
  test.setTimeout(120000);owner=new WorkspaceDatabases({directory:path.join(parent,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(owner);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const main=page.locator('main'),dialog=page.locator('#dialog');

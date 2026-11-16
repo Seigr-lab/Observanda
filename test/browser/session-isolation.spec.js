@@ -28,12 +28,6 @@ test('authorization stays on the application origin across native resources, rel
   expect(await unrelated.evaluate(async()=>{const databases=await indexedDB.databases();return databases.map(value=>value.name);})).not.toContain('observanda-browser-session');
   const native=await context.newPage();await native.goto(app.origin+'/api/access/status');expect(await native.locator('body').innerText()).toContain('locked');await native.close();
   await page.reload();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
-  const result=await page.evaluate(async()=>{
-   const current=await(await fetch('/api/notebook')).json(),response=await fetch('/api/design-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appearance:current.book.appearance})});return {status:response.status,value:await response.json()};
-  });expect(result.status,JSON.stringify(result.value)).toBe(200);expect(result.value.url).toMatch(/^\/preview\//);
-  const preview=await context.newPage();await preview.goto(app.origin+result.value.url);await expect(preview.locator('body')).toContainText('fictional sample content');
-  const media=await preview.locator('img,audio,video').evaluateAll(async elements=>Promise.all(elements.filter(element=>element.currentSrc||element.src).map(async element=>{const response=await fetch(element.currentSrc||element.src,{headers:{Range:'bytes=0-31'}});return response.status;})));expect(media.length).toBeGreaterThan(0);expect(media.every(status=>[200,206].includes(status))).toBe(true);
-  const images=await preview.locator('img').evaluateAll(async images=>Promise.all(images.map(image=>image.complete?image.naturalWidth>0:new Promise(resolve=>{image.onload=()=>resolve(true);image.onerror=()=>resolve(false);})))) ;expect(images.every(Boolean)).toBe(true);
-  await preview.close();await unrelated.close();
+  await unrelated.close();
  }finally{await app.close();await clearVault(fixture.vault);await new Promise(resolve=>other.close(resolve));expect(path.dirname(directory)).toBe(parent);expect(path.basename(directory)).toMatch(/^observanda-session-browser-/);await rm(directory,{recursive:true,force:true});}
 });

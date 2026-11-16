@@ -24,8 +24,7 @@ test.beforeEach(async({page})=>{
 });
 test.afterEach(async()=>{await app?.close();app=null;if(fixture)await clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 
-test('dashboard cards show their selected page and the website design preview shows the whole page',async({page})=>{
+test('dashboard cards show their selected page without inner scrolling',async({page})=>{
  await navigate(page,'Dashboard');await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();const panel=page.locator('.desk-inspector');await panel.getByLabel('Items per page',{exact:true}).fill('12');await expect(panel.getByLabel('Items per page',{exact:true})).toHaveValue('12');await expect.poll(async()=>{const result=await sessionRequest(page,'get',app.origin+'/api/dashboard');return (await result.json()).settings.views[0].panels[0].count;}).toBe(12);await panel.getByRole('button',{name:'Close card settings',exact:true}).click();
  const recent=page.locator('.desk-card').filter({has:page.getByRole('heading',{name:'Recent records',exact:true})});await expect(recent.locator('.desk-item')).toHaveCount(12);await noPanels(page);await recent.getByRole('button',{name:/River observation 12/}).scrollIntoViewIfNeeded();
- await preferences(page,'Website design');await noInnerScroll(page.locator('#design-preview'));await noPanels(page);
 });

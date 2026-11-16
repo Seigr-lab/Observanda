@@ -16,7 +16,7 @@ test('Menu opens and closes on workspace screens, carries the user choice and do
  // Read the starting preferences once the browser session is authorized.
  const original=await readFile(path.join(root,'observanda.json'),'utf8'),before=await page.evaluate(async()=>(await fetch('/api/interface')).json());expect(before.appTheme).toBeTruthy();await menu.click();await expect(nav).toBeHidden();
  await navigate(page,'Projects');await expect(nav).toBeVisible();await menu.click();await expect(nav).toBeHidden();
- await navigate(page,'All records');await expect(nav).toBeVisible();await preferences(page,'Appearance');if(!await nav.isVisible())await menu.click();await expect(nav).toBeVisible();await menu.click();await expect(nav).toBeHidden();
+ await navigate(page,'All records');await expect(nav).toBeVisible();await preferences(page,'App appearance');if(!await nav.isVisible())await menu.click();await expect(nav).toBeVisible();await menu.click();await expect(nav).toBeHidden();
  expect(await page.evaluate(async()=>(await fetch('/api/interface')).json())).toEqual(before);expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(original);
  await page.setViewportSize({width:390,height:844});await menu.click();await expect(nav.getByRole('button',{name:'Website editor',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(nav).toBeHidden();
 });

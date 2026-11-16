@@ -64,20 +64,10 @@ test('encrypted general, appearance and SVG branding forms persist without resen
   await appLayout(page);await page.getByLabel('Header alignment').selectOption('right');
   await page.getByLabel('Logo and title order').selectOption('title-first');
   const interfaceSave=page.waitForResponse(r=>r.url().endsWith('/api/interface')&&r.request().method()==='POST');await click(page,'Save app settings');expect((await interfaceSave).ok()).toBe(true);
-  // Website design and branding belong to the website and save as website editor changes.
-  await preferences(page,'Appearance');let design=designChange(page);await page.getByRole('button',{name:/Studio Spacious cards/}).click();expect((await design).ok()).toBe(true);
-  // The checkpoint keeps an unsaved website draft; Save appearance publishes it into the website.
-  await expect(page.locator('#save-status')).toHaveText('Unsaved changes');let commit=websiteSave(page);await click(page,'Save appearance');expect((await commit).ok()).toBe(true);
-  await expect(page.locator('#save-status')).toHaveText('Saved');await click(page,'Logos & branding');
-  design=designChange(page);await page.getByLabel('Add logo',{exact:true}).setInputFiles({name:'studio.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="teal"/></svg>')});
-  await expect(page.locator('.logo-editor img')).toBeVisible();await expect(page.getByLabel('Add logo',{exact:true})).toBeEnabled();
-  expect((await design).ok()).toBe(true);commit=websiteSave(page);await click(page,'Save branding');expect((await commit).ok()).toBe(true);await expect(page.locator('#save-status')).toHaveText('Saved');
-  await click(page,'Back to Appearance');await page.reload();await appLayout(page);await expect(page.getByLabel('Header alignment')).toHaveValue('right');
-  await preferences(page,'Appearance');await click(page,'Logos & branding');await expect(page.locator('.logo-editor img')).toBeVisible();
+  await page.reload();await appLayout(page);await expect(page.getByLabel('Header alignment')).toHaveValue('right');
   const stored=(await f.renamed('Creative research studio').read()).book;
   expect(stored.title).toBe('Creative research studio');expect(stored.entries).toEqual(f.book.entries);
   expect(f.requests).toHaveLength(1);for(const r of f.requests){expect(r.url).toContain('/api/workspace/save');expect(r.data.changes).toEqual([]);expect(r.data.book).toBeUndefined();}
-  expect(f.designs.length).toBeGreaterThanOrEqual(2);for(const d of f.designs){expect(d.book).toBeUndefined();for(const e of f.book.entries)expect(JSON.stringify(d)).not.toContain(e.body);}
   expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });

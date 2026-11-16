@@ -73,9 +73,12 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   expect(await page.evaluate(nodes=>({host:nodes.host===document.querySelector('[data-lab-book-directory]'),grid:nodes.grid===document.querySelector('[data-lab-book-directory] .notebook-grid'),focus:nodes.focused===document.activeElement}),directoryNodes)).toEqual({host:true,grid:true,focus:true});await directoryNodes.dispose();
   await logo.click();await expect(page.locator('#notice')).toContainText('up to date');
   await fixture.screenshot(app,test.info().outputPath('desktop-workspace.png'));expect(errors).toEqual([]);
-  await navigate(page,'Website editor');await page.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();await page.getByRole('button',{name:'New website',exact:true}).click();
-  await page.getByLabel('Website name',{exact:true}).fill('Desktop project website');await page.getByRole('button',{name:'Create website',exact:true}).click();
-  await expect(page.locator('.website-site-context')).toContainText('Desktop project website');await expect(page).not.toHaveURL(/\/owners\//);const siteRoute=new URL(page.url()).hash;
+  const canvas=page.frameLocator('#website-files-canvas'),siteHeading=canvas.getByRole('heading',{name:'Desktop project website',level:1});
+  await navigate(page,'Website editor');const menu=page.locator('[data-website-site-menu]');if(!await menu.evaluate(node=>node.open))await menu.locator('summary').click();
+  await menu.getByRole('button',{name:'New website',exact:true}).click();const form=page.locator('[data-website-files-form]');
+  await form.getByLabel('Website name',{exact:true}).fill('Desktop project website');await form.getByRole('button',{name:'New website',exact:true}).click();
+  await expect(siteHeading).toBeVisible();await expect(page).not.toHaveURL(/\/owners\//);const siteRoute=new URL(page.url()).hash;
+  await page.locator('[data-action="website-files-back"]').click();
   // Exercise the desktop service's record-block upgrade through its ordinary
   // authenticated authoring API, then amend the record in the actual editor.
   const retained=await page.evaluate(async({notebook,projectId})=>{
@@ -162,29 +165,18 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await evidence.getByRole('button',{name:'Inspect',exact:true}).click();await expect(evidence.getByRole('heading',{name:/^Packaged evidence /})).toBeVisible();
   await evidence.getByRole('button',{name:'Back to evidence',exact:true}).click();await evidence.getByRole('button',{name:'Close',exact:true}).click();
   console.log('Desktop evidence: paged browsing and separate source checks passed.');
-  await page.evaluate(route=>location.hash=route,siteRoute);await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
+  await navigate(page,'Website editor');await page.locator('[data-website-file-site]').selectOption({label:'Desktop project website'});
+  // The editor names the chosen website and shows its saved page.
+  await expect(page.locator('[data-website-file-site] option:checked')).toHaveText('Desktop project website');await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   const introduction='Written in the installed desktop application for this named website.';
-  await page.evaluate(async({route,introduction})=>{
-   const storage=await(await fetch('/api/storage')).json(),headers={'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'};
-   const call=async(path,body)=>{const response=await fetch(path,{method:'POST',headers,body:JSON.stringify(body)});if(!response.ok)throw Error('Packaged website authoring failed: '+response.status);return response.json();};
-   const snapshot=await call('/api/workspace/read/start',{}),website={workspaceId:snapshot.metadata.id,websiteId:route.match(/^#\/websites\/([a-f0-9-]{36})\//)[1]};
-   let editor=await call('/api/websites/editor/open',website);
-   editor=await call('/api/websites/editor/change',{...website,websitePin:editor.websitePin,draftId:editor.draft?.id??null,expectedRevision:editor.draft?.revision??null,commandId:crypto.randomUUID(),operations:[
-    {type:'settings',path:['document','website','home','enabled'],value:true},
-    {type:'settings',path:['document','website','home','introduction'],value:introduction}
-   ]});
-   await call('/api/websites/editor/save',{...website,websitePin:editor.websitePin,draftId:editor.draft.id,expectedRevision:editor.draft.revision,commandId:crypto.randomUUID()});
-  },{route:siteRoute,introduction});
-  await page.reload();await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
-  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
-  await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).toContainText(introduction,{timeout:30000});
-  console.log('Desktop website: saved named homepage and prepared publication preview passed.');
+  await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();const html=page.getByRole('textbox',{name:'Page code (HTML)',exact:true});
+  await html.fill((await html.inputValue()).replace('</main>','<p>'+introduction+'</p></main>'));await page.getByRole('button',{name:'Save website',exact:true}).click();
+  await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  await page.reload();await page.getByRole('button',{name:'Page code (HTML)',exact:true}).click();await expect(page.getByRole('textbox',{name:'Page code (HTML)',exact:true})).toHaveValue(new RegExp(introduction));
+  console.log('Desktop website: a named website saved in the website editor reopens with its text.');
   expect(errors).toEqual([]);
   await fixture.close(app);app=null;
-  for(const root of [workspaceRoot,projectRoot,path.join(projectRoot,externalBook.title)]){
-   const service=path.join(root,'.observanda','postgresql');await readFile(path.join(service,'data','PG_VERSION'));
-   const running=await readFile(path.join(service,'data/postmaster.pid'),'utf8').catch(error=>{if(error.code==='ENOENT')return '';throw error;});expect(running.trim()).toBe('');
-  }
+  const service=path.join(workspaceRoot,'.observanda','postgresql');await readFile(path.join(service,'data','PG_VERSION'));
+  const running=await readFile(path.join(service,'data/postmaster.pid'),'utf8').catch(error=>{if(error.code==='ENOENT')return '';throw error;});expect(running.trim()).toBe('');
  }finally{await fixture.dispose(app);}
 });

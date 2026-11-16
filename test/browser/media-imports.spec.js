@@ -47,24 +47,6 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
  }finally{MediaStore.prototype.prepare=prepare;await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
-test('durable SVG branding upload adds a draft, persists on Save and can be inspected on a narrow screen',async({page})=>{
- test.setTimeout(45000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-branding-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
- try{
-  await page.goto(app.url);await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
-  await page.getByLabel('Add logo',{exact:true}).setInputFiles({name:'studio.svg',mimeType:'image/svg+xml',buffer:bytes});
-  await expect(page.locator('.logo-editor img')).toBeVisible({timeout:15000});expect((await f.workspace.read()).book.branding).toEqual([]);
-  await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();await expect(page.locator('.logo-editor img')).toBeVisible();
-  await page.setViewportSize({width:390,height:844});const open=page.getByRole('button',{name:'Media imports',exact:true});await open.focus();await page.keyboard.press('Enter');
-  const dialog=page.locator('#dialog');await expect(dialog).toContainText('Completed');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
-  await page.screenshot({path:test.info().outputPath('media-imports-narrow.png')});
-  await dialog.getByRole('button',{name:'Close',exact:true}).focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
- }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
-});
-
-// The website editor uploads its pictures directly; resumable imports belong
-// to record media, where reusing an import must never attach it twice.
 test('an interrupted upload can be reselected and attached to a record without duplication',async({page})=>{
  test.setTimeout(45000);
  const book=sampleNotebook();book.entries[0].attachments=[];
@@ -91,15 +73,15 @@ test('an interrupted upload can be reselected and attached to a record without d
 
 test('older imports remain selectable with keyboard paging while processing completes',async({page})=>{
  test.setTimeout(60000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-pages-')),f=await encryptedFixture(directory,sampleNotebook()),imports=new MediaImports(f.workspace);let oldest;
+ const book=sampleNotebook(),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-pages-')),f=await encryptedFixture(directory,book),imports=new MediaImports(f.workspace);let oldest;
  for(let i=0;i<23;i++){const session=await imports.start({name:'study-'+String(i).padStart(2,'0')+'.svg',size:bytes.length,kind:'image'});if(i===0){oldest=session;await imports.receive(session.id,bytes);}}
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  try{
-  await page.goto(app.url);await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);await (await revealInEditor(page,page.getByRole('button',{name:'Media imports',exact:true}),'Evidence and results')).click();const dialog=page.locator('#dialog');
   await expect(dialog.locator('[data-media-import-row]')).toHaveCount(20);await expect(dialog).toContainText('study-22.svg');await expect(dialog).not.toContainText('study-00.svg');
   const older=dialog.getByRole('button',{name:'Older imports'});await older.focus();await page.keyboard.press('Enter');await expect(dialog.locator('[data-media-import-row]')).toHaveCount(3);await expect(dialog).toContainText('Page 2');await expect(older).toBeDisabled();
   const row=dialog.locator('[data-media-import-row="'+oldest.id+'"]');await row.getByRole('button',{name:'Prepare media'}).click();await expect(row.getByRole('button',{name:'Use media'})).toBeVisible({timeout:15000});await expect(dialog).toContainText('Page 2');
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeInViewport();await page.screenshot({path:test.info().outputPath('media-pages-narrow.png')});
-  await row.getByRole('button',{name:'Use media'}).click();await expect(page.locator('.logo-editor img')).toBeVisible();expect((await f.workspace.read()).book.branding).toEqual([]);
+  await row.getByRole('button',{name:'Use media'}).click();await expect(page.locator('[data-record-media="'+oldest.id+'"]')).toBeVisible();
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

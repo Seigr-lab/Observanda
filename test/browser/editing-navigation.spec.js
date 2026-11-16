@@ -53,10 +53,6 @@ test('leaving the website editor asks to save, keeps the draft on Cancel and car
   await discardEdits(page);await expect(canvas(page).getByText('An unwanted change')).toHaveCount(0);await expect(canvas(page).getByText('Navigation page')).toBeVisible();
   await write(page,'Intended change');await backToWorkspace(page);await leaveQuestion(page).getByRole('button',{name:'Save and leave',exact:true}).click();
   await inWorkspace(page);const html=await savedPage(id);expect(html).toContain('Intended change');expect(html).not.toContain('An unwanted change');
-  // A website design choice is a draft of the website: leaving offers to discard it.
-  await preferences(page,'Appearance');await expect(page.getByRole('heading',{level:1,name:'Website design',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:/Studio Spacious cards/}).click();await navigate(page,'Projects');await choose(page,'Discard changes');
-  await expect(page.locator('html')).toHaveAttribute('data-theme','research');
 });
 
 test('a failed save keeps the website editor and its draft open for correction or retry',async({page})=>{
@@ -96,10 +92,10 @@ test('publishing and local access forms cannot silently lose or carry unsaved fi
 // The workspace name is its folder name: saving it renames and reopens the folder.
 test('inline workspace details protect edits and invalid forms cannot be saved by navigating away',async({page})=>{
   await editWorkspace(page);const form=page.locator('#workspace-name-form');
-  await form.getByLabel('Workspace name',{exact:true}).fill('Changed workspace');await preferences(page,'Appearance');await choose(page,'Stay here');await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue('Changed workspace');
-  await preferences(page,'Appearance');await choose(page,'Discard changes');await expect(page.locator('.workspace-name')).toHaveText(book.title);
-  await editWorkspace(page);await page.getByLabel('Workspace name',{exact:true}).fill('');await preferences(page,'Appearance');await choose(page,'Save and continue');await expect(guard(page).getByRole('alert')).toContainText('required fields');
-  await choose(page,'Stay here');await page.getByLabel('Workspace name',{exact:true}).fill('Saved through prompt');await preferences(page,'Appearance');await choose(page,'Save and continue');await expect(page.locator('.workspace-name')).toHaveText('Saved through prompt',{timeout:30000});
+  await form.getByLabel('Workspace name',{exact:true}).fill('Changed workspace');await preferences(page,'App appearance');await choose(page,'Stay here');await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue('Changed workspace');
+  await preferences(page,'App appearance');await choose(page,'Discard changes');await expect(page.locator('.workspace-name')).toHaveText(book.title);
+  await editWorkspace(page);await page.getByLabel('Workspace name',{exact:true}).fill('');await preferences(page,'App appearance');await choose(page,'Save and continue');await expect(guard(page).getByRole('alert')).toContainText('required fields');
+  await choose(page,'Stay here');await page.getByLabel('Workspace name',{exact:true}).fill('Saved through prompt');await preferences(page,'App appearance');await choose(page,'Save and continue');await expect(page.locator('.workspace-name')).toHaveText('Saved through prompt',{timeout:30000});
 });
 
 test('switching workspaces from the website editor asks first and does not persist a discarded draft',async({page})=>{

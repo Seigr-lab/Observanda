@@ -128,12 +128,6 @@ test('create, edit, persist, customize, review, and download an independent note
   // Applying the list saves the page; a remaining edit is saved here.
   const saveSite=files.getByRole('button',{name:'Save website',exact:true});if(await saveSite.isEnabled())await saveSite.click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await files.locator('[data-action="website-files-back"]').click();
-  await preferences(page,'Appearance');
-  await page.getByRole('button', { name: /Studio/ }).click();
-  await page.getByLabel('Preview content',{exact:true}).selectOption('website');
-  // The design preview renders the chosen theme for the selected website.
-  await expect(page.frameLocator('#design-preview').locator('body')).toBeVisible();
-  await saveChanges(page);
   await navigate(page,'Website editor');
   const downloadEvent=page.waitForEvent('download');await (await siteMenu(page)).getByRole('button',{name:'Download website ZIP',exact:true}).click();
   const download=await downloadEvent;
@@ -407,51 +401,6 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   expect(errors).toEqual([]);
 });
 
-test('logos at workspace, project, lab book, custom page and record scopes are saved and survive reopening', async ({ page }) => {
-  test.setTimeout(90000);
-  const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'branding-')));
-  const book=sampleNotebook(), custom={id:crypto.randomUUID(),title:'About the laboratory',body:'Independent work.',share:true};
-  book.pages.push(custom);await encryptedSample(book);
-  const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(app.url);
-  const open=async()=>{await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();};
-  const scope=page.getByLabel('Branding scope',{exact:true});
-  // Records and custom pages are chosen in pickers; the scope then names the choice.
-  async function chooseScope(target,name){
-    if(target.startsWith('entry:')){await scope.selectOption('record-picker');await page.getByRole('dialog').getByLabel('Find in this workspace',{exact:true}).fill(book.entries[0].title);await page.getByRole('dialog').locator('[data-action=research-target-choose]').click();}
-    else if(target.startsWith('page:')){await scope.selectOption('page-picker');await page.getByRole('dialog').locator('[data-page-path]').filter({hasText:custom.title}).click();}
-    else await scope.selectOption(target);
-    await expect(scope.locator('option:checked')).toContainText(name);
-  }
-  const targets=[['home','Workspace','Workspace emblem'],['project:'+book.projects[0].id,book.projects[0].title,'Project emblem'],['notebook:'+book.notebooks[0].id,book.notebooks[0].title,'Lab book emblem'],['page:'+custom.id,custom.title,'About emblem'],['entry:'+book.entries[0].id,book.entries[0].title,'Record emblem']];
-  await open();
-  for(const [target,name,alt] of targets){
-    await chooseScope(target,name);
-    await page.getByLabel('Add logo',{exact:true}).setInputFiles(fixtures.image.file);
-    await page.getByLabel('Logo 1 alternative text').fill(alt);
-    await page.getByRole('button',{name:'Save branding',exact:true}).click();
-    await expect(page.locator('#save-status')).toHaveText('Saved');
-  }
-  await chooseScope('home','Workspace');
-  await page.getByLabel('Add logo',{exact:true}).setInputFiles(fixtures.image.file);
-  await page.getByLabel('Logo 2 alternative text').fill('Partner emblem');
-  await page.getByRole('button',{name:'Save branding',exact:true}).click();
-  await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.screenshot({path:test.info().outputPath('scoped-branding.png'),fullPage:true});
-  // Reopening returns to Logos & branding, and every scope still has its own logos.
-  await page.reload();await expect(page.getByRole('heading',{name:'Logos & branding',level:1})).toBeVisible();
-  for(const [target,name,alt] of targets){
-    await chooseScope(target,name);
-    await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue(alt);
-    if(target==='home')await expect(page.getByLabel('Logo 2 alternative text')).toHaveValue('Partner emblem');
-  }
-  await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
-  expect(errors).toEqual([]);
-});
-
-// A Logos block in the website editor shows the website's logos, set in the home
-// page's settings; they are placed from the website's own files when it is published.
 test('website logos set in page settings reach a Logos block, published from the website files', async ({ page }) => {
   test.setTimeout(150000);
   const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'site-logos-')));
@@ -504,132 +453,6 @@ test('a server login is set up once in Integrations and a website publishes to i
   await expect(page.locator('[data-website-files-review]')).toContainText('Lab server · research@hosting.example:/srv/observanda/current');
 });
 
-
-test('themes style the whole workspace and can be saved, renamed, updated, reapplied and deleted', async ({ page }) => {
-  const errors = []; page.on('pageerror', error => errors.push(error.message));
-  page.on('console',message=>{
-    if(message.type()!=='error')return;
-    const blocked=message.text().match(/^Blocked script execution in '([^']+)' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/);
-    // Reader scripts stay disabled in previews, including their temporary blank frame; the parent wires controls.
-    if(blocked&&(blocked[1]==='about:blank'||blocked[1].startsWith(app.origin+'/appearance-preview/')||blocked[1].startsWith(app.origin+'/preview/')))return;
-    // Failed requests are checked by address below.
-    if(message.text().startsWith('Failed to load resource:'))return;
-    errors.push(message.text());
-  });
-  const sample=sampleNotebook();
-  // The sample keeps its project inside the workspace (the older model), which has no lab book list.
-  page.on('response',response=>{if(response.status()>=400&&!response.url().endsWith('/api/projects/'+sample.projects[0].id+'/lab-books/list'))errors.push(response.status()+' '+new URL(response.url()).pathname);});
-  await encryptedSample(sample);
-  await page.goto(app.url);
-  await preferences(page,'Appearance');await expect(page.locator('#design-preview')).toHaveAttribute('sandbox','allow-same-origin');
-  // Website themes style websites; the app keeps its own app theme.
-  const appNavigation=await page.locator('.nav-button.active').evaluate(el=>getComputedStyle(el).color);
-  await page.getByRole('button', { name:/^Studio/ }).click();
-  await expect(page.locator('.sidebar')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(page.locator('.nav-button.active')).toHaveCSS('color', appNavigation);
-  await page.locator('[data-appearance="accent"]').fill('#5832a8');
-  await expect(page.locator('.nav-button.active')).toHaveCSS('color', appNavigation);
-  await page.getByLabel('Published cards', {exact:true}).selectOption('list');
-  await page.getByLabel('Corner radius', {exact:false}).fill('4');
-  await expect(page.frameLocator('#design-preview').locator('body')).toHaveClass('studio cards-list header-band navigation-top heading-split');
-  await expect(page.frameLocator('#design-preview').locator('.publication-card').first()).toHaveCSS('border-radius', '4px');
-  await page.getByRole('button', {name:'Save as new theme'}).click();
-  const themeName = 'Microscopy \u03b1 / <north> & "light"';
-  await page.getByLabel('Theme name', {exact:true}).fill(themeName);
-  await page.getByRole('button', {name:'Save theme', exact:true}).click();
-  await expect(page.locator('#theme-status')).toHaveText(themeName + ' / saved preset');
-  await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();
-  await expect(page.getByRole('heading',{name:'Website design',exact:true})).toBeVisible();
-  await expect(page.locator('#theme-status')).toHaveText(themeName + ' / saved preset');
-  await expect(page.getByLabel('Accent', {exact:true})).toHaveValue('#5832a8');
-  await page.getByRole('button', {name:'Rename',exact:true}).click();
-  await page.getByLabel('Theme name', {exact:true}).fill('Microscopy / final');
-  await page.getByRole('button', {name:'Rename theme',exact:true}).click();
-  await expect(page.locator('#theme-status')).toContainText('Microscopy / final');
-  await page.getByLabel('Accent', {exact:true}).fill('#334e82');
-  await page.getByRole('button', {name:'Update saved theme',exact:true}).click();
-  await expect(page.locator('#theme-status')).toHaveText('Microscopy / final / saved preset');
-  await page.getByRole('button', {name:/^Research/}).click();
-  await expect(page.locator('.nav-button.active')).toHaveCSS('color',appNavigation);
-  await page.getByRole('button', {name:'Apply',exact:true}).click();
-  await expect(page.getByLabel('Accent', {exact:true})).toHaveValue('#334e82');
-  await expect(page.getByRole('button', {name:'Save appearance',exact:true})).toBeDisabled();
-  await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.getByRole('button', {name:'Phone',exact:true}).click();
-  await expect(page.locator('#design-preview')).toHaveCSS('width', '390px');
-  await page.evaluate(() => window.scrollTo(0,0));
-  await page.screenshot({path:test.info().outputPath('appearance-studio.png')});
-  await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-  await page.getByRole('button', {name:'Save as new theme'}).click();
-  await expect(page.getByRole('dialog')).toHaveCSS('background-color','rgb(255, 255, 255)');
-  await page.getByRole('button', {name:'Cancel',exact:true}).click();
-  await page.screenshot({path:test.info().outputPath('appearance-mobile.png'),fullPage:true});
-  await page.getByRole('button', {name:'Delete',exact:true}).click();await answerConfirmation(page,'Delete');
-  await expect(page.locator('#saved-theme')).toHaveCount(0);
-  await expect(page.getByLabel('Accent', {exact:true})).toHaveValue('#334e82');
-  await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();
-  await expect(page.getByRole('heading',{name:'Website design',exact:true})).toBeVisible();
-  await expect(page.locator('#saved-theme')).toHaveCount(0);
-  await expect(page.getByLabel('Accent', {exact:true})).toHaveValue('#334e82');
-  expect(errors).toEqual([]);
-});
-
-test('themes are chosen in Appearance after setup without changing workspace identity or adding starter records',async({page})=>{
- await page.goto(app.url);await page.getByLabel('Workspace name').fill('A new perspective');await page.getByText('Add a description',{exact:false}).click();await page.getByLabel('Workspace description').fill('Research across disciplines.');
- await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('A new perspective');await createdWorkspace('A new perspective');
- await preferences(page,'Appearance');await page.getByRole('button',{name:/^Studio/}).click();await expect(page.locator('.section-save [data-action=save]')).toBeEnabled();await saveChanges(page);await page.reload();
- await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#216e69');const saved=(await new Workspace(root,await verifyAccess(await readAccess(root),'','',{deviceStore})).read()).book;expect(saved.title).toBe('A new perspective');expect(saved.description).toBe('Research across disciplines.');expect(saved.projects).toHaveLength(0);expect(saved.notebooks).toHaveLength(0);
-});
-
-test('empty websites have a complete isolated design gallery with selectable pages and playable examples', async ({ page }) => {
-  const errors=[]; page.on('pageerror',error=>errors.push(error.message));
-  const book=sampleNotebook(); book.entries=[]; book.projects.forEach(p=>p.share=false);
-  await encryptedSample(book); const before=await new Workspace(root,workspaceVault).read();
-  await page.goto(app.url); await preferences(page,'Appearance');
-  const frame=page.frameLocator('#design-preview');
-  await expect(page.getByLabel('Preview content',{exact:true})).toHaveValue('examples');
-  await expect(frame.locator('.specimen-banner')).toBeVisible();
-  await expect(frame.getByRole('heading',{name:'An example experiment',exact:true,level:1})).toBeVisible();
-  // A chart's values are a table the reader opens beneath it.
-  const values=frame.locator('details').filter({has:frame.locator('table')}).first();await values.locator(':scope > summary').click();
-  await expect(values.getByRole('table')).toBeVisible();
-  expect(await frame.locator('.publication-card').count()).toBeGreaterThanOrEqual(4);
-  await expect.poll(()=>frame.locator('audio').evaluate(el=>el.readyState)).toBeGreaterThanOrEqual(1);
-  await expect.poll(()=>frame.locator('video').evaluate(el=>el.readyState)).toBeGreaterThanOrEqual(1);
-  for(const kind of ['audio','video']) {
-    expect(await frame.locator(kind).evaluate(el=>el.autoplay)).toBeFalsy();
-    await frame.locator(kind).evaluate(el=>el.play());
-    await expect.poll(()=>frame.locator(kind).evaluate(el=>el.currentTime)).toBeGreaterThan(0);
-    await frame.locator(kind).evaluate(el=>el.pause());
-  }
-  expect(await frame.locator('img').evaluateAll(images=>images.every(el=>el.complete&&el.naturalWidth>0))).toBeTruthy();
-  await page.screenshot({path:test.info().outputPath('design-gallery-desktop.png')});
-  const record='entries/00000000-0000-4000-8000-000000000010.html';
-  await page.getByLabel('Preview page',{exact:true}).selectOption(record);
-  await expect(frame.locator('.specimen-index')).toHaveCount(0);
-  await page.getByLabel('Accent',{exact:true}).fill('#5832a8');
-  await expect(frame.locator('body')).toHaveCSS('--accent','#5832a8');
-  await expect(page.getByLabel('Preview page',{exact:true})).toHaveValue(record);
-  await page.getByLabel('Preview content',{exact:true}).selectOption('website');
-  await expect(frame.getByRole('heading',{name:book.title,exact:true})).toBeVisible();
-  await expect(frame.locator('.specimen-banner')).toHaveCount(0);
-  await expect(frame.locator('body')).not.toContainText('An example experiment');
-  await page.getByLabel('Preview content',{exact:true}).selectOption('examples');
-  await expect(frame.locator('.specimen-index')).toBeVisible();
-  await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
-  expect(await frame.locator('html').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBeTruthy();
-  await page.locator('#design-preview').scrollIntoViewIfNeeded();
-  await expect(frame.locator('.specimen-banner')).toBeVisible();
-  await frame.locator('body').evaluate(()=>document.fonts.ready);
-  await page.waitForTimeout(200);
-  await page.screenshot({path:test.info().outputPath('design-gallery-mobile.png')});
-  expect((await new Workspace(root,workspaceVault).read()).etag).toBe(before.etag);
-  expect(errors).toEqual([]);
-});
 
 test('workspace correction preserves research and gives projects, lab books and records stable navigation', async ({ page }) => {
   test.setTimeout(90000);await independentDatabases();

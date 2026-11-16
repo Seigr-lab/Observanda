@@ -60,9 +60,6 @@ test('module and template switches save independently, retain failed edits and k
   await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
   await preferences(page,'General');await expect(page.locator('#leave-dialog')).not.toBeVisible();await expect(main.getByLabel('Workspace name',{exact:true})).toBeVisible();
   await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
-  await navigate(page,'Website editor');await main.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
-  await expect(page).toHaveURL(/#\/websites$/);await expect(page.locator('#leave-dialog')).not.toBeVisible();
-  await page.goBack();await expect(main.locator('.website-site-context')).toBeVisible();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   await navigate(page,'Preferences');await preferences(page,'Modules');await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
   await page.context().unroute('**/api/dashboard/pending',fail);await main.getByRole('button',{name:'Retry',exact:true}).click();
   await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('planning');
