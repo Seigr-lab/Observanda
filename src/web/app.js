@@ -513,10 +513,14 @@ const recordDrafts=recordDraftsUI({api,esc,snapshot:recordCheckpoint,compact:()=
 function showDialog(html) { dialogSurface?.destroy(); const dialog = $('#dialog'); dialog.innerHTML = html; if (!dialog.open) dialog.showModal(); const frame=dialog.querySelector(".expanded-preview iframe");dialogSurface=frame?previewSurface(frame):null;dialog.addEventListener("close",()=>{dialogSurface?.destroy();dialogSurface=null;},{once:true}); drafts.track(); }
 function field(label, content) {
   if(content.startsWith('<font-picker>'))return `<div class="field"><label>${label}</label>${content.replace('<select ',`<select aria-label="${esc(label)}" `)}</div>`;
-  const controlTag = /^<(input|textarea|select)\b[^>]*>/.exec(content)?.[0] ?? '';
+  // The label names the leading control, or the only control inside a wrapper
+  // (such as a retained scalar value); content with several controls keeps its own labels.
+  const controls = [...content.matchAll(/<(input|textarea|select)\b[^>]*>/g)].filter(match=>!/\btype="hidden"/.test(match[0]));
+  const target = content.match(/^<(input|textarea|select)\b/) ? controls[0] : controls.length === 1 ? controls[0] : null;
+  const controlTag = target?.[0] ?? '';
   const existing = /\bid="([^"]+)"/.exec(controlTag)?.[1];
   const id = existing ?? `field-${++fieldSequence}`;
-  const control = existing ? content : content.replace(/^<(input|textarea|select)\b/, `<$1 id="${id}"`);
+  const control = existing || !target ? content : content.slice(0, target.index) + target[0].replace(/^<(input|textarea|select)\b/, `<$1 id="${id}"`) + content.slice(target.index + target[0].length);
   return `<div class="field"><label for="${id}">${label}</label>${control}</div>`;
 }
 const entry = () => editableRecord(state.book,state.selected);
