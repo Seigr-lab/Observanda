@@ -13,6 +13,7 @@ import {createBlock,duplicateBlock} from './website-files-blocks.js';
 import {websiteElementLibrary} from './website-element-library.js';
 import {websiteToolRail} from './website-tool-rail.js';
 import {websiteSiteMenu} from './website-site-menu.js';
+import {websitePageStarters} from './website-page-starters.js';
 import {sectionTemplates,createSection,sectionCSS} from './website-section-templates.js';
 import {websiteFilesGallery} from './website-files-gallery.js';
 import {buttonCSS,editActionLink,editLogos} from './website-files-dialogs.js';
@@ -158,7 +159,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  const regions=websiteFilesRegions({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  const exchange=websiteFilesDesignExchange({request,site:()=>opened,esc,tr,render,adopt:adoptRelated,close:()=>{mode='visual';render();}});
  async function openMenu(id=null){if(await beforeLeave(true)){await menu.open(id,false);mode='menu';render();}}
- const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc});
+ const library=websiteElementLibrary({t:tr,esc}),toolRail=websiteToolRail({t:tr,esc}),siteMenu=websiteSiteMenu({esc}),pageStarters=websitePageStarters({t:tr,esc});
  const components=websiteFilesComponents({request,t,tr,esc,site:()=>opened,selected:()=>selected,save,adopt:adoptRelated,render,run,notify,
   async showInstance({path,instance},expectedRevision){
    await checkPlacementRevision(expectedRevision);
@@ -721,7 +722,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const name=field(isPage?'pageTitle':'name',isPage?form.title:'','required maxlength="160"');
   const path=isPage?field('pagePath',form.path,'required pattern="[a-zA-Z0-9_.\\/\\-]+[.]html"'):'';
   const inclusion=isPage?'<label>'+esc(tr('pageInclusion'))+'<select data-website-file-field="inclusion"><option value="private">'+esc(tr('pagePrivate'))+'</option><option value="included"'+(form.inclusion==='included'?' selected':'')+'>'+esc(tr('pageIncludeNext'))+'</option></select></label>':'';
-  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+inclusion+'</div>'+(isPage?pageDesignChoice():starterChoice())+
+  return '<section class="panel website-page-form"><form data-website-files-form><h2>'+esc(tr(label))+'</h2><div class="website-page-form-fields">'+name+path+inclusion+'</div>'+(isPage?pageStarters.view(form.pageStarter)+pageDesignChoice():starterChoice())+
    '<div class="inline-actions"><button class="button primary" type="submit">'+esc(tr(label))+'</button>'+button('cancel','form-cancel')+'</div></form></section>';
  }
  // A new website starts from a purpose: its pages, menu, regions and record lists.
@@ -732,6 +733,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return '<fieldset class="website-starters"><legend>'+esc(tr('starterChoose'))+'</legend>'+starters.map(id=>'<label class="website-starter">'+preview(id)+'<span class="website-starter-choice"><input type="radio" name="website-starter" data-website-file-field="starter" value="'+id+'"'+(id==='blank'?' checked':'')+'><span><strong>'+esc(tr(key(id)))+'</strong><span class="hint">'+esc(tr(key(id)+'Text'))+'</span></span></span></label>').join('')+'</fieldset>';
  }
  const starterPreviews=new Map();let starterTimer=null;
+ // Page layouts preview the new page in this website's own stylesheet.
+ function paintPageStarters(){if(form?.type!=='page'||!opened)return;pageStarters.paint(document,{title:document.querySelector('[data-website-files-form] [data-website-file-field="pageTitle"]')?.value.trim()||tr('pageTitle'),css});}
  function paintStarterPreviews(){
   const frames=[...document.querySelectorAll('[data-starter-preview]')];if(!frames.length)return;
   const language=document.documentElement.lang||'en',name=document.querySelector('[data-website-files-form] [data-website-file-field="name"]')?.value.trim()||tr('site'),epoch=generation;
@@ -840,7 +843,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
-  siteMenu.bind(document);paintStarterPreviews();hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  siteMenu.bind(document);paintStarterPreviews();paintPageStarters();hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
   if(mode==='exchange')exchange.bind();
@@ -1201,6 +1204,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  function input(element){
   // Starter previews show the website's name as it is typed.
   if(element.matches('[data-website-file-field="name"]')&&document.querySelector('[data-starter-preview]')){clearTimeout(starterTimer);starterTimer=setTimeout(paintStarterPreviews,400);}
+  if(form?.type==='page'&&element.matches('[data-website-file-field="pageStarter"]'))form.pageStarter=element.value;
+  if(form?.type==='page'&&element.matches('[data-website-file-field="pageTitle"]')){clearTimeout(starterTimer);starterTimer=setTimeout(paintPageStarters,300);}
   if(mode==='versions'&&versions.input(element))return true;
   if(mode==='review'){
    const handled=review.input(element);
@@ -1256,7 +1261,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   return element.closest('[data-website-files-form]')!==null;
  }
  async function submit(element){if(!element.matches('[data-website-files-form]'))return false;if(!element.reportValidity())return true;await run(async()=>{
-  const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result;
+  const value=key=>element.querySelector('[data-website-file-field="'+key+'"]')?.value.trim();let result,starter=null;
   if(form.type==='new'){
    const name=value('name'),source=form.source??'blank';
    if(source==='folder')result=await request('import/folder',{name,directory:form.folder??''});
@@ -1277,10 +1282,15 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    if(form.taken.has(path.toLowerCase()))throw Error(tr('duplicatePage'));
    const inclusion=value('inclusion'),language=websiteHTML(opened.html).documentElement.lang||document.documentElement.lang||'en';
    if(form.designId)result=await designs('use',{expectedRevision:form.designs.revision,design:form.designId,destination:path,title,language,inclusion,labels:{heading:tr('heading'),text:tr('paragraph'),image:tr('altText')}});
-   else result=await request('page/create',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,language,inclusion});
+   else{result=await request('page/create',{siteId:siteId(),expectedRevision:opened.site.revision,path,title,language,inclusion});starter=element.querySelector('[data-website-file-field="pageStarter"]:checked')?.value;}
   }
   else return;
   form=null;mode='visual';adopt(result);history.replaceState(history.state,'',fileRoute(result.site.id));render();
+  // A page layout adds its sections to the new page, which is then saved.
+  if(starter&&starter!=='blank'){
+   documentChange(doc=>{if(pageStarters.apply(starter,doc,main(doc))){if(!css.includes('.ow-hero,')){ensureStyle(doc);css+=sectionCSS;}if(!css.includes('.website-button{')){ensureStyle(doc);css+=buttonCSS;}}});
+   await save();render();
+  }
  });return true;}
  async function openRecovery(row){
   if(!row||row.surface!=='website'||row.owner?.workspaceId!==session?.workspaceId)throw Error(tr('changed'));

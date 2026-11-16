@@ -43,5 +43,18 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   await expect(canvas.locator('nav[data-website-menu]').getByRole('link',{name:'Resources'})).toBeVisible();
   await expect(canvas.locator('footer[data-website-region="footer"]')).toContainText('Beekeeping basics — published with Observanda.');
   const sites=(await store.list({limit:10})).items.map(item=>item.name);expect(sites).toContain('Beekeeping basics');
+  // A new page can start from a page layout, previewed in the website's own stylesheet.
+  await page.locator('[data-action="website-files-new-page"]').click();
+  const pageForm=page.locator('[data-website-files-form]'),layouts=pageForm.getByRole('group',{name:'Page layout'});
+  await expect(layouts.getByRole('radio',{name:/^Blank page/})).toBeChecked();
+  await pageForm.getByLabel('Page title',{exact:true}).fill('Visit the apiary');await pageForm.getByLabel('Page file name',{exact:true}).fill('visit.html');
+  const contactPreview=layouts.locator('label').filter({has:page.getByRole('radio',{name:/^Contact page/})}).frameLocator('iframe');
+  await expect(contactPreview.locator('h1')).toHaveText('Visit the apiary');await expect(contactPreview.locator('section.ow-contact dl')).toBeVisible();
+  await layouts.getByRole('radio',{name:/^Contact page/}).check();
+  await pageForm.getByRole('button',{name:'Add page',exact:true}).click();
+  await expect(canvas.locator('section.ow-contact')).toBeVisible();await expect(canvas.locator('section.ow-hero')).toHaveCount(1);
+  await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
+  const created=(await store.list({limit:10})).items.find(item=>item.name==='Beekeeping basics');
+  const saved=await store.open(created.id,{path:'visit.html'});expect(saved.html).toContain('ow-contact');expect(saved.css).toContain('.ow-hero,');
  }finally{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

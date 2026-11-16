@@ -1,9 +1,13 @@
 .website-starters { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr)); gap:.5rem; border:0; padding:0; margin:.75rem 0; }
 .website-starters > legend { font-weight:600; margin-bottom:.4rem; }
+.website-starters-help { grid-column:1 / -1; margin:0; }
 .website-starter { display:flex; flex-direction:column; gap:.5rem; padding:.6rem; border:1px solid var(--border,var(--ui-border)); border-radius:.4rem; cursor:pointer; }
 .website-starter-choice { display:flex; gap:.5rem; align-items:flex-start; }
 /* The home page at a quarter of its size; clicks choose the card. */
 .website-starter-preview { display:block; aspect-ratio:16/10; overflow:hidden; border:1px solid var(--ui-border); border-radius:.3rem; background:var(--ui-soft); }
 .website-starter-preview iframe { display:block; width:400%; height:400%; border:0; transform:scale(.25); transform-origin:0 0; pointer-events:none; }
+/* A page layout is a stack of sections: show the whole page, taller and smaller. */
+.website-page-starters .website-starter-preview { aspect-ratio:4/5; }
+.website-page-starters .website-starter-preview iframe { width:500%; height:500%; transform:scale(.2); }
 .website-starter:has(input:checked) { border-color:var(--accent,var(--ui-accent)); box-shadow:0 0 0 1px var(--accent,color-mix(in srgb,var(--ui-accent) 100%,transparent)); }
 .website-starter-choice > span { display:grid; gap:.15rem; }
