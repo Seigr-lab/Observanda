@@ -818,7 +818,6 @@
   "recordingdescriptions": "Descriptions",
   "recordingDefaultTrack": "Use this track by default",
   "recordingApply": "Save recording to page",
-  "recordingCancel": "Cancel",
   "recordingChooseOne": "Choose either an uploaded file or a saved recording.",
   "recordingWrongKind": "Select the media type matching this recording.",
   "recordingChooseFile": "Choose a recording file or a saved website recording.",

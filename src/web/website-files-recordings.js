@@ -67,7 +67,7 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
    field('recordingTrackLabel','<input name="trackLabel" type="text" maxlength="120">')+
    field('recordingTrackKind','<select name="trackKind">'+['captions','subtitles','descriptions'].map(k=>opt(k,t('recording'+k))).join('')+'</select>')+
    '<label><input name="defaultTrack" type="checkbox"> '+esc(t('recordingDefaultTrack'))+'</label></fieldset>'+
-   '<div class="website-files-toolbar"><button type="submit">'+esc(t('recordingApply'))+'</button>'+button('recordingCancel','close')+'</div></form></section>';
+   '<div class="website-files-toolbar"><button type="submit">'+esc(t('recordingApply'))+'</button>'+'</div></form></section>';
  }
  async function apply(data,file,vtt){
   if(!doc||path()!==pagePath||site().revision!==revision)throw Error(t('changed'));
@@ -134,7 +134,6 @@ export function websiteFilesRecordings({t,esc,request,read,css,path,site,url,ado
   }
   f.oninput=f.onchange=()=>{modified=true;edited();};
   block.onchange=async()=>{if(modified&&!await confirmAction(t('recordingDiscard'),{action:'discard'})){block.value=String(index);return;}const target=Number(block.value);void run(async()=>{if(modified)await forget();index=target;modified=false;recovered=null;render();}).catch(e=>notify(e.message,true));};
-  panel.querySelector('[data-recording-action="close"]').onclick=async()=>{if(modified&&!await confirmAction(t('recordingDiscard'),{action:'discard'}))return;void run(async()=>{if(modified)await forget();reset();close();}).catch(e=>notify(e.message,true));};
   const more=panel.querySelector('[data-recording-action="more"]');
   if(more)more.onclick=()=>void run(async()=>{const count=items.length;await loadLibrary(next);for(const item of items.slice(count))f.elements.reuse.add(new Option(item.label||item.name,item.name));more.hidden=!next;}).catch(e=>notify(e.message,true));
   f.onsubmit=event=>{
