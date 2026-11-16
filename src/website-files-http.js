@@ -1,6 +1,7 @@
 import {AppError} from './errors.js';
 import {randomUUID} from 'node:crypto';
 import {WebsiteFileStore} from './website-file-store.js';
+import {STARTER_IDS,starterPreview,starterText} from './website-starters.js';
 import {saveWebsiteRecovery,inspectWebsiteRecovery,listWebsiteRecovery,readWebsiteRecovery,discardWebsiteRecovery,websiteRecoveryResource,websiteRecoveryInput,registerRecoveryWrite,finishRecoveryInputs} from './website-recovery.js';
 import {writeRecordingDraft} from './website-recovery-input.js';
 import {WebsiteFilesCandidate} from './website-files-candidate.js';
@@ -221,6 +222,10 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
   if(operation==='import/folder'){
    if(Object.keys(data).some(key=>!['name','directory'].includes(key))||typeof data.name!=='string'||typeof data.directory!=='string')throw new AppError('INVALID');
    json(await importStaticWebsite(store,{name:data.name,source:'folder',read:()=>readWebsiteFolder(data.directory,{signal}),signal}));return true;
+  }
+  if(operation==='starters/preview'){
+   if(Object.keys(data).some(key=>!['starter','name','language'].includes(key))||!STARTER_IDS.includes(data.starter)||typeof data.name!=='string'||data.name.length>160||typeof data.language!=='string'||data.language.length>64)throw new AppError('INVALID');
+   json({html:starterPreview(data.starter,{name:data.name,language:data.language,text:await starterText(data.language)})});return true;
   }
   if(operation==='create'){json(await store.create({name:data.name,html:data.html,css:data.css,language:data.language,starter:data.starter,signal}));return true;}
   if(operation.startsWith('connection/')&&githubAccount){await githubAccount(operation.slice('connection/'.length),data);return true;}

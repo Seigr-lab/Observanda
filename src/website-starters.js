@@ -6,6 +6,8 @@ import {starterPage,starterStyles} from './web/website-file-starter.js';
 import {saveSiteMenu} from './website-menu-storage.js';
 import {defineComponent} from './website-component-storage.js';
 import {regionOperation} from './website-region-storage.js';
+import {regionWrapper,regionStylesheet} from './website-region-markup.js';
+import {regionSettings} from './website-region-model.js';
 import {saveWebsiteFeed} from './website-dynamic-feeds.js';
 
 // A starter is a recipe for a new website: its pages, menu, site regions and
@@ -91,6 +93,25 @@ export function starterFiles(id,{name,language,text}){
   files.set(page.path,document.replace('</h1></main>','</h1>'+markup(page.body,say,page.path)+'</main>'));
  }
  return files;
+}
+
+// A picture of the home page a starter creates: its words and stylesheet, its
+// menu, its site regions and its record lists, which a new site shows empty.
+// Self-contained (styles inline, no links followed) for a sandboxed frame.
+const PREVIEW_CSS='\n[data-starter-preview-menu] ul{display:flex;flex-wrap:wrap;gap:1rem;list-style:none;margin:0;padding:.75rem 1rem}\n.starter-preview-records>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(8rem,1fr));gap:.75rem}\n.starter-preview-records span{display:block;height:4.5rem;border:1px solid currentColor;border-radius:.4rem;opacity:.25}\n';
+export function starterPreview(id,{name,language,text}){
+ const starter=WEBSITE_STARTERS[id];if(!starter)throw new AppError('INVALID');
+ const say=words(text,name),home=starter.pages[0],slots={};let before='',after='';
+ const menu=starter.menu?'<header data-starter-preview-menu><nav aria-label="'+esc(say('starterHome'))+'"><ul>'+starter.menu.map(([href,key])=>'<li><a href="'+esc(href)+'">'+esc(say(key))+'</a></li>').join('')+'</ul></nav></header>':'';
+ for(const [slot,region] of Object.entries(starter.regions??{})){
+  const settings=regionSettings(slot,region.settings?{...region.settings,mobileTitle:say(region.settings.mobileTitle)}:{});slots[slot]={settings};
+  const wrapped=regionWrapper(slot,settings,'<section>'+markup(region.body,say,'index.html')+'</section>');
+  if(slot==='footer')after+=wrapped;else before+=wrapped;
+ }
+ const records=home.feed?'<section class="starter-preview-records"><h2>'+esc(say(home.feed.heading))+'</h2><div>'+'<span></span>'.repeat(3)+'</div></section>':'';
+ const page=starterFiles(id,{name,language,text}).get('index.html');
+ return page.replace('<link rel="stylesheet" href="style.css">','<style>'+starterStyles+'\n'+regionStylesheet(slots)+PREVIEW_CSS+'</style>')
+  .replace('<body>','<body>'+menu+before).replace('</main>',records+'</main>').replace('</body>',after+'</body>');
 }
 
 // Give a newly created site its menu, region components and record lists.

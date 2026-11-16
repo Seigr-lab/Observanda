@@ -7,7 +7,7 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
-import {WEBSITE_STARTERS,STARTER_IDS,starterText} from '../src/website-starters.js';
+import {WEBSITE_STARTERS,STARTER_IDS,starterText,starterPreview} from '../src/website-starters.js';
 import {regionOperation} from '../src/website-region-storage.js';
 import {contentBuffer} from '../src/file-content.js';
 
@@ -67,4 +67,18 @@ test('a starter writes its content in the site language and refuses unknown star
  await assert.rejects(store.create({name:'X',starter:'unknown'}),{code:'INVALID'});
  const blank=await store.create({name:'Plain',starter:'blank'});
  assert.deepEqual(blank.site.pages.map(page=>page.path),['index.html']);
+});
+
+test('each starter previews the home page it creates, self-contained and in the site language',async()=>{
+ for(const language of ['en','nb']){
+  const text=await starterText(language);
+  for(const id of STARTER_IDS){
+   const html=starterPreview(id,{name:'Field <station>',language,text}),starter=WEBSITE_STARTERS[id];
+   assert.ok(html.includes('<title>Field &lt;station&gt;</title>')&&html.includes('<style>')&&!/<link|<script|style\.css/.test(html),id);
+   assert.equal(html.includes('<header data-starter-preview-menu>'),Boolean(starter.menu),id);
+   for(const slot of Object.keys(starter.regions??{}))assert.match(html,new RegExp('<(header|footer|aside) data-website-region="'+slot+'">'),id+' '+slot);
+   assert.equal(html.includes('<section class="starter-preview-records">'),Boolean(starter.pages[0].feed),id);
+  }
+ }
+ assert.throws(()=>starterPreview('unknown',{name:'A',language:'en',text:{}}),{code:'INVALID'});
 });

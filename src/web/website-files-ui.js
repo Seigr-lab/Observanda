@@ -727,7 +727,21 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  // A new website starts from a purpose: its pages, menu, regions and record lists.
  function starterChoice(){
   const starters=['blank','journal','portfolio','handbook','course','laboratory'],key=id=>'starter'+id[0].toUpperCase()+id.slice(1);
-  return '<fieldset class="website-starters"><legend>'+esc(tr('starterChoose'))+'</legend>'+starters.map(id=>'<label class="website-starter"><input type="radio" name="website-starter" data-website-file-field="starter" value="'+id+'"'+(id==='blank'?' checked':'')+'><span><strong>'+esc(tr(key(id)))+'</strong><span class="hint">'+esc(tr(key(id)+'Text'))+'</span></span></label>').join('')+'</fieldset>';
+  // Each starter shows the home page it creates, in a sandboxed frame.
+  const preview=id=>'<span class="website-starter-preview" aria-hidden="true"><iframe sandbox="" tabindex="-1" title="" data-starter-preview="'+id+'"></iframe></span>';
+  return '<fieldset class="website-starters"><legend>'+esc(tr('starterChoose'))+'</legend>'+starters.map(id=>'<label class="website-starter">'+preview(id)+'<span class="website-starter-choice"><input type="radio" name="website-starter" data-website-file-field="starter" value="'+id+'"'+(id==='blank'?' checked':'')+'><span><strong>'+esc(tr(key(id)))+'</strong><span class="hint">'+esc(tr(key(id)+'Text'))+'</span></span></span></label>').join('')+'</fieldset>';
+ }
+ const starterPreviews=new Map();let starterTimer=null;
+ function paintStarterPreviews(){
+  const frames=[...document.querySelectorAll('[data-starter-preview]')];if(!frames.length)return;
+  const language=document.documentElement.lang||'en',name=document.querySelector('[data-website-files-form] [data-website-file-field="name"]')?.value.trim()||tr('site'),epoch=generation;
+  if(starterPreviews.size>60)starterPreviews.clear();
+  for(const frame of frames){
+   const key=[frame.dataset.starterPreview,language,name].join('\n');
+   const show=html=>{if(frame.isConnected&&epoch===generation)frame.srcdoc=html;};
+   if(!starterPreviews.has(key))starterPreviews.set(key,request('starters/preview',{starter:frame.dataset.starterPreview,name,language}).then(result=>result.html).catch(()=>{starterPreviews.delete(key);return null;}));
+   void starterPreviews.get(key).then(html=>{if(html)show(html);});
+  }
  }
  function pageDesignChoice(){
   if(!form.designs)return button('designChoose','design-choose')+'<p class="hint">'+esc(tr('designDiscover'))+'</p>';
@@ -826,7 +840,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   for(const name of ['website-files','website-files-visual','website-files-hierarchy','website-files-menu','website-files-regions','website-files-starters']){
    if(!document.querySelector('link[data-sheet="'+name+'"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+name+'.css';link.dataset.sheet=name;document.head.append(link);}
   }
-  siteMenu.bind(document);hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
+  siteMenu.bind(document);paintStarterPreviews();hierarchy.bindHost(document);library.bind(document);picker.bind();gallery.bind();figures.bind();components.bind();recordings.bind();
   if(mode==='menu')menu.bind();
   if(mode==='regions')regions.bind();
   if(mode==='exchange')exchange.bind();
@@ -1185,6 +1199,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   },operation==='save'||operation==='save-destination'?'saving':operation==='publish'?'publishing':'working');return true;
  }
  function input(element){
+  // Starter previews show the website's name as it is typed.
+  if(element.matches('[data-website-file-field="name"]')&&document.querySelector('[data-starter-preview]')){clearTimeout(starterTimer);starterTimer=setTimeout(paintStarterPreviews,400);}
   if(mode==='versions'&&versions.input(element))return true;
   if(mode==='review'){
    const handled=review.input(element);

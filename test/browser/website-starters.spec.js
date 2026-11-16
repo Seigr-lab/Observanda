@@ -27,7 +27,14 @@ test('an author starts a course website and gets linked lessons, a lesson sideba
   await (await siteMenu(page)).getByRole('button',{name:'New website',exact:true}).click();
   const form=page.locator('[data-website-files-form]'),starters=form.getByRole('group',{name:'Starting layout'});
   await expect(starters.getByRole('radio',{name:/Blank website/})).toBeChecked();
+  // Each starter shows the home page it creates: its menu, regions and record lists.
+  const coursePreview=starters.locator('label').filter({has:page.getByRole('radio',{name:/^Course/})}).frameLocator('iframe');
+  await expect(coursePreview.locator('aside[data-website-region="sidebar"]')).toContainText('Lesson 2');
+  await expect(coursePreview.locator('[data-starter-preview-menu]')).toContainText('Resources');
+  const labPreview=starters.locator('label').filter({has:page.getByRole('radio',{name:/^Laboratory/})}).frameLocator('iframe');
+  await expect(labPreview.locator('.starter-preview-records h2')).toBeVisible();
   await form.getByLabel('Website name',{exact:true}).fill('Beekeeping basics');
+  await expect(coursePreview.locator('h1')).toHaveText('Beekeeping basics');
   await starters.getByRole('radio',{name:/^Course/}).check();
   await form.getByRole('button',{name:'New website',exact:true}).click();
   await expect(canvas.getByRole('heading',{name:'Beekeeping basics',level:1})).toBeVisible();
