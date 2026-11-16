@@ -20,6 +20,11 @@ summary{cursor:pointer;min-height:44px;padding-block:.6rem;overflow-wrap:anywher
 .record-edit-area h3{font-size:1.05rem;margin-top:1.5rem}
 .record-edit-group{border:1px solid var(--ui-border);border-radius:var(--ui-radius);padding:var(--space-3) var(--space-4);margin-block:var(--space-3);background:var(--ui-surface)}
 .record-edit-group>summary{font-size:1.1rem;font-weight:600}
+/* The record's work in the centre, its properties beside it on wide screens. */
+.record-editor-zones{display:grid;gap:var(--space-6)}
+.record-editor-work,.record-editor-properties{min-width:0}
+.record-editor-properties>.record-quick-details{margin-block-start:0}
+@media(min-width:1100px){.record-editor-zones{grid-template-columns:minmax(0,1fr) minmax(16rem,21rem);align-items:start}.record-editor-properties{position:sticky;top:calc(var(--shell-topbar-height,76px) + var(--space-3));max-height:calc(100vh - var(--shell-topbar-height,76px) - var(--space-6));overflow-y:auto;overscroll-behavior:contain;padding-inline-end:var(--space-1)}.record-editor-properties .record-edit-group{margin-block:0 var(--space-3)}.record-editor-properties .panel{padding:var(--space-4)}}
 .record-edit-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:var(--space-4)}
 .record-edit-details dd{margin:0;display:grid;justify-items:start;gap:var(--space-2)}
 .save-explanation{font-size:.85rem;color:var(--ui-muted);max-width:80ch;margin-block:.5rem}

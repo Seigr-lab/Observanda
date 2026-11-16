@@ -70,6 +70,7 @@
  "editingHelp":"Choose a field or section to edit. Save changes in its editor.",
  "editingNavigation":"Record editing areas",
  "area_details":"Record details",
+ "propertiesLabel":"Record properties",
  "area_summary":"Summary / context",
  "area_sections":"Writing sections",
  "area_figures":"Figures",

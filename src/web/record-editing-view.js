@@ -25,8 +25,13 @@ export function recordEditingView({record,book,esc,status,busy,details,summary,s
  ].filter(([,html])=>html);
  const groups=[['writing',['summary','sections']],['evidence',['attachments','figures','evidence','results','attempt','relations']],['details',['details','tags','contributors']],['activity',['activity']]];
  const section=([key,html])=>'<section class="record-edit-area" data-record-edit-area="'+key+'" tabindex="-1" '+(key==='relations'||key==='details'?'aria-label="'+esc(text('area_'+key))+'">':'aria-labelledby="record-edit-heading-'+key+'"><h3 id="record-edit-heading-'+key+'">'+esc(text('area_'+key))+'</h3>')+html+'</section>';
- return '<article class="record-reader record-editing" aria-busy="'+busy+'"><div class="record-title-row"><h1>'+esc(record.title)+'</h1>'+edit('title')+'</div>'+status+
-  '<div class="record-quick-details"><span>'+esc(recordDateLabel(record.occurredOn))+'</span>'+edit('occurredOn')+'<span>'+esc(detailText('status_'+record.status))+'</span>'+edit('status')+'</div>'+
-  publicationAvailability(record,book,esc,{editing:true,busy})+'<nav class="record-edit-navigation" aria-label="'+esc(text('editingNavigation'))+'">'+groups.map(([key,ids])=>'<button type="button" class="button subtle" data-action="content-edit-area" data-area="'+ids[0]+'">'+esc(ux(key))+'</button>').join('')+'</nav>'+
-  groups.map(([key,ids])=>{const content=ids.flatMap(id=>areas.filter(([name])=>name===id)).map(section).join('');return key==='writing'?'<section class="record-writing-surface">'+content+'</section>':'<details class="record-edit-group" data-disclosure="record-'+key+'"><summary>'+esc(ux(key))+'</summary>'+content+'</details>';}).join('')+'</article>';
+ const group=([key,ids])=>{const content=ids.flatMap(id=>areas.filter(([name])=>name===id)).map(section).join('');return key==='writing'?'<section class="record-writing-surface">'+content+'</section>':'<details class="record-edit-group" data-disclosure="record-'+key+'"><summary>'+esc(ux(key))+'</summary>'+content+'</details>';};
+ const inWork=new Set(['writing','evidence']);
+ // The work in the centre: what the record says and what supports it. Its
+ // properties (date, status, visibility, details, history) sit beside it.
+ return '<article class="record-reader record-editing record-editor-zones" aria-busy="'+busy+'"><div class="record-editor-work"><div class="record-title-row"><h1>'+esc(record.title)+'</h1>'+edit('title')+'</div>'+status+
+  '<nav class="record-edit-navigation" aria-label="'+esc(text('editingNavigation'))+'">'+groups.map(([key,ids])=>'<button type="button" class="button subtle" data-action="content-edit-area" data-area="'+ids[0]+'">'+esc(ux(key))+'</button>').join('')+'</nav>'+
+  groups.filter(([key])=>inWork.has(key)).map(group).join('')+'</div>'+
+  '<aside class="record-editor-properties" aria-label="'+esc(text('propertiesLabel'))+'"><div class="record-quick-details"><span>'+esc(recordDateLabel(record.occurredOn))+'</span>'+edit('occurredOn')+'<span>'+esc(detailText('status_'+record.status))+'</span>'+edit('status')+'</div>'+
+  publicationAvailability(record,book,esc,{editing:true,busy})+groups.filter(([key])=>!inWork.has(key)).map(group).join('')+'</aside></article>';
 }
