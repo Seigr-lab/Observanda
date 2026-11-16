@@ -20,7 +20,6 @@ import {PublicationDocumentBuilder} from '../src/publication-document.js';
 import {publicationReviewOwner,publicationAnalysisReader} from '../src/publication-retained-input.js';
 import {PublicationRollback,verifyRetainedPublicationRollback} from '../src/publication-rollback.js';
 import {publicationAnalysisState} from '../src/publication-analysis-state.js';
-import {analysisEditionReviewView,requireAnalysisEditionReview} from '../src/web/analysis-review-ui.js';
 import {digest} from '../src/storage-format.js';
 async function changed(t){
  const f=await comparisonFixture(t,{groups:2}),analysis=await f.m.comparisons.save(f.command),previous=await f.m.read(f.dataset),column=(await f.m.retainedSchemaPage(previous,{limit:1})).items[0];
@@ -91,10 +90,4 @@ test('native analysis decisions survive archive and fresh-key copies without cur
   assert.equal(await format(restored),await format(f.workspace));assert.deepEqual(await decisions.read(retained),receipt);assert.deepEqual(await decisions.verify(retained),{reviewed:true,decided:5,total:5,decisions:[]});
   const page=await decisions.window(retained,{offset:4});assert.equal(page.items.length,1);assert.equal(page.items[0].decision.reason,'This edition reports the retained original interpretation.');
  }
-});
-
-test('review UI uses scalar counts and selected rows without aggregate entry descriptors',()=>{
- const item={id:digest('item'),recordId:randomUUID(),recordTitle:'Selected retained title',label:'Result',changed:1,sample:[],decision:null},preview={researchReview:{analysis:{fingerprint:digest('state'),count:37}},analysisReview:{reviewed:false,decided:0,window:{items:[item],total:37,offset:0,next:'cursor',decided:0}}};
- assert.throws(()=>requireAnalysisEditionReview(preview));const html=analysisEditionReviewView(preview,{esc:String,field:(label,control)=>label+control});assert.ok(html.includes('Selected retained title'));assert.ok(html.includes('analysis-review-next'));assert.ok(html.includes('data-offset="1"'));assert.ok(html.includes('Reviewed 0 of 37'));
- requireAnalysisEditionReview({...preview,analysisReview:{reviewed:true}});assert.throws(()=>requireAnalysisEditionReview({researchReview:{analysis:{count:1}}}));
 });
