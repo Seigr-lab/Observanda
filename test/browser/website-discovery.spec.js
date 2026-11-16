@@ -39,7 +39,7 @@ test('a bilingual project publishes search and sharing declarations for its publ
   await panel.getByRole('button',{name:'Save settings'}).click();
   await expect(address).toHaveValue('https://example.org/estuary/');
   await expect(panel).toContainText('Search engines read robots.txt only at the root of a site');
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
 
   // Link the Catalan page as a language version of the home page.
   await page.locator('[data-website-file-page]').selectOption('ca/index.html');
@@ -50,7 +50,7 @@ test('a bilingual project publishes search and sharing declarations for its publ
   const link=panel.getByRole('button',{name:'Link language version'});await link.focus();await link.press('Enter');
   const group=panel.locator('.website-discovery-group li');await expect(group).toHaveCount(2);
   await expect(group.first()).toContainText('en · Original');await expect(group.last()).toContainText('ca · Needs update');
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
 
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
   await page.getByRole('button',{name:'Review file changes'}).click();await page.locator('[data-website-file-folder-confirm]').check();

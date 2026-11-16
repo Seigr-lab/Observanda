@@ -54,7 +54,7 @@ test('repair rendered accessibility findings, then read and operate the exported
   await gallery.locator('input[type=file]').setInputFiles(path.resolve('src/preview-assets/image.png'));
   await gallery.getByLabel('Image purpose').selectOption('decorative');
   await gallery.getByLabel('Accessible link name').fill('Open station photograph');
-  await gallery.locator('[data-action=website-files-gallery-close]').click();
+  await page.locator('[data-action=website-files-gallery-close]').click();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('[data-website-files-status]')).toHaveText('Website saved.');
   await page.reload();await expect(canvas.getByRole('img',{name:'Dissolved oxygen at three stations'})).toBeVisible();
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);

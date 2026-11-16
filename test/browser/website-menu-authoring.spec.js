@@ -48,7 +48,7 @@ test('open converted navigation in place, drag to nest and publish independent h
   await expect(menu.getByRole('combobox',{name:'Navigation menu',exact:true}).locator('option:checked')).toHaveText('Protocol resources');
   await preview.locator('summary').click();await expect(preview.getByRole('link',{name:'Instrument reference'})).toHaveAttribute('href','https://example.org/optics');
   if(process.env.OBSERVANDA_MENU_SCREENSHOT)await menu.screenshot({path:process.env.OBSERVANDA_MENU_SCREENSHOT});
-  await menu.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
   await page.locator('[data-website-file-page]').selectOption(method);
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();
   const reader=page.frameLocator('#website-files-preview');await expect(reader.locator('footer nav')).toHaveAccessibleName('Protocol resources');

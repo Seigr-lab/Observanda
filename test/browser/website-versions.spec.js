@@ -29,7 +29,7 @@ test('name, reopen, compare and restore a website version with current permissio
   await go();await button('Version history').click();
   await page.getByLabel('Checkpoint name').fill('Site review');await button('Name current checkpoint').click();
   await expect(page.locator('[data-versions=version] option:checked')).toContainText('Site review');
-  await button('Return to editing').click();await button('HTML').click();
+  await button('Back to the page').click();await button('HTML').click();
   const html=page.getByRole('textbox',{name:'HTML',exact:true});
   await html.fill((await html.inputValue()).replace('Earlier observations','Later observations'));await button('Save website').click();
   await button('Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);

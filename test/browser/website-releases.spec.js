@@ -31,7 +31,7 @@ test('the release view tracks a folder edition, withdraws it after review and re
 
   await openReleases();
   await expect(panel).toContainText('No destination chosen');await expect(panel).toContainText('Choose a folder or a remote destination');
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
 
   // Publish the website to a folder through the ordinary review.
   await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);
@@ -42,7 +42,7 @@ test('the release view tracks a folder edition, withdraws it after review and re
   await expect(panel.locator('[data-release-current]')).toHaveText('The destination has the current saved website.');
   await expect(panel).toContainText(out);await expect(panel).toContainText('Written and verified in the folder');
   await expect(panel.locator('[data-release-entry]')).toHaveCount(1);
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
 
   // A saved edit is outstanding until the next reviewed update.
   const heading=canvas.getByRole('heading',{name:'Estuary survey'});await heading.click();await page.keyboard.press('End');await page.keyboard.type(' 2026');

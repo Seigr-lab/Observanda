@@ -67,7 +67,7 @@ test('save, undo and redo writing, styling, order and owned media; withdraw a so
   await menu.getByLabel('Location on each page').selectOption('footer');await menu.getByRole('button',{name:'Add menu item'}).click();
   await menu.getByLabel('Menu label',{exact:true}).fill('Method reference');await menu.getByLabel('Link',{exact:true}).fill('index.html');
   await menu.getByRole('button',{name:'Save menu'}).click();await expect(menu.getByRole('button',{name:'Save menu'})).toBeDisabled();
-  await menu.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
   await command('Undo').click();await expect(text).toHaveText('Exposure series');
   await expect(canvas.locator('[data-website-instance]')).toHaveCount(1);await expect(canvas.locator('[data-website-page-theme]')).toHaveCount(1);
   await expect(canvas.getByRole('link',{name:'Method reference',exact:true})).toHaveCount(1);

@@ -34,7 +34,7 @@ export function websiteFilesDesignExchange({request,site,esc,tr,render,adopt,clo
    '<div class="inline-actions">'+action('designImportApply','apply','data-primary')+action('cancel','discard')+'</div></section>';
  }
  function view(){
-  return '<section class="panel website-files-design-exchange" aria-label="'+esc(tr('designExchange'))+'"><header><div><h2>'+esc(tr('designExchange'))+'</h2><p>'+esc(tr('designExchangeHelp'))+'</p></div>'+action('closePreview','close')+'</header>'+
+  return '<section class="panel website-files-design-exchange" aria-label="'+esc(tr('designExchange'))+'"><header><div><h2>'+esc(tr('designExchange'))+'</h2><p>'+esc(tr('designExchangeHelp'))+'</p></div></header>'+
    (notice?'<p role="status">'+esc(notice)+'</p>':'')+
    '<section><h3>'+esc(tr('designExport'))+'</h3><p>'+esc(tr('designExportHelp'))+'</p><p><label><input type="checkbox" data-design-drafts'+(includeDrafts?' checked':'')+'> '+esc(tr('designIncludePrivate'))+'</label></p>'+(privateNames.length?'<p>'+esc(tr('designExportPrivate',{names:privateNames.join(', ')}))+'</p>':'')+action('designExport','export')+'</section>'+
    '<section><h3>'+esc(tr('designImport'))+'</h3><p>'+esc(tr('designImportHelp'))+'</p><label>'+esc(tr('designImportChoose'))+' <input type="file" accept=".observanda-design,application/zip" data-design-file></label> '+action('designImportReview','review')+reviewView()+'</section></section>';

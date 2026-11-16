@@ -55,7 +55,7 @@ export function websiteFilesRegions({request,site,esc,tr,render,adopt,close}){
  function view(){
   if(!data||!live())return '<section class="panel website-files-regions"><p>'+esc(tr('changed'))+'</p>'+action('reopen','reload')+'</section>';
   const folder=folderOf(path),shown=data.page.map(row=>tr(slotKey[row.slot])+': '+row.name).join(', ')||tr('regionNoneOnPage');
-  return '<section class="panel website-files-regions" aria-label="'+esc(tr('regions'))+'"><header><div><h2>'+esc(tr('regions'))+'</h2><p>'+esc(tr('regionScope'))+'</p></div>'+action('closePreview','close')+'</header>'+
+  return '<section class="panel website-files-regions" aria-label="'+esc(tr('regions'))+'"><header><div><h2>'+esc(tr('regions'))+'</h2><p>'+esc(tr('regionScope'))+'</p></div></header>'+
    (notice?'<p role="status">'+esc(notice)+'</p>':'')+
    (data.components.length?'':'<p>'+esc(tr('regionNeedsComponent'))+'</p>')+
    '<section><h3>'+esc(tr('regionSite'))+'</h3><ul class="website-region-slots">'+siteRows()+'</ul></section>'+

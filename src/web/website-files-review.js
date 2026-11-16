@@ -63,7 +63,7 @@ export function websiteFilesReview({request,site,esc,tr,signal,document:pageDocu
     (value.offset||value.next!==null?'<div class="inline-actions">'+button('pageBack','previous',value.offset?'':'disabled')+button('pageForward','next',value.next===null?'disabled':'')+'</div>':'')+'</section>';
   }
   return '<section class="panel website-files-publish website-team-review" data-website-review><h2 tabindex="-1" data-review-heading>'+esc(tr('reviewTitle'))+'</h2>'+body+
-   '<div class="inline-actions">'+button('closePreview','close')+'</div></section>';
+   '</section>';
  }
  async function accept(next){
   value=next;error=null;drift=new Map();

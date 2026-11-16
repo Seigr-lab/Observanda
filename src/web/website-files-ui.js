@@ -793,7 +793,9 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   if(mode!=='visual'&&!panel)return toolbar+'<div class="website-files-code-layout">'+toolRail.view({mode,label:tr('siteTools')})+'<div>'+sourcePane.view(mode)+'</div></div>';
   const blocks=library.view();
   // An open site tool takes the left column; the page stays in view beside it.
-  const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head"><h2>'+esc(tr(taskLabel()))+'</h2>'+button('closePanel','visual')+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
+  // One way back from a docked tool: its own close, which keeps or discards what it holds.
+  const close={menu:'menu-cancel',regions:'regions-close',exchange:'exchange-close',pages:'pages-close',versions:'versions-close',releases:'releases-close',discovery:'discovery-close',review:'review-close',gallery:'gallery-close'}[mode]??'visual';
+  const left=panel?'<aside class="website-files-dock" tabindex="0" aria-label="'+esc(tr(taskLabel()))+'"><div class="website-files-dock-head">'+button('closePanel',close)+'</div><div class="website-files-dock-body">'+panel+'</div></aside>'
    :'<aside tabindex="0" aria-label="'+esc(tr('structure'))+'">'+blocks+components.tabs()+components.view()+'<section class="panel"><h2>'+esc(tr('structure'))+'</h2><ol class="website-files-structure" data-website-files-structure></ol></section>'+picker.view()+'</aside>';
   return toolbar+'<div class="website-files-editor" '+(sourcePane.active?'data-source-open ':'')+(panel?'data-panel-open':'')+'>'+toolRail.view({mode,label:tr('siteTools')})+left+'<section class="website-files-stage">'+viewport.frame('website-files-canvas',tr('visual'))+'<nav class="website-selection-trail" data-layer-trail aria-label="'+esc(tr('selectionTrail'))+'"></nav></section>'+(sourcePane.active?sourcePane.view():'')+(panel?'':'<aside class="website-files-inspection" tabindex="0" aria-label="'+esc(tr('sectionAppearance'))+'"><section data-website-visual-inspector></section></aside>')+'</div>';
  }

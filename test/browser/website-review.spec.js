@@ -24,7 +24,7 @@ test('a required review comments on a figure caption, approves the corrected edi
   await page.goto(app.origin+'/?view=website#'+app.launchToken);
   const canvas=page.frameLocator('#website-files-canvas'),panel=page.locator('[data-website-review]'),status=page.locator('[data-website-files-status]');
   await expect(canvas.getByRole('heading',{name:'Plankton atlas'})).toBeVisible();
-  const closeReview=async()=>{await expect(async()=>{await panel.getByRole('button',{name:'Return to editing'}).click();await expect(panel).toBeHidden({timeout:1000});}).toPass();};
+  const closeReview=async()=>{await expect(async()=>{await page.getByRole('button',{name:'Back to the page',exact:true}).click();await expect(panel).toBeHidden({timeout:1000});}).toPass();};
   const openReview=async()=>{await (await siteMenu(page)).getByRole('button',{name:'Review',exact:true}).click();await expect(panel.getByRole('heading',{name:'Review',exact:true})).toBeFocused();};
   const publish=async()=>{
    await page.getByRole('button',{name:'Publish to folder',exact:true}).click();await page.getByLabel('Destination folder',{exact:true}).fill(out);

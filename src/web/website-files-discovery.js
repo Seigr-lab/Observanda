@@ -40,7 +40,7 @@ export function websiteFilesDiscovery({request,site,esc,tr,signal,adopt}){
   else if(!value)body='<p role="status">'+esc(tr('loading'))+'</p>';
   else body='<p>'+esc(tr('discoveryIntro'))+'</p>'+settingsView()+languagesView();
   return '<section class="panel website-files-publish website-discovery" data-website-discovery><h2 tabindex="-1" data-discovery-heading>'+esc(tr('discoveryTitle'))+'</h2>'+body+
-   '<div class="inline-actions">'+button('closePreview','close')+'</div></section>';
+   '</section>';
  }
  function accept(next){value=next;draft={...next.settings};link={of:'',status:'current'};error=null;}
  async function open(){

@@ -69,7 +69,7 @@ export function websiteFilesVersions({site,request,signal,tr,esc,adopt,close,ren
  }
  function view(){
   if(!history||openSite!==site()?.site.id||history.revision!==site()?.site.revision)return '<section class="panel">'+button('reopen','refresh')+'</section>';
-  return '<section class="panel website-version-panel"><header><h2>'+esc(tr('versionsTitle'))+'</h2>'+button('closePreview','close')+'</header>'+
+  return '<section class="panel website-version-panel"><header><h2>'+esc(tr('versionsTitle'))+'</h2></header>'+
    '<p>'+esc(tr('versionCapacity',{total:history.maxVersions,named:history.maxNamed,mb:Math.floor(history.retiredLimit/(1024*1024))}))+'</p>'+
    '<div class="website-version-controls">'+field('versionLabel','<input data-versions="label" maxlength="120" value="'+esc(label)+'">')+button('versionName','name',history.items.filter(e=>e.label).length>=history.maxNamed)+'</div>'+
    (history.items.length?'<div class="website-version-controls">'+field('versionsTitle',select('version',history.items.map(e=>[e.id,title(e)]),version))+

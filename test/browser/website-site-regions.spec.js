@@ -38,7 +38,7 @@ test('a site header region appears on every page, survives page edits and can be
   await expect(panel.getByText('Shown on this page: Header: Banner')).toBeVisible();
   for(const file of ['index.html','notes/one.html'])expect((await store.open(id,{path:file})).html).toMatch(/<body><header data-website-region="header"><section data-website-instance="[^"]+"><p>Apiary log banner<\/p><\/section><\/header>/);
 
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
   await expect(canvas.locator('header[data-website-region="header"]')).toContainText('Apiary log banner');
   await canvas.locator('#note').click();await page.keyboard.press('End');await page.keyboard.type(', two frames of brood');
   await page.getByRole('button',{name:'Save website',exact:true}).click();

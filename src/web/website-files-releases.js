@@ -53,13 +53,13 @@ export function websiteFilesReleases({request,site,esc,tr,t,signal}){
   const controllable=['folder','github','ssh','sftp','ftp'].includes(value.destination.kind);
   const unfinished=value.transfer?.uncertain||value.pending;
   const withdraw=controllable&&value.delivered&&value.delivered.edition!=='withdrawal'&&!unfinished;
-  return '<div class="inline-actions">'+button('publishUpdate','update')+(withdraw?button('releaseWithdraw','withdraw'):'')+button('releaseRefresh','refresh')+button('closePreview','close')+'</div>'+
+  return '<div class="inline-actions">'+button('publishUpdate','update')+(withdraw?button('releaseWithdraw','withdraw'):'')+button('releaseRefresh','refresh')+'</div>'+
    '<p class="hint">'+esc(tr(controllable?'releaseIndependentCopies':'releaseManualRemediation'))+'</p>';
  }
  function view(){
   const current=site();if(!current)return '';
   let body;
-  if(error)body='<p role="alert">'+esc(error)+'</p>'+button('releaseRefresh','refresh')+button('closePreview','close');
+  if(error)body='<p role="alert">'+esc(error)+'</p>'+button('releaseRefresh','refresh');
   else if(!overview||loading)body='<p role="status">'+esc(tr('loading'))+'</p>';
   else body='<dl class="website-release-facts">'+row(tr('savedWebsiteRevision'),code(overview.revision))+row(tr('releaseSavedEdition'),code(overview.releaseId)+' · '+esc(tr('releaseFileCount',{count:overview.files})))+
    row(tr('destination'),destinationLabel(overview.destination))+'</dl>'+deliveredView(overview)+changesView(overview)+actions(overview)+historyView(overview)+

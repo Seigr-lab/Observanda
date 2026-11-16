@@ -56,7 +56,7 @@ test('a site design is exported as a package and imported into another site afte
   const download=await downloading;expect(download.suggestedFilename()).toBe('Apiary.observanda-design');
   const saved=path.join(directory,'apiary.observanda-design');await download.saveAs(saved);
   expect((await readFile(saved)).subarray(0,2).toString()).toBe('PK');
-  await panel.getByRole('button',{name:'Return to editing'}).click();
+  await page.getByRole('button',{name:'Back to the page',exact:true}).click();
 
   // Import into the other site, choosing the footer region.
   await page.locator('[data-website-file-site]').first().selectOption({label:'Orchard'});
