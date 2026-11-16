@@ -82,26 +82,6 @@ test('maintenance endpoints are unavailable without queuing activity or blocking
  assert.deepEqual((await(await f.call('/api/activity')).json()).operations,[]);
 });
 
-test('website discovery and preview remain reads during copying and create no queued writes',async t=>{
- const f=await fixture(t),destination=path.join(f.directory,'copy'),before=await websiteWorkspace(f.workspace).read();
- const verify=ResearchCatalogue.prototype.verifyRecordHistory;let release,entered;
- const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
- ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){entered();await gate;return verify.apply(this,args);};
- const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
- let copying;
- try{
-  copying=f.call('/api/storage/copy',{path:destination,confirmed:true});await ready;
-  const summary=await f.call('/api/website/research/summary',{workspaceId:before.book.id,snapshotId:before.etag,websitePin:before.websitePin,selection:emptyWebsiteSelection(),search:''},controller.signal);
-  assert.equal(summary.status,200,await summary.text());
-  const draft={...workspaceSaveRequest(before.book,before.book,recordRevisions(before.book)),baseEtag:before.etag};
-  const response=await f.call('/api/design-preview',{draft,websitePin:before.websitePin,mode:'website',designTarget:'project:'+before.book.projects[0].id,workspaceContent:true},controller.signal),preview=await response.json();
-  assert.equal(response.status,200,JSON.stringify(preview));
-  const asset=await f.call(preview.url,undefined,controller.signal);assert.equal(asset.status,200);assert.match(await asset.text(),/<html/);
-  assert.equal((await f.workspace.outline()).etag,before.etag);
-  const activity=await(await f.call('/api/activity')).json();assert.equal(activity.busy,true);assert.equal(activity.operations.length,1);assert.equal(activity.operations[0].kind,'/api/storage/copy');
- }finally{clearTimeout(timeout);controller.abort();release();ResearchCatalogue.prototype.verifyRecordHistory=verify;if(copying)await copying;}
-});
-
 test('custom font bytes remain readable during a read-permitted workspace copy',async t=>{
  const f=await fixture(t),original=await readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),font=await new WorkspaceFonts(f.workspace).import(original),destination=path.join(f.directory,'copy');
  const asset=(context=f.storage.contextId,cookie=f.cookie)=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(context),{headers:{'X-Observanda-Session':cookie},signal:AbortSignal.timeout(10000)});

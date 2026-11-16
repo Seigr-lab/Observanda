@@ -11,18 +11,18 @@ const bookRoute=book=>projectRoute(book.projectId)+'/lab-books/'+book.labBookId;
 // All authoring, transfer and publication requests enter the running desktop's
 // authenticated HTTP service. No source storage or service implementation is
 // imported here, so the same journey qualifies a selected packaged executable.
-test('desktop portable owners preserve originals, links and the website’s selected sources',async()=>{
+test('desktop portable owners preserve originals and links',async()=>{
  test.setTimeout(600000);
  const fixture=await desktopFixture('observanda-desktop-portability-'),{directory,start}=fixture;
  const sourceName='Field workspace caf\u00e9 1',sourceRoot=path.join(directory,sourceName),receivingName='Receiving workspace 2',receivingRoot=path.join(directory,receivingName);
  const access=desktopAccess(),{credentials}=access;
  const errors=[];let app,page,primaryFailure=null;
  const watch=async()=>{page=await app.firstWindow();page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));await page.waitForURL(url=>url.protocol==='http:',{timeout:60000});await page.waitForFunction(()=>['access','setup','workspace'].includes(document.documentElement.dataset.appMode),null,{timeout:60000});};
- const call=(route,data,websiteId=null)=>page.evaluate(async({route,data,websiteId})=>{
+ const call=(route,data)=>page.evaluate(async({route,data})=>{
   const storage=await (await fetch('/api/storage')).json();
-  const response=await fetch(route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1',...(websiteId?{'X-Observanda-Website':websiteId}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
+  const response=await fetch(route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
   if(!response.ok)throw Error(route+' returned '+response.status+': '+await response.text());return response.json();
- },{route,data,websiteId});
+ },{route,data});
  const bytes=route=>page.evaluate(async route=>{
   const response=await fetch(route);if(!response.ok)throw Error(route+' returned '+response.status);return Array.from(new Uint8Array(await response.arrayBuffer()));
  },route).then(value=>Buffer.from(value));
@@ -53,7 +53,7 @@ test('desktop portable owners preserve originals, links and the website’s sele
    const book=(await call(projectRoute(owner.projectId)+'/lab-books/create',{id:randomUUID(),...credentials,book:{id:randomUUID(),projectId:owner.projectId,title}})).book;
    Object.assign(book,{projectId:owner.projectId,title});if(credentials.password)await call(bookRoute(book)+'/access/unlock',{...credentials,recovery:''});expect(book.root).toBe(path.join(owner.root,title));
    const now=new Date().toISOString();
-   // Publication requires source consent as well as the website's selection.
+   // Each record keeps its own sharing consent.
    // The second record and the original evidence remain private through import.
    book.records=[false,true].map(privateRecord=>({id:randomUUID(),notebookId:book.labBookId,type:'experiment',title:privateRecord?'WITHHELD_RECORD_'+index:'Selected observation '+index,body:privateRecord?'PRIVATE_OBSERVATION_'+index:'Original observation '+index,contributors:[],relations:[],tags:[],occurredOn:'2026-10-17',createdAt:now,updatedAt:now,share:!privateRecord,figures:[],status:'draft',attachments:[],sections:[]}));
    await call(bookRoute(book)+'/research/records/save',{workspaceId:book.namespaceId,changes:book.records.map(record=>({id:record.id,expectedRevision:null,record}))});
@@ -87,14 +87,6 @@ test('desktop portable owners preserve originals, links and the website’s sele
   app=await start();await watch();expect(await page.evaluate(()=>document.documentElement.dataset.appMode)).toBe('access');
   await call('/api/notebook/create',{title:receivingName,storageParent:directory,...credentials,createNew:true});
   await page.reload();await expect(page.locator('.workspace-name')).toHaveText(receivingName,{timeout:60000});
-  // The website owns only consent and presentation. Save stable source identities
-  // before import, including a book whose project placement will change.
-  const sites=await call('/api/websites/list',{}),created=await call('/api/websites/change',{workspaceId:sites.workspaceId,etag:sites.etag,operation:'create',name:'Independent field journal',projectId:null});
-  const website={workspaceId:sites.workspaceId,websiteId:created.id};
-  let site=await call('/api/websites/editor/open',{...website,websitePin:created.websitePin});expect(site.site.projectId).toBeNull();
-  const sources=books.map(book=>({workspaceId:book.namespaceId,labBookId:book.labBookId,projectIds:[book.projectId],selection:{defaultShare:false,includeProjects:[],records:[{id:book.records[0].id,share:true,attachments:[]}]}}));
-  site=await call('/api/websites/editor/change',{...website,websitePin:site.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:books.map(book=>({type:'source-selection',kind:'record',workspaceId:book.namespaceId,labBookId:book.labBookId,projectId:book.projectId,recordId:book.records[0].id,share:true}))});
-  await call('/api/websites/editor/save',{...website,websitePin:site.websitePin,draftId:site.draft.id,expectedRevision:site.draft.revision,commandId:randomUUID()});
   const imported=await call('/api/projects/open',{id:randomUUID(),path:copiedProject,parentId:null,...credentials,recovery:'',owners:credentials.password?[{relative:books[1].title,...credentials,recovery:''}]:[]});
   expect(imported.project.projectId).toBe(parent.projectId);expect(imported.project.root).toBe(path.join(receivingRoot,path.basename(parent.root)));
   if(credentials.password)await call(projectRoute(parent.projectId)+'/access/unlock',{...credentials,recovery:''});
@@ -128,11 +120,6 @@ test('desktop portable owners preserve originals, links and the website’s sele
   const amended=(await selection(importedBook)).book.entries,amendedRecord=amended.find(record=>record.id===address.recordId);
   expect(amendedRecord.body).toBe(amendedBody);expect(amendedRecord.relations).toEqual(importedBook.saved.find(record=>record.id===address.recordId).relations);
   expect(amended.find(record=>record.id===importedBook.records[1].id)).toEqual(importedBook.saved.find(record=>record.id===importedBook.records[1].id));importedBook.saved=amended;
-  site=await call('/api/websites/editor/open',website);expect(site.sources.count).toBe(sources.length);expect(site.site.document.website.researchSources).toEqual([]);expect(site.research.count).toBe(0);expect(site.research.metadata.entries??[]).toEqual([]);
-  for(const source of sources){
-   const retained=await call('/api/websites/editor/sources',{...website,websitePin:site.websitePin,sourceId:source.workspaceId,recordIds:source.selection.records.map(record=>record.id),collection:'records',offset:0,limit:10});
-   expect(retained.source).toEqual(source);expect(retained.total).toBe(1);expect(retained.rows.map(row=>row.value)).toEqual(source.selection.records);
-  }
   console.log('Portable owners: reopened imported owners with original workspace and copy locations unavailable; originals, history and cross-owner reference match.');
   for(const book of books)expect((await selection(book)).book.entries).toEqual(book.saved);
   expect(errors).toEqual([]);await fixture.close(app);app=null;

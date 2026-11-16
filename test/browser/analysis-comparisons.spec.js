@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {encryptedFixture} from './encrypted-fixture.js';
@@ -8,9 +8,9 @@ import {upgradeNotebook} from '../../src/model.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
-import {openEvidence} from './record-editor-helper.js';
+import {openEvidence,revealInEditor} from './record-editor-helper.js';
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'unknown',reference:'',resolution:'',uncertainty:''}});
-test('author and revise a comparison, inspect exceptions, retain a result statement and review changed publication inputs',async({page},testInfo)=>{
+test('author and revise a comparison, inspect exceptions, and retain a result statement',async({page},testInfo)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-comparison-ui-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[0],f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace);
  const upload=async(name,text)=>{const bytes=Buffer.from(text),s=await m.startImport({recordId:record.id,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
  const artifact=await upload('readings.csv','Value,State,Low,High\n10,correct,9,11\n12,mismatched,9,11\n,correct,9,11'),columns=[column('Value','integer'),column('State'),column('Low','integer'),column('High','integer')],dataset=await m.dataset({recordId:record.id,title:'Run observations',artifact,columns});
@@ -26,18 +26,8 @@ test('author and revise a comparison, inspect exceptions, retain a result statem
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();await page.screenshot({path:testInfo.outputPath('comparison-phone.png')});await page.setViewportSize({width:1280,height:900});
   await dialog.getByRole('button',{name:'Back to evidence',exact:true}).click();await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Add result statement'}).click();const resultDialog=page.getByRole('dialog',{name:'Edit result statement',exact:true});
   await resultDialog.getByLabel('Result title',{exact:true}).fill('Signal result');await resultDialog.getByLabel('Result kind',{exact:true}).selectOption('figure');await resultDialog.getByRole('button',{name:'Choose figure or panel',exact:true}).click();await resultDialog.locator('[data-result-use-figure="'+record.figures[0].id+'"]').click();await resultDialog.getByLabel('Result statement / table text').fill('One of two assessed readings matched. One observation was unavailable.');await resultDialog.getByLabel('Sources, scope and limitations').fill('Original boundaries; no independence or causality claim.');await resultDialog.getByLabel('Result provenance',{exact:true}).selectOption('retained');
-  const resultRef=resultDialog.locator('[data-analysis-ref="resultSource"]');await resultRef.getByRole('button',{name:'Choose retained revision'}).click();const current=await m.current((await m.list({recordId:record.id,kind:'analysis'})).items[0].id);await resultRef.getByLabel('Supporting analysis revision',{exact:true}).selectOption('analysis:'+current.id+':'+current.revision);await resultRef.getByRole('button',{name:'Use selected revision'}).click();const savedResponse=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save'));await resultDialog.getByRole('button',{name:'Save changes',exact:true}).click();expect((await savedResponse).ok()).toBeTruthy();await expect(resultDialog).not.toBeVisible();await expect(page.getByText('Signal result',{exact:true})).toBeVisible();await page.reload();await expect(page.getByText('Signal result',{exact:true})).toBeVisible();
+  const resultRef=resultDialog.locator('[data-analysis-ref="resultSource"]');await resultRef.getByRole('button',{name:'Choose retained revision'}).click();const current=await m.current((await m.list({recordId:record.id,kind:'analysis'})).items[0].id);await resultRef.getByLabel('Supporting analysis revision',{exact:true}).selectOption('analysis:'+current.id+':'+current.revision);await resultRef.getByRole('button',{name:'Use selected revision'}).click();const savedResponse=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save'));await resultDialog.getByRole('button',{name:'Save changes',exact:true}).click();expect((await savedResponse).ok()).toBeTruthy();await expect(resultDialog).not.toBeVisible();await expect(page.getByText('Signal result',{exact:true})).toBeVisible();await page.reload();await expect(await revealInEditor(page,page.getByText('Signal result',{exact:true}),'Evidence and results')).toBeVisible();
   const stored=await f.workspace.read();expect(stored.book.entries.find(r=>r.id===record.id).results.statements[0].source.revision).toBe(current.revision);
-  await m.dataset({recordId:record.id,title:'Run observations',id:dataset.id,expectedRevision:dataset.revision,artifact,baseDataset:dataset,columnChanges:[{index:0,column:{...columns[0],unit:'count'}}]});
-  // Use the same app preview endpoint and rendered review page as publishing.
-  await page.evaluate(()=>{location.hash='#/publishing';});await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Changed analysis inputs'})).toBeVisible();
-  await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Download website ZIP'}).click();await expect(page.locator('#notice')).toContainText('analysis review decisions');
-  const preview=await page.locator('#full-public-preview').getAttribute('href'),reviewId=preview.split('/')[2];
-  const refused=await page.evaluate(async id=>{const response=await fetch('/api/export/'+id);return {ok:response.ok,error:await response.json()};},reviewId);expect(refused.ok).toBe(false);expect(refused.error.code).toBe('ANALYSIS_REVIEW');
-  await page.getByLabel('Applicability decision and limitations').fill('Publish the original historical interpretation with its stated limitations.');await page.getByRole('button',{name:'Save analysis review decisions'}).click();await expect(page.getByRole('status').filter({hasText:'Analysis review decisions saved'})).toBeVisible();
-  await page.reload();await expect(page.getByRole('status').filter({hasText:'Analysis review decisions saved'})).toBeVisible();
-  await page.getByLabel('I have reviewed this website and its media for sharing.').check();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP'}).click();const download=await downloading,bytes=await readFile(await download.path());
-  expect(bytes.includes(Buffer.from('One of two assessed readings matched.'))).toBe(true);expect(bytes.includes(Buffer.from('Signal result · Retained analysis</a>'))).toBe(true);expect(bytes.includes(Buffer.from('readings.csv'))).toBe(false);expect(bytes.includes(Buffer.from(f.workspace.root))).toBe(false);
   expect(requests.filter(p=>p==='/api/workspace/read/page'||p==='/api/notebook')).toEqual([]);expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

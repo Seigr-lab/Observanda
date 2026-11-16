@@ -10,7 +10,7 @@ const deferred=()=>{let resolve,reject;return {promise:new Promise((a,b)=>{resol
 
 test('project routes keep workspace preferences separate from research authoring',()=>{
  const id=randomUUID(),owner={projectId:id};
- for(const route of ['/api/research/records/writing/save','/api/research/drafts/list','/api/workspace/read/start','/api/workspace/structure','/api/workspace/save','/api/websites/open','/api/website/research/content','/api/publishing','/api/publication-jobs/start','/api/export/'+randomUUID(),'/api/modules/items','/api/v1/intake/readiness','/api/research/materials/chunk/'+randomUUID()+'/0'])assert.equal(projectApiRoute(route,id),'/api/projects/'+id+route.slice(4));
+ for(const route of ['/api/research/records/writing/save','/api/research/drafts/list','/api/workspace/read/start','/api/workspace/structure','/api/workspace/save','/api/publishing','/api/github-connection/status','/api/modules/items','/api/v1/intake/readiness','/api/research/materials/chunk/'+randomUUID()+'/0'])assert.equal(projectApiRoute(route,id),'/api/projects/'+id+route.slice(4));
  for(const route of ['/api/storage','/api/dashboard','/api/access/status','/api/interface','/api/projects/list'])assert.equal(projectApiRoute(route,id),route);
  assert.deepEqual(projectRoute(ownedRoute('#/records/'+randomUUID()+'/read',owner)).projectId,id);
  assert.deepEqual(projectRoute('#/preferences/general'),{projectId:null,hash:'#/preferences/general'});

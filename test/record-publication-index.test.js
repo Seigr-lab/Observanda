@@ -18,7 +18,6 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {compareRecordDates} from '../src/web/record-date.js';
-import {appearancePreviewPage} from '../src/appearance-preview.js';
 import {publicationRecords} from '../src/publication-records.js';
 
 async function fixture(t,count=80,configure=()=>{}){
@@ -58,34 +57,6 @@ test('sparse public choices seek across private records with a fixed page workin
    offset=page.next;cursor=page.nextCursor;
   }
   assert.equal(offset,null);t.diagnostic(JSON.stringify({count,publicRecords:43,firstPageSummaries:21,originals:0}));
- }
-});
-
-test('public dated cards and reverse neighbours seek across private gaps without inspecting their member payloads',async t=>{
- const member=SnapshotIndex.prototype.member,record=ResearchCatalogue.prototype.record;let measuring=false,privateMembers=0,bodies=0;
- SnapshotIndex.prototype.member=async function(...args){const row=await member.apply(this,args);if(measuring&&row?.share===false)privateMembers++;return row;};
- ResearchCatalogue.prototype.record=function(...args){if(measuring)bodies++;return record.apply(this,args);};
- t.after(()=>{SnapshotIndex.prototype.member=member;ResearchCatalogue.prototype.record=record;});
- for(const count of [80,800]){
-  const f=await fixture(t,count,book=>{
-   for(const [index,entry] of book.entries.entries())entry.occurredOn='2026-09-'+String(index%28+1).padStart(2,'0');
-   book.website.home.sections=book.website.home.sections.filter(s=>s.kind==='records');book.website.home.sections[0].filter={projectId:null,tag:'',limit:3};
-  });
-  const expected=f.book.entries.filter(r=>r.share).sort((a,b)=>compareRecordDates(a,b,{descending:true})||a.id.localeCompare(b.id,'en')),command={workspaceId:f.book.id,etag:f.source.etag,mode:'website',appearance:f.book.appearance};
-  measuring=true;privateMembers=0;bodies=0;
-  const home=await appearancePreviewPage(f.workspace,command,'index.html');assert.deepEqual(home.recordCards.map(r=>r.id),expected.slice(0,3).map(r=>r.id));assert.equal(privateMembers,0);assert.equal(bodies,0);
-  const last=f.book.entries.filter(r=>r.share).at(-1),entry=await appearancePreviewPage(f.workspace,command,'entries/'+last.id+'.html');assert.equal(entry.entries[0].id,last.id);assert.equal(privateMembers,0);assert.equal(bodies,1);measuring=false;
-  await f.workspace.catalogue(async store=>{
-   const snapshot=await store.snapshot(),index=new RecordPublicationIndex(store),scopes=new Map(f.book.notebooks.map(n=>[n.id,'shared']));
-   const forward=await Array.fromAsync(index.rows(snapshot,scopes,{order:'date'}));assert.deepEqual(forward.map(r=>r.id),expected.map(r=>r.id));
-   const after=forward[21],remaining=await Array.fromAsync(index.rows(snapshot,scopes,{order:'date',after})),previous=await Array.fromAsync(index.rows(snapshot,scopes,{order:'date',after,backward:true}));
-   assert.deepEqual(remaining.map(r=>r.id),expected.slice(22).map(r=>r.id));assert.deepEqual(previous.map(r=>r.id),expected.slice(0,21).reverse().map(r=>r.id));
-   const excluded=expected[0],included=f.book.entries.find(r=>!r.share),selection={includeProjects:[],records:[{id:excluded.id,share:false,attachments:[]},{id:included.id,share:true,attachments:[]}]},overrides=new Map();
-   for(const patch of selection.records)overrides.set(patch.id,{patch,row:await store.member(snapshot,patch.id)});
-   const merged=await Array.fromAsync(publicationRecords(store,snapshot,{metadata:snapshot.metadata,selection,overrides,notebooks:new Set(scopes.keys()),order:'date',backward:true}));
-   const chosen=f.book.entries.filter(r=>r.id===included.id||r.share&&r.id!==excluded.id).sort((a,b)=>compareRecordDates(a,b,{descending:true})||a.id.localeCompare(b.id,'en')).reverse();assert.deepEqual(merged.map(r=>r.id),chosen.map(r=>r.id));
-  });
-  t.diagnostic(JSON.stringify({records:count,publicRecords:43,cardOriginals:0,privateMembers:0,entryOriginals:1}));
  }
 });
 

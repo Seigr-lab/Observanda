@@ -18,7 +18,6 @@ import {WebsiteSites} from '../src/website-sites.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {revisionPageId} from '../src/publication-revisions.js';
 import {contentBuffer} from '../src/file-content.js';
-import {websitePreviewSource} from '../src/website-preview-source.js';
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {recordRevisions} from '../src/research.js';
 import {newElement} from '../src/web/composition-tree.js';
@@ -104,65 +103,6 @@ test('source preview applies section and attachment choices to derivatives and r
 });
 
 
-test('a combined canvas admits selected sources, follows cross-owner references and binds paging to consent',async t=>{
- const host=await fixture(t),source=await fixture(t,book=>{
-  book.entries[0].id=host.book.entries[0].id;book.entries[0].title='Foreign selected record';book.entries[0].body='Foreign original body';
-  book.entries[0].relations=[{id:randomUUID(),type:'Related to',label:'Host observation',target:{workspaceId:host.book.id,kind:'record',id:host.book.entries[0].id}}];
- });
- source.source.selection={defaultShare:false,includeProjects:[],records:[{id:source.book.entries[0].id,share:true,attachments:[]}]};
- const draft=structuredClone(host.book);draft.website.researchSources=[source.source];draft.website.home.sections=[newElement('records',randomUUID)];
- const request=await host.f.workspace.outline();const makeCommand=(includeHost=true)=>({...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:request.etag,selection:{defaultShare:false,includeProjects:includeHost?[host.book.projects[0].id]:[],records:[]}});
- let readers=0,closed=0,verified=0;
- const sourceReader=async()=>{readers++;return {...source.reader,verify:async()=>{verified++;},close:async()=>{closed++;}};};
- const identities=new PublicationOwnerIdentities(host.book.id),foreignId=identities.identity(source.book.id,'record',source.book.entries[0].id);
- const read=ResearchCatalogue.prototype.record,loaded=[];ResearchCatalogue.prototype.record=function(id,...args){loaded.push({workspaceId:this.workspace?.id,id});return read.call(this,id,...args);};t.after(()=>{ResearchCatalogue.prototype.record=read;});
- const home=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
- assert.equal(home.context.entries.length,0);assert.deepEqual(loaded,[]);assert.ok(home.context.recordCards.length<=24);assert.equal(readers,closed);assert.equal(readers,verified);
- const beforeEntry=source.opens,page=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});
- assert.equal(source.opens-beforeEntry,2,'The selected entry and its reference window share initial admission; only its outbound lookup reopens the source');
- assert.equal(page.context.entries.length,1);assert.equal(page.context.entries[0].body,'Foreign original body');assert.equal(page.context.entries[0].relations[0].id,host.book.entries[0].id);
- assert.equal(loaded.length,1);assert.equal(readers,closed);
- assert.equal(page.editor.workspaceId,host.book.id);const editorRecord=page.editor.records.find(record=>record.id===foreignId);
- assert.equal(editorRecord.title,'Foreign selected record');assert.equal(editorRecord.attachments.length,1);
- assert.deepEqual(Object.keys(editorRecord.attachments[0]).sort(),['alt','caption','id','kind','share']);assert.equal(Object.hasOwn(editorRecord,'body'),false);
- assert.equal(page.editor.sources[0].workspaceId,source.book.id);
- const references=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+host.book.entries[0].id,sourceReader});
- assert.ok(references.context.referencePage.recordIds.includes(foreignId));
- const mediaId=identities.identity(source.book.id,'media',source.book.entries[0].attachments[0].id),media=await page.media.get(mediaId,{streamed:true});
- assert.deepEqual(await contentBuffer(media.bytes),await readFile(new URL('../src/preview-assets/image.png',import.meta.url)));assert.equal(readers,closed);
- const first=home.context.collectionPages[0];assert.ok(first.nextCursor);
- const collections=[{key:first.key,definition:first.definition,query:new URLSearchParams({collection:first.key,cards:first.nextCursor}).toString()}];
- const second=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections});
- assert.equal(second.context.collectionPages[0].recordIds.some(id=>first.recordIds.includes(id)),false);
- const unselected=await websitePreviewSource(host.f.workspace,makeCommand(false),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});assert.deepEqual(unselected.context.entries[0].relations,[]);
- draft.website.researchSources=structuredClone([source.source]);draft.website.researchSources[0].selection.records[0].share=false;
- const reset=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections}),fresh=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
- assert.notEqual(reset.context.collectionPages[0].definition,first.definition);
- assert.equal(reset.context.collectionPages[0].previousCursor,null);
- assert.deepEqual(reset.context.collectionPages[0].recordIds,fresh.context.collectionPages[0].recordIds);
- assert.equal(reset.context.recordCards.some(record=>record.id===foreignId),false,'Changed consent restarts paging without the excluded foreign record');
- draft.website.researchSources=[];await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader}),{code:'INVALID'});
- assert.equal((await host.f.workspace.outline()).etag,request.etag);assert.equal(readers,closed);
-});
-
-
-test('explicit foreign historical pages keep their revision and selected sections without entering current collections',async t=>{
- const host=await fixture(t),source=await fixture(t),raw=source.book.entries[0],choice=defaultEditionRecord(raw,recordRevision(raw));choice.sections=[raw.sections[0].id];
- const current={...structuredClone(raw),body:'Later observation',relations:[{id:randomUUID(),type:'Related to',label:'Previous observation',target:{workspaceId:source.book.id,kind:'record',id:raw.id,revision:choice.revision}}]};
- await new ResearchRecords(source.f.workspace,new MediaStore(source.f.workspace)).save({workspaceId:source.book.id,changes:[{id:raw.id,expectedRevision:choice.revision,record:current}]});
- source.source.selection={defaultShare:false,includeProjects:[],records:[{id:raw.id,share:true,attachments:[]}]};source.source.edition={version:1,records:[],history:[choice]};
- const draft=structuredClone(host.book);draft.website.researchSources=[source.source];draft.website.home.sections=[];
- const head=await host.f.workspace.outline(),command={...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:head.etag},identities=new PublicationOwnerIdentities(host.book.id);
- const currentId=identities.identity(source.book.id,'record',raw.id),oldId=identities.identity(source.book.id,'record',revisionPageId(source.book.id,raw.id,choice.revision));
- const sourceReader=async()=>({...source.reader,verify:async()=>{},close:async()=>{}});
- const present=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'entry:'+currentId,sourceReader});
- assert.equal(present.context.entries[0].relations[0].id,oldId);
- const historical=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'entry:'+oldId,sourceReader});
- assert.equal(historical.context.entries[0].body,raw.body);assert.equal(historical.context.entries[0].revisionEdition.revision,choice.revision);assert.equal(historical.context.entries[0].revisionEdition.current,currentId);
- assert.equal(historical.context.entries[0].sections.some(section=>section.body==='Private details'),false);assert.equal(historical.context.browseRecords.some(record=>record.id===oldId),false);
-});
-
-
 test('owner preview counts and forward and reverse windows stay bounded at tenfold growth',async t=>{
  const member=SnapshotIndex.prototype.member,record=ResearchCatalogue.prototype.record,decode=ResearchCatalogue.prototype.decode;
  let measuring=false,members=0,originals=0,decoded=0;const results=[];
@@ -198,21 +138,6 @@ test('an explicit record choice cannot disclose a project excluded from its sour
  const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),all=new Set(f.book.notebooks.map(book=>owner.id('notebook',book.id)));
  assert.equal((await owner.window(all)).some(row=>row.recordId===hidden.id),false);assert.equal(await owner.find(owner.id('record',hidden.id)),null);assert.equal(await owner.resolve(owner.id('record',hidden.id)),null);
  assert.equal(Object.values(await owner.counts()).reduce((sum,value)=>sum+value,0),11);
-});
-
-
-test('an independent website combines sibling books without becoming owned by either book',async t=>{
- const host=await fixture(t,()=>{},1),first=await fixture(t,()=>{},12),projectId=first.book.projects[0].id,projectNamespace=randomUUID();
- const second=await fixture(t,book=>{const prior=book.projects[0].id;book.projects[0].id=projectId;for(const notebook of book.notebooks)if(notebook.projectId===prior)notebook.projectId=projectId;},12);
- const draft=structuredClone(host.book);draft.website.researchSources=[first.source,second.source];draft.website.home.sections=[];
- const sourceReader=async()=>({use:(id,revision,consume)=>{const selected=[first,second].find(source=>source.book.id===id);assert.ok(selected);return selected.reader.use(id,revision,(store,snapshot,pinned)=>consume(store,snapshot,{...pinned,projectNamespaceId:projectNamespace}));},verify:async()=>{},close:async()=>{}});
- const command={...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:(await host.f.workspace.outline()).etag};
- const publicProject=new PublicationOwnerIdentities(host.book.id).project({workspaceId:first.book.id,projectId,projectNamespaceId:projectNamespace},projectId);
- const page=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'project:'+publicProject,sourceReader});
- assert.equal(page.metadata.projects.filter(project=>project.id===publicProject).length,1);
- assert.equal(page.metadata.notebooks.filter(book=>book.projectId===publicProject).length,2);assert.equal(page.context.recordCards.length,24);
- assert.equal(new Set(page.context.recordCards.map(record=>record.notebookId)).size,2);
- assert.equal(page.metadata.id,host.book.id);assert.deepEqual((await new WebsiteSites(host.f.workspace).read(null)).book.website.researchSources,host.book.website.researchSources);
 });
 
 

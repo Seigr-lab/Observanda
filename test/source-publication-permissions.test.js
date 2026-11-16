@@ -19,7 +19,6 @@ import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
 import {exactPublicationRecord} from '../src/publication-revisions.js';
 import {MediaStore} from '../src/media.js';
 import {serialize} from '../src/storage-format.js';
-import {websitePreviewSource} from '../src/website-preview-source.js';
 import {catalogueFormat,catalogueRequiresSourcePublicationControls,catalogueRequiresWebsiteSourceSelections,requireSourcePublicationControls,requireWebsiteSourceSelections} from '../src/catalogue-format.js';
 import {rekeyCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
 import {backupCatalogue,CATALOGUE_ARCHIVE} from '../src/postgres.js';
@@ -103,20 +102,6 @@ test('withdrawing attachment permission blocks an already prepared edition and o
  const stored=await jobs.stored(candidate.reviewId);delete stored.sourcePermissionVersion;
  await jobs.workspace.withLock(()=>jobs.workspace.writeMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',serialize(stored)));
  await assert.rejects(jobs.read(candidate.reviewId),{code:'PUBLICATION_PERMISSIONS_CHANGED'});await jobs.verifyFiles(candidate.reviewId);
-});
-
-
-test('native website drafts omit source-private writing and an old tab cannot restore withdrawn content',async t=>{
- const f=await fixture(t),jobs=new PublicationJobs(f.workspace),old=await jobs.workspace.outline();
- const command=outline=>({workspaceId:f.book.id,baseEtag:outline.etag,metadata:{},projects:[],changes:[],removed:[]});
- const target='entry:'+f.record.id,preview=await websitePreviewSource(f.workspace,command(old),{websitePin:old.websitePin,designTarget:target});
- assert.ok(JSON.stringify(preview.context).includes(f.record.sections[1].title));
- const current=await f.workspace.read();current.book.entries.find(row=>row.id===f.record.id).sections[1].share=false;await f.workspace.save(current.book,current.etag);
- await assert.rejects(websitePreviewSource(f.workspace,command(old),{websitePin:old.websitePin,designTarget:target}),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
- const latest=await jobs.workspace.outline(),allowed=await websitePreviewSource(f.workspace,command(latest),{websitePin:latest.websitePin,designTarget:target}),text=JSON.stringify(allowed.context);
- assert.ok(!text.includes(f.record.sections[1].title));assert.ok(!text.includes(f.record.sections[1].id));
- assert.ok(text.includes('Public steps for the method.'));
- await assert.rejects(websitePreviewSource(f.workspace,command(latest),{websitePin:latest.websitePin,designTarget:'entry:'+f.secret.id}),{code:'INVALID'});
 });
 
 

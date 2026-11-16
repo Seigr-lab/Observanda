@@ -25,13 +25,8 @@ async function setup(t,{protected:secure=false,create=true,currentAccess=false}=
   return {...app,parent,root,preferencesFile,client,vault:encrypted?.vault};
 }
 
-async function preview(client){
-  const currentResponse=await client.request('/api/notebook'),current=await currentResponse.json();assert.equal(currentResponse.status,200,JSON.stringify(current));
-  const editorResponse=await client.request('/api/websites/editor/open',{workspaceId:current.book.id,websiteId:null}),editor=await editorResponse.json();assert.equal(editorResponse.status,200,JSON.stringify(editor));
-  const response=await client.request('/api/preview',{etag:editor.websitePin.researchSnapshotId,websitePin:editor.websitePin}),candidate=await response.json();assert.equal(response.status,200,JSON.stringify(candidate));return candidate;
-}
 
-test('protected launch links require sign-in for every private route, previews and downloads',async t=>{
+test('protected launch links require sign-in for every private route and download',async t=>{
   const app=await setup(t,{protected:true}),client=await app.client();
   assert.equal((await client.request('/api/access/status')).status,200);
   for(const route of ['/api/dashboard','/api/notebook','/api/storage','/api/workspaces','/api/history','/api/laboratory','/api/publishing','/api/media/00000000-0000-4000-8000-000000000001','/api/fonts','/api/fonts/custom-'+ '0'.repeat(64),'/preview/'+ '0'.repeat(64)+'/index.html'])assert.equal((await client.request(route)).status,401,route);
@@ -43,11 +38,12 @@ test('protected launch links require sign-in for every private route, previews a
   assert.equal((await client.request('/api/access/unlock',{username:'Researcher',password:'wrong'})).status,401);
   assert.equal((await client.request('/api/access/unlock',{username:'Researcher',password:'synthetic password 123'})).status,200);
   const saved=await (await client.request('/api/notebook')).json();assert.ok(saved.book);
-  const candidate=await preview(client);assert.equal((await client.request(candidate.url)).status,200);
-  const ticketResponse=await client.request('/api/session/download',{url:candidate.url});assert.equal(ticketResponse.status,200);const ticket=(await ticketResponse.json()).url;
+  // A private read, and a download ticket for it, stop working once the workspace locks.
+  const target='/api/notebook';assert.equal((await client.request(target)).status,200);
+  const ticketResponse=await client.request('/api/session/download',{url:target});assert.equal(ticketResponse.status,200);const ticket=(await ticketResponse.json()).url;
   assert.equal((await client.request('/api/access/lock',{})).status,200);
-  assert.equal((await fetch(app.origin+ticket)).status,401);assert.equal((await client.request('/api/session/download',{url:candidate.url})).status,401);
-  assert.equal((await client.request(candidate.url)).status,401);assert.equal((await client.request('/api/export',{id:candidate.id})).status,401);
+  assert.equal((await fetch(app.origin+ticket)).status,401);assert.equal((await client.request('/api/session/download',{url:target})).status,401);
+  assert.equal((await client.request(target)).status,401);
   assert.equal((await (await app.client()).request('/api/notebook')).status,401);
 });
 
@@ -60,8 +56,6 @@ test('access changes require the existing password and invalidate other authenti
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'wrong'});assert.equal(response.status,401);
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'first synthetic password'});assert.equal(response.status,200);
   assert.equal((await (await first.request('/api/notebook')).json()).etag,original.etag);
-  const candidate=await preview(first),download=await first.request('/api/export',{id:candidate.id});assert.equal(download.status,200);assert.equal(download.headers.get('content-type'),'application/zip');const zip=Buffer.from(await download.arrayBuffer()).toString();
-  for(const privateValue of ['Private account','first synthetic password','second synthetic password','access.json',app.root])assert.ok(!zip.includes(privateValue));
 });
 
 test('password attempts are limited across new launch sessions and the Open workspace route',async t=>{
@@ -83,7 +77,6 @@ test('copying switches only after review and verification and rejects old-tab wr
   assert.equal((await other.request('/api/notebook/save',before)).status,409);
   for(const route of ['/api/fonts/import','/api/fonts/update','/api/research/records/query','/api/research/records/open','/api/workspace/read/start','/api/workspace/read/page'])assert.equal((await other.request(route,{})).status,409,route);
   assert.equal((await client.request('/api/notebook')).status,200);
-  const candidate=await preview(client);assert.equal((await client.request(candidate.url)).status,200);
 });
 
 test('new workspace creation honors the selected folder and keeps paths and access settings out of research',async t=>{

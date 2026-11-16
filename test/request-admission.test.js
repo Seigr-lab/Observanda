@@ -12,7 +12,7 @@ test('request saturation bounds queues and retained bytes while reserving contro
  const control=await pool.acquire('control');control.retain(16);assert.throws(()=>pool.acquire('control'),{code:'WORKLOAD_BUSY'});
  a.release();a.release();const next=await waiting;next.retain(128);assert.equal(pool.stats().work.active,1);assert.equal(pool.stats().control.retainedBytes,16);
  next.release();control.release();assert.equal(pool.stats().work.retainedBytes,0);assert.equal(pool.stats().control.active,0);
- assert.equal(requestLane('POST','/api/publication-jobs/cancel'),'control');assert.equal(requestLane('POST','/api/publication-jobs/start'),'work');assert.equal(requestLane('POST','/api/untrusted/cancel'),'work');
+ assert.equal(requestLane('POST','/api/github-connection/cancel'),'control');assert.equal(requestLane('POST','/api/github-connection/start'),'work');assert.equal(requestLane('POST','/api/untrusted/cancel'),'work');
  assert.equal(requestLane('POST','/api/session'),'bootstrap');
  assert.equal(requestLane('POST','/api/projects/00000000-0000-4000-8000-000000000001/lab-books/00000000-0000-4000-8000-000000000002/research/materials/cancel-job'),'control');
 });

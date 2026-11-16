@@ -55,57 +55,6 @@ test('independent websites persist separate designs, selections, destinations an
  assert.equal((await new WebsiteSites(f.workspace).read(a)).book.website.footer,'Journal footer');assert.equal((await sites.read(b)).book.website.footer,'');
 });
 
-test('independent websites isolate selections and review IDs and deploy to pinned repositories after restart',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-sites-')),book=upgradeNotebook(sampleNotebook());
- const project={...structuredClone(book.projects[0]),id:randomUUID(),title:'Other project',parentId:null},notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:project.id};
- const other={...structuredClone(book.entries[0]),id:randomUUID(),notebookId:notebook.id,title:'Other project secret',body:'OTHER_PROJECT_PRIVATE',share:true,sections:[],attachments:[],figures:[],relations:[]};
- book.projects.push(project);book.notebooks.push(notebook);book.entries.push(other);
- const f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace),remotes=[githubFixture({branch:'main',repository:'site-a',initialFiles:{'README.md':'First site'}}),githubFixture({branch:'main',repository:'site-b',initialFiles:{'README.md':'Second site'}})];
- const publisher=new Publisher(f.workspace.root,{request:(url,options)=>remotes[url.includes('/site-b')?1:0].request(url,options)},f.vault);publisher.token='synthetic_github_token_1234567890';
- let jobs=workspaceJobs(f.workspace,publisher),app=null;
- t.after(async()=>{if(app)await app.close();await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const ids=[];for(const [i,p] of [book.projects[0],project].entries()){
-  const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i});ids.push(created.id);
-  const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[{id:p.id,share:true,logoId:null}],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
-  await sites.save(created.id,command);
-  if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,websitePin:(await sites.read(created.id)).websitePin,selection:{defaultShare:false,includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
- }
- const scoped=ids.map(id=>websiteWorkspace(f.workspace,id)),publishers=scoped.map(w=>websitePublisher(publisher,w));
- const etag=(await f.workspace.outline()).etag;
- for(let i=0;i<2;i++){const current=await publishers[i].read();await publishers[i].save({...current.config,github:{...current.config.github,owner:'example',repository:i?'site-b':'site-a',branch:'main'}},current.etag);await new PublicationJobs(scoped[i]).start(await source(scoped[i]),websiteJobQueue(jobs.queue,ids[i]));}
- // A fresh worker dispatches each immutable job through its own website.
- jobs=workspaceJobs(f.workspace,publisher);const prepared=[await run(jobs.queue),await run(jobs.queue)];
- for(let i=0;i<2;i++){const candidate=await new PublicationJobs(scoped[i]).read(prepared[i].result.id),text=await publicationText(candidate);assert.equal(text.includes('OTHER_PROJECT_PRIVATE'),i===1);const configEtag=(await publishers[i].read()).etag,plan=await publishers[i].reviewDestination(candidate,configEtag);await new DeploymentJobs(scoped[i],publishers[i],websiteJobQueue(jobs.queue,ids[i])).start({id:candidate.reviewId,configEtag,reviewed:true,destinationReview:plan.id,destinationReviewed:true});}
- await run(jobs.queue);await run(jobs.queue);
- for(let i=0;i<2;i++){assert.ok(remotes[i].head);assert.equal((await publishers[i].read()).receipt.commit,remotes[i].head);assert.equal((await new DeploymentJobs(scoped[i],publishers[i],websiteJobQueue(jobs.queue,ids[i])).page()).items.length,1);}
- assert.equal((await publisher.read()).configured,false);
- app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs.json')});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
- const request=(route,data,id)=>fetch(app.origin+route,{headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json',...(id?{'X-Observanda-Website':id}:{})},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
- const review=prepared[0].result.id;
- assert.equal((await request('/api/publication-jobs/open',{id:review},ids[1])).status,404);
- assert.equal((await request('/api/publication-jobs/open',{id:review})).status,404);
- const own=await request('/api/publication-jobs/open',{id:review},ids[0]);assert.equal(own.status,200);const summary=await own.json();
- const preview=await request(summary.url);assert.equal(preview.status,200);assert.ok(!(await preview.text()).includes('OTHER_PROJECT_PRIVATE'));
- // Opening a cached edition never grants another site's publishing routes access.
- assert.equal((await request('/api/publication-jobs/open',{id:review},ids[1])).status,404);
- assert.equal((await request('/api/deployment-jobs/status',{id:(await new DeploymentJobs(scoped[0],publishers[0],websiteJobQueue(jobs.queue,ids[0])).page()).items[0].id},ids[1])).status,404);
- await app.close();app=null;
- // Moving research between projects cannot make it public through a site's
- // earlier "include all" choice. Removal prunes only current selections.
- const records=new ResearchRecords(f.workspace,{}),moved={...other,notebookId:book.notebooks[0].id};
- await records.save({workspaceId:book.id,changes:[{id:other.id,expectedRevision:recordRevision(other),record:moved}]});
- let current=await f.workspace.read(),now=current.book.entries.find(r=>r.id===other.id);
- assert.equal((await publicationSource(scoped[0],await source(scoped[0]))).entries.some(r=>r.id===other.id),false);
- assert.equal((await publicationSource(scoped[1],await source(scoped[1]))).entries.some(r=>r.id===other.id),false);
- await records.remove({workspaceId:book.id,recordId:other.id,expectedRevision:recordRevision(now)});
- assert.ok((await sites.read(ids[0])).site.selection.records.every(r=>r.id!==other.id));
- // Retention preserves the edition, but deleted source consent must prevent
- // serving it again. A retained identifier is not continuing permission.
- await assert.rejects(new PublicationJobs(scoped[1]).read(prepared[1].result.id),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
-});
-
-
 test('websites can be created before research projects exist and have no fixed count ceiling',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-independent-sites-')),book=createNotebook('Empty workspace',''),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});

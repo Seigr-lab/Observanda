@@ -45,13 +45,12 @@ test('a detached session never implicitly selects a folder and requires a chosen
  assert.equal((await (await c.request('/api/notebook')).json()).book.title,path.basename(root));
 });
 
-test('reset preserves all research files, invalidates stale writes and preview URLs, and supports a fresh persisted setup',async t=>{
+test('reset preserves all research files, invalidates stale writes, and supports a fresh persisted setup',async t=>{
  const {parent,root,file}=await fixture(),deviceStore=new TestDeviceStore({file:file+'.device-key'}),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);
  try{await initializeLocation(root,createNotebook(path.basename(root)),access,vault);}finally{clearVault(vault);}
  await rememberLocation(file,root);await rememberInterface(file,{fontSize:22,lineHeight:1.8});
  const app=await startServer({root,port:0,preferencesFile:file,expectedExisting:true});t.after(()=>app.close());const c=await client(app),old=await client(app);
- const book=await (await c.request('/api/notebook')).json(),responsePreview=await c.request('/api/design-preview',{mode:'examples',book:book.book});
- assert.equal(responsePreview.status,200);const preview=await responsePreview.json();assert.ok(preview.url);assert.equal((await c.request(preview.url)).status,200);
+ const book=await (await c.request('/api/notebook')).json();
  await prepared(c);
  const before=await workspaceManifest(root),prefs=await readFile(file),setting=await (await c.request('/api/preferences')).json();assert.equal(setting.file,file);
  assert.equal((await c.request('/api/preferences/reset',{etag:setting.etag})).status,422);
@@ -61,7 +60,6 @@ test('reset preserves all research files, invalidates stale writes and preview U
  const response=await c.request('/api/preferences/reset',{etag:setting.etag,confirmed:true});assert.equal(response.status,200);const reset=await response.json();c.context=reset.storage.contextId;
  assert.equal(reset.storage.root,null);assert.deepEqual(await readFile(reset.backup),prefs);assert.deepEqual(await workspaceManifest(root),before);assert.deepEqual(await readPreferences(file),defaultPreferences());
  assert.equal((await old.request('/api/notebook/save',book)).status,409);assert.equal((await old.request('/api/interface',{fontSize:20,lineHeight:1.8})).status,409);
- assert.ok(preview.url);assert.equal((await c.request(preview.url)).status,404);
  assert.deepEqual(await (await c.request('/api/notebook')).json(),{book:null});
  const destination=path.join(parent,'New work');const created=await c.request('/api/notebook/create',{title:'New work',storagePath:destination});assert.equal(created.status,201);c.context=(await created.json()).storage.contextId;
  const preferences=await readPreferences(file);assert.equal(preferences.workspace,destination);assert.deepEqual(preferences.recent.map(item=>item.path),[destination]);assert.deepEqual(await workspaceManifest(root),before);
@@ -76,7 +74,7 @@ test('locked workspaces reject preference reset without modifying protection or 
 
 // Opening a workspace prepares its default website in the background; its files are
 // written once, so snapshots of the workspace are taken after preparation settles.
-async function prepared(c){for(let i=0;i<600;i++){const value=await (await c.request('/api/website-files/preparation')).json();if(['ready','failed','cancelled'].includes(value.preparation?.state))return value.preparation;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('Website preparation did not settle');}
+async function prepared(c){for(let i=0;i<600;i++){const value=await (await c.request('/api/website-files/preparation')).json();if(['failed','cancelled'].includes(value.preparation?.state)||value.preparation?.state==='ready'&&value.preparation.library&&value.preparation.library.state!=='preparing')return value.preparation;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('Website preparation did not settle');}
 async function launchCLI(t,file,args=[]){
  const child=spawn(process.execPath,['src/cli.js','open','--no-browser','--port','0','--preferences',file,...args],{cwd:process.cwd(),windowsHide:true,stdio:['ignore','pipe','pipe']});
  t.after(async()=>{if(child.exitCode===null){const done=once(child,'exit');child.kill();await done;}});
