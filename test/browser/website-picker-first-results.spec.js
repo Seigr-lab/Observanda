@@ -41,9 +41,9 @@ test('a website entry opens before owner counts finish and late counts cannot re
   await expect(d.locator('[data-picker-total]')).toBeEmpty();
   const token=await store.beginSourceUpdate({sourceId:source.id,target:'website'});
   await expect(d.locator('.website-picker-results li')).toHaveCount(0,{timeout:12000});
-  await expect(d.locator('[data-picker-total]')).toHaveText('0 entries available for websites');
+  await expect(d.locator('[data-picker-total]')).toHaveText('0 records available for websites');
   held.resolve();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  await expect(d.locator('[data-picker-total]')).toHaveText('0 entries available for websites');
+  await expect(d.locator('[data-picker-total]')).toHaveText('0 records available for websites');
   await expect(d).not.toContainText('Sampling method');await expect(d.locator('[data-picker-owner-results] button')).toHaveCount(0);
   await store.putSource({sourceId:source.id,target:'website',visible:false,title:'Withdrawn'},{token});
  }finally{held.resolve();await closeIdleMutationFiles();await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});}

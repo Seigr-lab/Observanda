@@ -4,7 +4,7 @@
   "WEBSITE_COMPONENT_ENTRY_FIELD": "This field contains linked entries. Detach those instances before removing or changing the field. The entries will keep their current publication permissions.",
   "PDF_NOTE_ANCHOR": "A note marker is missing or duplicated. Open Notes in the affected section and place the marker again.",
   "PDF_PLACEMENT_REVIEW": "Text changed at a layout, image or note position. Review the placements in the affected section before exporting.",
-  "WEBSITE_FEED_CAPACITY": "A website feed exceeds the HTML page limit. Open Entry feeds on the affected page and choose a smaller item layout before publishing.",
+  "WEBSITE_FEED_CAPACITY": "A lab book record list exceeds the HTML page limit. Open Lab book record lists on the affected page and choose a smaller item layout before publishing.",
   "WEBSITE_CHANGED": "The website content or its permissions changed. Reload the current view before continuing.",
   "INSTALL_FILE_MISSING": "An Observanda installation file is missing. Repair or reinstall Observanda.",
   "DATABASE_GUARD_STORAGE": "The database storage cannot provide verified private access and directory protection. Existing data has been preserved. Select storage with supported access controls, or ask your administrator to move the database into a verified private directory.",

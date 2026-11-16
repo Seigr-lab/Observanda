@@ -31,7 +31,7 @@ test('configure reusable title fields, use visual main styling and publish a cus
   await d.getByText('Editable fields',{exact:true}).click();
   await d.getByRole('combobox',{name:'Page element',exact:true}).selectOption({label:'h2 · Sample'});
   await d.getByLabel('Field name',{exact:true}).fill('Specimen name');await b(d,'Save field').click();
-  await b(d,'Add a linked entry area').click();
+  await b(d,'Add a linked record area').click();
   await main.locator('article').click({position:{x:3,y:3}});
   await d.getByRole('tab',{name:'Style',exact:true}).click();
   await d.locator('[data-visual-property="font-size"]').fill('24');await b(d,'Apply styles').click();
@@ -41,7 +41,7 @@ test('configure reusable title fields, use visual main styling and publish a cus
   const edit=page.getByRole('dialog',{name:'Customize instance'});await edit.getByLabel('Use a value for this instance').check();
   await edit.getByLabel('Text',{exact:true}).fill('Excavation 12');await b(edit,'Save instance').click();await expect(canvas.getByRole('heading',{name:'Excavation 12'})).toBeVisible();
   await canvas.getByText('Peak at 518 nm',{exact:true}).click();
-  await b(library,'Frame the selected entry').click();
+  await b(library,'Frame the selected record').click();
   await expect(canvas.locator('article [data-observanda-source]')).toContainText('Peak at 518 nm');
   await b(page,'Publish to folder').click();await page.getByLabel('Destination folder',{exact:true}).fill(folder);
   await b(page,'Review file changes').click();await page.locator('[data-website-file-folder-confirm]').check();await b(page,'Write reviewed files').click();

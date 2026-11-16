@@ -77,7 +77,7 @@ test('where used finds exact feed entries across duplicate site names, host page
   }
   await sitesForSource();await pickSite(split);
   const generatedUse=picker.locator('.website-picker-places li').filter({hasText:target});
-  await expect(generatedUse).toContainText('Feed on reports.html');await verify(generatedUse,spread.feedId,target);
+  await expect(generatedUse).toContainText('Record list on reports.html');await verify(generatedUse,spread.feedId,target);
   await page.locator('[data-action="website-files-visual"]').click();await sitesForSource();await pickSite(compact);
   const uses=picker.locator('.website-picker-places li');await expect(uses).toHaveCount(2);
   for(const value of [one,two])await expect(uses.filter({hasText:value.feedId.slice(0,8)})).toHaveCount(1);

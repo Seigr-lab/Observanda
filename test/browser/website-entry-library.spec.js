@@ -46,26 +46,26 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
    return {errorCode:error.code,message:error.message};
   }));
   await page.setViewportSize({width:1280,height:800});await mountFilesEditor(page);const browse=page.getByRole('button',{name:'Browse available content',exact:true}),d=page.getByRole('dialog');
-  await browse.press('Enter');await expect(d.getByText('24 entries available for websites')).toBeVisible();await expect(d.getByLabel('Search entries',{exact:true})).toBeFocused();await expect(d.locator('.website-picker-results li')).toHaveCount(12);
+  await browse.press('Enter');await expect(d.getByText('24 records available for websites')).toBeVisible();await expect(d.getByLabel('Search records',{exact:true})).toBeFocused();await expect(d.locator('.website-picker-results li')).toHaveCount(12);
   await d.locator('[data-picker-facet="book"] summary').click();
   const input=d.getByLabel('Find a lab book by name');await input.fill('Field observations');await input.press('Enter');
   const books=d.locator('[data-action="website-files-picker-choose-book"]');await expect(books).toHaveCount(3);await expect(books.first()).toBeVisible();
   await books.filter({hasText:'Coastal ecology'}).click();await expect(d.locator('.website-picker-results li')).toHaveCount(4);
   await d.locator('[data-picker-facet="project"] summary').click();await d.locator('[data-action="website-files-picker-clear-project"]').click();
   async function duplicates(){
-   const query=d.getByLabel('Search entries',{exact:true});await query.fill('Transect observation');await query.press('Enter');
+   const query=d.getByLabel('Search records',{exact:true});await query.fill('Transect observation');await query.press('Enter');
    await expect(d.locator('.website-picker-results li')).toHaveCount(6);
   }
   await duplicates();
   const results=()=>d.locator('.website-picker-results li'),a=results().filter({hasText:'Coastal ecology › Field observations'}),b=results().filter({hasText:'Forest phenology › Instrument surveys'});
   await a.getByRole('checkbox').check();await b.getByRole('checkbox').check();
   await d.locator('.website-picker-queue li').last().getByRole('button',{name:'Move up',exact:true}).click();
-  await d.getByRole('button',{name:'Insert 2 entries in this order'}).click();await expect(d.getByRole('status')).toHaveText('Inserted 2 into the saved page.');
+  await d.getByRole('button',{name:'Insert 2 records in this order'}).click();await expect(d.getByRole('status')).toHaveText('Inserted 2 into the saved page.');
   const saved=await store.open(id),chosen=corpus.examples.find(e=>e.notebookId===corpus.books[0].id),other=corpus.examples.find(e=>e.notebookId===corpus.books.at(-1).id);
   expect(saved.html.indexOf(other.id)).toBeLessThan(saved.html.indexOf(chosen.id));
   await a.getByRole('button',{name:'Transect observation',exact:true}).click();await expect(d.locator('.website-picker-detail')).toContainText('Sampling method');
   await expect(d.locator('.website-picker-facts')).toContainText('Hypothesis');
-  await expect(d.locator('.website-picker-detail').getByRole('heading',{name:'Entry text'})).toBeVisible();
+  await expect(d.locator('.website-picker-detail').getByRole('heading',{name:'Record text'})).toBeVisible();
   const bounds=await d.evaluate(el=>{
    const area=el.getBoundingClientRect(),button=el.querySelector('[data-action="website-files-picker-insert"]').getBoundingClientRect();
    return {clip:el.scrollHeight-el.clientHeight,inside:button.top>=area.top&&button.bottom<=area.bottom&&button.right<=area.right};
@@ -73,7 +73,7 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   await d.getByRole('button',{name:'Insert another copy'}).click();await expect(d.getByRole('heading',{name:'Uses in this website (2)'})).toBeVisible();
   await d.getByRole('button',{name:'Close content picker'}).click();await page.locator('[data-website-file-page]').selectOption('notes.html');await expect(page.frameLocator('#website-files-canvas').locator('h1')).toHaveText('Field notes');
   await browse.click();await duplicates();await a.getByRole('button',{name:'Transect observation',exact:true}).click();await d.getByRole('button',{name:'Insert another copy'}).click();
-  const uses=d.locator('.website-picker-places');await expect(uses).toContainText('Pages with this entry: 2');
+  const uses=d.locator('.website-picker-places');await expect(uses).toContainText('Pages with this record: 2');
   const home=()=>uses.locator('li').filter({hasText:'index.html'}).first();await home().getByRole('button',{name:'Open this placement'}).click();
   await expect(d).toHaveCount(0);await expect(page.locator('[data-website-file-page]')).toHaveValue('index.html');
   await browse.click();await duplicates();await a.getByRole('button',{name:'Transect observation',exact:true}).click();
@@ -81,9 +81,9 @@ test('browse eligible books, insert a reviewed group, locate repeated placements
   await expect(uses.getByRole('heading',{name:'Uses in this website (2)'})).toBeVisible();
   expect((await store.open(id)).html.split('data-observanda-source="'+chosen.id+'"').length-1).toBe(1);
   expect((await store.open(id,{path:'notes.html'})).html).toContain(chosen.id);
-  const where=d.getByRole('button',{name:'Where used',exact:true}),back=d.getByRole('button',{name:'Show entry details',exact:true});
+  const where=d.getByRole('button',{name:'Where used',exact:true}),back=d.getByRole('button',{name:'Show record details',exact:true});
   await where.press('Enter');await expect(back).toBeFocused();await expect(d.getByRole('heading',{name:'Uses in this website (2)'})).toBeInViewport();
-  await back.press('Enter');await expect(where).toBeFocused();await expect(d.getByRole('heading',{name:'Entry text'})).toBeVisible();
+  await back.press('Enter');await expect(where).toBeFocused();await expect(d.getByRole('heading',{name:'Record text'})).toBeVisible();
   await where.press('Enter');
   expect(siteScans).toBe(0);
   await d.getByRole('button',{name:'Find usage across websites'}).click();

@@ -35,13 +35,13 @@ test('an entry card shows a chosen cover photograph and the entry date in the pa
   await panel.getByRole('radio',{name:'Compact card',exact:true}).check();
   const details=panel.getByRole('group',{name:'Card details'});await expect(details).toBeVisible();
   await details.getByLabel('Cover image',{exact:true}).selectOption({label:'Capped brood'});
-  await details.getByRole('checkbox',{name:"Show the entry's date",exact:true}).check();
+  await details.getByRole('checkbox',{name:"Show the record's date",exact:true}).check();
   await panel.getByRole('button',{name:'Apply to this copy',exact:true}).click();await expect(panel).not.toBeVisible();
   await expect(copy).toHaveAttribute('data-observanda-display','card');
   const cover=copy.locator('img.website-entry-cover');await expect(cover).toHaveAttribute('alt','Capped brood frame');
   await expect(copy.locator('time[datetime="2026-05-02"]')).toHaveText(/2026/);await expect(copy.locator('time[datetime="2026-05-02"]')).not.toHaveText('2026-05-02');
   await toolbar.click();await expect(details.getByLabel('Cover image',{exact:true})).toHaveValue('media:'+photo);
-  await expect(details.getByRole('checkbox',{name:"Show the entry's date",exact:true})).toBeChecked();
+  await expect(details.getByRole('checkbox',{name:"Show the record's date",exact:true})).toBeChecked();
   await panel.press('Escape');await expect(panel).not.toBeVisible();
   await page.getByRole('button',{name:'Preview saved website',exact:true}).click();
   const saved=page.frameLocator('#website-files-preview');

@@ -32,9 +32,9 @@ test('one saved lab entry can be a full entry, card and selected section on diff
   async function enter(){await expect(toolbar).toBeEnabled();await toolbar.focus();await expect(toolbar).toBeFocused();await toolbar.press('Enter');await expect(panel).toBeVisible();}
   async function apply(){const button=panel.getByRole('button',{name:'Apply to this copy',exact:true});await button.focus();await button.press('Enter');await expect(panel).not.toBeVisible();}
   await expect(copies).toHaveCount(2);
-  await enter();await panel.getByLabel('Entry copy on this page').selectOption('1');
+  await enter();await panel.getByLabel('Record copy on this page').selectOption('1');
   await expect(formats.getByRole('radio')).toHaveCount(3);
-  const full=formats.getByRole('radio',{name:'Full entry',exact:true}),card=formats.getByRole('radio',{name:'Compact card',exact:true});
+  const full=formats.getByRole('radio',{name:'Full record',exact:true}),card=formats.getByRole('radio',{name:'Compact card',exact:true});
   await expect(full).toBeEnabled();await expect(full).toBeChecked();await full.focus();await expect(full).toBeFocused();await full.press('ArrowRight');await expect(card).toBeChecked();await expect(card).toBeFocused();
   await panel.getByLabel('Content to show').selectOption('body');await expect(preview).toContainText('Field measurements');await apply();
   await expect(copies.nth(1)).toHaveAttribute('data-observanda-display','card');

@@ -26,7 +26,7 @@ async function addInstrumentPlates(page){
  await dialog.getByRole('radio',{name:'Custom design'}).check();
  await dialog.getByText('Arrange fields',{exact:true}).click();
  await dialog.locator('[data-feed-field="content"]').uncheck();await dialog.locator('[data-feed-field="figures"]').check();
- await dialog.getByLabel('Layout of figures within each entry').selectOption('grid');
+ await dialog.getByLabel('Layout of figures within each record').selectOption('grid');
  await dialog.locator('[data-feed-apply]').click();
  await expect(dialog).toHaveCount(0);
 }
@@ -68,7 +68,7 @@ test('an authored feed republishes new lab grants, changed writing and section w
   await expect(canvas().getByRole('heading',{name:'Fluorescence atlas',exact:true})).toBeVisible();
   await page.locator('[data-action="website-files-add-block"][data-block="feed"]').click();
   const editor=page.locator('dialog[data-website-feed-dialog]');
-  await expect(editor.getByRole('radio',{name:'All eligible entries'})).toBeChecked();
+  await expect(editor.getByRole('radio',{name:'All eligible records'})).toBeChecked();
   await editor.locator('[data-feed-heading]').fill('Released instrument observations');
   await editor.locator('[data-feed-page-size]').fill('1');
   await editor.locator('[data-feed-apply]').click();await expect(editor).toHaveCount(0);

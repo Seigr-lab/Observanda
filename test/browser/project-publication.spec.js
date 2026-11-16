@@ -20,7 +20,7 @@ test('a workspace website using records from a project\'s lab book',async({page}
   // The library's hints describe finished discovery: wait for the one-time preparation.
   await websitePreparationFinished(page);
 
-  const library=page.locator('dialog[data-website-picker-dialog]'),search=library.getByLabel('Search entries',{exact:true}),rows=library.locator('.website-picker-results li');
+  const library=page.locator('dialog[data-website-picker-dialog]'),search=library.getByLabel('Search records',{exact:true}),rows=library.locator('.website-picker-results li');
   const find=async(text,count)=>expect(async()=>{await search.fill(text);await search.press('Enter');await expect(rows.filter({hasText:text})).toHaveCount(count,{timeout:2000});}).toPass({timeout:90000});
   await page.getByRole('button',{name:'Browse available content',exact:true}).click();await expect(library).toBeVisible();
   // The open project's shared record arrives through workspace discovery.

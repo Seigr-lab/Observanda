@@ -62,8 +62,8 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   const add=async()=>{await page.getByRole('button',{name:/^Lab book records/}).click();await expect(dialog).toBeVisible();};
   const save=async()=>{await dialog.locator('[data-feed-apply]').click();await expect(dialog).not.toBeVisible({timeout:30000});};
   const edit=async(title,expected=title)=>{await feed.getByRole('heading',{name:title,exact:true}).click();await page.locator('[data-feed-context]').click();await expect(dialog.locator('[data-feed-heading]')).toHaveValue(expected);};
-  await add();await expect(dialog.getByRole('radio',{name:'All eligible entries'})).toBeChecked();
-  await expect(dialog.getByRole('radio',{name:'Full entry'})).toBeChecked();
+  await add();await expect(dialog.getByRole('radio',{name:'All eligible records'})).toBeChecked();
+  await expect(dialog.getByRole('radio',{name:'Full record'})).toBeChecked();
   await checkFeedDialogLayout(page,dialog);
   await dialog.locator('[data-feed-heading]').fill('All stations');await dialog.locator('[data-feed-page-size]').fill('2');
   await dialog.getByRole('radio',{name:'Grid',exact:true}).check();await save();
@@ -118,7 +118,7 @@ test('authors design, filter, rearrange and publish automatic entry feeds while 
   await expect(visitor.locator('.tide-plate')).toHaveCount(2);await visitor.locator('a[rel=next]').first().click();await expect(visitor.locator('section[data-website-feed]')).toBeVisible();
   const published=await readFile(path.join(out,'index.html'),'utf8'),continuation=await readFile(path.join(out,more.split('#')[0]),'utf8');
   expect(published+continuation).not.toMatch(/private-landowner-canary|Transect station 1/);
-  await page.reload();await edit('Western stations');await dialog.getByRole('button',{name:'Remove feed',exact:true}).click();await answerConfirmation(page,'Remove');
+  await page.reload();await edit('Western stations');await dialog.getByRole('button',{name:'Remove record list',exact:true}).click();await answerConfirmation(page,'Remove');
   await expect(feed).toHaveCount(1);await expect(feed.first()).toContainText('All stations');expect(unexpected).toEqual([]);
  }finally{
   try{await visitor?.close();await app?.close();if(fixture)await clearVault(fixture.vault);}finally{if(database===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=database;}

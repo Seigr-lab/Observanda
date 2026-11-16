@@ -31,7 +31,7 @@ test('a full lab entry copy can leave out parts, choose a layout and speak the p
   // The record's own words already follow the page language.
   await expect(copy.locator('[data-observanda-part="metadata"] > span').last()).not.toHaveText(/^(draft|planned|in progress|completed)$/);
   await expect(toolbar).toBeEnabled();await toolbar.click();await expect(panel).toBeVisible();
-  const full=panel.getByRole('radio',{name:'Full entry',exact:true});await expect(full).toBeChecked();
+  const full=panel.getByRole('radio',{name:'Full record',exact:true});await expect(full).toBeChecked();
   const parts=panel.getByRole('group',{name:'Parts to show'});await expect(parts).toBeVisible();
   const details=parts.getByRole('checkbox',{name:'Type, date and status',exact:true}),sections=parts.getByRole('checkbox',{name:'Sections and template fields',exact:true});
   await expect(details).toBeChecked();await expect(sections).toBeChecked();
