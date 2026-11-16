@@ -1,9 +1,12 @@
 {
-  "pages": "Pàgines del lloc web",
+  "pages": "Pàgines dels llocs web",
   "group": "Publicació",
-  "website": "Lloc web",
-  "content": "Contingut del lloc web",
-  "invalid": "No s'han pogut carregar els recomptes del lloc web. Torna a carregar la targeta.",
-  "purposePages": "Pàgines del lloc web i les seves introduccions",
-  "purposeWebsite": "Publicació del lloc web: projectes, registres i pàgines compartits"
+  "website": "Llocs web",
+  "invalid": "No s'han pogut carregar els llocs web. Torna a carregar la targeta.",
+  "purposePages": "Totes les pàgines dels llocs web fets a l'editor de llocs web",
+  "purposeWebsite": "Llocs web fets a l'editor de llocs web i les seves pàgines",
+  "pageCount": "Pàgines",
+  "draftCount": "Esborranys",
+  "site": "Lloc web",
+  "path": "Fitxer"
 }

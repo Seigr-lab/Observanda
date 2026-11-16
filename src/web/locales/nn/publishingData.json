@@ -1,9 +1,12 @@
 {
   "pages": "Nettstadsider",
   "group": "Publisering",
-  "website": "Nettstad",
-  "content": "Nettstadinnhald",
-  "invalid": "Tala for nettstaden kunne ikkje lastast inn. Prøv kortet på nytt.",
-  "purposePages": "Nettstadsider og introduksjonane deira",
-  "purposeWebsite": "Publisering av nettstad: delte prosjekt, oppføringar og sider"
+  "website": "Nettstader",
+  "invalid": "Nettstadene kunne ikkje lastast inn. Prøv kortet på nytt.",
+  "purposePages": "Alle sider på nettstadene som er laga i nettstadredigeringa",
+  "purposeWebsite": "Nettstader laga i nettstadredigeringa og sidene deira",
+  "pageCount": "Sider",
+  "draftCount": "Utkast",
+  "site": "Nettstad",
+  "path": "Fil"
 }

@@ -1,9 +1,12 @@
 {
   "pages": "Website pages",
   "group": "Publishing",
-  "website": "Website",
-  "content": "Website content",
-  "invalid": "The website counts could not be loaded. Retry the card.",
-  "purposePages": "Website pages and their introductions",
-  "purposeWebsite": "Website publishing: shared projects, records and pages"
+  "website": "Websites",
+  "invalid": "The websites could not be loaded. Retry the card.",
+  "purposePages": "Every page of the websites made in the website editor",
+  "purposeWebsite": "Websites made in the website editor and their pages",
+  "pageCount": "Pages",
+  "draftCount": "Drafts",
+  "site": "Website",
+  "path": "File"
 }

@@ -1,9 +1,12 @@
 {
-  "pages": "Páginas del sitio web",
+  "pages": "Páginas de los sitios web",
   "group": "Publicación",
-  "website": "Sitio web",
-  "content": "Contenido del sitio web",
-  "invalid": "No se han podido cargar los recuentos del sitio web. Reintenta la tarjeta.",
-  "purposePages": "Páginas del sitio web y sus introducciones",
-  "purposeWebsite": "Publicación del sitio web: proyectos, registros y páginas compartidos"
+  "website": "Sitios web",
+  "invalid": "No se han podido cargar los sitios web. Reintenta la tarjeta.",
+  "purposePages": "Todas las páginas de los sitios web hechos en el editor de sitios web",
+  "purposeWebsite": "Sitios web hechos en el editor de sitios web y sus páginas",
+  "pageCount": "Páginas",
+  "draftCount": "Borradores",
+  "site": "Sitio web",
+  "path": "Archivo"
 }
