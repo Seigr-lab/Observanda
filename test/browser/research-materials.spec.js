@@ -12,8 +12,10 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
-import {openEvidence} from './record-editor-helper.js';
+import {openEvidence,revealInEditor} from './record-editor-helper.js';
 
+// An outside check waits while the running app holds the workspace writer.
+async function whenWriterFree(operation){let result;await expect.poll(async()=>{try{result=await operation();return true;}catch(error){if(/writer/i.test(error.message))return false;throw error;}},{timeout:60000}).toBe(true);return result;}
 test('creative run: pin method, retain source, declare columns, calculate, revise and inspect on narrow screens',async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(10000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-research-workflow-')),root=path.join(directory,'workspace'),book=upgradeNotebook(sampleNotebook());
@@ -23,10 +25,12 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
  page.on('pageerror',error=>errors.push(error.message));const dialog=page.locator('#dialog'),requests=[];page.on('request',r=>requests.push(new URL(r.url()).pathname));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,run.id);
-  await page.getByRole('button',{name:'Link research',exact:true}).click();
-  await dialog.getByLabel('Reference version').selectOption('exact');
-  await dialog.getByRole('button',{name:/Listening method/}).click();
-  await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  // A research link is a record value, chosen and saved in its own dialog.
+  const link=page.locator('dialog[open]');
+  await (await revealInEditor(page,page.getByRole('button',{name:'Add research link',exact:true}),'Evidence and results')).click();
+  await link.getByLabel('Version to choose',{exact:true}).selectOption({label:'Exact saved record revision'});
+  await link.getByRole('button',{name:'Choose target',exact:true}).click();await link.getByRole('button',{name:/Listening method/}).click();
+  await link.getByRole('button',{name:'Save changes',exact:true}).click();await expect(link).toHaveCount(0);
   const pinned=(await ws.read()).book.entries.find(e=>e.id===run.id).relations[0].target;expect(pinned.revision).toMatch(/^[a-f0-9]{64}$/);
   await openEvidence(page);
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
@@ -55,19 +59,19 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();
   await dialog.locator('[data-material-column="0"]').getByLabel('Unit',{exact:true}).fill('');
   await dialog.locator('.material-schema-column > summary').filter({hasText:"Level"}).click();
-  await dialog.locator('[data-material-column="1"]').getByLabel('Representation',{exact:true}).selectOption('decimal');
+  await dialog.locator('[data-material-column="1"]').locator('[data-schema="representation"]').selectOption('decimal');
   await dialog.locator('.material-schema-column > summary').filter({hasText:"Counter"}).click();
-  await dialog.locator('[data-material-column="2"]').getByLabel('Representation',{exact:true}).selectOption('integer');
+  await dialog.locator('[data-material-column="2"]').locator('[data-schema="representation"]').selectOption('integer');
   await dialog.locator('.material-schema-column > summary').filter({hasText:"Senary"}).click();
-  await dialog.locator('[data-material-column="3"]').getByLabel('Representation',{exact:true}).selectOption('radix');
-  await dialog.locator('[data-material-column="3"]').getByLabel('Base (for explicit base)').fill('6');
+  await dialog.locator('[data-material-column="3"]').locator('[data-schema="representation"]').selectOption('radix');
+  await dialog.locator('[data-material-column="3"]').locator('[data-schema="radix"]').fill('6');
   await dialog.getByRole('button',{name:'Save dataset revision'}).click();
   await dialog.getByRole('button',{name:'Create reproducible figure'}).click();
-  await dialog.getByLabel('Level · decimal',{exact:true}).check();
+  await dialog.getByLabel('Level · Exact decimal',{exact:true}).check();
   await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();
   await expect(dialog.locator('svg')).toBeVisible();
   await dialog.getByRole('button',{name:'Add retained figure to record'}).click();
-  await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  const figureValue=page.locator('dialog[open]').filter({has:page.getByRole('button',{name:'Save changes',exact:true})});await figureValue.getByRole('button',{name:'Save changes',exact:true}).click();await expect(figureValue).toHaveCount(0);
 
   // A revised dataset flags the retained result; ordinary record saves do not recompute it.
   const store=new ResearchMaterials(ws),dataset=(await store.heads()).find(h=>h.kind==='dataset'),doc=await store.read(dataset);
@@ -128,7 +132,7 @@ test('verification can be reopened after reload, cancelled and retried without s
   await page.reload();await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();await openEvidence(page);await dialog.getByRole('button',{name:'Check verification'}).click();
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('button',{name:'Cancel verification'}).focus();await page.keyboard.press('Enter');await expect(dialog.getByText('Verification cancelled.',{exact:false})).toBeVisible();
-  const store=new ResearchMaterials(workspace);expect((await store.verify()).receivedBytes).toBe(bytes.length);expect((await store.heads()).length).toBe(0);
+  const store=new ResearchMaterials(workspace);expect((await whenWriterFree(()=>store.verify())).receivedBytes).toBe(bytes.length);expect((await store.heads()).length).toBe(0);
   hold=false;await dialog.getByRole('button',{name:'Retry verification'}).click();
   // The durable worker completes independently of browser clicks and may be
   // competing with other database/filesystem work in the qualification suite.
