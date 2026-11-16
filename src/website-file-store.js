@@ -12,7 +12,7 @@ import {writeSegmentedContent} from './segmented-file-write.js';
 import {withStagingCapacity} from './staging-reservations.js';
 import {readSegmentedRange,segmentedFileHeader} from './segmented-file-io.js';
 import {unseal} from './encryption.js';
-import {FileContent,contentBuffer,contentSize,contentHash} from './file-content.js';
+import {FileContent,contentBuffer,contentHash} from './file-content.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {AppError} from './errors.js';
 import {recoveryAssets} from './website-recovery.js';
@@ -24,7 +24,7 @@ import {websiteFileName,websiteHTMLByteLimit,validateWebsiteHTML,validateWebsite
 import {websiteSourceLocation} from './website-source-location.js';
 import {validateDiscovery} from './website-discovery-settings.js';
 import {applyDiscovery,discoveryNames} from './website-discovery-output.js';
-import {applyWebsiteLogos,applyPageLogos,websiteLogoPlan,websiteLogoFile,LOGOS_STYLESHEET,LOGOS_CSS} from './website-logos.js';
+import {applyWebsiteLogos,applyPageLogos,websiteLogoPlan,LOGOS_STYLESHEET,LOGOS_CSS} from './website-logos.js';
 import {cssStructureIssue} from './web/website-source-text.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {REGION_FILES,placeSiteRegions,regionFiles} from './website-region-storage.js';
@@ -720,18 +720,14 @@ export class WebsiteFileStore{
     await this.current(id,manifest.revision);return {bytes:Buffer.from(entryCSS),contentType:'text/css; charset=utf-8',revision:manifest.revision,sha256:entryStyleHash,size:Buffer.byteLength(entryCSS)};
    }
   }
-  // Branding logos and their stylesheet are published files no page stores.
-  if(!descriptor&&editor!==true){
-   const logo=name===LOGOS_STYLESHEET?{content:Buffer.from(LOGOS_CSS),contentType:'text/css; charset=utf-8'}:await websiteLogoFile(this,manifest,name,{signal});
-   if(logo){const content=logo.content;return {content,contentType:logo.contentType,revision:manifest.revision,size:contentSize(content),sha256:contentHash(content)};}
-  }
+  // The logos stylesheet is a published file no page stores.
+  if(!descriptor&&editor!==true&&name===LOGOS_STYLESHEET){const content=Buffer.from(LOGOS_CSS);return {content,contentType:'text/css; charset=utf-8',revision:manifest.revision,size:content.length,sha256:contentHash(content)};}
   if(!descriptor||editor!==true&&(descriptor.draft||descriptor.picture&&!publicPictureNames(manifest).has(name)||descriptor.recording&&!publicRecordingNames(manifest).has(name)))throw new AppError('NOT_FOUND');
   const legacy=descriptor.entryStyle!==entryStyleHash&&name.endsWith('.html')&&(usesEntryStyle(manifest.pages.find(p=>p.path===name))||await fileHasEditorMenu(this,descriptor,signal));
   const blocked=!editor&&manifest.publicPageFiles===undefined&&/\.(?:html|css)$/.test(name)?privateWebsiteNames(manifest):null;
   const content=legacy||blocked?.size?await RenderedWebsiteFile.open(this,manifest,descriptor,signal,blocked):new WebsiteFileContent(this,id,manifest.revision,descriptor);
   if(editor!==true&&name.endsWith('.html')){
-   const html=(await contentBuffer(content,{signal,maxBytes:websiteHTMLByteLimit})).toString('utf8'),row=(await websiteLogoPlan(this,manifest,[{name,feedPage:descriptor.feedPage,html}],{signal})).pages.get(name);
-   const output=row?applyPageLogos(html,name,row).html:html;
+   const html=(await contentBuffer(content,{signal,maxBytes:websiteHTMLByteLimit})).toString('utf8'),output=applyPageLogos(html,name,await websiteLogoPlan(this,manifest,[{name,html}],{signal})).html;
    if(output!==html){const bytes=Buffer.from(output);return {content:bytes,contentType:descriptor.contentType,revision:manifest.revision,size:bytes.length,sha256:contentHash(bytes)};}
   }
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:content.size,sha256:content.sha256};

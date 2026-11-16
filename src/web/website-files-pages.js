@@ -100,7 +100,9 @@ export function websiteFilesPages({site,esc,tr,render,openPage,edit,save:saveDoc
  function logosView(){
   const rows=draft.logos.map((logo,index)=>'<li data-page-logo="'+index+'"><img alt="" src="'+esc(pictureURL?.(pictureName(logo.src))??'')+'"><label>'+esc(tr('altText'))+'<input data-page-logo-alt="'+index+'" maxlength="160" value="'+esc(logo.alt)+'"></label><div class="inline-actions"><button type="button" class="button" data-action="website-files-pages-logo-up" data-index="'+index+'"'+(index?'':' disabled')+'>'+esc(tr('up'))+'</button><button type="button" class="button" data-action="website-files-pages-logo-remove" data-index="'+index+'">'+esc(tr('remove'))+'</button></div></li>').join('');
   const add=draft.logos.length<maxPageLogos&&addPicture?'<label>'+esc(tr('pageLogosAdd'))+'<input type="file" data-page-logo-file accept="image/png,image/jpeg,image/webp,image/gif,image/avif"></label>':'<p>'+esc(tr('pageLogosFull'))+'</p>';
-  return '<section class="website-page-logos" aria-labelledby="website-page-logos-title"><h3 id="website-page-logos-title">'+esc(tr('pageLogos'))+'</h3><p class="muted">'+esc(tr('pageLogosHelp'))+'</p>'+(rows?'<ol>'+rows+'</ol>':'')+add+'</section>';
+  // The home page's logos are the website's logos (src/website-logos.js).
+  const home=site().path==='index.html';
+  return '<section class="website-page-logos" aria-labelledby="website-page-logos-title"><h3 id="website-page-logos-title">'+esc(tr(home?'websiteLogos':'pageLogos'))+'</h3><p class="muted">'+esc(tr(home?'websiteLogosHelp':'pageLogosHelp'))+'</p>'+(rows?'<ol>'+rows+'</ol>':'')+add+'</section>';
  }
  async function addLogo(file){
   const stamp=key();if(!file||!draft||draft.logos.length>=maxPageLogos)return;

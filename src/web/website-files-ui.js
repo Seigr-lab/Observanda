@@ -778,11 +778,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    const created=sectionTemplates.includes(type)?createSection(doc,type,tr):createBlock(doc,type,tr),at=blockAt(doc,selected);
    if(movable(at)&&main(doc).contains(at)){if(node&&where==='before')at.before(created);else at.after(created);}else main(doc).append(created);});
  }
- // Whose Branding logos a Logos block can show: the page's own, the website's, or a project's or lab book's.
- function logoChoices(){
-  const book=state?.book;
-  return [['auto',tr('logosAuto')],['home',tr('logosHome')],...(book?.projects??[]).map(p=>['project:'+p.id,tr('logosProject',{title:p.title})]),...(book?.notebooks??[]).map(n=>['notebook:'+n.id,tr('logosLabBook',{title:n.title})])];
- }
+ // A Logos block shows this page's logos or the website's (the home page's).
+ function logoChoices(){return [['auto',tr('logosAuto')],['home',tr('logosHome')]];}
  function editorView(panel=''){
   const tools='<span class="website-editor-modes">'+['visual','html','css'].map(key=>button(key,key,'aria-pressed="'+String(mode===key&&(key!=='visual'||!sourcePane.active))+'"')).join('')+button('splitSource','split-source','aria-pressed="'+(mode==='visual'&&sourcePane.active)+'"')+'</span>';
   const history=button('undo','undo',undo.length?'':'disabled')+button('redo','redo',redo.length?'':'disabled');

@@ -450,9 +450,9 @@ test('logos at workspace, project, lab book, custom page and record scopes are s
   expect(errors).toEqual([]);
 });
 
-// A Logos block in the website editor shows the logos Branding gives a scope;
-// they are added when the website is previewed or published, never saved in the page.
-test('Branding logos reach a Logos block on a page made in the website editor', async ({ page }) => {
+// A Logos block in the website editor shows the website's logos, set in the home
+// page's settings; they are placed from the website's own files when it is published.
+test('website logos set in page settings reach a Logos block, published from the website files', async ({ page }) => {
   test.setTimeout(150000);
   const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'site-logos-')));
   await encryptedSample();const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -460,18 +460,18 @@ test('Branding logos reach a Logos block on a page made in the website editor', 
   const files=page.locator('#main[data-website-files-app]'),canvas=page.frameLocator('#website-files-canvas');
   await files.locator('.element-card[data-block="logos"]').click();
   const dialog=page.locator('dialog.website-author-dialog');await expect(dialog.getByRole('heading',{name:'Logos',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('combobox',{name:'Show the logos of',exact:true}).locator('option')).toHaveText(['This page (automatic)','The website']);
   await dialog.getByRole('combobox',{name:'Show the logos of',exact:true}).selectOption({label:'The website'});
   await dialog.getByRole('button',{name:'Apply',exact:true}).click();
   await expect(canvas.locator('[data-observanda-logos="home"]')).toHaveCount(1);
   await files.getByRole('button',{name:'Save website',exact:true}).click();await expect(files.locator('[data-website-files-status]')).toHaveText('Website saved.');
-  await files.getByRole('button',{name:/^Back to (workspace|where you were)$/}).click();
-  await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
-  await page.getByLabel('Add logo',{exact:true}).setInputFiles(fixtures.image.file);
-  await page.getByLabel('Logo 1 alternative text').fill('Website emblem');
-  await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  const exported=await new WebsiteFileStore(new Workspace(root,workspaceVault)).export(id);
-  const html=(await contentBuffer(exported.files.get('index.html'))).toString('utf8'),logo=/data-observanda-logos="home"[^>]*><img src="(logos\/[a-f0-9-]{36}\.\w+)" alt="Website emblem"><\/div>/.exec(html);
-  expect(logo).not.toBeNull();expect(exported.files.has(logo[1])).toBe(true);
+  await files.getByRole('button',{name:'Website pages',exact:true}).click();
+  const logos=files.locator('section.website-page-logos');await expect(logos.getByRole('heading',{name:'Website logos',exact:true})).toBeVisible();
+  await logos.getByLabel('Add a logo',{exact:true}).setInputFiles(fixtures.image.file);
+  await logos.getByLabel('Image description (alt text)',{exact:true}).fill('Website emblem');
+  await files.getByRole('button',{name:'Save page settings',exact:true}).click();
+  const store=new WebsiteFileStore(new Workspace(root,workspaceVault));
+  await expect.poll(async()=>{const exported=await store.export(id),html=(await contentBuffer(exported.files.get('index.html'))).toString('utf8'),logo=/data-observanda-logos="home"[^>]*><img src="(pictures\/[a-f0-9-]{36}\.png)" alt="Website emblem"><\/div>/.exec(html);return Boolean(logo&&exported.files.has(logo[1])&&!html.includes('<template'));},{timeout:30000}).toBe(true);
   expect(errors).toEqual([]);
 });
 
