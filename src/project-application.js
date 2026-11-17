@@ -89,7 +89,7 @@ export function projectRequest(route,method){
  const addressed=projectMaterialReferenceRequest(route);if(addressed)return addressed;
  if(route==='/api/projects/delete/pending')return {operation:'delete/pending',write:false,limit:16384};
  if(['/api/projects/open/access/start','/api/projects/open/access/page','/api/projects/open/access/submit','/api/projects/open/access/finish','/api/projects/open/access/release'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/page'),limit:32768};
- if(['/api/projects/open','/api/projects/open/resume','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
+ if(['/api/projects/open','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
  if(['/api/projects/reference','/api/projects/reference-location'].includes(route))return {operation:route.endsWith('-location')?'research-reference-location':'research-reference',write:false,limit:16384};
  if(['/api/projects/create/pending','/api/projects/create/resume'].includes(route))return {operation:route.slice('/api/projects/'.length),write:route.endsWith('/resume'),limit:16384};
  if(['/api/projects/list','/api/projects/choices','/api/projects/create'].includes(route))return {operation:route.split('/').at(-1),write:route.endsWith('/create'),limit:MAX_BYTES};
@@ -266,10 +266,10 @@ export class ProjectApplication{
    const result=await this.run(client,{projectId:entry.projectId,operation:entry.labBookId?'lab-books/'+operation:operation,write:false,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'reference',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},entry.labBookId?data:{...reference,domain:'research'},{signal,check,setCheck});
    return {...result,registered:true,target:structuredClone(data),projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId}:{}),namespaceId:entry.namespaceId};
   }
-  if(['list','choices','open','open/resume','open/cancel','open/pending','open/access/start','open/access/page','open/access/submit','open/access/finish','open/access/release','create','create/pending','create/resume'].includes(selected.operation))return this.tracked(async()=>{
+  if(['list','choices','open','open/cancel','open/pending','open/access/start','open/access/page','open/access/submit','open/access/finish','open/access/release','create','create/pending','create/resume'].includes(selected.operation))return this.tracked(async()=>{
    await check();const registry=await this.registry();let result;
    if(selected.operation==='open/pending'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');result=await new ProjectImports(registry,this.deviceStore).pending(data);}
-   else if(['open','open/resume','open/cancel'].includes(selected.operation)||selected.operation.startsWith('open/access/')){
+   else if(['open','open/cancel'].includes(selected.operation)||selected.operation.startsWith('open/access/')){
     const session=this.session(client),expected=new Map();
     const openingCheck=async()=>{await check();if(this.closed||[...expected].some(([id,saved])=>session.get(id)!==saved))throw new AppError('ACCESS_LOCKED');};
     const options={check:openingCheck,onProgress,identified:id=>expected.set(id,session.get(id)),opened:async(entry,access,vault)=>{
@@ -282,7 +282,7 @@ export class ProjectApplication{
     result=await this.renames.withParent(client,parentId,openingCheck,async current=>{
      const scoped={...options,check:current};
      if(accessOperation)return this.importAccess[accessOperation](client,data,scoped);
-     if(selected.operation==='open/cancel'){try{return await imports.cancel(data,scoped);}finally{await this.importAccess.settled(data.id);}}return selected.operation==='open/resume'?imports.run(data,{...scoped,resume:true}):new ProjectOpening(registry,this.deviceStore).open(data,scoped);
+     if(selected.operation==='open/cancel'){try{return await imports.cancel(data,scoped);}finally{await this.importAccess.settled(data.id);}}return new ProjectOpening(registry,this.deviceStore).open(data,scoped);
     });
    }
    else if(selected.operation==='choices')result=await projectDirectoryChoices(registry,data,{signal});

@@ -620,7 +620,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(['lab-books/storage/delete','lab-books/storage/delete/resume'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-delete:'+data?.id;
         if(/^lab-books\/storage\/(copy|export|move)(?:\/(resume|cancel))?$/.test(selectedProject.operation))req.activityRecoveryKey='lab-book-'+selectedProject.operation.split('/')[2]+':'+data?.id;
         if(['settings/save','directory/reparent'].includes(selectedProject.operation))req.activityRecoveryKey=(selectedProject.operation==='settings/save'?'project-settings':'project-placement')+':'+data?.id;
-        if(['open','open/resume','open/cancel','open/access/finish'].includes(selectedProject.operation))req.activityRecoveryKey='project-open:'+data?.id;
+        if(['open','open/cancel','open/access/finish'].includes(selectedProject.operation))req.activityRecoveryKey='project-open:'+data?.id;
         if(['storage/delete','storage/delete/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-delete:'+data?.id;
         if(/^storage\/(copy|export|move)(?:\/(resume|cancel))?$/.test(selectedProject.operation))req.activityRecoveryKey='project-'+selectedProject.operation.split('/')[1]+':'+data?.id;
         if(['lab-books/access/unlock','lab-books/access/lock'].includes(selectedProject.operation)){
