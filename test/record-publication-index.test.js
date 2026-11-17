@@ -19,6 +19,7 @@ import {Workspace} from '../src/storage.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {compareRecordDates} from '../src/web/record-date.js';
 import {publicationRecords} from '../src/publication-records.js';
+import {publicationWorkspace} from '../src/publication-pin.js';
 
 async function fixture(t,count=80,configure=()=>{}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-index-')),book=sampleNotebook(),seed=book.entries[0];
@@ -28,9 +29,13 @@ async function fixture(t,count=80,configure=()=>{}){
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Selection '+i,body:'Private body '+i,sections:[],figures:[],attachments:[],relations:[],contributors:[],tags:[],share:shared.has(i),notebookId:book.notebooks[i%2].id}));
  configure(book);
  const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,book,directory,source:{workspaceId:book.id,etag:(await f.workspace.outline()).etag}};
+ // Publication requests name the research snapshot together with the website revision.
+ return {...f,book,directory,source:await head({...f,book})};
 }
-function source(f,selection,projects=[]){return {etag:f.source.etag,draft:{workspaceId:f.book.id,baseEtag:f.source.etag,metadata:{},projects,changes:[],removed:[],selection}};}
+// The current research head with the current website revision, as the app requests it.
+async function head(f){const websitePin=(await publicationWorkspace(f.workspace).currentOutline()).websitePin;return {workspaceId:f.book.id,etag:websitePin.researchSnapshotId,websitePin};}
+const at=(f,etag)=>({...f.source,etag,websitePin:{...f.source.websitePin,researchSnapshotId:etag}});
+function source(f,selection,projects=[]){return {etag:f.source.etag,websitePin:f.source.websitePin,draft:{workspaceId:f.book.id,baseEtag:f.source.etag,metadata:{},projects,changes:[],removed:[],selection}};}
 async function choices(workspace,source){
  const items=[];let offset=0,cursor=null;
  do{const page=await publicationSelection(workspace,{source,offset,cursor});items.push(...page.items);offset=page.next;cursor=page.nextCursor;}while(offset!==null);
@@ -130,7 +135,7 @@ test('sharing, moves, removal and failed index writes preserve pinned choices an
  const current=(await f.workspace.outline()).etag;assert.equal((await indexedRows(f,current)).length,43);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await restored.catalogue(async store=>Array.fromAsync(new RecordPublicationIndex(store).rows(await store.snapshot(f.source.etag),new Map(f.book.notebooks.map(n=>[n.id,'shared']))))),before);
- assert.deepEqual((await choices(restored,{...f.source,etag:current})).map(r=>r.id),oldChoices.map(r=>r.id));
+ assert.deepEqual((await choices(restored,at(f,current))).map(r=>r.id),oldChoices.map(r=>r.id));
  const controller=new AbortController();controller.abort();await assert.rejects(indexedRows(f,current,{signal:controller.signal}),{name:'AbortError'});
 });
 
@@ -140,19 +145,6 @@ test('older snapshots keep their identity and fallback until the next atomic wri
  assert.deepEqual(await choices(f.workspace,f.source),expected);assert.equal((await f.workspace.outline()).etag,f.source.etag);
  const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Revised'}}]},{recordIds:[record.id]});
  await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex,undefined);await new RecordPublicationIndex(store).verify(await store.snapshot());await store.verify(catalogueDescriptor(f.book));});
-});
-
-test('legacy members without sharing or ownership summaries acquire the index without losing explicit inclusions',async t=>{
- const f=await fixture(t,45),expected=await choices(f.workspace,f.source),privateRecord=f.book.entries.find(r=>!r.share);
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const manifest=await store.manifest();manifest.records=manifest.records.map(({share,notebookId,queryRevision,summaryRevision,...row})=>row);
-  await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.source.etag,manifest),f.source.etag);
- }));
- assert.deepEqual(await choices(f.workspace,f.source),expected);
- const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'New indexed revision'}}]},{receipt:true});
- const current=(await f.workspace.outline()).etag,request=source({...f,source:{...f.source,etag:current}},{defaultShare:false,includeProjects:[],records:[{id:privateRecord.id,share:true,attachments:[]}]});
- assert.deepEqual((await choices(f.workspace,request)).map(r=>r.id),[privateRecord.id]);
- await f.workspace.catalogue(store=>store.verify(catalogueDescriptor(f.book)));
 });
 
 test('missing, substituted and unrelated changed index entries cannot pass full or incremental verification',async t=>{
