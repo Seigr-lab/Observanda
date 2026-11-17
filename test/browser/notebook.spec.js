@@ -17,7 +17,7 @@ import {LabBookRegistry} from '../../src/lab-book-registry.js';
 import {LabBookStorage} from '../../src/lab-book-storage.js';
 import { test, expect } from '@playwright/test';
 import { mediaFixtures } from '../media-fixtures.js';
-import { mediaCapabilities } from '../../src/media.js';
+import {mediaToolsAvailable} from '../media-tools.js';
 import http from 'node:http';
 import {defaultEditionRecord} from '../../src/web/publication-selection.js';
 import {recordRevision} from '../../src/research.js';
@@ -262,7 +262,7 @@ test('a new entry defaults to the author local calendar date', async ({ browser 
 test('build a project with structured research and playable media, place it on a website with a page of its own, and export it', async ({ page }) => {
   test.setTimeout(180000);page.setDefaultTimeout(15000);
   await independentDatabases();
-  test.skip(!(await mediaCapabilities()).available, 'FFmpeg and ffprobe are required for media tests.');
+  test.skip(!(await mediaToolsAvailable()), 'FFmpeg and ffprobe are required for media tests.');
   const fixtures = await mediaFixtures(await mkdtemp(path.join(parent, 'media-fixtures-')));
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await encryptedSample();

@@ -14,7 +14,7 @@ import {componentOperation} from '../src/website-component-storage.js';
 import {contentBuffer} from '../src/file-content.js';
 import {websiteFilesHttp} from '../src/website-files-http.js';
 import {readRecordingUpload,saveRecordingUpload} from '../src/website-recordings.js';
-import {mediaCapabilities} from '../src/media.js';
+import {mediaToolsAvailable} from './media-tools.js';
 import {mediaFixtures} from './media-fixtures.js';
 import {archivedBlobs,readVersionIndex} from '../src/website-version-retention.js';
 
@@ -103,7 +103,7 @@ test('the library pages through more than 128 definitions and rejects an oversiz
  assert.equal(await store.siteVersion(id),state.site.revision);
 });
 test('typed audio, video and VTT retain private main ownership and leave the public manifest and disk when their last owner releases them',async t=>{
- if(!(await mediaCapabilities()).available)return t.skip('Requires FFmpeg and FFprobe');
+ if(!await mediaToolsAvailable())return t.skip('Requires FFmpeg and FFprobe');
  const {store,workspace,id,op,opened}=await fixture(t,'<section></section>');
  const fixtures=await mediaFixtures(workspace.root),names=[],blobs=[],cues='WEBVTT\n\n00:00.000 --> 00:00.300\nA tone\n';let state=opened;
  const jsonSave=options=>websiteFilesHttp({method:'POST',headers:{}},new EventEmitter(),{workspace,url:new URL('http://localhost/api/website-files/save'),body:async()=>({siteId:id,expectedRevision:state.site.revision,path:state.path,html:state.html,css:state.css,...options}),check:async()=>{},json:()=>assert.fail('Unsafe input was accepted')});

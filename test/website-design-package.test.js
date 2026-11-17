@@ -24,7 +24,7 @@ import {writeVisualStyle} from '../src/web/website-files-visual-style.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {Readable} from 'node:stream';
 import {readdir} from 'node:fs/promises';
-import {mediaCapabilities} from '../src/media.js';
+import {mediaToolsAvailable} from './media-tools.js';
 import {contentBuffer} from '../src/file-content.js';
 import {readRecordingUpload,saveRecordingUpload} from '../src/website-recordings.js';
 import {mediaFixtures,PRIVATE_MARKER} from './media-fixtures.js';
@@ -156,7 +156,7 @@ test('malformed, foreign and unsafe packages are refused before the site changes
 });
 
 test('a component that plays a recording travels with its recording and captions, which arrive prepared like an upload',async t=>{
- if(!(await mediaCapabilities()).available)return t.skip('Requires FFmpeg and FFprobe');
+ if(!await mediaToolsAvailable())return t.skip('Requires FFmpeg and FFprobe');
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-design-recording-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:10});});
  const workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),store=new WebsiteFileStore(workspace),siteId=randomUUID(),fixtures=await mediaFixtures(root);

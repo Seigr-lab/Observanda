@@ -9,7 +9,7 @@ import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
 import {WebsiteFilesCandidate} from '../src/website-files-candidate.js';
 import {contentBuffer} from '../src/file-content.js';
-import {mediaCapabilities} from '../src/media.js';
+import {mediaToolsAvailable} from './media-tools.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {plainWebVTT,readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from '../src/website-recordings.js';
 import {mediaFixtures,PRIVATE_MARKER} from './media-fixtures.js';
@@ -26,7 +26,7 @@ test('timed track parser admits caption text, ignores notes, and rejects malform
 });
 
 test('streamed website recordings and captions survive publication, reuse, replacement and withdrawal with research offline',async t=>{
- if(!(await mediaCapabilities()).available)return t.skip('Requires FFmpeg and FFprobe');
+ if(!await mediaToolsAvailable())return t.skip('Requires FFmpeg and FFprobe');
  const root=await mkdtemp(path.join(os.tmpdir(),'website-recordings-'));await mkdir(path.join(root,'.observanda'));
  t.after(async()=>{await closeIdleMutationFiles();await rm(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
  const fixtures=await mediaFixtures(root),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)});

@@ -5,7 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { mediaFixtures, PRIVATE_MARKER } from './media-fixtures.js';
-import { MediaStore, mediaCapabilities } from '../src/media.js';
+import { MediaStore } from '../src/media.js';
+import {mediaToolsAvailable} from './media-tools.js';
 import { Workspace, digest } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
 import { buildPublication, writePublication, publicationZip } from '../src/publication.js';
@@ -13,7 +14,7 @@ import {testServer as startServer} from './device-fixture.js';
 
 let available, fixtures;
 before(async () => {
-  available = (await mediaCapabilities()).available;
+  available = await mediaToolsAvailable();
   if (available) fixtures = await mediaFixtures(await mkdtemp(path.join(os.tmpdir(), 'observanda-fixtures-')));
 });
 

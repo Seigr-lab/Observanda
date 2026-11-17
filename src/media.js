@@ -44,11 +44,6 @@ export async function mediaCommand(binary, args, timeout = 30000, {signal}={}) {
   });}finally{try{await closed;await parser?.close();}finally{release();}}
 }
 
-export async function mediaCapabilities() {
-  try { await mediaCommand('ffmpeg', ['-version']); await mediaCommand('ffprobe', ['-version']); return { available: true, maxBytes: null }; }
-  catch { return { available: false, maxBytes: null }; }
-}
-
 // Seekable input over a private, token-protected loopback endpoint; source paths never reach FFmpeg.
 async function memoryInput(bytes,operation){
   const token=randomBytes(32).toString('hex');let host;

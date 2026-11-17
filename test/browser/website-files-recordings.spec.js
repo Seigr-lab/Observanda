@@ -8,14 +8,14 @@ import {Workspace} from '../../src/storage.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {WebsiteFilesCandidate} from '../../src/website-files-candidate.js';
 import {serveContent} from '../../src/file-content.js';
-import {mediaCapabilities} from '../../src/media.js';
+import {mediaToolsAvailable} from '../media-tools.js';
 import {closeIdleMutationFiles} from '../../src/mutation-files.js';
 import {readRecordingUpload,saveRecordingUpload,websiteRecordingLibrary} from '../../src/website-recordings.js';
 import {mediaFixtures} from '../media-fixtures.js';
 
 test('upload, play and replace an authored recording and captions using portable website files',async({page})=>{
  test.setTimeout(90000);
- test.skip(!(await mediaCapabilities()).available,'Requires FFmpeg and FFprobe');
+ test.skip(!(await mediaToolsAvailable()),'Requires FFmpeg and FFprobe');
  const root=await mkdtemp(path.join(os.tmpdir(),'website-recording-browser-'));let server;
  try{
   await mkdir(path.join(root,'.observanda'));
