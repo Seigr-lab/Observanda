@@ -110,7 +110,6 @@
   "WORKSPACE_READ_LIMIT": "This legacy operation requests the entire workspace and exceeds its capacity. Open the dashboard and select the records you need. Your saved records remain available.",
   "RECORD_SELECTION_LIMIT": "This selection exceeds 2 MiB of editable record content. Open fewer records together. Your saved records remain available.",
   "RECORD_QUERY_CURSOR": "These results are no longer available. Refresh records to continue.",
-  "PUBLICATION_SELECTION_CURSOR": "This edition page belongs to a different or expired review. Close the review and choose Review website again. Your saved records and website are unchanged.",
   "RECORD_HISTORY_CURSOR": "This history page is no longer available. Refresh the record history to continue.",
   "MODULE_HISTORY_CURSOR": "This history page is no longer available. Refresh the item history to continue.",
   "MODULE_QUERY_CURSOR": "These items changed while you were browsing. Refresh the list to see the current items; your unfinished edit is kept.",

@@ -110,7 +110,6 @@
   "WORKSPACE_READ_LIMIT": "Denne eldre operasjonen ber om hele arbeidsområdet og overskrider kapasiteten. Åpne dashbordet og velg oppføringene du trenger. De lagrede oppføringene er fortsatt tilgjengelige.",
   "RECORD_SELECTION_LIMIT": "Dette utvalget overskrider 2 MiB redigerbart oppføringsinnhold. Åpne færre oppføringer samtidig. De lagrede oppføringene er fortsatt tilgjengelige.",
   "RECORD_QUERY_CURSOR": "Disse resultatene er ikke lenger tilgjengelige. Oppdater oppføringene for å fortsette.",
-  "PUBLICATION_SELECTION_CURSOR": "Denne utgavesiden tilhører en annen eller utløpt gjennomgang. Lukk gjennomgangen og velg Gjennomgå nettsted på nytt. De lagrede oppføringene og nettstedet er uendret.",
   "RECORD_HISTORY_CURSOR": "Denne historikksiden er ikke lenger tilgjengelig. Oppdater oppføringshistorikken for å fortsette.",
   "MODULE_HISTORY_CURSOR": "Denne historikksiden er ikke lenger tilgjengelig. Oppdater elementhistorikken for å fortsette.",
   "MODULE_QUERY_CURSOR": "Disse elementene ble endret mens du bladde. Oppdater listen for å se de gjeldende elementene; den uferdige redigeringen din beholdes.",

@@ -110,7 +110,6 @@
   "WORKSPACE_READ_LIMIT": "Esta operación heredada solicita todo el espacio de trabajo y supera su capacidad. Abre el panel y selecciona los registros que necesites. Tus registros guardados siguen disponibles.",
   "RECORD_SELECTION_LIMIT": "Esta selección supera los 2 MiB de contenido editable de registros. Abre menos registros conjuntamente. Tus registros guardados siguen disponibles.",
   "RECORD_QUERY_CURSOR": "Estos resultados ya no están disponibles. Actualiza los registros para continuar.",
-  "PUBLICATION_SELECTION_CURSOR": "Esta página de edición pertenece a otra revisión o a una caducada. Cierra la revisión y elige de nuevo Revisar sitio web. Los registros y el sitio web guardados permanecen intactos.",
   "RECORD_HISTORY_CURSOR": "Esta página del historial ya no está disponible. Actualiza el historial del registro para continuar.",
   "MODULE_HISTORY_CURSOR": "Esta página del historial ya no está disponible. Actualiza el historial del elemento para continuar.",
   "MODULE_QUERY_CURSOR": "Estos elementos han cambiado mientras explorabas. Actualiza la lista para ver los elementos actuales; se conserva tu modificación sin terminar.",

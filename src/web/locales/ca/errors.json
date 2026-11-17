@@ -110,7 +110,6 @@
   "WORKSPACE_READ_LIMIT": "Aquesta operació antiga demana tot l'espai de treball i supera la seva capacitat. Obre el tauler i selecciona els registres que necessites. Els registres guardats continuen disponibles.",
   "RECORD_SELECTION_LIMIT": "Aquesta selecció supera els 2 MiB de contingut de registre editable. Obre menys registres alhora. Els registres guardats continuen disponibles.",
   "RECORD_QUERY_CURSOR": "Aquests resultats ja no estan disponibles. Actualitza els registres per continuar.",
-  "PUBLICATION_SELECTION_CURSOR": "Aquesta pàgina d'edició pertany a una revisió diferent o caducada. Tanca la revisió i torna a triar Revisa el lloc web. Els registres i el lloc web guardats no han canviat.",
   "RECORD_HISTORY_CURSOR": "Aquesta pàgina d'historial ja no està disponible. Actualitza l'historial del registre per continuar.",
   "MODULE_HISTORY_CURSOR": "Aquesta pàgina d'historial ja no està disponible. Actualitza l'historial de l'element per continuar.",
   "MODULE_QUERY_CURSOR": "Aquests elements han canviat mentre els exploraves. Actualitza la llista per veure els elements actuals; es conserva l'edició inacabada.",
