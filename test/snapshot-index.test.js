@@ -206,7 +206,7 @@ test('lab-book browsing visits only the selected encrypted branch and keeps page
  let first;
  try{
   first=await service.list({workspaceId:book.id,query,limit:2});
-  assert.equal(first.total,3);assert.equal(first.records.length,2);assert.equal(members,3,'other lab books stay unread');
+  assert.equal(first.total,3);assert.equal(first.records.length,2);assert.equal(members,first.records.length,'only the shown records of the selected lab book are read');
  }finally{for(const [key,fn] of Object.entries(original))ResearchCatalogue.prototype[key]=fn;}
  await save(f,base,[{...base.book.entries[0],notebookId:other.id}]);
  const next=await service.list({workspaceId:book.id,query,limit:2,cursor:first.nextCursor});
