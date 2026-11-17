@@ -110,7 +110,7 @@ test('desktop portable owners preserve originals and links',async()=>{
     expect(await readFile(download.file)).toEqual(book.original);expect(download.bytes).toBe(book.original.length);
    }
   }
-  expect((await call('/api/projects/reference',retained)).value.body).toBe('Original observation 1');
+  expect((await call('/api/projects/material-reference/record',{ref:retained})).value.previous.record.body).toBe('Original observation 1');
   const location=await call('/api/projects/reference-location',retained);expect(location.projectId).toBe(parent.projectId);expect(location.labBookId).toBe(books[1].labBookId);
   // Continue authoring in the independently imported owner after every source
   // location is unavailable, then retain this new write through the next restart.

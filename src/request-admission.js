@@ -9,7 +9,7 @@ const controlPost=new Set([
  '/api/access/lock','/api/writer-recovery',
  '/api/media-imports/job','/api/media-imports/cancel',
  '/api/v1/intake/status','/api/v1/intake/cancel','/api/storage/copy/cancel','/api/storage/export/cancel','/api/storage/move/cancel',
- '/api/storage/move/status','/api/storage/delete/status','/api/record-transfer/cancel'
+ '/api/record-transfer/cancel'
 ]);
 export function requestLane(method,pathname){
  if(method==='POST'&&pathname==='/api/session')return 'bootstrap';

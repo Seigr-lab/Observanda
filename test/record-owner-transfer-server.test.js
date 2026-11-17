@@ -50,7 +50,7 @@ test('record transfer HTTP commands recover across sessions without changing des
  const resumed=await api.call(transfer+'resume',{workspaceId:source.namespaceId,recordId:record.id,id:command.id});assert.equal(resumed.phase,'complete');assert.equal(resumed.result.recordId,record.id);assert.equal(resumed.result.labBookId,target.labBookId);
  assert.deepEqual(await api.call(transfer+'start',command),resumed);
  const location=await api.call('/api/projects/reference-location',originalRef);assert.equal(location.namespaceId,target.namespaceId);assert.equal(location.labBookId,target.labBookId);
- assert.equal((await api.call('/api/projects/reference',originalRef)).value.body,record.body);
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:originalRef})).value.previous.record.body,record.body);
  const foreign=await api.raw(prefix(target)+'/reference-location',{...originalRef,workspaceId:randomUUID()});assert.notEqual(foreign.status,200);assert.equal((await foreign.json()).code,'NOT_FOUND');
  const retained=await api.call('/api/projects/material-reference/record',{ref:originalRef,offset:0});assert.equal(retained.namespaceId,target.namespaceId);assert.equal(retained.value.previous.header.body,record.body);
 
@@ -76,7 +76,7 @@ test('record transfer HTTP commands recover across sessions without changing des
  const latest=await api.call(prefix(target)+'/workspace/read/record-content',{workspaceId:target.namespaceId,recordId:record.id,pagedHeader:true});
  const returned=await api.call(prefix(target)+'/research/records/transfer/start',{id:randomUUID(),workspaceId:target.namespaceId,recordId:record.id,sourceNotebookId:target.labBookId,expectedStorageRevision:latest.storageRevision,targetProjectId:null,targetLabBookId:null,targetWorkspaceId:f.registry.workspaceId,targetNotebookId:legacyBook.id});assert.equal(returned.phase,'complete');
  const rootLocation=await api.call('/api/projects/reference-location',originalRef);assert.equal(rootLocation.namespaceId,f.registry.workspaceId);assert.equal(rootLocation.projectId,null);
- assert.equal((await api.call('/api/projects/reference',originalRef)).value.body,record.body);
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:originalRef})).value.previous.record.body,record.body);
  const rootRead=await api.call('/api/projects/material-reference/record',{ref:originalRef,offset:0});assert.equal(rootRead.namespaceId,f.registry.workspaceId);assert.equal(rootRead.projectId,null);assert.equal(rootRead.value.previous.header.body,record.body);
  const canonical=await api.call('/api/workspace/read/record-content',{workspaceId:f.registry.workspaceId,recordId:record.id,pagedHeader:true});assert.equal(canonical.header.body,'Continued after transfer');assert.equal(canonical.header.notebookId,legacyBook.id);
 

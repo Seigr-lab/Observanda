@@ -56,16 +56,15 @@ test('book namespace links resolve current and retained content with independent
  const busy=workspace.withLock(()=>parent.withLock(()=>unrelated.withLock(async()=>{entered();await hold;})));await gate;
  try{
   const located=await result(await call('/api/projects/reference-location',retained));assert.equal(located.projectId,projectId);assert.equal(located.labBookId,book.labBookId);assert.equal(located.namespaceId,book.namespaceId);
-  assert.equal((await result(await call('/api/projects/reference',reference))).value.body,'A later observation');
-  assert.equal((await result(await call('/api/projects/reference',retained))).value.body,saved.body);
+  assert.equal((await result(await call(own+'/research/records/writing/read',{workspaceId:book.namespaceId,recordId:saved.id,sectionId:null}))).value.body,'A later observation');
+  assert.equal((await result(await call('/api/projects/material-reference/record',{ref:retained}))).value.previous.record.body,saved.body);
   const material=await result(await call('/api/projects/material-reference/read',{ref:artifact}));assert.equal(material.labBookId,book.labBookId);assert.equal(material.value.id,artifact.id);
   const retainedMaterial=await result(await call('/api/projects/material-reference/record',{ref:retained}));assert.equal(retainedMaterial.labBookId,book.labBookId);assert.equal(retainedMaterial.value.previous.record.id,saved.id);
   const original=await fetch(app.origin+'/api/projects/material-reference/original/'+book.namespaceId+'/'+artifact.id+'/'+artifact.revision+'?context='+context,{headers:{...headers,Range:'bytes=2-7'}});assert.equal(original.status,206);assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes.subarray(2,8));
  }finally{release();await busy;}
  assert.deepEqual(await result(await call('/api/projects/reference-location',{...reference,workspaceId:randomUUID()})),{registered:false});
- await result(await call(other+'/reference',reference),422);
- await result(await call('/api/projects/reference',{...reference,id:randomUUID()}),404);
- await result(await call('/api/projects/reference',{...retained,revision:'f'.repeat(64)}),404);
+ assert.equal((await result(await call('/api/projects/material-reference/record',{ref:{...retained,id:randomUUID()}}),422)).code,'MATERIAL_MISSING');
+ assert.equal((await result(await call('/api/projects/material-reference/record',{ref:{...retained,revision:'f'.repeat(64)}}),422)).code,'MATERIAL_MISSING');
  await assert.rejects(addresses.register(randomUUID(),book),{code:'DATABASE_LOCATION'});
  await assert.rejects(addresses.register(projectId,{...book,labBookId:sibling.labBookId}),{code:'DATABASE_LOCATION'});
  await result(await call(own+'/access/lock'));
@@ -73,8 +72,8 @@ test('book namespace links resolve current and retained content with independent
  assert.equal((await result(await call('/api/projects/material-reference/read',{ref:artifact}),401)).labBookId,book.labBookId);
  await result(await call(own+'/access/unlock'));
  const renamed=await result(await call(own+'/storage/rename',{id:randomUUID(),expectedName:book.directory,name:'Observations 2'}));assert.ok(renamed);
- assert.equal((await result(await call('/api/projects/reference',retained))).value.body,saved.body);
+ assert.equal((await result(await call('/api/projects/material-reference/record',{ref:retained}))).value.previous.record.body,saved.body);
  await result(await call(own+'/storage/delete',{id:randomUUID(),expectedName:'Observations 2'}));
- assert.notEqual((await call('/api/projects/reference',reference)).status,200);
+ assert.notEqual((await call('/api/projects/material-reference/record',{ref:retained})).status,200);
  assert.notEqual((await call('/api/projects/material-reference/read',{ref:artifact})).status,200);
 });

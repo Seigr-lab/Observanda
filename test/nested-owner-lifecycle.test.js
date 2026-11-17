@@ -120,7 +120,7 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  const copiedBook=path.join(bookCopies,books[0].directory),beforeMove=books[0].root;
  const placed=await api.call(bookRoute(books[0])+'/storage/move',{id:randomUUID(),projectId:child.projectId});
  books[0].projectId=child.projectId;books[0].root=placed.book.root;assert.equal(books[0].root,path.join(child.root,books[0].directory));await assert.rejects(stat(beforeMove),{code:'ENOENT'});
- assert.equal((await api.call('/api/projects/reference',retained)).value.body,'Original observation 1');
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:retained})).value.previous.record.body,'Original observation 1');
  await api.call(projectRoute(parent.projectId)+'/storage/copy',{id:randomUUID(),parent:projectCopies});
  const copiedProject=path.join(projectCopies,path.basename(parent.root)),beforePlacement=parent.root;
  // A project is never moved inside another project.
@@ -152,7 +152,7 @@ test('nested owners retain concurrent work, evidence and links through rename, p
   const history=await api.call(bookRoute(book)+'/research/records/history/list',{workspaceId:book.namespaceId,recordId:records[index].id});assert.ok(history.versions.length>=2);if(index===1)assert.ok(history.versions.some(item=>item.revision===retained.revision));
  }
  const linked=(await api.call(bookRoute(books[0])+'/workspace/read/selection',{workspaceId:books[0].namespaceId,ids:[records[0].id]})).book.entries[0];assert.deepEqual(linked.relations[0].target,retained);
- assert.equal((await api.call('/api/projects/reference',retained)).value.body,'Original observation 1');
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:retained})).value.previous.record.body,'Original observation 1');
  const located=await api.call('/api/projects/reference-location',retained);assert.equal(located.projectId,child.projectId);assert.equal(located.labBookId,books[1].labBookId);
  const downloaded=await api.raw('/api/projects/material-reference/original/'+books[0].namespaceId+'/'+evidence.id+'/'+evidence.revision+'?context='+api.context());
  assert.equal(downloaded.status,200,await downloaded.clone().text());assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()),bytes);
@@ -162,6 +162,6 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  }
  const read=await api.call(bookRoute(books[1])+'/research/records/writing/read',address(1));
  await api.call(bookRoute(books[1])+'/research/records/writing/save',{...address(1),expectedRevision:read.revision,value:{body:'New observation after independent reopening'}});
- assert.equal((await api.call('/api/projects/reference',retained)).value.body,'Original observation 1');
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:retained})).value.previous.record.body,'Original observation 1');
  t.diagnostic('Independent reopening retains dedicated databases, history, original evidence and cross-owner links');
 });

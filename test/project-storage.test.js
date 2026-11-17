@@ -1,5 +1,6 @@
 import {ProjectRenames} from '../src/project-rename.js';
 import {test} from 'node:test';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,copyFile,rename,rm,realpath} from 'node:fs/promises';
 import path from 'node:path';
@@ -144,21 +145,23 @@ test('project registry and references retain identity across relocation without 
  const old=(await b.storage.read()).book.entries[0],target={projectId:b.id,domain:'research',kind:'record',id:old.id,revision:recordRevision(old)};
  const link=projectReference(target);assert.deepEqual(parseProjectReference(link),target);assert.equal(parseProjectReference(link+'&bad=1'),null);
  await b.storage.update(book=>{book.entries[0].title='B revised';return book;});
- assert.deepEqual((await references.resolve(target)).value,old);assert.deepEqual(opened,[b.id]);
- assert.equal((await references.resolve({...target,revision:undefined}).catch(e=>e)).code,'INVALID');
- allowed=false;const count=opened.length;await assert.rejects(references.resolve(target),{code:'ACCESS_DENIED'});assert.equal(opened.length,count);allowed=true;
- locked=true;await assert.rejects(references.resolve(target),{code:'ACCESS_LOCKED'});locked=false;
+ const retained=async()=>(await router.withProject(target.projectId,async storage=>new RetainedRecordDocuments(storage).read({ref:{workspaceId:(await storage.outline()).metadata.id,kind:'record',id:target.id,revision:target.revision}}),{action:'read',target})).previous.record;
+ const same=record=>({title:record.title,body:record.body});
+ assert.deepEqual(same(await retained()),same(old));assert.deepEqual(opened,[b.id]);
+ assert.equal((await references.locate({...target,revision:undefined}).catch(e=>e)).code,'INVALID');
+ allowed=false;const count=opened.length;await assert.rejects(references.locate(target),{code:'ACCESS_DENIED'});assert.equal(opened.length,count);allowed=true;
+ locked=true;await assert.rejects(references.locate(target),{code:'ACCESS_LOCKED'});locked=false;
  const revision=state.revision;await assert.rejects(registry.reparent(a.id,b.id,{expected:revision}),{code:'STORAGE_PATH'});assert.equal((await registry.read()).revision,revision);
  let entered,release;const enteredPromise=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve),busy=w.workspace.withLock(async()=>{entered();await held;});await enteredPromise;
- try{const placed=await new ProjectRenames(registry,b.id).run(b.storage,{id:randomUUID(),name:path.basename(b.storage.root),expectedName:path.basename(b.storage.root),placement:{parentId:null,expectedParentId:a.id}});b.storage=new ProjectStorage(placed.project.root,b.id,b.vault);state=await registry.read();assert.deepEqual((await references.resolve(target)).value,old);}finally{release();await busy;}
+ try{const placed=await new ProjectRenames(registry,b.id).run(b.storage,{id:randomUUID(),name:path.basename(b.storage.root),expectedName:path.basename(b.storage.root),placement:{parentId:null,expectedParentId:a.id}});b.storage=new ProjectStorage(placed.project.root,b.id,b.vault);state=await registry.read();assert.deepEqual(same(await retained()),same(old));}finally{release();await busy;}
  await f.owner.closeProject(b.storage.root);const moved=path.join(w.workspace.root,'relocated',path.basename(b.storage.root));await mkdir(path.dirname(moved));await rename(b.storage.root,moved);
- await assert.rejects(references.resolve(target));const movedStorage=new ProjectStorage(moved,b.id,b.vault);
- state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual((await references.resolve(target)).value,old);assert.equal(projectReference(target),link);
+ await assert.rejects(references.locate(target));const movedStorage=new ProjectStorage(moved,b.id,b.vault);
+ state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual(same(await retained()),same(old));assert.equal(projectReference(target),link);
  assert.ok(opened.every(id=>id===b.id));
  await assert.rejects(registry.attach(movedStorage,{expected:state.revision}),{code:'EXISTS'});
  await assert.rejects(registry.reparent(b.id,a.id,{expected:revision}),{code:'CONFLICT'});
  const current=(await movedStorage.read()).book.entries[0];await new ResearchRecords(movedStorage).remove({workspaceId:(await movedStorage.outline()).metadata.id,recordId:old.id,expectedRevision:recordRevision(current)});
- assert.deepEqual((await references.resolve(target)).value,old);const {revision:pinned,...latest}=target;await assert.rejects(references.resolve(latest),{code:'NOT_FOUND'});
+ assert.deepEqual(same(await retained()),same(old));const {revision:pinned,...latest}=target;await assert.rejects(references.locate(latest),{code:'NOT_FOUND'});
 });
 
 

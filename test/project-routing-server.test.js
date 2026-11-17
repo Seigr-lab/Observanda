@@ -133,8 +133,8 @@ test('a busy project does not queue its siblings and project credentials stay sc
   await result(await f.project(f.locked,'access/lock'));await result(await f.project(f.locked,'research/records/writing/read',target(f.locked)),401);
   await result(await f.project(f.b,'research/records/writing/read',target(f.b)));
   await db.run('ROLLBACK');await result(await pending);
-  const source=f.b.book.entries[0];const reference=await result(await f.project(f.b,'reference',{domain:'research',kind:'record',id:source.id}));assert.equal(reference.target.projectId,f.b.id);assert.equal(reference.value.body,'B saved independently');
-  await result(await f.project(f.b,'reference',{projectId:f.a.id,domain:'research',kind:'record',id:source.id}),422);
+  const source=f.b.book.entries[0],located=await result(await f.call('/api/projects/reference-location',{workspaceId:f.b.book.id,kind:'record',id:source.id}));assert.equal(located.projectId,f.b.id);
+  assert.equal((await result(await f.project(f.b,'research/records/writing/read',{workspaceId:f.b.book.id,recordId:source.id,sectionId:null}))).value.body,'B saved independently');
  }finally{await db.close();if(pending)await pending.catch(()=>{});}
 });
 
@@ -205,17 +205,18 @@ test('saved cross-project references resolve by namespace with access control an
  }finally{ResearchCatalogue.prototype.record=reconstruct;}
  assert.deepEqual(await result(await f.call('/api/projects/reference-location',{...reference,workspaceId:randomUUID()})),{registered:false});
  await result(await f.call('/api/projects/reference-location',{...reference,id:randomUUID()}),404);
- const resolved=await result(await f.call('/api/projects/reference',reference));assert.equal(resolved.projectId,f.b.id);assert.equal(resolved.revision,reference.revision);assert.deepEqual(resolved.target,reference);
+ const retained=ref=>f.call('/api/projects/material-reference/record',{ref});
+ const resolved=await result(await retained(reference));assert.equal(resolved.projectId,f.b.id);assert.equal(resolved.value.previous.record.id,destination.id);assert.equal(resolved.value.ref.revision,reference.revision);
  const writing=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));
  await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:writing.revision,value:{body:'The target evolved'}}));
- assert.equal((await result(await f.call('/api/projects/reference',reference))).value.body,destination.body);
- const current={workspaceId:f.b.book.id,kind:'record',id:destination.id};assert.equal((await result(await f.call('/api/projects/reference',current))).value.body,'The target evolved');
- await result(await f.project(f.b,'access/lock'));await result(await f.call('/api/projects/reference',reference),401);assert.equal((await result(await f.call('/api/projects/reference-location',reference),401)).projectId,f.b.id);
+ assert.equal((await result(await retained(reference))).value.previous.record.body,destination.body);
+ assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,'The target evolved');
+ await result(await f.project(f.b,'access/lock'));await result(await retained(reference),401);assert.equal((await result(await f.call('/api/projects/reference-location',reference),401)).projectId,f.b.id);
  assert.equal((await result(await f.project(f.a,'workspace/read/selection',{workspaceId:f.a.book.id,ids:[source.id]}))).book.entries[0].relations[0].target.workspaceId,f.b.book.id);
  await result(await f.project(f.b,'access/unlock'));await f.owner.closeProject(f.b.storage.root);
- assert.equal((await result(await f.call('/api/projects/reference',reference))).revision,reference.revision);
- await result(await f.call('/api/projects/reference',{...current,workspaceId:randomUUID()}),404);
- await result(await f.call('/api/projects/reference',{...current,workspaceId:f.a.book.id}),404);
+ assert.equal((await result(await retained(reference))).value.ref.revision,reference.revision);
+ await result(await retained({...reference,workspaceId:randomUUID()}),404);
+ await result(await retained({...reference,workspaceId:f.a.book.id}),422);
  const registry=await f.registry.read(),collision=structuredClone(registry.value);collision.projects[1].namespaceId=collision.projects[0].namespaceId;assert.throws(()=>f.registry.validate(collision),{code:'FORMAT'});
 });
 
@@ -244,7 +245,7 @@ test('HTTP project move keeps sibling authoring available and follows the adopte
  assert.equal((await f.registry.locate(f.b.id)).root,destination);
  assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,before.value.body);
  assert.equal((await result(await f.project(f.b,'storage/move',command))).project.root,destination);
- assert.equal((await result(await f.project(f.b,'storage/move/resume',{id}))).project.root,destination);assert.equal((await result(await f.project(f.b,'storage/move/status'))).move.phase,'complete');
+ assert.equal((await result(await f.project(f.b,'storage/move/resume',{id}))).project.root,destination);
  assert.equal((await result(await f.project(f.locked,'research/records/writing/read',target(f.locked)))).value.body,'Still authoring during the move');
 });
 test('a project move out of its workspace is refused before it starts and the project stays usable',async t=>{
@@ -342,7 +343,6 @@ test('HTTP project deletion authenticates its owner and preserves sibling author
   ProjectDeletions.prototype.stopDatabase=async function(...args){if(this.projectId===f.a.id){entered();await held;}return stop.apply(this,args);};
   operation=f.project(f.a,'storage/delete',{id,expectedRoot:f.a.storage.root});await ready;
   const pending=await result(await f.call('/api/projects/delete/pending',{after:null,limit:20}));assert.equal(pending.items[0].projectId,f.a.id);assert.equal(pending.items[0].running,true);
-  const status=await result(await f.project(f.a,'storage/delete/status'));assert.equal(status.deletion.phase,'frozen');
   const observed=(await f.activity()).operations.find(entry=>entry.kind==='/api/projects/'+f.a.id+'/storage/delete'&&entry.state==='running');assert.equal(observed?.state,'running');assert.equal(observed.view,'#/projects');assert.equal(observed.progress.stage,'delete-database');
   const reference=await f.call('/api/projects/reference-location',{workspaceId:f.a.book.id,kind:'record',id:f.a.book.entries[0].id});assert.notEqual(reference.status,200);assert.equal((await reference.json()).code,'PROJECT_DELETED');
   const writing=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:writing.revision,value:{body:'Saved during sibling deletion'}}));
@@ -363,8 +363,8 @@ test('HTTP legacy project references use indexed owners and retain project autho
  let release,entered;const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),busy=f.workspace.withLock(async()=>{entered();await gate;});await ready;
  try{
   const located=await result(await f.call('/api/projects/reference-location',reference));assert.equal(located.projectId,f.a.id);assert.equal(located.namespaceId,f.a.book.id);assert.deepEqual(located.target,reference);
-  const resolved=await result(await f.call('/api/projects/reference',reference));assert.equal(resolved.value.body,selected.body);assert.equal(resolved.revision,reference.revision);
-  await result(await f.project(f.a,'access/lock'));const denied=await result(await f.call('/api/projects/reference',reference),401);assert.equal(denied.projectId,f.a.id);
+  const resolved=await result(await f.call('/api/projects/material-reference/record',{ref:reference}));assert.equal(resolved.value.previous.record.body,selected.body);assert.equal(resolved.value.ref.revision,reference.revision);
+  await result(await f.project(f.a,'access/lock'));const denied=await result(await f.call('/api/projects/material-reference/record',{ref:reference}),401);assert.equal(denied.projectId,f.a.id);
   assert.deepEqual(await result(await f.call('/api/projects/reference-location',{...reference,id:randomUUID()})),{registered:false});
  }finally{release();await busy;}
 });

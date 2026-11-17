@@ -24,7 +24,7 @@ import {ProjectBookOwners} from '../src/project-book-owners.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {ResearchMaterials} from '../src/research-materials.js';
-import {resolveResearchReference} from '../src/research-owner-reference.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import {renameScope} from '../src/workspace-rename-state.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 
@@ -68,7 +68,7 @@ test('cross-filesystem book relocation resumes transfer, registration and retire
  });
  await assert.rejects(fs.stat(sourceRoot),{code:'ENOENT'});const binding=await catalogueBinding(destination);assert.notEqual(binding.id,sourceBinding.id);assert.equal(binding.labBookId,storage.labBookId);
  const moved=new LabBookStorage(destination,storage.labBookId,storage.vault),after=await moved.read();assert.deepEqual(after.book.entries,[{...original,share:false,updatedAt:after.book.entries[0].updatedAt}]);assert.equal(after.book.notebooks[0].title,path.basename(destination));assert.equal(after.book.notebooks[0].projectId,target.projectId);
- const address=await f.registry.reference(f.reference);assert.equal(address.projectId,target.projectId);assert.equal((await resolveResearchReference(moved,f.reference,{namespaceId:f.before.book.id})).value.body,original.body);
+ const address=await f.registry.reference(f.reference);assert.equal(address.projectId,target.projectId);assert.equal((await new RetainedRecordDocuments(moved).read({ref:f.reference})).previous.record.body,original.body);
  const materials=new ResearchMaterials(moved);assert.deepEqual(await moved.readFile(await materials.artifactPath(await materials.read(f.artifact))),f.bytes);
  await new ProjectBookOwners(source).ready();await new ProjectBookOwners(target).ready();assert.equal((await command.run(source,target,storage.vault,{id})).complete,true);
 });

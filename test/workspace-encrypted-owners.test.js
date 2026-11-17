@@ -74,7 +74,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and n
   await api.call(bookRoute(book)+'/research/records/writing/save',{workspaceId:book.namespaceId,recordId:records[i].id,sectionId:null,expectedRevision:writing.revision,value:{body:'Current observation'}});
  }
  const original={workspaceId:books[1].namespaceId,kind:'record',id:records[1].id,revision:recordRevision(records[1])};
- assert.equal((await api.call('/api/projects/reference',original)).value.body,'Earlier observation');
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:original})).value.previous.record.body,'Earlier observation');
  const bytes=Buffer.from('synthetic measurement\n1,2,3\n'),prefix=bookRoute(books[0]);
  const upload=await api.call(prefix+'/research/materials/start',{recordId:records[0].id,name:'measurements.csv',size:bytes.length});
  assert.equal((await api.raw(prefix+'/research/materials/chunk/'+upload.id+'/0',{method:'POST',body:bytes,headers:{'Content-Type':'application/octet-stream'}})).status,200);
@@ -104,7 +104,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and n
  await rename(f.workspace.root,path.join(directory,'Original unavailable'));phase('original owners unavailable');
  api=await open(destination,newPassword);for(const owner of projects)await api.call(projectRoute(owner.projectId)+'/access/unlock',{username:'',password});for(const book of books)await api.call(bookRoute(book)+'/access/unlock',{username:'',password});
  for(const [i,book] of books.entries()){const history=await api.call(bookRoute(book)+'/research/records/history/list',{workspaceId:book.namespaceId,recordId:records[i].id});assert.ok(history.versions.length>=2);}
- assert.equal((await api.call('/api/projects/reference',original)).value.body,'Earlier observation');
+ assert.equal((await api.call('/api/projects/material-reference/record',{ref:original})).value.previous.record.body,'Earlier observation');
  const download=await api.raw('/api/projects/material-reference/original/'+books[0].namespaceId+'/'+evidence.id+'/'+evidence.revision+'?context='+api.context());assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),bytes);
  phase('independent history and evidence verified');
  // Every successor owner activated in the successor's own, new cluster.

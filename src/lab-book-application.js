@@ -3,7 +3,7 @@ import {inventoryMaintenanceRequest,executeInventoryMaintenance} from './invento
 import {sampleAnalysisRequest,executeSampleAnalysisRequest} from './sample-analysis-requests.js';
 import {projectModuleRequest} from './project-module-requests.js';
 import {projectCalendarRequest} from './project-calendar.js';
-import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
+import {locateResearchReference} from './research-owner-reference.js';
 import {validTarget} from './web/research-reference.js';
 import {LabBookCopies} from './lab-book-copy.js';
 import {LabBookAccessSettings} from './lab-book-access-settings.js';
@@ -42,8 +42,8 @@ export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel'].includes(match[2]))return {bookOperation:'transfer',operation:'lab-books/'+match[2],labBookId:match[1],write:match[2]!=='storage/details',limit:16384};
  if(method==='POST'&&match[2]==='storage/rename')return {bookOperation:'rename',operation:'lab-books/storage/rename',labBookId:match[1],write:true,limit:16384};
  if(method==='POST'&&match[2]==='settings/save')return {bookOperation:'settings',operation:'lab-books/settings/save',labBookId:match[1],write:true,limit:MAX_BYTES};
- if(method==='POST'&&['storage/delete','storage/delete/status','storage/delete/resume'].includes(match[2]))return {bookOperation:'delete',operation:'lab-books/'+match[2],labBookId:match[1],write:match[2]!=='storage/delete/status',limit:16384};
- if(method==='POST'&&['reference','reference-location'].includes(match[2]))return {bookOperation:'reference',operation:'lab-books/'+match[2],labBookId:match[1],write:false,limit:16384};
+ if(method==='POST'&&['storage/delete','storage/delete/resume'].includes(match[2]))return {bookOperation:'delete',operation:'lab-books/'+match[2],labBookId:match[1],write:true,limit:16384};
+ if(method==='POST'&&match[2]==='reference-location')return {bookOperation:'reference',operation:'lab-books/'+match[2],labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&['workspace-owners','workspace-owner-records'].includes(match[2]))return {operation:match[2],labBookId:match[1],write:false,limit:16384};
  const route='/api/'+match[2];
  const command=inventoryMaintenanceRequest(route,method)??recordOwnerTransferRequest(route,method)??sampleAnalysisRequest(route,method)??projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
@@ -66,7 +66,6 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
  const keyFor=root=>bookAccess?bookAccess.key(root):readAccess(root).then(value=>verifyAccess(value,'','',{deviceStore}));
  if(selected.bookOperation==='delete'){
   const deletions=new LabBookDeletions(project,selected.labBookId),receipt=await deletions.receipt();
-  if(selected.operation.endsWith('/status')){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {deletion:receipt&&{id:receipt.id,labBookId:receipt.labBookId,name:receipt.directory,phase:receipt.phase}};}
   if(!data||Object.keys(data).sort().join()!=='expectedName,id')throw new AppError('INVALID');
   if(selected.operation.endsWith('/resume')&&receipt?.id!==data.id)throw new AppError('NOT_FOUND');
   const root=receipt?.id===data.id?await deletions.authenticationRoot(receipt):(await registry.locate(selected.labBookId)).root;
@@ -104,7 +103,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
   const result=await router.withLabBook(selected.labBookId,storage=>scoped(async()=>{
    if(selected.bookOperation==='reference'){
     if(!validTarget(data)||data.kind==='workspace')throw new AppError('INVALID');
-    return (selected.operation.endsWith('-location')?locateResearchReference:resolveResearchReference)(storage,data,{namespaceId:entry.namespaceId});
+    return locateResearchReference(storage,data,{namespaceId:entry.namespaceId});
    }
    const background=()=>jobs(storage,etag,()=>current(),retain);
    if(selected.maintenance){const owner=await background();return executeInventoryMaintenance(owner.storage,owner,selected.maintenance,data);}

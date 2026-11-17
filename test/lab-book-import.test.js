@@ -27,7 +27,7 @@ import {RecordWriting} from '../src/record-writing.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {MediaStore} from '../src/media.js';
-import {resolveResearchReference} from '../src/research-owner-reference.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 
 test('selected book import restores once at its nested destination and resumes without its source',{timeout:480000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-import-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
@@ -53,7 +53,7 @@ test('selected book import restores once at its nested destination and resumes w
   t.diagnostic('Import recovered through '+stage);
  }
  assert.ok(renamed);const completed=await command.run(next,{resume:true});assert.equal(completed.complete,true);await assert.rejects(command.cancel(next),{code:'CONFLICT'});assert.equal(completed.book.root,path.join(targetProject.root,path.basename(source.root)));assert.equal((await command.pending()).items.length,0);await new ProjectBookOwners(targetProject).ready();
- const imported=new LabBookStorage(completed.book.root,source.labBookId,source.vault),read=await imported.read();assert.equal(read.book.id,initial.book.id);assert.equal(read.book.projects[0].id,targetProject.projectId);assert.equal(read.book.notebooks[0].projectId,targetProject.projectId);assert.equal(read.book.entries[0].body,'Latest observation');assert.equal((await resolveResearchReference(imported,reference)).value.body,old.body);assert.equal((await destination.registry.reference(reference)).projectId,targetProject.projectId);
+ const imported=new LabBookStorage(completed.book.root,source.labBookId,source.vault),read=await imported.read();assert.equal(read.book.id,initial.book.id);assert.equal(read.book.projects[0].id,targetProject.projectId);assert.equal(read.book.notebooks[0].projectId,targetProject.projectId);assert.equal(read.book.entries[0].body,'Latest observation');assert.equal((await new RetainedRecordDocuments(imported).read({ref:reference})).previous.record.body,old.body);assert.equal((await destination.registry.reference(reference)).projectId,targetProject.projectId);
  await new ResearchMaterials(imported).artifact(evidence);const current=await new RecordWriting(imported).read(target);await new RecordWriting(imported).save({...target,expectedRevision:current.revision,value:{body:'Written after import'}});await command.run(next,{resume:true});assert.equal((await imported.read()).book.entries[0].body,'Written after import');
  await rename(missing,backup);await assert.rejects(new LabBookImports(sibling,destination.registry,device).run({...request,id:randomUUID()}),{code:'DATABASE_LOCATION'});await assert.rejects(stat(path.join(sibling.root,path.basename(source.root))),{code:'ENOENT'});
  // A portable owner already placed under its chosen project is adopted there.

@@ -4,7 +4,7 @@ import {ProjectImportAccess} from './project-import-access.js';
 import {assertProjectTransferDestination} from './project-registry-locations.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
-import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
+import {locateResearchReference} from './research-owner-reference.js';
 import {RecordOwnerTransferApplication,recordOwnerTransferRequest} from './record-owner-transfer-application.js';
 import {BookConversionApplication,bookConversionRequest} from './book-conversion.js';
 import {InventoryWorkspaceConnections} from './inventory-workspace-connections.js';
@@ -90,7 +90,7 @@ export function projectRequest(route,method){
  if(route==='/api/projects/delete/pending')return {operation:'delete/pending',write:false,limit:16384};
  if(['/api/projects/open/access/start','/api/projects/open/access/page','/api/projects/open/access/submit','/api/projects/open/access/finish','/api/projects/open/access/release'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/page'),limit:32768};
  if(['/api/projects/open','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
- if(['/api/projects/reference','/api/projects/reference-location'].includes(route))return {operation:route.endsWith('-location')?'research-reference-location':'research-reference',write:false,limit:16384};
+ if(route==='/api/projects/reference-location')return {operation:'research-reference-location',write:false,limit:16384};
  if(['/api/projects/create/pending','/api/projects/create/resume'].includes(route))return {operation:route.slice('/api/projects/'.length),write:route.endsWith('/resume'),limit:16384};
  if(['/api/projects/list','/api/projects/choices','/api/projects/create'].includes(route))return {operation:route.split('/').at(-1),write:route.endsWith('/create'),limit:MAX_BYTES};
  const match=/^\/api\/projects\/([a-f0-9-]{36})\/(.+)$/.exec(route);
@@ -101,11 +101,11 @@ export function projectRequest(route,method){
  if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules','dashboard-collection/calendar','dashboard-collection/samples'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
- if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
+ if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/delete','storage/delete/resume'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details'].includes(match[2]),limit:16384};
  const command=inventoryMaintenanceRequest('/api/'+match[2],method)??pdfDocumentRequest('/api/'+match[2],method)??recordOwnerTransferRequest('/api/'+match[2],method)??bookConversionRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
- if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
+ if(['access/unlock','access/lock'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  return null;
 }
 const reuseRequestConnections=selected=>selected.bookOperation==='research'||!selected.write&&selected.publication?.startsWith('websites/');
@@ -187,7 +187,6 @@ export class ProjectApplication{
  async deletion(client,selected,data,{check=async()=>{},onProgress}={}){
   return this.tracked(async()=>{
    await check();const registry=await this.registry(),deletions=new ProjectDeletions(registry,selected.projectId),session=this.session(client);
-   if(selected.operation==='storage/delete/status'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {deletion:await deletions.status()};}
    const resume=selected.operation==='storage/delete/resume',fields=Object.keys(data??{}).sort().join();
    if(!researchId(data?.id)||(resume?fields!=='id,password,recovery,username'||['username','password','recovery'].some(key=>typeof data[key]!=='string'||data[key].length>1024):fields!=='expectedRoot,id'||typeof data.expectedRoot!=='string'))throw new AppError('INVALID');
    const receipt=await deletions.receipt();if(resume&&receipt?.id!==data.id)throw new AppError('NOT_FOUND');
@@ -252,16 +251,16 @@ export class ProjectApplication{
   if(selected.bookOperation==='placement')return this.bookPlacements.run(client,selected.projectId,selected.labBookId,data,{resume:selected.operation.endsWith('/resume'),check,onProgress});
   if(selected.operation?.startsWith('storage/delete'))return this.deletion(client,selected,data,{check,onProgress});
   if(selected.operation==='delete/pending'){await check();if(!data||Object.keys(data).sort().join()!=='after,limit')throw new AppError('INVALID');return pendingProjectDeletions(await this.registry(),data);}
-  if(['research-reference','research-reference-location'].includes(selected.operation)){
+  if(selected.operation==='research-reference-location'){
    await check();if(!validTarget(data)||data.kind==='workspace')throw new AppError('INVALID');
    let entry;
-   try{entry=await (await this.registry()).reference(data);}catch(error){if(selected.operation==='research-reference-location'&&error.code==='NOT_FOUND')return {registered:false};throw error;}
+   try{entry=await (await this.registry()).reference(data);}catch(error){if(error.code==='NOT_FOUND')return {registered:false};throw error;}
    const {workspaceId,...reference}=data;
-   const operation=selected.operation==='research-reference-location'?'reference-location':'reference';
+   const operation='reference-location';
    if(entry.projectId===null)return this.tracked(async()=>{
     const registry=await this.registry();if(entry.namespaceId!==registry.workspaceId)throw new AppError('DATABASE_LOCATION');
     await check();signal?.throwIfAborted();
-    const result=await (operation==='reference-location'?locateResearchReference:resolveResearchReference)(this.workspace,data,{namespaceId:registry.workspaceId});
+    const result=await locateResearchReference(this.workspace,data,{namespaceId:registry.workspaceId});
     await check();return {...result,registered:true,target:structuredClone(data),projectId:null,namespaceId:registry.workspaceId};
    });
    const result=await this.run(client,{projectId:entry.projectId,operation:entry.labBookId?'lab-books/'+operation:operation,write:false,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'reference',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},entry.labBookId?data:{...reference,domain:'research'},{signal,check,setCheck});
@@ -306,13 +305,13 @@ export class ProjectApplication{
   if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;}
   if(selected.operation==='settings/save')return this.tracked(()=>this.renames.save(client,selected.projectId,data,{check}),selected.projectId);
   return this.tracked(async()=>{
-   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:!['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation),deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
+   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:!['storage/details','storage/move/resume','storage/move/cancel'].includes(selected.operation),deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
    const assertCurrent=()=>owner.check(),acceptRelocation=latest=>owner.relocated(latest),moves=new ProjectMoves(registry),copies=new ProjectCopies(registry),archives=new ProjectArchives(registry);
    try{
     const router=await owner.router();
     setCheck(assertCurrent);
-    if(['reference','reference-location'].includes(selected.operation)&&data.projectId!==undefined&&data.projectId!==selected.projectId)throw new AppError('INVALID');
-    const result=['reference','reference-location'].includes(selected.operation)?await new ProjectReferences(router)[selected.operation==='reference-location'?'locate':'resolve']({...data,projectId:selected.projectId}):await router.withProject(selected.projectId,async storage=>{
+    if(selected.operation==='reference-location'&&data.projectId!==undefined&&data.projectId!==selected.projectId)throw new AppError('INVALID');
+    const result=selected.operation==='reference-location'?await new ProjectReferences(router).locate({...data,projectId:selected.projectId}):await router.withProject(selected.projectId,async storage=>{
      const execute=async()=>{
      if(selected.bookOperation==='import'){
       const imports=new LabBookImports(storage,registry,this.deviceStore);
@@ -337,7 +336,6 @@ export class ProjectApplication{
       if(selected.operation==='storage/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {path:storage.root,projectId:storage.projectId,parentId:(await registry.locate(storage.projectId)).parentId,move:await this.renames.moveStatus(selected.projectId,await moves.status(selected.projectId),storage.root),copy:await copies.status(selected.projectId),export:await archives.status(selected.projectId)};}
       if(['storage/copy/cancel','storage/export/cancel','storage/move/cancel'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return ({copy:copies,export:archives,move:moves}[selected.operation.split('/')[1]]).cancel(storage,{id:data.id});}
       if(['storage/copy/resume','storage/export/resume'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return copyOwner(selected.operation==='storage/export/resume'?archives:copies,{id:data.id,resume:true,onProgress});}
-      if(selected.operation==='storage/move/status'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {move:await this.renames.moveStatus(selected.projectId,await moves.status(selected.projectId),storage.root)};}
       if(selected.operation==='storage/move/resume'){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return moveOwner({id:data.id,resume:true,onProgress});}
       if(data&&Object.keys(data).sort().join()==='id,parent'&&['storage/copy','storage/export'].includes(selected.operation)){if(typeof data.parent!=='string')throw new AppError('INVALID');data={id:data.id,path:storageCreationPath(data.parent,path.basename(storage.root))};}
       if(!data||Object.keys(data).sort().join()!=='id,path'||!researchId(data.id)||typeof data.path!=='string')throw new AppError('INVALID');
@@ -359,7 +357,7 @@ export class ProjectApplication{
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
      };return withQueryCacheScope(this,client,[owner.sessionEntry],()=>reuseRequestConnections(selected)?storage.withCatalogueConnections(execute):execute());
-    },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
+    },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}
   },selected.projectId,selected.operation==='lab-books/access/lock'?undefined:selected.labBookId);

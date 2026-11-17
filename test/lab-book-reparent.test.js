@@ -25,7 +25,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {RecordWriting} from '../src/record-writing.js';
 import {ResearchMaterials} from '../src/research-materials.js';
-import {resolveResearchReference} from '../src/research-owner-reference.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import {withWriterLease} from '../src/writer-lease.js';
 
 test('moving a book between project folders preserves identities and recovers every publication boundary',{timeout:480000},async t=>{
@@ -61,7 +61,7 @@ test('moving a book between project folders preserves identities and recovers ev
   const moved=await new LabBookReparents(registry,storage.labBookId).run(source,target,storage.vault,{id});assert.equal(moved.complete,true);assert.equal(moved.book.root,path.join(target.root,first.entry.directory));await assert.rejects(stat(sourceRoot),{code:'ENOENT'});
   assert.equal((await stat(moved.book.root)).ino,originalIdentity.ino);await assert.rejects(new LabBookRegistry(source).locate(storage.labBookId),{code:'LAB_BOOK_MOVED'});
   const located=await registry.reference(reference);assert.equal(located.projectId,target.projectId);assert.equal(located.labBookId,storage.labBookId);
-  storage=new LabBookStorage(moved.book.root,storage.labBookId,storage.vault);const latest=await storage.read();assert.equal(latest.book.projects[0].id,target.projectId);assert.equal(latest.book.notebooks[0].projectId,target.projectId);assert.equal(latest.book.entries[0].body,'Edited before the move froze');assert.equal((await resolveResearchReference(storage,reference,{namespaceId:first.entry.namespaceId})).value.body,oldRecord.body);
+  storage=new LabBookStorage(moved.book.root,storage.labBookId,storage.vault);const latest=await storage.read();assert.equal(latest.book.projects[0].id,target.projectId);assert.equal(latest.book.notebooks[0].projectId,target.projectId);assert.equal(latest.book.entries[0].body,'Edited before the move froze');assert.equal((await new RetainedRecordDocuments(storage).read({ref:reference})).previous.record.body,oldRecord.body);
   const evidence=new ResearchMaterials(storage),doc=await evidence.read(artifact);assert.equal((await stat(await evidence.artifactPath(doc))).ino,fileIdentity.ino);await evidence.artifact(artifact);
   assert.equal((await command.run(source,target,storage.vault,{id})).complete,true);await new ProjectBookOwners(source).ready();await new ProjectBookOwners(target).ready();
   t.diagnostic('Recovered '+stage+' without copying record or evidence files');[source,target]=[target,source];
