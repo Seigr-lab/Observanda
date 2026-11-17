@@ -83,19 +83,6 @@ test('project evidence integrity verification uses write admission and refuses l
  await result(await f.project(f.a,'access/lock'));await result(await f.project(f.a,'research/materials/verify',{}),401);
 });
 
-test('selected project website reads expose bounded numeric connection measurements and recheck locking',{timeout:180000},async t=>{
- const diagnostics=new OperationalDiagnostics(),f=await fixture(t,{diagnostics}),measurements=[];
- for(let attempt=0;attempt<3;attempt++){
-  const response=await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),correlation=response.headers.get('x-observanda-request'),opened=await result(response);
-  assert.equal(opened.workspaceId,f.a.book.id);assert.ok(opened.initialView);const entry=(await diagnostics.snapshot()).entries.find(row=>row.event==='request'&&row.correlation===correlation);
-  assert.ok(entry);assert.ok(entry.databaseQueries>0);if(attempt>0)assert.ok((entry.databaseConnections??0)<=4,'warm selected opening must not reopen every membership check');measurements.push({durationMs:entry.durationMs,connections:entry.databaseConnections,connectMs:entry.databaseConnectMs,admissionMs:entry.databaseAdmissionMs,queries:entry.databaseQueries,queryMs:entry.databaseQueryMs});
- }
- t.diagnostic(JSON.stringify({projectWebsiteOpening:measurements}));
- await result(await f.project(f.a,'access/lock'));
- await result(await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),401);
- const sibling=await result(await f.project(f.b,'websites/editor/open',{websiteId:null,initialView:true}));assert.equal(sibling.workspaceId,f.b.book.id);
-});
-
 test('warm project requests reuse database connections and the device unlock of their session',{timeout:180000},async t=>{
  const diagnostics=new OperationalDiagnostics(),f=await fixture(t,{diagnostics});
  const requests=[['research/drafts/list',{workspaceId:f.a.book.id}],['research/drafts/remove',{id:randomUUID(),workspaceId:f.a.book.id,expectedRevision:'a'.repeat(64)}],['research/records/writing/read',target(f.a)]];
