@@ -460,11 +460,6 @@ export class Workspace {
       yield {id:name.slice(0,-5),book:await this.readRevision(name.slice(0,-5))};
     }
   }
-  async history() {
-    const records=[];
-    for await(const {id,book} of this.revisionSnapshots())records.push({id,revision:book.revision,updatedAt:book.updatedAt,entries:book.entries.length});
-    return records.sort((a,b)=>b.revision-a.revision);
-  }
   async readRevision(revisionId) {
     if(await this.storageKind()==='catalogue')return (await this.catalogue(store=>store.read(revisionId))).book;
     if (!/^[a-f0-9]{64}$/.test(revisionId)) throw new AppError('INVALID');

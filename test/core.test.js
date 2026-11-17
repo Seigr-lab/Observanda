@@ -69,7 +69,7 @@ test('external edits and unknown formats are preserved without rewriting', async
 test('old revisions stay readable after a save; tampering is rejected', async () => {
   const root = await temp(), ws = new Workspace(root), initial = await ws.create(sampleNotebook());
   const next = structuredClone(initial.book); next.title = 'Another title';
-  await ws.save(next, initial.etag);const history = await ws.history();
+  await ws.save(next, initial.etag);const history = [];for await (const {id} of ws.revisionSnapshots()) history.push({id});
   assert.equal(history.length, 1);
   assert.equal((await ws.readRevision(history[0].id)).title, initial.book.title);
   await writeFile(path.join(root, '.observanda', 'revisions', `${history[0].id}.json`), serialize(next));
