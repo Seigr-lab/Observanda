@@ -24,3 +24,10 @@ export function addressedMaterialReference(data,request={material:'read'}){
  return materialReference(ref);
 }
 export function addressedMaterialCommand(request,data){const ref=addressedMaterialReference(data,request);return {ref,command:withMaterialReadReference(request.material,data,ref)};}
+// The registry can resolve an address through an alias (an earlier namespace of
+// the same content). The owner reads it under the namespace it now holds.
+export function ownedMaterialCommand(request,command,ref,namespaceId){
+ if(ref.workspaceId===namespaceId)return {request,command};
+ const owned={...ref,workspaceId:namespaceId};
+ return {request:request.ref?{...request,ref:owned}:request,command:withMaterialReadReference(request.material,command,owned)};
+}

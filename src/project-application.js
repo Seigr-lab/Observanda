@@ -51,7 +51,7 @@ import {ProjectArchives} from './project-archives.js';
 import {ProjectAccessSettings} from './project-access-settings.js';
 import {ProjectSessionOwner} from './project-session-owner.js';
 import {withProjectHistoryAccess} from './project-history-access.js';
-import {projectMaterialReferenceRequest,addressedMaterialCommand} from './project-material-reference.js';
+import {projectMaterialReferenceRequest,addressedMaterialCommand,ownedMaterialCommand} from './project-material-reference.js';
 import {intakeRequest,intakeCommand} from './intake/commands.js';
 import {ProjectJobs} from './project-jobs.js';
 import {materialRequest,executeMaterialRequest} from './material-requests.js';
@@ -244,7 +244,8 @@ export class ProjectApplication{
     await check();signal?.throwIfAborted();const value=await executeMaterialRequest(this.workspace,request,command,{signal,download,stream,sourceAccess:comparisonSourceFactory(this,client,{check})});await check();
     return selected.download?value:{projectId:null,namespaceId:registry.workspaceId,value};
    });
-   const value=await this.run(client,{...request,projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'research',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},command,{signal,onProgress,download,stream,check,setCheck});
+   const owned=ownedMaterialCommand(request,command,ref,entry.namespaceId);
+   const value=await this.run(client,{...owned.request,projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'research',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},owned.command,{signal,onProgress,download,stream,check,setCheck});
    return selected.download?value:{projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId}:{}),namespaceId:entry.namespaceId,value};
   }
 
