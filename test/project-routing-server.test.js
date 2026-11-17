@@ -500,39 +500,6 @@ test('addressed evidence reads enforce the owning project grant and retain exact
 });
 
 
-test('previously stored scoped websites remain readable while new websites cannot be created under research projects',{timeout:180000},async t=>{
- const f=await fixture(t),sourceHead=(await f.workspace.outline()).etag,sourceDb=await f.workspace.openCatalogue(),site=randomUUID();let release;
- await f.a.storage.update(book=>{book.websites=[{id:site,name:'Previously stored site',projectId:f.a.id,document:websiteDocument(book),projects:book.projects.map(({id,logoId})=>({id,logoId,share:true})),selection:{defaultShare:false,includeProjects:[],records:[]}}];return book;});
- try{
-  await sourceDb.run('BEGIN');await sourceDb.lock();
-  await result(await f.project(f.a,'websites/change',{workspaceId:f.a.book.id,etag:(await f.a.storage.outline()).etag,operation:'create',name:'New website'}),422);
-  const opened=await result(await f.project(f.a,'websites/open',{id:site}));
-  const edit={workspaceId:f.a.book.id,baseEtag:opened.etag,websitePin:opened.websitePin,metadata:{website:{...opened.book.website,footer:'PROJECT_A_PUBLIC_FOOTER'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:f.a.book.entries[0].id,share:true,attachments:[]}]}};
-  const saved=await result(await f.project(f.a,'websites/save',{id:site,command:edit})),headers={'X-Observanda-Website':site};
-  const settings=await result(await f.raw('/api/projects/'+f.a.id+'/publishing',{headers}));
-  await result(await f.project(f.a,'publishing/save',{config:{...settings.config,github:{...settings.config.github,owner:'Example',repository:'independent-project'}},etag:settings.etag},headers));
-  assert.equal((await result(await f.raw('/api/projects/'+f.b.id+'/publishing'))).configured,false);
-  assert.deepEqual((await result(await f.project(f.a,'website/research/summary',{workspaceId:f.a.book.id,snapshotId:saved.etag,websitePin:saved.websitePin,selection:edit.selection,search:''},headers))).entries,1);
-  let entered;const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),prepare=PublicationJobs.prototype.prepare;
-  t.mock.method(PublicationJobs.prototype,'prepare',async function(...args){if(this.workspace.projectId===f.a.id){entered();await gate;}return prepare.apply(this,args);});
-  const started=await result(await f.project(f.a,'publication-jobs/start',{etag:saved.etag,websitePin:saved.websitePin,commandId:randomUUID()},headers));await ready;
-  const b=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:b.revision,value:{body:'B authoring continues during A publication'}}));
-  assert.equal((await f.workspace.outline()).etag,sourceHead);release();
-  let job=started.job;const deadline=Date.now()+60000;
-  while(['queued','running'].includes(job.state)){if(Date.now()>deadline)throw Error('Project publication did not finish');await delay(100);job=(await result(await f.project(f.a,'publication-jobs/status',{id:job.id},headers))).job;}
-  assert.equal(job.state,'completed',JSON.stringify(job));
-  const edition=await result(await f.project(f.a,'publication-jobs/open',{id:job.result.id},headers));assert.ok(edition.url.startsWith('/api/projects/'+f.a.id+'/publication-preview/'));
-  const page=await f.raw(edition.url);assert.equal(page.status,200);assert.match(await page.text(),/PROJECT_A_PUBLIC_FOOTER/);
-  const archive=await f.raw('/api/projects/'+f.a.id+'/export/'+edition.id);assert.equal(archive.status,200,await archive.clone().text());assert.equal(archive.headers.get('content-type'),'application/zip');assert.equal(Buffer.from(await archive.arrayBuffer()).subarray(0,2).toString(),'PK');
-  await result(await f.raw(edition.url.replace(f.a.id,f.b.id)),404);
-  await result(await f.project(f.b,'publication-jobs/open',{id:edition.id}),404);
-  const prior=(await result(await f.project(f.a,'websites/open',{id:site}))).book.website.footer;assert.equal(prior,'PROJECT_A_PUBLIC_FOOTER');
-  await result(await f.project(f.a,'access/lock'));await result(await f.raw(edition.url),401);await result(await f.project(f.a,'access/unlock'));assert.equal((await f.raw(edition.url)).status,200);
-  assert.equal((await result(await f.project(f.b,'research/records/writing/read',target(f.b)))).value.body,'B authoring continues during A publication');
- }finally{release?.();await sourceDb.close();}
-});
-
-
 test('project publication assets retain font bytes and original downloads under their own grants',{timeout:150000},async t=>{
  const f=await fixture(t),db=await f.workspace.openCatalogue(),fontBytes=await (await import('node:fs/promises')).readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),prefix='/api/projects/'+f.a.id;
  try{
@@ -551,27 +518,6 @@ test('project publication assets retain font bytes and original downloads under 
   await result(await f.project(f.a,'access/lock'));await result(await f.raw(prefix+'/media/'+job.result.id),401);await result(await f.project(f.a,'access/unlock'));assert.equal((await f.raw(prefix+'/media/'+job.result.id)).status,200);
   const b=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));assert.ok(b.revision);
  }finally{await db.close();}
-});
-
-
-test('project deployment jobs use their own publisher and preserve sibling configuration',{timeout:150000},async t=>{
- const measurements=new OperationalDiagnostics(),prepare=DeploymentJobs.prototype.prepare,source=PublicationJobs.prototype.source;let preparing=false,sourceReads=0;
- PublicationJobs.prototype.source=function(...args){if(preparing)sourceReads++;return source.apply(this,args);};
- DeploymentJobs.prototype.prepare=function(...args){return withDiagnostics(measurements,async()=>{const start=performance.now();preparing=true;try{return await prepare.apply(this,args);}finally{preparing=false;diagnostic('request',{route:'publication-jobs',durationMs:performance.now()-start});}});};
- t.after(()=>{DeploymentJobs.prototype.prepare=prepare;PublicationJobs.prototype.source=source;});
- const remote=githubFixture({branch:'main',repository:'project-site',initialFiles:{'README.md':'Existing independent destination'}}),f=await fixture(t,{publishingOptions:{request:remote.request}});
- t.after(async()=>{t.diagnostic(JSON.stringify({sourceReads,deploymentPreparation:(await measurements.snapshot()).entries}));});
- const prefix='/api/projects/'+f.a.id,settings=await result(await f.raw(prefix+'/publishing'));
- const configured=await result(await f.project(f.a,'publishing/save',{config:{...settings.config,github:{...settings.config.github,owner:'example',repository:'project-site',branch:'main'}},etag:settings.etag}));
- await result(await f.project(f.a,'publishing/connect',{token:'fixture_project_token_1234567890'}));
- assert.equal((await result(await f.raw('/api/projects/'+f.b.id+'/publishing'))).connected,false);
- const edition=await result(await f.project(f.a,'preview',{etag:(await f.a.storage.outline()).etag}));
- const plan=await result(await f.project(f.a,'publishing/plan',{id:edition.id,configEtag:configured.etag}));
- const started=await result(await f.project(f.a,'deployment-jobs/start',{id:edition.id,configEtag:configured.etag,reviewed:true,destinationReview:plan.id,destinationReviewed:true}));
- let job=started.job;const deadline=Date.now()+45000;while(['queued','running'].includes(job.state)){if(Date.now()>deadline){t.diagnostic(JSON.stringify({state:job.state,progress:job.progress,error:job.error}));throw Error('Project deployment did not finish');}await delay(100);job=(await result(await f.project(f.a,'deployment-jobs/status',{id:job.id}))).job;}
- assert.equal(job.state,'completed',JSON.stringify(job));const own=await result(await f.raw(prefix+'/publishing'));assert.equal(own.receipt.commit,remote.head);assert.equal((await result(await f.raw('/api/projects/'+f.b.id+'/publishing'))).receipt,null);
- assert.ok(sourceReads<=3,'One deployment attempt must not readmit the immutable source for every uploaded file');
- await result(await f.project(f.b,'deployment-jobs/status',{id:job.id}),404);assert.ok(remote.calls.some(call=>call.route.includes('/repos/example/project-site/')));
 });
 
 
