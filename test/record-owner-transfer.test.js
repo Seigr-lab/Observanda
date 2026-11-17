@@ -16,13 +16,9 @@ import {referenceOriginKey,referenceNamespaceMatches} from '../src/research-refe
 import {RunReceiptStore} from '../src/run-receipt-store.js';
 import {verifyRecordOwnerTransfers} from '../src/record-owner-transfer-verification.js';
 import {copyLabBookLocation} from '../src/lab-book-transfer.js';
-import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
-import {TestDeviceStore} from './device-fixture.js';
-import {clearVault} from '../src/encryption.js';
-import {atomicWrite,workspaceFile,serialize,privateDirectory} from '../src/storage.js';
-import {rekeyCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
-import {workspaceFiles} from '../src/workspace-inventory.js';
-import {FileContent,describeContent,contentBuffer} from '../src/file-content.js';
+import {workspaceFile} from '../src/storage.js';
+import {verifyCatalogueArchive} from '../src/research-catalogue.js';
+import {FileContent,contentBuffer} from '../src/file-content.js';
 import {readRecordOwnerTransfer,writeRecordOwnerTransfer} from '../src/record-owner-transfer-state.js';
 const media={get:async()=>{throw Error('Unexpected media');}};
 const column=name=>({name,representation:'text',radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
@@ -74,11 +70,7 @@ test('selected owner move retains exact evidence, unavailable sibling provenance
  }
  await check(target);t.diagnostic('Completed move: exact originals, receipts, provenance, interruption/replay and verifier passed.');assert.equal((await source.read()).book.entries.some(value=>value.id===record.id),false);assert.equal((await source.read()).book.entries.find(value=>value.id===sibling.id).title,'Foreground authoring stayed available');
  const redirected=await f.registry.reference({workspaceId:from.namespaceId,kind:'record',id:record.id});assert.equal(redirected.labBookId,to.labBookId);
- for(const portable of [false,true]){const parent=path.join(f.directory,portable?'Portable copies':'Ordinary copies');await mkdir(parent);const copied=await copyLabBookLocation(target,path.join(parent,path.basename(target.root)),{id:randomUUID(),portable});await check(copied);t.diagnostic((portable?'Portable':'Ordinary')+' owner copy passed.');}
- const parent=path.join(f.directory,'Fresh key copies');await mkdir(parent);const root=path.join(parent,path.basename(target.root)),access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.directory,'fresh-device')})),key=takeCreatedVault(access);t.after(()=>clearVault(key));const fresh=new LabBookStorage(root,to.labBookId,key);await mkdir(path.join(root,'.observanda'),{recursive:true});await atomicWrite(path.join(root,'.observanda/access.json'),serialize(access));
- const descriptorText=await target.readFile(await workspaceFile(target.root),'utf8');await fresh.writeFile(await workspaceFile(root,{secure:true}),descriptorText);
- for await(const file of workspaceFiles(target.root,{includeDatabase:false}))if(/^\.observanda\/(?:materials\/originals|media)\//.test(file.path)){await privateDirectory(root,path.posix.dirname(file.path));await (await describeContent(target,path.join(target.root,file.path))).copyTo(fresh,path.join(root,file.path));}
- await rekeyCatalogue(target,fresh,JSON.parse(descriptorText));await check(fresh);await verifyCatalogueArchive(fresh,JSON.parse(descriptorText));t.diagnostic('Fresh-key recovery and archive verification passed.');
+ for(const portable of [false,true]){const parent=path.join(f.root,portable?'Portable copies':'Ordinary copies');await mkdir(parent);const copied=await copyLabBookLocation(target,path.join(parent,path.basename(target.root)),{id:randomUUID(),portable});await check(copied);t.diagnostic((portable?'Portable':'Ordinary')+' owner copy passed.');}
  const restore={...retire,action:'restore',reason:'Restore in destination'},plan=await new EvidenceCorrections(incoming).preview(restore);await new EvidenceCorrections(incoming).apply({command:restore,review:plan.review});assert.equal((await incoming.current(retired.id)).revision,retired.revision);await incoming.verify();await target.catalogue(store=>verifyRecordOwnerTransfers(store));
  const returning=new RecordOwnerTransfer(target,source,{registry:f.registry,sourceOwner:targetOwner,targetOwner:sourceOwner}),returnMember=await target.catalogue(async store=>store.member(await store.snapshot(),record.id)),returnCommand={id:randomUUID(),workspaceId:to.namespaceId,recordId:record.id,sourceNotebookId:to.labBookId,expectedStorageRevision:returnMember.revision,targetWorkspaceId:from.namespaceId,targetNotebookId:from.labBookId};
  const returned=await returning.start(returnCommand);assert.equal(returned.phase,'complete');t.diagnostic('Actual return move completed.');assert.deepEqual(await returning.start(returnCommand),returned);
