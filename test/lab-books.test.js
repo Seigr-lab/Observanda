@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtemp} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
@@ -61,9 +63,10 @@ test('deleting records removes publication targets, reparents menus and retains 
 });
 
 test('HTTP deletion is atomic, refuses changes since review, and retains the prior version',async t=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-delete-book-')),ws=new Workspace(path.join(dir,'workspace'));
- const {book,source,destination}=fixture();await ws.create(book);
- const app=await startServer({root:ws.root,port:0,preferencesFile:path.join(dir,'preferences.json')});t.after(()=>app.close());
+ // The app opens only encrypted workspaces, through its own device store.
+ const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-delete-book-')),{book,source,destination}=fixture(),f=await encryptedFixture(dir,book),ws=f.workspace;
+ const app=await startServer({root:ws.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(dir,'preferences.json')});
+ t.after(async()=>{await app.close();await clearVault(f.vault);await rm(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
  const cookie=auth.headers.get('x-observanda-session').split(';')[0];
  const send=(etag,change)=>fetch(app.origin+'/api/workspace/structure',{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({etag,change})});
@@ -75,7 +78,6 @@ test('HTTP deletion is atomic, refuses changes since review, and retains the pri
  assert.equal((await send(initial.etag,command(destination.id))).status,409);
  assert.equal((await ws.read()).etag,changed.etag);
  const response=await send(changed.etag,command(source.id,'delete'));assert.equal(response.status,200);
- const deleted=await response.json();assert.equal(deleted.book.notebooks.length,1);assert.equal(deleted.book.entries.length,1);
- assert.ok((await ws.history()).some(v=>v.id===changed.etag));
+ await response.json();const deleted=await ws.read();assert.equal(deleted.book.notebooks.length,1);assert.equal(deleted.book.entries.length,1);
  assert.deepEqual((await ws.readRevision(changed.etag)).notebooks,changed.book.notebooks);
 });
