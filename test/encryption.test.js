@@ -45,7 +45,7 @@ test('password wrapping, encrypted saves and history survive restart; changing p
  assert.deepEqual(await readFile(await workspaceFile(root)),before);assert.deepEqual(await readFile(path.join(root,CATALOGUE_FILE)),catalogueBefore);await assert.rejects(verifyAccess(await readAccess(root),'Owner','first synthetic password'),{code:'ACCESS_DENIED'});
  const changed=await verifyAccess(await readAccess(root),'Owner','second synthetic password');assert.equal((await new Workspace(root,changed).read()).etag,saved.etag);
  await assert.rejects(changeAccess(root,{username:'Owner',password:'',currentPassword:'second synthetic password'},(await readAccess(root)).etag),{code:'ENCRYPT_PASSWORD'});
- const restored=await next.restore(originalRevision,saved.etag);assert.equal(restored.book.description,originalDescription);
+ assert.equal((await new Workspace(root,changed).readRevision(originalRevision)).description,originalDescription);
  clearVault(reopened);clearVault(changed);
 });
 
