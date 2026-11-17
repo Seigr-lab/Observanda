@@ -17,10 +17,9 @@ import {DashboardDiscovery} from '../src/dashboard-discovery.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 import {recordFingerprint,reconcileResearch} from './fixtures/research-reconciliation.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
+import {PublicationConversion} from '../src/publication-conversion.js';
+import {WebsiteFileStore,websiteSourceId} from '../src/website-file-store.js';
 import {contentBuffer} from '../src/file-content.js';
-import {WebsiteEditor} from '../src/website-editor.js';
-import {randomUUID} from 'node:crypto';
 import {sampleWorkloadCpu} from './workload-cpu-sample.js';
 
 import {withDatabaseRequest} from '../src/database-request-context.js';
@@ -85,32 +84,27 @@ async function workload(copies,t){
   const service=new ResearchRecords(f.workspace,{}),read=new WorkspaceReader(f.workspace),base=(await read.selection({workspaceId:f.book.id,ids:[f.first.id]})).book.entries[0],began=performance.now();
   const materials=new ResearchMaterials(f.workspace);
   const continued={...base,share:true,title:'Continuing after complete evidence intake',body:'Qualified synthetic observations; original evidence remains private.',figures:[{...structuredClone((await materials.read(evidence.retained.figure)).content.figure),source:evidence.retained.figure}]};
-  const saved=await service.save({workspaceId:f.book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:continued}]},{recordIds:[base.id]});f.expectedRecords.set(base.id,recordFingerprint({...continued,updatedAt:saved.book.entries[0].updatedAt}));
+  const files=new WebsiteFileStore(f.workspace),conversion=new PublicationConversion(f.workspace,{store:files});
+  const saved=await conversion.mutateRecord(f.workspace,{workspaceId:f.book.id,notebookId:base.notebookId,recordId:base.id},()=>service.save({workspaceId:f.book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:continued}]},{recordIds:[base.id]}));f.expectedRecords.set(base.id,recordFingerprint({...continued,updatedAt:saved.book.entries[0].updatedAt}));
   const editMs=Math.round(performance.now()-began);observeTiming('editMs',editMs,5000);assert.equal(saved.recordScope.total,113*copies);
   const pinnedAnalysis=await materials.read(evidence.retained.analysis);assert.equal(pinnedAnalysis.content.tool,'Synthetic external analysis');
   const expected={records:f.expectedRecords,originals:evidence.originals,retained:evidence.retained,rows:evidence.metrics.rows};
   process.stdout.write('A10 '+copies+'x complete source reconciliation\n');
   const reconciled=await reconcileResearch(f.workspace,expected);
   assert.equal(reconciled.originalBytes,evidence.metrics.physicalBytes);
-  // Consent belongs to the authored source. The saved website narrows that
-  // consent to one record; originals and every other run remain private.
-  const outline=await f.workspace.outline(),project=outline.metadata.projects[0],editor=new WebsiteEditor(f.workspace),website={workspaceId:f.book.id,websiteId:null};
-  let site=await editor.execute('open',website);
-  site=await editor.execute('change',{...website,websitePin:site.websitePin,draftId:site.draft?.id??null,expectedRevision:site.draft?.revision??null,commandId:randomUUID(),operations:[
-   {type:'settings',path:['projects'],value:outline.metadata.projects.map(({id,logoId})=>({id,share:id===project.id,logoId}))},
-   {type:'settings',path:['selection'],value:{defaultShare:false,includeProjects:[],records:[{id:base.id,share:true,attachments:[]}]}}
-  ]});
-  site=await editor.execute('save',{...website,draftId:site.draft.id,expectedRevision:site.draft.revision,commandId:randomUUID()});
-  const edition=await new PublicationJobs(f.workspace).inline({etag:site.websitePin.researchSnapshotId,websitePin:site.websitePin,blockedValues:[f.workspace.root]});
-  const editionFiles=new Map();
-  for await(const [name,content] of edition.files){
+  // Consent belongs to the authored record. The website editor places that one
+  // shared record on a page; originals and every other record remain private.
+  const outline=await f.workspace.outline(),notebook=outline.metadata.notebooks.find(item=>item.id===base.notebookId);
+  const sourceId=websiteSourceId({workspaceId:f.book.id,projectId:notebook.projectId,notebookId:notebook.id,recordId:base.id});
+  const created=await files.create({name:'Capacity results'}),placed=await files.insertSource(created.site.id,{expectedRevision:created.site.revision,sourceId});
+  const siteId=created.site.id,exported=await files.export(siteId,{expectedRevision:placed.site.revision}),editionFiles=new Map();
+  for(const [name,content] of exported.files){
    const bytes=await contentBuffer(content);editionFiles.set(name,bytes);
-   if(/\.(html|json|csv|svg|css)$/.test(name)){
+   if(/\.(html|json|csv|svg|css|xml|txt)$/.test(name)){
     const text=bytes.toString('utf8');for(const secret of ['Returned observation detail.','Amended method','18446744073709551615','returned-00000.raw',f.workspace.root])assert.ok(!text.includes(secret),'Private material in '+name);
    }
   }
-  assert.ok(editionFiles.get('entries/'+base.id+'.html').includes(Buffer.from(continued.body)));
-  assert.equal([...editionFiles.keys()].filter(name=>/^entries\/[^/]+\.html$/.test(name)).length,1);
+  assert.ok(editionFiles.get(placed.path).includes(Buffer.from(continued.body)));
   const recovery={};let at=performance.now();
   // Larger physical evidence has a separate, declared ten-minute copy budget;
   // record-only backup qualification retains its tighter three-minute budget.
@@ -137,8 +131,9 @@ async function workload(copies,t){
    assert.equal((await m.read(evidence.retained.preparation)).content.inputsIndex.count,246*copies);
    assert.equal((await m.read(evidence.retained.returned)).content.inputsIndex.count,27*copies);
    assert.deepEqual(await reconcileResearch(ws,expected),reconciled);
-   const retainedEdition=await new PublicationJobs(ws).read(edition.reviewId);assert.deepEqual(new Set(await Array.fromAsync(retainedEdition.files.keys())),new Set(editionFiles.keys()));
-   for(const [name,bytes] of editionFiles)assert.deepEqual(await contentBuffer(await retainedEdition.files.get(name)),bytes);
+   // The website's own files travel with the copy and export unchanged.
+   const copiedSite=await new WebsiteFileStore(ws).export(siteId);assert.deepEqual(new Set(copiedSite.files.keys()),new Set(editionFiles.keys()));
+   for(const [name,bytes] of editionFiles)assert.deepEqual(await contentBuffer(copiedSite.files.get(name)),bytes);
    process.stdout.write('A10 '+copies+'x '+name+' copy reconciled\n');
    // Continue through the public writer, then open fresh readers for the saved
    // revision, its searchable title and the unchanged historical snapshot.
