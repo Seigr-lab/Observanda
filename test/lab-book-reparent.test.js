@@ -66,7 +66,8 @@ test('moving a book between project folders preserves identities and recovers ev
   assert.equal((await command.run(source,target,storage.vault,{id})).complete,true);await new ProjectBookOwners(source).ready();await new ProjectBookOwners(target).ready();
   t.diagnostic('Recovered '+stage+' without copying record or evidence files');[source,target]=[target,source];
  }
- const latest=await storage.read();await storage.restore(original.etag,latest.etag);const restored=await storage.read();assert.equal(restored.book.projects[0].id,source.projectId);assert.equal(restored.book.notebooks[0].projectId,source.projectId);assert.equal(restored.book.notebooks[0].title,first.entry.directory);assert.equal(restored.book.entries[0].body,oldRecord.body);
+ // A cancelled move leaves the record exactly as last saved.
+ const kept=(await storage.read()).book.entries[0].body;
  for(const stage of ['cancel-unfrozen','cancelled','cancel-target-released']){
   const id=randomUUID();
   // Resume a cancellation receipt written by the earlier same-volume mover.
@@ -74,7 +75,7 @@ test('moving a book between project folders preserves identities and recovers ev
   await assert.rejects(command.run(source,target,storage.vault,{id,checkpoint:point=>{if(point===stage)throw Error('Interrupted '+stage);}}),stage==='cancelling'?{code:'STORAGE_RENAME_VOLUME'}:new RegExp('Interrupted '+stage));
   await assert.rejects(command.run(source,target,storage.vault,{id}),{code:'STORAGE_RENAME_VOLUME'});
   assert.equal((await command.read()).phase,'cancelled');await new ProjectBookOwners(source).ready();await new ProjectBookOwners(target).ready();
-  assert.equal((await new LabBookRegistry(source).locate(storage.labBookId)).root,storage.root);assert.equal((await storage.read()).book.entries[0].body,oldRecord.body);
+  assert.equal((await new LabBookRegistry(source).locate(storage.labBookId)).root,storage.root);assert.equal((await storage.read()).book.entries[0].body,kept);
   t.diagnostic('Recovered cancellation at '+stage);
  }
 });

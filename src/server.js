@@ -550,7 +550,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         await body(req);if(context!==selectedContext||req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
         activities.clear(context.id);return json({ok:true});
       }
-      if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/history','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
+      if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
       if(url.pathname.startsWith('/api/website-files/')){
        if(!workspace||changing||loginBusy||!selectedContext.readers.accepting)throw new AppError('LOCKED');
        releaseRead=selectedContext.readers.enter();if(!releaseRead)throw new AppError('LOCKED');
@@ -1408,11 +1408,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const asset = await media.get(mediaRequest[1],{streamed:true});
         if(asset.kind==='file')res.setHeader('Content-Disposition',"attachment; filename*=UTF-8''"+encodeURIComponent(asset.name));
         return await serveContent(req, res, asset.bytes, asset.mime);
-      }
-      if (req.method === 'GET' && url.pathname === '/api/history') return json({ revisions: await workspace.history() });
-      if (req.method === 'POST' && url.pathname === '/api/history/restore') {
-        const data = await body(req);
-        return json(responseBook(await workspace.restore(data.id, data.etag)));
       }
       throw new AppError('NOT_FOUND');
       },{check:()=>req.checkWriter()});

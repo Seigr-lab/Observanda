@@ -1,4 +1,4 @@
-import {requireStorageName,storageFolderName} from './storage-names.js';
+import {requireStorageName} from './storage-names.js';
 import {withProjectRetentionLease} from './project-retention-lease.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {Workspace} from './storage.js';
@@ -22,7 +22,6 @@ class ProjectResearchCatalogue extends ResearchCatalogue{
 }
 export class ProjectStorage extends Workspace{
  constructor(root,projectId,vault){super(root,vault);assertCatalogueOwner(null,projectId);if(projectId===undefined)throw new AppError('INVALID');this.projectId=projectId;}
- prepareRestoredBook(previous,current){super.prepareRestoredBook(previous,current);previous.title=storageFolderName(this.root);previous.projects[0].title=previous.title;return previous;}
  catalogueStore(db,options){return new ProjectResearchCatalogue(this,db,options);}
  openCatalogue(options={}){
   if(options.projectId!==undefined&&options.projectId!==this.projectId)throw new AppError('DATABASE_LOCATION');

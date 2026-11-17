@@ -29,7 +29,7 @@ async function setup(t,{protected:secure=false,create=true,currentAccess=false}=
 test('protected launch links require sign-in for every private route and download',async t=>{
   const app=await setup(t,{protected:true}),client=await app.client();
   assert.equal((await client.request('/api/access/status')).status,200);
-  for(const route of ['/api/dashboard','/api/notebook','/api/storage','/api/workspaces','/api/history','/api/laboratory','/api/publishing','/api/media/00000000-0000-4000-8000-000000000001','/api/fonts','/api/fonts/custom-'+ '0'.repeat(64),'/preview/'+ '0'.repeat(64)+'/index.html'])assert.equal((await client.request(route)).status,401,route);
+  for(const route of ['/api/dashboard','/api/notebook','/api/storage','/api/workspaces','/api/laboratory','/api/publishing','/api/media/00000000-0000-4000-8000-000000000001','/api/fonts','/api/fonts/custom-'+ '0'.repeat(64),'/preview/'+ '0'.repeat(64)+'/index.html'])assert.equal((await client.request(route)).status,401,route);
   for(const route of ['/api/fonts/import','/api/fonts/update','/api/research/records/query','/api/research/records/open','/api/workspace/read/start','/api/workspace/read/page'])assert.equal((await client.request(route,{})).status,401,route);
   for(const operation of ['start','part','finish','readPart','readBase'])assert.equal((await client.request('/api/research/drafts/transfer/'+operation,{})).status,401,operation);
   assert.equal((await client.request('/api/storage/browse',{path:app.parent})).status,401);

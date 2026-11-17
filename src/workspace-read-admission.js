@@ -7,7 +7,7 @@ import {recordStarterRequest} from './record-starter-requests.js';
 // Only routes owned by snapshot readers may continue during a storage copy or
 // database preparation. Admission closes and drains before replacing their
 // catalogue, clearing its key, or retiring its folder.
-const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/history','/api/media-policy','/api/fonts']);
+const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/media-policy','/api/fonts']);
 const post=new Set([
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),

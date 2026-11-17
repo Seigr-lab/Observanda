@@ -66,18 +66,14 @@ test('external edits and unknown formats are preserved without rewriting', async
   assert.equal(await readFile(path.join(root, 'observanda.json'), 'utf8'), bytes);
 });
 
-test('old revisions can be restored as a new save; tampering is rejected', async () => {
+test('old revisions stay readable after a save; tampering is rejected', async () => {
   const root = await temp(), ws = new Workspace(root), initial = await ws.create(sampleNotebook());
   const next = structuredClone(initial.book); next.title = 'Another title';
-  const saved = await ws.save(next, initial.etag), history = await ws.history();
+  await ws.save(next, initial.etag);const history = await ws.history();
   assert.equal(history.length, 1);
-  const restored = await ws.restore(history[0].id, saved.etag);
-  assert.equal(restored.book.title, path.basename(root));
   assert.equal((await ws.readRevision(history[0].id)).title, initial.book.title);
-  assert.equal(restored.book.revision, 2);
-  assert.equal((await ws.history()).length, 2);
   await writeFile(path.join(root, '.observanda', 'revisions', `${history[0].id}.json`), serialize(next));
-  await assert.rejects(ws.restore(history[0].id, restored.etag), code('FORMAT'));
+  await assert.rejects(ws.readRevision(history[0].id), code('FORMAT'));
 });
 
 test('a held writer lock and symlinked internal directory fail closed', async () => {

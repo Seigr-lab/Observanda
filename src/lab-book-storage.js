@@ -1,7 +1,7 @@
 import {Workspace} from './storage.js';
 import {ResearchCatalogue} from './research-catalogue.js';
 import {assertLabBookCatalogueOwner} from './lab-book-catalogue-owner.js';
-import {requireStorageName,storageFolderName} from './storage-names.js';
+import {requireStorageName} from './storage-names.js';
 import {AppError} from './errors.js';
 
 function assertMetadata(metadata,labBookId,code='INVALID'){
@@ -19,7 +19,6 @@ class LabBookResearchCatalogue extends ResearchCatalogue{
 }
 export class LabBookStorage extends Workspace{
  constructor(root,labBookId,vault){super(root,vault);assertLabBookCatalogueOwner(null,labBookId);this.labBookId=labBookId;}
- prepareRestoredBook(previous,current){super.prepareRestoredBook(previous,current);previous.title=storageFolderName(this.root);previous.notebooks[0].title=previous.title;previous.projects=structuredClone(current.projects);previous.notebooks[0].projectId=current.notebooks[0].projectId;return previous;}
  catalogueStore(db,options){return new LabBookResearchCatalogue(this,db,options);}
  openCatalogue(options={}){
   if(options.projectId!==undefined||options.labBookId!==undefined&&options.labBookId!==this.labBookId)throw new AppError('DATABASE_LOCATION');

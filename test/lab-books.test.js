@@ -60,7 +60,7 @@ test('deleting records removes publication targets, reparents menus and retains 
  assert.deepEqual(next.website.layouts,book.website.layouts.filter(l=>l.target===target));
 });
 
-test('HTTP deletion is atomic, refuses changes since review, and retains a restorable prior version',async t=>{
+test('HTTP deletion is atomic, refuses changes since review, and retains the prior version',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-delete-book-')),ws=new Workspace(path.join(dir,'workspace'));
  const {book,source,destination}=fixture();await ws.create(book);
  const app=await startServer({root:ws.root,port:0,preferencesFile:path.join(dir,'preferences.json')});t.after(()=>app.close());
@@ -77,8 +77,5 @@ test('HTTP deletion is atomic, refuses changes since review, and retains a resto
  const response=await send(changed.etag,command(source.id,'delete'));assert.equal(response.status,200);
  const deleted=await response.json();assert.equal(deleted.book.notebooks.length,1);assert.equal(deleted.book.entries.length,1);
  assert.ok((await ws.history()).some(v=>v.id===changed.etag));
- const restored=await ws.restore(changed.etag,deleted.etag);
- assert.deepEqual(restored.book.notebooks,changed.book.notebooks);
- const contents=entries=>entries.map(({createdAt,updatedAt,...record})=>record);
- assert.deepEqual(contents(restored.book.entries),contents(changed.book.entries));
+ assert.deepEqual((await ws.readRevision(changed.etag)).notebooks,changed.book.notebooks);
 });

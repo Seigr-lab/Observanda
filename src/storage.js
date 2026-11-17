@@ -3,10 +3,8 @@ import {withQueryCacheHandoff} from './query-cache-lifecycle.js';
 import {assertStagingHandoff,withStagingHandoff} from './staging-reservations.js';
 import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
-import {websiteMetadataShell} from './website-owned-metadata.js';
 import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
 import {inspectRecordedCatalogue,assertCatalogueWritable} from './catalogue-inspection.js';
-import {workspaceFolderName} from './workspace-names.js';
 import {assertNotRenaming} from './workspace-rename-state.js';
 import {digest,serialize} from './storage-format.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -478,18 +476,5 @@ export class Workspace {
     const content = await this.readFile(file, 'utf8');
     if (digest(content) !== revisionId) throw new AppError('FORMAT');
     return validateNotebook(JSON.parse(content));
-  }
-  async restore(revisionId, expectedEtag) {
-    const previous = await this.readRevision(revisionId);
-    const current = await this.read();
-    const separateWebsites=await this.storageKind()==='catalogue'&&await this.catalogue(async store=>(await store.snapshot(current.etag)).websiteDocuments===1);
-    // Restoring research never replaces independently saved website originals.
-    const research=separateWebsites?websiteMetadataShell(previous):previous;
-    return this.save(this.prepareRestoredBook(research,current.book), expectedEtag);
-  }
-  prepareRestoredBook(previous,current){
-    previous.revision=current.revision;
-    if(this.projectId===undefined&&this.labBookId===undefined)previous.title=workspaceFolderName(this.root);
-    return previous;
   }
 }
