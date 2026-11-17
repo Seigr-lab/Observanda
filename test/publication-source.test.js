@@ -16,12 +16,9 @@ import {openPublicationInput} from '../src/publication-input-reader.js';
 import {WebsiteSites} from '../src/website-sites.js';
 import {publicationSource} from '../src/publication-source.js';
 import {publicProjection} from '../src/publication.js';
-import {publicationSelection} from '../src/publication-selection.js';
-import {publicationReferences} from '../src/publication-revisions.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {clearVault} from '../src/encryption.js';
-import {Workspace} from '../src/storage.js';
 
 async function fixture(t,count=42,{publicPrefix=0}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-saved-publication-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -61,49 +58,11 @@ test('unsaved presentation and selection commands drive preview and retained rel
  await assert.rejects(publicationSource(f.workspace,{...request,draft:{...command,selection:{includeProjects:[],records:[{id:included.id,share:true,attachments:[{id:randomUUID(),share:true}]}]}}}),{code:'INVALID'});
 });
 
-test('publication choice pages and one-record reference inspection do not scan the unused corpus',async t=>{
- const decode=ResearchCatalogue.prototype.decode,record=ResearchCatalogue.prototype.record;let queries=0,bodies=0,measuring=false;
- ResearchCatalogue.prototype.decode=function(table,id,...rest){if(measuring&&table==='state'&&id.startsWith('record-query:'))queries++;return decode.call(this,table,id,...rest);};
- ResearchCatalogue.prototype.record=function(...args){if(measuring)bodies++;return record.apply(this,args);};
- t.after(()=>{ResearchCatalogue.prototype.decode=decode;ResearchCatalogue.prototype.record=record;});
- for(const count of [65,650]){
-  const f=await fixture(t,count,{publicPrefix:45}),source={workspaceId:f.book.id,...await f.releases.workspace.outline()};
-  queries=0;bodies=0;measuring=true;
-  const first=await publicationSelection(f.workspace,{source});measuring=false;
-  assert.deepEqual(first.items.map(item=>item.id),f.book.entries.slice(0,20).map(r=>r.id));assert.equal(first.next,20);assert.equal(bodies,0);assert.equal(queries,21);
-  queries=0;bodies=0;measuring=true;
-  const refs=await publicationReferences(f.workspace,{source,recordId:f.book.entries.at(-1).id});measuring=false;
-  assert.deepEqual(refs,{items:[],offset:0,next:null});assert.equal(queries,1);assert.equal(bodies,1);
-  queries=0;bodies=0;measuring=true;
-  const second=await publicationSelection(new Workspace(f.workspace.root,f.vault),{source,offset:first.next,cursor:first.nextCursor});measuring=false;
-  assert.deepEqual(second.items.map(item=>item.id),f.book.entries.slice(20,40).map(r=>r.id));assert.equal(second.next,40);assert.equal(bodies,0);assert.equal(queries,21);
-  const final=await publicationSelection(f.workspace,{source,offset:second.next,cursor:second.nextCursor});
-  assert.deepEqual(final.items.map(item=>item.id),[...f.book.entries.slice(40,45),f.book.entries.at(-1)].map(r=>r.id));assert.equal(final.next,null);assert.equal(final.nextCursor,null);
-  assert.deepEqual((await publicationSelection(f.workspace,{source,offset:first.next,cursor:first.nextCursor})).items,second.items,'Returning to a visited page keeps its identities');
-  t.diagnostic(JSON.stringify({count,choiceQueries:21,choiceBodies:0,referenceQueries:1,referenceBodies:1}));
- }
-});
-
-test('edition continuation rejects tampering, changed draft selection, wrong offsets and source revisions',async t=>{
- const f=await fixture(t,65,{publicPrefix:45}),source={workspaceId:f.book.id,...await f.releases.workspace.outline()},first=await publicationSelection(f.workspace,{source});
- assert.ok(first.nextCursor);const cursor=first.nextCursor,bytes=Buffer.from(cursor,'base64url');bytes[bytes.length-1]^=1;
- await assert.rejects(publicationSelection(f.workspace,{source,offset:20,cursor:bytes.toString('base64url')}),{code:'PUBLICATION_SELECTION_CURSOR'});
- await assert.rejects(publicationSelection(f.workspace,{source,offset:40,cursor}),{code:'PUBLICATION_SELECTION_CURSOR'});
- const draft={workspaceId:f.book.id,baseEtag:source.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:f.book.entries[25].id,share:false,attachments:[]}]}};
- await assert.rejects(publicationSelection(f.workspace,{source:{...source,draft},offset:20,cursor}),{code:'PUBLICATION_SELECTION_CURSOR'});
- const controller=new AbortController();controller.abort();await assert.rejects(publicationSelection(f.workspace,{source,offset:20,cursor},{signal:controller.signal}),{name:'AbortError'});
- const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Changed during review'}}]},{compact:true});
- await assert.rejects(publicationSelection(f.workspace,{source,offset:20,cursor}),{code:'CONFLICT'});
- await assert.rejects(publicationSelection(f.workspace,{source:{...source,...await f.releases.workspace.outline()},offset:20,cursor}),{code:'PUBLICATION_SELECTION_CURSOR'});
-});
-
-test('paged publication still validates late selection overrides and never loads excluded originals',async t=>{
+test('a draft selection still validates unknown records and attachments before loading excluded originals',async t=>{
  const f=await fixture(t,65,{publicPrefix:45}),source={workspaceId:f.book.id,...await f.releases.workspace.outline()},last=f.book.entries.at(-1),command={workspaceId:f.book.id,baseEtag:source.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:last.id,share:false,attachments:[]}]}};
  const guard=forbidPrivateReads(t,f.book.entries.slice(0,21).map(r=>r.id));
- const request={...source,draft:command},first=await publicationSelection(f.workspace,{source:request});assert.equal(first.items.length,20);assert.equal(guard.loaded.length,0);guard.loaded.length=0;
- await assert.rejects(publicationReferences(f.workspace,{source:request,recordId:last.id}),{code:'RECORD_CHANGED'});assert.equal(guard.loaded.length,0);
  for(const override of [{id:randomUUID(),share:true,attachments:[]},{id:last.id,share:true,attachments:[{id:randomUUID(),share:true}]}]){
-  await assert.rejects(publicationSelection(f.workspace,{source:{...source,draft:{...command,selection:{includeProjects:[],records:[override]}}}}),{code:'INVALID'});
+  await assert.rejects(publicationSource(f.workspace,{...source,draft:{...command,selection:{includeProjects:[],records:[override]}}}),{code:'INVALID'});
   assert.equal(guard.loaded.length,0);
  }
 });

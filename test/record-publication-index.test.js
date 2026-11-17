@@ -8,17 +8,13 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {RecordPublicationIndex} from '../src/record-publication-index.js';
-import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
+import {catalogueDescriptor} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {verifyDerivedRecordChange} from '../src/record-index-verification.js';
-import {publicationSelection} from '../src/publication-selection.js';
 import {publicationSource} from '../src/publication-source.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {SnapshotIndex} from '../src/snapshot-index.js';
-import {compareRecordDates} from '../src/web/record-date.js';
-import {publicationRecords} from '../src/publication-records.js';
 import {publicationWorkspace} from '../src/publication-pin.js';
 
 async function fixture(t,count=80,configure=()=>{}){
@@ -36,34 +32,13 @@ async function fixture(t,count=80,configure=()=>{}){
 async function head(f){const websitePin=(await publicationWorkspace(f.workspace).currentOutline()).websitePin;return {workspaceId:f.book.id,etag:websitePin.researchSnapshotId,websitePin};}
 const at=(f,etag)=>({...f.source,etag,websitePin:{...f.source.websitePin,researchSnapshotId:etag}});
 function source(f,selection,projects=[]){return {etag:f.source.etag,websitePin:f.source.websitePin,draft:{workspaceId:f.book.id,baseEtag:f.source.etag,metadata:{},projects,changes:[],removed:[],selection}};}
-async function choices(workspace,source){
- const items=[];let offset=0,cursor=null;
- do{const page=await publicationSelection(workspace,{source,offset,cursor});items.push(...page.items);offset=page.next;cursor=page.nextCursor;}while(offset!==null);
- return items;
-}
+async function choices(workspace,source){return publicationSource(workspace,source,{consume:async(metadata,records)=>Array.fromAsync(records)});}
 async function indexedRows(f,etag=f.source.etag,options={}){
  return f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(etag),scopes=new Map(snapshot.metadata.notebooks.map(n=>[n.id,'shared']));
   return Array.fromAsync(new RecordPublicationIndex(store).rows(snapshot,scopes,options));
  });
 }
-
-test('sparse public choices seek across private records with a fixed page working set at tenfold growth',async t=>{
- const decode=ResearchCatalogue.prototype.decode,record=ResearchCatalogue.prototype.record;let summaries=0,bodies=0,measuring=false;
- ResearchCatalogue.prototype.decode=function(table,id,...args){if(measuring&&table==='state'&&/^(record-summary|record-query):/.test(id))summaries++;return decode.call(this,table,id,...args);};
- ResearchCatalogue.prototype.record=function(...args){if(measuring)bodies++;return record.apply(this,args);};
- t.after(()=>{ResearchCatalogue.prototype.decode=decode;ResearchCatalogue.prototype.record=record;});
- for(const count of [80,800]){
-  const f=await fixture(t,count),expected=f.book.entries.filter(r=>r.share);let offset=0,cursor=null;
-  for(const size of [20,20,3]){
-   summaries=0;bodies=0;measuring=true;
-   const page=await publicationSelection(f.workspace,{source:f.source,offset,cursor});measuring=false;
-   assert.deepEqual(page.items.map(r=>r.id),expected.slice(offset,offset+size).map(r=>r.id));assert.equal(summaries,size===20?21:3);assert.equal(bodies,0);
-   offset=page.next;cursor=page.nextCursor;
-  }
-  assert.equal(offset,null);t.diagnostic(JSON.stringify({count,publicRecords:43,firstPageSummaries:21,originals:0}));
- }
-});
 
 test('position-only publication indexes remain readable and an atomic write adds date and owner ranges without rewriting earlier snapshots',async t=>{
  const f=await fixture(t),record=f.book.entries.find(r=>r.share);

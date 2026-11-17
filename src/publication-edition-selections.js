@@ -1,13 +1,10 @@
 // Edition choices are immutable indexed values within the website's encrypted
 // metadata owner. Checkpoints publish only small roots, never a corpus-sized list.
-import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
 import {RecordValueTree} from './record-value-tree.js';
-import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {publicationWorkspace} from './publication-pin.js';
-import {publicationSource} from './publication-source.js';
 import {researchId,parseResearchReference} from './web/research-reference.js';
 import {canonicalValue,revisionId} from './web/revision-model.js';
 import {validWebsitePin} from './web/website-pin.js';
@@ -23,7 +20,6 @@ const validKey=(kind,value)=>typeof value==='string'&&(kind==='records'?research
 const headFile=identity=>'.observanda/publication-selections/'+identity+'.json';
 const blockPrefix=id=>'.observanda/publication-selection-blocks/'+id;
 const discardFile=id=>'.observanda/publication-selection-discard/'+id+'.json';
-const receiptFile=(id,commandId)=>'.observanda/publication-selection-receipts/'+id+'/'+commandId+'.json';
 export function editionSelectionSource(source){
  if(!source||!researchId(source.workspaceId)||!revisionId(source.etag)||!validWebsitePin(source.websitePin)||source.websitePin.websiteRevision===null||source.websitePin.researchSnapshotId!==source.etag||source.websiteDraft!==undefined&&!validWebsiteDraftPin(source.websiteDraft)||source.book!==undefined||source.draft!==undefined)invalid();
  return {workspaceId:source.workspaceId,etag:source.etag,websitePin:source.websitePin,...(source.websiteDraft===undefined?{}:{websiteDraft:source.websiteDraft})};
@@ -53,7 +49,6 @@ class SelectionReader{
 function validateHead(head,source){
  if(!exact(head,['version','id','source','workspaceId','websiteId','generation','roots'])||head.version!==1||!researchId(head.id)||head.source!==source||!researchId(head.workspaceId)||head.websiteId!==null&&!researchId(head.websiteId)||!natural(head.generation)||!exact(head.roots,collections)||collections.some(kind=>!validTableRef(head.roots[kind])))damaged();return head;
 }
-const pin=head=>({version:2,id:head.id,source:head.source,revision:hash(head)});
 export class PublicationEditionSelections{
  constructor(workspace){this.workspace=publicationWorkspace(workspace);}
  async readHead(source){const raw=await this.workspace.readMetadata(headFile(source),8192);if(raw===null)return null;try{return validateHead(JSON.parse(raw),source);}catch(error){if(error.code)throw error;damaged();}}
@@ -62,57 +57,6 @@ export class PublicationEditionSelections{
   if(!head||head.id!==selection.id||hash(head)!==selection.revision)throw new AppError('CONFLICT');
   if(head.websiteId!==(this.workspace.websiteId??null)||source&&hash(editionSelectionSource(source))!==head.source)throw new AppError('WORKSPACE_CHANGED');
   return new SelectionReader(this.workspace,head,{signal});
- }
- async operate(operation,data,{signal}={}){
-  if(!data||typeof data!=='object'||Array.isArray(data))invalid();
-  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
-  if(operation==='open')await this.recover({signal});
-  const work=async()=>{
-   signal?.throwIfAborted();
-   if(operation==='open'){
-    const source=editionSelectionSource(data.source);if(source.websitePin.websiteId!==(this.workspace.websiteId??null))throw new AppError('WORKSPACE_CHANGED');
-    await publicationSource(this.workspace,source,{signal,inventory:true,page:{offset:0,limit:1},consume:async metadata=>{if(metadata.id!==source.workspaceId)throw new AppError('WORKSPACE_CHANGED');}});
-    const identity=hash(source),previous=await this.readHead(identity),head=previous??{version:1,id:randomUUID(),source:identity,workspaceId:source.workspaceId,websiteId:this.workspace.websiteId??null,generation:0,roots:{records:null,history:null,availability:null}};
-    if(!previous)await this.workspace.writeMetadata(headFile(identity),serialize(head));return {selection:pin(head),resumed:!!previous,counts:Object.fromEntries(collections.map(kind=>[kind,head.roots[kind]?.count??0]))};
-   }
-   if(operation==='checkpoint'){
-    if(!researchId(data.commandId)||!validRetainedEditionSelection(data.selection)||!Array.isArray(data.changes)||data.changes.length<1||data.changes.length>32||Buffer.byteLength(JSON.stringify(data.changes))>1024*1024)invalid();
-    const request=hash(data),receipt=await this.workspace.readMetadata(receiptFile(data.selection.id,data.commandId),2048);
-    if(receipt!==null){const saved=JSON.parse(receipt);if(saved.request!==request)throw new AppError('CONFLICT');const current=await this.readHead(data.selection.source);if(!current||current.id!==data.selection.id)throw new AppError('CONFLICT');return saved.result;}
-    const reader=await this.bound(data.selection,{signal}),head=structuredClone(reader.head),seen=new Set();
-    for(const change of data.changes){
-     const {collection,id,value}=change;if(!exact(change,['collection','id','value'])||!collections.includes(collection)||!validKey(collection,id)||value!==null&&(!validValue(collection,value)||key(collection,value)!==id)||seen.has(collection+':'+id))invalid();seen.add(collection+':'+id);
-     head.roots[collection]=value===null?await reader.index.remove(head.roots[collection],id):await reader.index.change(head.roots[collection],id,await reader.tree.retain(value));
-    }
-    await reader.index.flushRoots(Object.values(head.roots),{signal});head.generation++;signal?.throwIfAborted();
-    const result={selection:pin(head),counts:Object.fromEntries(collections.map(kind=>[kind,head.roots[kind]?.count??0]))};
-    await this.workspace.writeMetadata(headFile(head.source),serialize(head));await this.workspace.writeMetadata(receiptFile(head.id,data.commandId),serialize({request,result}));return result;
-   }
-   if(operation==='discard'&&validRetainedEditionSelection(data.selection)&&!await this.readHead(data.selection.source))return {discarded:true,cleanup:data.selection.id};
-   const reader=await this.bound(data.selection,{signal});
-   if(operation==='read'){
-    if(!Array.isArray(data.keys)||data.keys.length>64)invalid();const items=[];for(const item of data.keys){if(!exact(item,['collection','id'])||!collections.includes(item.collection)||!validKey(item.collection,item.id))invalid();items.push({...item,value:await reader.get(item.collection,item.id)});}return {selection:pin(reader.head),items};
-   }
-   if(operation==='window')return {selection:pin(reader.head),...await reader.window(data.collection,data.offset??0,data.limit??20)};
-   if(operation==='discard'){await this.workspace.writeMetadata(discardFile(reader.head.id),serialize({version:1,id:reader.head.id,source:reader.head.source}));await this.workspace.removeMetadata(headFile(reader.head.source));return {discarded:true,cleanup:reader.head.id};}
-   invalid();
-  };
-  const result=await (['open','checkpoint','discard'].includes(operation)?this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,work)):this.workspace.catalogue(work));
-  if(result.cleanup){await this.cleanup(result.cleanup,{signal});return {discarded:true};}return result;
- }
- async cleanup(id,{signal}={}){
-  if(!researchId(id))invalid();
-  for(;;){signal?.throwIfAborted();const done=await this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
-   const raw=await this.workspace.readMetadata(discardFile(id),1024);if(raw===null)return true;let journal;try{journal=JSON.parse(raw);}catch{damaged();}
-   if(!exact(journal,['version','id','source'])||journal.version!==1||journal.id!==id||!revisionId(journal.source)||(await this.readHead(journal.source))?.id===id)damaged();
-   let removed=0;for(const [prefix,valid] of [[blockPrefix(id),name=>/^(value|index)-[a-f0-9]{64}\.json$/.test(name)],['.observanda/publication-selection-receipts/'+id,name=>name.endsWith('.json')&&researchId(name.slice(0,-5))]]){
-    const page=await this.workspace.metadataPage(prefix,{limit:64});for(const row of page.items){signal?.throwIfAborted();if(!valid(row.name))damaged();await this.workspace.removeMetadata(prefix+'/'+row.name);removed++;}
-   }
-   if(!removed)await this.workspace.removeMetadata(discardFile(id));return !removed;
-  }));if(done)return;}
- }
- async recover({signal}={}){
-  for(;;){const page=await this.workspace.metadataPage('.observanda/publication-selection-discard',{limit:32});if(!page.items.length)return;for(const row of page.items){if(!row.name.endsWith('.json')||!researchId(row.name.slice(0,-5)))damaged();await this.cleanup(row.name.slice(0,-5),{signal});}}
  }
  async verify(){
   for await(const name of this.workspace.metadataNames('.observanda/publication-selection-discard')){

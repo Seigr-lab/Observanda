@@ -8,7 +8,6 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {RecordWriting} from '../src/record-writing.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
-import {publicationSelection} from '../src/publication-selection.js';
 import {defaultEditionRecord,selectEditionRecord} from '../src/web/publication-selection.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 import {recordRevision} from '../src/research.js';
@@ -47,14 +46,12 @@ test('website and edition choices cannot authorize source-private records or wri
  assert.equal(selectEditionRecord(secret,{...defaultEditionRecord(secret,recordRevision(secret)),include:true}).share,false);
 });
 
-test('section permission saves with its source revision and bounds inventory, preview, export and portable reopening',async t=>{
+test('section permission saves with its source revision and bounds preview, export and portable reopening',async t=>{
  const f=await fixture(t),writing=new RecordWriting(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,sectionId:f.record.sections[1].id};
  const before=await writing.read(target);
  await writing.save({...target,expectedRevision:before.revision,value:{...before.value,share:false}});
  assert.deepEqual((await writing.read(target)).value,{...before.value,share:false});
  const saved=await f.workspace.read(),record=saved.book.entries.find(r=>r.id===f.record.id),jobs=new PublicationJobs(f.workspace),source={...await jobs.workspace.outline(),workspaceId:f.book.id};
- const item=(await publicationSelection(f.workspace,{source})).items.find(r=>r.id===record.id);
- assert.ok(!item.sections.some(s=>s.id===target.sectionId));
  const candidate=await jobs.inline(source),output=await publicationText(candidate);
  assert.ok(!output.includes('WITHHELD_SECTION_TITLE'));
  assert.ok(!output.includes(target.sectionId));assert.ok(output.includes('Public steps for the method.'));
@@ -70,8 +67,6 @@ test('a private lab book excludes its records even when a website selects its pr
  const f=await fixture(t),saved=await f.workspace.read(),notebook=saved.book.notebooks.find(n=>n.id===f.record.notebookId);
  notebook.share=false;await f.workspace.save(saved.book,saved.etag);
  const jobs=new PublicationJobs(f.workspace),source={...await jobs.workspace.outline(),workspaceId:f.book.id};
- const inventory=await publicationSelection(f.workspace,{source});
- assert.ok(!inventory.items.some(r=>r.id===f.record.id));
  const candidate=await jobs.inline(source),output=await publicationText(candidate);
  assert.ok(!output.includes(f.record.title));assert.ok(!output.includes(f.record.id));
 });

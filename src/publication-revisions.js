@@ -1,21 +1,14 @@
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
 import {workspaceReferenceNamespaceMatches} from './research-reference-namespace.js';
-import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {recordRevision} from './research.js';
 import {ResearchMaterials} from './research-materials.js';
-import {publicationSource,publicationOriginal,publicationDerivative} from './publication-source.js';
+import {publicationDerivative} from './publication-source.js';
 import {sourceRecordAllowed} from './web/source-publication-permissions.js';
-import {proseText} from './web/prose-model.js';
-import {researchId,researchReference} from './web/research-reference.js';
-import {editionRevisionKey,selectEditionRecord,validEditionRecord} from './web/publication-selection.js';
+import {editionRevisionKey,selectEditionRecord} from './web/publication-selection.js';
 import {validateEditionRecord} from './publication-selection.js';
-import {recordEditionInventory} from './web/publication-inventory.js';
-import {customFieldLabel} from './web/custom-field-presentation.js';
-// Template field labels may be shipped profile text; register its catalogue here.
-import './web/i18n/catalogues/labBookProfiles.js';
 import {editionReferences,omittedEditionReferences} from './web/publication-record-references.js';
 export {editionReferences} from './web/publication-record-references.js';
 // A publication page has its own stable identity. The encrypted original keeps
@@ -49,27 +42,6 @@ export async function exactPublicationRecord(workspace,target){
  if(!current.record||!sourceRecordAllowed(current.record,current.metadata)||!sourceRecordAllowed(record,current.metadata))throw new AppError('MATERIAL_MISSING');
  const sections=new Map(current.record.sections.map(section=>[section.id,section])),attachments=new Map(current.record.attachments.map(item=>[item.id,item]));
  return publicationDerivative({...record,sections:record.sections.map(section=>sections.get(section.id)?.share===false?{...section,share:false}:section),attachments:record.attachments.map(item=>attachments.get(item.id)?.share===false?{...item,share:false}:item)},record);
-}
-export function editionRecordInventory(record,metadata){
- return {...recordEditionInventory(record,recordRevision(publicationOriginal(record))),notebook:metadata.notebooks.find(n=>n.id===record.notebookId)?.title??''};
-}
-// Fetch only the selected referring record and one bounded page of its exact
-// references. Authenticated preview prose never enters a public descriptor.
-export async function publicationReferences(workspace,{source,recordId,revision,choice,offset=0},{signal}={}){
- if(!source||!researchId(recordId)||revision!==undefined&&!revisionId(revision)||choice&&revision&&choice.revision!==revision||choice!==undefined&&!validEditionRecord(choice)||choice&&choice.id!==recordId||!Number.isSafeInteger(offset)||offset<0||offset>10000)throw new AppError('INVALID');
- return publicationSource(workspace,source,{signal,page:{recordId,offset:0,limit:1},consume:async(metadata,records)=>{
-  const selected=revision?[await exactPublicationRecord(workspace,{workspaceId:metadata.id,kind:'record',id:recordId,revision})]:await Array.fromAsync(records);if(selected.length!==1)throw new AppError('RECORD_CHANGED');
-  validateEditionRecord(selected[0],choice);
-  const refs=editionReferences(selectEditionRecord(selected[0],choice)),items=[];
-  for(const target of refs.slice(offset,offset+20)){
-   signal?.throwIfAborted();let record=null;
-   if(target.kind==='record'&&target.revision&&await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target)){try{record=await exactPublicationRecord(workspace,target);}catch(error){if(!['MATERIAL_MISSING'].includes(error.code))throw error;}}
-   const item={target,available:!!record};
-   if(record){const permitted=selectEditionRecord(record);item.record={...editionRecordInventory(record,metadata),pageId:revisionPageId(metadata.id,record.id,target.revision)};item.preview={body:proseText(permitted.body),sections:permitted.sections.map(s=>({title:s.title,body:proseText(s.body)})),fields:(record.template?.fields??[]).map(f=>({title:customFieldLabel(f),value:String(record.template.values[f.key]??'')}))};}
-   items.push(item);
-  }
-  return {items,offset,next:refs.length>offset+20?offset+20:null};
- }});
 }
 export async function retainSelectedRevisions(workspace,metadata,edition,records,pin,{signal}={}){
  const pending=new Map((edition.history??[]).filter(c=>c.include).map(c=>[editionRevisionKey(c),c]));

@@ -2,8 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {recordRevision} from '../src/research.js';
-import {ResearchCatalogue} from '../src/research-catalogue.js';
-import {publicationReferences,revisionPageId} from '../src/publication-revisions.js';
+import {revisionPageId} from '../src/publication-revisions.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {contentBuffer} from '../src/file-content.js';
 import {publicationText} from './publication-fixture.js';
@@ -34,18 +33,6 @@ test('excluded references expose only the approved statement and reject unrelate
  await assert.rejects(f.releases.inline({...f.source,edition:{...edition,availability:[{...edition.availability[0],target:{...f.target,id:randomUUID()}}]}}),{code:'INVALID'});
  await assert.rejects(f.releases.inline({...f.source,edition:{version:1,records:[],history:[defaultEditionRecord({...f.old,id:randomUUID()},f.target.revision)]}}),{code:'INVALID'});
 });
-test('authenticated revision review is bounded, returns exact text and rejects stale selection',async t=>{
- const f=await historicalFixture(t),loaded=[],read=ResearchCatalogue.prototype.read,record=ResearchCatalogue.prototype.record;
- ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace read');};ResearchCatalogue.prototype.record=function(id,...args){loaded.push(id);return record.call(this,id,...args);};
- try{
-  const result=await publicationReferences(f.workspace,{source:f.source,recordId:f.run.id});assert.equal(result.items.length,1);assert.equal(result.items[0].preview.body,'Exact older procedure');assert.equal(result.items[0].record.choice.revision,f.target.revision);
-  // The current target supplies present-day publication consent for its retained revision.
-  assert.deepEqual(loaded,[f.run.id,f.method.id]);
- }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;}
- await assert.rejects(publicationReferences(f.workspace,{source:{...f.source,etag:'0'.repeat(64),websitePin:{...f.source.websitePin,researchSnapshotId:'0'.repeat(64)}},recordId:f.run.id}),{code:'CONFLICT'});
- await assert.rejects(publicationReferences(f.workspace,{source:f.source,recordId:f.run.id,choice:{include:true}}),{code:'INVALID'});
-});
-
 test('historical methods and chapter fragments survive interrupted publication, newer authoring and reviewed rollback',async t=>{
  const f=await historicalFixture(t),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request,liveRequest:remote.request},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false});config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');await publisher.connect('synthetic_github_token_1234567890');
