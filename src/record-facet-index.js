@@ -15,7 +15,7 @@ export class RecordFacetIndex extends ObjectIndex{
  async keys(row,_version,_workspaceId,metadata=null){
   metadata??=this.metadata??=(await this.store.snapshot()).metadata;
   const values=await Array.fromAsync(this.store.queryDocuments([row],metadata,{search:false}));if(values.length!==1)fail();
-  const value=values[0];if(value.id!==row.id||row.notebookId!==undefined&&value.notebookId!==row.notebookId)fail();
+  const value=values[0];if(value.id!==row.id||value.notebookId!==row.notebookId)fail();
   const kind=value.type==='run'?'runs':value.type==='experiment'&&!value.template?'experiments':'other',domain=value.template?.profileId??'';
   return [value.notebookId+':count:'+kind+':'+row.id,value.notebookId+':domain:'+encodeURIComponent(domain)+':'+row.id];
  }

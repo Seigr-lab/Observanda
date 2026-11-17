@@ -20,7 +20,7 @@ export async function validateIndexedMetadata(store,current,metadata,{removed=[]
   for(const target of targets){
    const id=target.slice(6);if(!identifier(id)||deleted.has(id))continue;
    const row=added.get(id)??await store.member(current,id);
-   if(row){const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;if(notebooks.has(notebookId))entryTargets.push(target);}
+   if(row&&notebooks.has(row.notebookId))entryTargets.push(target);
   }
   return {reservedIds,entryTargets};
  }

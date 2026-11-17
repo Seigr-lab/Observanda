@@ -58,7 +58,7 @@ async function fieldIdentity({value,tree},field,{signal}={}){
  return 'retained:'+value.notebookId+':'+value.generation+':'+selected.revision;
 }
 function queryNotebook(source,row){
- const notebookId=source.value.notebookId;if(row.notebookId!==undefined&&notebookId!==row.notebookId)fail();return notebookId;
+ const notebookId=source.value.notebookId;if(notebookId!==row.notebookId)fail();return notebookId;
 }
 async function withUniqueTerms(source,consume,{signal}={}){
  const iterator=source[Symbol.asyncIterator](),memory=new Set();let item;

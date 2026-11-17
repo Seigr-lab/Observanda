@@ -37,7 +37,7 @@ export class ProjectSourceAuthority{
   const bytes=rows.get(scopeSlot(id)),prior=bytes?this.store.decode('state',scopeSlot(id),bytes):null;
   if(prior){if(!exact(prior,['version','notebookId','projectId'])||prior.version!==1||prior.notebookId!==id||!researchId(prior.projectId))throw new AppError('CATALOGUE_DAMAGED');if(prior.projectId!==current?.projectId)await this.writable(prior.projectId);}
  }
- async recordRows(metadata,rows){if(this.store.workspace.projectId)return;const seen=new Set();for await(const row of rows){if(!row.notebookId||seen.has(row.notebookId))continue;seen.add(row.notebookId);await this.notebook(row.notebookId,metadata);}}
+ async recordRows(metadata,rows){if(this.store.workspace.projectId)return;const seen=new Set();for await(const row of rows){if(seen.has(row.notebookId))continue;seen.add(row.notebookId);await this.notebook(row.notebookId,metadata);}}
  async fullBookRecords(current,metadata,before,after,rows){
   const prior=new Map(before.map(row=>[row.id,row])),next=new Map(after.map(row=>[row.id,row]));
   const content=row=>{if(!row)return null;const {position,...value}=row;return value;};

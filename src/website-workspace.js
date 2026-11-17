@@ -72,7 +72,7 @@ export function websiteWorkspace(base,id=null,{websitePin=null}={}){
      if(snapshot.indexVersion)return store.validateMetadata.call(scoped,snapshot,metadata,options);
      const rows=[];for await(const row of adapter.members(snapshot))rows.push(row);validateCatalogueMetadata(metadata,{reservedIds:rows.flatMap(r=>[r.id,...r.sections]),entryTargets:rows.map(r=>'entry:'+r.id)});
     },
-    async *queryDocuments(rows,metadata,options){const ids=new Set(metadata.notebooks.map(n=>n.id));async function* selected(){for await(const row of rows)if(!row.notebookId||ids.has(row.notebookId))yield row;}yield* store.queryDocuments(selected(),metadata,options);}
+    async *queryDocuments(rows,metadata,options){const ids=new Set(metadata.notebooks.map(n=>n.id));async function* selected(){for await(const row of rows)if(ids.has(row.notebookId))yield row;}yield* store.queryDocuments(selected(),metadata,options);}
    };
    const scoped=new Proxy(store,{get(target,key){if(key in adapter)return adapter[key];const value=target[key];return typeof value==='function'?value.bind(target):value;}});
    return operation(scoped);

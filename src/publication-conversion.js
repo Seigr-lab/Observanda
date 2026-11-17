@@ -84,7 +84,7 @@ async function visibleParts(document,field,target){
 }
 async function status(metadata,row,document,target,options={}){
  const {tagsOnly=false,trackLive=false,liveOnly=false}=options;
- const record={id:row.id,notebookId:row.notebookId??(await document.field(['notebookId'])).value,[consentKey(target)]:(await document.field([consentKey(target)])).value};
+ const record={id:row.id,notebookId:row.notebookId,[consentKey(target)]:(await document.field([consentKey(target)])).value};
  const provenance=identity(metadata,row.id,record.notebookId,target);if(!provenance)throw new AppError('CATALOGUE_DAMAGED');
  const visible=sourceRecordAllowed(record,metadata,target);let permissions=null,tagsRevision=null,liveSignature=null;
  if(visible&&tagsOnly){
@@ -265,7 +265,7 @@ export class PublicationConversion{
   const book=snapshot.metadata.notebooks.find(book=>book.id===pointer.notebookId);
   if(!book||book.projectId!==pointer.projectId||book.share===false)return 'withdrawn';
   return withRecordDocument(catalogue,row.id,row.revision,async document=>{
-   const record={notebookId:row.notebookId??(await document.field(['notebookId'])).value,share:(await document.field(['share'])).value};
+   const record={notebookId:row.notebookId,share:(await document.field(['share'])).value};
    return record.notebookId!==pointer.notebookId||!sourceRecordAllowed(record,snapshot.metadata)?'withdrawn':null;
   });
  }
@@ -331,7 +331,7 @@ export class PublicationConversion{
       const captured=source.provenance?.recordRevision??source.provenance?.revision;
       if(!row||!captured||websiteSourceId(source.provenance)!==source.id)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
       const current=await withRecordDocument(store,row.id,row.revision,async doc=>{
-       const notebookId=row.notebookId??(await doc.field(['notebookId'])).value;
+       const notebookId=row.notebookId;
        if(notebookId!==provenance.notebookId||(await doc.field(['share'])).value!==true)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
        return row.revision!==captured?status(metadata,row,doc,'website'):null;
       });
@@ -373,7 +373,7 @@ export class PublicationConversion{
       const row=await store.member(snapshot,provenance.recordId),metadata=snapshot.metadata;
       if(!row||metadata.id!==provenance.workspaceId)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
       const record=await withRecordDocument(store,row.id,row.revision,async doc=>{
-       const book=row.notebookId??(await doc.field(['notebookId'])).value;
+       const book=row.notebookId;
        if(book!==provenance.notebookId||!metadata.notebooks.some(item=>item.id===book&&item.projectId===provenance.projectId)||
         !sourceRecordAllowed({id:row.id,notebookId:book,share:(await doc.field(['share'])).value},metadata,'website'))throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
        return permittedOriginal(doc,'website');

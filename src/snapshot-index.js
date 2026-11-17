@@ -16,13 +16,13 @@ const hash=value=>digest(serialize(value));
 const id=value=>typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
-export const validMember=row=>row&&id(row.id)&&revision(row.revision)&&(row.notebookId===undefined||id(row.notebookId))&&
- (row.share===undefined||typeof row.share==='boolean')&&
+export const validMember=row=>row&&id(row.id)&&revision(row.revision)&&id(row.notebookId)&&
+ typeof row.share==='boolean'&&
  (row.occurredOn===undefined||validRecordDate(row.occurredOn))&&
- (row.updatedAt===undefined||typeof row.updatedAt==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(row.updatedAt)&&Number.isFinite(Date.parse(row.updatedAt)))&&
- (row.template===undefined||row.template===null||id(row.template.id)&&typeof row.template.label==='string'&&row.template.label.length<=160)&&
+ (typeof row.updatedAt==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(row.updatedAt)&&Number.isFinite(Date.parse(row.updatedAt)))&&
+ (row.template===null||id(row.template.id)&&typeof row.template.label==='string'&&row.template.label.length<=160)&&
  (row.cardItems===undefined||row.cardItems&&Object.keys(row.cardItems).sort().join()==='attachments,contributors,figures,relations'&&Object.values(row.cardItems).every(values=>Array.isArray(values)&&values.every(id)&&new Set(values).size===values.length))&&
- (row.queryRevision===undefined||revision(row.queryRevision)&&id(row.notebookId))&&
+ (row.queryRevision===undefined||revision(row.queryRevision))&&
  (row.summaryRevision===undefined||revision(row.summaryRevision)&&revision(row.queryRevision))&&
  (row.collections?validMemberCollections(row.collections)&&row.sections===undefined&&row.cardItems===undefined:Array.isArray(row.sections)&&row.sections.every(id))&&
  Array.isArray(row.runOf)&&row.runOf.every(target=>target&&id(target.id))&&Number.isSafeInteger(row.bytes)&&row.bytes>0;
@@ -65,7 +65,7 @@ export class SnapshotIndex extends ObjectIndex{
   }
  }
  async *keys(row){
-  yield 'record:'+row.id;if(row.notebookId)yield 'book:'+row.notebookId+':'+row.id;yield 'identity:'+row.id;
+  yield 'record:'+row.id;yield 'book:'+row.notebookId+':'+row.id;yield 'identity:'+row.id;
   for await(const id of new RecordMemberCollections(this.store).ids(row,'sections'))yield 'identity:'+id;
   for(const target of row.runOf)yield 'run:'+target.id+':'+row.id;
  }

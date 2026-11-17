@@ -80,7 +80,7 @@ export class WebsiteSites{
     for(const notebook of book.notebooks){signal?.throwIfAborted();const count=await index.scopedCount(snapshot.membership,notebook.id);notebookCounts[notebook.id]=count;total+=count;}
     for(const id of selected){signal?.throwIfAborted();const row=await store.member(snapshot,id);if(row&&projects.has(row.notebookId))selectionProjects[id]=projects.get(row.notebookId);}
    }else for await(const row of store.members(snapshot,{signal})){
-    const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;
+    const notebookId=row.notebookId;
     if(!Object.hasOwn(notebookCounts,notebookId))continue;
     notebookCounts[notebookId]++;total++;if(selected.has(row.id))selectionProjects[row.id]=projects.get(notebookId);
    }

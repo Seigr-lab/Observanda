@@ -19,7 +19,7 @@ export async function* recordRunMembers(store,snapshot,recordId,{signal,notebook
   }
  };
  for await(const row of rows()){
-  signal?.throwIfAborted();if(notebookIds&&row.notebookId&&!notebookIds.has(row.notebookId))continue;
+  signal?.throwIfAborted();if(notebookIds&&!notebookIds.has(row.notebookId))continue;
   if(await hasRunParent(store,row,recordId))yield row;
  }
 }

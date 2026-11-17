@@ -21,7 +21,7 @@ async function fixture(t,options){
 const counts=workspace=>workspace.catalogue(async store=>({states:(await store.db.get('SELECT COUNT(*) AS count FROM state')).count,snapshots:(await store.db.get('SELECT COUNT(*) AS count FROM snapshots')).count}));
 
 for(const kind of ['flat','indexed'])test(kind+' older catalogue can preview and save structure beyond whole-book limits without assembling records',async t=>{
- const count=kind==='flat'?80:1002,f=await fixture(t,{kind,count,size:kind==='flat'?40000:20,missingOwners:true}),service=f.service;
+ const count=kind==='flat'?80:1002,f=await fixture(t,{kind,count,size:kind==='flat'?40000:20}),service=f.service;
  const read=ResearchCatalogue.prototype.read;ResearchCatalogue.prototype.read=()=>{throw Error('Complete research document requested');};t.after(()=>{ResearchCatalogue.prototype.read=read;});
  const change={workspaceTitle:'A wider research workspace',workspaceDescription:'Independent work',projectId:f.book.projects[0].id,copyLogos:false},before=await f.workspace.outline();
  const rowsBefore=await counts(f.workspace),preview=await service.execute('reorganize',{etag:before.etag,change},{preview:true});
@@ -38,11 +38,11 @@ for(const kind of ['flat','indexed'])test(kind+' older catalogue can preview and
 });
 
 test('interrupted ownership reconstruction and invalid identities roll back before retry and fresh-key recovery',async t=>{
- const f=await fixture(t,{count:40,missingOwners:true}),before=await counts(f.workspace),controller=new AbortController(),record=ResearchCatalogue.prototype.record;
+ const f=await fixture(t,{count:40}),before=await counts(f.workspace),controller=new AbortController(),members=ResearchCatalogue.prototype.members;
  let loaded=0;
- ResearchCatalogue.prototype.record=async function(...args){const value=await record.apply(this,args);if(++loaded===7)controller.abort();return value;};
+ ResearchCatalogue.prototype.members=async function*(...args){for await(const row of members.apply(this,args)){if(++loaded===7)controller.abort();yield row;}};
  try{await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>completeSnapshotOwnership(store,await store.snapshot(),{signal:controller.signal}))),{name:'AbortError'});}
- finally{ResearchCatalogue.prototype.record=record;}
+ finally{ResearchCatalogue.prototype.members=members;}
  assert.equal(loaded,7);assert.deepEqual(await counts(f.workspace),before);assert.equal((await f.workspace.outline()).etag,f.etag);
  const bad={kind:'notebook',value:{...f.book.notebooks[0],id:f.records[0].id}};
  await assert.rejects(f.service.execute('structure',{etag:f.etag,response:'outline',change:bad}),{code:'INVALID'});
@@ -69,7 +69,7 @@ test('interrupted ownership reconstruction and invalid identities roll back befo
 });
 
 test('missing declared ownership keys are rejected rather than silently rebuilt',async t=>{
- const f=await fixture(t,{kind:'indexed',count:12,missingOwners:true});
+ const f=await fixture(t,{kind:'indexed',count:12});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const source=await store.snapshot(),index=new SnapshotIndex(store),row=await store.member(source,f.records[0].id);
   source.membership=await index.change(source.membership,'book:'+row.notebookId+':'+row.id,null);await index.flush(source.membership);

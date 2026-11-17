@@ -17,11 +17,7 @@ function suffix(row){
 export class RecordRecentIndex extends ObjectIndex{
  constructor(store,{cacheSize=128}={}){super(store,{namespace:'record-recent-index:',immutable:true,cacheSize});this.membership=new SnapshotIndex(store,{cacheSize});}
  static valid(value){return value?.version===1&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
- async describe(row){
-  if(row.updatedAt!==undefined&&row.notebookId!==undefined)return row;
-  const record=await this.store.record(row.id,row.revision);
-  return {...row,updatedAt:row.updatedAt??record.updatedAt,notebookId:row.notebookId??record.notebookId};
- }
+ async describe(row){return row;}
  async key(row){const value=await this.describe(row);return prefix(value.notebookId)+suffix(value);}
  async build(snapshot){
   const self=this;

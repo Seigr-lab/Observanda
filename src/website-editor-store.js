@@ -185,7 +185,7 @@ export class WebsiteEditorStore{
     if(target==='home'){if(collection==='layouts'&&book.website.home.enabled===false)invalid();}
     else if(target.startsWith('page:')){if(!await this.sourceItem(context,'pages',target.slice(5),{signal}))invalid();}
     else if(!book.projects.some(item=>target==='project:'+item.id)&&!book.notebooks.some(item=>target==='notebook:'+item.id)&&!publicationPresentationTarget(book.website,target)){
-     if(!target.startsWith('entry:'))invalid();const row=await this.store.member(snapshot,target.slice(6));if(!row)invalid();const notebookId=row.notebookId??(await this.store.record(row.id,row.revision)).notebookId;if(!book.notebooks.some(item=>item.id===notebookId))invalid();
+     if(!target.startsWith('entry:'))invalid();const row=await this.store.member(snapshot,target.slice(6));if(!row)invalid();if(!book.notebooks.some(item=>item.id===row.notebookId))invalid();
     }
    }
    if(collection==='navigation'){

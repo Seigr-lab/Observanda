@@ -26,7 +26,7 @@ export class WebsiteEditor{
    for(const notebook of metadata.notebooks){signal?.throwIfAborted();const count=await index.scopedCount(snapshot.membership,notebook.id);notebookCounts[notebook.id]=count;total+=count;}
    for(const id of selected){signal?.throwIfAborted();const row=await store.member(snapshot,id);if(row&&notebooks.has(row.notebookId))selectionProjects[id]=notebooks.get(row.notebookId);}
   }else for await(const row of store.members(snapshot,{signal})){
-   const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;
+   const notebookId=row.notebookId;
    if(!notebooks.has(notebookId))continue;notebookCounts[notebookId]++;total++;if(selected.has(row.id))selectionProjects[row.id]=notebooks.get(notebookId);
   }
   return {...result,workspaceId:metadata.id,etag:pin.researchSnapshotId,research:{metadata,count:total},recordRevisions:{},notebookCounts,total,selectionProjects};

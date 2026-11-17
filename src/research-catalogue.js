@@ -191,7 +191,7 @@ export class ResearchCatalogue{
   let count=0,bytes=0;
   for await(const stored of rows){
    signal?.throwIfAborted();const row=snapshot.indexVersion?stored:{...stored,position:count};count++;bytes+=row.bytes;
-   if(!notebookIds||!row.notebookId||notebookIds.has(row.notebookId))yield row;
+   if(!notebookIds||notebookIds.has(row.notebookId))yield row;
   }
   if(snapshot.indexVersion&&(count!==snapshot.count||bytes!==snapshot.bytes))fail();
  }
@@ -698,11 +698,7 @@ export class ResearchCatalogue{
     return;
    }
    const record=await this.record(row.id,row.revision),{position,queryRevision,summaryRevision,...stored}=row,expected=summary(record);void position;void queryRevision;void summaryRevision;
-   if(row.notebookId===undefined)delete expected.notebookId;
-   if(row.share===undefined)delete expected.share;
-   if(row.updatedAt===undefined)delete expected.updatedAt;
    if(row.occurredOn===undefined)delete expected.occurredOn;
-   if(row.template===undefined)delete expected.template;
    if(row.cardItems===undefined)delete expected.cardItems;
    if(hash(stored)!==hash(expected))fail();
    if(media)await media.record(record);

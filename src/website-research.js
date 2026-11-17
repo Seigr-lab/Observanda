@@ -21,7 +21,7 @@ function scopedResearchStore(store,metadata){
  const ids=new Set(metadata.notebooks.map(notebook=>notebook.id)),adapter={
   async member(snapshot,id){const row=await store.member(snapshot,id);return row&&ids.has(row.notebookId)?row:null;},
   async *members(snapshot,options){for await(const row of store.members(snapshot,options))if(ids.has(row.notebookId))yield row;},
-  async *queryDocuments(rows,book,options){async function* selected(){for await(const row of rows)if(!row.notebookId||ids.has(row.notebookId))yield row;}yield* store.queryDocuments(selected(),book,options);}
+  async *queryDocuments(rows,book,options){async function* selected(){for await(const row of rows)if(ids.has(row.notebookId))yield row;}yield* store.queryDocuments(selected(),book,options);}
  };
  return new Proxy(store,{get(target,key){if(Object.hasOwn(adapter,key))return adapter[key];const value=target[key];return typeof value==='function'?value.bind(target):value;}});
 }

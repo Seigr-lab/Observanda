@@ -58,7 +58,7 @@ export async function recordCollectionQuery(pages,client,command,{scope,visit,si
    }else{
     const rows=store.searchMembers(snapshot,ids,query.search,{signal});
     if(mode==='recent'){
-     for await(const row of rows){for await(const doc of store.queryDocuments([row],metadata,{signal,search:false})){recentTotal++;attach(doc,row.updatedAt??(await store.record(row.id,row.revision)).updatedAt);}}
+     for await(const row of rows){for await(const doc of store.queryDocuments([row],metadata,{signal,search:false})){recentTotal++;attach(doc,row.updatedAt);}}
     }else for await(const doc of store.queryDocuments(rows,metadata,{signal,search:false,matching:query.search}))attach(doc);
    }
   });

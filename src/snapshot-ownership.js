@@ -20,16 +20,12 @@ export async function completeSnapshotOwnership(store,snapshot,{signal}={}){
  async function* rows(){
   for await(const row of store.members(snapshot,{signal})){
    signal?.throwIfAborted();count++;bytes+=row.bytes;
-   if(snapshot.indexVersion&&row.notebookId!==undefined){
+   if(snapshot.indexVersion){
     const book=await index.find({root:snapshot.membership},'book:'+row.notebookId+':'+row.id),record=await index.find({root:snapshot.membership},'record:'+row.id);
     if(!book||book.revision!==record?.revision)damaged();known++;
    }
-   const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;
-   if(!notebooks.has(notebookId))damaged();
-   // Member verification hashes the serialized summary in its declared field
-   // order. Restore ownership in that position, not at the end of an old row.
-   const {id,revision,type,...details}=row;
-   yield {id,revision,type,notebookId,...details};
+   if(!notebooks.has(row.notebookId))damaged();
+   yield row;
   }
   if(count!==totals.total||bytes!==totals.totalBytes||snapshot.indexVersion&&known!==ownership)damaged();
  }

@@ -37,7 +37,7 @@ export async function* publicationRecords(store,snapshot,{metadata,selection,ove
  }
  if(!snapshot.publicationIndex){
   const rows=order==='position'&&!backward?recordOrder(store,snapshot,{after,signal}):new RecordReadingIndex(store).rows(snapshot,notebooks,{order,after:order==='position'&&after!==null?{position:after}:after,backward,signal});
-  for await(const row of rows)if(row.notebookId===undefined||notebooks.has(row.notebookId))yield row;
+  for await(const row of rows)if(notebooks.has(row.notebookId))yield row;
   return;
  }
  const scopes=new Map(),owners=new Map(metadata.notebooks.map(n=>[n.id,n.projectId]));

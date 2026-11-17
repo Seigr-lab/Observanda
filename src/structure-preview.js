@@ -8,7 +8,7 @@ export async function legacyStructurePreview(store,source,change,etag,{signal}={
  const result=transformStructure({...source.metadata,entries:[]},'reorganize',change),metadata={...result.book,entries:[]};
  await reconcileWebsiteMembership(metadata,async id=>{
   signal?.throwIfAborted();const row=await store.member(source,id);
-  return row&&{...row,notebookId:row.notebookId??(await store.record(row.id,row.revision)).notebookId};
+  return row;
  });
  await store.validateMetadata(source,metadata);
  const counts=await catalogueOutline(store,source,{signal});

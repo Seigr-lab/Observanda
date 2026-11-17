@@ -56,7 +56,7 @@ export async function verifySearchChange(store,before,after){
      // UUID order interleaves bitmap blocks and repeatedly flushes their words.
      // Keep the grouping encrypted and disk-backed; retain only one query pair and
      // the bounded word accumulator while deriving the independent expectation.
-     const group=side+':'+(row.notebookId??'')+':'+Math.floor(row.position/SEARCH_BLOCK_SIZE);
+     const group=side+':'+row.notebookId+':'+Math.floor(row.position/SEARCH_BLOCK_SIZE);
      await ordered.putGrouped(group,row.id,{side,row,other:same?other:null});
     }
    }

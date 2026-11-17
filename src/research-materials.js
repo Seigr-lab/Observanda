@@ -156,7 +156,7 @@ export class ResearchMaterials {
   await this.workspace.catalogue(async store=>{
    const head=await store.head(),check=async()=>{
     const snapshot=await store.snapshot(head),row=await store.member(snapshot,recordId);if(!row)fail();
-    return JSON.stringify([row.notebookId??null,snapshot.metadata.notebooks.find(item=>item.id===row.notebookId)?.projectId??null]);
+    return JSON.stringify([row.notebookId,snapshot.metadata.notebooks.find(item=>item.id===row.notebookId)?.projectId??null]);
    };
    const cache=metadataBatchIndex(store)?.objectReads??store.readCache;
    const [notebookId,projectId]=JSON.parse(cache?await cache.proof('material-owner:'+head+':'+recordId,check):await check());

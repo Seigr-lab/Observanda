@@ -11,10 +11,7 @@ const hash=value=>digest(serialize(value));
 export class RecordTypeIndex extends ObjectIndex{
  constructor(store,{cacheSize=128}={}){super(store,{namespace:'record-type-index:',immutable:true,cacheSize});this.membership=new SnapshotIndex(store,{cacheSize});}
  static valid(value){return value?.version===1&&validIndexRef(value.root);}
- async describe(row){
-  const legacy=row.template===undefined||row.updatedAt===undefined||row.notebookId===undefined?await this.store.record(row.id,row.revision):null;
-  return {...row,notebookId:row.notebookId??legacy.notebookId,template:row.template===undefined?legacy.template:row.template,updatedAt:row.updatedAt??legacy.updatedAt};
- }
+ async describe(row){return row;}
  async key(row){const {template}=await this.describe(row);return template?template.id+':'+row.id:null;}
  async build(snapshot){
   const self=this;

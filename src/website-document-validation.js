@@ -97,8 +97,7 @@ export async function validateWebsiteDocument(store,snapshot,document,{signal,dr
    if(publicationPresentationTarget(website,target,{records}))return true;
    if(!records||!target.startsWith('entry:')||!researchId(target.slice(6)))return false;
    const row=await store.member(snapshot,target.slice(6));if(!row)return false;
-   const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;
-   if(!book.notebooks.some(item=>item.id===notebookId))return false;
+   if(!book.notebooks.some(item=>item.id===row.notebookId))return false;
    await proof.add('target:'+target);return true;
   };
   for await(const {value:item} of collection(document,paths.navigation,{signal})){

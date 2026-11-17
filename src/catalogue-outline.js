@@ -31,8 +31,7 @@ export async function catalogueOutline(store,snapshot,{signal}={}){
    const record=await index.find({root:snapshot.membership},'record:'+row.id);
    if(!book||book.revision!==record?.revision)damaged();known++;
   }
-  const notebookId=row.notebookId??(await store.record(row.id,row.revision)).notebookId;
-  if(!Object.hasOwn(notebookCounts,notebookId))damaged();notebookCounts[notebookId]++;
+  if(!Object.hasOwn(notebookCounts,row.notebookId))damaged();notebookCounts[row.notebookId]++;
  }
  signal?.throwIfAborted();
  if(snapshot.indexVersion&&known!==ownership||Object.values(notebookCounts).reduce((a,b)=>a+b,0)!==totals.total)damaged();
