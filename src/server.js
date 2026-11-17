@@ -168,7 +168,7 @@ import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
 import {admitResearchBytes} from './research-capacity.js';
 import {MODULE_BYTES,MODULE_CHECKPOINT_BYTES} from './modules/capacity.js';
 import {AppError,safeError} from './errors.js';
-import {MediaStore,mediaCapabilities} from './media.js';
+import {MediaStore} from './media.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
 import {MAX_FONT_BYTES} from './font-inspector.js';
 
@@ -499,7 +499,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(req.method==='POST'){const settings=await body(req);if(context!==selectedContext||(contextRequired&&req.headers['x-observanda-workspace']!==context.id))throw new AppError('WORKSPACE_CHANGED');activeWrites++;countedWrite=true;if(!validInterface(settings))throw new AppError('INVALID');await rememberInterface(preferencesFile,settings);localPreferences.interface=settings;}
         return json(localPreferences.interface);
       }
-      if(req.method==='GET'&&url.pathname==='/api/security/capabilities')return json({deviceAvailable:deviceStore.available()});
       if(req.method==='POST'&&url.pathname==='/api/security/device'){await body(req);return json(await deviceStore.identity());}
       if(req.method==='POST'&&url.pathname.startsWith('/api/security/collaboration-identity/')){
         const data=await body(req,32768),operation=url.pathname.slice('/api/security/collaboration-identity/'.length);
@@ -1365,7 +1364,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }
         throw new AppError('INVALID');
       }
-      if (req.method === 'GET' && url.pathname === '/api/media-capabilities') return json(await mediaCapabilities());
       const upload = /^\/api\/media\/(image|audio|video|file)$/.exec(url.pathname);
       if (req.method === 'POST' && upload) {
         if (importing) throw new AppError('LOCKED');
