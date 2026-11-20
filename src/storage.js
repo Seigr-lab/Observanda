@@ -335,9 +335,6 @@ export class Workspace {
       await store.put(book);
       for(const [relative,text] of Object.entries(metadata)){this.metadataPath(relative);await store.putObject('metadata:'+relative,{text});}
       if(populate)await catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>populate(this));
-      // Historical snapshots retain their original metadata until the explicit
-      // format upgrade. Current website documents require current metadata.
-      if(book.formatVersion===21&&!this.projectId&&!this.labBookId)await store.initializeWebsiteDocuments();
       await store.verify(descriptor);
       await db.run('COMMIT');
       await this.writeFile(file,serialize(descriptor));
@@ -427,11 +424,6 @@ export class Workspace {
     if(await this.storageKind()==='catalogue')return this.catalogue(async store=>{
       if(await store.head()!==current.etag)throw new AppError('CONFLICT');
       const saved=await store.put(next);
-      // The explicit format upgrade is the writer that gives a workspace its
-      // current website documents, as creation does. Left to sign-in website
-      // preparation, that initialization would move the head after the author
-      // had read it, and the author's next save would meet a conflict.
-      if(next.formatVersion===21&&current.book.formatVersion!==21&&!this.projectId&&!this.labBookId){await store.initializeWebsiteDocuments();return store.read();}
       return saved;
     });
     const revisions = await privateDirectory(this.root, '.observanda/revisions');
