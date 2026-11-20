@@ -10,15 +10,18 @@ import {clearVault} from '../../src/encryption.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {WebsiteFileStore} from '../../src/website-file-store.js';
 import {startServer} from '../../src/server.js';
 import {WorkspaceWebsitePreparation} from '../../src/workspace-website-preparation.js';
 
-async function fixture(page,count=42){
+async function fixture(page,count=42,{websites=[]}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-discovery-ui-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,body:'Private detailed notes '+i,sections:[],attachments:[],figures:[],relations:[],contributors:[{id:randomUUID(),name:'Artist '+i,role:'Performer'}]}));
  const f=await encryptedFixture(directory,book),settings=defaultDashboard();settings.views[0].panels=[];settings.shortcuts=[];
  await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
- // Opening a workspace converts its saved website once, reading every shared record it publishes.
+ // Websites made in the website editor, as an author makes them.
+ for(const name of websites)await new WebsiteFileStore(f.workspace).create({name});
+ // Opening a workspace discovers the shared records for websites, reading them once.
  // That background job has its own specs; hold it here so the counter measures only the dashboard.
  const prepare=WorkspaceWebsitePreparation.prototype.start;WorkspaceWebsitePreparation.prototype.start=function(){};
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),requests=[],bodies=[],errors=[];
@@ -48,14 +51,14 @@ for(const count of [42,420])test('card search, paging, pinning and restoration s
 });
 test('website counts can be pinned and reopened without promoting the dashboard to all record bodies',async({page})=>{
  test.setTimeout(60000);
- const f=await fixture(page,420);
+ const f=await fixture(page,420,{websites:['Field notes','Studio sessions']});
  try{
   const library=page.getByRole('region',{name:'Data library',exact:true});
   await library.getByRole('combobox',{name:'Show',exact:true}).selectOption('website');
-  await library.getByRole('button',{name:'Pin Website content',exact:true}).click();
-  await library.locator('[data-action="dashboard-add"][data-label="Website content"]').click();
-  const card=page.locator('.desk-card');await expect(card).toContainText('Website content');await expect(card).toContainText(String(f.book.entries.filter(e=>e.share).length));
-  expect(f.bodies).toEqual([]);await expect(page.locator('#desk-save-state')).toHaveText('');await page.reload();await expect(card).toContainText('Website content');await expect(card).toContainText(String(f.book.entries.filter(e=>e.share).length));
+  await library.getByRole('button',{name:'Pin Websites',exact:true}).click();
+  await library.locator('[data-action="dashboard-add"][data-label="Websites"]').click();
+  const card=page.locator('.desk-card');await expect(card).toContainText('Websites');await expect(card).toContainText('Field notes');await expect(card).toContainText('Studio sessions');
+  expect(f.bodies).toEqual([]);await expect(page.locator('#desk-save-state')).toHaveText('');await page.reload();await expect(card).toContainText('Studio sessions');
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toEqual([]);expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
