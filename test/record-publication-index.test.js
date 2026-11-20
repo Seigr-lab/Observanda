@@ -11,11 +11,8 @@ import {RecordPublicationIndex} from '../src/record-publication-index.js';
 import {catalogueDescriptor} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {verifyDerivedRecordChange} from '../src/record-index-verification.js';
-import {publicationSource} from '../src/publication-source.js';
-import {websiteRecordShare} from '../src/web/website-selection.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {publicationWorkspace} from '../src/publication-pin.js';
 
 async function fixture(t,count=80,configure=()=>{}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-index-')),book=sampleNotebook(),seed=book.entries[0];
@@ -29,10 +26,7 @@ async function fixture(t,count=80,configure=()=>{}){
  return {...f,book,directory,source:await head({...f,book})};
 }
 // The current research head with the current website revision, as the app requests it.
-async function head(f){const websitePin=(await publicationWorkspace(f.workspace).currentOutline()).websitePin;return {workspaceId:f.book.id,etag:websitePin.researchSnapshotId,websitePin};}
-const at=(f,etag)=>({...f.source,etag,websitePin:{...f.source.websitePin,researchSnapshotId:etag}});
-function source(f,selection,projects=[]){return {etag:f.source.etag,websitePin:f.source.websitePin,draft:{workspaceId:f.book.id,baseEtag:f.source.etag,metadata:{},projects,changes:[],removed:[],selection}};}
-async function choices(workspace,source){return publicationSource(workspace,source,{consume:async(metadata,records)=>Array.fromAsync(records)});}
+async function head(f){return {workspaceId:f.book.id,etag:(await f.workspace.outline()).etag};}
 async function indexedRows(f,etag=f.source.etag,options={}){
  return f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(etag),scopes=new Map(snapshot.metadata.notebooks.map(n=>[n.id,'shared']));
@@ -71,31 +65,8 @@ test('missing or substituted date lanes fail direct reading and full and increme
  }));
 });
 
-test('default, project and sparse record consent merge in stable order without cross-project leakage',async t=>{
- const f=await fixture(t),privateRecord=f.book.entries.find(r=>!r.share),publicRecord=f.book.entries.find(r=>r.share);
- const overrides=[{id:privateRecord.id,share:true,attachments:[]},{id:publicRecord.id,share:false,attachments:[]},{id:f.book.entries.at(-1).id,share:null,attachments:[]}];
- const cases=[
-  {includeProjects:[],records:overrides},
-  {defaultShare:false,includeProjects:[],records:overrides},
-  {defaultShare:true,includeProjects:[],records:overrides},
-  {defaultShare:false,includeProjects:[f.book.projects[0].id],records:overrides},
-  {includeProjects:[f.book.projects[1].id],records:overrides}
- ];
- for(const selection of cases)for(const hidden of [false,true]){
-  const projects=hidden?[{id:f.book.projects[1].id,share:false,logoId:null}]:[],request=source(f,selection,projects);
-  const expected=f.book.entries.filter(record=>{
-   const projectId=f.book.notebooks.find(n=>n.id===record.notebookId).projectId;
-   return !(hidden&&projectId===f.book.projects[1].id)&&websiteRecordShare(selection,record,projectId);
-  });
-  const items=await choices(f.workspace,request);assert.deepEqual(items.map(r=>r.id),expected.map(r=>r.id));
-  assert.equal(new Set(items.map(r=>r.id)).size,items.length);
-  assert.deepEqual((await publicationSource(f.workspace,request)).entries.map(r=>r.id),expected.map(r=>r.id));
- }
- assert.equal((await f.workspace.outline()).etag,f.source.etag);
-});
-
 test('sharing, moves, removal and failed index writes preserve pinned choices and verified portable recovery',async t=>{
- const f=await fixture(t),before=await indexedRows(f),oldChoices=await choices(f.workspace,f.source),service=new ResearchRecords(f.workspace,{}),record=f.book.entries.find(r=>!r.share);
+ const f=await fixture(t),before=await indexedRows(f),service=new ResearchRecords(f.workspace,{}),record=f.book.entries.find(r=>!r.share);
  const changed={...record,share:true,notebookId:f.book.notebooks.find(n=>n.id!==record.notebookId).id};
  const saved=await service.save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:changed}]},{recordIds:[record.id]});
  const moved=saved.book.entries[0];assert.equal(moved.share,false,'Moving a record requires renewed publication consent');assert.equal((await indexedRows(f,saved.etag)).length,43);
@@ -110,14 +81,13 @@ test('sharing, moves, removal and failed index writes preserve pinned choices an
  const current=(await f.workspace.outline()).etag;assert.equal((await indexedRows(f,current)).length,43);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await restored.catalogue(async store=>Array.fromAsync(new RecordPublicationIndex(store).rows(await store.snapshot(f.source.etag),new Map(f.book.notebooks.map(n=>[n.id,'shared']))))),before);
- assert.deepEqual((await choices(restored,at(f,current))).map(r=>r.id),oldChoices.map(r=>r.id));
  const controller=new AbortController();controller.abort();await assert.rejects(indexedRows(f,current,{signal:controller.signal}),{name:'AbortError'});
 });
 
 test('older snapshots keep their identity and fallback until the next atomic write builds the selection index',async t=>{
- const f=await fixture(t),expected=await choices(f.workspace,f.source);
+ const f=await fixture(t);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.publicationIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.source.etag,snapshot),f.source.etag);}));
- assert.deepEqual(await choices(f.workspace,f.source),expected);assert.equal((await f.workspace.outline()).etag,f.source.etag);
+assert.equal((await f.workspace.outline()).etag,f.source.etag);
  const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Revised'}}]},{recordIds:[record.id]});
  await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex,undefined);await new RecordPublicationIndex(store).verify(await store.snapshot());await store.verify(catalogueDescriptor(f.book));});
 });

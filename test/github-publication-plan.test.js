@@ -7,7 +7,6 @@ import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {githubPlanReader} from '../src/github-plan-index.js';
-import {publicationWorkspace} from '../src/publication-pin.js';
 import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.js';
 import {githubFilePlan,readGithubOwnership} from '../src/github-publication-plan.js';
 import {buildPublication} from '../src/publication.js';
@@ -65,7 +64,7 @@ test('a later edition removes only previously owned files and preserves interven
  outsideEdit(f.remote,'research/handwritten.html','A separately maintained page');outsideEdit(f.remote,'news/latest.html','Unrelated news');
  const before=tree(f.remote).filter(e=>['research/handwritten.html','news/latest.html'].includes(e.path));
  const saved=await f.ws.read(),entry=saved.book.entries.find(e=>e.share);assert.ok(entry);entry.share=false;
- await f.ws.save(saved.book,saved.etag);const next=await publicationWorkspace(f.ws).read(),candidate=buildPublication(next.book);candidate.etag=next.etag;candidate.websitePin=next.websitePin;
+ await f.ws.save(saved.book,saved.etag);const next=await f.ws.read(),candidate=buildPublication(next.book);candidate.etag=next.etag;
  const {plan}=await publish(f,candidate);
  assert.ok(plan.removed.includes('research/entries/'+entry.id+'.html'));assert.ok(plan.requiresReview);
  assert.deepEqual(tree(f.remote).filter(e=>before.some(b=>b.path===e.path)),before);

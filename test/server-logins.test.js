@@ -12,7 +12,8 @@ import {Publisher,defaultPublishing,readRemoteFiles} from '../src/publishing.js'
 import {ServerLogins,validServerLogin} from '../src/server-logins.js';
 import {serverLoginRequest} from '../src/server-login-requests.js';
 import {HostCredentials} from '../src/host-credentials.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
+import {WebsiteFileStore} from '../src/website-file-store.js';
+import {websitePublicationMetadata} from '../src/website-publication-metadata.js';
 import {memoryHost} from './remote-host-fixture.js';
 
 async function setup(t){
@@ -45,12 +46,14 @@ test('websites share one server login with their own folders, records and file o
  const ftp={open:async(c,options)=>{passwords.push(options.password);return host.transport.open(c,options);}};
  const {logins:[login],etag}=await new ServerLogins(s.workspace).save(ftpLogin,'new');
  await serverLoginRequest('password',{id:login.id,password:'host secret'},{workspace:s.workspace,hostCredentials:s.credentials});
- const site=async(id,folder)=>{
-  const workspace=websiteWorkspace(s.workspace,id),publisher=new Publisher(s.workspace.root,{workspace,ftp,hostCredentials:s.credentials,authorizeCandidate:async()=>{}},s.workspace.vault),config=defaultPublishing();
+ // Each website made in the website editor keeps its own destination with the shared login.
+ const siteFiles=new WebsiteFileStore(s.workspace);
+ const site=async(name,folder)=>{
+  const id=(await siteFiles.create({name})).site.id,workspace=websitePublicationMetadata(await siteFiles.publicationWorkspace(id)),publisher=new Publisher(s.workspace.root,{workspace,ftp,hostCredentials:s.credentials,authorizeCandidate:async()=>{}},s.workspace.vault),config=defaultPublishing();
   config.kind='ftp';config.ftp={login:login.id,directory:folder,allowExisting:false};const saved=await publisher.save(config,'new');
   return {publisher,saved};
  };
- const first=await site(randomUUID(),'/public_html/atlas'),second=await site(randomUUID(),'/public_html/diary');
+ const first=await site('Atlas','/public_html/atlas'),second=await site('Diary','/public_html/diary');
  assert.equal(first.saved.server.name,'Shared hosting');assert.deepEqual(first.saved.server.password,{saved:true,persistent:false});
  assert.notEqual(first.publisher.destinationKey(first.saved.config),second.publisher.destinationKey(second.saved.config));
  const book=sampleNotebook(),atlas=buildPublication(book),diary=buildPublication({...structuredClone(book),title:'Bee yard diary'});

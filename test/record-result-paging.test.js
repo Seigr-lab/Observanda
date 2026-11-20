@@ -14,7 +14,6 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {recordRevision} from '../src/research.js';
 import {validateRecordDocument} from '../src/record-document-validation.js';
 import {validateDocumentSources} from '../src/record-document-sources.js';
-import {publicationWorkspace} from '../src/publication-pin.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {retainedTable} from '../src/retained-tables.js';
 const media={get:async()=>{throw Error('Unexpected media access');}};
@@ -94,7 +93,7 @@ test('late result source admission and complete publication use originals indepe
  const table=await retainedTable(f.materials,{ref:source,selection:{columns:[0,1],offset:0,count:2,includeExcluded:false}}),statement={id:randomUUID(),kind:'table',title:'Late retained table',text:'Selected exact observations',limitations:'Two retained rows only',basis:'retained',source,table},command={...target(f),field:'result:'+statement.id},base=await f.values.read(command);
  await f.values.save({...command,expectedRevision:base.revision,value:{value:statement}});
  const late=await new RecordContent(f.workspace).read({...target(f),pagedHeader:true,windows:{results:97}});assert.deepEqual(late.header.results.statements,[statement]);assert.deepEqual(late.collections.results,{offset:97,total:98,count:1});
- const expected={version:1,statements:[...f.record.results.statements,statement]},outline=await publicationWorkspace(f.workspace).outline();
+ const expected={version:1,statements:[...f.record.results.statements,statement]};
  const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===f.record.id))).text;
  for(const statement of expected.statements){assert.ok(html.includes('id="result-'+statement.id+'"'));assert.ok(html.includes(statement.text));assert.ok(html.includes(statement.limitations));}
  assert.ok(!html.includes(f.analysis.id));assert.ok(!html.includes(source.id));assert.ok(!html.includes('PRIVATE_RESULT_COLUMN'));assert.ok(html.includes('10000000000000001'));

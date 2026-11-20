@@ -11,7 +11,8 @@ import {clearVault} from '../src/encryption.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
+import {WebsiteFileStore} from '../src/website-file-store.js';
+import {websitePublicationMetadata} from '../src/website-publication-metadata.js';
 import {randomUUID} from 'node:crypto';
 
 test('retained live inventories grow past their former envelope and seek directly to late paths',async t=>{
@@ -43,7 +44,8 @@ test('inventory preparation preserves removals, fences changes and survives fres
  const latest={commit:'c'.repeat(40),releaseId:'next-edition'};await workspace.withLock(()=>recordDeploymentInventory(workspace,key,latest,next));
  await assert.rejects(workspace.withLock(()=>recordDeploymentInventory(workspace,key,{commit:'d'.repeat(40),releaseId:'stale'},stale)),{code:'PUBLISH_STALE'});
  const current=await deploymentInventory(workspace,key);assert.deepEqual(await Array.fromAsync(deploymentInventoryPaths(workspace,current,'removed')),['old.html','remote-retired.html']);
- const scoped=websiteWorkspace(workspace,randomUUID());assert.equal(await deploymentInventory(scoped,key),null);
+ // A website made in the website editor keeps its own inventory, apart from the workspace's.
+ const siteFiles=new WebsiteFileStore(workspace),scoped=websitePublicationMetadata(await siteFiles.publicationWorkspace((await siteFiles.create({name:'Field notes'})).site.id));assert.equal(await deploymentInventory(scoped,key),null);
  const site=await prepareDeploymentInventory(scoped,key,['publication.json','site.html']);
  await scoped.withLock(()=>recordDeploymentInventory(scoped,key,{commit:'site-commit',releaseId:'site-edition'},site));
  assert.equal((await deploymentInventory(workspace,key)).commit,latest.commit);await verifyDeploymentInventories(workspace);await verifyDeploymentInventories(scoped);

@@ -1,5 +1,4 @@
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
 import {recordRevisions} from '../src/research.js';
 import {emptyWebsiteSelection} from '../src/web/website-selection.js';
 import {test} from 'node:test';

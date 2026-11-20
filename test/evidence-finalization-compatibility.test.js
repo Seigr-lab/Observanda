@@ -23,7 +23,6 @@ import {CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {readProjectDomainRegistry} from '../src/project-domain-registry.js';
 import {workspaceSettingsRegistry} from '../src/workspace-settings.js';
 import {readWorkspaceDashboard} from '../src/security/dashboard-storage.js';
-import {WebsiteDocumentStore} from '../src/website-document-store.js';
 import {EvidenceCorrections} from '../src/evidence-corrections.js';
 
 function catalogue(version,{optionalDomains=false}={}){
@@ -73,7 +72,7 @@ test('archive version ten preserves every staged capability combination and reje
 });
 
 const reference=head=>({kind:head.kind,id:head.id,revision:head.revision});
-async function ownerState(workspace){return {format:await workspace.catalogue(s=>catalogueFormat(s.db)),domains:await workspace.catalogue(readProjectDomainRegistry),settings:await workspace.catalogue(workspaceSettingsRegistry),dashboard:await readWorkspaceDashboard(workspace),website:await workspace.catalogue(s=>new WebsiteDocumentStore(s).read(null))};}
+async function ownerState(workspace){return {format:await workspace.catalogue(s=>catalogueFormat(s.db)),domains:await workspace.catalogue(readProjectDomainRegistry),settings:await workspace.catalogue(workspaceSettingsRegistry),dashboard:await readWorkspaceDashboard(workspace)};}
 async function classify(workspace,files,expected){await workspace.catalogue(async store=>{const owner=projectSourceEvidenceOwner(store,id=>({kind:'record',recordId:id}));for(const file of files)assert.deepEqual(await owner('metadata:.observanda/materials/'+file),expected,file);});}
 
 test('completed staged originals retain ownership through packet transfer, archive activation and fresh-key recovery',{timeout:240000},async t=>{

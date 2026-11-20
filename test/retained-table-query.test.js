@@ -5,8 +5,6 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {retainedTable,retainedTablePage,retainedTableBlocks,retainedTableCell} from '../src/retained-tables.js';
 import {validRetainedTable} from '../src/web/retained-table-model.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
-import {PublicationDocumentBuilder,PublicationDocument} from '../src/publication-document.js';
-import {retainPublicationTables,publicationTableChunks,verifyRetainedTableEntry} from '../src/publication-retained-tables.js';
 const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)};
 function materials({rows=1205,columns=301,excluded=false}={}){
  const workspace={vault:{id:randomUUID(),key:randomBytes(32)},withCatalogueConnections:fn=>fn(),catalogue:fn=>fn(new ResearchCatalogue(workspace,null))};
@@ -26,20 +24,6 @@ test('filtered query pages count matching rows and explicit columns retain chose
  const m=materials({rows:80,columns:5,excluded:true}),table=await retainedTable(m,{ref,selection:{columns:[4,1],offset:5,count:19,includeExcluded:false},version:3}),first=await retainedTablePage(m,{ref,table}),second=await retainedTablePage(m,{ref,table,offset:first.next});
  assert.deepEqual(first.table.rows[0].cells,['value-8-4','value-8-1']);assert.equal(first.table.rows.length+second.table.rows.length,19);assert.equal(second.next,null);assert.equal(first.table.rows.some(row=>row.exclusion!==null),false);
 });
-test('native publication capture retains complete table chunks independently of the source and detects missing or substituted query evidence',async()=>{
- const files=new Map(),workspace={async readMetadata(file,limit){const text=files.get(file)??null;if(text!==null)assert.ok(Buffer.byteLength(text)<=limit);return text;},async writeMetadata(file,text){assert.ok(Buffer.byteLength(text)<=65536);files.set(file,text);}},owner={kind:'source',workspaceId:randomUUID(),websiteId:null,jobId:randomUUID(),attemptId:null},builder=new PublicationDocumentBuilder(workspace,{owner,collections:{retainedTables:{indexes:['result']}}});
- const m=materials({rows:1205,columns:9}),originalPage=m.retainedDatasetPage,unicode=String.fromCodePoint(0x1f642).repeat(5000);m.retainedDatasetPage=async(...args)=>{const data=await originalPage(...args);if(args[1]===0&&data.columnIndices.includes(0))data.rows[0].cells[data.columnIndices.indexOf(0)]=unicode;return data;};const table=await retainedTable(m,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false},version:3}),statement={id:randomUUID(),source:ref,table},record={id:randomUUID(),results:{statements:[statement]}};
- await retainPublicationTables(builder,m,record,record.id);assert.ok(builder.count('retainedTables')>64);const descriptor=await builder.finish({header:{tableQueries:1}}),reader=await PublicationDocument.open(workspace,descriptor,{owner}),input={native:true,document:reader};
- m.read=()=>{throw Error('Publication must not reopen the dataset');};let size=0,last=false,privateRef=false,astral=0,carry='';for await(const text of publicationTableChunks(input,record.id,statement)){size+=Buffer.byteLength(text);const decoded=carry+text;carry=/[\uD800-\uDBFF]$/.test(decoded)?decoded.slice(-1):'';astral+=[...decoded.slice(0,decoded.length-carry.length)].filter(value=>value===String.fromCodePoint(0x1f642)).length;last||=text.includes('value-1204-8');privateRef||=text.includes(ref.id)||text.includes('/row/');}
- assert.ok(size>262144);assert.equal(astral,5000);assert.equal(carry,'');assert.equal(last,true);assert.equal(privateRef,false);await reader.verify();
- await assert.rejects(async()=>{for await(const part of publicationTableChunks(input,record.id,{...statement,table:{...table,selection:{...table.selection,count:1}}}))void part;},{code:'JOB_DAMAGED'});
- const summaryKey=record.id+'/'+statement.id+'/summary',summary=await reader.get('retainedTables',summaryKey),admitted={...input,document:{get:async(name,key)=>name==='records'&&key===record.id?{id:key}:reader.get(name,key)},record:async()=>record};
- await verifyRetainedTableEntry(admitted,summaryKey,summary);
- await assert.rejects(verifyRetainedTableEntry({...admitted,record:async()=>({...record,results:{statements:[]}})},summaryKey,summary),{code:'JOB_DAMAGED'});
- const orphanId=randomUUID(),orphanKey=record.id+'/'+orphanId+'/0000000000000000';await assert.rejects(verifyRetainedTableEntry(admitted,orphanKey,{recordId:record.id,resultId:orphanId,ordinal:0,text:'orphan'}),{code:'JOB_DAMAGED'});
- const first=await reader.window('retainedTables',{limit:1}),changed=await PublicationDocumentBuilder.open(workspace,descriptor,{owner});await changed.upsert('retainedTables',first.items[0].key,{...first.items[0].value,text:'changed'},{indexes:{result:record.id+'/'+statement.id+'/'}});const tampered=await PublicationDocument.open(workspace,await changed.finish({header:{}}),{owner});await assert.rejects(async()=>{for await(const part of publicationTableChunks({native:true,document:tampered},record.id,statement))void part;},{code:'JOB_DAMAGED'});
-});
-
 test('long exact cells have explicit preview boundaries and complete paged access without slicing a numeric source',async()=>{
  const m=materials({rows:1,columns:1}),original=m.retainedDatasetPage,exact='10000000000000001.'+'123456'.repeat(2000);
  m.retainedDatasetPage=async(...args)=>{const data=await original(...args);data.rows[0].cells=[{format:'dataset-cell',version:1,characters:exact.length,sha256:'b'.repeat(64),parts:{}}];return data;};

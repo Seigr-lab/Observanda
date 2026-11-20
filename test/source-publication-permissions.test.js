@@ -14,7 +14,6 @@ import {recordRevision} from '../src/research.js';
 import {buildPublication} from '../src/publication.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
-import {exactPublicationRecord} from '../src/publication-revisions.js';
 import {MediaStore} from '../src/media.js';
 import {serialize} from '../src/storage-format.js';
 import {catalogueFormat,catalogueRequiresSourcePublicationControls,catalogueRequiresWebsiteSourceSelections,requireSourcePublicationControls,requireWebsiteSourceSelections} from '../src/catalogue-format.js';
@@ -68,19 +67,16 @@ test('a private lab book excludes its records even when a website selects its pr
 });
 
 
-test('a website copy survives text edits while withdrawn sharing reaches it and historical reuse',async t=>{
- const f=await fixture(t),before=await f.workspace.read(),record=before.book.entries.find(row=>row.id===f.record.id),revision=recordRevision(record);
+test('a website copy survives text edits while withdrawn sharing reaches it',async t=>{
+ const f=await fixture(t),before=await f.workspace.read(),record=before.book.entries.find(row=>row.id===f.record.id);
  const copy=await websiteRecordCopy(f.workspace,record);assert.ok(copy.html.includes(record.sections[1].title));
  const save=async change=>{const current=await f.workspace.read(),entry=current.book.entries.find(row=>row.id===record.id);change(entry);await saveForWebsites(f.workspace,entry,()=>f.workspace.save(current.book,current.etag));};
  await save(entry=>{entry.body='An ordinary later text edit.';});
  assert.equal(await storedRecordCopy(f.workspace,record),copy.html);
  await save(entry=>{entry.sections[1].share=false;});
  assert.ok(!(await storedRecordCopy(f.workspace,record)).includes(record.sections[1].title));
- const historical=await exactPublicationRecord(f.workspace,{workspaceId:f.book.id,kind:'record',id:record.id,revision});
- assert.equal(historical.sections[1].share,false);assert.equal(selectEditionRecord(historical).sections.length,1);
  await save(entry=>{entry.share=false;});
  assert.equal(await storedRecordCopy(f.workspace,record),null);
- await assert.rejects(exactPublicationRecord(f.workspace,{workspaceId:f.book.id,kind:'record',id:record.id,revision}),{code:'MATERIAL_MISSING'});
 });
 
 test('withdrawing attachment permission removes the attachment from the website copy',async t=>{

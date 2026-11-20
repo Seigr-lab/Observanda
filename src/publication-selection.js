@@ -1,6 +1,6 @@
 import {AppError} from './errors.js';
 import {recordRevision} from './research.js';
-import {publicationOriginal} from './publication-source.js';
+import {publicationOriginal} from './publication-originals.js';
 import {validEditionSelection,validEditionRecord} from './web/publication-selection.js';
 
 export function validateEditionSelection(value){if(!validEditionSelection(value))throw new AppError('INVALID');return value;}
