@@ -3,7 +3,6 @@ import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {digest,serialize} from './storage-format.js';
 import {commitStructureDocuments} from './record-structure-documents.js';
-import {reconcileWebsiteMembership} from './website-membership.js';
 
 const fields=['workspaceId','recordId','sourceNotebookId','notebookId','expectedStorageRevision','commandId'];
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys.toSorted().join();
@@ -31,7 +30,6 @@ export class RecordLocation{
    if(row.revision!==command.expectedStorageRevision||row.notebookId!==command.sourceNotebookId)throw new AppError('RECORD_CHANGED');
    if(!current.metadata.notebooks.some(n=>n.id===command.notebookId))throw new AppError('MISSING');
    const target={id:row.id,notebookId:command.notebookId,share:false},metadata=structuredClone(current.metadata);
-   await reconcileWebsiteMembership(metadata,id=>id===row.id?target:store.member(current,id),{moved:[row.id]});
    await store.validateMetadata(current,metadata,{records:[target]});
    await commitStructureDocuments(store,etag,current,metadata,[row],new Map([[row.id,target]]),{signal});
    const result={etag:await store.head(),saved:true,recordId:row.id,notebookId:target.notebookId};

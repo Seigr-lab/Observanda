@@ -24,7 +24,6 @@ import {stageRecordOwnerRevision} from './record-owner-read-visibility.js';
 import {withScratch} from './scratch-work.js';
 import {ResearchMaterials} from './research-materials.js';
 import {withMetadataBatch} from './metadata-batch.js';
-import {reconcileWebsiteMembership} from './website-membership.js';
 import {PublicationConversion} from './publication-conversion.js';
 const same=(a,b)=>serialize(a)===serialize(b),now=()=>new Date().toISOString();
 const terminal=value=>value.phase==='complete'||value.phase==='cancelled'&&value.progress.reclamation?.state!=='pending';
@@ -315,7 +314,7 @@ export class RecordOwnerTransfer{
    if(row){
     if(row.revision!==value.command.expectedStorageRevision||row.notebookId!==value.command.sourceNotebookId)throw new AppError('RECORD_CHANGED');
     const target='entry:'+row.id,metadata={...current.metadata,branding:current.metadata.branding.filter(item=>item.target!==target),website:{...current.metadata.website,layouts:current.metadata.website.layouts.filter(item=>item.target!==target)}};
-    await reconcileWebsiteMembership(metadata,id=>id===row.id?null:store.member(current,id));await store.validateMetadata(current,metadata,{removed:[row.id]});await store.commitChanges(currentId,current,metadata,[],{removed:[row.id]});
+    await store.validateMetadata(current,metadata,{removed:[row.id]});await store.commitChanges(currentId,current,metadata,[],{removed:[row.id]});
    }
   })));
  }

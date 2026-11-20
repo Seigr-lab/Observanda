@@ -2,7 +2,6 @@ import {configurationOwner,configurationCheckpoint,discardConfigurationCheckpoin
 // Existing structure forms use one command adapter. Metadata-only changes never
 // assemble the record corpus; moves visit the selected lab book's branch only.
 import {AppError} from './errors.js';
-import {reconcileWebsiteMembership} from './website-membership.js';
 import {readWebsiteDocumentRegistry} from './website-document-registry.js';
 import {commitStructureDocuments} from './record-structure-documents.js';
 import {saveStructure,editNotebook,reorganizeWorkspace,transformStructure} from './structure.js';
@@ -103,7 +102,6 @@ export class StructureCommands{
   const metadata={...result.book,entries:[]},kept=new Set(result.book.entries.map(r=>r.id)),removed=selected.filter(row=>!kept.has(row.id)).map(row=>row.id);
   const removedIds=new Set(removed);
   const changed=new Map(result.book.entries.map(r=>[r.id,r]));
-  await reconcileWebsiteMembership(metadata,id=>removedIds.has(id)?null:changed.get(id)??store.member(current,id));
   await store.validateMetadata(current,metadata,{removed,records:result.book.entries});
   if(kind==='reorganize'){
    const notebooks=new Set(metadata.notebooks.filter(n=>n.projectId===result.projectId).map(n=>n.id));let count=0;

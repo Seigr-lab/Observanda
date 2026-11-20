@@ -6,7 +6,6 @@ import {figureValueFixture} from './record-figure-values-fixture.js';
 import {RecordLocation} from '../src/record-location.js';
 import {RecordContent} from '../src/record-content.js';
 import {RecordValues} from '../src/record-values.js';
-import {StructureCommands} from '../src/structure-commands.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
 import {RecordBlockStore} from '../src/record-block-store.js';
 import {withRecordDocument} from '../src/record-document.js';
@@ -14,9 +13,6 @@ import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
-import {WebsiteSites} from '../src/website-sites.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
-import {publicationSource} from '../src/publication-source.js';
 
 async function fixture(t,large=false){
  // The workspace starts with a second lab book in the same project to move the record into.
@@ -68,21 +64,4 @@ test('stale or invalid location commands cannot move records, and block/receipt 
  await assert.rejects(f.moves.move(command),/Interrupted move receipt/);workspace.writeMetadata.mock.restore();assert.deepEqual(await inventory(),before);assert.equal(await workspace.readMetadata('.observanda/record-locations/'+command.commandId+'.json',8192),null);
  const saved=await f.moves.move(command);assert.deepEqual(await f.moves.move(command),saved);
  await workspace.withLock(()=>workspace.writeMetadata('.observanda/record-locations/'+command.commandId+'.json','{}'));await assert.rejects(f.moves.move(command),{code:'CATALOGUE_DAMAGED'});
-});
-
-test('moving between projects removes old website membership and overrides destination-wide publication defaults',async t=>{
- const f=await fixture(t),project={...f.book.projects[0],id:randomUUID(),title:'Other project',parentId:null};
- await f.workspace.update(book=>{book.projects.push(project);book.notebooks.find(n=>n.id===f.notebook.id).projectId=project.id;return book;});
- const sites=new WebsiteSites(f.workspace),ids=[];
- for(const projectId of [f.book.projects[0].id,project.id]){
-  const created=await sites.change({workspaceId:f.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+ids.length});ids.push(created.id);
-  const current=await sites.read(created.id);await sites.save(created.id,{workspaceId:f.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[projectId],records:[]}});
- }
- const before=(await f.workspace.outline()).etag,source=websiteWorkspace(f.workspace,ids[0]),destination=websiteWorkspace(f.workspace,ids[1]);
- const retained=await f.workspace.catalogue(store=>store.snapshot(before));
- assert.deepEqual((await publicationSource(source,{etag:before})).entries.map(r=>r.id),[f.record.id]);
- await f.moves.move(f.command);const after=(await f.workspace.outline()).etag;
- assert.deepEqual((await publicationSource(source,{etag:after})).entries,[]);assert.deepEqual((await publicationSource(destination,{etag:after})).entries,[]);
- const target=await sites.read(ids[1]);assert.deepEqual(target.site.selection.records,[{id:f.record.id,share:false,attachments:[]}]);
- await f.workspace.catalogue(async store=>{const old=await store.snapshot(before);assert.deepEqual(old,retained);assert.equal((await store.member(old,f.record.id)).notebookId,f.command.sourceNotebookId);});
 });

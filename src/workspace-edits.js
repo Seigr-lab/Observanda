@@ -1,5 +1,4 @@
 import {AppError} from './errors.js';
-import {reconcileWebsiteMembership} from './website-membership.js';
 import {ResearchRecords,recordRevision} from './research.js';
 import {validateRecordChanges} from './model.js';
 import {SnapshotIndex} from './snapshot-index.js';
@@ -39,7 +38,6 @@ export class WorkspaceEdits{
    if(record)previous.set(record.id,record);
   }
   const edited=new Map(command.changes.map(c=>[c.id,c.record]));
-  await reconcileWebsiteMembership(metadata,id=>deleted.has(id)?null:edited.get(id)??store.member(current,id));
   await store.validateMetadata(current,metadata,{removed,records:command.changes.map(c=>c.record)});
   // Validate the same record contract before reference/media checks.
   validateRecordChanges(metadata,command.changes.map(c=>c.record),[]);

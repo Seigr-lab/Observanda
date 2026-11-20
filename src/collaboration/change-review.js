@@ -9,7 +9,6 @@ import {validateResearchPackage} from './package-validation.js';
 import {ResearchMaterials} from '../research-materials.js';
 import {ResearchRecords,recordRevision} from '../research.js';
 import {MediaStore} from '../media.js';
-import {reconcileWebsiteMembership} from '../website-membership.js';
 import {receiptPath,matchesWorkingCopy,requireNewEdition,updatedStructure,retainWorkingBase} from './working-copy.js';
 import {reviewFonts} from './review-fonts.js';
 import {customFontId} from '../web/font-catalogue.js';
@@ -142,7 +141,6 @@ export class ChangeReview{
     if(working)await admitConfigurations(this.workspace,parts,selection.metadata);
     const metadata=working?await updatedStructure(snapshot.metadata,working.selection,selection,{workspace:this.workspace,retainedBookIds}):structuredClone(snapshot.metadata),service=new ResearchRecords(this.workspace,new MediaStore(this.workspace));
     metadata.branding=metadata.branding.filter(b=>!removed.some(id=>b.target==='entry:'+id));metadata.website.layouts=metadata.website.layouts.filter(l=>!removed.some(id=>l.target==='entry:'+id));
-    await reconcileWebsiteMembership(metadata,id=>removed.includes(id)?null:store.member(snapshot,id));
     async function* changed(){
      for(const row of review.rows)if(chosen.has(row.id)&&row.kind!=='removed'){
       const record=await parts.value('record',row.id),member=await store.member(snapshot,row.id),previous=member?await store.record(row.id,member.revision):null;

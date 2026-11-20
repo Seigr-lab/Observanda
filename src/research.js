@@ -3,7 +3,6 @@ import {isConfigurationReference} from './web/configuration-reference.js';
 import {validateCurrentInlineRecordTemplate} from './record-template-configuration.js';
 import {recordContentRevision} from './record-encoding.js';
 import {AppError} from './errors.js';
-import {reconcileWebsiteMembership} from './website-membership.js';
 import {upgradeNotebook,validateNotebook,validateRecordChanges} from './model.js';
 import {validateAttemptChange} from './attempts.js';
 import {validateResultSources} from './result-statements.js';
@@ -71,7 +70,6 @@ export class ResearchRecords {
         if((await history.display(saved.item)).revision!==command.expectedRevision)throw new AppError('RECORD_CHANGED',[{field:'record',recordId:command.recordId}]);
         const current=await store.indexed(source),target='entry:'+command.recordId;
         const metadata={...current.metadata,branding:current.metadata.branding.filter(b=>b.target!==target),website:{...current.metadata.website,layouts:current.metadata.website.layouts.filter(l=>l.target!==target)}};
-        await reconcileWebsiteMembership(metadata,id=>id===command.recordId?null:store.member(current,id));
         await store.validateMetadata(current,metadata,{removed:[command.recordId]});
         await store.commitChanges(head,current,metadata,[],{removed:[command.recordId]});
       }

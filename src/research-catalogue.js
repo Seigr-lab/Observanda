@@ -15,7 +15,6 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 // never titles, prose or file paths. Workspace owns locking and key custody.
 import {catalogueContext} from './catalogue-context.js';
 import {cachedMaterialText,rememberMaterialText} from './catalogue-material-text-cache.js';
-import {reconcileWebsiteMembership,reconcileOwnedWebsiteMembership,websiteMembershipChange} from './website-membership.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
 import {verifyWebsiteEditor} from './website-editor-store.js';
 import {readWebsiteDocumentRegistry,websiteDocumentLocks} from './website-document-registry.js';
@@ -269,7 +268,6 @@ export class ResearchCatalogue{
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
-  if(websiteDocuments&&current){const present=new Set(after.map(row=>row.id)),removed=before.filter(row=>!present.has(row.id)).map(row=>row.id);await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteMembershipChange(current.metadata,metadata,before,after,{removed}));}
 
   for(const {id,item,initialize,fresh} of history)await this.historyIndex(id).append(item,{initialize,fresh});
   (await this.db.run("INSERT INTO state VALUES ('head',$1) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload",this.encode('state','head',{id:etag})));
@@ -407,11 +405,6 @@ export class ResearchCatalogue{
    if(!Number.isSafeInteger(count)||count<0||!Number.isSafeInteger(bytes)||bytes<0||!Number.isSafeInteger(nextPosition))throw new AppError('LIMIT');
    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    const membership=await index.replace(current.membership,before,after);
-   const websiteChange=websiteMembershipChange(current.metadata,metadata,before,after,{removed});
-   if(metadata.websites?.length){
-    await reconcileWebsiteMembership(metadata,id=>index.get(membership,id),websiteChange);
-    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
-   }
    const snapshot={indexVersion:1,metadata,membership,count,bytes,nextPosition,...(websiteDocuments?{websiteDocuments:1}:{}),
     // Reconstructed old membership changes authenticated descriptors even when
     // no original changed. A record-only delta cannot describe that transition.
@@ -436,7 +429,6 @@ export class ResearchCatalogue{
    operationAdvance();
    await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
-   if(websiteDocuments)await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteChange);
    await this.db.run("UPDATE state SET payload=$1 WHERE slot='head'",this.encode('state','head',{id:etag}));
    return etag;
    });
