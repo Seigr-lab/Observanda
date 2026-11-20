@@ -55,7 +55,8 @@ test('cached reads preserve authenticated identities, namespaces, limits and cal
  const file=sequenceFile('chunks',id),original=f.objects.get(file);f.objects.set(file,serialize(other));
  await withDatasetPreparationWrites(f.materials,{writePage:f.writePage},async m=>{
   await assert.rejects(m.sequences.read('chunks',id),{code:'MATERIAL_MISSING'});f.objects.set(file,original);assert.deepEqual(await m.sequences.read('chunks',id),value);
-  const absent='0'.repeat(64);assert.equal(await m.sequences.read('chunks',absent),null);assert.equal(await m.sequences.read('chunks',absent),null);assert.equal(f.reads.get(sequenceFile('chunks',absent)),2);
+  // Absence is never cached; each miss is confirmed through the writer as well.
+  const absent='0'.repeat(64);assert.equal(await m.sequences.read('chunks',absent),null);assert.equal(await m.sequences.read('chunks',absent),null);assert.equal(f.reads.get(sequenceFile('chunks',absent)),4);
  });
 });
 test('reading an existing immutable value never substitutes for retaining it through writer authority',async()=>{

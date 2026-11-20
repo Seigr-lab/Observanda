@@ -28,7 +28,10 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
   async read(kind,id,limit=1048576){
    signal?.throwIfAborted();const key=kind+':'+id,entry=pending.get(key)??touch(key);
    if(entry){if(entry.size>limit)throw new AppError('LIMIT');return structuredClone(entry.value);}
-   const value=await materials.sequences.read(kind,id,limit);signal?.throwIfAborted();
+   let value=await materials.sequences.read(kind,id,limit);signal?.throwIfAborted();
+   // A caller's read snapshot can predate objects this preparation has already
+   // committed and evicted from the bounded cache; the writer sees them.
+   if(value===null){value=await write(()=>materials.sequences.read(kind,id,limit));signal?.throwIfAborted();}
    // The ordinary reader authenticates the immutable identity before it enters
    // this bounded cache. Keep returned objects separate from retained values.
    if(value!==null)cache(key,value,Buffer.byteLength(serialize(value)));return value;
