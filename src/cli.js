@@ -10,13 +10,12 @@ import {clearVault} from './encryption.js';
 import {initializeLocation} from './locations.js';
 import {defaultLocation,preferencesLocation,readPreference,namedWorkspaceLocation} from './locations.js';
 import path from 'node:path';
-import os from 'node:os';
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
 import { Workspace } from './storage.js';
 import { createNotebook } from './model.js';
-import {writePublication} from './publication.js';
-import {PublicationJobs} from './publication-jobs.js';
+import {writeNewFolder} from './new-folder-output.js';
+import {WebsiteFileStore} from './website-file-store.js';
 import {catalogueDescriptor} from './research-catalogue.js';
 import { AppError, safeError } from './errors.js';
 import {intakeCLI} from './intake/cli.js';
@@ -38,7 +37,7 @@ try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     source:{type:'string'}, manifest:{type:'string'}, 'expect-pin':{type:'string'}, json:{type:'boolean'},
     action:{type:'string'}, 'workspace-id':{type:'string'}, 'record-id':{type:'string'}, id:{type:'string'}, pin:{type:'string'}, wait:{type:'boolean'},
-    workspace: { type: 'string' }, title: { type: 'string' }, out: { type: 'string' }, port: { type: 'string' },
+    workspace: { type: 'string' }, title: { type: 'string' }, out: { type: 'string' }, site: { type: 'string' }, port: { type: 'string' },
     'password-stdin': {type:'boolean'}, 'no-browser': { type: 'boolean' }, headless: {type:'boolean'}, setup: {type:'boolean'}, preferences: {type:'string'}, help: { type: 'boolean', short: 'h' }
   } });
   const command = positionals[0] ?? 'open';
@@ -89,10 +88,17 @@ try {
     if (command === 'build') {
       if (!values.out) { console.log(text('chooseOutput')); process.exitCode = 1; }
       else {
-        const outline=await workspace.outline();
-        const candidate=await new PublicationJobs(workspace).inline({workspaceId:outline.metadata.id,etag:outline.etag,blockedValues:[root,os.homedir(),os.hostname()]},{signal:startup.signal});
-        await writePublication(candidate, values.out);
-        console.log(text('exported',{entries:candidate.entries.length,files:candidate.files.size,release:candidate.id.slice(0,12)}));
+        // A website made in the website editor holds only what its lab books
+        // allow; its saved files are exported exactly as the editor publishes them.
+        const store=new WebsiteFileStore(workspace),sites=[];let after=null;
+        do{const page=await store.list({limit:100,after,signal:startup.signal});sites.push(...page.items);after=page.next;}while(after);
+        const named=sites.filter(site=>site.name===values.site),chosen=values.site===undefined?(sites.length===1?sites[0]:null):sites.find(site=>site.id===values.site)??(named.length===1?named[0]:null);
+        if(!chosen){console.log(sites.length?text('chooseSite',{sites:sites.map(site=>site.name).join(', ')}):text('noSites'));process.exitCode=1;}
+        else{
+          const exported=await store.export(chosen.id,{signal:startup.signal});
+          await writeNewFolder(exported.files,values.out);
+          console.log(text('exported',{pages:exported.site.pages.length,files:exported.files.size}));
+        }
       }
     }
     await clearVault(vault);password='';

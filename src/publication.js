@@ -44,16 +44,14 @@ import {renderRichText,richTextStyles} from './web/rich-text-model.js';
 import {formattedText} from './web/formatted-text.js';
 import {sectionItems,linkAvailable} from './web/website-model.js';
 import {staticSectionContent,sectionMarkup,sectionStyleDeclarations} from './web/website-section-markup.js';
-import {FileContent,contentSize,contentHash,writePublicFile} from './file-content.js';
-import { readFile, writeFile, lstat, unlink, rmdir, realpath } from 'node:fs/promises';
-import {atomicReplace as rename} from './atomic-replace.js';
-import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
+import {FileContent,contentSize,contentHash} from './file-content.js';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { fontCSS } from './fonts.js';
 import {variationCSS} from './web/font-catalogue.js';
 import { assertPublicFields, assertPublicFiles } from './privacy.js';
 import { AppError } from './errors.js';
+import {writeNewFolder} from './new-folder-output.js';
 import { digest, serialize } from './storage.js';
 
 const bookCSS = await readFile(new URL('./web/book.css', import.meta.url), 'utf8')+'\n'+await readFile(new URL('./web/public-feeds.css', import.meta.url), 'utf8')+'\n'+await readFile(new URL('./web/public-index.css', import.meta.url), 'utf8');
@@ -392,30 +390,7 @@ export function verifyPublicationManifest(candidate) {
 // This first slice writes only to a new destination. Existing output is never deleted.
 export async function writePublication(candidate, destination) {
   verifyPublication(candidate);
-  const target = path.resolve(destination);
-  await mkdir(path.dirname(target), { recursive: true });
-  const parent = await realpath(path.dirname(target));
-  const final = path.join(parent, path.basename(target));
-  try { await lstat(final); throw new AppError('EXISTS'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  const staging = path.join(parent, `.observanda-build-${randomUUID()}`);
-  await mkdir(staging, { mode: 0o700 });
-  try {
-    for (const [name, content] of candidate.files) {
-      const file = path.join(staging, name);
-      await mkdir(path.dirname(file), { recursive: true });
-      await writePublicFile(file,content);
-    }
-    verifyPublication(candidate);
-    // Recheck after staging: refuse any destination created in the meantime.
-    try { await lstat(final); throw new AppError('EXISTS'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    await rename(staging, final);
-  } finally {
-    // Only known staging members are removed. No recursive removal of user paths.
-    for (const name of candidate.files.keys()) await unlink(path.join(staging, name)).catch(() => {});
-    const directories = new Set([...candidate.files.keys()].map(name => path.dirname(name)).filter(name => name !== '.'));
-    for (const name of directories) await rmdir(path.join(staging, name)).catch(() => {});
-    await rmdir(staging).catch(() => {});
-  }
+  await writeNewFolder(candidate.files, destination, {beforeRename: () => verifyPublication(candidate)});
 }
 
 function crc32(bytes) {

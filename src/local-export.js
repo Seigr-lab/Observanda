@@ -1,5 +1,4 @@
 import {publicationWorkspace} from './publication-pin.js';
-import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
 import {discardNativeFiles,withNativeExport,nativeExportFingerprint,exportDirectoryIdentity} from './local-export-native-files.js';
 import os from 'node:os';
@@ -7,9 +6,6 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage.js';
-import {PublicationJobs} from './publication-jobs.js';
-import {AnalysisPublicationReview} from './analysis-publication-review.js';
-import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {contentHash,contentSize} from './file-content.js';
 import {researchId} from './web/research-reference.js';
 import {destinationDirectory,within,outputName,sameFile,stageFiles,checkOriginals,applyFiles,cleanFiles} from './local-export-files.js';
@@ -36,7 +32,7 @@ function checkMembers(files,changes=false){
 }
 
 export class LocalExport {
- constructor(workspace,{checkpoint=async()=>{},sourceReader,fileOwner}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.sourceReader=sourceReader;this.fileOwner=fileOwner;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
+ constructor(workspace,{checkpoint=async()=>{},fileOwner}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.fileOwner=fileOwner;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
  async read(file){const raw=await this.workspace.readMetadata(file,limit);if(raw===null)return null;try{return JSON.parse(raw);}catch{throw new AppError('LOCAL_EXPORT_DAMAGED');}}
  async save(plan,owner){
   if(Buffer.byteLength(serialize(plan))>(plan.version===2?16384:limit))throw new AppError('LIMIT');
@@ -56,26 +52,10 @@ export class LocalExport {
   if(within(workspace,directory)||within(directory,workspace)||applicationFiles||within(directory,application)||path.resolve(os.homedir())===directory)throw new AppError('UNSAFE');
   return directory;
  }
- // A session lock lasts across short, separately durable journal transactions.
- // It is released by PostgreSQL on process failure, without a stale disk lock.
- async locked(directory,operation){
-  if(this.fileOwner)return this.fileOwner.locked(directory,operation);
-  const db=await this.workspace.openCatalogue({detached:true});
-  try{if(!(await db.get('SELECT pg_catalog.pg_try_advisory_lock(pg_catalog.hashtextextended($1,0)) AS locked','local-export:'+directoryKey(directory))).locked)throw new AppError('LOCKED');return await operation();}
-  finally{await db.close();}
- }
- async candidate(id,{fresh=false}={}){
-  if(this.fileOwner)return this.fileOwner.candidate(id,{fresh});
-  // Authenticate the retained trees in one read snapshot. Opening a separate
-  // catalogue for each node repeats admission and shared branch reads.
-  const candidate=await this.workspace.catalogue(async()=>{
-   const value=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!value)throw new AppError('NOT_FOUND');
-   await verifyPublicationCandidate(value);return value;
-  });
-  await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
-  if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate))throw new AppError('PUBLISH_STALE');
-  return candidate;
- }
+ // Folder publishing belongs to one website made in the website editor. Its
+ // owner holds that website's lock and supplies the reviewed edition.
+ async locked(directory,operation){if(!this.fileOwner)throw new AppError('INVALID');return this.fileOwner.locked(directory,operation);}
+ async candidate(id,{fresh=false}={}){if(!this.fileOwner)throw new AppError('INVALID');return this.fileOwner.candidate(id,{fresh});}
  async plan({reviewId,directory}){
   const candidate=await this.candidate(reviewId,{fresh:true});directory=await this.directory(directory);
   return this.locked(directory,()=>withNativeExport({directory},async root=>{

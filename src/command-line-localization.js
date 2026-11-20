@@ -17,7 +17,7 @@ const usage=`  npm start
   node src/cli.js init --workspace "<parent>/Research Workspace 1" [--password-stdin]
   node src/cli.js inventory --source <export-directory> [--manifest inventory.observanda-source.json] [--expect-pin <sha256>] [--json]
   node src/cli.js validate --workspace <directory>
-  node src/cli.js build --workspace <directory> --out <new-directory>`;
+  node src/cli.js build --workspace <directory> --out <new-directory> [--site <website>]`;
 
 // A CLI invocation captures its language once. Reading it never repairs settings
 // or starts workspace/database services, including for --preferences --help.
