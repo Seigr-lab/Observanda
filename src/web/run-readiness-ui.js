@@ -18,7 +18,7 @@ export function runReadinessUI({call,frame,esc,field,guard,back,notify}){
   return '<details><summary>'+esc(tr('receiptDetails'))+'</summary><dl>'+pair('recordedAt',receipt.recordedAt)+pair('savedRevision',receipt.recordRevision)+pair('evidenceRevision',receipt.evidenceRevision)+pair('sourceRevision',source?.revision)+pair('sourceSha256',source?.sha256??receipt.sourceSha256)+
    (tool?pair('tool',tool.name??tool.tool)+pair('toolVersion',tool.version)+pair('toolSha256',tool.sha256):'')+
    (receipt.git?pair('repository',receipt.git.repository)+pair('commit',receipt.git.commit):'')+
-   (receipt.publication?pair('website',receipt.publication.websiteName??tr('workspaceWebsite'))+pair('release',receipt.publication.releaseId)+pair('publicationJob',receipt.publication.jobId):'')+pair('pin',receipt.pin)+'</dl>'+(receipt.publication?'<p>'+esc(tr('preparedOnly'))+'</p>':'')+'</details>';
+   (receipt.publication?pair('website',receipt.publication.websiteName??tr('workspaceWebsite'))+pair('release',receipt.publication.releaseId)+pair('publishedAt',receipt.publication.publishedAt):'')+pair('pin',receipt.pin)+'</dl>'+(receipt.publication?'<p>'+esc(tr('preparedOnly'))+'</p>':'')+'</details>';
  }
  async function home({cursor:nextCursor=null,previous=[],criteriaOffset=0,expectedRevision}={}){
   const at=++generation,result=await call('readiness',{receiptCursor:nextCursor,criteriaOffset,...(expectedRevision?{expectedRevision}:{})});guard();if(at!==generation)return;view=result;receiptCursor=nextCursor;receiptBack=previous;
@@ -31,10 +31,10 @@ export function runReadinessUI({call,frame,esc,field,guard,back,notify}){
  function form({loading=false}={}){
   frame(tr('addReceipt'),select('kind',['validation','publication','git'].map(k=>[k,tr(k)]),draft.kind)+(draft.kind==='publication'?
    select('website',websiteChoices(),draft.website)+websiteControls()+'<p>'+esc(tr('preparedOnly'))+'</p>'+
-   (loading?'<p role="status">'+esc(tr('loadingEditions'))+'</p>':page.items.length?select('edition',page.items.map(s=>[s.jobId,s.createdAt+' · '+s.releaseId.slice(0,12)+' · '+tr(s.current?'current':'earlier')]),draft.edition):'<p>'+esc(tr('noEditions'))+'</p>')+
+   (loading?'<p role="status">'+esc(tr('loadingEditions'))+'</p>':page.items.length?select('edition',page.items.map(s=>[s.releaseId,s.publishedAt+' · '+s.releaseId.slice(0,12)+' · '+tr(s.current?'current':'earlier')]),draft.edition):'<p>'+esc(tr('noEditions'))+'</p>')+
    (cursor?button('latestEditions','latest'):'')+(page.next?button('olderEditions','more'):''):
    input('sourceRevision')+input('sourceSha256',64)+field(tr('statement'),'<textarea id="readiness-statement" data-receipt-field="statement" required maxlength="2000">'+esc(draft.statement??'')+'</textarea>')+(draft.kind==='git'?input('repository')+input('commit',64):input('tool',200)+input('toolVersion',200)+input('toolSha256',64))+'<p>'+esc(tr('declared'))+'</p>'),
-   button('readiness','home')+button('saveReceipt','save',loading||websiteLoading||draft.kind==='publication'&&!page.items.find(s=>s.jobId===draft.edition)?.current?'disabled':''));
+   button('readiness','home')+button('saveReceipt','save',loading||websiteLoading||draft.kind==='publication'&&!page.items.find(s=>s.releaseId===draft.edition)?.current?'disabled':''));
   document.getElementById('readiness-kind').onchange=()=>{capture();cursor=null;void changeKind().catch(error=>notify(error.message,true));};
   if(draft.kind==='publication'){
    document.getElementById('readiness-website').disabled=websiteLoading;
@@ -51,7 +51,7 @@ export function runReadinessUI({call,frame,esc,field,guard,back,notify}){
  }
  async function editions(){
   const at=++generation;form({loading:true});
-  try{const result=await call('receipt-editions',{websiteId:draft.website||null,cursor,expectedRevision:view.revision});guard();if(at!==generation)return;page=result;if(!page.items.some(s=>s.jobId===draft.edition))draft.edition=page.items.find(s=>s.current)?.jobId??page.items[0]?.jobId??'';form();}
+  try{const result=await call('receipt-editions',{websiteId:draft.website||null,cursor,expectedRevision:view.revision});guard();if(at!==generation)return;page=result;if(!page.items.some(s=>s.releaseId===draft.edition))draft.edition=page.items.find(s=>s.current)?.releaseId??page.items[0]?.releaseId??'';form();}
   catch(error){if(at!==generation)return;page={items:[],next:null};form();throw error;}
  }
  async function changeKind(){if(draft.kind==='publication'){page={items:[],next:null};if(await websites())await editions();}else{stop();websiteLoading=false;form();}}
@@ -69,7 +69,7 @@ export function runReadinessUI({call,frame,esc,field,guard,back,notify}){
    if(action==='save'){
     if(!document.getElementById('material-form').reportValidity())return true;capture();
     const command={kind:draft.kind,expectedRevision:view.revision,expectedEvidenceRevision:view.evidenceRevision};
-    if(draft.kind==='publication'){command.websiteId=draft.website||null;command.publicationJob=draft.edition;}
+    if(draft.kind==='publication'){command.websiteId=draft.website||null;command.releaseId=draft.edition;}
     else for(const key of ['statement','sourceRevision','sourceSha256',...(draft.kind==='git'?['repository','commit']:['tool','toolVersion','toolSha256'])])command[key]=draft[key];
     const identity=JSON.stringify(command);if(request?.identity!==identity)request={identity,id:crypto.randomUUID()};
     await call('link-receipt',{...command,id:request.id});guard();if(at===generation)await home();

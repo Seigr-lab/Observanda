@@ -41,6 +41,7 @@ import {websiteVersions} from './website-versions.js';
 import {restoreWebsitePageVersion} from './website-version-restore.js';
 import {websiteVersionDesign} from './website-version-design.js';
 import {websiteEdition,isWithdrawalRelease} from './website-withdrawal-edition.js';
+import {placedReleaseRecords} from './website-release-records.js';
 import {recordRelease} from './website-release-ledger.js';
 import {websiteReleaseOverview} from './website-release-overview.js';
 import {websiteDiscovery} from './website-discovery-settings.js';
@@ -99,10 +100,13 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
  // The history version that holds this saved revision, recorded with each
  // completed delivery so the edition can later be reopened from history.
  const savedVersion=(siteId,expectedRevision)=>store.scope(async()=>(await readVersionIndex(store,await store.current(siteId,expectedRevision))).entries[0]?.id??null,{signal});
- const recordRemoteRelease=async(target,transfer,version,expectedRevision)=>{
+ const recordRemoteRelease=async(target,transfer,version,expectedRevision,siteId)=>{
   if(!transfer?.receipt||!['completed','settled'].includes(transfer.state))return;
   const saved=await target.read();if(!saved.destinationKey)return;
-  await recordRelease(target.workspace,{releaseId:transfer.releaseId,revision:transfer.revision,version:transfer.revision===expectedRevision?version:null,edition:isWithdrawalRelease(transfer.releaseId)?'withdrawal':'website',destination:{kind:saved.config.kind,key:saved.destinationKey},completedAt:transfer.receipt.at??transfer.updatedAt});
+  // Placed records are known only while the delivered revision is still the saved one.
+  const withdrawal=isWithdrawalRelease(transfer.releaseId),current=transfer.revision===expectedRevision;
+  const records=!withdrawal&&current?await placedReleaseRecords(store,siteId,transfer.revision,{signal}).catch(error=>{if(error.code==='CONFLICT')return null;throw error;}):null;
+  await recordRelease(target.workspace,{releaseId:transfer.releaseId,revision:transfer.revision,version:current?version:null,edition:withdrawal?'withdrawal':'website',destination:{kind:saved.config.kind,key:saved.destinationKey},completedAt:transfer.receipt.at??transfer.updatedAt},{records});
  };
  try{
   if(req.method==='GET'&&operation.startsWith('gallery/image/')){
@@ -455,7 +459,9 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    const local=new LocalExport(metadata,{fileOwner:{locked:(_directory,task)=>store.withSite(siteId,expectedRevision,task),
     completed:async plan=>{
      await rememberPublishTarget(metadata,'folder',plan.directory,plan.completedAt);
-     await recordRelease(metadata,{releaseId:plan.releaseId,revision:expectedRevision,version,edition:isWithdrawalRelease(plan.releaseId)?'withdrawal':'website',destination:{kind:'folder',directory:plan.directory},completedAt:plan.completedAt});
+     // The site lock holds this saved revision, so its placed records are exact.
+     const withdrawal=isWithdrawalRelease(plan.releaseId),records=withdrawal?null:await placedReleaseRecords(store,siteId,expectedRevision,{signal});
+     await recordRelease(metadata,{releaseId:plan.releaseId,revision:expectedRevision,version,edition:withdrawal?'withdrawal':'website',destination:{kind:'folder',directory:plan.directory},completedAt:plan.completedAt},{records});
     },candidate:async(reviewId,{fresh=false}={})=>{
     const value=await reviewedEdition(reviewId);
     if(fresh)await assertPublicationApproval(metadata,value);
@@ -473,7 +479,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
    if(!revision(expectedRevision)||!researchId(options.id))throw new AppError('INVALID');
    const target=await publisher(siteId),version=await savedVersion(siteId,expectedRevision);
    await observed(()=>operationStage('remoteSettleProgress',{},()=>withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
-    const transfer=await settleWebsiteTransfer(target,{...options,signal});await recordRemoteRelease(target,transfer,version,expectedRevision);return transfer;
+    const transfer=await settleWebsiteTransfer(target,{...options,signal});await recordRemoteRelease(target,transfer,version,expectedRevision,siteId);return transfer;
    }))));return true;
   }
   if(operation==='publish/verify'){
@@ -509,7 +515,7 @@ export async function websiteFilesHttp(req,res,{url,workspace,contextId,title,ac
     return withPublication(()=>store.withSite(siteId,expectedRevision,async()=>{
      await rememberPublishTarget(target.workspace,'remote');
      const result=await publishWebsiteTransfer(target,candidate,{configEtag:options.configEtag,id:options.destinationReview,ownerId:workspace.vault?.id,signal,retryPages:options.retryPages===true,validateSSH:()=>sshReview(target.workspace,options.destinationReview,expectedRevision,saved.etag)});
-     await recordRemoteRelease(target,result.transfer,version,expectedRevision);return result;
+     await recordRemoteRelease(target,result.transfer,version,expectedRevision,siteId);return result;
     }));
    }));
    return true;

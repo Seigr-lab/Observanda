@@ -1,10 +1,8 @@
-import {openPublicationInput} from './publication-input-reader.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
-import {PublicationJobs} from './publication-jobs.js';
-import {WebsiteDocumentStore} from './website-document-store.js';
-import {websiteWorkspace} from './website-workspace.js';
+import {websitePublicationMetadata} from './website-publication-metadata.js';
+import {readReleaseLedger,readReleaseRecords} from './website-release-ledger.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 
@@ -35,46 +33,44 @@ export function declaredReceipt(command){
  }
  return receipt;
 }
-export async function receiptWebsite(workspace,websiteId=null){
+// Publication receipts cite a website made in the website editor and one of
+// its published versions that showed this exact record revision. Only labels,
+// identities and dates cross this boundary; no website files are read.
+function websiteFiles(files){if(!files||typeof files.list!=='function')throw new AppError('INTAKE_RECEIPT');return files;}
+async function releaseRows(files,websiteId){
  if(websiteId!==null&&!researchId(websiteId))throw new AppError('INTAKE_INVALID');
- const scoped=websiteWorkspace(workspace,websiteId);let name=null;
- if(await workspace.storageKind()==='catalogue'){
-  try{name=(await workspace.catalogue(store=>new WebsiteDocumentStore(store).head(websiteId,{includeRemoved:true}))).name;}
-  catch(error){if(error.code!=='NOT_FOUND')throw error;}
- }else name=(await scoped.website()).name;
- return {workspace:scoped,websiteId,name};
+ const metadata=websitePublicationMetadata(await files.publicationWorkspace(websiteId));
+ return {metadata,rows:(await readReleaseLedger(metadata)).filter(row=>row.edition==='website')};
 }
-export async function publicationReceipt(workspace,{websiteId=null,publicationJob},recordId,revision){
- if(!researchId(publicationJob))throw new AppError('INTAKE_INVALID');
- const scoped=await receiptWebsite(workspace,websiteId),source=await new PublicationJobs(scoped.workspace).source(publicationJob);
- const raw=await scoped.workspace.readMetadata('.observanda/release-candidates/'+source.reviewId+'.json',16*1024*1024);
- const input=await openPublicationInput(scoped.workspace,source),record=await input.recordTarget({workspaceId:source.workspaceId,kind:'record',id:recordId,revision});
- if(!raw||!record)throw new AppError('INTAKE_RECEIPT');
- const candidate=JSON.parse(raw),metadata=await input.metadata();
- if(candidate.jobId!==source.id||candidate.reviewId!==source.reviewId||!revisionId(candidate.id)||(candidate.websiteId??null)!==websiteId||(source.websiteId??null)!==websiteId)throw new AppError('INTAKE_RECEIPT');
- return {jobId:source.id,reviewId:source.reviewId,releaseId:candidate.id,websiteId,websiteName:scoped.name??metadata.website?.title??metadata.title,createdAt:candidate.createdAt};
+async function releaseRecord(metadata,row,{workspaceId,recordId}){
+ const records=await readReleaseRecords(metadata,row.releaseId);
+ return records?.find(item=>item.workspaceId===workspaceId&&item.recordId===recordId)??null;
 }
-export async function receiptEditions(workspace,{websiteId=null,cursor=null},recordId,revision,{signal}={}){
- const scoped=await receiptWebsite(workspace,websiteId),releases=new PublicationJobs(scoped.workspace),page=await releases.feed.page({cursor,limit:20}),items=[];
- for(const item of page.items){
-  signal?.throwIfAborted();const source=await releases.source(item.id),input=await openPublicationInput(scoped.workspace,source,{signal}),exact=await input.recordTarget({workspaceId:source.workspaceId,kind:'record',id:recordId,revision});
-  let selected=exact;
-  if(!selected){if(source.version===6)selected=(await input.window('records',{index:'original',prefix:source.workspaceId+'/'+recordId+'/',limit:1})).items[0];else selected=(source.records??[]).find(row=>(row.recordId??row.id)===recordId);}
-  if(!selected)continue;
-  try{const ref=await publicationReceipt(workspace,{websiteId,publicationJob:item.id},recordId,selected.revision);items.push({...ref,current:!!exact});}
-  catch(error){if(error.code!=='INTAKE_RECEIPT')throw error;}
+async function websiteName(files,websiteId){
+ for(let after=null;;){
+  const page=await files.list({limit:100,after});const site=page.items.find(item=>(item.id??null)===websiteId);if(site)return site.name;
+  if(!page.next)return null;after=page.next;
  }
- return {items,next:page.next};
 }
-
-// Only labels and owner IDs cross this continuation boundary. Selecting an
-// edition resolves its own immutable source separately.
-export async function receiptWebsites(workspace,{after=null,limit=20,signal}={}){
- if(after!==null&&after!=='default'&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>20)throw new AppError('INTAKE_INVALID');
- if(await workspace.storageKind()==='catalogue')return workspace.catalogue(async store=>{
-  const page=await new WebsiteDocumentStore(store).list({after,limit,includeDefault:after===null});signal?.throwIfAborted();
-  return {items:page.sites.map(({websiteId,name})=>({id:websiteId,name})),next:page.next};
- });
- const {metadata}=await workspace.outline(),sites=[{id:null,name:metadata.website.title||metadata.title},...(metadata.websites??[])].filter(site=>after===null||site.id!==null&&(after==='default'||site.id>after)).sort((a,b)=>a.id===null?-1:b.id===null?1:a.id<b.id?-1:1),items=sites.slice(0,limit).map(({id,name})=>({id,name}));
- return {items,next:sites.length>limit?(items.at(-1).id??'default'):null};
+export async function publicationReceipt(files,{websiteId=null,releaseId},owner){
+ if(!revisionId(releaseId))throw new AppError('INTAKE_INVALID');
+ files=websiteFiles(files);const {metadata,rows}=await releaseRows(files,websiteId),row=rows.find(item=>item.releaseId===releaseId);
+ const record=row?await releaseRecord(metadata,row,owner):null;
+ if(!record||record.recordRevision!==owner.revision)throw new AppError('INTAKE_RECEIPT');
+ return {websiteId,websiteName:await websiteName(files,websiteId),releaseId,siteRevision:row.revision,publishedAt:row.completedAt};
+}
+const EDITION_PAGE=20;
+export async function receiptEditions(files,{websiteId=null,cursor=null},owner,{signal}={}){
+ const offset=cursor===null?0:Number(cursor);if(!Number.isSafeInteger(offset)||offset<0)throw new AppError('INTAKE_INVALID');
+ const {metadata,rows}=await releaseRows(websiteFiles(files),websiteId),items=[];
+ for(const row of rows.slice(offset,offset+EDITION_PAGE)){
+  signal?.throwIfAborted();const record=await releaseRecord(metadata,row,owner);
+  if(record)items.push({releaseId:row.releaseId,publishedAt:row.completedAt,current:record.recordRevision===owner.revision});
+ }
+ return {items,next:offset+EDITION_PAGE<rows.length?String(offset+EDITION_PAGE):null};
+}
+export async function receiptWebsites(files,{after=null,limit=20,signal}={}){
+ if(after!==null&&(typeof after!=='string'||after.length>100)||!Number.isSafeInteger(limit)||limit<1||limit>20)throw new AppError('INTAKE_INVALID');
+ const page=await websiteFiles(files).list({limit,after,signal});
+ return {items:page.items.map(site=>({id:site.id??null,name:site.name})),next:page.next};
 }

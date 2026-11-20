@@ -20,7 +20,8 @@ import {RunReceiptStore} from './run-receipt-store.js';
 import {attemptDocumentReadiness} from './record-attempt-document.js';
 const prefix='.observanda/run-readiness/';
 export class RunReadiness{
- constructor(workspace){this.workspace=workspace;this.materials=new ResearchMaterials(workspace);}
+ // Websites belong to the workspace's website editor, also when this record's owner is a project or lab book.
+ constructor(workspace,{websiteFiles=null}={}){this.workspace=workspace;this.websiteFiles=websiteFiles;this.materials=new ResearchMaterials(workspace);}
  async json(name,fallback){const raw=await readRecordOwnerMetadata(this.workspace,prefix+name+'.json',1024*1024);if(raw===null)return fallback;try{return JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}}
  async target(command,{attempt=false,criteriaOffset=0,signal}={}){
   if(!researchId(command.recordId)||!researchId(command.workspaceId))throw new AppError('INTAKE_INVALID');
@@ -30,7 +31,7 @@ export class RunReadiness{
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MATERIAL_INVALID');
    const summary=await materialRecordSummary(store,row),record={id:row.id};
    if(attempt)record.unresolvedCriteria=await withRecordDocument(store,row.id,row.revision,document=>attemptDocumentReadiness(document,{signal,offset:criteriaOffset}));
-   return {record,revision:summary.revision,projectId:snapshot.metadata.notebooks.find(n=>n.id===row.notebookId)?.projectId};
+   return {record,revision:summary.revision,documentRevision:row.revision,projectId:snapshot.metadata.notebooks.find(n=>n.id===row.notebookId)?.projectId};
   });
   const book=await this.materials.owner(command.recordId);if(book.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const record=book.entries[0],revision=recordRevision(record),projectId=book.notebooks.find(n=>n.id===record.notebookId)?.projectId;
@@ -40,7 +41,7 @@ export class RunReadiness{
  async receiptPage(recordId,options){return this.receiptStore(recordId).page(options);}
  async appendLocked(recordId,receipt){return this.receiptStore(recordId).appendLocked(receipt);}
  async link(command){return this.workspace.withLock(async()=>{
-  const {record,revision}=await this.target(command);
+  const {record,revision,documentRevision}=await this.target(command);
   if(!researchId(command.id)||!receiptKinds.includes(command.kind))throw new AppError('INTAKE_INVALID');
   const prior=await this.receiptStore(record.id).getLocked(command.id),request=intakeHash(command);
   if(prior){if(!await projectRunRequestMatches(this.workspace,command,prior))throw new AppError('INTAKE_CHANGED');return prior;}
@@ -49,12 +50,13 @@ export class RunReadiness{
   if(command.expectedEvidenceRevision!==undefined&&command.expectedEvidenceRevision!==evidenceRevision)throw new AppError('INTAKE_CHANGED');
   const receipt={id:command.id,kind:command.kind,recordRevision:revision,evidenceRevision,request,recordedAt:new Date().toISOString()};
   if(command.kind==='publication'){
-   receipt.publication=await publicationReceipt(this.workspace,command,record.id,revision);
+   // Website copies record the stored document revision of the record they show.
+   receipt.publication=await publicationReceipt(this.websiteFiles,command,{workspaceId:command.workspaceId,recordId:record.id,revision:documentRevision});
   }else Object.assign(receipt,declaredReceipt(command));
   await this.materials.retainCurrentRecordLocked(record.id);return this.appendLocked(record.id,receipt);
  });}
- async websites(command,{signal}={}){return this.materials.readSnapshot(async()=>{const {revision}=await this.target(command,{signal});if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptWebsites(this.workspace,{after:command.after??null,limit:command.limit??20,signal});});}
- async editions(command,options){return this.materials.readSnapshot(async()=>{const {record,revision}=await this.target(command,options);if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptEditions(this.workspace,command,record.id,revision,options);});}
+ async websites(command,{signal}={}){return this.materials.readSnapshot(async()=>{const {revision}=await this.target(command,{signal});if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptWebsites(this.websiteFiles,{after:command.after??null,limit:command.limit??20,signal});});}
+ async editions(command,options){return this.materials.readSnapshot(async()=>{const {record,revision,documentRevision}=await this.target(command,options);if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptEditions(this.websiteFiles,command,{workspaceId:command.workspaceId,recordId:record.id,revision:documentRevision},options);});}
  async policy(projectId){if(!researchId(projectId))throw new AppError('INTAKE_INVALID');return this.json('projects/'+projectId,{version:1,required:[]});}
  async setPolicy(command){return this.workspace.withLock(async()=>{
   const {projectId}=await this.target(command),current=await this.policy(projectId);

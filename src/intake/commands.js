@@ -4,6 +4,10 @@ import {MAX_BYTES} from '../model.js';
 import {AppError} from '../errors.js';
 import {LocalIntake} from './service.js';
 import {RunReadiness} from '../run-readiness.js';
+import {WebsiteFileStore} from '../website-file-store.js';
+// Workspace requests use their own website files; project and lab book
+// requests pass the workspace's website files explicitly.
+const receiptWebsiteFiles=(workspace,options)=>options.websiteFiles??new WebsiteFileStore(workspace);
 export async function intakeCommand(workspace,queue,action,command,options={}){
  if(!command||command.version!==1)throw new AppError('INTAKE_INVALID');
  const {version,...input}=command;void version;
@@ -30,9 +34,9 @@ export async function intakeCommand(workspace,queue,action,command,options={}){
   return action==='builder-folder'?builderFolder(service,input,options):buildIntake(service,input,options);
  }
  if(action==='readiness'){const readiness=new RunReadiness(workspace);return withComparisonInputs(readiness.materials,options,inputs=>readiness.view(input,{...options,inputs}));}
- if(action==='receipt-websites')return new RunReadiness(workspace).websites(input,options);
- if(action==='receipt-editions')return new RunReadiness(workspace).editions(input,options);
- if(action==='link-receipt')return new RunReadiness(workspace).link(input);
+ if(action==='receipt-websites')return new RunReadiness(workspace,{websiteFiles:receiptWebsiteFiles(workspace,options)}).websites(input,options);
+ if(action==='receipt-editions')return new RunReadiness(workspace,{websiteFiles:receiptWebsiteFiles(workspace,options)}).editions(input,options);
+ if(action==='link-receipt')return new RunReadiness(workspace,{websiteFiles:receiptWebsiteFiles(workspace,options)}).link(input);
  if(action==='policy')return new RunReadiness(workspace).setPolicy(input);
  if(['preview','stage','apply','status','list'].includes(action))return service[action](input,options);
  if(action==='cancel'||action==='resume')return service.control(input,action==='resume'?'retry':'cancel');

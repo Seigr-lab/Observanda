@@ -11,7 +11,7 @@ import {websiteFilesHttp} from '../src/website-files-http.js';
 import {defaultPublishing} from '../src/publishing.js';
 import {githubFixture} from './github-fixture.js';
 import {withdrawalNotice,isWithdrawalRelease} from '../src/website-withdrawal-edition.js';
-import {recordRelease,readReleaseLedger,maxReleaseEntries} from '../src/website-release-ledger.js';
+import {recordRelease,readReleaseLedger,readReleaseRecords,maxReleaseEntries} from '../src/website-release-ledger.js';
 
 async function fixture(t,publisherOptions){
  const area=await mkdtemp(path.join(os.tmpdir(),'observanda-release-')),root=path.join(area,'workspace'),folder=path.join(area,'published');
@@ -107,13 +107,19 @@ test('a GitHub destination withdraws through the reviewed transfer and records t
  assert.equal(overview.changes.counts.removed,0);assert.ok(overview.changes.samples.added.includes('style.css'));
 });
 
-test('the release ledger is bounded, idempotent and rejects damaged rows',async()=>{
- const values=new Map(),metadata={withLock:task=>task(),readMetadata:async name=>values.get(name)??null,writeMetadata:async(name,value)=>{values.set(name,value);}};
+test('the release ledger is bounded, idempotent, keeps the records each release showed and rejects damaged rows',async()=>{
+ const values=new Map(),metadata={withLock:task=>task(),readMetadata:async name=>values.get(name)??null,writeMetadata:async(name,value)=>{values.set(name,value);},removeMetadata:async name=>{values.delete(name);}};
  const row=i=>({releaseId:i.toString(16).padStart(64,'0'),revision:'a'.repeat(64),version:null,edition:'website',destination:{kind:'folder',directory:'/srv/site'},completedAt:new Date(Date.UTC(2026,0,1,0,0,i)).toISOString()});
- for(let i=0;i<maxReleaseEntries+5;i++)await recordRelease(metadata,row(i));
+ // Each published version names the records it showed; the list leaves with its ledger row.
+ const shown=i=>[{workspaceId:'11111111-1111-4111-8111-111111111111',recordId:'22222222-2222-4222-8222-222222222222',recordRevision:i.toString(16).padStart(64,'b')}];
+ for(let i=0;i<maxReleaseEntries+5;i++)await recordRelease(metadata,row(i),{records:shown(i)});
  await recordRelease(metadata,row(maxReleaseEntries+4));
  const entries=await readReleaseLedger(metadata);
  assert.equal(entries.length,maxReleaseEntries);assert.equal(entries[0].releaseId,row(maxReleaseEntries+4).releaseId);
+ assert.deepEqual(await readReleaseRecords(metadata,row(maxReleaseEntries+4).releaseId),shown(maxReleaseEntries+4));
+ assert.equal(await readReleaseRecords(metadata,row(0).releaseId),null);
+ await assert.rejects(recordRelease(metadata,{...row(90),edition:'withdrawal'},{records:shown(90)}),{code:'INVALID'});
+ await assert.rejects(recordRelease(metadata,row(91),{records:[{...shown(91)[0],recordRevision:'short'}]}),{code:'INVALID'});
  await assert.rejects(recordRelease(metadata,{...row(1),destination:{kind:'folder',directory:'relative/path'}}),{code:'INVALID'});
  values.set('.observanda/website-releases.json',JSON.stringify({version:1,entries:[{...row(1),edition:'draft'}]}));
  await assert.rejects(readReleaseLedger(metadata),{code:'JOB_DAMAGED'});
