@@ -58,7 +58,6 @@
   "verify-evidence": "Verifying evidence and datasets",
   "verify-collaboration": "Verifying collaboration records",
   "verify-media": "Verifying media originals",
-  "verify-publication": "Verifying publishing data",
   "verify-history": "Verifying record history",
   "verify-drafts": "Verifying recovery checkpoints",
   "activate": "Opening the verified workspace",

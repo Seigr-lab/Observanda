@@ -1,18 +1,13 @@
-import {githubPlanJobDefinitions} from './github-plan-jobs.js';
 import {inventoryMaintenanceJobDefinitions} from './inventory-maintenance-jobs.js';
 import {ComparisonJobAccess} from './comparison-job-access.js';
-import {publicationVerificationDefinitions} from './publication-verification-jobs.js';
-import {deploymentJobDefinitions} from './deployment-jobs.js';
 import {repositoryJobDefinitions} from './github-repository.js';
 import {Publisher} from './publishing.js';
-import {publicationJobDefinitions} from './publication-jobs.js';
-import {analysisPublicationReviewDefinitions} from './analysis-publication-review-jobs.js';
 // Modules provide job semantics; one workspace worker schedules all types.
+import {AppError} from './errors.js';
 import {DurableJobs,JobWorker} from './jobs.js';
 import {researchJobDefinitions} from './research-jobs.js';
 import {mediaJobDefinitions} from './media-imports.js';
 import {intakeJobDefinitions} from './intake/jobs.js';
-import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
 import {WebsiteFileStore} from './website-file-store.js';
 import {fileSiteWorkspace,fileSiteJobQueue} from './website-files-repository.js';
 import {workspaceMoveJobDefinitions,recoverWorkspaceMove} from './workspace-move-jobs.js';
@@ -21,21 +16,17 @@ export function websitePublisher(publisher,workspace){
  const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,liveRequest:publisher.liveRequest,ssh:publisher.ssh,sftp:publisher.sftp,ftp:publisher.ftp,hostCredentials:publisher.hostCredentials,connection:publisher.connection},workspace.vault);
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
-function publicationDefinitions(workspace,publisher,current,services){
- const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q,services),...analysisPublicationReviewDefinitions(w,p,q,services),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q),...githubPlanJobDefinitions(w,p,q,services)});
- const defaultWorkspace=websiteWorkspace(workspace,null),normal=definitions(defaultWorkspace,websitePublisher(publisher,defaultWorkspace),()=>websiteJobQueue(current(),null)),result={};
- for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
-  if(job.input.fileSiteId){
-   // A website made in the website editor keeps its publication state with its own files.
-   const scoped=fileSiteWorkspace(workspace,new WebsiteFileStore(workspace),job.input.fileSiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>fileSiteJobQueue(current(),job.input.fileSiteId));
-   return services[type][method](job,...args);
-  }
-  if(!job.input.websiteId)return definition[method](job,...args);
-  const scoped=websiteWorkspace(workspace,job.input.websiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>websiteJobQueue(current(),job.input.websiteId));
+// Websites made in the website editor run only repository setup as jobs. Each
+// job carries its site id and keeps its journal with that website's own files.
+function publicationDefinitions(workspace,publisher,current){
+ const definitions=(w,p,q)=>repositoryJobDefinitions(w,p,q),result={};
+ for(const [type,definition] of Object.entries(definitions(workspace,publisher,current)))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
+  if(!job.input.fileSiteId)throw new AppError('JOB_UNSUPPORTED');
+  const scoped=fileSiteWorkspace(workspace,new WebsiteFileStore(workspace),job.input.fileSiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>fileSiteJobQueue(current(),job.input.fileSiteId));
   return services[type][method](job,...args);
  }]));return result;
 }
-export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...workspaceMoveJobDefinitions(workspace),...inventoryMaintenanceJobDefinitions(workspace,current),...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current,services),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
+export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...workspaceMoveJobDefinitions(workspace),...inventoryMaintenanceJobDefinitions(workspace,current),...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current,services),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current)};}
 export function workspaceJobs(workspace,publisher=new Publisher(workspace.root,{},workspace.vault),options={}){
  const current=()=>queue,comparisonAccess=options.comparisonAccess??new ComparisonJobAccess();
  const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current,{sourceAccess:options.sourceAccess,comparisonAccess}),options);

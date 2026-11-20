@@ -22,7 +22,7 @@ test('copy progress measures files, archive rows and verified revisions while pr
  for(const stage of ['archive-table','verify-snapshots','verify-history']){
   const completed=events.filter(e=>e.stage===stage&&e.total>0&&e.completed===e.total);assert.ok(completed.length,stage);
  }
- for(const stage of ['verify-evidence','verify-publication','verify-collaboration'])assert.ok(events.some(e=>e.stage===stage),stage);
+ for(const stage of ['verify-evidence','verify-collaboration'])assert.ok(events.some(e=>e.stage===stage),stage);
  assert.ok(events.some(e=>e.stage==='verify-snapshots'&&e.activity.objects>0));
  const next=await createAccess('','fresh synthetic progress password'),vault=takeCreatedVault(next);t.after(()=>clearVault(vault));const rekey=[];
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),next,vault,f.vault,{onProgress:e=>rekey.push(e)});

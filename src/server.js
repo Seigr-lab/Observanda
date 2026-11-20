@@ -284,7 +284,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
   let context=makeContext(root,expectedExisting), origin, publishing=false, importing=false, changing=false, activeWrites=0, loginBusy=false;
-  const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
+  const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.repository']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   const sessions=new Map(), plans=new Map(), failures=new Map();
   const launches=new LaunchCapabilities(),downloads=new DownloadCapabilities();
   let contextRequired=false;

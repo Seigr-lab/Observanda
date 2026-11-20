@@ -5,9 +5,7 @@ import {Workspace} from '../../src/storage.js';
 import {CATALOGUE_ARCHIVE} from '../../src/postgres.js';
 import {CATALOGUE_ACTIVATION} from '../../src/postgres-activation.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
-import {PublicationJobs} from '../../src/publication-jobs.js';
 import {workspaceJobs} from '../../src/workspace-jobs.js';
-import {websiteWorkspace,websiteJobQueue} from '../../src/website-workspace.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {copyPlan,encryptedCopy} from '../../src/locations.js';
 import {WorkspaceCopyRecovery} from '../../src/workspace-copy-recovery.js';
@@ -41,10 +39,6 @@ process.once('message',async({root,vault,point,upload,record,websiteId,intake,fr
    const freshVault={...freshCopy.vault,key:Buffer.from(freshCopy.vault.key,'base64')},recovery=new WorkspaceCopyRecovery(workspace,freshCopy.destination,{encryptionAccess:freshCopy.access});
    const plan={...await copyPlan(root,freshCopy.destination,{vault:workspace.vault}),encrypted:true};
    await recovery.run(plan,{value:{projects:[]}},()=>encryptedCopy(plan,freshCopy.access,freshVault,workspace.vault,{recovery}));
-  }else if(point==='publication-capture'){
-   let count=0;const read=ResearchCatalogue.prototype.record,storage=websiteWorkspace(workspace,websiteId);
-   ResearchCatalogue.prototype.record=async function(...args){const value=await read.apply(this,args);if(++count===40)await pause();return value;};
-   const {etag,websitePin}=await storage.outline();await new PublicationJobs(storage).captureStart({etag,websitePin},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
   }else if(point==='evidence-intake-checkpoint'){
    let receipts=0;const write=workspace.writeMetadata.bind(workspace),{worker}=workspaceJobs(workspace);
    workspace.writeMetadata=async(file,value)=>{

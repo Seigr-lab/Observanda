@@ -7,11 +7,15 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {Publisher,defaultPublishing} from '../src/publishing.js';
-import {workspaceJobs} from '../src/workspace-jobs.js';
-import {GithubRepositorySetup} from '../src/github-repository.js';
+import {workspaceJobs,websitePublisher} from '../src/workspace-jobs.js';
+import {WebsiteFileStore} from '../src/website-file-store.js';
+import {fileSiteRepositorySetup,fileSiteWorkspace} from '../src/website-files-repository.js';
 import {repositoryFixture} from './github-fixture.js';
 const token='synthetic_github_token_1234567890';
-async function fixture(t,options){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-repository-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture(options),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),jobs=workspaceJobs(f.workspace,publisher),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:true});await publisher.connect(token);t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,remote,publisher,config,setup:new GithubRepositorySetup(f.workspace,publisher,jobs.queue),command:{config,etag:'new',visibility:'public',confirmed:true}};}
+async function fixture(t,options){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-repository-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture(options),base=new Publisher(f.workspace.root,{request:remote.request},f.vault),jobs=workspaceJobs(f.workspace,base),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:true});await base.connect(token);
+ // Repository setup belongs to one website made in the website editor.
+ const store=new WebsiteFileStore(f.workspace),siteId=(await store.create({name:'Repository site'})).site.id,publisher=websitePublisher(base,fileSiteWorkspace(f.workspace,store,siteId));
+ t.after(async()=>{await jobs.worker.stop();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,...jobs,remote,publisher,config,setup:fileSiteRepositorySetup({base:f.workspace,store,siteId,publisher,queue:jobs.queue}),command:{config,etag:'new',visibility:'public',confirmed:true}};}
 async function run(queue){const job=await queue.claim();assert.ok(job);try{const output=await queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:p=>queue.pulse(job.id,job.lease.token,p)});return await queue.complete(job.id,job.lease.token,output);}catch(error){return queue.release(job.id,job.lease.token,{error});}}
 test('new personal and organization repositories are initialized on main without publishing workspace content',async t=>{
  for(const ownerType of ['User','Organization']){

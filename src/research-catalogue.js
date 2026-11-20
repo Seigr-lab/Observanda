@@ -737,7 +737,7 @@ export class ResearchCatalogue{
   await withCatalogueVerification(this,verified=>this.workspace.inspectCatalogue(this,async()=>{
    const {MediaVerification}=await import('./media-verification.js'),media=new MediaVerification(this.workspace,verified);
    let previous=null;
-   await operationSequence('verify-copy',['verify-snapshots','verify-modules','verify-objects','verify-analysis','verify-reviews','verify-imports','verify-evidence','verify-collaboration','verify-media','verify-publication','verify-drafts','verify-run-receipts','verify-history'],async()=>{
+   await operationSequence('verify-copy',['verify-snapshots','verify-modules','verify-objects','verify-analysis','verify-reviews','verify-imports','verify-evidence','verify-collaboration','verify-media','verify-drafts','verify-run-receipts','verify-history'],async()=>{
    await operationStage('verify-snapshots',{total:Number((await this.db.get('SELECT count(*)::text AS total FROM snapshots')).total),unit:'snapshots'},async()=>{
     for await(const {id} of this.db.rows('SELECT id FROM snapshots ORDER BY ordinal')){operationItem(id);previous=await this.verifySnapshot(id,descriptor.workspaceId,verified,verified.stableSnapshot?previous:null,media);operationAdvance();}
    });
@@ -754,7 +754,6 @@ export class ResearchCatalogue{
    const {verifyCollaboration}=await import('./collaboration/verification.js');
    await operationStage('verify-collaboration',{},()=>verifyCollaboration(this.workspace,verified));
    await operationStage('verify-media',{},()=>media.pending());
-   const {verifyPublicationStorage}=await import('./publication-storage-verification.js');await operationStage('verify-publication',{},()=>verifyPublicationStorage(this.workspace));
    const {verifyResearchDrafts}=await import('./research-draft-verification.js'),{verifyRecordStarters}=await import('./record-starter-verification.js');await operationStage('verify-drafts',{unit:'checkpoints'},async()=>{await verifyResearchDrafts(this);await verifyRecordStarters(this.workspace);});
    await operationStage('verify-run-receipts',{},async()=>{
     const {verifyRunReceiptStores}=await import('./run-receipt-store.js');await verifyRunReceiptStores(this.workspace);

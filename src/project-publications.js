@@ -21,7 +21,7 @@ export class ProjectPublications{
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);
   const publisher=websitePublisher(basePublisher,websiteWorkspace(storage,websiteId,{websitePin}));
-  const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
+  const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.repository']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   if(operation.startsWith('github-connection/')){
    const method=operation.slice(18),connection=publisher.connection;
    if(!connection){if(method==='status')return {available:false,accounts:[],selected:null,connected:false,signIn:null,error:null};throw new AppError('GITHUB_HELPER_MISSING');}

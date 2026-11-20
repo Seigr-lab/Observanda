@@ -12,7 +12,6 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {ProjectDeletions} from '../src/project-deletion.js';
 import {databaseCapacity} from '../src/postgres.js';
 import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
-import {DeploymentJobs} from '../src/deployment-jobs.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,mkdir,writeFile,readFile,stat} from 'node:fs/promises';
