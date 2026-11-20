@@ -1,17 +1,16 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { createHash,randomUUID } from 'node:crypto';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {createHash,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { Publisher, defaultPublishing, validatePublishing } from '../src/publishing.js';
-import { digest, serialize } from '../src/storage.js';
-import { sampleNotebook } from '../src/sample.js';
-import { buildPublication } from '../src/publication.js';
+import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.js';
+import {digest,serialize} from '../src/storage.js';
+import {sampleNotebook} from '../src/sample.js';
+import {buildPublication} from '../src/publication.js';
 import {githubFixture as mainGithubFixture} from './github-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {WebsiteSites} from '../src/website-sites.js';
 import {newElement} from '../src/web/composition-tree.js';
 const sha = (type, bytes) => createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 const token = 'synthetic_session_secret_1234567890';
@@ -19,7 +18,7 @@ async function setup(t,options) {
   const book=sampleNotebook();book.website.home.sections=[newElement('text',randomUUID)];
   const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
   t.after(async t=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
-  const saved = await new WebsiteSites(ws).read(null), candidate = buildPublication(saved.book); candidate.etag = saved.etag;candidate.websitePin=saved.websitePin;
+  const saved = await ws.read(), candidate = buildPublication(saved.book); candidate.etag = saved.etag;
   return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, options,f.vault) };
 }
 const githubFixture=mainGithubFixture;

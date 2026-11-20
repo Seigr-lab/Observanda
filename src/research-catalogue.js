@@ -15,9 +15,8 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 // never titles, prose or file paths. Workspace owns locking and key custody.
 import {catalogueContext} from './catalogue-context.js';
 import {cachedMaterialText,rememberMaterialText} from './catalogue-material-text-cache.js';
-import {WebsiteDocumentStore} from './website-document-store.js';
-import {readWebsiteDocumentRegistry,websiteDocumentLocks} from './website-document-registry.js';
-import {websiteMetadataShell,assertWebsiteMetadataShell,defaultWebsiteSelection} from './website-owned-metadata.js';
+import {readWebsiteDocumentRegistry} from './website-document-registry.js';
+import {assertWebsiteMetadataShell} from './website-owned-metadata.js';
 import {withCatalogueVerification,verificationContext} from './catalogue-verification.js';
 import {verifiedCatalogueObjects} from './catalogue-object-verification.js';
 import {randomUUID,randomBytes} from 'node:crypto';
@@ -80,7 +79,6 @@ const identifier=value=>typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);
 const summary=(record,encoded=recordEncoding(record))=>({id:record.id,revision:encoded.revision,type:record.type,notebookId:record.notebookId,share:record.share,occurredOn:record.occurredOn,updatedAt:record.updatedAt,...(record.attempt?{hasAttempt:true}:{}),template:record.template?{id:record.template.id,label:record.template.label}:null,cardItems:Object.fromEntries(['contributors','relations','figures','attachments'].map(field=>[field,(record[field]??[]).map(item=>item.id)])),sections:(record.sections??[]).map(v=>v.id),runOf:(record.relations??[]).filter(r=>r.role==='run-of').map(r=>r.target),bytes:encoded.memberBytes});
 const assembledBytes=(metadata,count,bytes)=>Buffer.byteLength(serialize(metadata))+(count?2+bytes+2*(count-1)+2:0);
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
-
 import {operationStage,operationSequence,operationAdvance,operationItem,operationWork} from './operation-progress.js';
 export class ResearchCatalogue{
  constructor(workspace,db,{readCache=null}={}){this.workspace=workspace;this.db=db;this.readCache=readCache;}
@@ -271,17 +269,6 @@ export class ResearchCatalogue{
   for(const {id,item,initialize,fresh} of history)await this.historyIndex(id).append(item,{initialize,fresh});
   (await this.db.run("INSERT INTO state VALUES ('head',$1) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload",this.encode('state','head',{id:etag})));
   return {book,etag};
- }
- // Explicit conversion is a writer operation. Retained inline snapshots are
- // preserved; ordinary reads and record saves never initialize website owners.
- async initializeWebsiteDocuments(){
-  if(await readWebsiteDocumentRegistry(this))return;
-  await websiteDocumentLocks(this,{registration:true,membership:'exclusive'});
-  const researchSnapshotId=await this.head(),snapshot=await this.snapshot(researchSnapshotId);
-  if(snapshot.metadata.formatVersion!==21)throw new AppError('STORAGE_UPGRADE_REQUIRED');
-  const defaultSelection=await defaultWebsiteSelection(this,snapshot);
-  await new WebsiteDocumentStore(this).initialize(researchSnapshotId,snapshot,{defaultSelection});
-  await this.commitChanges(researchSnapshotId,await this.indexed(snapshot),websiteMetadataShell(snapshot.metadata),[]);
  }
  // Validate metadata against authenticated record identities without loading bodies.
  validateMetadata(current,metadata,options){return validateIndexedMetadata(this,current,metadata,options);}

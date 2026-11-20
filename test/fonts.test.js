@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import {BUNDLED_FONTS,fontStack} from '../src/web/font-catalogue.js';
-import {fontCSS,bundledFonts} from '../src/fonts.js';
+import {fontCSS} from '../src/fonts.js';
 import {WorkspaceFonts,inspectUploadedFont} from '../src/workspace-fonts.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
@@ -16,7 +16,6 @@ import {clearVault} from '../src/encryption.js';
 import {woffFixture} from './font-fixture.js';
 import {assertPublicFiles} from '../src/privacy.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
-import {WebsiteSites} from '../src/website-sites.js';
 const bytes=()=>readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url));
 test('OTF, WOFF and WOFF2 preserve their real font formats and variation axes',async()=>{
  for(const [extension,source] of [['otf',await readFile(new URL('./fixtures/fonts/source-serif.otf',import.meta.url))],['woff2',await readFile(new URL('./fixtures/fonts/dm-sans.woff2',import.meta.url))],['woff',woffFixture(await bytes())]]){
@@ -48,10 +47,9 @@ test('custom variable fonts survive encrypted backup; only publicly used font by
  assert.throws(()=>buildPublication(book,{fontFiles:new Map([[added.id,{...added,bytes:original}]])}),{code:'FONT_EMBED'});
  await fonts.update(added.id,{embed:true,hidden:false});const files=await fonts.files(publicProjection(book)),candidate=buildPublication(book,{fontFiles:files});verifyPublication(candidate);
  const name='fonts/'+added.faces[0].file;assert.deepEqual(candidate.files.get(name),original);assert.ok(candidate.files.get('styles.css').includes('--reading-weight:475'));assert.ok(candidate.files.get('styles.css').includes('"opsz" 18'));
- // Appearance is a website document field: creation already moved it out of
- // the research metadata, so the author saves it through the website owner.
- const sites=new WebsiteSites(ws),site=await sites.read(null);await sites.save(null,{workspaceId:book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{appearance:{...site.book.appearance,font:added.id,headingFont:'dm-sans',fontAxes:{wght:475,opsz:18}}},projects:[],changes:[],removed:[]});
- const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'restored'),{vault}),{vault}),restored=new WorkspaceFonts(new Workspace(backup,vault));assert.deepEqual((await restored.get(added.id)).bytes,original);assert.deepEqual((await new WebsiteSites(new Workspace(backup,vault)).read(null)).book.appearance.fontAxes,{wght:475,opsz:18});
+ // The workspace's appearance names the added font and its axes.
+ const current=await ws.read();current.book.appearance={...current.book.appearance,font:added.id,headingFont:'dm-sans',fontAxes:{wght:475,opsz:18}};await ws.save(current.book,current.etag);
+ const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'restored'),{vault}),{vault}),restored=new WorkspaceFonts(new Workspace(backup,vault));assert.deepEqual((await restored.get(added.id)).bytes,original);assert.deepEqual((await new Workspace(backup,vault).read()).book.appearance.fontAxes,{wght:475,opsz:18});
  await fonts.update(added.id,{embed:true,hidden:true});assert.deepEqual((await fonts.get(added.id)).bytes,original);
  book.appearance.font='atkinson';book.appearance.fontAxes={};book.entries.find(e=>!e.share).body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Private font specimen',marks:[{type:'font_family',attrs:{font:added.id}}]}]}]};
  const publicFonts=await fonts.files(publicProjection(book));assert.equal(publicFonts.size,0);assert.ok(!buildPublication(book,{fontFiles:publicFonts}).files.has(name));

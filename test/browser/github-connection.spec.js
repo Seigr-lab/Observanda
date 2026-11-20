@@ -11,19 +11,17 @@ import {AppError} from '../../src/errors.js';
 import {randomUUID} from 'node:crypto';
 import {ResearchRecords} from '../../src/research.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
-import {WebsiteSites} from '../../src/website-sites.js';
 import {pathToFileURL} from 'node:url';
 import {buildBrowser} from '../../scripts/browser-build.js';
 import {createApplicationAssets} from '../../src/application-assets.js';
 
-for(const named of [false,true])test((named?'named website':'workspace preferences')+' GitHub controls retain edits and stay independent of a workspace above the complete-read budget',async({page})=>{
+for(const named of [false])test((named?'named website':'workspace preferences')+' GitHub controls retain edits and stay independent of a workspace above the complete-read budget',async({page})=>{
  test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-github-ui-')),book=sampleNotebook(),seed=book.entries[0];book.entries=[];
  const f=await encryptedFixture(directory,book),file=path.join(directory,'github.json'),store=new Map(),token='synthetic_browser_token_1234567890';let complete=null;
  const records=new ResearchRecords(f.workspace,{});
  for(let offset=0;offset<60;offset+=20){const changes=Array.from({length:20},(_,i)=>{const record={...structuredClone(seed),id:randomUUID(),title:'Private observation '+(offset+i),body:'PRIVATE_RESEARCH_'.repeat(2500),share:false,sections:[],attachments:[],figures:[],relations:[]};return {id:record.id,expectedRevision:null,record};});await records.save({workspaceId:book.id,changes},{receipt:true});}
  await expect(f.workspace.catalogue(store=>store.read())).rejects.toMatchObject({code:'WORKSPACE_READ_LIMIT'});
  let destination='#/preferences/integrations';
- if(named){const sites=new WebsiteSites(f.workspace),outline=await f.workspace.outline(),result=await sites.change({workspaceId:book.id,etag:outline.etag,operation:'create',name:'Field journal'});destination='#/websites/'+result.id+'/settings';}
  let browserAssets;if(named){const built=process.env.OBSERVANDA_TEST_BROWSER_BUILD,out=built?path.resolve(built):path.join(directory,'frontend');if(built)await readFile(path.join(out,'manifest.json'));else await buildBrowser({out});browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});}
  // Startup/unlock integrity verification is separate from account actions.
  // Attribute original reads only while the connection panel is in use.

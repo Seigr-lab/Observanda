@@ -13,7 +13,6 @@ import {withDraftDocument} from '../src/record-draft-document.js';
 import {validResultStatement} from '../src/web/result-statements.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {retainedTable} from '../src/retained-tables.js';
-import {WebsiteSites} from '../src/website-sites.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
@@ -50,9 +49,6 @@ test('retained result tables verify exact values and publish only their chosen d
  const source=await f.materials.dataset({recordId:f.record.id,title:'Private readings',artifact:await f.materials.finishImport(upload.id),columns:[defaultColumn({label:'State'}),{...defaultColumn({label:'Count'}),representation:'radix-fraction',radix:6},defaultColumn({label:'Private'})]});forbid(t);
  const table=await retainedTable(f.materials,{ref:source,selection:{columns:[0,1],offset:0,count:2,includeExcluded:false}}),s={...statement(),kind:'table',basis:'retained',source,table},base=await f.values.read(target(f,s.id)),bad=structuredClone(s);bad.table.rows[0].cells[1]='1';await assert.rejects(save(f,base,bad),{code:'DATASET_TABLE'});await save(f,base,s);
  const sharing={workspaceId:f.book.id,recordId:f.record.id,field:'share'},published=await f.values.read(sharing);await f.values.save({...sharing,expectedRevision:published.revision,value:{value:true}});
- const sites=new WebsiteSites(f.workspace),site=await sites.read(null),selection=structuredClone(site.site.selection);
- selection.records=selection.records.filter(row=>row.id!==f.record.id);selection.records.push({id:f.record.id,share:true,attachments:[]});
- await sites.save(null,{workspaceId:f.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});
  ResearchCatalogue.prototype.record.mock.restore();const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===f.record.id))).text;assert.match(html,/Count \(base 6\)/);assert.match(html,/10000000000000001/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes(source.id));
 });
 test('unfinished selected results recover under a new key, verify scope and roll back interrupted saves',async t=>{

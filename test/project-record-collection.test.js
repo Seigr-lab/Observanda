@@ -24,7 +24,6 @@ import {MediaStore} from '../src/media.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {viewQuery} from '../src/web/record-view-model.js';
-import {WebsiteSites} from '../src/website-sites.js';
 import {projectRecordCollection} from '../src/project-record-collection.js';
 test('project collection reads nested owners, authenticates each book and keeps pinned pages across writes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-collection-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const originalRecord=ResearchCatalogue.prototype.record;
@@ -32,7 +31,6 @@ test('project collection reads nested owners, authenticates each book and keeps 
   const root=sampleNotebook(),f=await encryptedFixture(directory,root);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,root.id);
   const create=async(name,parent=null)=>{const book=sampleNotebook();book.title=book.projects[0].title=name;const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);keys.push(vault);const storage=await initializeProjectLocation(path.join(parent?.root??f.workspace.root,name),book.projects[0].id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision,parentId:parent?.projectId??null});return {book,storage};};
   const project=await create('Research Project'),child=await create('Nested Project',project.storage),sibling=await create('Other Project');
-  await assert.rejects(new WebsiteSites(project.storage).change({workspaceId:project.book.id,etag:(await project.storage.outline()).etag,operation:'create',name:'Unowned project website'}),{code:'INVALID'});
   const section={id:randomUUID(),profileId:null,key:'field-template',label:'Field template',description:'',fields:[],enabled:true};
   const created=await new LabBookCreation(project.storage,f.deviceStore,{publish:entry=>new LabBookDirectory(registry).register(project.storage.projectId,entry)}).create({id:randomUUID(),username:'',password:'Independent book password',book:{id:randomUUID(),projectId:project.storage.projectId,title:'Observations Book',configuration:{profiles:[],sections:[section]}}}),key=await verifyAccess(await readAccess(created.book.root),'','Independent book password',{deviceStore:f.deviceStore});keys.push(key);
   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),metadata=(await storage.outline()).metadata,record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:storage.labBookId,title:'Dedicated observation',sections:[{id:randomUUID(),title:'Measured conditions',body:'Retained conditions'}],template:templateFrom(section),updatedAt:'2026-10-15T12:00:00.000Z'};
