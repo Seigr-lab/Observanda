@@ -3,7 +3,7 @@ import {isConfigurationReference} from './web/configuration-reference.js';
 import {validateCurrentInlineRecordTemplate} from './record-template-configuration.js';
 import {recordContentRevision} from './record-encoding.js';
 import {AppError} from './errors.js';
-import {upgradeNotebook,validateNotebook,validateRecordChanges} from './model.js';
+import {upgradeNotebook,validateNotebook,validateRecordChanges,currentWorkspaceMetadata} from './model.js';
 import {validateAttemptChange} from './attempts.js';
 import {validateResultSources} from './result-statements.js';
 import {validateFigureSources} from './figure-provenance.js';
@@ -15,12 +15,12 @@ export const recordRevision=record=>recordContentRevision(record);
 export function historicalBook(metadata,record){
  const book={...metadata,entries:[record]};
  delete book.websites;
- if(book.formatVersion>=3)book.branding=[];
+ if(book.formatVersion>=3&&book.formatVersion<22)book.branding=[];
  if(book.website?.layouts)book.website={...book.website,layouts:[]};
  // Catalogue metadata and records have independent budgets. Reconstructing a
  // serialized legacy notebook here charges indentation and unrelated metadata
  // against a valid record, including during indexing, history and verification.
- if(book.formatVersion===21){
+ if(book.formatVersion>=21){
   validateRecordChanges(book,[record],[],{capacity:false});
   return structuredClone(book);
  }
@@ -29,7 +29,7 @@ export function historicalBook(metadata,record){
 // Index and history owners only inspect the validated value. Current records
 // need no upgraded copy; mutable authoring callers still use historicalBook.
 export function historicalRecordValue(metadata,record){
- if(metadata.formatVersion!==21)return historicalBook(metadata,record).entries[0];
+ if(metadata.formatVersion<21)return historicalBook(metadata,record).entries[0];
  validateRecordChanges(metadata,[record],[],{capacity:false});return record;
 }
 export const recordRevisions=book=>Object.fromEntries(book.entries.map(record=>[record.id,recordRevision(record)]));
@@ -55,7 +55,7 @@ export class ResearchRecords {
     if(!exact(command,['workspaceId','recordId','expectedRevision'])||!id(command.workspaceId)||!id(command.recordId)||!revision(command.expectedRevision))throw new AppError('INVALID');
     const outline=await this.workspace.outline();
     if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(outline.metadata.formatVersion!==21||await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
+    if(outline.metadata.formatVersion<21||await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
     return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
       const head=await store.head(),source=await store.snapshot(head);
       if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -68,8 +68,7 @@ export class ResearchRecords {
         // revision. Removing membership needs that identity, not all its prose.
         // Older summaries still use the history owner's compatibility reader.
         if((await history.display(saved.item)).revision!==command.expectedRevision)throw new AppError('RECORD_CHANGED',[{field:'record',recordId:command.recordId}]);
-        const current=await store.indexed(source),target='entry:'+command.recordId;
-        const metadata={...current.metadata,branding:current.metadata.branding.filter(b=>b.target!==target),website:{...current.metadata.website,layouts:current.metadata.website.layouts.filter(l=>l.target!==target)}};
+        const current=await store.indexed(source),metadata=currentWorkspaceMetadata(structuredClone(current.metadata));
         await store.validateMetadata(current,metadata,{removed:[command.recordId]});
         await store.commitChanges(head,current,metadata,[],{removed:[command.recordId]});
       }
@@ -82,7 +81,7 @@ export class ResearchRecords {
     validateRecordEdits(command.changes);
     if(Object.hasOwn(command,'baseEtag')&&!revision(command.baseEtag))throw new AppError('INVALID');
     if(await this.workspace.storageKind()==='catalogue'){
-      const eligible=await this.workspace.catalogue(async store=>[20,21].includes((await store.snapshot()).metadata.formatVersion));
+      const eligible=await this.workspace.catalogue(async store=>((await store.snapshot()).metadata.formatVersion>=20));
       if(eligible)return this.workspace.updateRecords(command,source=>this.prepare(source,command),{compact,recordIds,receipt,storedBases:true});
     }
     if(receipt)throw new AppError('INVALID');

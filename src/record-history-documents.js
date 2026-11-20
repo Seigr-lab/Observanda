@@ -23,7 +23,7 @@ export class RecordHistoryDocuments{
  async context(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('RECORD_CHANGED');
-  if(snapshot.metadata.formatVersion!==21)return null;
+  if(snapshot.metadata.formatVersion<21)return null;
   const history=store.historyIndex(row.id),head=await history.head(),current=(await history.display((await history.lookup(head,'version',row.revision)).item)).revision;
   let selected;
   if(command.source.kind==='retained'){
@@ -32,7 +32,7 @@ export class RecordHistoryDocuments{
    selected=await store.recordSnapshot(found.item.snapshotId,command.recordId);
   }else selected=command.source.kind==='current'?snapshot:await store.recordSnapshot(command.source.id,command.recordId);
   if(selected.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(selected.metadata.formatVersion!==21)return null;
+  if(selected.metadata.formatVersion<21)return null;
   const old=await store.member(selected,command.recordId);if(!old)throw new AppError('RECORD_HISTORY_MISSING');
   await assertRecordOwnerRevisionVisible(store,command.recordId,command.revision,{code:'RECORD_HISTORY_MISSING'});
   if((await history.display((await history.lookup(head,'version',old.revision)).item)).revision!==command.revision)throw new AppError('RECORD_HISTORY_MISSING');

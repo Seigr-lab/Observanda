@@ -106,7 +106,7 @@ export async function verifyRecordOwnerTransfers(store,{signal,verified}={}){
   signal?.throwIfAborted();capability();const id=key.slice('record-owner-history:'.length),value=await store.object(key);if(!revisionId(id)||!researchId(value?.recordId))fail();
   const snapshot=await readRecordOwnerHistory(store,id,value.recordId,{verifyConfigurations:true,signal,verified});if(!snapshot)fail();const member=snapshot.records[0];
   await verifyStoredRecord(store,member.id,member.revision,{signal});
-  if(snapshot.metadata.formatVersion===21)await withRecordDocument(store,member.id,member.revision,document=>verifyMember(store,document,member,{signal}));
+  if(snapshot.metadata.formatVersion>=21)await withRecordDocument(store,member.id,member.revision,document=>verifyMember(store,document,member,{signal}));
   else await retainedRecordDisplay(store,member.id,member.revision,snapshot.metadata,{signal});
  }
  for await(const key of store.objectIdEntries('record:reference-origin:')){

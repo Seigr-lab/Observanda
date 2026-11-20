@@ -1,6 +1,7 @@
 // A selected record crosses authenticated owners through durable checkpoints.
 // Destination verification precedes publication and source retirement. Immutable
 // staging survives interruption; a command ID never changes its destination.
+import {currentWorkspaceMetadata} from './model.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
@@ -313,7 +314,7 @@ export class RecordOwnerTransfer{
    const currentId=await store.head(),current=await store.indexed(await store.snapshot(currentId)),row=await store.member(current,value.command.recordId);
    if(row){
     if(row.revision!==value.command.expectedStorageRevision||row.notebookId!==value.command.sourceNotebookId)throw new AppError('RECORD_CHANGED');
-    const target='entry:'+row.id,metadata={...current.metadata,branding:current.metadata.branding.filter(item=>item.target!==target),website:{...current.metadata.website,layouts:current.metadata.website.layouts.filter(item=>item.target!==target)}};
+    const metadata=currentWorkspaceMetadata(structuredClone(current.metadata));
     await store.validateMetadata(current,metadata,{removed:[row.id]});await store.commitChanges(currentId,current,metadata,[],{removed:[row.id]});
    }
   })));

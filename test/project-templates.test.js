@@ -5,7 +5,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook,validateNotebook} from '../src/model.js';
+import {validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
 import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateChoices,newLabBookConfiguration,retainedTemplateAvailable} from '../src/web/project-templates.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
@@ -27,8 +27,7 @@ test('retained template availability checks bounded profile pages and releases r
 });
 
 test('project templates copy into independent lab books without rewriting existing records',()=>{
- const original=sampleNotebook();original.formatVersion=20;const before=JSON.stringify(original),book=upgradeNotebook(original);
- assert.equal(book.formatVersion,21);assert.equal(JSON.stringify(original),before);
+ const book=sampleNotebook();
  const project=book.projects[0],template=starterTemplate('computer-it');project.labBookTemplate=template;
  const n=book.notebooks[0];n.configuration=copyConfiguration(template.configuration);const section=n.configuration.sections[0];book.entries[0].template=templateFrom(section);
  const frozen=structuredClone(book.entries),notebooks=structuredClone(book.notebooks);

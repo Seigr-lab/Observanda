@@ -19,7 +19,7 @@ export class RecordStarterSource{
   return this.workspace.catalogue(async store=>{
    const current=await store.snapshot(await store.head()),snapshot=await store.snapshot(command.snapshotId);
    if(current.metadata.id!==command.workspaceId||snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
    return withRecordDocument(store,row.id,row.revision,document=>read({store,row,document,signal}));
   });

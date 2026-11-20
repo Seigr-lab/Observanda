@@ -46,7 +46,7 @@ export class RecordWriting{
  async select(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);
   if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+  if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
   const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
   const position=command.sectionId===null?null:await new RecordMemberCollections(store).position(row,'sections',command.sectionId);
   if(position===-1)throw new AppError('MISSING');

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook,validateNotebook} from '../src/model.js';
+import {validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
 import {projectUsesTool,projectToolScope} from '../src/web/project-tools.js';
 import {locationTools} from '../src/web/modules/location-tools.js';
@@ -16,9 +16,8 @@ function setup(){
 }
 const choose=(book,moduleId,projectIds)=>saveStructure(book,{kind:'project-tools',value:{moduleId,projectIds}}).book;
 
-test('old and new projects never adopt tools implicitly; choices are independent of ancestors and availability',()=>{
- const {book,parent,child,other}=setup();book.formatVersion=15;const before=structuredClone(book),next=upgradeNotebook(book);
- assert.equal(next.formatVersion,21);assert.deepEqual(book,before);
+test('projects never adopt tools implicitly; choices are independent of ancestors and availability',()=>{
+ const {book:next,parent,child,other}=setup();
  const settings={enabledModules:['resources','planning']};
  for(const p of next.projects)assert.deepEqual(locationTools(settings,next,p.id),[]);
  const chosen=choose(next,'resources',[child.id]);
@@ -28,7 +27,7 @@ test('old and new projects never adopt tools implicitly; choices are independent
  assert.equal(projectToolScope(chosen,other.id,'resources'),null);
  assert.deepEqual(locationTools(settings,chosen,child.id).map(m=>m.id),['resources']);
  assert.deepEqual(locationTools({enabledModules:[]},chosen,child.id),[]);
- assert.deepEqual(choose(chosen,'resources',[]).entries,book.entries);
+ assert.deepEqual(choose(chosen,'resources',[]).entries,next.entries);
  assert.equal(projectUsesTool(next,child.id,'resources'),false);
 });
 

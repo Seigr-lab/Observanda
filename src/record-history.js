@@ -179,7 +179,7 @@ export class RecordHistory {
    return book;
   };
   if(await this.workspace.storageKind()==='catalogue'){
-   const eligible=await this.workspace.catalogue(async store=>[20,21].includes((await store.snapshot()).metadata.formatVersion));
+   const eligible=await this.workspace.catalogue(async store=>((await store.snapshot()).metadata.formatVersion>=20));
    if(eligible)return this.workspace.updateRecords({workspaceId:command.workspaceId,changes:[{id:command.recordId}],...(command.baseEtag?{baseEtag:command.baseEtag}:{})},apply,{compact,recordIds});
   }
   return this.workspace.update(apply);

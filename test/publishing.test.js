@@ -13,13 +13,16 @@ import {githubFixture as mainGithubFixture} from './github-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {newElement} from '../src/web/composition-tree.js';
+import {renderingBook} from './fixtures/rendering-book.js';
 const sha = (type, bytes) => createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 const token = 'synthetic_session_secret_1234567890';
 async function setup(t,options) {
-  const book=sampleNotebook();book.website.home.sections=[newElement('text',randomUUID)];
+  const book=sampleNotebook();
   const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
   t.after(async t=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
-  const saved = await ws.read(), candidate = buildPublication(saved.book); candidate.etag = saved.etag;
+  // The stored book has no page settings; its rendering carries a homepage with one text section.
+  const saved = await ws.read(), rendered = renderingBook(saved.book); rendered.website = {...rendered.website, home: {...rendered.website.home, sections: [newElement('text', randomUUID)]}};
+  const candidate = buildPublication(rendered); candidate.etag = saved.etag;
   // Like the website editor, the publisher admits only a candidate made from the current saved state.
   const authorizeCandidate=async value=>{if((await ws.read()).etag!==value.etag)throw new AppError('STALE');};
   return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, {authorizeCandidate,...options},f.vault) };

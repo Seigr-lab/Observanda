@@ -1,15 +1,14 @@
-import { test, before } from 'node:test';
+import {test,before} from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { randomUUID } from 'node:crypto';
-import { mediaFixtures, PRIVATE_MARKER } from './media-fixtures.js';
-import { MediaStore } from '../src/media.js';
+import {mediaFixtures,PRIVATE_MARKER} from './media-fixtures.js';
+import {MediaStore} from '../src/media.js';
 import {mediaToolsAvailable} from './media-tools.js';
-import { Workspace, digest } from '../src/storage.js';
-import { sampleNotebook } from '../src/sample.js';
-import { buildPublication, writePublication, publicationZip } from '../src/publication.js';
+import {Workspace,digest} from '../src/storage.js';
+import {sampleNotebook} from '../src/sample.js';
+import {buildPublication,writePublication,publicationZip} from '../src/publication.js';
 import {testServer as startServer} from './device-fixture.js';
 
 let available, fixtures;
@@ -68,22 +67,6 @@ test('media endpoints require authentication, support byte ranges, and expose no
   assert.equal((await fetch(app.origin + '/api/media/' + asset.id + '/original', { headers: { 'X-Observanda-Session': cookie } })).status, 404);
   assert.equal((await fetch(app.origin + '/api/media/' + asset.id, { headers: { 'X-Observanda-Session': cookie, Range: 'bytes=999999999-' } })).status, 416);
 });
-
-test('logos and fonts are included offline; private project logos and media are excluded', async t => {
-  if (!available) return t.skip('FFmpeg and ffprobe are required for this test.');
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-branding-')), book = sampleNotebook();
-  await new Workspace(root).create(book); const store = new MediaStore(root);
-  const logo = await store.import(fixtures.image.bytes, 'image');
-  book.website.logoId = logo.id; book.website.logoAlt = 'Research collective';
-  book.appearance.font = 'atkinson'; book.appearance.headingFont = 'source-serif';
-  book.projects.push({ id: randomUUID(), title: 'Private project', description: 'Hidden', share: false, logoId: randomUUID() });
-  const candidate = buildPublication(book, { mediaFiles: await store.publicFiles(book) });
-  assert.ok(candidate.files.has(`media/${logo.id}.png`));
-  for (const name of ['atkinson', 'source-serif']) { assert.ok(candidate.files.has(`fonts/${name}.ttf`)); assert.ok(candidate.files.has(`fonts/${name}-OFL.txt`)); }
-  assert.ok(candidate.files.get('index.html').includes('Research collective'));
-  assert.ok(!candidate.files.get('index.html').includes('Private project'));
-});
-
 
 test('file-backed publication matches buffered publication and refuses modified media',async t=>{
  if(!available)return t.skip('FFmpeg required');const root=await mkdtemp(path.join(os.tmpdir(),'observanda-stream-site-')),book=sampleNotebook();await new Workspace(root).create(book);const store=new MediaStore(root),asset=await store.import(fixtures.audio.bytes,'audio');book.entries[0].attachments.push({...asset,caption:'Audio',alt:'',transcript:'',share:true});

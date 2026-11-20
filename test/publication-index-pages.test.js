@@ -7,8 +7,6 @@ import {buildPublication,verifyPublication} from '../src/publication.js';
 import {PUBLIC_INDEX_ROWS,publicIndexPage} from '../src/web/public-browse-pages.js';
 import {assertPublicFiles} from '../src/privacy.js';
 import {selectedContent} from '../src/web/website-model.js';
-import {createRegion,assignRegion} from '../src/web/website-regions.js';
-import {defaultFeed} from '../src/web/website-feed-model.js';
 
 test('static index pages contain every selected record once with bounded markup and complete manifests',()=>{
  const book=indexedBook(),candidate=buildPublication(book);verifyPublication(candidate);
@@ -26,13 +24,3 @@ test('earlier shipped index scripts remain admitted without admitting altered co
  for(const version of [1,2]){const old=await readFile(new URL('./fixtures/public-book-v'+version+'.txt',import.meta.url),'utf8');assert.doesNotThrow(()=>assertPublicFiles(new Map([['public-book.js',old]])));assert.throws(()=>assertPublicFiles(new Map([['public-book.js',old+'\nalert(1)']])) ,{code:'UNSAFE'});}
 });
 
-test('an authored footer feed keeps the owning index page through fallback navigation',()=>{
- const book=indexedBook(53),footer=createRegion(book.website,'footer','Footer readings',{makeId:randomUUID});assignRegion(book.website,'*','footer',footer.id);
- footer.sections=[{id:'reading-feed',kind:'records',title:'Featured readings',show:true,layout:'inherit',filter:{projectId:null,tag:'',limit:2},feed:{...defaultFeed('records'),pageSize:1}}];
- const output=buildPublication(book);verifyPublication(output);const feedIds=[];
- for(const name of ['browse.html','browse-1.html','browse-2.html']){
-  const html=output.files.get(name),id=/data-public-feed="([a-f0-9]+)"/.exec(html)[1];feedIds.push(id);
-  const continued=output.files.get('feed-'+id+'-1.html');assert.ok(continued);assert.deepEqual([...continued.matchAll(/data-public-record="([^"]+)"/g)].map(m=>m[1]),[...html.matchAll(/data-public-record="([^"]+)"/g)].map(m=>m[1]));
- }
- assert.equal(new Set(feedIds).size,3);
-});

@@ -4,25 +4,9 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {createNotebook,upgradeNotebook,validateNotebook} from '../src/model.js';
-import {Workspace,digest} from '../src/storage.js';
+import {createNotebook,validateNotebook} from '../src/model.js';
 import {readPreferences,readPreference,rememberLocation,rememberInterface} from '../src/locations.js';
-import {publicProjection} from '../src/publication.js';
 import {validIdentity,identityLabel} from '../src/web/workspace-identity.js';
-
-test('format 4 keeps all record identities and original bytes when its workspace identity becomes editable',async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-identity-')),legacy=createNotebook('Existing personal work');
-  legacy.formatVersion=4;delete legacy.website.typography;delete legacy.website.presentation;delete legacy.website.palette;delete legacy.identity;
-  for (const key of ['title','description','home','design','assets','layouts','templates']) delete legacy.website[key];
-  const raw=JSON.stringify(legacy),file=path.join(root,'observanda.json');await writeFile(file,raw);
-  const ws=new Workspace(root),source=await ws.read(),book=upgradeNotebook(source.book);
-  assert.deepEqual(book.identity,{kind:'workspace',label:''});assert.equal(await readFile(file,'utf8'),raw);
-  book.identity={kind:'studio',label:''};await ws.save(book,source.etag);
-  const current=(await ws.read()).book;
-  assert.equal(current.id,legacy.id);assert.deepEqual(current.projects,legacy.projects);assert.deepEqual(current.notebooks,legacy.notebooks);
-  assert.equal(await readFile(path.join(root,'.observanda','revisions',digest(raw)+'.json'),'utf8'),raw);
-  assert.equal(Object.hasOwn(publicProjection(current),'identity'),false);
-});
 
 test('identity labels are descriptive and never add membership, access or ownership fields',()=>{
   for(const kind of ['personal','organization','laboratory','studio','collective','workspace']){

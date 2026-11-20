@@ -47,19 +47,14 @@ test('moving records preserves IDs, content and sharing within a project; crossi
  assert.deepEqual(moved.entries,book.entries.map(e=>({...e,notebookId:destination.id,share:false})));
 });
 
-test('deleting records removes publication targets, reparents menus and retains independent research references',()=>{
- const {book,source,destination}=fixture(),sourceTarget='notebook:'+source.id,target='notebook:'+destination.id;
+test('deleting a lab book removes its records and retains independent research references',()=>{
+ const {book,source,destination}=fixture();
  const survivor={...book.entries[0],id:randomUUID(),notebookId:destination.id,relations:[{id:randomUUID(),type:'Related to',target:{workspaceId:book.id,kind:'record',id:book.entries[0].id},label:'Earlier observation'}]};
  book.entries.push(survivor);
- book.branding=[{target:sourceTarget,logos:[]},{target:'entry:'+book.entries[0].id,logos:[]},{target,logos:[]}];
- book.website.navigation=[{target:'home',label:'Home',show:true,parent:null},{target:sourceTarget,label:'Source',show:true,parent:'home'},{target,label:'Keep',show:true,parent:sourceTarget}];
- book.website.layouts=[sourceTarget,'entry:'+book.entries[0].id,target].map(target=>({target,showHeading:true,heading:'',description:'',placement:'after',sections:[]}));
  validateNotebook(book);
  const next=saveStructure(book,command(source.id,'delete')).book;
- assert.deepEqual(next.entries,[survivor]);assert.deepEqual(next.branding,[{target,logos:[]}]);
- assert.deepEqual(next.website.navigation,[{target:'home',label:'Home',show:true,parent:null},{target,label:'Keep',show:true,parent:'home'}]);
+ assert.deepEqual(next.entries,[survivor]);
  assert.deepEqual(next.notebooks,[destination]);assert.deepEqual(next.projects,book.projects);
- assert.deepEqual(next.website.layouts,book.website.layouts.filter(l=>l.target===target));
 });
 
 test('HTTP deletion is atomic, refuses changes since review, and retains the prior version',async t=>{

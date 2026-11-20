@@ -27,6 +27,7 @@ async function checkConfigurations(store,metadata,{verify=false,signal,verified=
 export function recordOwnerHistoryMetadata(metadata,notebookId,workspaceId){
  const notebook=metadata.notebooks.find(value=>value.id===notebookId);if(!notebook)fail();
  const project=metadata.projects.find(value=>value.id===notebook.projectId);if(!project)fail();
+ // Format 21 kept the earlier website settings; format 22 metadata has none to clear.
  const value=metadata.formatVersion===21?websiteMetadataShell(metadata):structuredClone(metadata);
  value.id=workspaceId;value.entries=[];value.notebooks=[structuredClone(notebook)];value.projects=[{...structuredClone(project),parentId:null}];
  if(value.pages)value.pages=[];if(value.branding)value.branding=[];delete value.websites;

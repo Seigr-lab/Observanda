@@ -241,7 +241,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
     }
     if(state.recordScope)return api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope.ids},{adopt,signal});
     if(state.workspaceOutline){await ensureCompleteWorkspace();return {book:adopt?draftWorkspace(savedBook):savedBook,etag:state.etag,recordRevisions:{...savedRecordRevisions}};}
-    if(savedBook&&state.book?.id===savedBook.id&&state.etag&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){
+    if(savedBook&&state.book?.id===savedBook.id&&state.etag&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){
       return api('/api/workspace/read/changes',{workspaceId:savedBook.id,baseEtag:state.etag},{adopt,signal});
     }
     const result=await newWorkspaceReader().read({signal,onProgress});
@@ -417,12 +417,12 @@ async function save() {
 async function saveRecords(){
   if(configurationRecord?.active())return configurationRecord.save();
   figures.validate();
-  const creation=recordChanges.command(),native=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+  const creation=recordChanges.command(),native=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
   if(native&&creation?.changes.length===1&&(creation.changes[0].expectedRevision===null||initialRecordSave?.workspaceId===state.book.id&&initialRecordSave.recordId===creation.changes[0].id))return saveInitialRecord();
   await recordDrafts.flush();
   const version=changeVersion,{book:submitted,command:recordCommand}=recordChanges.submission(state.book),previousRevisions={...savedRecordRevisions},previousBases={...savedRecordBases};
   const command=recordCommand;
-  const indexed=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+  const indexed=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
   const workspaceCommand=!command&&indexed?workspaceSaveRequest(savedBook,submitted,previousRevisions):null;
   try {
     if(!command&&indexed&&!workspaceCommand)throw {code:'INVALID',message:appText('dedicatedSettings')};
@@ -497,7 +497,7 @@ const recordDrafts=recordDraftsUI({api,esc,snapshot:recordCheckpoint,compact:()=
   let applied=false;
   await leave.run(async()=>{
     const ids=draft.changes.map(change=>change.record.id);
-    const latest=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?await api('/api/workspace/read/selection',{workspaceId:draft.workspaceId,ids},{adopt:false}):await newWorkspaceReader().read();
+    const latest=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21?await api('/api/workspace/read/selection',{workspaceId:draft.workspaceId,ids},{adopt:false}):await newWorkspaceReader().read();
     if(latest.book?.id!==draft.workspaceId)throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};
     const entries=await recordRecovery.review({changes:draft.changes,book:latest.book,recovering:true});
     if(!entries)return;
@@ -555,7 +555,7 @@ const recordDetails=recordDetailsUI({state,esc,field,dirty:()=>dirtyRecord(),ren
 const bookReferences=bookReferenceUI({state,api,esc,showDialog,notify,revisions:()=>savedRecordRevisions});
 async function recordLinkDestinations({query='',cursor=null,signal}={}){
  const book=state.book,context=state.storage?.contextId;
- if(state.storage?.researchStorage!=='catalogue'||state.storage.researchFormatVersion!==21)return researchTargets(book).map(t=>({href:researchReference(t),label:t.title,context:t.context}));
+ if(state.storage?.researchStorage!=='catalogue'||state.storage.researchFormatVersion<21)return researchTargets(book).map(t=>({href:researchReference(t),label:t.title,context:t.context}));
  const result=await api('/api/research/records/query',{workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:query,browse:recordBrowse()},cursor,limit:25},{adopt:false,signal});
  if(book.id!==state.book?.id||context!==state.storage?.contextId)throw {name:'AbortError'};
  const structure=cursor?[]:researchTargets({...book,entries:[]}).filter(t=>(t.title+' '+t.context).toLocaleLowerCase().includes(query));
@@ -784,7 +784,7 @@ $('#dialog').addEventListener('cancel',event=>{event.preventDefault();action({da
 function renderAccess(content){help.stop();appShell.showStandalone(content);accessHelp.fromRoute();}
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
-const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
 const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true,origin=null){
  const returnOrigin=origin??(!['editor','record-reader'].includes(state.page)?await captureResearchReturn():null);
@@ -812,7 +812,7 @@ async function selectRecord(id,{metadataOnly=false}={}){
  }finally{status.remove();if(main&&request===recordOpenRequest){main.inert=false;main.removeAttribute('aria-busy');}}
 }
 function releaseCompleteWorkspace(){
- if(state.workspaceOutline||!savedBook||state.dirty||savePromise||completingWorkspace||state.storage?.researchStorage!=='catalogue'||state.storage.researchFormatVersion!==21||!outlineViewSupported())return;
+ if(state.workspaceOutline||!savedBook||state.dirty||savePromise||completingWorkspace||state.storage?.researchStorage!=='catalogue'||state.storage.researchFormatVersion<21||!outlineViewSupported())return;
  const notebookCounts=state.recordScope?.notebookCounts??Object.fromEntries(savedBook.notebooks.map(n=>[n.id,0]));if(!state.recordScope)for(const record of savedBook.entries)notebookCounts[record.notebookId]++;
  const result={outline:true,book:{...savedBook,entries:[]},etag:state.etag,recordRevisions:{},notebookCounts,total:state.recordScope?.total??savedBook.entries.length};adoptSnapshot(result);state.book=result.book;
 }
@@ -1029,7 +1029,7 @@ async function rawAction(button) {
   if(name?.startsWith('lab-book-directory-'))return labBookDirectoryUI.action(button);
   if(name?.startsWith('project-directory-'))return projectDirectoryUI.action(button);
   if(name?.startsWith('project-storage-'))return structureUI.projectStorage.action(button);
-  if(['workflow-new-run','material-repeat'].includes(name)&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){await runCreation.open(state.selected);return;}
+  if(['workflow-new-run','material-repeat'].includes(name)&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){await runCreation.open(state.selected);return;}
   if(await recordContent.action(button))return;
   if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField,focusTarget:button});
   if(button.dataset.action==='record-value-add-contributor')return recordValues.open({recordId:state.selected,field:'contributor:'+crypto.randomUUID()});
@@ -1122,7 +1122,7 @@ async function rawAction(button) {
     if (!await confirmAction(t('recordAuthoring','confirmRemove'),{action:'remove'})) return;
     if(supportsRecordSelection())return removeSelectedRecord();
     const previous=draftWorkspace(state.book);
-    try{state.book.entries=state.book.entries.filter(e=>e.id!==state.selected);state.book.branding=state.book.branding.filter(b=>b.target!=='entry:'+state.selected);state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='entry:'+state.selected);dirty();await save();}
+    try{state.book.entries=state.book.entries.filter(e=>e.id!==state.selected);dirty();await save();}
     catch(error){state.book=previous;dirty();throw error;}
     state.selected=null;state.page='entries';render();
   }

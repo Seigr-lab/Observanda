@@ -25,7 +25,7 @@ export class RecordFigureCommands{
  async context(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);
   if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');return {etag,snapshot};
+  if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');return {etag,snapshot};
  }
  async receipt(file,request){
   const raw=await this.workspace.readMetadata(file,4096);if(raw===null)return null;let saved;

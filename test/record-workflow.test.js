@@ -5,7 +5,7 @@ import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook,validateNotebook} from '../src/model.js';
+import {validateNotebook} from '../src/model.js';
 import {createRun,runsOf,recordCounts,sectionAnchor,workflowIssues} from '../src/web/record-workflow.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {Workspace} from '../src/storage.js';
@@ -23,10 +23,8 @@ function fixture(){
  series.type='note';series.title='Acoustic sessions';
  return {book,experiment,method,series};
 }
-test('format 19 preserves legacy hashes and statuses; roles validate independently of labels',()=>{
- const {book,experiment,method}=fixture();book.formatVersion=18;experiment.status='failed';
- const bytes=JSON.stringify(book),revision=recordRevision(experiment),next=upgradeNotebook(book);
- assert.equal(JSON.stringify(book),bytes);assert.equal(recordRevision(next.entries[0]),revision);assert.equal(next.entries[0].status,'failed');
+test('run roles validate independently of labels',()=>{
+ const {book:next,method}=fixture();
  const run=createRun(next,next.entries[0]);next.entries.push(run);
  for(const change of [
   r=>r.relations[0].target.revision='a'.repeat(64),

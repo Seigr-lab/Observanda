@@ -17,7 +17,7 @@ export function inventoryClient(c,{card,stock,bom}){
  const connectedActive=()=>active()&&c.current?.type==='resource'&&c.current.expectedRevision!==null&&c.section==='connections'&&!state.access?.locked&&!state.storageUnavailable;
  const connectedIdentity=()=>JSON.stringify([state.modulePath,c.current?.id,c.section]);
  const connectedKey=()=>JSON.stringify([state.storage?.contextId,state.book.id,state.projectOwner,connectedIdentity()]);
- const aggregate=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+ const aggregate=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
  const drawConnections=()=>{const node=document.querySelector('[data-inventory-links]');if(node&&connectedActive())node.innerHTML=connectionView();};
  const connections=aggregate?connectedReferencePages({state,api,esc:c.esc,prefix:'inventory-links',action:'module-command',active:connectedActive,identity:connectedIdentity,draw:drawConnections}):moduleItemPages({api,workspaceId:state.book.id,esc:c.esc,prefix:'inventory-links',draw:drawConnections});
  function connectionView(){return c.button(t('moduleConnected','refresh'),'inventory-links-refresh',!connectedActive()||connections.busy?'disabled':'')+connections.view(item=>{

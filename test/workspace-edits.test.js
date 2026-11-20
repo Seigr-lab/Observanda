@@ -17,22 +17,17 @@ import {RecordSearchIndex} from '../src/record-search-index.js';
 import {ResearchRecords,recordRevision,recordRevisions} from '../src/research.js';
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {applyRecordPatch} from '../src/web/record-patch.js';
-import {defaultPageLayout} from '../src/web/website-layouts.js';
+import {startingAppearance} from '../src/web/themes.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {publicProjection} from '../src/publication.js';
 import {validateWorkspaceOutline} from '../src/web/workspace-reader.js';
-import {MediaStore} from '../src/media.js';
 
 async function fixture(t,count=8){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-edits-'));
  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Private take '+i,body:'Unrelated original body '+i,share:false,sections:[{id:randomUUID(),title:'Notes',body:''}],figures:[],attachments:[],relations:[]}));
- book.branding=[{target:'entry:'+book.entries.at(-1).id,logos:[]}];
- book.website.layouts=[defaultPageLayout('entry:'+book.entries.at(-1).id)];
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
- const media=new MediaStore(ws.root,vault),logo=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>'),'image'),saved=await ws.read();
- saved.book.branding[0].logos=[{id:logo.id,alt:'Private mark'}];await ws.save(saved.book,saved.etag);
  return {directory,ws,vault,base:await ws.read(),service:new WorkspaceEdits(ws,{get:async()=>{throw Object.assign(Error('Missing original'),{code:'MEDIA_MISSING'});}})};
 }
 const request=(base,draft)=>({...workspaceSaveRequest(base.book,draft,recordRevisions(base.book)),baseEtag:base.etag});
@@ -44,14 +39,14 @@ async function bounded(ids,fn){
  SnapshotIndex.prototype.members=()=>{throw Error('Whole membership scan');};
  try{return {result:await fn(),loaded};}finally{Object.assign(ResearchCatalogue.prototype,old);SnapshotIndex.prototype.members=members;}
 }
-test('general, appearance, website and branding saves reuse record roots at growing corpus sizes',async t=>{
+test('general, appearance, theme and identity saves reuse record roots at growing corpus sizes',async t=>{
  for(const count of [32,320]){
   const f=await fixture(t,count),before=await f.ws.catalogue(s=>s.snapshot());let base=f.base;
   const edits=[
    b=>{b.title='Research studio';b.description='Shared creative work';},
    b=>{b.appearance.accent='#735123';},
-   b=>{b.website.footer='An approved public footer';b.pages.push({id:randomUUID(),title:'Introduction',body:'Selected explanation',share:false});},
-   b=>{b.branding.push({target:'home',logos:[{id:b.branding[0].logos[0].id,alt:'Studio emblem'}]});b.projects[0].logoId=b.branding.at(-1).logos[0].id;}
+   b=>{b.themes.push({id:randomUUID(),name:'Field notes',appearance:startingAppearance('studio')});},
+   b=>{b.identity={kind:'studio',label:''};}
   ];
   await bounded(new Set(),async()=>{
    for(const edit of edits){
@@ -81,8 +76,7 @@ test('workspace details save from an explicit outline without loading or replaci
 });
 test('mixed publication selections and deletion commit together and restore with original revisions',async t=>{
  const f=await fixture(t),draft=structuredClone(f.base.book),removed=draft.entries.pop();
- draft.website.footer='Reviewed context';draft.projects[0].share=true;draft.entries[0].share=true;draft.entries[1].title='A revised interpretation';
- draft.branding=[];draft.website.layouts=[];
+ draft.description='Reviewed context';draft.projects[0].share=true;draft.entries[0].share=true;draft.entries[1].title='A revised interpretation';
  const command=request(f.base,draft),{result}=await bounded(new Set([draft.entries[0].id,draft.entries[1].id,removed.id]),()=>f.service.save(command));
  assert.deepEqual(result.recordPatch.removed,[removed.id]);assert.equal(result.recordPatch.records.length,2);
  const saved=await f.ws.read();assert.deepEqual(patch(f.base,result).book,saved.book);assert.deepEqual(saved.book.entries.slice(2),f.base.book.entries.slice(2,-1));
@@ -103,13 +97,10 @@ test('mixed publication selections and deletion commit together and restore with
 test('invalid identities, selections, structure mutations and stale bases never partially save',async t=>{
  const f=await fixture(t),base=request(f.base,f.base.book),first=f.base.book.entries[0];
  const invalid=[
-  ...[null,[],42].map(website=>({...base,metadata:{website}})),
-  ...['pages','branding','themes'].map(key=>({...base,metadata:{[key]:null}})),
+  // Websites keep their own settings; the workspace refuses the earlier ones.
+  ...[['website',{}],['pages',[]],['branding',[]],['websites',[]]].map(([key,value])=>({...base,metadata:{[key]:value}})),
+  {...base,metadata:{themes:null}},
   {...base,metadata:{id:randomUUID()}},
-  {...base,metadata:{pages:[{id:first.id,title:'Collision',body:'',share:false}]}},
-  {...base,metadata:{pages:[{id:first.sections[0].id,title:'Collision',body:'',share:false}]}},
-  {...base,metadata:{branding:[{target:'entry:'+randomUUID(),logos:[]}]}},
-  {...base,metadata:{website:{...f.base.book.website,layouts:[defaultPageLayout('entry:'+randomUUID())]}}},
   {...base,projects:[{id:randomUUID(),share:true,logoId:null}]},
   {...base,projects:[{id:f.base.book.projects[0].id,share:true,logoId:null,title:'Bypass'}]},
   {...base,metadata:{title:''}},
@@ -141,7 +132,7 @@ test('failed reference checks and interrupted mixed commits roll back metadata, 
 });
 test('mixed insertion has a bounded append response and preserves per-record revision validation',async t=>{
  const f=await fixture(t),draft=structuredClone(f.base.book),record={...structuredClone(draft.entries[0]),id:randomUUID(),sections:[],title:'A new take'};
- draft.entries.push(record);draft.website.footer='New edition';draft.website.layouts.push(defaultPageLayout('entry:'+record.id));
+ draft.entries.push(record);draft.description='New edition';
  const {result}=await bounded(new Set(),()=>f.service.save(request(f.base,draft)));
  assert.deepEqual(result.recordPatch.appended,[record.id]);assert.equal(result.recordPatch.records.length,1);const saved=await f.ws.read();
  assert.deepEqual(patch(f.base,result).book,saved.book);
@@ -165,8 +156,8 @@ test('an unchanged save is idempotent and cannot erase a writer that commits aft
 });
 test('client authoring commands exclude unchanged private records and reject structural edits',()=>{
  const book=upgradeNotebook(sampleNotebook()),next=structuredClone(book),revisions=recordRevisions(book);
- next.website.footer='Only metadata';const command=workspaceSaveRequest(book,next,revisions);
- assert.deepEqual(command.metadata,{website:next.website});assert.deepEqual(command.changes,[]);
+ next.description='Only metadata';const command=workspaceSaveRequest(book,next,revisions);
+ assert.deepEqual(command.metadata,{description:next.description});assert.deepEqual(command.changes,[]);
  next.notebooks[0].title='Structural change';assert.equal(workspaceSaveRequest(book,next,revisions),null);
  next.notebooks=book.notebooks;next.projects[0].title='Other structure';assert.equal(workspaceSaveRequest(book,next,revisions),null);
  next.projects=book.projects;next.entries.reverse();assert.equal(workspaceSaveRequest(book,next,revisions),null);
@@ -180,7 +171,7 @@ test('template snapshots, private moves and selected media use the shared record
   book.notebooks.push({id:randomUUID(),projectId:book.projects[0].id,title:'Another lab book'});
   return book;
  });
- const draft=structuredClone(base.book);draft.website.footer='Mixed changes';draft.entries[0].template.label='Silently revised method';
+ const draft=structuredClone(base.book);draft.description='Mixed changes';draft.entries[0].template.label='Silently revised method';
  await assert.rejects(f.service.save(request(base,draft)),{code:'INVALID'});
  draft.entries[0].template=structuredClone(base.book.entries[0].template);
  draft.entries[0].notebookId=draft.notebooks.at(-1).id;draft.entries[0].share=true;
@@ -198,7 +189,7 @@ test('pre-index metadata edits and unchanged retries preserve history and reconc
   await store.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',f.base.etag,store.encode('snapshot',f.base.etag,manifest));
  }));
  const unchanged=await f.service.save(request(f.base,f.base.book));assert.deepEqual(patch(f.base,unchanged).book,f.base.book);
- const draft=structuredClone(f.base.book);draft.website.footer='Older workspace edited';
+ const draft=structuredClone(f.base.book);draft.description='Older workspace edited';
  const result=await f.service.save(request(f.base,draft));assert.deepEqual(patch(f.base,result).book,(await f.ws.read()).book);
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.base.book)));
 });

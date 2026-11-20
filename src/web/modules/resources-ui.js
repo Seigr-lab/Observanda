@@ -21,7 +21,7 @@ export function createResourcesUI(services){let context;const tags=resourceTagsU
  return moduleEditor(services,{
  listQuery:tags.query,listTools:tags.filters,listInput:tags.filterInput,
  id:'resources',initialType:'resource',scoped:true,paged:true,get label(){return m('inventory')},readOnly:d=>bomReadonly(d)||d.type==='bom'&&!!context?.bomOperations?.summary()&&!context.bomOperations.summary().terminal,
- setup(c){context=c;c.schema=moduleSchemaFields(c);c.inventory=inventoryClient(c,{card:inventoryCardFacts,stock:inventoryStockSection,bom:stockPreview});if(services.state.storage?.researchStorage==='catalogue'&&services.state.storage.researchFormatVersion===21){c.bomSources=bomSourcesUI(services,c);c.bomOperations=bomOperationUI(services,c);}},
+ setup(c){context=c;c.schema=moduleSchemaFields(c);c.inventory=inventoryClient(c,{card:inventoryCardFacts,stock:inventoryStockSection,bom:stockPreview});if(services.state.storage?.researchStorage==='catalogue'&&services.state.storage.researchFormatVersion>=21){c.bomSources=bomSourcesUI(services,c);c.bomOperations=bomOperationUI(services,c);}},
  bind:c=>{c.inventory.bind();c.bomSources?.bind();c.bomOperations?.bind();},deactivate:c=>{quality.close();c.inventory.stop();c.bomSources?.stop();c.bomOperations?.stop();},dispose:c=>{quality.close();c.inventory.stop();c.bomSources?.stop();c.bomOperations?.stop();},afterCommand:c=>{c.inventory.invalidate();c.bomSources?.invalidate();c.bomOperations?.settled();},
  commandRequest:(run,command)=>context.bomOperations?context.bomOperations.commandRequest(run,command):run(),
  pendingCommand:(result,command)=>context.bomOperations.pendingCommand(result,command),

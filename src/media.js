@@ -1,3 +1,4 @@
+import {renderingNotebook} from './publication-rendering-book.js';
 import {adoptRecordOwnerMedia} from './record-owner-resources.js';
 import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
@@ -231,7 +232,7 @@ export class MediaStore {
   }
 
   async publicFiles(source,{signal,streamed=false,designPageId=null,designTarget=null,workspaceContent=false}={}) {
-    const book = upgradeNotebook(source), files = new Map();
+    const book = renderingNotebook(source), files = new Map();
     const context = publicProjection(book,{designPageId,designTarget,workspaceContent});
     for(const entry of context.entries)for(const attachment of entry.attachments){
       signal?.throwIfAborted();

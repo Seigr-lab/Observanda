@@ -1,3 +1,4 @@
+import {renderingSample} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,writeFile,rm} from 'node:fs/promises';
@@ -24,7 +25,7 @@ test('SVG originals remain exact and encrypted; only a static prepared image rea
  assert.equal(metadata.originalSha256,digest(original));assert.equal(metadata.originalBytes,original.length);
  const prepared=await store.get(asset.id);assert.equal(prepared.mime,'image/png');
  assert.equal(prepared.bytes.readUInt32BE(16),120);assert.equal(prepared.bytes.readUInt32BE(20),80);
- const book=createNotebook('Studio');book.website.home.enabled=true;book.branding=[{target:'home',logos:[{id:asset.id,alt:'Studio mark'}]}];
+ const book=renderingSample();book.entries[0].share=true;book.entries[0].attachments.push({...asset,caption:'Studio mark',alt:'Studio mark',transcript:'',share:true});
  const candidate=buildPublication(book,{mediaFiles:await store.publicFiles(book)});
  assert.ok([...candidate.files.keys()].some(name=>name.endsWith(asset.id+'.png')));
  for(const content of candidate.files.values())assert.ok(!Buffer.from(content).includes(Buffer.from('PRIVATE')));

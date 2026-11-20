@@ -9,7 +9,7 @@ export function recordRunsUI({state,api,esc,getRecord}){
  const record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  const active=()=>['editor','record-reader'].includes(state.page)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&record()?.type!=='run'&&!!record();
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.selected,state.etag]);
- const indexed=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+ const indexed=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
  const link=run=>`<a href="#/records/${run.id}/read" data-action="record-read-linked" data-id="${run.id}">${esc(run.title)}</a>`;
  const button=(key,action,disabled=false)=>`<button type="button" class="button" data-action="workflow-${action}" ${disabled?'disabled':''}>${text(key)}</button>`;
  let key='',generation=0,controller=null,page=null,error=null,loading=false,opened=false,compare=false,requestedCursor=null,detail=null;

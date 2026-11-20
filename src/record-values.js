@@ -126,7 +126,7 @@ export class RecordValues{
  }
  async select(store,command){
   const etag=await store.head(),snapshot=await store.snapshot(etag);if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
+  if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
   const collection=recordValueCollection(command.field),position=collection?await new RecordMemberCollections(store).position(row,collection.name,collection.id):undefined;
   return {etag,snapshot,row,position};
  }

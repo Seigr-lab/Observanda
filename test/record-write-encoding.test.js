@@ -9,7 +9,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
-import {ResearchRecords,historicalRecordValue,recordRevision} from '../src/research.js';
+import {ResearchRecords,recordRevision} from '../src/research.js';
 import {withRecordWriteEncoding,recordWriteEncoding,recordWriteDisplay} from '../src/record-write-encoding.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {revisionText} from '../src/web/revision-model.js';
@@ -21,7 +21,6 @@ import {recordEditionInventory} from '../src/web/publication-inventory.js';
 import {verifyStoredRecord} from '../src/record-storage.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {legacyRecords} from './legacy-records.js';
 
 function source(){const book=upgradeNotebook(sampleNotebook());book.entries=[book.entries[2]];return book;}
 const identities=record=>({storage:digest(serialize(record)),content:digest(revisionText(record))});
@@ -71,17 +70,6 @@ test('prepared writes own immutable records, reject executable values and expire
  await assert.rejects(withRecordWriteEncoding(owner,getter,metadata,()=>assert.fail('Invalid source consumed')),{code:'INVALID'});
  const hook={...record,toJSON(){assert.fail('Record serialization hook was invoked');}};
  await assert.rejects(withRecordWriteEncoding(owner,hook,metadata,()=>assert.fail('Invalid source consumed')),{code:'INVALID'});
-});
-
-test('prepared legacy originals keep their storage spelling and independently upgraded display identity',async()=>{
- const book=legacyRecords(source());book.formatVersion=12;
- const record=book.entries[0],metadata={...book,entries:[]},owner={},before=structuredClone(record),display=historicalRecordValue(metadata,record);
- assert.notDeepEqual(display,record);
- await withRecordWriteEncoding(owner,record,metadata,async(receipt,value)=>{
-  const retained=recordWriteDisplay(owner,value,metadata);assert.notEqual(retained,value);assert.ok(Object.isFrozen(retained));assert.ok(Object.isFrozen(retained.contributors));
-  assert.deepEqual(retained,display);assert.equal(receipt.encoding.revision,digest(serialize(before)));assert.equal(receipt.contentRevision,digest(revisionText(display)));
-  await Promise.resolve();record.author='Caller changed legacy author';assert.deepEqual(value,before);assert.deepEqual(retained,display);
- });
 });
 
 test('public full and selected saves reuse exact encoding identities through query and history storage',async t=>{

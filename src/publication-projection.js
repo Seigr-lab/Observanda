@@ -1,3 +1,4 @@
+import {renderingNotebook} from './publication-rendering-book.js';
 import {sourcePublicationRecord} from './web/source-publication-permissions.js';
 import {upgradeNotebook} from './model.js';
 import {withoutFigureSources} from './web/figure-provenance.js';
@@ -27,7 +28,7 @@ import './web/i18n/catalogues/labBookProfiles.js';
 
 export function publicProjection(source, options={}) {
   const {designPageId=null,designTarget=null,workspaceContent=false}=options;
-  const book = upgradeNotebook(source),selection=selectedContent(book);
+  const book = renderingNotebook(source),selection=selectedContent(book);
   if(designPageId){const page=book.pages.find(p=>p.id===designPageId);if(!page)throw new AppError('INVALID');if(!selection.pages.some(p=>p.id===page.id))selection.pages=[...selection.pages,page];}
   if(designTarget!==null&&(typeof designTarget!=='string'||! /^(home|(?:page|project|notebook|entry):[a-f0-9-]{36})$/.test(designTarget)))throw new AppError('INVALID');
   if(designTarget&&designTarget!=='home'){

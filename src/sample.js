@@ -1,4 +1,3 @@
-import {websiteDefaults} from './web/website-model.js';
 import {upgradeRecord} from './web/record-model.js';
 import { randomUUID } from 'node:crypto';
 import { createNotebook } from './model.js';
@@ -6,7 +5,6 @@ import { createNotebook } from './model.js';
 // Fictional examples for appearance preview and automated verification only.
 export function sampleNotebook() {
   const book = createNotebook('A closer look', 'Small experiments in the everyday. A lab book of questions, careful observations, and unexpected connections.');
-  book.website.home=websiteDefaults().home;
   const projectId=randomUUID();
   book.projects=[{id:projectId,title:'Patterns in the everyday',description:'',share:true,logoId:null}];
   book.notebooks=[{id:randomUUID(),projectId,title:'Field journal'}];

@@ -21,7 +21,7 @@ export class RecordSectionCommands{
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const etag=await store.head(),snapshot=await store.snapshot(etag);
    if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const row=await store.member(snapshot,command.recordId);if(!row)throw new AppError('MISSING');
    const items=new RecordMemberCollections(store),index=await items.position(row,'sections',command.sectionId),total=memberCollectionCount(row,'sections');
    const receipt=(version,member)=>({etag:version,saved:true,sectionId:command.sectionId,structureRevision:memberStructureRevision(member)});
@@ -72,7 +72,7 @@ export class RecordSectionCommands{
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const etag=await store.head(),snapshot=await store.snapshot(etag);
    if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const row=await store.member(snapshot,recordId);if(!row)throw new AppError('MISSING');
    const items=new RecordMemberCollections(store);
    const receipt=(etag,member)=>({etag,saved:true,sectionIds:[...ids],storageRevision:member.revision});

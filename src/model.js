@@ -117,7 +117,7 @@ export function validateNotebook(book) {return validateBook(book);}
 // Only the catalogue supplies these authenticated identities. Public document
 // validation remains complete and never accepts an omitted record collection.
 export function validateCatalogueMetadata(book,{reservedIds=[],entryTargets=[],websiteContexts}={}){
- if(book?.formatVersion!==21||!Array.isArray(book.entries)||book.entries.length)throw new AppError('FORMAT');
+ if(![21,22].includes(book?.formatVersion)||!Array.isArray(book.entries)||book.entries.length)throw new AppError('FORMAT');
  admitResearchBytes('metadata',researchBytes(book));
  return validateBook(book,{reservedIds,entryTargets,websiteContexts,configurationReferences:true});
 }
@@ -129,9 +129,9 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
   }
   const issues = [];
   const check = (valid, field, recordId) => { if (!valid) issues.push({ field, ...(id(recordId) ? { recordId } : {}) }); };
-  if (!keys(book, ['formatVersion', 'id', 'revision', 'title', 'description', 'createdAt', 'updatedAt', 'appearance', 'projects', 'notebooks', 'entries', ...(book?.formatVersion >= 2 ? ['website', 'pages', ...(book.formatVersion >= 3 ? ['branding'] : []), ...(book.formatVersion >= 4 ? ['themes', 'activeThemeId'] : []), ...(book.formatVersion >= 5 ? ['identity'] : [])] : [])]) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(book.formatVersion)) throw new AppError('FORMAT');
-  if(book.formatVersion>=2&&(!book.website||typeof book.website!=='object'||Array.isArray(book.website)||!Array.isArray(book.pages))||
-    book.formatVersion>=3&&!Array.isArray(book.branding)||book.formatVersion>=4&&!Array.isArray(book.themes))throw new AppError('INVALID');
+  if (!keys(book, ['formatVersion', 'id', 'revision', 'title', 'description', 'createdAt', 'updatedAt', 'appearance', 'projects', 'notebooks', 'entries', ...(book?.formatVersion >= 2 ? [...(book.formatVersion < 22 ? ['website', 'pages'] : []), ...(book.formatVersion >= 3 && book.formatVersion < 22 ? ['branding'] : []), ...(book.formatVersion >= 4 ? ['themes', 'activeThemeId'] : []), ...(book.formatVersion >= 5 ? ['identity'] : [])] : [])]) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(book.formatVersion)) throw new AppError('FORMAT');
+  if(book.formatVersion>=2&&book.formatVersion<22&&(!book.website||typeof book.website!=='object'||Array.isArray(book.website)||!Array.isArray(book.pages))||
+    book.formatVersion>=3&&book.formatVersion<22&&!Array.isArray(book.branding)||book.formatVersion>=4&&!Array.isArray(book.themes))throw new AppError('INVALID');
   check(id(book.id), 'id');
   if (book.formatVersion >= 5) check(validIdentity(book.identity), 'identity');
   check(Number.isSafeInteger(book.revision) && book.revision >= 0, 'revision');
@@ -151,6 +151,9 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
   checkRecords(book,book.entries,unique,check);
   if (book.formatVersion >= 2) {
     check(validFont(a?.headingFont) && ['background', 'surface', 'text'].every(key => /^#[0-9a-f]{6}$/i.test(a?.[key])), 'appearance');
+  }
+  // Formats before 22 carried the earlier website system's settings, pages and branding.
+  if (book.formatVersion >= 2 && book.formatVersion < 22) {
     const site = book.website;
     check(keys(site, ['logoId', 'logoAlt', 'footer', 'navigation', ...(site.researchSources===undefined?[]:['researchSources']), ...(book.formatVersion >= 6 ? ['title','description','home'] : []), ...(book.formatVersion >= 7 ? ['design','assets'] : []), ...(book.formatVersion >= 8 ? ['layouts','templates'] : []), ...(book.formatVersion >= 10 ? ['typography'] : []), ...(book.formatVersion >= 11 ? ['presentation','palette'] : [])]) && (site.logoId === null || id(site.logoId)) && text(site.logoAlt, 160) && text(site.footer, 1500) && Array.isArray(site.navigation) && site.navigation.length <= 200 && site.navigation.every(item => validWebsiteNavigationItem(item,{formatVersion:book.formatVersion})) && new Set(site.navigation.map(item => item.target)).size === site.navigation.length, 'website');
     if (book.formatVersion >= 11) {check(validPresentation(site.presentation), 'media presentation');check(validPalette(site.palette), 'website colors');}
@@ -172,7 +175,7 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
       check(site.navigation.every(item => targets.has(item.target)||publicationPresentationTarget(site,item.target,{records:false})), 'navigation');
     }
   }
-  if (book.formatVersion >= 3) {
+  if (book.formatVersion >= 3 && book.formatVersion < 22) {
     const targets = new Set(issues.length ? [] : [...brandingTargets(book).map(item => item.target),...entryTargets]);
     check(Array.isArray(book.branding) && book.branding.length <= 1700 && book.branding.every(item => validWebsiteBranding(item) && (targets.has(item.target)||publicationPresentationTarget(book.website,item.target))) && new Set(book.branding.map(item => item.target)).size === book.branding.length, 'branding');
   }
@@ -186,13 +189,20 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
   return book;
 }
 
+// Format 22 leaves the earlier website system's settings, pages, branding and
+// named sites behind; websites are made in the website editor with their own files.
+export const CURRENT_FORMAT=22;
+export function currentWorkspaceMetadata(metadata){
+ if(metadata.formatVersion!==21)return metadata;
+ const {website,websites,pages,branding,...current}=metadata;void website;void websites;void pages;void branding;
+ return {...current,formatVersion:22};
+}
 export function createNotebook(title = 'My field notes', description = '', theme = 'research') {
   if (!['research', 'studio'].includes(theme)) throw new AppError('INVALID');
   const now = new Date().toISOString();
   return validateNotebook({
-    formatVersion: 21, identity: {kind:'personal',label:''}, branding: [], themes: [], activeThemeId: null, id: randomUUID(), revision: 0, title, description, createdAt: now, updatedAt: now,
+    formatVersion: 22, identity: {kind:'personal',label:''}, themes: [], activeThemeId: null, id: randomUUID(), revision: 0, title, description, createdAt: now, updatedAt: now,
     appearance: startingAppearance(theme),
-    website: websiteRenderingDefaults(), pages: [],
     projects: [], notebooks: [], entries: []
   });
 }
@@ -242,5 +252,6 @@ export function upgradeNotebook(source,{configurationReferences=false}={}) {
   // Broader date choices do not rewrite existing records or pinned revisions.
   if(book.formatVersion===19)book.formatVersion=20;
   if(book.formatVersion===20)book.formatVersion=21;
+  if(book.formatVersion===21)Object.assign(book,currentWorkspaceMetadata(book));
   return validateBook(book,{configurationReferences});
 }

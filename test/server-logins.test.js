@@ -1,3 +1,4 @@
+import {renderingSample} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -56,7 +57,7 @@ test('websites share one server login with their own folders, records and file o
  const first=await site('Atlas','/public_html/atlas'),second=await site('Diary','/public_html/diary');
  assert.equal(first.saved.server.name,'Shared hosting');assert.deepEqual(first.saved.server.password,{saved:true,persistent:false});
  assert.notEqual(first.publisher.destinationKey(first.saved.config),second.publisher.destinationKey(second.saved.config));
- const book=sampleNotebook(),atlas=buildPublication(book),diary=buildPublication({...structuredClone(book),title:'Bee yard diary'});
+ const book=renderingSample(),atlas=buildPublication(book),diary=buildPublication({...structuredClone(book),title:'Bee yard diary'});
  await first.publisher.deploy(atlas,first.saved.etag,randomUUID());await second.publisher.deploy(diary,second.saved.etag,randomUUID());
  assert.ok(host.files.has('/public_html/atlas/index.html'));assert.ok(host.files.has('/public_html/diary/index.html'));
  assert.deepEqual(passwords,['host secret','host secret']);

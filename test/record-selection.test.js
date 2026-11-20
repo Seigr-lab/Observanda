@@ -16,7 +16,6 @@ import {recordSelectionReader,validateRecordReceipt} from '../src/web/record-sel
 import {validateRecordScope} from '../src/web/record-scope.js';
 import {recordCreationBase} from '../src/web/record-creation.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
-import {defaultPageLayout} from '../src/web/website-layouts.js';
 import {largeRecordBook} from './record-capacity-fixture.js';
 
 async function fixture(t,count=4){
@@ -107,10 +106,9 @@ test('creation and removal retain bounded selections and original revisions at t
  }
 });
 
-test('removal checks revisions, atomically cleans presentation targets and keeps incoming references',async t=>{
+test('removal checks revisions, is atomic and keeps incoming references',async t=>{
  const f=await fixture(t),id=f.book.entries[0].id,other=f.book.entries[1].id;
  const base=await f.workspace.update(book=>{
-  book.branding.push({target:'entry:'+id,logos:[{id:randomUUID(),alt:'Original logo'}]});book.website.layouts.push(defaultPageLayout('entry:'+id));
   book.entries[1].relations=[{id:randomUUID(),type:'supports',target:{workspaceId:book.id,kind:'record',id},label:'Source observation'}];
   return book;
  });
@@ -125,7 +123,7 @@ test('removal checks revisions, atomically cleans presentation targets and keeps
  try{await assert.rejects(f.records.remove(command),/Interrupted/);}finally{ResearchCatalogue.prototype.commitChanges=commit;}
  assert.equal((await f.workspace.read()).etag,revised.etag);
  await f.records.remove(command);const after=(await f.workspace.read()).book;
- assert.equal(after.branding.some(b=>b.target==='entry:'+id),false);assert.equal(after.website.layouts.some(l=>l.target==='entry:'+id),false);
+ assert.equal(after.entries.some(r=>r.id===id),false);
  assert.deepEqual(after.entries.find(r=>r.id===other),base.book.entries[1]);
 });
 

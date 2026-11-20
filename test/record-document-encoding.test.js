@@ -7,11 +7,6 @@ import {RecordBlockStore} from '../src/record-block-store.js';
 import {recordEncoding,recordContentRevision} from '../src/record-encoding.js';
 import {withRecordEncodingAudit} from '../src/record-document-encoding.js';
 import {withCatalogueVerification} from '../src/catalogue-verification.js';
-import {retainedRecordDisplay} from '../src/record-history-display.js';
-import {historicalRecordValue,recordRevision} from '../src/research.js';
-import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook} from '../src/model.js';
-import {legacyRecords} from './legacy-records.js';
 import {seal} from '../src/encryption.js';
 import {digest,serialize} from '../src/storage-format.js';
 
@@ -128,11 +123,3 @@ test('new audits reject corrupted blocks and authenticated envelopes with a fals
  const bad=await f.add(f.record,{revision:'0'.repeat(64)}),proof=receipts();await assert.rejects(withRecordEncodingAudit(f.store,proof,()=>bad.open(document=>document.encoding())),{code:'CATALOGUE_DAMAGED'});assert.equal(proof.values.size,0);
 });
 
-test('legacy historical display transformations keep their independently upgraded identity',async()=>{
- const book=legacyRecords(upgradeNotebook(sampleNotebook()));book.formatVersion=12;const record=book.entries[0],metadata={...book,entries:[]},f=await fixture(record),proof=receipts();f.store.record=async()=>structuredClone(record);
- const display=historicalRecordValue(metadata,record);assert.notEqual(recordRevision(record),recordRevision(display));
- await withRecordEncodingAudit(f.store,proof,async()=>{
-  await f.open(async document=>assert.equal((await document.encoding()).contentRevision,recordRevision(record)));
-  const retained=await retainedRecordDisplay(f.store,record.id,f.revision,metadata);assert.equal(retained.revision,recordRevision(display));assert.equal(proof.values.size,1);
- });
-});

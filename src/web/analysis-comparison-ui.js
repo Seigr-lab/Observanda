@@ -13,7 +13,7 @@ import {calculationText} from './dataset-calculation-ui.js';
 export function analysisComparisonUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,measurements,notify,access=run=>run(),readOnly=()=>false}){
  let draft=null,identity=null,columns=[],dispose=null,generation=0,view='all',offset=0,category='',group='',groupOffset=0,groupsOpen=false,reference=null,doc=null,dependencyStatus=null,dependencyError=null,saving=false;
  let shownView=null;
- const dedicated=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+ const dedicated=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21;
  const sourceClient=retainedSourceClient({state,api,access,identity:()=>[generation,identity?.id],active:()=>!!document.querySelector('[data-comparison-form]')});
  const sourcePicker=retainedSourcePicker({state,client:sourceClient,esc,field,current:()=>draft});
  const current=request=>{guard();if(request!==generation||!document.getElementById('dialog')?.open)throw new DOMException('Comparison view changed','AbortError');};

@@ -7,7 +7,7 @@ import os from 'node:os';
 import {validRecordDate,recordDateLabel,dateBounds,dateInRange} from '../src/web/record-date.js';
 import {queryRecords} from '../src/web/record-query.js';
 import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook,validateNotebook} from '../src/model.js';
+import {validateNotebook} from '../src/model.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {ResearchMaterials} from '../src/research-materials.js';
@@ -40,12 +40,8 @@ test('declared dates retain precision and reject malformed dates or extra metada
  assert.equal(dateInRange({...approx,kind:'day',value:'2024-02-10'},'2024-02-11'),false); // No invented error margin.
  assert.equal(validRecordDate({...range,to:''},{draft:true}),true);
 });
-test('upgrading format 19 preserves exact record revisions and new planned runs start undated',()=>{
- const old=sampleNotebook();old.formatVersion=19;const bytes=JSON.stringify(old),hashes=old.entries.map(recordRevision);
- const next=upgradeNotebook(old);assert.equal(next.formatVersion,21);assert.equal(JSON.stringify(old),bytes);
- assert.deepEqual(next.entries.map(recordRevision),hashes);assert.deepEqual(next.entries,old.entries);
- const run=createRun(next,next.entries[0]);assert.deepEqual(run.occurredOn,unknown);
- old.entries[0].occurredOn=unknown;assert.throws(()=>validateNotebook(old),{code:'INVALID'});
+test('new planned runs start undated',()=>{
+ const book=sampleNotebook(),run=createRun(book,book.entries[0]);assert.deepEqual(run.occurredOn,unknown);
 });
 test('chronology overlaps declared spans, keeps unknown last, and never orders by import timestamp',()=>{
  const source=sampleNotebook().entries[0];

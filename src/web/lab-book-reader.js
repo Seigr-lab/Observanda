@@ -40,7 +40,7 @@ export async function readBookWindow(api,command,{signal,onCommand=()=>{}}={}){
 }
 export async function readBookPage({state,api,page,signal}){
  const ids=page.records.map(r=>r.id);if(!ids.length)return [];
- if(state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){
+ if(state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){
   const records=[];for(const recordId of ids)records.push(await readBookWindow(api,{workspaceId:page.workspaceId,recordId,snapshotId:page.snapshotId,offset:0,pagedHeader:true},{signal}));return records;
  }
  if(state.etag!==page.snapshotId)throw Error(text('changed'));

@@ -32,12 +32,12 @@ export class WorkspaceReader {
   if(!this.workspace)return {book:null};
   try{
    const outline=await this.workspace.outline();
-   if(await this.workspace.storageKind()==='catalogue'&&outline.metadata.formatVersion===21){
+   if(await this.workspace.storageKind()==='catalogue'&&outline.metadata.formatVersion>=21){
     const result=await this.workspace.catalogue(async store=>{
      const etag=snapshotId??await store.head(),snapshot=await store.snapshot(etag);
      if(workspaceId&&snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
      if(snapshot.metadata.id!==outline.metadata.id)throw new AppError('WORKSPACE_CHANGED');
-     if(snapshot.metadata.formatVersion!==21)return null;
+     if(snapshot.metadata.formatVersion<21)return null;
      signal?.throwIfAborted();
      const anchor={version:snapshot.indexVersion?1:2,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
      const counts=await catalogueOutline(store,snapshot,{signal});
@@ -90,10 +90,10 @@ export class WorkspaceReader {
    const result=await this.workspace.catalogue(async store=>{
     const current=await store.snapshot();
     if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(current.metadata.formatVersion!==21)return null;
+    if(current.metadata.formatVersion<21)return null;
     const base=await store.snapshot(baseEtag);
     if(base.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(base.metadata.formatVersion!==21)return null;
+    if(base.metadata.formatVersion<21)return null;
     signal?.throwIfAborted();
     const patch=await store.recordPatch(baseEtag,{signal});
     signal?.throwIfAborted();return patch;
@@ -125,7 +125,7 @@ export class WorkspaceReader {
    if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const snapshot=await store.snapshot(anchor.etag);
    const {total,totalBytes}=snapshotTotals(snapshot),flat=anchor.version===2;
-   if(snapshot.metadata.id!==workspaceId||snapshot.metadata.formatVersion!==21||(flat?snapshot.indexVersion!==undefined:snapshot.indexVersion!==1))cursorError();
+   if(snapshot.metadata.id!==workspaceId||snapshot.metadata.formatVersion<21||(flat?snapshot.indexVersion!==undefined:snapshot.indexVersion!==1))cursorError();
    if(anchor.offset>total||anchor.bytes>totalBytes)cursorError();
    const records=[];let bytes=0,after=anchor.after,more=false;
    async function* rows(){

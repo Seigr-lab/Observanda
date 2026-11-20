@@ -1,10 +1,10 @@
 import {randomUUID} from 'node:crypto';
-import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook} from '../src/model.js';
+import {renderingSample} from './fixtures/rendering-book.js';
 import {recordRevision} from '../src/research.js';
 
 export function referenceBook(count=53){
- const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0],notebook=book.notebooks.find(n=>n.id===seed.notebookId);
+ // Rendered straight from memory, so the book carries the renderer's page settings.
+ const book=renderingSample(),seed=book.entries[0],notebook=book.notebooks.find(n=>n.id===seed.notebookId);
  book.notebooks=[notebook,{...structuredClone(notebook),id:randomUUID(),title:'Second source book'}];
  for(const project of book.projects)project.share=true;
  const target={...structuredClone(seed),id:randomUUID(),title:'Reference target',body:'A stable scientific definition.',sections:[],relations:[],attachments:[],figures:[],share:true,tags:[]};

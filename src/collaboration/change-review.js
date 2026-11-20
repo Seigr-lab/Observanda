@@ -1,3 +1,4 @@
+import {currentWorkspaceMetadata} from '../model.js';
 import {admitConfigurations,openPackageConfiguration} from './configuration-transfer.js';
 import {randomUUID} from 'node:crypto';
 import {AppError} from '../errors.js';
@@ -139,8 +140,7 @@ export class ChangeReview{
     const removed=review.rows.filter(r=>chosen.has(r.id)&&r.kind==='removed').map(r=>r.id),retainedBookIds=new Set();
     if(working)for await(const member of store.members(snapshot))if(!removed.includes(member.id))retainedBookIds.add(member.notebookId);
     if(working)await admitConfigurations(this.workspace,parts,selection.metadata);
-    const metadata=working?await updatedStructure(snapshot.metadata,working.selection,selection,{workspace:this.workspace,retainedBookIds}):structuredClone(snapshot.metadata),service=new ResearchRecords(this.workspace,new MediaStore(this.workspace));
-    metadata.branding=metadata.branding.filter(b=>!removed.some(id=>b.target==='entry:'+id));metadata.website.layouts=metadata.website.layouts.filter(l=>!removed.some(id=>l.target==='entry:'+id));
+    const metadata=currentWorkspaceMetadata(working?await updatedStructure(snapshot.metadata,working.selection,selection,{workspace:this.workspace,retainedBookIds}):structuredClone(snapshot.metadata)),service=new ResearchRecords(this.workspace,new MediaStore(this.workspace));
     async function* changed(){
      for(const row of review.rows)if(chosen.has(row.id)&&row.kind!=='removed'){
       const record=await parts.value('record',row.id),member=await store.member(snapshot,row.id),previous=member?await store.record(row.id,member.revision):null;

@@ -17,7 +17,6 @@ import {workspaceReader} from '../src/web/workspace-reader.js';
 import {ResearchRecords,recordRevision,recordRevisions} from '../src/research.js';
 import {WorkspaceEdits} from '../src/workspace-edits.js';
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
-import {readWebsiteDocumentRegistry} from '../src/website-document-registry.js';
 
 test('record entry requires an outline and never falls back to complete record pages',async()=>{
  const book=sampleNotebook(),etag='a'.repeat(64),start={metadata:{...book,entries:[]},etag,total:book.entries.length,totalBytes:1,cursor:'next-records',notebookCounts:Object.fromEntries(book.notebooks.map(n=>[n.id,book.entries.filter(r=>r.notebookId===n.id).length]))};
@@ -28,11 +27,10 @@ test('record entry requires an outline and never falls back to complete record p
  const calls=[],reader=workspaceReader(async route=>{calls.push(route);return start;});const result=await reader.read({requireOutline:true});assert.equal(result.outline,true);assert.deepEqual(result.book.entries,[]);assert.deepEqual(calls,['/api/workspace/read/start']);
 });
 
-async function fixture(t,count=45,{large=false,formatVersion=21}={}){
+async function fixture(t,count=45,{large=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-pages-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Take '+i,share:false,
   body:'Original '+i,sections:large?Array.from({length:i===0?6:3},()=>({id:randomUUID(),title:'Notes',body:'x'.repeat(59000)})):[],figures:[],attachments:[],relations:[]}));
- book.formatVersion=formatVersion;
  const f=await encryptedFixture(directory,book);
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,base:await f.workspace.read(),reader:new WorkspaceReader(f.workspace)};
@@ -200,21 +198,6 @@ test('client rejects duplicated, partial or mismatched pages before exposing a w
  }
 });
 
-test('older encrypted catalogues and document workspaces keep the validated compatibility path',async t=>{
- const f=await fixture(t,2,{formatVersion:20}),old=await workspaceReader(requestFor(f.reader)).read();
- assert.deepEqual(old.book,upgradeNotebook(f.base.book));assert.deepEqual(old.recordRevisions,recordRevisions(old.book));
- assert.equal(await f.workspace.catalogue(readWebsiteDocumentRegistry),null);
- 
- assert.equal(await f.workspace.catalogue(readWebsiteDocumentRegistry),null);
- assert.deepEqual(await f.workspace.read(),f.base);
- await assert.rejects(f.reader.start({snapshotId:f.base.etag,workspaceId:f.base.book.id}),{code:'INVALID'});
- const root=path.join(f.directory,'document'),ws=new Workspace(root);await ws.create(sampleNotebook());
- const result=await workspaceReader(requestFor(new WorkspaceReader(ws))).read();
- assert.deepEqual(result.book,upgradeNotebook((await ws.read()).book));
- await assert.rejects(new WorkspaceReader(ws).start({snapshotId:f.base.etag,workspaceId:f.base.book.id}),{code:'INVALID'});
- assert.deepEqual(await new WorkspaceReader(null).start(),{book:null});
-});
-
 test('refresh reads only changed originals and reuses unchanged snapshots at growing corpus sizes',async t=>{
  for(const count of [32,320]){
   const f=await fixture(t,count),base=f.base,record=base.book.entries[0],removed=base.book.entries[1];
@@ -239,7 +222,7 @@ test('refresh reads only changed originals and reuses unchanged snapshots at gro
  }
 });
 
-test('refresh preserves appended identities, validates workspace/base and retains the older-format fallback',async t=>{
+test('refresh preserves appended identities and validates workspace/base',async t=>{
  const f=await fixture(t,3),command={workspaceId:f.base.book.id,baseEtag:f.base.etag};
  const before=await f.workspace.read(),next={...structuredClone(before.book.entries[0]),id:randomUUID(),title:'Appended remote take'};
  await new ResearchRecords(f.workspace,{}).save({workspaceId:before.book.id,changes:[{id:next.id,expectedRevision:null,record:next}]});
@@ -250,9 +233,6 @@ test('refresh preserves appended identities, validates workspace/base and retain
  const controller=new AbortController();controller.abort();
  await assert.rejects(f.reader.changes(command,{signal:controller.signal}),{name:'AbortError'});
  await assert.rejects(new WorkspaceReader(null).changes(command),{code:'MISSING'});
- const older=await fixture(t,2,{formatVersion:20});
- const fallback=await older.reader.changes({workspaceId:older.base.book.id,baseEtag:older.base.etag});
- assert.deepEqual(fallback.book,upgradeNotebook(older.base.book));assert.deepEqual(fallback.recordRevisions,recordRevisions(fallback.book));
 });
 
 test('refresh cancellation during a body read publishes no response and leaves the saved revision intact',async t=>{

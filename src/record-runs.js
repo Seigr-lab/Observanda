@@ -21,7 +21,7 @@ export class RecordRuns{
   if(compare&&runs.length){
    await this.workspace.catalogue(async store=>{
     const snapshot=await store.snapshot(page.snapshotId);if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-    if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+    if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
     for(const run of runs){
      signal?.throwIfAborted();
      const row=await store.member(snapshot,run.id);if(!row)throw new AppError('CATALOGUE_DAMAGED');
@@ -38,7 +38,7 @@ export class RecordRuns{
   return this.workspace.catalogue(async store=>{
    const current=await store.snapshot(),snapshot=await store.snapshot(snapshotId);if(current.metadata.id!==workspaceId||snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const row=await store.member(snapshot,runId);if(!await hasRunParent(store,row,recordId))throw new AppError('MISSING');
-   if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   if(snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const conditions=await withRecordDocument(store,row.id,row.revision,document=>recordRunComparison(document,{windows,signal}));
    return {workspaceId,recordId,runId,snapshotId,conditions};
   });

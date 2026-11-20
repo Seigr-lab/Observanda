@@ -5,7 +5,7 @@ import {SnapshotIndex} from '../snapshot-index.js';
 export async function protectedImportTargets(catalogue,snapshot,removals,restorations,{signal}={}){
  const candidates=new Set(removals),protectedIds=new Set(),edges=new Map(),prior=new Map(restorations.map(ref=>[ref.id,ref.revision]));
  if(!candidates.size)return protectedIds;
- for(const value of [...snapshot.metadata.branding,...snapshot.metadata.website.layouts]){
+ for(const value of [...(snapshot.metadata.branding??[]),...(snapshot.metadata.website?.layouts??[])]){
   const id=value.target?.startsWith('entry:')?value.target.slice(6):null;if(candidates.has(id))protectedIds.add(id);
  }
  for await(const member of new SnapshotIndex(catalogue).members(snapshot.membership)){

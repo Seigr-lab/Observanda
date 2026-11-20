@@ -26,7 +26,7 @@ export class RetainedRecordDocuments{
   if(!researchId(id)||expectedRevision!==undefined&&!revisionId(expectedRevision))throw new AppError('MATERIAL_INVALID');
   return this.workspace.catalogue(async store=>{
    const snapshotId=await store.head(),snapshot=await store.snapshot(snapshotId),row=await store.member(snapshot,id);if(!row)throw new AppError('MATERIAL_INVALID');
-   if(snapshot.metadata.formatVersion!==21)return null;
+   if(snapshot.metadata.formatVersion<21)return null;
    const history=store.historyIndex(id),found=await history.lookup(await history.head(),'version',row.revision),view=await history.display(found.item);
    if(expectedRevision!==undefined&&view.revision!==expectedRevision)throw new AppError('RECORD_CHANGED');
    const ref={kind:'record',id,revision:view.revision,workspaceId:snapshot.metadata.id};
@@ -49,7 +49,7 @@ export class RetainedRecordDocuments{
    if(raw===null&&history){
     let located;try{located=await recordReferenceLocation(store,ref.id,ref.revision,{raw:true});}catch(error){if(error.code==='NOT_FOUND')fail();throw error;}
     const {snapshot,row}=located;
-    if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion!==21)fail();
+    if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion<21)fail();
     return withRecordDocument(store,ref.id,row.revision,document=>consume(document,row,store));
    }
    if(raw===null)fail();try{value=JSON.parse(raw);}catch{fail();}
@@ -60,7 +60,7 @@ export class RetainedRecordDocuments{
    if(retainedRecordPointer(value)){
     if(Object.keys(value).sort().join()!=='format,id,revision,snapshotId,storageRevision,version'||value.version!==1||value.id!==ref.id||value.revision!==ref.revision||![value.snapshotId,value.storageRevision].every(revisionId)||await catalogueFormat(store.db)<8)fail();
     const snapshot=await store.recordSnapshot(value.snapshotId,ref.id),row=await store.member(snapshot,ref.id);
-    if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion!==21||row?.revision!==value.storageRevision)fail();
+    if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion<21||row?.revision!==value.storageRevision)fail();
     const history=store.historyIndex(ref.id),found=await history.lookup(await history.head(),'version',value.storageRevision),view=await history.display(found.item);if(view.revision!==ref.revision)fail();
     return withRecordDocument(store,ref.id,row.revision,document=>use(document,row));
    }

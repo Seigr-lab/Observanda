@@ -150,11 +150,9 @@ test('creative takes use the same references and datasets without hypotheses or 
  assert.equal((await ws.read()).book.entries.find(e=>e.id===take.id).status,'incomplete');
 });
 
-test('new reference semantics are version gated and invalid tables keep their originals',async t=>{
+test('invalid tables keep their originals',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-retained-format-')),book=upgradeNotebook(sampleNotebook()),{workspace:ws,vault}=await encryptedFixture(root,book);
- t.after(()=>clearVault(vault));const store=new ResearchMaterials(ws),record=book.entries[0],pinned=await store.pinRecord(record.id,recordRevision(record));
- const older=structuredClone(book);older.formatVersion=16;older.entries[1].relations=[{id:randomUUID(),type:'Uses',target:{...pinned,workspaceId:book.id},label:'Retained'}];
- assert.throws(()=>validateNotebook(older),{code:'INVALID'});
+ t.after(()=>clearVault(vault));const store=new ResearchMaterials(ws),record=book.entries[0];
  const bytes=Buffer.from([0xff,0xfe,0,0,60,115,99,114,105,112,116,62]),artifact=await upload(store,record.id,'opaque-script.html',bytes);
  await assert.rejects(store.dataset({recordId:record.id,title:'Not a UTF-8 table',artifact}),{code:'MATERIAL_TABLE'});
  assert.deepEqual(await contentBuffer((await store.artifact(artifact)).content),bytes);

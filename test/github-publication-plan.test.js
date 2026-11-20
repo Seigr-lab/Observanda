@@ -11,6 +11,7 @@ import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.
 import {githubFilePlan,readGithubOwnership} from '../src/github-publication-plan.js';
 import {buildPublication} from '../src/publication.js';
 import {sampleNotebook} from '../src/sample.js';
+import {renderingBook} from './fixtures/rendering-book.js';
 import {githubFixture,sha} from './github-fixture.js';
 import {truncatedGithubTrees} from './github-tree-fixture.js';
 
@@ -19,8 +20,8 @@ const tree=remote=>remote.trees.get(remote.commits.get(remote.head).tree);
 const writes=remote=>remote.calls.filter(c=>c.method!=='GET');
 async function fixture(t,{directory='',files={'index.html':'Existing site','README.md':'Keep this document','private.config':'Existing repository configuration'}}={}){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ownership-'));
- const book=sampleNotebook();book.website.home.enabled=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
- const f=await encryptedFixture(root,book),ws=f.workspace,saved=await ws.read(),candidate=buildPublication(saved.book);candidate.etag=saved.etag;
+ const book=sampleNotebook();book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
+ const f=await encryptedFixture(root,book),ws=f.workspace,saved=await ws.read(),candidate=buildPublication(renderingBook(saved.book));candidate.etag=saved.etag;
  t.after(async()=>{await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(ws.root,{workspace:ws,request:remote.request,authorizeCandidate:async value=>{if((await ws.read()).etag!==value.etag)throw new AppError('STALE');}},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',directory});const settings=await publisher.save(config,'new');await publisher.connect(token);
@@ -64,7 +65,7 @@ test('a later edition removes only previously owned files and preserves interven
  outsideEdit(f.remote,'research/handwritten.html','A separately maintained page');outsideEdit(f.remote,'news/latest.html','Unrelated news');
  const before=tree(f.remote).filter(e=>['research/handwritten.html','news/latest.html'].includes(e.path));
  const saved=await f.ws.read(),entry=saved.book.entries.find(e=>e.share);assert.ok(entry);entry.share=false;
- await f.ws.save(saved.book,saved.etag);const next=await f.ws.read(),candidate=buildPublication(next.book);candidate.etag=next.etag;
+ await f.ws.save(saved.book,saved.etag);const next=await f.ws.read(),candidate=buildPublication(renderingBook(next.book));candidate.etag=next.etag;
  const {plan}=await publish(f,candidate);
  assert.ok(plan.removed.includes('research/entries/'+entry.id+'.html'));assert.ok(plan.requiresReview);
  assert.deepEqual(tree(f.remote).filter(e=>before.some(b=>b.path===e.path)),before);

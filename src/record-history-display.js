@@ -6,7 +6,7 @@ import {AppError} from './errors.js';
 // History stores a small display receipt, not a duplicate of the record. Verify
 // that receipt against the immutable original without reconstructing its body.
 export async function retainedRecordDisplay(store,id,revision,metadata,{signal}={}){
- if(metadata.formatVersion!==21){
+ if(metadata.formatVersion<21){
   const record=historicalRecordValue(metadata,await store.record(id,revision));
   return {revision:recordRevision(record),title:record.title,status:record.status,updatedAt:record.updatedAt};
  }

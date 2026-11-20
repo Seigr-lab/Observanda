@@ -7,7 +7,7 @@ import {withRecordEncodingAudit} from './record-document-encoding.js';
 export function verificationContext(metadata){
  // These values cannot change current-format record validation or projection.
  // Earlier formats retain their complete context for historical upgrades.
- if(metadata.formatVersion!==21)return metadata;
+ if(metadata.formatVersion<21)return metadata;
  const {revision,updatedAt,...context}=metadata;void revision;void updatedAt;return context;
 }
 export async function withCatalogueVerification(store,operation){

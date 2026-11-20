@@ -19,7 +19,6 @@ import {ResearchRecords,recordRevision,recordRevisions} from '../src/research.js
 import {RecordQuery} from '../src/record-query.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {applyRecordPatch} from '../src/web/record-patch.js';
-import {defaultPageLayout} from '../src/web/website-layouts.js';
 import {starterTemplate} from '../src/web/project-templates.js';
 import {validateWorkspaceOutline} from '../src/web/workspace-reader.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
@@ -30,8 +29,6 @@ async function fixture(t,count=12){
  const notebook={id:randomUUID(),projectId:project.id,title:'Listening'},empty={id:randomUUID(),projectId:book.projects[0].id,title:'Empty book'};
  book.projects.push(project);book.notebooks.push(notebook,empty);
  book.entries=Array.from({length:count},(_,n)=>({...structuredClone(seed),id:randomUUID(),notebookId:n<3?book.notebooks[0].id:notebook.id,title:'Private take '+n,body:'Original working material',share:true,sections:[{id:randomUUID(),title:'Notes',body:''}],figures:[],attachments:[],relations:[]}));
- book.branding=[];
- book.website.layouts=[defaultPageLayout('entry:'+book.entries.at(-1).id),defaultPageLayout('entry:'+book.entries[0].id)];
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault,base:await ws.read(),service:new StructureCommands(ws)};
@@ -55,7 +52,6 @@ test('structure receipts retry the exact committed result and cancellation rolls
 
 test('current structure metadata uses a byte budget instead of the old 100-project and 500-book counts',async t=>{
  const f=await fixture(t),book=structuredClone(f.base.book);book.entries=[];
- book.branding=[];book.website.layouts=[];
  book.projects=Array.from({length:110},(_,i)=>({...book.projects[0],id:randomUUID(),title:'Project '+i}));
  book.notebooks=Array.from({length:510},(_,i)=>({...book.notebooks[0],id:randomUUID(),projectId:book.projects[i%110].id,title:'Book '+i}));
  // Start through the document validator, then use the normal metadata command.
@@ -143,8 +139,6 @@ test('deletion responses reconcile concurrent changes with no discarded bodies a
  const {result}=await bounded(new Set([source.id]),new Set(),()=>command(f,f.base,'delete-notebook',{id:source.id,records:'delete',destinationId:null,confirmed:true}));
  assert.deepEqual(new Set(result.recordPatch.removed),new Set(removed));assert.equal(result.recordPatch.count,9);
  const deleted=await f.ws.read();assert.deepEqual(patch(f.base,result).book,deleted.book);
- assert.equal(deleted.book.website.layouts.some(l=>l.target==='entry:'+removed[0]),false);
- assert.deepEqual(deleted.book.branding,f.base.book.branding);
  const other=f.base.book.entries[3];
  const {result:concurrent}=await bounded(new Set(),new Set([other.id]),()=>new ResearchRecords(f.ws,{}).save({workspaceId:f.base.book.id,baseEtag:f.base.etag,changes:[{id:other.id,expectedRevision:recordRevision(other),record:{...other,title:'A concurrent edit'}}]},{compact:true}));
  assert.deepEqual(patch(f.base,concurrent).book,(await f.ws.read()).book);

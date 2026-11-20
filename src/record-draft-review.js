@@ -69,7 +69,7 @@ export class RecordDraftReview{
    const checkpoint=await this.drafts.read(command.id,{expand:false,header:true});
    if(!checkpoint||checkpoint.revision!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
    const draft=checkpoint.draft;if(draft.workspaceId!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   if(![1,2,3,4].includes(draft.formatVersion)||snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
+   if(![1,2,3,4].includes(draft.formatVersion)||snapshot.metadata.formatVersion<21)throw new AppError('FORMAT');
    const position=command.position??0,source=recoveryRecord(draft,position),legacy=draft.formatVersion!==4,row=await store.member(snapshot,source.recordId);
    const recovered=legacy?await new RecordDraftRecoveryLedger(store).receipt(draft.id,checkpoint.revision,position):null;
    if(recovered){this.validate(recovered);return this.summary(recovered);}

@@ -1,3 +1,4 @@
+import {renderingSample} from './fixtures/rendering-book.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, lstat, symlink, readdir } from 'node:fs/promises';
@@ -18,7 +19,7 @@ test('new lab books contain no automatic public entries or machine metadata', ()
   const book = createNotebook('An independent inquiry');
   assert.deepEqual(book.projects,[]);assert.deepEqual(book.notebooks,[]);
   assert.equal(book.entries.length, 0);
-  assert.equal(book.formatVersion, 21);
+  assert.equal(book.formatVersion, 22);
   assert.equal(buildPublication(book).entries.length, 0);
   assert.ok(!JSON.stringify(book).includes(os.homedir()));
 });
@@ -131,7 +132,7 @@ test('private figure labels and metadata fields block export too', () => {
 });
 
 test('legitimate URLs, safe relative references, and markup-as-text remain readable', () => {
-  const book = sampleNotebook();
+  const book = renderingSample();
   book.entries[0].body = 'https://example.org/articles/1 /lab/notes ./figures/plot.svg <script>alert(1)</script>';
   const html = buildPublication(book).files.get('index.html');
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
@@ -161,7 +162,7 @@ test('manifest covers all payload bytes; mutation after preview blocks download'
 
 test('directory export is complete and refuses to replace an existing destination', async () => {
   const root = await temp(), destination = path.join(root, 'site');
-  const candidate = buildPublication(sampleNotebook());
+  const candidate = buildPublication(renderingSample());
   await writePublication(candidate, destination);
   for (const [name, bytes] of candidate.files) assert.equal(digest(await readFile(path.join(destination, name))), digest(bytes), name);
   await assert.rejects(writePublication(candidate, destination), code('EXISTS'));
