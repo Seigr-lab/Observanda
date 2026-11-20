@@ -1,5 +1,3 @@
-import {WebsiteDocumentStore} from './website-document-store.js';
-import {readWebsiteDocumentRegistry} from './website-document-registry.js';
 // A source catalogue relinquishes write authority in the same transaction as
 // its handover receipt. Lookup is by selected project/scope, never by opening
 // sibling databases or scanning retained workspace history on each command.
@@ -57,7 +55,7 @@ export class ProjectSourceAuthority{
  }
  async metadata(before,after){
   if(this.store.workspace.projectId)return;
-  for(const field of ['projects','notebooks','websites']){
+  for(const field of ['projects','notebooks']){
    const previous=new Map((before?.[field]??[]).map(item=>[item.id,item])),next=new Map((after[field]??[]).map(item=>[item.id,item]));
    for(const id of new Set([...previous.keys(),...next.keys()])){
     const left=previous.get(id),right=next.get(id);if(hash(left??null)===hash(right??null))continue;
@@ -67,14 +65,10 @@ export class ProjectSourceAuthority{
   }
  }
  async scope(kind,id,metadata){
-  if(!['notebook','website'].includes(kind)||!researchId(id))throw new AppError('INVALID');
-  if(kind==='website'&&await readWebsiteDocumentRegistry(this.store)){
-   try{const site=await new WebsiteDocumentStore(this.store).head(id);return {id,projectId:site.projectId,ambiguous:false};}
-   catch(error){if(error.code!=='NOT_FOUND')throw error;}
-  }
-  const value=(metadata[kind==='notebook'?'notebooks':'websites']??[]).find(item=>item.id===id);
+  if(kind!=='notebook'||!researchId(id))throw new AppError('INVALID');
+  const value=(metadata.notebooks??[]).find(item=>item.id===id);
   if(value)return {id,projectId:value.projectId,ambiguous:false};
   const saved=await this.read('project-source-scope:'+kind+':'+id);if(!saved)return null;
-  if(!exact(saved,['id','projectId','ambiguous'])||saved.id!==id||!(kind==='website'&&saved.projectId===null)&&!researchId(saved.projectId)||typeof saved.ambiguous!=='boolean')throw new AppError('CATALOGUE_DAMAGED');return saved;
+  if(!exact(saved,['id','projectId','ambiguous'])||saved.id!==id||!researchId(saved.projectId)||typeof saved.ambiguous!=='boolean')throw new AppError('CATALOGUE_DAMAGED');return saved;
  }
 }

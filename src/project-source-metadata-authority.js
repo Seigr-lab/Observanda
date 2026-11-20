@@ -10,7 +10,7 @@ import {withFlushedMetadataBatch} from './metadata-batch.js';
 async function scopes(store){
  const authority=new ProjectSourceAuthority(store),snapshot=await store.snapshot(),metadata=snapshot.metadata;
  return {namespaceId:metadata.id,projectId:null,head:await store.head(),current:metadata,
-  notebook:id=>authority.scope('notebook',id,metadata),website:id=>authority.scope('website',id,metadata),record:async()=>null};
+  notebook:id=>authority.scope('notebook',id,metadata),record:async()=>null};
 }
 export async function withProjectSourceMetadataAuthority(workspace,db,operation){
  const after=workspace.catalogueStore(db);if(workspace.projectId||workspace.labBookId||!await new ProjectSourceAuthority(after).active())return operation();
