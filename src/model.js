@@ -19,6 +19,7 @@ import {upgradeRecord,validContributors,validRelations} from './web/record-model
 import {validPresentation,presentationDefaults} from './web/media-presentation.js';
 import {validTypography,validPalette} from './web/website-typography.js';
 import {layoutTargets} from './web/website-layouts.js';
+import {websiteRenderingDefaults} from './publication-rendering-book.js';
 import {emptyHomepage,websiteDefaults,validWebsiteComposition,siteLayoutDefaults,validSiteLayout,validSections,validMenuParents} from './web/website-model.js';
 import { validIdentity } from './web/workspace-identity.js';
 import {validLabBookTemplate} from './web/project-templates.js';
@@ -191,7 +192,7 @@ export function createNotebook(title = 'My field notes', description = '', theme
   return validateNotebook({
     formatVersion: 21, identity: {kind:'personal',label:''}, branding: [], themes: [], activeThemeId: null, id: randomUUID(), revision: 0, title, description, createdAt: now, updatedAt: now,
     appearance: startingAppearance(theme),
-    website: { ...websiteDefaults(), home:emptyHomepage(), design:siteLayoutDefaults(), assets:[], layouts:[], templates:[], typography:{}, presentation:presentationDefaults(), palette:{}, logoId: null, logoAlt: '', footer: '', navigation: [] }, pages: [],
+    website: websiteRenderingDefaults(), pages: [],
     projects: [], notebooks: [], entries: []
   });
 }

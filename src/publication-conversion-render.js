@@ -1,3 +1,4 @@
+import {withRenderingWebsite} from './publication-rendering-book.js';
 import {parse,serializeOuter} from 'parse5';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -86,7 +87,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  if(!project)throw new AppError('CATALOGUE_DAMAGED');
  // Build only the selected entry's composition. No other owner's names,
  // navigation, homepage, records, or publication choices are visited.
- const book=createNotebook(record.title);book.id=metadata.id;
+ const book=withRenderingWebsite(createNotebook(record.title));book.id=metadata.id;
  book.projects=[{id:project.id,title:project.title,description:'',share:true,logoId:null}];
  book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
  const target='entry:'+record.id,selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};

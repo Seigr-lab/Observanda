@@ -52,6 +52,7 @@ import {variationCSS} from './web/font-catalogue.js';
 import { assertPublicFields, assertPublicFiles } from './privacy.js';
 import { AppError } from './errors.js';
 import {writeNewFolder} from './new-folder-output.js';
+import {withRenderingWebsite} from './publication-rendering-book.js';
 import { digest, serialize } from './storage.js';
 
 const bookCSS = await readFile(new URL('./web/book.css', import.meta.url), 'utf8')+'\n'+await readFile(new URL('./web/public-feeds.css', import.meta.url), 'utf8')+'\n'+await readFile(new URL('./web/public-index.css', import.meta.url), 'utf8');
@@ -72,7 +73,7 @@ export function renderChart(chart,accent='#3b5bbd'){
 
 
 export function buildPublication(book, options = {}) {
-  return renderPublication(publicProjection(book,options),options);
+  return renderPublication(publicProjection(withRenderingWebsite(book),options),options);
 }
 
 // Callers must supply the admitted projection, never raw workspace records.
