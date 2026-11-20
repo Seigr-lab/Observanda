@@ -47,21 +47,25 @@ test('concurrent dashboard writers cannot overwrite one another and a rejected w
 });
 
 test('dedicated preference routes retain old bookmarks and stable dashboard navigation',()=>{
- const book=sampleNotebook();for(const [page,tab] of [['preferences','general'],['dashboard-settings','dashboard'],['appearance','appearance'],['integrations','integrations'],['storage','storage']]){assert.equal(routeFor({page}),`#/preferences/${tab}`);assert.equal(resolveRoute(`#/preferences/${tab}`,book).page,page);}
- assert.equal(resolveRoute('#/appearance',book).page,'appearance');assert.equal(resolveRoute('#/storage',book).page,'storage');assert.equal(resolveRoute('#/preferences/unknown',book).page,'workspace');
+ const book=sampleNotebook();for(const [page,tab] of [['preferences','general'],['dashboard-settings','dashboard'],['fonts','fonts'],['integrations','integrations'],['storage','storage']]){assert.equal(routeFor({page}),`#/preferences/${tab}`);assert.equal(resolveRoute(`#/preferences/${tab}`,book).page,page);}
+ // The earlier website design addresses open the website editor.
+ for(const hash of ['#/appearance','#/preferences/appearance'])assert.equal(resolveRoute(hash,book).page,'website');
+ assert.equal(resolveRoute('#/storage',book).page,'storage');assert.equal(resolveRoute('#/preferences/unknown',book).page,'workspace');
 });
 
 test('default website routes remain distinct from application preferences and round-trip after reopening',()=>{
  const book=sampleNotebook();
- for(const [page,segment] of [['website','editor'],['integrations','settings'],['appearance','appearance'],['publishing','publishing']]){
+ for(const [page,segment] of [['website','editor'],['publishing','publishing']]){
   const hash='#/websites/default/'+segment,state=resolveRoute(hash,book);
   assert.equal(state.page,page);assert.equal(state.websiteId,null);assert.equal(state.websiteDefaultRoute,true);assert.equal(routeFor(state),hash);
  }
- for(const page of ['appearance','integrations']){const hash='#/preferences/'+page,state=resolveRoute(hash,book);assert.equal(state.websiteDefaultRoute,false);assert.equal(routeFor(state),hash);}
+ // A website's former settings and design addresses open its publishing destination and editor.
+ for(const [page,segment,canonical] of [['publishing','settings','publishing'],['website','appearance','editor']]){const state=resolveRoute('#/websites/default/'+segment,book);assert.equal(state.page,page);assert.equal(state.websiteDefaultRoute,true);assert.equal(routeFor(state),'#/websites/default/'+canonical);}
+ const state=resolveRoute('#/preferences/integrations',book);assert.equal(state.websiteDefaultRoute,false);assert.equal(routeFor(state),'#/preferences/integrations');
 });
 
 test('dashboard API enforces session, origin and conflict checks, survives restart and never edits the research manifest',async()=>{
- const root=await temp(),file=path.join(root,'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
+ const root=await temp(),file=path.join(await temp(),'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
  try{
   assert.equal((await fetch(app.origin+'/api/dashboard')).status,401);
   const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});const cookie=auth.headers.get('x-observanda-session').split(';')[0];
