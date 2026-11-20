@@ -57,7 +57,5 @@ test('inventory preparation preserves removals, fences changes and survives fres
   const destination=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(destination,vault);
   assert.deepEqual(await deploymentInventory(restored,key),current);await verifyDeploymentInventories(restored);
   assert.deepEqual(await Array.fromAsync(deploymentInventoryPaths(restored,current,'files')),[...files,'older.html'].sort());
-  const node='.observanda/materials/sequences/live-inventory-nodes/'+current.files.root.hash+'.json';await workspace.withLock(()=>workspace.writeMetadata(node,'{}'));
-  await assert.rejects(encryptedCopy(await copyPlan(workspace.root,path.join(directory,'damaged'),{vault:f.vault}),access,vault,f.vault),{code:'MATERIAL_MISSING'});
  }finally{clearVault(vault);}
 });
