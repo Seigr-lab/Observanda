@@ -44,7 +44,10 @@ export class WorkspaceWebsitePreparation{
     this.progress={state:'ready',total:0,done:0};
    },{signal,check}))
   )).then(()=>{if(entry&&!converting&&Date.now()-started<2000)entry.remove();else entry?.finish();},error=>{
-   entry?.finish(signal.aborted?new AppError('WRITE_CANCELLED'):error);
+   // A person who stops preparation sees it cancelled; stopping it because the
+   // workspace locks or closes is not the person's activity and leaves no entry.
+   if(signal.aborted&&!this.cancelled)entry?.remove();
+   else entry?.finish(signal.aborted?new AppError('WRITE_CANCELLED'):error);
    if(!signal.aborted&&!['failed','ready'].includes(this.progress?.state))this.progress={state:'failed',code:error instanceof AppError?error.code:'IO'};
   }).finally(()=>{this.task=null;const next=this.next;this.next=null;if(next&&!signal.aborted)this.start(...next);});
  }
