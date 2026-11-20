@@ -6,6 +6,7 @@ import {websiteHTML,serializeWebsiteHTML,loadWebsiteCanvas,applyCanvasCSS,websit
 import {websiteFilesRecovery} from './website-files-recovery.js';
 import {websiteFilesFolder} from './website-files-folder.js';
 import {websiteAnalysisReview} from './website-analysis-review.js';
+import {websiteRecordUpdates} from './website-record-updates.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {downloadResource} from './session-download.js';
 import {destinationPlanRows,destinationConflictCount} from './publication-review.js';
@@ -113,7 +114,10 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
  }
  
  const analysis=websiteAnalysisReview({api,esc,site:()=>opened,render,onChange:()=>paintStatus()});
- const folder=websiteFilesFolder({request,site:()=>opened,esc,render,current:()=>!stale&&!dirty,gate:analysis});
+ // Placed lab book records changed since this website took its copies; never a publishing gate.
+ const recordUpdates=websiteRecordUpdates({api,esc,site:()=>opened,render,reopen:()=>open(opened.site.id,opened.path)});
+ const publishReview={view:()=>recordUpdates.view()+analysis.view(),ready:()=>analysis.ready()};
+ const folder=websiteFilesFolder({request,site:()=>opened,esc,render,current:()=>!stale&&!dirty,gate:publishReview});
  const directory=(stamp=opened.site.revision,route='preview')=>new URL('/api/website-files/'+route+'/'+siteId()+'/'+stamp+'/',location.origin);
  const baseURL=(path=opened.path)=>new URL(path,directory()).href;
  const canvasURL=(path=opened.path)=>new URL(path,directory(opened.historyAssetStamp??opened.assetStamp)).href;
@@ -951,7 +955,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   const archive='<details class="website-files-replacement"><summary>'+esc(t('publication','replacementOptions'))+'</summary><p>'+esc(t('publication','replacementGuidance'))+'</p><label for="website-replacement-archive">'+esc(t('publication','replacementArchiveLabel'))+'</label><input id="website-replacement-archive" data-replacement-archive maxlength="100" placeholder="before-observanda" value="'+esc(review.replacement?.archiveBranch??'')+'"><p>'+esc(t('publication','replacementArchiveGuidance'))+'</p></details>';
   const archived=review.replacement?.archiveBranch?'<p data-replacement-archived>'+esc(t('publication','replacementArchive',{branch:review.replacement.archiveBranch,commit:review.head}))+'</p>':'';
   const confirm=destinationConflictCount(review)?'<p role="alert">'+esc(tr('conflicts'))+'</p>'+archive+button('replacement','replacement-plan')
-   :analysis.view()+'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
+   :publishReview.view()+'<label><input type="checkbox" data-website-files-confirm>'+esc(tr('confirm'))+'</label>'+button('publish','publish','data-website-file-requires-clean disabled');
   const withdrawal=remoteEdition==='withdrawal'?'<p role="note" data-release-withdrawal>'+esc(tr('releaseWithdrawRemoteIntro'))+'</p>':'';
   return '<section data-website-files-review><h3>'+esc(tr(remoteEdition==='withdrawal'?'releaseWithdrawReview':'review'))+'</h3>'+withdrawal+'<p>'+esc(address)+'</p>'+archived+lists.join('')+confirm+'</section>';
  }
@@ -1206,6 +1210,8 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
    else if(operation==='folder'){await save();folder.reset();mode='folder';render();await folder.loadChooser();}
    else if(operation.startsWith('folder-'))await folder.action(operation.slice(7));
    else if(operation==='analysis-check')await analysis.check();
+   else if(operation==='record-updates-check')await recordUpdates.check();
+   else if(operation==='record-updates-apply'){if(!dirty)await recordUpdates.apply();}
    else if(operation==='publish-update')await showPublishUpdate();
    else if(operation==='destination')await showDestination();
    else if(operation==='plan-page'){if(!plan||stale||dirty||destinationDirty)throw Error(tr('changed'));const result=await request('plan/page',{siteId:siteId(),expectedRevision:opened.site.revision,configEtag:destination.etag,...(remoteEdition==='withdrawal'?{edition:'withdrawal'}:{}),id:(plan.plan??plan).id,kind:element.dataset.kind,offset:Number(element.dataset.offset)});const current=plan.plan??plan,kind=element.dataset.kind;current[kind]=result.items;current.windows[kind]={offset:result.offset,next:result.next};const host=element.closest('details');if(host)host.querySelector('[data-file-plan-rows]').innerHTML=destinationPlanRows(current,kind,{esc,action:'website-files-plan-page'});}
@@ -1242,6 +1248,7 @@ export function websiteFilesUI({api,esc,render,notify=()=>{},onDirty=()=>{},onSi
   }
   if(element.matches('[data-website-files-confirm]')){paintStatus();return true;}
   if(analysis.input(element))return true;
+  if(recordUpdates.input(element))return true;
   if(form?.type==='new'&&element.closest('[data-website-files-form]')){
    if(element.dataset.websiteFileField==='name')form.name=element.value;
    else if(element.matches('[data-website-import-source]')){form.source=element.value;form.issues=null;render();if(form.source==='folder'&&form.native===undefined)void run(loadImportChooser);}

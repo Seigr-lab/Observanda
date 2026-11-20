@@ -444,6 +444,13 @@ export class PublicationConversion{
   if(![workspaceId,notebookId,recordId].every(researchId))throw new AppError('INVALID');
   return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set()},workspaceId,operation));
  }
+ // A record saved after it was placed keeps its website copy until the author
+ // asks to update it. This recaptures the record's current permitted content,
+ // and the websites that place it take the new copy with their own edits kept.
+ async refreshRecord(storage,{workspaceId,notebookId,recordId}){
+  if(![workspaceId,notebookId,recordId].every(researchId))throw new AppError('INVALID');
+  return this.withProducer(storage,()=>this.change(storage,{records:new Map([[recordId,notebookId]]),books:new Set(),refresh:true},workspaceId,async()=>undefined));
+ }
  async change(storage,targets,workspaceId,operation,basis,{committed}={}){
   targets={...targets,trackLive:!targets.tagsOnly};
   const selectedChannels=targets.liveOnly?['website']:channels;
@@ -497,6 +504,7 @@ export class PublicationConversion{
    const removed=!after.has(id)&&(targets.removed?.has(state.provenance.recordId)||targets.removedBooks?.has(state.provenance.notebookId));
    if(removed&&prior.source?.visible&&state.provenance.target==='website')await this.commitLive(id,null,token);
    else if(removed&&state.provenance.target==='pdf'&&!prior.pending)await this.files.cancelSourceUpdate({sourceId:id,token});
+   else if(targets.refresh&&!error&&!prior.pending&&prior.source?.visible&&next.visible&&next.provenance.target==='website')await this.capture(storage,next,token);
    else if(!prior.pending&&samePermissions&&!tagsChanged&&!liveChanged&&(error||prior.source||!next.visible))await this.files.cancelSourceUpdate({sourceId:id,token});
    else if(prior.source?.visible&&next.visible&&samePermissions&&(!prior.pending||recover||targets.tagsOnly&&prior.pending.tagsOnly)){
     const retryTags=prior.pending?.tagsOnly||prior.pending?.policySignature===next.signature&&prior.pending.tagsRevision!==next.tagsRevision;

@@ -19,7 +19,9 @@ const post=new Set([
  // Listing server logins reads one small settings file; changes still wait for the writer.
  '/api/server-logins/list',
  // Checking an editor website's analyses reads its placed records; it changes nothing.
- '/api/website-analysis/check'
+ '/api/website-analysis/check',
+ // Listing placed records the lab book changed reads them too; updating them is a write.
+ '/api/website-record-updates/check'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
  const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;

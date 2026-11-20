@@ -96,6 +96,7 @@ import {websiteAnalysisCheck} from './website-analysis-check.js';
 import {WebsiteFileStore} from './website-file-store.js';
 import {WorkspaceWebsitePreparation} from './workspace-website-preparation.js';
 import {PublicationConversion} from './publication-conversion.js';
+import {websiteRecordUpdates,refreshWebsiteRecords} from './website-record-updates.js';
 import {websiteWorkspace,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
 import {databaseStatus,databaseCapacity} from './postgres.js';
@@ -588,6 +589,19 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       // Checks the analyses behind an editor website's placed research before it is published.
+      // Lab book records placed on an editor website that changed after the
+      // website took its copy, and the author's choice to update those copies.
+      if(req.method==='POST'&&url.pathname==='/api/website-record-updates/check'){
+        const data=await body(req);if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join()!=='expectedRevision,siteId')throw new AppError('INVALID');
+        const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+        try{return json(await websiteRecordUpdates(new WebsiteFileStore(workspace),data.siteId,{expectedRevision:data.expectedRevision,sourceReader,signal:controller.signal}));}finally{res.off('close',abort);}
+      }
+      if(req.method==='POST'&&url.pathname==='/api/website-record-updates/apply'){
+        const data=await body(req);if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join()!=='expectedRevision,siteId,sourceIds')throw new AppError('INVALID');
+        await req.checkWriter();if(!countedWrite){activeWrites++;countedWrite=true;}
+        const conversion=selectedContext.publicationConversion??=new PublicationConversion(workspace);
+        return json(await refreshWebsiteRecords(conversion.files,conversion,data.siteId,{expectedRevision:data.expectedRevision,sourceIds:data.sourceIds,sourceReader}));
+      }
       if(req.method==='POST'&&url.pathname==='/api/website-analysis/check'){
         const data=await body(req);if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join()!=='expectedRevision,siteId')throw new AppError('INVALID');
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
