@@ -1,3 +1,4 @@
+import {AppError} from '../src/errors.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -19,7 +20,9 @@ async function setup(t,options) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
   t.after(async t=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   const saved = await ws.read(), candidate = buildPublication(saved.book); candidate.etag = saved.etag;
-  return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, options,f.vault) };
+  // Like the website editor, the publisher admits only a candidate made from the current saved state.
+  const authorizeCandidate=async value=>{if((await ws.read()).etag!==value.etag)throw new AppError('STALE');};
+  return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, {authorizeCandidate,...options},f.vault) };
 }
 const githubFixture=mainGithubFixture;
 

@@ -1,7 +1,5 @@
 import {githubPlanReader,githubReviewKinds,githubRemovedPaths} from './github-plan-index.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
-import {publicationWorkspace} from './publication-pin.js';
-import {publicationRevisionCurrent} from './publication-freshness.js';
 import {liveManifestReceipt} from './publication-live-budget.js';
 import {LocalExportManifest} from './local-export-manifest.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
@@ -287,11 +285,9 @@ export class Publisher {
     const preparedInventory=journal.liveInventory??await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:githubRemovedPaths(this.workspace,plan,config.github?.directory)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
     const run=async () => {
-      if(this.authorizeCandidate)await this.authorizeCandidate(candidate);
-      else{
-       await publicationWorkspace(this.workspace).lockWebsite();
-       if (!await publicationRevisionCurrent(this.workspace,candidate)) throw new AppError('STALE');
-      }
+      // The website editor proves the candidate is its current saved revision.
+      if(!this.authorizeCandidate)throw new AppError('PUBLISH_CONFIG');
+      await this.authorizeCandidate(candidate);
       if ((await this.read()).etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
       await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory,journal.receipt);
       if(transfer&&!journal.liveInventory){journal.liveInventory=preparedInventory;await transfer.save(journal);}

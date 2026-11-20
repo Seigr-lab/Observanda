@@ -1,3 +1,4 @@
+import {AppError} from '../src/errors.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -20,9 +21,9 @@ const writes=remote=>remote.calls.filter(c=>c.method!=='GET');
 async function fixture(t,{directory='',files={'index.html':'Existing site','README.md':'Keep this document','private.config':'Existing repository configuration'}}={}){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ownership-'));
  const book=sampleNotebook();book.website.home.enabled=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
- const f=await encryptedFixture(root,book),ws=f.workspace,saved=await publicationWorkspace(ws).read(),candidate=buildPublication(saved.book);candidate.etag=saved.etag;candidate.websitePin=saved.websitePin;
+ const f=await encryptedFixture(root,book),ws=f.workspace,saved=await ws.read(),candidate=buildPublication(saved.book);candidate.etag=saved.etag;
  t.after(async()=>{await clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(ws.root,{workspace:ws,request:remote.request},f.vault),config=defaultPublishing();
+ const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(ws.root,{workspace:ws,request:remote.request,authorizeCandidate:async value=>{if((await ws.read()).etag!==value.etag)throw new AppError('STALE');}},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',directory});const settings=await publisher.save(config,'new');await publisher.connect(token);
  return {ws,remote,publisher,config,candidate,etag:settings.etag,book:saved.book};
 }
