@@ -11,18 +11,14 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {clearVault} from '../src/encryption.js';
 import {blankAnalysisMethod,blankAnalysisSource,validComparison} from '../src/web/analysis-model.js';
-import {AnalysisPublicationReview} from '../src/analysis-publication-review.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
-import {WebsiteSites} from '../src/website-sites.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {contentBuffer} from '../src/file-content.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {enqueueComparison,datasetJobs} from '../src/dataset-jobs.js';
-import {LocalExport} from '../src/local-export.js';
 import {AppError} from '../src/errors.js';
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 const col=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 const columns=[col('key'),col('value','integer'),col('status'),col('lower','integer'),col('upper','integer'),col('exclusion'),col('before'),col('after'),col('concurrent')];
 async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-analysis-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
@@ -58,25 +54,14 @@ test('independent expected fixtures preserve unmatched rows, missing values and 
  assert.equal(validComparison({...command.comparison,sources:[]}),false);
  assert.equal(validComparison({...command.comparison,sources:[command.comparison.sources[0],command.comparison.sources[0]]}),false);
 });
-test('result statements retain sources, stale editions require dispositions and later input changes revoke admission',async t=>{
+test('result statements retain their sources, publish without private analysis details and survive a workspace copy',async t=>{
  const f=await fixture(t),analysis=await f.m.comparisons.save(f.command),records=new ResearchRecords(f.workspace,{}),conclusion=f.book.entries[2];
  const result={id:randomUUID(),kind:'conclusion',title:'Observed result',text:'Two of four assessed raw readings match. Exceptions remain visible.',basis:'retained',source:{...analysis,label:'PRIVATE_ANALYSIS_TITLE'},limitations:'Synthetic tests; overlapping readings are not independent runs.'};
  await records.save({workspaceId:f.book.id,changes:[{id:conclusion.id,expectedRevision:recordRevision(conclusion),record:{...conclusion,share:true,results:{version:1,statements:[result]}}}]},{compact:true});
  const firstDoc=await f.m.read(f.first);await f.m.dataset({recordId:f.recordId,title:firstDoc.title,id:f.first.id,expectedRevision:f.first.revision,artifact:f.one,baseDataset:f.first,columnChanges:[{index:1,column:{...columns[1],unit:'count'}}]});
- // A website keeps its own record selection: a record shared later is added to it explicitly.
- const sites=new WebsiteSites(f.workspace),website=await sites.read(null);await sites.save(null,{workspaceId:f.book.id,baseEtag:website.etag,websitePin:website.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{...website.site.selection,records:[...website.site.selection.records,{id:conclusion.id,share:true,attachments:[]}]}});
- const site=websiteWorkspace(f.workspace,null),releases=new PublicationJobs(site),candidate=await releases.inline(await site.outline()),review=new AnalysisPublicationReview(site);
- const analysisItems=(await review.window(candidate,{limit:32})).items;assert.equal(analysisItems.length,1);assert.equal(candidate.researchReview.analysis.count,1);await assert.rejects(review.assert(candidate),{code:'ANALYSIS_REVIEW'});
- const local=new LocalExport(site);await assert.rejects(local.candidate(candidate.reviewId),{code:'ANALYSIS_REVIEW'});
- const html=await contentBuffer(await candidate.files.get('entries/'+conclusion.id+'.html'));assert.ok(html.includes(Buffer.from(result.text)));assert.ok(!html.includes(Buffer.from('PRIVATE_ANALYSIS_TITLE')));assert.ok(!html.includes(Buffer.from(f.one.id)));assert.ok(html.includes(Buffer.from('Supporting analysis retained privately')));
- await assert.rejects(review.save(candidate,[{id:analysisItems[0].id,reason:''}]),{code:'ANALYSIS_REVIEW'});
- await review.save(candidate,analysisItems.map(i=>({id:i.id,reason:'This edition explicitly reports the original count interpretation; the revised schema does not replace that historical result.'})));await review.assert(candidate);
- assert.equal((await local.candidate(candidate.reviewId)).id,candidate.id);
- const receiptFile=review.file(candidate.reviewId),receipt=await site.readMetadata(receiptFile,1024*1024);
- await site.withLock(()=>site.writeMetadata(receiptFile,JSON.stringify({...JSON.parse(receipt),decisions:[]})));
- await assert.rejects(review.assert(candidate),{code:'CATALOGUE_DAMAGED'});
- await site.withLock(()=>site.writeMetadata(receiptFile,receipt));
- const current=await f.m.current(f.first.id);await f.m.dataset({recordId:f.recordId,title:firstDoc.title,id:current.id,expectedRevision:current.revision,artifact:f.one,baseDataset:current,columnChanges:[{index:1,column:{...columns[1],unit:'ticks'}}]});await assert.rejects(review.assert(candidate),{code:'ANALYSIS_REVIEW'});
+ // The website copy of the shared conclusion carries the result, never the private analysis details.
+ const copy=await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===conclusion.id));
+ assert.ok(copy.html.includes(result.text));assert.ok(!copy.html.includes('PRIVATE_ANALYSIS_TITLE'));assert.ok(!copy.html.includes(f.one.id));assert.ok(copy.html.includes('Supporting analysis retained privately'));
  const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));assert.deepEqual(await restored.read(analysis),await f.m.read(analysis));assert.deepEqual(await contentBuffer((await restored.artifact(f.one)).content),await contentBuffer((await f.m.artifact(f.one)).content));await restored.verify();
 });
 
@@ -107,14 +92,12 @@ test('external analyses retain structured tool, calibration and parameter proven
  try{const comparison=await f.m.comparisons.prepare(f.command,{retained:true});assert.equal(comparison.content.summary.rows,7);}finally{f.m.assertOwner=owner;}
 });
 
-test('criterion assessments participate in changed-analysis review without copying their evidence into public output',async t=>{
+test('criterion assessments publish their outcome without copying their evidence into public output',async t=>{
  const f=await fixture(t),analysis=await f.m.comparisons.save(f.command),record=f.book.entries[1],preparationId=randomUUID(),criterionId=randomUUID(),recordedAt=new Date().toISOString();
  const attempt={version:1,events:[],preparations:[{id:preparationId,supersedes:null,recordedAt,reason:'',applicability:'Declared original readings',basedOn:null,protocols:[],conditions:[],inputs:[],observations:[],criteria:[{id:criterionId,label:'Signal matches',expected:'All acquired values',comparator:'Exact declared value',denominator:'Acquired values',scope:'prospective',reason:''}]}],
   assessments:[{id:randomUUID(),supersedes:null,recordedAt,reason:'Review of retained comparison',preparationId,criterionId,outcome:'not-met',domainOutcome:'',observed:'Two mismatches',denominator:'Four assessed raw readings',actor:'',source:'',time:{meaning:'unknown',value:''},references:[{...analysis,workspaceId:f.book.id,label:'PRIVATE_ANALYSIS_ASSESSMENT'}]}]};
  await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,attempt}}]});
  await f.m.comparisons.save({...f.command,id:analysis.id,expectedRevision:analysis.revision,method:{...f.command.method,limitations:'Revised interpretation'}});
- const site=websiteWorkspace(f.workspace,null),candidate=await new PublicationJobs(site).inline(await site.outline()),items=(await new AnalysisPublicationReview(site).window(candidate,{limit:32})).items;
- assert.equal(items.length,1);assert.equal(items[0].assessmentId,attempt.assessments[0].id);assert.equal(items[0].label,'Signal matches');
- const html=await contentBuffer(await candidate.files.get('entries/'+record.id+'.html'));assert.ok(!html.includes(Buffer.from('PRIVATE_ANALYSIS_ASSESSMENT')));assert.ok(html.includes(Buffer.from('Two mismatches')));
- await assert.rejects(new AnalysisPublicationReview(site).assert(candidate),{code:'ANALYSIS_REVIEW'});
+ const copy=await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===record.id));
+ assert.ok(!copy.html.includes('PRIVATE_ANALYSIS_ASSESSMENT'));assert.ok(copy.html.includes('Two mismatches'));
 });

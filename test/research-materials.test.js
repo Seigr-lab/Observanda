@@ -1,10 +1,11 @@
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
-import {Workspace,digest,serialize} from '../src/storage.js';
+import {Workspace,digest} from '../src/storage.js';
 import {createAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -13,11 +14,8 @@ import {ResearchMaterials,EVIDENCE_CHUNK,exactInteger} from '../src/research-mat
 import {recordRevision} from '../src/research.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {researchReference,parseResearchReference} from '../src/web/research-reference.js';
-import {verifyPublication,writePublication} from '../src/publication.js';
 import {contentBuffer} from '../src/file-content.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
-import {publicationDraftCommand} from './publication-fixture.js';
 import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
@@ -115,20 +113,17 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  assert.equal((await store.datasetRows(dataset))[0].excluded,null);
 
  // Public edition has only selected readable content and figure coordinates.
- const publicBook=(await ws.read()).book;
+ const current=await ws.read(),publicBook=current.book;
  publicBook.entries.find(e=>e.id===method.id).share=true; // latest method is public, but old pinned reference must not redirect to it
  publicBook.entries.find(e=>e.id===conclusion.id).relations=[{id:randomUUID(),type:'Uses',target,label:'PRIVATE OLD METHOD LABEL'}];
  const sources=await store.releaseSources(publicBook,[conclusion.id]);assert.equal(sources.sources[0].analysis.revision,result.ref.revision);assert.equal(sources.warnings[0].reason,'inputs');
- const command=await publicationDraftCommand(ws,publicBook),edition=await new PublicationJobs(ws).inline({...command,blockedValues:['E:\\private\\']}),files=new Map();
- // The fixture has four records: inspect every emitted text file and retain the
- // existing manifest/privacy/export assertions against the native preparation.
- for await(const [name,content] of edition.files)files.set(name,/\.(html|css|csv|svg|json|js|txt)$/.test(name)?(await contentBuffer(content)).toString('utf8'):content);
- const release={...edition,files};verifyPublication(release);
- const all=[...release.files.values()].filter(v=>typeof v==='string').join('\n');
+ await ws.save(publicBook,current.etag);
+ // Every shared record's website copy, with its figure and table assets, keeps private material out.
+ const copies=[];for(const record of (await ws.read()).book.entries.filter(e=>e.share)){const copy=await websiteRecordCopy(ws,record);if(copy)copies.push(copy);}
+ const all=copies.map(copy=>copy.text).join('\n');
  for(const privateValue of ['opaque-capture.bin','measurements.csv','E:\\private\\',captureDoc.content.sha256,large,senary,'PRIVATE OLD METHOD LABEL'])assert.ok(!all.includes(privateValue),privateValue);
  assert.ok(all.includes('Supporting captures are not publicly available.'));
- assert.ok([...release.files.keys()].some(p=>p.startsWith('figures/')));
- await writePublication(release,path.join(parent,'website-section'));
+ assert.ok(copies.some(copy=>/<figure|<svg/.test(copy.text)));
 
  const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup,{vault}),{vault});
  const restoredVault=await verifyAccess(await readAccess(backup),'','synthetic adoption password');

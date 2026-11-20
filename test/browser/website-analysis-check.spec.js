@@ -9,7 +9,7 @@ import {upgradeNotebook} from '../../src/model.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState,websiteWithRecords} from './website-preparation-helper.js';
 import {navigate} from './preferences-helper.js';
 
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'unknown',reference:'',resolution:'',uncertainty:''}});
@@ -28,7 +28,8 @@ test('a placed result whose analysis inputs changed must be reviewed before the 
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),folderPicker:{capabilities:async()=>({mode:'native'}),choose:async()=>({folder:destination})}});
  try{
   await page.goto(app.url);await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});
-  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
+  await websiteWithRecords(f.workspace,book,[record]);
   // The dataset moves on after the result was written.
   await m.dataset({recordId:record.id,title:'Run observations',id:dataset.id,expectedRevision:dataset.revision,artifact,baseDataset:dataset,columnChanges:[{index:0,column:{...columns[0],unit:'count'}}]});
   await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');

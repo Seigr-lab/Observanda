@@ -11,7 +11,7 @@ import {RecordWriting} from '../../src/record-writing.js';
 import {operationStage} from '../../src/operation-progress.js';
 import {AppError} from '../../src/errors.js';
 import {preferences} from './preferences-helper.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState} from './website-preparation-helper.js';
 
 for(const kind of ['copy','record','failed-record'])test(`${kind} activity remains available after navigation and reload while the writer is busy`,async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
@@ -25,7 +25,7 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
   await page.goto(app.url);await preferences(page,'General');
   // Signing in starts the workspace's own website preparation, a separate activity.
   // Let it finish and clear it, so the panel below shows only the operation under test.
-  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
   await expect.poll(()=>page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations.filter(entry=>['running','queued'].includes(entry.state)).length),{timeout:30000}).toBe(0);
   expect(await page.evaluate(async()=>{
    const {sessionHeaders}=await import('/session-store.js'),snapshot=await(await fetch('/api/activity')).json();

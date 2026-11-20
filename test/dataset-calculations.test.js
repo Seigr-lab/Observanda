@@ -1,3 +1,4 @@
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -17,13 +18,9 @@ import {calculateStep,validOperand} from '../src/web/dataset-calculation-model.j
 import {retainedTable} from '../src/retained-tables.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {createFigure} from '../src/web/figure-model.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
-import {contentBuffer} from '../src/file-content.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {AnalysisPublicationReview} from '../src/analysis-publication-review.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
 const col=(name,representation='text',unit='')=>({...defaultColumn({label:name}),representation,unit});
 const constant=(constant,unit='')=>({constant,unit}),column=column=>({column});
 const condition=(left,operator,right)=>({left,operator,right});
@@ -45,8 +42,8 @@ test('derived values feed figures and verified publication tables while revision
  const bad=structuredClone(next);bad.results.statements[0].table.rows[0].cells[1]='100';const records=new ResearchRecords(f.workspace,{});
  await assert.rejects(records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:bad}]}),{code:'DATASET_TABLE'});
  await records.save({workspaceId:snapshot.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:next}]});
- const site=websiteWorkspace(f.workspace,null),candidate=await new PublicationJobs(site).inline(await site.outline()),html=(await contentBuffer(await candidate.files.get('entries/'+record.id+'.html'))).toString();assert.match(html,/3\/5/);assert.match(html,/retained-result-table/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes('PRIVATE_DERIVED'));assert.ok(!html.includes(source.id));
- const prior=await f.m.read(derived),recipe2=structuredClone(c);recipe2.steps[0].right=constant('10','Hz');await f.m.dataset({recordId:f.recordId,title:prior.title,id:derived.id,expectedRevision:derived.revision,calculation:recipe2});await assert.rejects(new AnalysisPublicationReview(site).assert(candidate),{code:'ANALYSIS_REVIEW'});
+ const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===record.id))).html;assert.match(html,/3\/5/);assert.match(html,/retained-result-table/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes('PRIVATE_DERIVED'));assert.ok(!html.includes(source.id));
+ const prior=await f.m.read(derived),recipe2=structuredClone(c);recipe2.steps[0].right=constant('10','Hz');await f.m.dataset({recordId:f.recordId,title:prior.title,id:derived.id,expectedRevision:derived.revision,calculation:recipe2});
  const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));assert.deepEqual(await retainedTable(restored,{ref:derived,selection}),table);await restored.verify();
 });
 test('paired calculations preserve exact counters, calibration, exclusions and inspectable input cells over bounded pages',async t=>{

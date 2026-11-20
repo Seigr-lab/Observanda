@@ -1,3 +1,4 @@
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -12,10 +13,7 @@ import {withDraftDocument} from '../src/record-draft-document.js';
 import {validResultStatement} from '../src/web/result-statements.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {retainedTable} from '../src/retained-tables.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
-import {publicationWorkspace} from '../src/publication-pin.js';
 import {WebsiteSites} from '../src/website-sites.js';
-import {contentBuffer} from '../src/file-content.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
@@ -55,7 +53,7 @@ test('retained result tables verify exact values and publish only their chosen d
  const sites=new WebsiteSites(f.workspace),site=await sites.read(null),selection=structuredClone(site.site.selection);
  selection.records=selection.records.filter(row=>row.id!==f.record.id);selection.records.push({id:f.record.id,share:true,attachments:[]});
  await sites.save(null,{workspaceId:f.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});
- ResearchCatalogue.prototype.record.mock.restore();const outline=await publicationWorkspace(f.workspace).outline(),output=await new PublicationJobs(f.workspace).inline({etag:outline.etag,websitePin:outline.websitePin}),html=(await contentBuffer(await output.files.get('entries/'+f.record.id+'.html'))).toString();assert.match(html,/Count \(base 6\)/);assert.match(html,/10000000000000001/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes(source.id));
+ ResearchCatalogue.prototype.record.mock.restore();const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===f.record.id))).text;assert.match(html,/Count \(base 6\)/);assert.match(html,/10000000000000001/);assert.ok(!html.includes('PRIVATE_SENTINEL'));assert.ok(!html.includes(source.id));
 });
 test('unfinished selected results recover under a new key, verify scope and roll back interrupted saves',async t=>{
  const f=await figureValueFixture({large:true});t.after(f.close);forbid(t);assert.ok(Buffer.byteLength(JSON.stringify(f.record))>2*1024*1024);

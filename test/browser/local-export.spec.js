@@ -2,21 +2,21 @@ import {test,expect} from '@playwright/test';
 import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {randomUUID} from 'node:crypto';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {LocalExport} from '../../src/local-export.js';
 import {clearVault} from '../../src/encryption.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState,websiteWithRecords} from './website-preparation-helper.js';
 import {navigate} from './preferences-helper.js';
 
-// Signing in prepares the workspace's saved website as its own activity. Once it
-// is ready, Publishing opens that website's publishing destination; the folder
-// export is a publication tool of the website files editor.
+// Signing in discovers the records shared for websites. The author then places
+// them on a website made in the website editor; the folder export is one of its
+// publication tools.
 async function signedIn(page,app,f){
  await page.goto(app.url);await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});
- await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+ await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
+ const {book}=await f.workspace.read();return websiteWithRecords(f.workspace,book,book.entries.filter(entry=>entry.share));
 }
 async function folderExport(page){
  await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');
@@ -54,11 +54,14 @@ test('Publishing exports through folder review, preserves existing pages, and in
 });
 
 test('folder choice returns to the export and file review pages remain bounded',async({page})=>{
- test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-export-folder-ui-')),destination=path.join(directory,'site'),chosen=path.join(destination,'lab-book'),book=sampleNotebook();book.pages=Array.from({length:50},(_,i)=>({id:randomUUID(),title:'Field station '+i,body:'Synthetic field notes',share:true}));
+ test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-export-folder-ui-')),destination=path.join(directory,'site'),chosen=path.join(destination,'lab-book'),book=sampleNotebook();
  const f=await encryptedFixture(directory,book);await mkdir(chosen,{recursive:true});let choices=0;
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),folderPicker:{capabilities:async()=>({mode:'native'}),choose:async()=>++choices===1?{cancelled:true}:{cancelled:false,folder:chosen}}});
  try{
-  await signedIn(page,app,f);const panel=await folderExport(page),folder=panel.getByLabel('Destination folder',{exact:true}),rows=panel.locator('.website-folder-files li');
+  // A large website: fifty published pages beside the placed records.
+  let {store,siteId,revision}=await signedIn(page,app,f);
+  for(let i=0;i<50;i++)revision=(await store.createPage(siteId,{expectedRevision:revision,path:'station-'+i+'.html',title:'Field station '+i,inclusion:'included'})).site.revision;
+  const panel=await folderExport(page),folder=panel.getByLabel('Destination folder',{exact:true}),rows=panel.locator('.website-folder-files li');
   // Leaving the folder chooser keeps the typed destination; choosing a folder replaces it.
   await folder.fill(destination);await control(panel,'Choose folder').click();await expect.poll(()=>choices).toBe(1);await expect(folder).toHaveValue(destination);
   await control(panel,'Choose folder').click();await expect(folder).toHaveValue(chosen);

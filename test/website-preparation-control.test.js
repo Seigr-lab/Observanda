@@ -12,9 +12,9 @@ import {clearVault} from '../src/encryption.js';
 import {startServer} from '../src/server.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
 
-// Preparing saved websites runs in the background, shows in the activity surface, can be
-// stopped by a person and resumes from its journals to the same complete result.
-test('website preparation reports activity, stops on request and resumes to a complete site',{timeout:900000},async t=>{
+// Discovering the records shared for websites runs in the background, shows in the activity
+// surface, can be stopped by a person and resumes to the same complete library.
+test('website preparation reports activity, stops on request and resumes to a complete library',{timeout:900000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-preparation-control-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:42},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,body:'Shared notes '+i,sections:[],attachments:[],figures:[],relations:[],contributors:[]}));
  const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
@@ -23,9 +23,9 @@ test('website preparation reports activity, stops on request and resumes to a co
  const storage=await (await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json();
  const post=async route=>{const response=await fetch(app.origin+route,{method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:'{}'});assert.equal(response.status,200,await response.clone().text());return response.json();};
  const activity=async()=>(await (await fetch(app.origin+'/api/activity',{headers:{'X-Observanda-Session':cookie}})).json()).operations.filter(entry=>entry.kind==='website-preparation');
- // Stop once entries are being converted, part way through the work.
- for(;;){const {preparation}=await post('/api/website-files/preparation');if(preparation.stage==='converting-entries'&&preparation.completed>0)break;assert.notEqual(preparation.state,'ready','preparation finished before it could be stopped');await delay(50);}
- const running=await activity();assert.equal(running.length,1);assert.equal(running[0].state,'running');assert.equal(running[0].progress.stage,'converting-entries');
+ // Stop while the shared records are being discovered.
+ for(;;){const {preparation}=await post('/api/website-files/preparation');if(preparation.state==='preparing'&&preparation.stage==='discovering-library'&&(await activity()).length)break;assert.notEqual(preparation.state,'ready','preparation finished before it could be stopped');await delay(50);}
+ const running=await activity();assert.equal(running.length,1);assert.equal(running[0].state,'running');assert.equal(running[0].progress.stage,'discovering-library');
  const stopped=await post('/api/website-files/preparation/cancel');assert.equal(stopped.preparation.state,'cancelled');
  assert.equal((await activity())[0].state,'cancelled');
  // Opening the workspace again in this session does not restart a stopped preparation.

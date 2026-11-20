@@ -10,7 +10,6 @@ import {closeIdleMutationFiles} from '../src/mutation-files.js';
 import {insertWebsiteSource,updateWebsiteSource} from '../src/website-file-html.js';
 import {validateWebsiteHTML,validateWebsiteCSS} from '../src/website-file-policy.js';
 import {contentBuffer} from '../src/file-content.js';
-import {bindConvertedPage} from '../src/website-files-migration.js';
 
 test('a reviewed batch of eligible entries is placed in order or leaves the saved page untouched',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'website-reviewed-batch-'));await mkdir(path.join(root,'.observanda'));
@@ -54,10 +53,9 @@ test('cross-entry references retain authored labels, revoke target titles and ne
  const asset=Buffer.from('Unplaced target image'),assetName='assets/'+createHash('sha256').update(asset).digest('hex')+'.png';
  const put=async(sourceId,title,visible=true)=>store.putSource({sourceId,title,visible,html:visible?fragment(title):'',assets:visible&&sourceId===targetId?[{path:assetName,bytes:asset,contentType:'image/png'}]:[]},{token:await store.beginSourceUpdate({sourceId})});
  const a=await put(parentId,'Parent'),b=await put(targetId,'Original title');
- const record=(id,source,title)=>[id,{source,media:new Map(),record:{title,tags:[],type:'note',attachments:[]}}];
- const records=new Map([record(parent,a,'Parent'),record(target,b,'Original title')]);
- const source='<html><body data-page="entry:'+parent+'"><main><article class="record-page"><div class="rich-document"><p>Surrounding copy <a href="'+href+'">my wording</a> and <a href="'+href+'"><em>Read </em><strong aria-label="Original title">Original</strong> title next</a>.</p></div><section class="record-related"><ul><li><a href="'+href+'">Original title</a></li></ul></section></article></main><footer>Footer</footer></body></html>';
- const bound=bindConvertedPage('index.html',source,{records,aliases:new Map()});
+ // A page that places the parent record, whose writing links to the target record three times.
+ const link=(key,label='')=>'<a href="'+href+'" data-observanda-link="'+b.id+'" data-observanda-link-key="'+key+'" data-observanda-link-revision="'+b.revision+'"'+label+'>';
+ const bound='<html><head></head><body data-page="entry:'+parent+'"><main><article class="record-page" data-observanda-source="'+a.id+'" data-observanda-source-revision="'+a.revision+'"><div class="rich-document" data-observanda-part="body"><p>Surrounding copy '+link(1)+'my wording</a> and '+link(2)+'<em>Read </em><strong aria-label="Original title"><span data-observanda-link-title="0">Original</span></strong><span data-observanda-link-title="0"> title</span> next</a>.</p></div><section class="record-related" data-observanda-part="relations"><ul><li>'+link(3,' data-observanda-link-label="title"')+'Original title</a></li></ul></section></article></main><footer>Footer</footer></body></html>';
  let opened=await store.importFiles(site,{name:'Study',files:new Map([['index.html',bound],['style.css','']])});
  assert.ok(opened.html.includes('my wording'));assert.match(opened.html,/<em>Read <\/em><strong aria-label="Original title">/);assert.equal((await store.export(site)).files.has(assetName),false);
  await assert.rejects(store.file(site,assetName),{code:'NOT_FOUND'});

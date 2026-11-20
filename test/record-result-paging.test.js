@@ -1,3 +1,4 @@
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -13,10 +14,8 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {recordRevision} from '../src/research.js';
 import {validateRecordDocument} from '../src/record-document-validation.js';
 import {validateDocumentSources} from '../src/record-document-sources.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
 import {publicationWorkspace} from '../src/publication-pin.js';
 import {WebsiteSites} from '../src/website-sites.js';
-import {contentBuffer} from '../src/file-content.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {retainedTable} from '../src/retained-tables.js';
 const media={get:async()=>{throw Error('Unexpected media access');}};
@@ -100,7 +99,7 @@ test('late result source admission and complete publication use originals indepe
  selection.records=selection.records.filter(row=>row.id!==f.record.id);selection.records.push({id:f.record.id,share:true,attachments:[]});
  await sites.save(null,{workspaceId:f.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});
  const expected={version:1,statements:[...f.record.results.statements,statement]},outline=await publicationWorkspace(f.workspace).outline();
- const output=await new PublicationJobs(f.workspace).inline({etag:outline.etag,websitePin:outline.websitePin}),html=(await contentBuffer(await output.files.get('entries/'+f.record.id+'.html'))).toString();
+ const html=(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(item=>item.id===f.record.id))).text;
  for(const statement of expected.statements){assert.ok(html.includes('id="result-'+statement.id+'"'));assert.ok(html.includes(statement.text));assert.ok(html.includes(statement.limitations));}
  assert.ok(!html.includes(f.analysis.id));assert.ok(!html.includes(source.id));assert.ok(!html.includes('PRIVATE_RESULT_COLUMN'));assert.ok(html.includes('10000000000000001'));
  const exported=await f.workspace.read();assert.deepEqual(exported.book.entries[0].results,expected);

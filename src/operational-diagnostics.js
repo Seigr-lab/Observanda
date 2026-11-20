@@ -13,7 +13,7 @@ for(const stage of ['startup-modules','runtime-permissions','runtime-version','r
 for(const stage of ['runtime-upgrade-copy','runtime-upgrade-verify'])phases.add(stage);
 for(const stage of ['website-source-entry','website-source-find','website-source-describe','website-source-neighbours','website-source-body','website-source-references'])phases.add(stage);
 for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])phases.add(stage);
-for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist','website-storage-upgrade'])phases.add(stage);
+for(const stage of ['website-open','website-checkpoint','website-save','website-history','website-read','website-preview','website-preview-source','website-preview-render','website-validation','website-persist','website-library-discovery'])phases.add(stage);
 const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor','website-files']);
 const websiteRoutes=new Set(['website-version','website-open','website-canvas','website-asset','website-save']);
 export function diagnosticRoute(url){

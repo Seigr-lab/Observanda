@@ -11,7 +11,7 @@ import {OperationActivity} from '../../src/operation-activity.js';
 import {OperationalDiagnostics} from '../../src/operational-diagnostics.js';
 import {AppError} from '../../src/errors.js';
 import {openRecordWriting} from './record-editing-helper.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState} from './website-preparation-helper.js';
 
 test('local diagnostics require an unlocked session and are reviewed before a private-safe download',async({page})=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-diagnostic-ui-')),book=sampleNotebook();book.title='private-record-sentinel';
@@ -65,7 +65,7 @@ test('health review returns a waiting writer to its owner and keeps an uncertain
   await preferences(page,'General');
   // Signing in starts the workspace's own website preparation, a separate activity.
   // Let it finish and clear it, so the review counts only the operations seeded below.
-  await expect.poll(async()=>(await websiteUpgradeStatus(fixture.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(async()=>await websiteLibraryState(fixture.workspace),{timeout:60000}).toBe('ready');
   await expect.poll(()=>page.evaluate(async()=>(await(await fetch('/api/activity')).json()).operations.filter(entry=>['running','queued'].includes(entry.state)).length),{timeout:30000}).toBe(0);
   expect(await page.evaluate(async()=>{
    const {sessionHeaders}=await import('/session-store.js'),snapshot=await(await fetch('/api/activity')).json();

@@ -11,10 +11,10 @@ import {readPreference,inspectLocation} from '../../src/locations.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {preferences} from './preferences-helper.js';
 import {setTimeout as delay} from 'node:timers/promises';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState} from './website-preparation-helper.js';
 // Signing in starts website preparation, which writes into the workspace until it is ready.
 // A reviewed copy plan pins the workspace's files, so review only a settled workspace.
-const prepared=workspace=>expect.poll(async()=>(await websiteUpgradeStatus(workspace)).state,{timeout:60000}).toBe('ready');
+const prepared=workspace=>expect.poll(async()=>await websiteLibraryState(workspace),{timeout:60000}).toBe('ready');
 const copyNotebook=()=>({...sampleNotebook(),title:'workspace'});
 
 for(const fresh of [false,true])test(`${fresh?'fresh-key':'ordinary'} workspace copy recovers a lost completion response without copying again`,async({page})=>{

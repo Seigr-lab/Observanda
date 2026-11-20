@@ -6,7 +6,6 @@ import {RECORD_DRAFT_CHUNK_BYTES} from '../src/web/record-draft-protocol.js';
 import {createHash} from 'node:crypto';
 import {viewQuery} from '../src/web/record-view-model.js';
 import {githubFixture} from './github-fixture.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
 import {projectMaterialReferenceRequest,addressedMaterialReference} from '../src/project-material-reference.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ProjectDeletions} from '../src/project-deletion.js';

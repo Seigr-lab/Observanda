@@ -7,7 +7,7 @@ import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState,websiteWithRecords} from './website-preparation-helper.js';
 import {executeResearchRequest} from '../../src/research-requests.js';
 import {PublicationConversion} from '../../src/publication-conversion.js';
 import {WebsiteFileStore} from '../../src/website-file-store.js';
@@ -20,7 +20,8 @@ test('the author updates a placed record from the lab book before writing the we
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),folderPicker:{capabilities:async()=>({mode:'native'}),choose:async()=>({folder:destination})}});
  try{
   await page.goto(app.url);await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});
-  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
+  await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
+  await websiteWithRecords(f.workspace,book,[record]);
   // The author corrects the record's title in the lab book after the website placed it.
   const store=new WebsiteFileStore(f.workspace),conversion=new PublicationConversion(f.workspace,{store}),identity={workspaceId:book.id,recordId:record.id,field:'title'};
   const command=(name,data)=>executeResearchRequest(f.workspace,'/api/research/records/'+name,data,{publicationConversion:conversion});

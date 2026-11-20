@@ -1,3 +1,4 @@
+import {websiteRecordCopy} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
@@ -6,10 +7,6 @@ import os from 'node:os';
 import {randomUUID,createHash} from 'node:crypto';
 import {journeyBook,block} from './book-fixture.js';
 import {researchReference} from '../src/web/research-reference.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
-import {websiteWorkspace} from '../src/website-workspace.js';
-import {buildPublication} from '../src/publication.js';
-import {contentBuffer} from '../src/file-content.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {populateImageEvidence} from './image-evidence-fixture.js';
 import {clearVault} from '../src/encryption.js';
@@ -58,9 +55,11 @@ test('retained card excerpts and book pages share public reference and inline fi
  const linked=record=>({type:'text',text:record.title,marks:[{type:'link',attrs:{href:researchReference({workspaceId:f.book.id,kind:'record',id:record.id}),title:'',target:'_self',nofollow:false}}]});
  f.concept.body.content.unshift(block('figure',{figureId:privateImage,alternative:'PRIVATE inline diagram narrative'}),{type:'paragraph',content:[linked(f.privateRecord),{type:'text',text:' then '},linked(f.method)]});
  const storage=await encryptedFixture(directory,f.book,{populate:workspace=>populateImageEvidence(workspace,[privateImage])});t.after(async()=>{await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});});
- const site=websiteWorkspace(storage.workspace,null),actual=await new PublicationJobs(site).inline(await site.outline()),expected=buildPublication(f.book);
- for await(const [name,value] of actual.files)if(name.endsWith('.html')){
-  const html=(await contentBuffer(value)).toString('utf8');assert.ok(!html.includes('PRIVATE'));assert.ok(!html.includes(privateImage));assert.ok(!html.includes(f.privateRecord.id));assert.equal(html,expected.files.get(name),name);
+ // Every shared record's website copy keeps private material out.
+ const {book}=await storage.workspace.read();let copies=0;
+ for(const record of book.entries.filter(item=>item.share)){
+  const copy=await websiteRecordCopy(storage.workspace,record);if(!copy)continue;copies++;
+  assert.ok(!copy.text.includes('PRIVATE'),record.title);assert.ok(!copy.text.includes(privateImage));assert.ok(!copy.text.includes(f.privateRecord.id));
  }
- const project=(await contentBuffer(await actual.files.get('projects/'+f.book.projects[0].id+'.html'))).toString('utf8');assert.ok(project.includes(f.method.title));
+ assert.ok(copies>0);
 });

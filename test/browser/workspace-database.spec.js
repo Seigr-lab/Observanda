@@ -12,7 +12,7 @@ import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {catalogueBinding} from '../../src/postgres-activation.js';
 import {preferences} from './preferences-helper.js';
 import {moveWorkspaceTo} from '../../src/workspace-move.js';
-import {websiteUpgradeStatus} from '../../src/website-files-migration.js';
+import {websiteLibraryState} from './website-preparation-helper.js';
 
 test('workspace owns its database, locks it and moves the whole workspace in the app',async({page})=>{
  test.setTimeout(180000);
@@ -25,9 +25,8 @@ test('workspace owns its database, locks it and moves the whole workspace in the
   await expect(page.getByText('This workspace owns its database files.',{exact:false})).toBeVisible();
   expect((await catalogueBinding(f.workspace.root)).placement).toBe('workspace');
   await expect(page.locator('p.storage-path').filter({hasText:path.join(f.workspace.root,'.observanda','postgresql')})).toBeVisible();
-  // Signing in starts website preparation and its writes; locking refuses while a writer is active.
-  await expect.poll(async()=>(await websiteUpgradeStatus(f.workspace)).state,{timeout:60000}).toBe('ready');
-  await expect(page.getByRole('button',{name:'Activity',exact:true})).toBeVisible({timeout:30000});
+  // Signing in discovers the records shared for websites; locking waits until that work has finished.
+  await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
   await page.getByRole('button',{name:'Lock workspace',exact:true}).last().click();
   await expect(page.getByRole('button',{name:'Unlock workspace',exact:true})).toBeVisible();
   expect(owner.instances.instances.has(f.workspace.root)).toBe(false);

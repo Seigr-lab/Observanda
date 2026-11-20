@@ -6,8 +6,6 @@ import {buildPublication,verifyPublication} from '../src/publication.js';
 import {PUBLIC_COLLECTION_ROWS,collectionPagePath,collectionPageFromPath} from '../src/web/public-collection-pages.js';
 import {createRegion,assignRegion} from '../src/web/website-regions.js';
 import {defaultFeed} from '../src/web/website-feed-model.js';
-import {projectPublicationLinks} from '../src/publication-links.js';
-import {selectedContent} from '../src/web/website-model.js';
 import {defaultPageLayout} from '../src/web/website-layouts.js';
 
 const recordIds=html=>[...html.matchAll(/data-record-id="([^"]+)"/g)].map(m=>m[1]);
@@ -41,7 +39,6 @@ test('collection continuation uses the owning layout and independent footer-feed
 test('collection paths are canonical and cannot collide with legacy publication aliases',()=>{
  const book=indexedBook(53),target='project:'+book.projects[0].id,name=collectionPagePath(target,1);
  const config={version:1,pages:[{id:randomUUID(),path:name,title:'Earlier collection',anchors:[{id:randomUUID(),fragment:'old',label:'Old reading',target:{workspaceId:book.id,kind:'record',id:book.entries[0].id}}]}]};
- assert.throws(()=>projectPublicationLinks(book.id,selectedContent(book),config),{code:'PUBLICATION_LINKS'});
  for(const path of [name.replace('-records-1','-records-0'),name.replace('-records-1','-records-01'),name.replace('-records-1','-records-9007199254740992'),'entries/'+book.entries[0].id+'-records-1.html',name+'/../private'])assert.equal(collectionPageFromPath(path),null);
  assert.throws(()=>collectionPagePath(target,-1));assert.throws(()=>collectionPagePath('entry:'+book.entries[0].id,0));
 });

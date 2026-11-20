@@ -1,3 +1,4 @@
+import {websiteRecordCopy,storedRecordCopy,saveForWebsites} from './fixtures/website-record-copy.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,copyFile,readFile,rm} from 'node:fs/promises';
@@ -7,12 +8,10 @@ import {selectionBook} from './publication-selection-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {RecordWriting} from '../src/record-writing.js';
-import {PublicationJobs} from '../src/publication-jobs.js';
 import {defaultEditionRecord,selectEditionRecord} from '../src/web/publication-selection.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 import {recordRevision} from '../src/research.js';
 import {buildPublication} from '../src/publication.js';
-import {publicationText} from './publication-fixture.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
 import {exactPublicationRecord} from '../src/publication-revisions.js';
@@ -46,16 +45,15 @@ test('website and edition choices cannot authorize source-private records or wri
  assert.equal(selectEditionRecord(secret,{...defaultEditionRecord(secret,recordRevision(secret)),include:true}).share,false);
 });
 
-test('section permission saves with its source revision and bounds preview, export and portable reopening',async t=>{
+test('section permission saves with its source revision and bounds the website copy, rendering and portable reopening',async t=>{
  const f=await fixture(t),writing=new RecordWriting(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,sectionId:f.record.sections[1].id};
  const before=await writing.read(target);
  await writing.save({...target,expectedRevision:before.revision,value:{...before.value,share:false}});
  assert.deepEqual((await writing.read(target)).value,{...before.value,share:false});
- const saved=await f.workspace.read(),record=saved.book.entries.find(r=>r.id===f.record.id),jobs=new PublicationJobs(f.workspace),source={...await jobs.workspace.outline(),workspaceId:f.book.id};
- const candidate=await jobs.inline(source),output=await publicationText(candidate);
+ const saved=await f.workspace.read(),record=saved.book.entries.find(r=>r.id===f.record.id),output=(await websiteRecordCopy(f.workspace,record)).text;
  assert.ok(!output.includes('WITHHELD_SECTION_TITLE'));
  assert.ok(!output.includes(target.sectionId));assert.ok(output.includes('Public steps for the method.'));
- const direct=await publicationText(buildPublication(saved.book));
+ const direct=[...buildPublication(saved.book).files.values()].filter(value=>typeof value==='string').join('\n');
  assert.ok(!direct.includes('WITHHELD_SECTION_TITLE'));assert.ok(!direct.includes(target.sectionId));
  const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable copy'),{vault:f.vault}),{vault:f.vault});
  const restored=new Workspace(destination,f.vault),copied=await new RecordWriting(restored).read(target);
@@ -66,39 +64,33 @@ test('section permission saves with its source revision and bounds preview, expo
 test('a private lab book excludes its records even when a website selects its project',async t=>{
  const f=await fixture(t),saved=await f.workspace.read(),notebook=saved.book.notebooks.find(n=>n.id===f.record.notebookId);
  notebook.share=false;await f.workspace.save(saved.book,saved.etag);
- const jobs=new PublicationJobs(f.workspace),source={...await jobs.workspace.outline(),workspaceId:f.book.id};
- const candidate=await jobs.inline(source),output=await publicationText(candidate);
- assert.ok(!output.includes(f.record.title));assert.ok(!output.includes(f.record.id));
+ assert.equal(await websiteRecordCopy(f.workspace,(await f.workspace.read()).book.entries.find(r=>r.id===f.record.id)),null);
 });
 
 
-test('prepared editions survive text edits but source withdrawal blocks preview, export and historical reuse',async t=>{
- const f=await fixture(t),jobs=new PublicationJobs(f.workspace),source={...await jobs.workspace.outline(),workspaceId:f.book.id};
- const before=await f.workspace.read(),record=before.book.entries.find(row=>row.id===f.record.id),revision=recordRevision(record);
- const candidate=await jobs.inline(source),prepared=await jobs.read(candidate.reviewId);
- const edited=await f.workspace.read();edited.book.entries.find(row=>row.id===record.id).body='An ordinary later text edit.';await f.workspace.save(edited.book,edited.etag);
- assert.equal((await jobs.read(candidate.reviewId)).id,prepared.id);
- const privateWriting=await f.workspace.read();privateWriting.book.entries.find(row=>row.id===record.id).sections[1].share=false;await f.workspace.save(privateWriting.book,privateWriting.etag);
- await assert.rejects(jobs.read(candidate.reviewId),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
- await assert.rejects(jobs.assertSourcePermissions(prepared),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
- await jobs.verifyFiles(candidate.reviewId);
+test('a website copy survives text edits while withdrawn sharing reaches it and historical reuse',async t=>{
+ const f=await fixture(t),before=await f.workspace.read(),record=before.book.entries.find(row=>row.id===f.record.id),revision=recordRevision(record);
+ const copy=await websiteRecordCopy(f.workspace,record);assert.ok(copy.html.includes(record.sections[1].title));
+ const save=async change=>{const current=await f.workspace.read(),entry=current.book.entries.find(row=>row.id===record.id);change(entry);await saveForWebsites(f.workspace,entry,()=>f.workspace.save(current.book,current.etag));};
+ await save(entry=>{entry.body='An ordinary later text edit.';});
+ assert.equal(await storedRecordCopy(f.workspace,record),copy.html);
+ await save(entry=>{entry.sections[1].share=false;});
+ assert.ok(!(await storedRecordCopy(f.workspace,record)).includes(record.sections[1].title));
  const historical=await exactPublicationRecord(f.workspace,{workspaceId:f.book.id,kind:'record',id:record.id,revision});
  assert.equal(historical.sections[1].share,false);assert.equal(selectEditionRecord(historical).sections.length,1);
- const withdrawn=await f.workspace.read();withdrawn.book.entries.find(row=>row.id===record.id).share=false;await f.workspace.save(withdrawn.book,withdrawn.etag);
+ await save(entry=>{entry.share=false;});
+ assert.equal(await storedRecordCopy(f.workspace,record),null);
  await assert.rejects(exactPublicationRecord(f.workspace,{workspaceId:f.book.id,kind:'record',id:record.id,revision}),{code:'MATERIAL_MISSING'});
 });
 
-test('withdrawing attachment permission blocks an already prepared edition and older candidate markers require preparation',async t=>{
+test('withdrawing attachment permission removes the attachment from the website copy',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><circle cx="4" cy="4" r="3"/></svg>'),'image');
  const before=await f.workspace.read();before.book.entries[0].attachments=[{id:asset.id,kind:'image',caption:'Selected evidence',alt:'Circle',transcript:'',share:true}];await f.workspace.save(before.book,before.etag);
- const jobs=new PublicationJobs(f.workspace),candidate=await jobs.inline({...await jobs.workspace.outline(),workspaceId:f.book.id}),saved=await f.workspace.read();
- saved.book.entries[0].attachments[0].share=false;await f.workspace.save(saved.book,saved.etag);
- await assert.rejects(jobs.read(candidate.reviewId),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
- const stored=await jobs.stored(candidate.reviewId);delete stored.sourcePermissionVersion;
- await jobs.workspace.withLock(()=>jobs.workspace.writeMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',serialize(stored)));
- await assert.rejects(jobs.read(candidate.reviewId),{code:'PUBLICATION_PERMISSIONS_CHANGED'});await jobs.verifyFiles(candidate.reviewId);
+ const record=(await f.workspace.read()).book.entries[0];assert.ok((await websiteRecordCopy(f.workspace,record)).text.includes('Selected evidence'));
+ const saved=await f.workspace.read();saved.book.entries[0].attachments[0].share=false;
+ await saveForWebsites(f.workspace,saved.book.entries[0],()=>f.workspace.save(saved.book,saved.etag));
+ assert.ok(!(await storedRecordCopy(f.workspace,record)).includes('Selected evidence'));
 });
-
 
 test('paged website source admission rolls back atomically and survives portable copies, archived reopening and fresh-key recovery',{timeout:180000},async t=>{
  const f=await fixture(t),format=workspace=>workspace.catalogue(store=>catalogueFormat(store.db)),before=await format(f.workspace),failure=Error('Rollback source-choice admission');

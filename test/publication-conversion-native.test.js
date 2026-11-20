@@ -97,7 +97,6 @@ test('explicit research saves update a placed HTML entry and withdrawing consent
  await publicationConversion.mutate(workspace,{route:'/api/workspace/structure',data:commandData},()=>new StructureCommands(workspace).execute('structure',commandData));
  const privateBook=await files.open(site.site.id);assert.doesNotMatch(privateBook.html,/Edited website title|Listening to the room/);assert.match(privateBook.html,/data-observanda-source/);assert.equal(privateBook.css,edited.css);
 });
-import {convertExistingWebsite} from '../src/website-files-migration.js';
 test('reopening the grant seed verifies old memberships and revives only an explicitly regranted tombstone',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-grant-seed-')),book=sampleNotebook(),record=book.entries[1],notebook=book.notebooks[0];
  book.entries=[record];book.projects[0].title='Private owner label';notebook.title='Private book label';record.share=true;
@@ -121,17 +120,4 @@ test('reopening the grant seed verifies old memberships and revives only an expl
  await grant(true);const revival=await seed();assert.equal(revival.get(record.id).id,id);assert.equal((await store.searchLibrary()).items.length,1);
  // A stale positive file head by itself cannot vouch for present research consent.
  await grant(false);await assert.rejects(seed(),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
-});
-test('a saved home composition and its existing research cards convert once to private-aware website files',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-conversion-')),book=sampleNotebook(),record=book.entries[1];book.entries=[record];record.tags=['private-index-tag-canary'];const section={id:randomUUID(),title:'Unreleased experiment details',body:'A newly disclosed method.',share:false};record.sections=[section];
- book.website.home.sections.unshift({id:'authored-heading',kind:'text',show:true,title:'Authored home design',body:'Authored website introduction'});
- const {workspace,vault}=await encryptedFixture(directory,book);t.after(async()=>{await closeIdleMutationFiles();await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100});});
- const files=new WebsiteFileStore(workspace),publicationConversion=new PublicationConversion(workspace,{store:files});
- const imported=await convertExistingWebsite(workspace,files,{websiteId:null}),siteId=imported.site.id;assert.match(imported.html,/Authored home design/);assert.match(imported.html,/Authored website introduction/);assert.match(imported.html,/data-observanda-view="card"/);
- const page=await files.open(siteId,{path:'entries/'+record.id+'.html'});assert.match(page.html,/data-observanda-source/);assert.doesNotMatch(page.html,/A newly disclosed method/);
- const request=(path,data)=>executeResearchRequest(workspace,'/api/research/records/'+path,data,{publicationConversion}),identity={workspaceId:book.id,recordId:record.id};
- const sectionRead=await request('writing/read',{...identity,sectionId:section.id});await request('writing/save',{...identity,sectionId:section.id,expectedRevision:sectionRead.revision,value:{...sectionRead.value,share:true}});
- assert.match((await files.open(siteId,{path:page.path})).html,/A newly disclosed method/);
- const share=await request('values/read',{...identity,field:'share'});await request('values/save',{...identity,field:'share',expectedRevision:share.revision,value:{value:false}});
- const {files:published}=await files.export(siteId);for(const [name,value] of published)if(name.endsWith('.html')){let html='';for await(const chunk of value.readStaged())html+=chunk.toString('utf8');assert.doesNotMatch(html,/Does paper change the color|A newly disclosed method|Would the same pigment|private-index-tag-canary/,name);}
 });
