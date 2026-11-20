@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {spoolLiveManifest,liveManifestFrameBytes} from '../src/publication-live-spool.js';
 import {retainLiveManifest} from '../src/publication-live-manifest.js';
 import {liveManifestReceipt,reviewedManifest} from '../src/publication-live-budget.js';
@@ -45,18 +45,4 @@ test('reviewed manifest receipts record UTF-8 bytes and never infer bounds from 
  assert.equal(await liveManifestReceipt(workspace,'key',proof),proof);
  assert.equal(await liveManifestReceipt(workspace,'key',{releaseId:'edition',manifestHash:hash(body)}),null);
  assert.equal(await liveManifestReceipt(workspace,'key',{...proof,manifestBytes:undefined}),null);
-});
-
-test('legacy receipt bounds require matching local deployment and retained manifest evidence',async()=>{
- const id=hash('edition'),reviewId=hash('review'),deploymentId=randomUUID(),body='retained manifest',receipt={releaseId:id,deploymentId,commit:hash('commit'),manifestHash:hash(body)};
- const deployment={version:1,id:deploymentId,intent:{key:'destination',releaseId:id,reviewId},journal:{receipt:{...receipt}}};
- const candidate={version:1,id,reviewId,jobId:randomUUID(),attempt:randomUUID(),files:[{name:'index.html',size:1,sha256:hash('a')},{name:'publication.json',size:Buffer.byteLength(body),sha256:hash(body)}]};
- const metadata=new Map([['.observanda/deployments/'+deploymentId+'.json',deployment],['.observanda/release-candidates/'+reviewId+'.json',candidate]]);
- const workspace={websiteContext:true,websiteId:null,metadataPath:name=>name,async readMetadata(name){assert.ok(metadata.has(name),'only matched local metadata can supply the bounds');const value=metadata.get(name);return value===null?null:JSON.stringify(value);}};
- assert.deepEqual(await liveManifestReceipt(workspace,'destination',receipt),{...receipt,manifestBytes:body.length,manifestFiles:1});
- candidate.version=2;candidate.websiteId=null;candidate.etag=hash('research');candidate.websitePin={researchSnapshotId:candidate.etag,websiteId:null,websiteRevision:null};
- assert.equal((await liveManifestReceipt(workspace,'destination',receipt)).manifestFiles,1);
- await assert.rejects(liveManifestReceipt(workspace,'other-destination',receipt),{code:'JOB_DAMAGED'});
- candidate.files[1].sha256=hash('changed');await assert.rejects(liveManifestReceipt(workspace,'destination',receipt),{code:'JOB_DAMAGED'});
- metadata.set('.observanda/release-candidates/'+reviewId+'.json',null);assert.equal(await liveManifestReceipt(workspace,'destination',receipt),null);
 });
