@@ -1,3 +1,5 @@
+import {WebsiteFileStore} from '../../src/website-file-store.js';
+import {websitePublicationMetadata} from '../../src/website-publication-metadata.js';
 import {test,expect} from '@playwright/test';
 import path from 'node:path';
 import {sshFixture} from '../ssh-fixture.js';
@@ -9,12 +11,12 @@ import {startServer} from '../../src/server.js';
 import {navigate} from './preferences-helper.js';
 
 test('SSH publishing exposes uncertain switching and resume in the actual app',async({page})=>{
- test.setTimeout(90000);const cleanup=[],remote=await sshFixture({after:fn=>cleanup.push(fn)}),f=await encryptedFixture(remote.directory,sampleNotebook()),publisher=new Publisher(f.workspace.root,{ssh:remote.host},f.vault),config=defaultPublishing();config.kind='ssh';config.ssh=await remote.target(f.workspace);config.publicUrl='https://synthetic.example/';await publisher.save(config,'new');
+ test.setTimeout(90000);const cleanup=[],remote=await sshFixture({after:fn=>cleanup.push(fn)}),f=await encryptedFixture(remote.directory,sampleNotebook()),store=new WebsiteFileStore(f.workspace),siteId=(await store.create({name:'Field notes'})).site.id,publisher=new Publisher(f.workspace.root,{ssh:remote.host,workspace:websitePublicationMetadata(await store.publicationWorkspace(siteId))},f.vault),config=defaultPublishing();config.kind='ssh';config.ssh=await remote.target(f.workspace);config.publicUrl='https://synthetic.example/';await publisher.save(config,'new');
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(remote.directory,'preferences.json'),publishingOptions:{ssh:remote.host}}),errors=[];page.on('pageerror',e=>errors.push(e.message));let lost=false;
  remote.setHook((call,phase)=>{if(!lost&&phase==='after'&&call.args.at(-1).includes('mv -Tf')){lost=true;throw Error('Switch acknowledgement lost');}});
  try{
-  // Publishing → Review website opens this website's destination: the shared
-  // SSH login and this website's folder.
+  // Publishing opens the website made in the website editor, whose saved
+  // destination is the shared SSH login and this website's folder.
   await page.goto(app.url);await navigate(page,'Publishing');
   const form=page.locator('.website-files-publish'),reviewWebsite=page.getByRole('button',{name:'Review website',exact:true});
   await form.or(reviewWebsite).first().waitFor();if(await reviewWebsite.isVisible())await reviewWebsite.click();
