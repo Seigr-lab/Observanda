@@ -10,9 +10,11 @@ import {RecordWriting} from '../src/record-writing.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {createComposition} from '../src/web/figure-composition.js';
 import {ResearchMaterials} from '../src/research-materials.js';
-export async function figureValueFixture({large=false,tags=null}={}){
+export async function figureValueFixture({large=false,tags=null,extraNotebooks=[]}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-values-')),source=sampleNotebook(),record=source.entries[2];source.entries=[record];record.status='draft';
  if(tags)record.tags=tags;
+ // Further lab books the workspace starts with, beside the record's own.
+ for(const book of extraNotebooks)source.notebooks.push({...source.notebooks[0],...book});
  record.sections=Array.from({length:73},(_,i)=>({id:randomUUID(),title:'Section '+i,body:large?'exact'.repeat(5600):'Retained observation '+i}));
  record.figures=Array.from({length:9},(_,i)=>{const f=createFigure();f.title='Observation '+i;f.kind='scatter';f.series[0].points=[{x:1,y:i+2,error:null,xLower:.5,xUpper:1.5,yLower:i+1,yUpper:i+3,count:4},{x:2,y:i+3,error:null,count:9}];f.markerArea={unitArea:24,label:'Repeated observations'};return f;});
  const compound=createComposition(record.figures.slice(0,3));compound.title='Panel comparison';record.figures[8]=compound;

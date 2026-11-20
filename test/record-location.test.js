@@ -19,9 +19,9 @@ import {websiteWorkspace} from '../src/website-workspace.js';
 import {publicationSource} from '../src/publication-source.js';
 
 async function fixture(t,large=false){
- const f=await figureValueFixture({large});t.after(f.close);
- const notebook={...f.book.notebooks[0],id:randomUUID(),title:'Destination'};
- await new StructureCommands(f.workspace).execute('structure',{etag:(await f.workspace.outline()).etag,response:'outline',change:{kind:'notebook',value:notebook}});
+ // The workspace starts with a second lab book in the same project to move the record into.
+ const destination={id:randomUUID(),title:'Destination'},f=await figureValueFixture({large,extraNotebooks:[destination]});t.after(f.close);
+ const notebook=f.book.notebooks.find(item=>item.id===destination.id);
  const reading=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true});
  const command={workspaceId:f.book.id,recordId:f.record.id,sourceNotebookId:f.record.notebookId,notebookId:notebook.id,expectedStorageRevision:reading.storageRevision,commandId:randomUUID()};
  return {...f,notebook,reading,command,moves:new RecordLocation(f.workspace)};
