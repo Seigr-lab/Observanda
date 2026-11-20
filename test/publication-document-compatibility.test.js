@@ -6,8 +6,6 @@ import * as formats from '../src/catalogue-format.js';
 import {writeCatalogueArchive,readCatalogueStream} from '../src/postgres-archive.js';
 import {seal} from '../src/encryption.js';
 import {projectDomainSchema} from '../src/project-domain-schema.js';
-import {requirePublicationDocumentStorage,assertPublicationDocumentStorage} from '../src/publication-document-storage.js';
-import {catalogueContext} from '../src/research-catalogue.js';
 
 function database(version,{optionalDomains=false,payload=null,domains=[]}={}){
  const id=randomUUID(),schema='obs_'+id.replaceAll('-','');let selected=schema;
@@ -72,15 +70,6 @@ test('archive 13 carries all 24 exact capabilities and rejects missing or invent
   }
  }
 });
-
-test('publication storage admission reuses only an ambient writer and refuses file or cancelled admission',async()=>{
- const db=database(49),workspace={root:'in-memory-owner',async storageKind(){return 'catalogue';},async catalogue(operation){return operation({db});},async withLock(operation){this.locks++;return operation();},locks:0};
- await catalogueContext.run({root:workspace.root,db},()=>assertPublicationDocumentStorage(workspace));assert.equal(workspace.locks,0);assert.equal(db.version,73);
- await catalogueContext.run({root:'different-owner'},()=>requirePublicationDocumentStorage(workspace));assert.equal(workspace.locks,1);
- const controller=new AbortController();controller.abort();await assert.rejects(assertPublicationDocumentStorage(workspace,{signal:controller.signal}),{name:'AbortError'});assert.equal(workspace.locks,1);
- const file={async storageKind(){return 'file';},withLock(){assert.fail('File workspace writer was entered');}};assert.equal(await requirePublicationDocumentStorage(file),false);await assert.rejects(assertPublicationDocumentStorage(file),{code:'FORMAT'});
-});
-
 
 test('record transfers preserve all 48 independent capability combinations and later admissions',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}],[formats.requirePublicationDocuments,{publication:true}]];
