@@ -935,7 +935,8 @@ export class WebsiteFileStore{
   const relative=name=>{if(typeof name!=='string'||!name.startsWith('.observanda/'))throw new AppError('UNSAFE');websiteFileName(name.slice(12));return prefix+'/'+name.slice(12);};
   return {root:base.root,vault:base.vault,websiteId:id,websiteContext:true,baseWorkspace:base,
    withLock:operation=>store.scope(()=>operation(),{write:true}),
-   async deploymentOwnerId(){const {websiteDeploymentOwner}=await import('./website-publishing-migration.js');return websiteDeploymentOwner(this,id);},
+   // A website's remote destinations are owned by the website itself.
+   async deploymentOwnerId(){return id;},
    readMetadata:(name,limit=CONTROL_LIMIT)=>store.scope(async()=>{const bytes=await store.bytes(relative(name),{missing:true,limit});return bytes?.toString('utf8')??null;}),
    writeMetadata:(name,text)=>store.scope(()=>store.writeBytes(relative(name),Buffer.from(text)),{write:true}),
    removeMetadata:name=>store.scope(()=>store.remove(relative(name)),{write:true}),

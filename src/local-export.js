@@ -1,4 +1,3 @@
-import {publicationWorkspace} from './publication-pin.js';
 import path from 'node:path';
 import {discardNativeFiles,withNativeExport,nativeExportFingerprint,exportDirectoryIdentity} from './local-export-native-files.js';
 import os from 'node:os';
@@ -32,7 +31,7 @@ function checkMembers(files,changes=false){
 }
 
 export class LocalExport {
- constructor(workspace,{checkpoint=async()=>{},fileOwner}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.fileOwner=fileOwner;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
+ constructor(workspace,{checkpoint=async()=>{},fileOwner}={}){this.workspace=workspace;this.fileOwner=fileOwner;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
  async read(file){const raw=await this.workspace.readMetadata(file,limit);if(raw===null)return null;try{return JSON.parse(raw);}catch{throw new AppError('LOCAL_EXPORT_DAMAGED');}}
  async save(plan,owner){
   if(Buffer.byteLength(serialize(plan))>(plan.version===2?16384:limit))throw new AppError('LIMIT');
