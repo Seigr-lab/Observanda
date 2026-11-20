@@ -36,10 +36,10 @@ test('notebook moves keep content and stable links but require renewed website s
 });
 test('navigation resolves stable project, notebook and record context and rejects missing locations',()=>{
   const b=sampleNotebook(),n=b.notebooks[0],e=b.entries[0];
-  for(const hash of ['#/workspace','#/projects/'+n.projectId,'#/projects/'+n.projectId+'/records','#/notebooks/'+n.id,'#/notebooks/'+n.id+'/read','#/records/'+e.id,'#/preferences/appearance'])assert.equal(routeFor(resolveRoute(hash,b)),hash);
+  for(const hash of ['#/workspace','#/projects/'+n.projectId,'#/projects/'+n.projectId+'/records','#/notebooks/'+n.id,'#/notebooks/'+n.id+'/read','#/records/'+e.id,'#/preferences/fonts'])assert.equal(routeFor(resolveRoute(hash,b)),hash);
   const state=resolveRoute('#/records/'+e.id,b);assert.equal(state.notebook,n.id);assert.equal(state.project,n.projectId);
   assert.equal(resolveRoute('#/notebooks/'+n.id+'/read',b).bookReading,true);
-  for(const hash of ['#/notebooks/'+n.id+'/unknown','#/projects/missing','#/notebooks/missing','#/records/missing','#/branding/%ZZ'])assert.equal(resolveRoute(hash,b).page,'workspace');
+  for(const hash of ['#/notebooks/'+n.id+'/unknown','#/projects/missing','#/notebooks/missing','#/records/missing','#/unknown/%ZZ'])assert.equal(resolveRoute(hash,b).page,'workspace');
 });
 
 test('saved-record reading and editing routes resolve against metadata without complete records',()=>{
