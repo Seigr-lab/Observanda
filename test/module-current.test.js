@@ -122,6 +122,9 @@ test('missing or changed constraint facts fail closed and verification checks bo
   const value=store.decode('state',slot,(await store.db.get('SELECT payload FROM state WHERE slot=$1',slot)).payload);value.data.status='done';
   await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',store.encode('state',slot,value),slot);
  },{write:true});
- await assert.rejects(f.modules.execute(f.command(f.data.entities[1]),{compact:true}),{code:'CATALOGUE_DAMAGED'});
+ // A cosmetic edit proves unchanged constraints from its own authenticated fact;
+ // a status change rescans every task and meets the tampered one.
+ await f.modules.execute(f.command(f.data.entities[1],{title:'Renamed'}),{compact:true});
+ await assert.rejects(f.modules.execute(f.command({...f.data.entities[1],revision:2},{status:'doing'}),{compact:true}),{code:'CATALOGUE_DAMAGED'});
  await assert.rejects(f.workspace.catalogue(store=>f.modules.verifyCatalogue(store,f.book.id)),{code:'CATALOGUE_DAMAGED'});
 });
