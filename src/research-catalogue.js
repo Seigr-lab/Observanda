@@ -16,7 +16,6 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 import {catalogueContext} from './catalogue-context.js';
 import {cachedMaterialText,rememberMaterialText} from './catalogue-material-text-cache.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
-import {verifyWebsiteEditor} from './website-editor-store.js';
 import {readWebsiteDocumentRegistry,websiteDocumentLocks} from './website-document-registry.js';
 import {websiteMetadataShell,assertWebsiteMetadataShell,defaultWebsiteSelection} from './website-owned-metadata.js';
 import {withCatalogueVerification,verificationContext} from './catalogue-verification.js';
@@ -666,7 +665,6 @@ export class ResearchCatalogue{
   };
   for(const notebook of snapshot.metadata.notebooks)await configuration({workspaceId,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'},notebook.configuration);
   for(const project of snapshot.metadata.projects)await configuration({workspaceId,projectId:project.id,notebookId:null,slot:'labBookTemplate'},project.labBookTemplate?.configuration);
-  if(snapshot.websiteDocuments===1)await verified.once(['website-document-registry'],async()=>{if(!await readWebsiteDocumentRegistry(this))fail();});
   if(snapshot.indexVersion)await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
    if(!previous||!await verifyMembershipChange(this,previous,snapshot))await index.verify(snapshot);
   });
@@ -735,7 +733,7 @@ export class ResearchCatalogue{
    });
    const {workspaceModules}=await import('./modules/index.js');
    await operationStage('verify-modules',{},async()=>{await workspaceModules(this.workspace).verifyCatalogue(this,descriptor.workspaceId);});
-   await operationStage('verify-objects',{},async()=>{const {verifyConfigurationBlocks}=await import('./configuration-documents.js');await verifyConfigurationBlocks(this);const {verifyOwnerDirectories}=await import('./owner-directory.js');await verifyOwnerDirectories(this);const {verifyPortabilityCollections}=await import('./portability-collection.js');await verifyPortabilityCollections(this);await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onDocument:document=>media.websiteDocument(document)});await verifyWebsiteEditor(this,{onDocument:document=>media.websiteDocument(document)});for await(const object of this.verifiedObjects())void object;});
+   await operationStage('verify-objects',{},async()=>{const {verifyConfigurationBlocks}=await import('./configuration-documents.js');await verifyConfigurationBlocks(this);const {verifyOwnerDirectories}=await import('./owner-directory.js');await verifyOwnerDirectories(this);const {verifyPortabilityCollections}=await import('./portability-collection.js');await verifyPortabilityCollections(this);await verifyWorkspaceSettings(this);for await(const object of this.verifiedObjects())void object;});
    const {verifySampleAnalysisCatalogue}=await import('./sample-analysis-catalogue.js');
    await operationStage('verify-analysis',{},()=>verifySampleAnalysisCatalogue(this));
    await operationStage('verify-reviews',{},()=>new ReviewScopeIndex(this).verify());
