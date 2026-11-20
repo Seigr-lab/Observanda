@@ -9,7 +9,6 @@ import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
-import {websiteRequestContext} from './website-request-context.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
 import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
@@ -97,7 +96,6 @@ import {WebsiteFileStore} from './website-file-store.js';
 import {WorkspaceWebsitePreparation} from './workspace-website-preparation.js';
 import {PublicationConversion} from './publication-conversion.js';
 import {websiteRecordUpdates,refreshWebsiteRecords} from './website-record-updates.js';
-import {websiteWorkspace,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
 import {databaseStatus,databaseCapacity} from './postgres.js';
 import {databaseProvider} from './workspace-database-context.js';
@@ -1017,11 +1015,6 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // An unavailable prior location blocks operations on it, but must not block an
       // explicit request to create a workspace in a folder selected by the user.
       if(requiredWorkspaceMissing&&!(req.method==='POST'&&url.pathname==='/api/notebook/create'))throw new AppError('STORAGE_UNAVAILABLE');
-      if(websiteRequest(url.pathname)&&await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
-      if(websiteRequest(url.pathname)){
-        const {websiteId,websitePin}=websiteRequestContext(req.headers);
-        workspace=websiteWorkspace(workspace,websiteId,{websitePin});publisher=websitePublisher(publisher,workspace);
-      }
       if(req.method==='POST'&&url.pathname.startsWith('/api/v1/intake/')){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{

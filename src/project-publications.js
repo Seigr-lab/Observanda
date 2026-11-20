@@ -1,6 +1,5 @@
 import {WorkspaceEdits} from './workspace-edits.js';
 import {MediaStore} from './media.js';
-import {websiteWorkspace} from './website-workspace.js';
 import {websitePublisher} from './workspace-jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
@@ -20,7 +19,7 @@ export class ProjectPublications{
   const {storage,publisher:basePublisher,queue:baseQueue}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);
-  const publisher=websitePublisher(basePublisher,websiteWorkspace(storage,websiteId,{websitePin}));
+  const publisher=websitePublisher(basePublisher,storage);
   const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.repository']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   if(operation.startsWith('github-connection/')){
    const method=operation.slice(18),connection=publisher.connection;
