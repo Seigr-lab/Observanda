@@ -35,10 +35,10 @@ test('authenticated encryption rejects modified ciphertext, wrong keys and swapp
 test('password wrapping, encrypted saves and history survive restart; changing password never rewrites research',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-crypto-'));
  const access=await createAccess('Owner','first synthetic password'),vault=takeCreatedVault(access),ws=new Workspace(root,vault);
- const initial=await ws.create(sampleNotebook()),originalDescription=initial.book.description,initialHistory=await revisions(ws);assert.equal(initialHistory.length,1);const originalRevision=initialHistory[0].id;await atomicWrite(path.join(root,'.observanda','access.json'),serialize(access));
+ const initial=await ws.create(sampleNotebook()),originalDescription=initial.book.description,originalRevision=initial.etag;assert.deepEqual(await revisions(ws),[]);await atomicWrite(path.join(root,'.observanda','access.json'),serialize(access));
  const raw=await readFile(await workspaceFile(root));assert.ok(encrypted(raw));assert.ok(!raw.includes(Buffer.from(initial.book.title)));
  initial.book.description='Private changed description';const saved=await ws.save(initial.book,initial.etag);
- const saves=await revisions(ws);assert.equal(saves.length,2);assert.ok(saves.some(revision=>revision.id===originalRevision));assert.equal((await ws.readRevision(originalRevision)).description,originalDescription);await assertEncryptedFile(root,CATALOGUE_FILE);
+ const saves=await revisions(ws);assert.equal(saves.length,1);assert.ok(saves.some(revision=>revision.id===originalRevision));assert.equal((await ws.readRevision(originalRevision)).description,originalDescription);await assertEncryptedFile(root,CATALOGUE_FILE);
  clearVault(vault);await assert.rejects(ws.read(),{code:'ACCESS_LOCKED'});await assert.rejects(new Workspace(root).read(),{code:'ACCESS_LOCKED'});
  const settings=await readAccess(root);await assert.rejects(verifyAccess(settings,'Owner','wrong'),{code:'ACCESS_DENIED'});
  const reopened=await verifyAccess(settings,'Owner','first synthetic password');const next=new Workspace(root,reopened);assert.equal((await next.read()).etag,saved.etag);
