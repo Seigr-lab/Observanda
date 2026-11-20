@@ -181,9 +181,9 @@ test('identity collisions, invalid metadata, stale forms and interrupted commits
 
 test('reorganization preview is read-only and counts only selected metadata branches',async t=>{
  const f=await fixture(t),p=f.base.book.projects[0],source=f.base.book.notebooks[0],empty=f.base.book.notebooks[2];
- // Website documents own every logo; the workspace has none to copy.
+ // Websites own their logos; a reorganization has no logos to copy.
  await assert.rejects(f.service.execute('reorganize',{etag:f.base.etag,change:{workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id,copyLogos:true}},{preview:true}),{code:'INVALID'});
- const change={workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id,copyLogos:false};
+ const change={workspaceTitle:'Creative research',workspaceDescription:'One workspace',projectId:p.id};
  const {result:plan}=await bounded(new Set([source.id,empty.id]),new Set(),()=>f.service.execute('reorganize',{etag:f.base.etag,change},{preview:true}));
  assert.equal(plan.summary.records,3);assert.equal(plan.summary.notebooks,2);assert.equal((await f.ws.outline()).etag,f.base.etag);
  await assert.rejects(f.service.execute('reorganize',{etag:plan.etag,change}),{code:'INVALID'});
@@ -219,7 +219,7 @@ test('pre-index catalogues validate structure and upgrade membership without cha
   const manifest=await store.manifest(f.base.etag);
   await store.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',f.base.etag,store.encode('snapshot',f.base.etag,manifest));
  }));
- const change={workspaceTitle:'Restored workspace',workspaceDescription:'',projectId:f.base.book.projects[0].id,copyLogos:false};
+ const change={workspaceTitle:'Restored workspace',workspaceDescription:'',projectId:f.base.book.projects[0].id};
  const preview=await f.service.execute('reorganize',{etag:f.base.etag,change},{preview:true});
  assert.equal(preview.summary.records,3);
  const result=await command(f,f.base,'notebook',{...f.base.book.notebooks[0],title:'Renamed legacy book'});
@@ -236,7 +236,7 @@ test('empty retained lab books remain editable while new inline identities are r
  const id=base.book.notebooks[1].id,value={...base.book.notebooks[1],title:'Fresh start'};
  await assert.rejects(command(f,base,'notebook',{...value,id:randomUUID()}),{code:'INVALID'});
  await assert.rejects(command(f,base,'project',{id:randomUUID(),title:'New inline project',description:'',share:false,logoId:null}),{code:'INVALID'});
- const reorganize={workspaceTitle:base.book.title,workspaceDescription:'',projectId:'new',copyLogos:false};
+ const reorganize={workspaceTitle:base.book.title,workspaceDescription:'',projectId:'new'};
  await assert.rejects(f.service.execute('reorganize',{etag:base.etag,change:reorganize},{preview:true}),{code:'INVALID'});
  await assert.rejects(f.service.execute('reorganize',{etag:base.etag,change:reorganize,reviewed:true}),{code:'INVALID'});
  assert.equal((await f.ws.outline()).etag,base.etag);

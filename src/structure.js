@@ -1,7 +1,6 @@
 import {privatePublicationFlags} from './web/record-publication-privacy.js';
 import { randomUUID } from 'node:crypto';
 import { upgradeNotebook, validateNotebook } from './model.js';
-import { logosFor } from './web/branding.js';
 import {deleteLabBook} from './lab-books.js';
 import {selectToolProjects} from './web/project-tools.js';
 import { AppError } from './errors.js';
@@ -15,7 +14,7 @@ const validateResult=result=>({...result,book:validateNotebook(result.book)});
 // These transformations operate on a private draft. The document adapter or
 // indexed command adapter validates and persists the result atomically.
 function applyReorganization(book, change) {
-  if (!exact(change, ['workspaceTitle','workspaceDescription','projectId','copyLogos']) || !name(change.workspaceTitle) || typeof change.workspaceDescription !== 'string' || typeof change.copyLogos !== 'boolean') throw new AppError('INVALID');
+  if (!exact(change, ['workspaceTitle','workspaceDescription','projectId']) || !name(change.workspaceTitle) || typeof change.workspaceDescription !== 'string') throw new AppError('INVALID');
   let project = book.projects.find(p => p.id === change.projectId);
   if (!project && change.projectId !== 'new') throw new AppError('INVALID');
   const created = !project, previousTitle = project?.title ?? null;
@@ -25,15 +24,10 @@ function applyReorganization(book, change) {
   } else {
     project.title = book.title; project.description = book.description;
   }
-  if (change.copyLogos) {
-    const logos = structuredClone(logosFor(book, 'home'));
-    book.branding = book.branding.filter(b => b.target !== 'project:' + project.id);
-    book.branding.push({ target:'project:' + project.id, logos });
-  }
   book.title = change.workspaceTitle.trim(); book.description = change.workspaceDescription;
   const notebooks = book.notebooks.filter(n => n.projectId === project.id);
   const records = book.entries.filter(e => notebooks.some(n => n.id === e.notebookId));
-  return { book, projectId: project.id, summary: { workspaceTitle:book.title, projectTitle:project.title, previousTitle, created, notebooks:notebooks.length, records:records.length, copyLogos:change.copyLogos } };
+  return { book, projectId: project.id, summary: { workspaceTitle:book.title, projectTitle:project.title, previousTitle, created, notebooks:notebooks.length, records:records.length } };
 }
 
 export function editNotebook(source, change) {return validateResult(applyNotebookEdit(upgradeNotebook(source),change));}

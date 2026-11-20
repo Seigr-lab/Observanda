@@ -2,7 +2,6 @@ import {configurationOwner,configurationCheckpoint,discardConfigurationCheckpoin
 // Existing structure forms use one command adapter. Metadata-only changes never
 // assemble the record corpus; moves visit the selected lab book's branch only.
 import {AppError} from './errors.js';
-import {readWebsiteDocumentRegistry} from './website-document-registry.js';
 import {commitStructureDocuments} from './record-structure-documents.js';
 import {saveStructure,editNotebook,reorganizeWorkspace,transformStructure} from './structure.js';
 import {SnapshotIndex} from './snapshot-index.js';
@@ -77,7 +76,6 @@ export class StructureCommands{
   const collection=kind==='structure'&&['project','notebook'].includes(data.change?.kind)?data.change.kind==='project'?'projects':'notebooks':null;
   if((collection&&!source.metadata[collection].some(value=>value.id===data.change.value?.id))||(kind==='reorganize'&&data.change.projectId==='new'))throw new AppError('INVALID');
   // Website documents own every logo, so the workspace has none to copy.
-  if(kind==='reorganize'&&data.change.copyLogos===true&&(source.websiteDocuments===1||await readWebsiteDocumentRegistry(store)))throw new AppError('INVALID');
   const complete=await hasSnapshotOwnership(store,source);
   if(preview&&!complete)return legacyStructurePreview(store,source,data.change,etag,{signal});
   if(!complete)onProgress?.({stage:'indexing'});

@@ -37,7 +37,7 @@ test('copying workspace details creates a dedicated top-level project without gr
   expect(await f.workspace.outline()).toEqual(before);expect(requests.filter(route=>route==='/api/projects/create')).toHaveLength(1);expect(requests.filter(route=>route.startsWith('/api/workspace/reorganize'))).toEqual([]);expect(errors).toEqual([]);
   const full=await f.workspace.read(),post=(route,data)=>sessionRequest(page,'post',app.origin+route,{headers:{Origin:app.origin},data}),inline={id:randomUUID(),title:'Inline bypass',description:'',share:false,logoId:null};
   for(const route of ['/api/notebook/save','/api/workspace/structure','/api/workspace/reorganize/preview','/api/workspace/reorganize']){
-   const data=route==='/api/notebook/save'?{etag:full.etag,book:{...full.book,projects:[inline]}}:route==='/api/workspace/structure'?{etag:full.etag,change:{kind:'project',value:inline}}:{etag:full.etag,reviewed:true,change:{workspaceTitle:full.book.title,workspaceDescription:'',projectId:'new',copyLogos:false}};
+   const data=route==='/api/notebook/save'?{etag:full.etag,book:{...full.book,projects:[inline]}}:route==='/api/workspace/structure'?{etag:full.etag,change:{kind:'project',value:inline}}:{etag:full.etag,reviewed:true,change:{workspaceTitle:full.book.title,workspaceDescription:'',projectId:'new'}};
    const response=await post(route,data);expect(response.status()).toBe(422);expect((await response.json()).code).toBe('INVALID');
   }
   const proposed={...full.book,notebooks:[{id:randomUUID(),projectId:entry.projectId,title:'Unowned book'}]};expect((await post('/api/notebook/save',{etag:full.etag,book:proposed})).status()).toBe(422);expect(await f.workspace.outline()).toEqual(before);

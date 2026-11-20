@@ -8,22 +8,20 @@ import {buildPublication} from '../src/publication.js';
 
 test('workspace reorganization preserves all record identities, evidence, links and selections',()=>{
   const source=sampleNotebook(), before=structuredClone(source), id=source.projects[0].id;
-  source.branding=[{target:'home',logos:[{id:randomUUID(),alt:'Identity'}]}];
-  const result=reorganizeWorkspace(source,{workspaceTitle:'A wider workspace',workspaceDescription:'Independent projects',projectId:id,copyLogos:true});
+  const result=reorganizeWorkspace(source,{workspaceTitle:'A wider workspace',workspaceDescription:'Independent projects',projectId:id});
   assert.equal(result.book.title,'A wider workspace');assert.equal(result.book.projects[0].title,before.title);
   assert.equal(result.book.projects[0].description,before.description);
   assert.deepEqual(result.book.entries,before.entries);assert.deepEqual(result.book.notebooks,before.notebooks);
   assert.equal(result.book.projects[0].id,id);assert.equal(result.book.projects[0].share,before.projects[0].share);
-  assert.deepEqual(result.book.branding.find(b=>b.target==='project:'+id).logos,source.branding[0].logos);
   assert.equal(source.title,before.title);assert.equal(source.projects[0].title,before.projects[0].title);
 });
 test('creating a project from workspace details leaves existing projects and records intact',()=>{
   const source=sampleNotebook();
-  const result=reorganizeWorkspace(source,{workspaceTitle:'New workspace',workspaceDescription:'',projectId:'new',copyLogos:false});
+  const result=reorganizeWorkspace(source,{workspaceTitle:'New workspace',workspaceDescription:'',projectId:'new'});
   assert.equal(result.book.projects.length,2);assert.deepEqual(result.book.projects[0],source.projects[0]);
   assert.equal(result.book.projects[1].share,false);assert.equal(result.book.projects[1].title,source.title);
   assert.deepEqual(result.book.entries,source.entries);assert.deepEqual(result.book.notebooks,source.notebooks);
-  for(const change of [{workspaceTitle:' '},{projectId:randomUUID()},{copyLogos:'yes'},{extra:true}])assert.throws(()=>reorganizeWorkspace(source,{workspaceTitle:'New',workspaceDescription:'',projectId:'new',copyLogos:false,...change}),{code:'INVALID'});
+  for(const change of [{workspaceTitle:' '},{projectId:randomUUID()},{extra:true}])assert.throws(()=>reorganizeWorkspace(source,{workspaceTitle:'New',workspaceDescription:'',projectId:'new',...change}),{code:'INVALID'});
 });
 test('notebook moves keep content and stable links but require renewed website selection',()=>{
   const book=sampleNotebook(), n=book.notebooks[0], original=structuredClone(book);
