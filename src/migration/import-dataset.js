@@ -23,7 +23,11 @@ export async function prepareImportedDataset(store,batch,row,content,{signal}={}
 export async function commitImportedDataset(materials,prepared,store,batchId){
  const artifact=await materials.current(prepared.artifactId);if(!artifact||artifact.kind!=='artifact')throw new AppError('IMPORT_DAMAGED');
  const content={...prepared.content,inputs:[{kind:artifact.kind,id:artifact.id,revision:artifact.revision},...prepared.content.inputs.slice(1)]},current=await materials.current(prepared.id);
- if(content.nativeMapping){const old=content.nativeMapping.artifact,native=await materials.current(old.id);if(!native||native.kind!=='artifact')throw new AppError('IMPORT_DAMAGED');const pinned={kind:native.kind,id:native.id,revision:native.revision};content.nativeMapping={...content.nativeMapping,artifact:pinned};content.inputs=content.inputs.map(r=>r.id===old.id?pinned:r);}
+ if(content.nativeMapping){const old=content.nativeMapping.artifact,native=await materials.current(old.id);if(!native||native.kind!=='artifact')throw new AppError('IMPORT_DAMAGED');const pinned={kind:native.kind,id:native.id,revision:native.revision};content.nativeMapping={...content.nativeMapping,artifact:pinned};content.inputs=content.inputs.map(r=>r.id===old.id?pinned:r);
+  // Preparation records the native original among the schema inputs before it
+  // has a retained revision; bind that reference to the committed original too.
+  if(content.schemaInputsIndex){const schemaInputs=materials.sequences.builder('references',write=>write());for await(const r of materials.sequences.items(content.schemaInputsIndex))await schemaInputs.append(r.kind==='artifact'&&r.id===old.id?pinned:r);content.schemaInputsIndex=await schemaInputs.finish();}
+ }
  if(importHash(current)!==importHash(prepared.previous))throw new AppError('IMPORT_CHANGED');
  if(prepared.keepAuthored)return null;
  if(current&&current.title===prepared.title&&importHash((await materials.read(current)).content)===importHash(content))return null;
