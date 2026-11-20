@@ -133,7 +133,6 @@ const routeFor=state=>ownedRoute(localRouteFor(state),state.projectOwner);
 const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book,{contentReading:supportsRecordSelection()||Boolean(state.websiteEditor)});
 
 import {validWebsitePin} from './website-pin.js';
-import {logosFor} from './branding.js';
 import {applicationMark} from './app-brand.js';
 import {RECORD_TYPES,STATUSES} from './record-types.js';
 import {recordTypeLabel as recordLabel} from './record-type-presentation.js';
@@ -214,7 +213,7 @@ const icons = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const mark = applicationMark;
 
-const navigationOptions={state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():state.book)):target[key]}),icon,logosFor,pinnedTools:()=>textControls.pinnedTools()};
+const navigationOptions={state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():state.book)):target[key]}),icon,pinnedTools:()=>textControls.pinnedTools()};
 const navigation=workspaceNavigation(navigationOptions),websiteDrawer=websiteFilesDrawer({navigation:workspaceNavigation(navigationOptions),esc});
 
 function adoptSnapshot(result){

@@ -25,9 +25,9 @@ function active(node, selected) {
 
 // Routes select items; they never recreate the tree. Stable project/notebook IDs
 // also retain their nodes during renames and moves.
-export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
+export function workspaceNavigation({state,icon,pinnedTools=()=>[]}) {
   let host=null,context=null,root,heading,identity,name,dashboard,projectsSection,projectOverview,tree,settings,lock;
-  let projects=new Map(),notebooks=new Map(),modules=new Map(),logos=new Map(),selectedTrail=null,pinnedGroup=null,pinnedNodes=new Map();
+  let projects=new Map(),notebooks=new Map(),modules=new Map(),selectedTrail=null,pinnedGroup=null,pinnedNodes=new Map();
   function button(action,label,glyph) {
     const node=element('button','nav-button');node.type='button';node.dataset.action=action;
     node.innerHTML=icon(glyph);
@@ -41,12 +41,12 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
   function unmount() {
     root?.remove();heading?.remove();
     host=context=root=heading=identity=name=dashboard=projectsSection=tree=settings=lock=null;
-    projects.clear();notebooks.clear();modules.clear();logos.clear();selectedTrail=null;
+    projects.clear();notebooks.clear();modules.clear();selectedTrail=null;
   }
   function mount(sidebar,topbar,key) {
     unmount();
     host=sidebar;context=key;
-    projects=new Map();notebooks=new Map();modules=new Map();logos=new Map();
+    projects=new Map();notebooks=new Map();modules=new Map();
     root=element('div','workspace-navigation');root.id='workspace-navigation';
     const home=element('nav');home.setAttribute('aria-label',t('navigation','dashboard'));
     dashboard=button('workspace',t('navigation','dashboard'),'dashboard');home.append(dashboard,button('entries',ux('find'),'records'),button('tools',ux('tools'),'folder'),button('help',ux('help'),'book'));
@@ -155,15 +155,7 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
   }
   function updateIdentity() {
     text(name,state.book.title);attr(identity,'title',state.book.title);
-    const wanted=new Set(),ordered=[];
-    for(const logo of logosFor(state.book,'home')) {
-      wanted.add(logo.id);
-      let node=logos.get(logo.id);
-      if(!node){node=element('img','workspace-logo');node.src='/api/media/'+logo.id;logos.set(logo.id,node);}
-      attr(node,'alt',logo.alt??'');ordered.push(node);
-    }
-    for(const [id,node] of logos)if(!wanted.has(id)){node.remove();logos.delete(id);}
-    orderNavigationNodes(identity,document.documentElement.dataset.headerOrder==='title-first'?[name,...ordered]:[...ordered,name]);
+    orderNavigationNodes(identity,[name]);
   }
   return {
     unmount,
