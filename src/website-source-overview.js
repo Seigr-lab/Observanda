@@ -45,7 +45,7 @@ export function projectedRecordMetadata(fragment){
 // own identity. They never supply a second copy of the overview text.
 export function projectedSourceOverview(fragment,title){
  const groups=new Map(kinds.map(kind=>[kind,[]]));
- let writing='',current='text';
+ let writing='',current='text',afterLabel=false;
  function flush(){
   const value=writing.trim();writing='';
   if(!value||current==='text'&&value===title||groups.get(current).length>=paragraphLimit)return;
@@ -61,10 +61,11 @@ export function projectedSourceOverview(fragment,title){
   }
   if(boundaries.has(node.tagName))flush();
   if(node.nodeName==='#text'&&writing.length<=paragraphBytes){
-   let value=node.value.replace(/\s+/gu,' ');if(!writing||writing.endsWith(' '))value=value.trimStart();
+   let value=node.value.replace(/\s+/gu,' ');if(afterLabel){value=value.replace(/^\s*:\s*/u,'');afterLabel=false;}if(!writing||writing.endsWith(' '))value=value.trimStart();
    writing+=value.slice(0,paragraphBytes+1-writing.length);
   }else if((node.tagName==='td'||node.tagName==='th')&&writing&&!writing.endsWith(' ')&&writing.length<=paragraphBytes)writing+=' ';
-  if(current==='outcome'&&node.tagName==='strong'&&plainLabel(node)==='Outcome:')return;
+  // The outcome's label names the part; the overview already groups it.
+  if(current==='outcome'&&node.tagName==='strong'&&(attr(node,'data-observanda-label')==='websiteRecordText:outcome'||plainLabel(node)==='Outcome:')){afterLabel=true;return;}
   for(const child of node.childNodes??[])visit(child);
   if(boundaries.has(node.tagName)||marker!==undefined)flush();
   current=before;
