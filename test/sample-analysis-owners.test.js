@@ -48,7 +48,8 @@ test('nested sample owners have independent writers, reports and bounded combine
  await call('/change',{action:'create-sample',etag:approved.etag,sample:{code:'Extra sample',material:'Synthetic',source:'',collectedOn:'2026-10-01',receivedOn:'2026-10-01'}},{query:{compact:'1'}});await assert.rejects(read({cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
  await app.run(client,projectRequest('/api/projects/'+b.projectId+'/lab-books/'+b.labBookId+'/access/lock','POST'),{});await assert.rejects(call('/read/selected',{workspaceId:b.namespaceId,kind:'analysis',id}),{code:'ACCESS_LOCKED'});await assert.rejects(read({key:chosen.collectionKey}),{code:'ACCESS_LOCKED'});
  assert.equal(await o.storage.catalogue(store=>store.object('laboratory')),null);
- t.mock.restoreAll();const parent=path.join(f.directory,'Copies');await mkdir(parent);
+ t.mock.restoreAll();// A plain copy is served by the workspace it sits in.
+ const parent=path.join(f.root,'Copies');await mkdir(parent);
  const project=f.owners.find(owner=>owner.projectId===b.projectId&&!owner.labBookId),copies=new LabBookCopies(project.storage,b.labBookId),copyId=randomUUID();
  await assert.rejects(copies.run(o.storage,{id:copyId,parent,checkpoint:stage=>{if(stage==='files')throw Error('Interrupted sample copy');}}),/Interrupted sample copy/);
  assert.equal((await copies.run(o.storage,{id:copyId,resume:true})).phase,'complete');

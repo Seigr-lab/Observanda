@@ -59,7 +59,8 @@ test('copy keeps original consent and a physical book reparent withdraws placeme
   assert.equal(possible(missing),false);
  },{write:true});
  const site=await files.create({name:'Relocation report'}),placed=await files.insertSource(site.site.id,{expectedRevision:site.site.revision,path:site.path,sourceId:grant.id,sourceRevision:grant.revision});
- const copies=path.join(f.directory,'Independent copies');await mkdir(copies);
+ // A plain copy is served by the workspace it sits in.
+ const copies=path.join(f.root,'Independent copies');await mkdir(copies);
  const copy=await copyLabBookLocation(storage,path.join(copies,from.directory),{id:randomUUID()});
  assert.equal((await copy.read()).book.entries[0].share,true);assert.equal((await files.open(site.site.id)).html,placed.html);
  const move=new LabBookReparents(f.registry,from.labBookId),id=randomUUID();
