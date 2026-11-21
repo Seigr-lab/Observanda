@@ -10,13 +10,16 @@ import {writeCatalogueArchive,readCatalogueArchive,inspectCatalogueArchive} from
 import {withOperationProgress} from '../src/operation-progress.js';
 import {cataloguePayloadRows} from '../src/catalogue-payload-rows.js';
 const hash=value=>createHash('sha256').update(value).digest('hex'),tables={state:['slot','payload']};
-test('archive headers restore each guarded catalogue generation',async t=>{
+test('archive headers restore each guarded catalogue generation and refuse catalogues older than alpha.29',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-archive-generation-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const file=path.join(directory,'archive');
- for(const generation of [8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,26]){
+ for(const generation of [21,23,26]){
   const payload=seal(Buffer.from('Synthetic state'),randomBytes(32),'test');let restored=generation;
   const db={async *rows(){yield {slot:'head',payload_bytes:payload.length};},all:async sql=>sql==='SELECT version FROM catalogue_format'?[{version:restored}]:[{slot:'head',payload}],get:async()=>({found:1}),run:async(sql,value)=>{if(sql.startsWith('UPDATE catalogue_format'))restored=value;}};
-  archiveDatabaseFixture(db);const handle=await open(file,'w');try{await writeCatalogueArchive(db,handle,tables);}finally{await handle.close();}restored=3;
+  archiveDatabaseFixture(db);const handle=await open(file,'w');
+  // Generations below 22 were written only by releases before alpha.29.
+  if(generation<22){try{await assert.rejects(writeCatalogueArchive(db,handle,tables),{code:'CATALOGUE_DAMAGED'});}finally{await handle.close();}continue;}
+  try{await writeCatalogueArchive(db,handle,tables);}finally{await handle.close();}restored=3;
   await readCatalogueArchive(file,db,tables);assert.equal(restored,generation);
   if(generation===23){
    const raw=await readFile(file,'utf8'),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,5);assert.deepEqual(header.domains,[]);
@@ -26,16 +29,18 @@ test('archive headers restore each guarded catalogue generation',async t=>{
   }
  }
 });
-test('chunked archive round-trips encrypted rows and still reads the original archive format',async t=>{
+test('chunked archive round-trips encrypted rows and refuses archive formats older than alpha.29',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-archive-format-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const file=path.join(directory,'backup'),payload=seal(Buffer.alloc(3*1024*1024+13,65),randomBytes(32),'test'),written=[];
- const db={async *rows(sql,args,options){assert.equal(options.batchSize,32);assert.match(sql,/octet_length/);yield {slot:'head',payload_bytes:payload.length};},async all(sql){return sql==='SELECT version FROM catalogue_format'?[{version:3}]:[{slot:'head',payload}];},async run(sql,...values){written.push(values);},async get(){return {found:1};}};
+ const db={async *rows(sql,args,options){assert.equal(options.batchSize,32);assert.match(sql,/octet_length/);yield {slot:'head',payload_bytes:payload.length};},async all(sql){return sql==='SELECT version FROM catalogue_format'?[{version:23}]:[{slot:'head',payload}];},async run(sql,...values){if(sql.startsWith('INSERT INTO state '))written.push(values);},async get(){return {found:1};}};
  archiveDatabaseFixture(db);const handle=await open(file,'wx');try{await writeCatalogueArchive(db,handle,tables);}finally{await handle.close();}
  const raw=await readFile(file,'utf8'),rows=raw.trimEnd().split('\n');assert.ok(rows.every(line=>Buffer.byteLength(line)<1.4*1024*1024));
  await readCatalogueArchive(file,db,tables);assert.deepEqual(written,[['head',payload]]);
  const oldRow=JSON.stringify({table:'state',values:['head',payload.toString('base64')]})+'\n';
- await writeFile(file,JSON.stringify({format:'observanda-postgresql-archive',version:1})+'\n'+oldRow+JSON.stringify({end:true,rows:1,digest:hash(oldRow)})+'\n');written.length=0;
- await readCatalogueArchive(file,db,tables);assert.deepEqual(written,[['head',payload]]);
+ for(const version of [1,2,3]){
+  await writeFile(file,JSON.stringify({format:'observanda-postgresql-archive',version})+'\n'+oldRow+JSON.stringify({end:true,rows:1,digest:hash(oldRow)})+'\n');
+  await assert.rejects(readCatalogueArchive(file,db,tables),{code:'CATALOGUE_DAMAGED'});
+ }
  // Recompute the archive digest so the row-level checks have to catch damage.
  const invalids=[
   values=>{values[1].bytes=256*1024*1024+1;},
@@ -89,7 +94,7 @@ test('archive and comparison stream rows once without a preliminary count scan',
  let visited=0;
  const db={
   get:async()=>{throw Object.assign(Error('count scan timed out'),{code:'57014'});},
-  all:async(sql,...ids)=>sql==='SELECT version FROM catalogue_format'?[{version:3}]:rows.filter(row=>ids.includes(row.slot)),
+  all:async(sql,...ids)=>sql==='SELECT version FROM catalogue_format'?[{version:23}]:rows.filter(row=>ids.includes(row.slot)),
   async *rows(){for(const row of rows){visited++;yield {slot:row.slot,payload_bytes:row.payload.length};}}
  };
  archiveDatabaseFixture(db);const outputs=[];
@@ -110,9 +115,9 @@ test('archive and comparison stream rows once without a preliminary count scan',
 
 test('read-only archive inspection requires exact file identity and complete validated framing',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-archive-inspect-'));t.after(()=>rm(directory,{recursive:true,force:true}));
- const file=path.join(directory,'archive'),payload=seal(Buffer.from('Synthetic state'),randomBytes(32),'test');
- const body=JSON.stringify({table:'state',values:['head',payload.toString('base64')]})+'\n';
- const raw=JSON.stringify({format:'observanda-postgresql-archive',version:1})+'\n'+body+JSON.stringify({end:true,rows:1,digest:hash(body)})+'\n';
+ const file=path.join(directory,'archive'),payload=seal(Buffer.from('Synthetic state'),randomBytes(32),'test'),parts=[];
+ const db=archiveDatabaseFixture({async *rows(){yield {slot:'head',payload_bytes:payload.length};},all:async sql=>sql==='SELECT version FROM catalogue_format'?[{version:23}]:[{slot:'head',payload}]});
+ await writeCatalogueArchive(db,{writeFile:async value=>parts.push(value)},tables);const raw=parts.join('');
  await writeFile(file,raw);const found=[];await inspectCatalogueArchive(file,tables,{row:(domain,table,values)=>found.push({domain,table,values})},{expectedDigest:hash(raw)});
  assert.deepEqual(found,[{domain:null,table:'state',values:['head',payload]}]);assert.equal(await readFile(file,'utf8'),raw);
  await assert.rejects(inspectCatalogueArchive(file,tables,{row(){}},{expectedDigest:'0'.repeat(64)}),{code:'CATALOGUE_DAMAGED'});
