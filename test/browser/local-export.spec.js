@@ -13,10 +13,10 @@ import {navigate} from './preferences-helper.js';
 // Signing in discovers the records shared for websites. The author then places
 // them on a website made in the website editor; the folder export is one of its
 // publication tools.
-async function signedIn(page,app,f){
+async function signedIn(page,app,f,{website=true}={}){
  await page.goto(app.url);await page.getByRole('button',{name:'Menu',exact:true}).waitFor({state:'visible'});
  await expect.poll(async()=>await websiteLibraryState(f.workspace),{timeout:60000}).toBe('ready');
- const {book}=await f.workspace.read();return websiteWithRecords(f.workspace,book,book.entries.filter(entry=>entry.share));
+ if(!website)return null;const {book}=await f.workspace.read();return websiteWithRecords(f.workspace,book,book.entries.filter(entry=>entry.share));
 }
 async function folderExport(page){
  await navigate(page,'Publishing');const files=page.locator('#main[data-website-files-app]');
@@ -82,7 +82,7 @@ test('an interrupted export reopens after server restart, finishes from its jour
   await expect.poll(()=>once,{timeout:60000}).toBe(false);await expect(control(panel,'Write reviewed files')).toHaveCount(0);
   // Reviewing the folder again finds the journal of the interrupted edition.
   await control(panel,'Review file changes').click();await expect(control(panel,'Resume export')).toBeVisible({timeout:60000});
-  await app.close();app=await startServer(options);await signedIn(page,app,f);panel=await folderExport(page);
+  await app.close();app=await startServer(options);await signedIn(page,app,f,{website:false});panel=await folderExport(page);
   await panel.getByLabel('Destination folder',{exact:true}).fill(destination);await control(panel,'Review file changes').click();await expect(control(panel,'Resume export')).toBeDisabled({timeout:60000});
   await confirm(panel).check();await control(panel,'Resume export').click();await expect(panel.getByText('Edition written and verified.',{exact:true})).toBeVisible({timeout:60000});
   await writeFile(path.join(destination,'index.html'),'Manual homepage');await control(panel,'Review file changes').click();await expect(panel.getByText('Conflicts: 1',{exact:true})).toBeVisible({timeout:60000});
