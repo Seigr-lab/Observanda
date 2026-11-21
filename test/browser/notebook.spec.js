@@ -385,10 +385,10 @@ test('a server login is set up once in Integrations and a website publishes to i
   await expect(logins).toContainText('Lab server');await expect(logins).toContainText('research@hosting.example');
   await expect(page.getByLabel('Publish with',{exact:true})).toHaveCount(0);
   await page.reload();await preferences(page,'Integrations');await expect(page.locator('#server-logins')).toContainText('research@hosting.example');
-  await navigate(page,'Publishing');
-  const form=page.locator('.website-files-publish'),reviewWebsite=page.getByRole('button',{name:'Review website',exact:true});
-  await form.or(reviewWebsite).first().waitFor();if(await reviewWebsite.isVisible())await reviewWebsite.click();
-  const destination=page.getByRole('button',{name:'Publishing destination',exact:true});if(await destination.isVisible())await destination.click();
+  // A website chooses the login in its own publishing destination.
+  await navigate(page,'Website editor');await openDefaultWebsite(page);
+  const form=page.locator('.website-files-publish');
+  await page.getByRole('button',{name:'Publish update',exact:true}).click();await page.getByRole('button',{name:'Publishing destination',exact:true}).click();
   await form.getByLabel('Publishing destination').selectOption('ssh');
   await form.getByLabel('Server login').selectOption({label:'Lab server · research@hosting.example'});
   await form.getByLabel("This website's folder on the server").fill('/srv/observanda');
