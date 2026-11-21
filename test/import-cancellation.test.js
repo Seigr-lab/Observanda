@@ -21,6 +21,9 @@ import {createWorkspaceAccess,takeCreatedVault,verifyAccess,readAccess} from '..
 import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {assertProjectImportsSettled} from '../src/project-import-state.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
+import {ProjectArchives} from '../src/project-archives.js';
+import {CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
 
 test('cancelling unpublished imports preserves sources and recovers only the pinned destination',{timeout:480000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-cancel-')),ownerId=randomUUID(),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId,env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),keys=[];
@@ -28,18 +31,19 @@ test('cancelling unpublished imports preserves sources and recovers only the pin
  const device=new TestDeviceStore({file:path.join(directory,'device')}),password='Independent import password';
  async function grant(){const access=await createWorkspaceAccess('',password,device),vault=takeCreatedVault(access);keys.push(vault);return {access,vault};}
  async function workspace(title){const g=await grant(),data=createNotebook(title),root=path.join(directory,title);await initializeLocation(root,data,g.access,g.vault);const storage=new Workspace(root,g.vault);return {storage,registry:new ProjectRegistry(storage,data.id)};}
- async function project(owner,title,parent=null){const g=await grant(),data=createNotebook(title),id=randomUUID();data.projects=[{id,title,parentId:null,description:'Independent project',share:false,logoId:null}];const storage=await initializeProjectLocation(path.join(parent?.root??owner.storage.root,title),id,data,g.access,g.vault);await owner.registry.attach(storage,{parentId:parent?.projectId??null,expected:(await owner.registry.read()).revision});return storage;}
+ async function project(owner,title,parent=null){const g=await grant(),data=createNotebook(title),id=randomUUID();data.projects=[{id,title,parentId:null,description:'Independent project',share:false,logoId:null}];const storage=await initializeProjectLocation(path.join(parent?.root??owner.storage.root,title),id,data,g.access,g.vault);await attachAsEarlierVersion(owner.registry,storage,{parentId:parent?.projectId??null,expected:(await owner.registry.read()).revision});return storage;}
  async function book(parent,title){const result=await new LabBookCreation(parent,device).create({id:randomUUID(),username:'',password,book:{id:randomUUID(),projectId:parent.projectId,title}}),vault=await verifyAccess(await readAccess(result.book.root),'',password,{deviceStore:device});keys.push(vault);return new LabBookStorage(result.book.root,result.book.labBookId,vault);}
+ // The source tree holds a child an earlier version placed inside its project; a project is imported at the top level.
  const source=await workspace('Original Workspace'),target=await workspace('Receiver Workspace'),root=await project(source,'Research Project'),child=await project(source,'Child Project',root),notes=await book(child,'Independent Notes'),parent=await project(target,'Containing Project');
  await notes.writeFile(path.join(notes.root,'.observanda/evidence.bin'),'Retained evidence');
- const original=await notes.read(),imports=new ProjectImports(target.registry,device),id=randomUUID(),base={id,username:'',password,recovery:'',owners:[child,notes].map(owner=>({relative:path.relative(root.root,owner.root).split(path.sep).join('/'),username:'',password,recovery:''}))},request={...base,path:root.root,parentId:parent.projectId};
+ const original=await notes.read(),imports=new ProjectImports(target.registry,device),id=randomUUID(),base={id,username:'',password,recovery:'',owners:[child,notes].map(owner=>({relative:path.relative(root.root,owner.root).split(path.sep).join('/'),username:'',password,recovery:''}))},request={...base,path:root.root,parentId:null};
  const stop=stage=>({checkpoint:point=>{if(point===stage)throw Error('Interrupted '+stage);}});
  await assert.rejects(imports.run(request,stop('copied')),/Interrupted copied/);
- const value=await imports.read(id),destination=value.destination;assert.equal(value.phase,'copied');await assert.rejects(new LabBookStorage(path.join(destination,'Child Project','Independent Notes'),notes.labBookId,notes.vault).outline(),{code:'STORAGE_INCOMPLETE'});await assert.rejects(assertProjectImportsSettled(target.registry,[parent.projectId]),{code:'STORAGE_PROJECT_BUSY'});
+ const value=await imports.read(id),destination=value.destination;assert.equal(value.phase,'copied');await assert.rejects(new LabBookStorage(path.join(destination,'Child Project','Independent Notes'),notes.labBookId,notes.vault).outline(),{code:'STORAGE_INCOMPLETE'});await assert.rejects(assertProjectImportsSettled(target.registry,[null]),{code:'STORAGE_PROJECT_BUSY'});
  await assert.rejects(imports.cancel({...base,password:'Wrong password'}),{code:'PROJECT_IMPORT_ACCESS'});assert.equal((await imports.read(id)).phase,'copied');
  const unrelated=path.join(destination,'unrelated.txt');await writeFile(unrelated,'User file');await assert.rejects(imports.cancel(base),{code:'STORAGE_DELETE_CONTENTS'});assert.equal(await readFile(unrelated,'utf8'),'User file');await unlink(unrelated);
  await assert.rejects(imports.run(base,{resume:true}),{code:'STORAGE_INCOMPLETE'});
- const replaced=path.join(parent.root,'Held destination');await rename(destination,replaced);await mkdir(destination);await writeFile(unrelated,'Replacement');await assert.rejects(imports.cancel(base),{code:'STORAGE_DELETE_STATE'});assert.equal(await readFile(unrelated,'utf8'),'Replacement');await unlink(unrelated);await rmdir(destination);await rename(replaced,destination);
+ const replaced=path.join(target.storage.root,'Held destination');await rename(destination,replaced);await mkdir(destination);await writeFile(unrelated,'Replacement');await assert.rejects(imports.cancel(base),{code:'STORAGE_DELETE_STATE'});assert.equal(await readFile(unrelated,'utf8'),'Replacement');await unlink(unrelated);await rmdir(destination);await rename(replaced,destination);
  const missing=path.join(source.storage.root,'Unavailable source');await provider.closeLabBook(notes.root);await provider.closeProject(child.root);await provider.closeProject(root.root);await rename(root.root,missing);
  await assert.rejects(imports.cancel(base),{code:'ENOENT'});await access(destination);await rename(missing,root.root);
  let recovery=base;
@@ -49,7 +53,7 @@ test('cancelling unpublished imports preserves sources and recovers only the pin
   if(stage==='cancel-retired'){await mkdir(destination);await writeFile(unrelated,'Reused after retirement');}
   t.diagnostic('Cancellation recovered through '+stage);
  }
- assert.equal((await imports.cancel(recovery)).cancelled,true);assert.equal((await imports.run(recovery,{resume:true})).cancelled,true);assert.deepEqual((await imports.pending()).items,[]);await assertProjectImportsSettled(target.registry,[parent.projectId]);assert.equal(await readFile(unrelated,'utf8'),'Reused after retirement');
+ assert.equal((await imports.cancel(recovery)).cancelled,true);assert.equal((await imports.run(recovery,{resume:true})).cancelled,true);assert.deepEqual((await imports.pending()).items,[]);await assertProjectImportsSettled(target.registry,[null]);assert.equal(await readFile(unrelated,'utf8'),'Reused after retirement');
  const discard=new ImportDiscard(target.storage,id),receipt=await discard.pending();assert.equal(receipt.phase,'complete');assert.equal(receipt.keyOwners,undefined);for await(const entry of discard.owners(receipt).entries())assert.equal(Object.hasOwn(entry,'key'),false);await rename(missing,root.root);assert.deepEqual(await notes.read(),original);assert.equal(await notes.readFile(path.join(notes.root,'.observanda/evidence.bin'),'utf8'),'Retained evidence');
  // Cancelling a book import shares the same guarded cleanup and frees its slot.
  const books=new LabBookImports(parent,target.registry,device);books.registry.read=books.registry.change=()=>{throw Error('Import must not materialize the book directory');};const bookRequest={id:randomUUID(),path:notes.root,username:'',password,recovery:''},bookCancel={id:bookRequest.id,username:'',password,recovery:''};
@@ -70,9 +74,12 @@ test('cancelling unpublished imports preserves sources and recovers only the pin
  }finally{if(processChild&&processChild.exitCode===null&&processChild.signalCode===null){processChild.kill('SIGKILL');await exited;}}
  assert.equal((await emptyImports.cancel({...base,id:killed.id,password:'',owners:[]})).cancelled,true);await assertProjectImportsSettled(emptyTarget.registry,[null]);
 
- // In-place project adoption also cancels without renaming or deleting data.
- for(const owner of [notes])await provider.closeLabBook(owner.root);for(const owner of [child,root])await provider.closeProject(owner.root);
- const inPlaceProject=path.join(emptyTarget.storage.root,path.basename(root.root));await rename(root.root,inPlaceProject);const inode=await stat(inPlaceProject),inPlaceProjectRequest={...empty,id:randomUUID(),path:inPlaceProject};await assert.rejects(emptyImports.run(inPlaceProjectRequest,stop('prepared')),/Interrupted prepared/);
- assert.equal((await emptyImports.cancel({...base,id:inPlaceProjectRequest.id,password:'',owners:[]})).cancelled,true);assert.equal((await stat(inPlaceProject)).ino,inode.ino);await access(path.join(inPlaceProject,'Child Project','Independent Notes','.observanda/evidence.bin'));await assertProjectImportsSettled(emptyTarget.registry,[null]);
+ // In-place adoption takes a portable copy already placed in the workspace and also cancels without renaming or
+ // deleting it. A live folder carried by hand into another workspace is not served by that workspace's database.
+ const exported=path.join(directory,'Exports',path.basename(root.root));await mkdir(path.dirname(exported));
+ const owners={withProject:(id,use)=>use([root,child].find(owner=>owner.projectId===id)),withProjectBook:(parent,id,use)=>use([notes].find(owner=>owner.labBookId===id)),withBook:(id,use)=>use([notes].find(owner=>owner.labBookId===id))};
+ await new ProjectArchives(source.registry).run(root,{id:randomUUID(),path:exported,...owners});
+ const inPlaceProject=path.join(emptyTarget.storage.root,path.basename(root.root));await rename(exported,inPlaceProject);const inode=await stat(inPlaceProject),inPlaceProjectRequest={...empty,id:randomUUID(),path:inPlaceProject};await assert.rejects(emptyImports.run(inPlaceProjectRequest,stop('prepared')),/Interrupted prepared/);
+ assert.equal((await emptyImports.cancel({...base,id:inPlaceProjectRequest.id,password:'',owners:[]})).cancelled,true);assert.equal((await stat(inPlaceProject)).ino,inode.ino);await access(path.join(inPlaceProject,'Child Project','Independent Notes',CATALOGUE_ARCHIVE));await assertProjectImportsSettled(emptyTarget.registry,[null]);
 
 });
