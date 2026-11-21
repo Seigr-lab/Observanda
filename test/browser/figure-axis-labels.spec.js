@@ -8,7 +8,7 @@ import {upgradeNotebook} from '../../src/model.js';
 import {createFigure} from '../../src/web/figure-model.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {buildPublication} from '../../src/publication.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
 
 test('small measurement differences have distinct visible axes in the reader and exported page',async({page},info)=>{
  test.setTimeout(120000);
@@ -30,10 +30,10 @@ test('small measurement differences have distinct visible axes in the reader and
   const reader=page.locator('.record-reader');await expect(reader.locator('.figure-value-tick').first()).toBeVisible();await check(reader);
   await reader.locator('svg').first().screenshot({path:info.outputPath('precise-axis-reader.png')});
   await page.setViewportSize({width:390,height:844});await check(reader);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
-  const publication=buildPublication(book),[filename,html]=[...publication.files].find(([name,body])=>name.endsWith('.html')&&String(body).includes('id="record-figure-'+plot.id+'"'));
+  const copy=await convertPublicationRecord({},book,book.entries.find(e=>e.figures.some(f=>f.id===plot.id))),html=copy.html;
   // Read the generated SVG as a browser, independently of the app's renderer.
   const output=await page.context().newPage();await output.setContent(String(html),{waitUntil:'domcontentloaded'});
-  const figure=output.locator('#record-figure-'+plot.id),source=await figure.locator('img').getAttribute('src'),svg=publication.files.get(path.posix.normalize(path.posix.join(path.posix.dirname(filename),source)));
+  const figure=output.locator('#record-figure-'+plot.id),source=await figure.locator('img').getAttribute('src'),svg=copy.assets.find(asset=>asset.path===source)?.bytes;
   expect(svg).toBeDefined();await output.setContent(String(svg));await check(output.locator('svg'));await output.close();
   expect((await f.workspace.read()).book.entries[0].figures).toEqual([plot]);expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

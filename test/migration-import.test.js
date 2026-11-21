@@ -21,7 +21,7 @@ import {createFigure} from '../src/web/figure-model.js';
 import {importOrder} from '../src/migration/import-plan.js';
 import {initialMapping,mappedId} from '../src/migration/import-model.js';
 import {importedArtifactId} from '../src/migration/import-evidence.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies} from './fixtures/record-copies.js';
 import {importContent} from '../src/migration/content.js';
 import {contentBuffer} from '../src/file-content.js';
 
@@ -135,7 +135,7 @@ test('shared chapter exclusions, figure conversions and exact source attributes 
  const provenance=await f.service.provenance({workspaceId:f.book.id,recordId:imported.id});
  assert.equal(provenance.items[0].source.attributes,'{"exact":900719925474099312345,"decimal":1.2300e-9}');assert.equal(records.find(r=>r.title==='Plot').figures[0].series[0].points[0].y,0.125);
  const book=(await f.workspace.read()).book;book.entries=records.map(r=>({...r,share:true}));book.projects.forEach(p=>p.share=true);
- const publication=buildPublication(book);for(const [name,value] of publication.files){if(/\.(html|json|xml|txt|csv)$/.test(name))assert.ok(!String(value).includes('EXCLUDED MARKER'),name);assert.ok(!name.includes('.original'));}
+ for(const copy of (await recordCopies(book,f.workspace)).values()){assert.ok(!(copy.html+copy.css).includes('EXCLUDED MARKER'));for(const asset of copy.assets){assert.ok(!asset.path.includes('.original'));if(asset.bytes)assert.ok(!Buffer.from(asset.bytes).includes('EXCLUDED MARKER'),asset.path);}}
 });
 
 test('shared original bytes retain each record association, filename, hash and download through repeat import and restore',async t=>{

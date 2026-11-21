@@ -1,11 +1,9 @@
-import {renderingBook} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {createNotebook,validateNotebook} from '../src/model.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
 import {startingAppearance,contrastChecks,contrastRatio} from '../src/web/themes.js';
 
 test('starting palettes meet the configured color contrast thresholds and remain independently editable', () => {
@@ -40,14 +38,3 @@ test('theme library validation rejects broken references, injection, duplicate I
   }
 });
 
-test('published appearance reflects settings while private preset names and unused styles stay private', () => {
-  const book = renderingBook(createNotebook('Research'));
-  book.themes.push({ id: randomUUID(), name: '/home/private/theme-name <script>', appearance: startingAppearance('studio') });
-  book.activeThemeId = book.themes[0].id;
-  book.appearance = { ...book.themes[0].appearance, accent:'#5832a8', header:'band', layout:'list', radius:4, fontSize:20, lineHeight:1.6, width:780 };
-  const candidate = buildPublication(book), css = candidate.files.get('styles.css');
-  assert.match(css, /--accent:#5832a8;/); assert.match(css, /--reading-width:780px;/); assert.match(css, /--corner-radius:4px;/); assert.match(css, /--body-size:20px;/);
-  assert.match(candidate.files.get('index.html'), /class="studio cards-list header-band navigation-top heading-split"/);
-  assert.ok(!Object.hasOwn(publicProjection(book), 'themes')); assert.ok(!Object.hasOwn(publicProjection(book), 'activeThemeId'));
-  assert.ok(![...candidate.files.values()].join('').includes('private/theme-name'));
-});

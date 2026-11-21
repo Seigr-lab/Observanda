@@ -13,7 +13,8 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {RecordHistory} from '../src/record-history.js';
 import {reconcileRecords} from '../src/web/record-merge.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 function fixture(){
  const book=sampleNotebook();book.entries.forEach(e=>{e.figures=[];e.sections=[];e.relations=[];e.share=false;});
@@ -76,27 +77,21 @@ test('saved workflow survives drafts, conflicts, exact method edits and record h
  const old=versions.versions.find(v=>v.revision===originalRevision);
  assert.deepEqual((await history.read({workspaceId:book.id,recordId:run.id,...old})).record,savedRun);
 });
-test('public journeys omit private runs and methods; stable section anchors survive edits',()=>{
+test('website copies omit private runs and methods; stable section anchors survive edits',async()=>{
  const {book,experiment,method}=fixture(),first=createRun(book,experiment),second=createRun(book,experiment);
  first.title='First attempt';first.status='completed';first.outcome='Negative result';first.share=true;
  second.title='PRIVATE incomplete attempt';second.status='incomplete';second.outcome='PRIVATE path E:\\private\\capture.bin';second.share=false;
  first.relations.push({id:randomUUID(),type:'Uses method',role:'uses-method',label:method.title,target:{workspaceId:book.id,kind:'record',id:method.id,revision:recordRevision(method)}});
  experiment.sections=[{id:randomUUID(),title:'Question',body:'Does the colour fade?'},{id:randomUUID(),title:'Limitations',body:'Two attempts cannot establish reliability.'}];
  book.entries.push(first,second);
- const projection=publicProjection(book);assert.equal(projection.entries.find(e=>e.id===first.id).relations.length,1);
- const build=buildPublication(book),html=build.files.get('entries/'+experiment.id+'.html');
- assert.match(html,/Runs and takes/);assert.ok(html.includes('../entries/'+first.id+'.html'));assert.ok(html.includes('Negative result'));
- const publicFiles=[...build.files.values()].filter(v=>typeof v==='string').join('\n');
+ const copies=await recordCopies(book),html=copies.get(experiment.id).html;
+ assert.equal(copies.get(second.id).visible,false);assert.ok(copies.get(first.id).html.includes('Negative result'));
+ const publicFiles=copiesText(copies);
  for(const secret of [method.id,method.title,second.id,second.title,'capture.bin'])assert.ok(!publicFiles.includes(secret),secret);
  const anchor=sectionAnchor(experiment.sections[0]);assert.ok(html.includes('id="'+anchor+'"'));
  experiment.sections.reverse();experiment.sections[1].title='Renamed question';
- assert.ok(buildPublication(book).files.get('entries/'+experiment.id+'.html').includes('id="'+anchor+'"'));
- const conclusion={...structuredClone(book.entries[2]),id:randomUUID(),type:'conclusion',title:'Two attempts compared',share:true,relations:[{id:randomUUID(),role:'compares',type:'Compares',label:first.title,target:{workspaceId:book.id,kind:'record',id:first.id,revision:recordRevision(first)}}]};
- book.entries.push(conclusion);
- assert.ok(buildPublication(book).files.get('entries/'+first.id+'.html').includes('Compared in'));
- first.outcome='Revised interpretation';
- assert.ok(!buildPublication(book).files.get('entries/'+conclusion.id+'.html').includes('../entries/'+first.id+'.html'));
- first.outcome='E:\\private\\new-capture.bin';assert.throws(()=>buildPublication(book));
+ assert.ok((await convertPublicationRecord({},book,experiment)).html.includes('id="'+anchor+'"'));
+ first.outcome='E:\\private\\new-capture.bin';await assert.rejects(convertPublicationRecord({},book,first),{code:'PRIVACY'});
 });
 test('reader and section URLs keep identity across rename and reordering',()=>{
  const {book,experiment}=fixture();experiment.sections=[{id:randomUUID(),title:'Rationale',body:'Context'}];

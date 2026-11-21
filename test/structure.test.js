@@ -4,7 +4,6 @@ import {randomUUID} from 'node:crypto';
 import {reorganizeWorkspace,editNotebook} from '../src/structure.js';
 import {sampleNotebook} from '../src/sample.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
-import {buildPublication} from '../src/publication.js';
 
 test('workspace reorganization preserves all record identities, evidence, links and selections',()=>{
   const source=sampleNotebook(), before=structuredClone(source), id=source.projects[0].id;
@@ -31,7 +30,6 @@ test('notebook moves keep content and stable links but require renewed website s
   const moved=editNotebook(book,{id:n.id,title:'Measurements',projectId:p.id});
   assert.equal(moved.book.notebooks[0].id,n.id);assert.equal(moved.book.notebooks[0].projectId,p.id);
   for(const record of moved.book.entries){assert.equal(record.share,false);const prior=original.entries.find(e=>e.id===record.id);assert.deepEqual({...record,share:prior.share},prior);}
-  assert.equal(buildPublication(moved.book).entries.length,0);
   assert.throws(()=>editNotebook(book,{id:n.id,title:'Missing parent',projectId:randomUUID()}),{code:'INVALID'});
 });
 test('navigation resolves stable project, notebook and record context and rejects missing locations',()=>{

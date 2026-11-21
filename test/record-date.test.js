@@ -15,7 +15,8 @@ import {RecordHistory} from '../src/record-history.js';
 import {Workspace} from '../src/storage.js';
 import {reconcileRecords} from '../src/web/record-merge.js';
 import {recordRevisionComparison} from '../src/web/record-revision-view.js';
-import {publicProjection,buildPublication,escapeHTML} from '../src/publication.js';
+import {escapeHTML} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {createAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {clearVault} from '../src/encryption.js';
@@ -93,14 +94,13 @@ test('encrypted save, incomplete draft, exact pins, history and verified workspa
   assert.deepEqual((await ws.read()).book.entries[0].occurredOn,approx);
  }finally{await clearVault(vault);if(restoredVault)await clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
 });
-test('static output keeps authored uncertainty and excludes private undated records before rendering',()=>{
+test('website copies keep authored uncertainty and exclude private undated records before rendering',async()=>{
  const book=sampleNotebook();const [art,field,hidden]=book.entries;
  art.title='Undated material study';art.occurredOn=unknown;field.occurredOn=approx;hidden.occurredOn=range;hidden.title='PRIVATE DATE SENTINEL';hidden.body='E:\\private\\capture.bin';hidden.share=false;
- const before=JSON.stringify(book),projection=publicProjection(book);projection.entries[0].occurredOn.kind='changed';assert.equal(JSON.stringify(book),before);
- const output=buildPublication(book),artHTML=output.files.get('entries/'+art.id+'.html'),fieldHTML=output.files.get('entries/'+field.id+'.html');
+ const before=JSON.stringify(book),copies=await recordCopies(book),artHTML=copies.get(art.id).html,fieldHTML=copies.get(field.id).html;
  assert.match(artHTML,/Date unknown/);assert.ok(!artHTML.includes('<time datetime='));
  assert.match(fieldHTML,/Estimated: February 2024/);assert.ok(!fieldHTML.includes('datetime="2024-02-01"'));
- const text=[...output.files.values()].filter(v=>typeof v==='string').join('\n');
+ const text=copiesText(copies);
  for(const privateValue of [hidden.id,hidden.title,'capture.bin','[object Object]'])assert.ok(!text.includes(privateValue),privateValue);
- assert.equal(output.files.has('entries/'+hidden.id+'.html'),false);assert.equal(JSON.stringify(book),before);
+ assert.equal(copies.get(hidden.id).visible,false);assert.equal(JSON.stringify(book),before);
 });

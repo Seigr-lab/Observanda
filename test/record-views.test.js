@@ -13,7 +13,7 @@ import {queryFixture} from './record-query-fixture.js';
 import {createAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {clearVault} from '../src/encryption.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {testServer} from './device-fixture.js';
 
 const baseQuery=()=>viewQuery({filter:'all',recordBrowse:{tags:'sound,summer',sort:'date-asc',from:'2026-06-01',to:'2026-06-30'}});
@@ -83,8 +83,8 @@ test('encrypted saved views survive verified copies and never enter publication 
   const restored=new Workspace(destination,restoredVault);
   assert.deepEqual((await new RecordViews(restored).list({workspaceId:book.id})).views,[saved]);
   assert.equal((await ws.read()).etag,etag);assert.equal((await restored.read()).etag,etag);
-  const output=buildPublication((await restored.read()).book),text=[...output.files.values()].filter(v=>typeof v==='string').join('\n');
-  assert.ok(!text.includes(value.name));assert.ok(!text.includes(value.query.search));assert.ok(![...output.files.keys()].some(k=>k.includes('record-views')));
+  const text=copiesText(await recordCopies((await restored.read()).book,restored));
+  assert.ok(!text.includes(value.name));assert.ok(!text.includes(value.query.search));assert.ok(!text.includes('record-views'));
  }finally{await clearVault(vault);if(restoredVault)await clearVault(restoredVault);await rm(parent,{recursive:true,force:true});}
 });
 

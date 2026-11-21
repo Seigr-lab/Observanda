@@ -8,21 +8,18 @@ import path from 'node:path';
 import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.js';
 import {digest,serialize} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {buildPublication} from '../src/publication.js';
+import {bookWebsiteCandidate} from './fixtures/website-candidate.js';
 import {githubFixture as mainGithubFixture} from './github-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {newElement} from '../src/web/composition-tree.js';
-import {renderingBook} from './fixtures/rendering-book.js';
 const sha = (type, bytes) => createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 const token = 'synthetic_session_secret_1234567890';
 async function setup(t,options) {
   const book=sampleNotebook();
   const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
   t.after(async t=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
-  // The stored book has no page settings; its rendering carries a homepage with one text section.
-  const saved = await ws.read(), rendered = renderingBook(saved.book); rendered.website = {...rendered.website, home: {...rendered.website.home, sections: [newElement('text', randomUUID)]}};
-  const candidate = buildPublication(rendered); candidate.etag = saved.etag;
+  // The website editor's saved files for this workspace, published as they are.
+  const saved = await ws.read(), candidate = bookWebsiteCandidate(saved.book); candidate.etag = saved.etag;
   // Like the website editor, the publisher admits only a candidate made from the current saved state.
   const authorizeCandidate=async value=>{if((await ws.read()).etag!==value.etag)throw new AppError('STALE');};
   return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, {authorizeCandidate,...options},f.vault) };
@@ -109,7 +106,7 @@ test('reviewing existing main pins its parent and Pages source, then subsequent 
  const saved=await s.publisher.save(config,'new');await s.publisher.connect(token);const initial=remote.head;
  await assert.rejects(s.publisher.deploy(s.candidate,saved.etag,s.owner),{code:'PUBLISH_OWNERSHIP'});
  const plan=await s.publisher.reviewDestination(s.candidate,saved.etag);
- assert.equal(plan.requiresReview,true);assert.equal(plan.head,initial);assert.deepEqual(plan.removed,[]);assert.deepEqual(plan.preserved,['README.md']);assert.ok(plan.added.includes('index.html'));
+ assert.equal(plan.requiresReview,true);assert.equal(plan.head,initial);assert.deepEqual(plan.removed,[]);assert.deepEqual(plan.preserved,['.nojekyll','README.md']);assert.ok(plan.added.includes('index.html'));
  await assert.rejects(s.publisher.deploy(s.candidate,saved.etag,s.owner,{destinationReview:plan.id}),{code:'PUBLISH_STALE'});
  assert.equal(remote.calls.filter(c=>c.method!=='GET').length,0);
  const first=await s.publisher.deploy(s.candidate,saved.etag,s.owner,{destinationReview:plan.id,destinationReviewed:true});

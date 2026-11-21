@@ -14,8 +14,7 @@ import {createFigure,figureIssues} from '../src/web/figure-model.js';
 import {createComposition,cloneFigure} from '../src/web/figure-composition.js';
 import {withFigureSource,figureReferences} from '../src/web/figure-provenance.js';
 import {resolveFigureSources} from '../src/figure-provenance.js';
-import {publicProjection} from '../src/publication-projection.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
@@ -41,8 +40,7 @@ test('figures retain exact calculations independently of result statements, sour
  saved.figures[0].panels[1].figure.series[0].points[0].y=25;await save(saved);snapshot=await f.workspace.read();
  review=await materials.releaseSources(snapshot.book,[record.id]);assert.equal(review.warnings.filter(w=>w.reason==='inputs').length,2);assert.deepEqual(review.warnings.filter(w=>w.reason==='edited'),[{recordId:record.id,figureId:compound.panels[1].figure.id,reason:'edited'}]);
  assert.deepEqual(await materials.read(original),retained);
- const projected=publicProjection(snapshot.book);assert.equal(JSON.stringify(projected).includes(original.revision),false);assert.equal(JSON.stringify(projected).includes(original.id),false);
- const exported=[...buildPublication(snapshot.book).files.values()].map(String).join('\n');for(const secret of [original.id,original.revision,'PRIVATE calculation','PRIVATE revised method'])assert.equal(exported.includes(secret),false);
+ const exported=copiesText(await recordCopies(snapshot.book,f.workspace));for(const secret of [original.id,original.revision,'PRIVATE calculation','PRIVATE revised method'])assert.equal(exported.includes(secret),false);
  const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(destination,f.vault);
  assert.deepEqual(await restored.read(),snapshot);assert.deepEqual(await new ResearchMaterials(restored).read(original),retained);
  for(const source of [{...original,revision:'invalid'},{...original,kind:'artifact'},{...original,extra:true}])assert.ok(figureIssues({...plot,source}).length);

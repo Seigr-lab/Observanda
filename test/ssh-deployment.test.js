@@ -1,15 +1,15 @@
-import {renderingSample} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,writeFile,symlink,unlink} from 'node:fs/promises';
 import path from 'node:path';
-import {buildPublication} from '../src/publication.js';
+import {bookWebsiteCandidate} from './fixtures/website-candidate.js';
+import {sampleNotebook} from '../src/sample.js';
 import {sshFixture} from './ssh-fixture.js';
 import {SSHHost} from '../src/ssh-host.js';
 
 test('real shell SSH protocol resumes lost claim, sealed release and switch responses without new uploads',async t=>{
  for(const point of ['claim','seal','switch','unlock'])await t.test(point,async t=>{
-  const f=await sshFixture(t),book=renderingSample(),candidate=buildPublication(book),journal={};let stored={},lost=false;
+  const f=await sshFixture(t),book=sampleNotebook(),candidate=bookWebsiteCandidate(book),journal={};let stored={},lost=false;
   const save=value=>{stored=structuredClone(value);};
   f.setHook((call,phase)=>{const command=call.args.at(-1),match=point==='claim'?command.includes('.observanda-owner'):point==='seal'?command.includes('mv -T ')&&!command.includes('mv -Tf'):point==='switch'?command.includes('mv -Tf'):command.includes('; rm ')&&command.includes('.publishing-lock');if(phase==='after'&&match&&!lost){lost=true;throw Error('Lost acknowledgement');}});
   await assert.rejects(f.host.deploy(f.config,candidate,book.id,{journal,save}));assert.equal(lost,true);
@@ -24,7 +24,7 @@ test('real shell SSH protocol resumes lost claim, sealed release and switch resp
  });
 });
 test('SSH stops on unexpected remote edits or corruption and never replaces a different operation claim',async t=>{
- const f=await sshFixture(t),book=renderingSample(),candidate=buildPublication(book),journal={};let once=true;
+ const f=await sshFixture(t),book=sampleNotebook(),candidate=bookWebsiteCandidate(book),journal={};let once=true;
  f.setHook(async(call,phase)=>{if(once&&call.program==='sftp'&&phase==='after'){once=false;await writeFile(path.join(f.directory,'site','.stage-'+journal.nonce,'index.html'),'corrupt');}});
  await assert.rejects(f.host.deploy(f.config,candidate,book.id,{journal}));await assert.rejects(f.current(),{code:'ENOENT'});
  f.setHook(null);await assert.rejects(f.host.deploy(f.config,candidate,book.id,{journal:{}}));

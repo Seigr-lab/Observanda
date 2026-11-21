@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
-import {projectPublication} from '../src/publication-projection.js';
-import {renderPublication} from '../src/publication.js';
-import {selectedContent} from '../src/web/website-model.js';
+import {recordPage} from './fixtures/record-page.js';
+import {recordProjection} from '../src/publication-conversion-render.js';
 import {publicMediaAttribution,sourcePublicationRecord} from '../src/web/source-publication-permissions.js';
 import {localizedRecordPage} from '../src/website-record-language.js';
 
@@ -32,14 +31,14 @@ test('only creator, credit and licence of public media reach a website, and noth
 test('a published photograph shows its credit in its caption, labelled in the page language',()=>{
  const book=upgradeNotebook(sampleNotebook()),entry=book.entries.find(e=>e.share);
  entry.attachments=[photo];
- const context=projectPublication(book,selectedContent(book));
+ const context=recordProjection(book,{...entry,share:true});
  const projected=context.entries.find(e=>e.id===entry.id).attachments[0];
  assert.deepEqual(projected.attribution,publicMediaAttribution(metadata));
  const png=Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000','hex');
- const output=renderPublication(context,{mediaFiles:new Map([[photo.id,{kind:'image',extension:'png',bytes:png}]])});
- const html=output.files.get('entries/'+entry.id+'.html');
+ const output=recordPage(book,entry,{mediaFiles:new Map([[photo.id,{kind:'image',extension:'png',bytes:png}]])});
+ const html=output.html;
  assert.match(html,/<figcaption>Capped brood<br><small class="media-provenance"><span data-observanda-label="websiteRecordText:mediaCreator">Creator<\/span>: Ada Lovelace &middot; Courtesy of the village archive &middot; <span data-observanda-label="websiteRecordText:mediaLicence">Licence<\/span>: CC BY 4\.0<\/small><\/figcaption>/);
- for(const secret of ['Private apiary','Box 3','Hive 4 frame','07:15'])assert.ok(![...output.files.values()].some(file=>typeof file==='string'&&file.includes(secret)),secret);
+ for(const secret of ['Private apiary','Box 3','Hive 4 frame','07:15'])assert.ok(![output.html,...output.files.values()].some(file=>typeof file==='string'&&file.includes(secret)),secret);
  const article=html.slice(html.indexOf('<article'),html.indexOf('</article>')+10);
  const page='<!doctype html><html lang="ca"><body><main><section data-observanda-source="'+'a'.repeat(64)+'" data-observanda-source-revision="'+'b'.repeat(64)+'">'+article+'</section></main></body></html>';
  assert.match(localizedRecordPage(page),/>Autoria<\/span>: Ada Lovelace &middot; Courtesy of the village archive &middot; <span data-observanda-label="websiteRecordText:mediaLicence">Llicència<\/span>: CC BY 4\.0/);

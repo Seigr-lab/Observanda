@@ -1,7 +1,7 @@
 import '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {selectedContent} from '../src/web/website-model.js';
 import {projectPublication} from '../src/publication-projection.js';
+import {withRenderingWebsite} from '../src/publication-rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
@@ -23,10 +23,10 @@ test('public collection links use only the admitted owner and return its derived
 });
 
 test('relation projection uses the admitted collection label and derived destination',()=>{
- const book=sampleNotebook(),foreign=id(),sourceId=book.projects[0].id,derived=id(),selection=selectedContent(book);
+ const book=sampleNotebook(),foreign=id(),sourceId=book.projects[0].id,derived=id(),selection={projects:book.projects,notebooks:book.notebooks,entries:book.entries.filter(entry=>entry.share),pages:[],homeEnabled:false};
  selection.projects=selection.projects.map(project=>({...project,id:derived,sourceId,referenceNamespaces:[foreign],title:'Selected foreign project'}));selection.notebooks=selection.notebooks.map(notebook=>({...notebook,projectId:derived}));
  const record=selection.entries[0];record.relations=[{id:id(),type:'related',role:'related',target:{workspaceId:foreign,kind:'project',id:sourceId}}];
- const projected=projectPublication(book,selection);assert.equal(projected.entries[0].relations[0].id,derived);assert.equal(projected.entries[0].relations[0].label,'Selected foreign project');assert.equal('referenceNamespaces' in projected.projects[0],false);
+ const projected=projectPublication(withRenderingWebsite(book),selection);assert.equal(projected.entries[0].relations[0].id,derived);assert.equal(projected.entries[0].relations[0].label,'Selected foreign project');assert.equal('referenceNamespaces' in projected.projects[0],false);
 });
 
 function namespaceStore({current=id(),projectId,readCache={},objects=new Map()}={}){

@@ -13,7 +13,7 @@ import {recordRevisionField} from '../src/web/record-revision-view.js';
 import {sectionInput} from '../src/web/laboratory/section-editor.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
 import {sampleNotebook} from '../src/sample.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {Workspace} from '../src/storage.js';
 import {RecordHistory} from '../src/record-history.js';
@@ -63,7 +63,8 @@ test('exact field contexts survive ordinary saves, template amendments, immutabl
  another.template.values.senary='5';another.template.fields[0].numeric.radix=8;await assert.rejects(records.save({workspaceId:book.id,changes:[{id:saved.id,expectedRevision:recordRevision(saved),record:another}]}),{code:'INVALID'});
  const versions=await history.list(command);assert.equal(versions.versions.length,2);const original=versions.versions.find(v=>v.revision===recordRevision(first)),old=await history.read({...command,...original});assert.deepEqual(old.record.template,first.template);
  const reopened=(await new Workspace(f.workspace.root,f.vault).read()).book;assert.deepEqual(reopened.entries.find(r=>r.id===saved.id).template,saved.template);
- const projection=publicProjection(reopened),projected=projection.entries.find(r=>r.id===saved.id);assert.deepEqual(projected.sections.slice(0,3).map(s=>s.body),['+15.3','1/3','9'.repeat(64)]);assert.equal(projected.sections[0].title,'senary (ticks) · Base 6 fractional numeral');
- const publication=buildPublication(reopened);assert.ok([...publication.files.values()].some(bytes=>String(bytes).includes('Base 6 fractional numeral')&&String(bytes).includes('+15.3')));
+ // The website copy keeps each number exactly as written, under its field's label.
+ const {html}=await convertPublicationRecord(f.workspace,reopened,reopened.entries.find(r=>r.id===saved.id));
+ for(const value of ['senary (ticks) · Base 6 fractional numeral','+15.3','1/3','9'.repeat(64)])assert.ok(html.includes(value),value);
  const backup=path.join(directory,'backup');await copyWorkspace(await copyPlan(f.workspace.root,backup,{vault:f.vault}),{vault:f.vault});const restored=new Workspace(backup,f.vault);assert.deepEqual((await restored.read()).book.entries.find(r=>r.id===saved.id).template,saved.template);assert.deepEqual((await new RecordHistory(restored,{}).read({...command,...original})).record.template,first.template);
 });

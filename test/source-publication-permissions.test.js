@@ -11,7 +11,6 @@ import {RecordWriting} from '../src/record-writing.js';
 import {defaultEditionRecord,selectEditionRecord} from '../src/web/publication-selection.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 import {recordRevision} from '../src/research.js';
-import {buildPublication} from '../src/publication.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
 import {MediaStore} from '../src/media.js';
@@ -52,8 +51,6 @@ test('section permission saves with its source revision and bounds the website c
  const saved=await f.workspace.read(),record=saved.book.entries.find(r=>r.id===f.record.id),output=(await websiteRecordCopy(f.workspace,record)).text;
  assert.ok(!output.includes('WITHHELD_SECTION_TITLE'));
  assert.ok(!output.includes(target.sectionId));assert.ok(output.includes('Public steps for the method.'));
- const direct=[...buildPublication(saved.book).files.values()].filter(value=>typeof value==='string').join('\n');
- assert.ok(!direct.includes('WITHHELD_SECTION_TITLE'));assert.ok(!direct.includes(target.sectionId));
  const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable copy'),{vault:f.vault}),{vault:f.vault});
  const restored=new Workspace(destination,f.vault),copied=await new RecordWriting(restored).read(target);
  assert.deepEqual(copied.value,{...before.value,share:false});

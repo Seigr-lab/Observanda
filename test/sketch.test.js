@@ -15,7 +15,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {RecordHistory} from '../src/record-history.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {buildPublication,verifyPublication} from '../src/publication.js';
+import {recordCopies} from './fixtures/record-copies.js';
 import {starterRecord,validStarter} from '../src/web/record-starter-model.js';
 function sketch(){return {...newSketch(randomUUID()),title:'Apparatus drawing',description:'Follow the input to the sensor. This drawing is not to scale.',items:[{id:randomUUID(),kind:'stroke',colour:'#123456',weight:2,points:[[20,30],[40.125,60],[80,70]]},...['line','arrow','rectangle','ellipse'].map(kind=>({id:randomUUID(),kind,colour:'#202a3a',weight:3,fill:'none',x:100,y:100,x2:300,y2:180})),{id:randomUUID(),kind:'text',colour:'#202a3a',x:320,y:100,size:24,text:'Sensor <A> & B'}]};}
 const doc=a=>({type:'doc',content:[{type:'book_sketch',attrs:a}]});
@@ -33,5 +33,5 @@ test('saved sketches retain prior geometry, restore encrypted, and render only i
  const history=new RecordHistory(storage.workspace,{}),query={workspaceId:f.book.id,recordId:before.id},listing=await history.list(query),old=listing.versions.find(v=>v.revision===recordRevision(before));assert.ok(old);assert.deepEqual((await history.read({...query,...old})).record.body,doc(a));
  await assert.rejects(service.save({workspaceId:f.book.id,changes:[{id:before.id,expectedRevision:recordRevision(before),record:edited}]}),{code:'RECORD_CHANGED'});
  const backup=await copyWorkspace(await copyPlan(storage.workspace.root,path.join(dir,'backup'),{vault:storage.vault}),{vault:storage.vault}),restored=await new Workspace(backup,storage.vault).read();assert.deepEqual(restored.book.entries.find(r=>r.id===before.id).body,edited.body);
- const publication=buildPublication(restored.book);verifyPublication(publication);const html=publication.files.get('entries/'+before.id+'.html');assert.match(html,/Changed sensor annotation/);assert.match(html,new RegExp('record-block-'+a.id));assert.match(html,/<svg/);assert.match(html,/Follow the input/);for(const value of publication.files.values())if(typeof value==='string')assert.ok(!value.includes('Private sketch marker'));
+ const copies=await recordCopies(restored.book),html=copies.get(before.id).html;assert.match(html,/Changed sensor annotation/);assert.match(html,new RegExp('record-block-'+a.id));assert.match(html,/<svg/);assert.match(html,/Follow the input/);for(const copy of copies.values())assert.ok(!(copy.html+copy.css).includes('Private sketch marker'));
 });

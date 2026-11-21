@@ -5,7 +5,7 @@ import {createFigure} from '../src/web/figure-model.js';
 import {createComposition} from '../src/web/figure-composition.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateDetachedRecords} from '../src/model.js';
-import {buildPublication} from '../src/publication.js';
+import {recordPage} from './fixtures/record-page.js';
 import {figureResultView} from '../src/web/result-statements.js';
 import analyses from '../src/web/locales/en/analyses.json' with {type:'json'};
 
@@ -21,7 +21,7 @@ test('a public figure without a supporting result carries no authoring note, whi
  record.figures=[lone];record.sections=[];
  record.body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Weights below.'}]},{type:'book_figure',attrs:{version:1,id:randomUUID(),figureId:lone.id,alternative:'Weight curve.'}}]};
  validateDetachedRecords([record]);
- const html=[...buildPublication(book).files.values()].map(String).join('\n');
+ const page=recordPage(book,record),html=[page.html,...page.files.values()].map(String).join('\n');
  assert.match(html,/Swarm weight/);
  assert.ok(!html.includes(analyses.figureUnlinked),'authoring note published');
 });

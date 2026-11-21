@@ -19,7 +19,7 @@ import {createFigure} from '../src/web/figure-model.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {attemptFixture} from './fixtures/attempts.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {randomUUID} from 'node:crypto';
 const column=(name,representation='text',extra={})=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},...extra});
 async function fixture(t){
@@ -73,7 +73,7 @@ test('retained exception follows exact cells, native bytes, decoder and calibrat
   const retained=await f.workspace.catalogue(async store=>{const member=await store.member(await store.snapshot(),record.id);return store.record(member.id,member.revision);});
   const assessment=retained.attempt.assessments[1],criterion=retained.attempt.preparations[0].criteria.find(c=>c.id===assessment.criterionId);assert.equal(criterion.label,'Recognition');
   const linked=await m.read(assessment.references[0]),contributor=await m.measurements.inspect(linked.content.measurement.sources[0]),located=await m.measurements.inspect(contributor.native);assert.deepEqual(Buffer.from(located.base64,'base64'),bytes.subarray(68,72));
-  const publication=buildPublication({...f.book,entries:[{...record,share:true}]});for(const [name,value] of publication.files)if(/\.(html|json|xml|txt|csv)$/.test(name))assert.ok(!String(value).includes('PRIVATE_NATIVE_DIAGNOSTIC'),name);
+  assert.ok(!copiesText(await recordCopies({...f.book,entries:[{...record,share:true}]},f.workspace)).includes('PRIVATE_NATIVE_DIAGNOSTIC'));
   const revised=await m.measurements.save({recordId:f.recordId,title:'Exception at r2',id:result.id,expectedRevision:result.revision,measurement:{...measurement,note:'Reviewed without changing source.'}});
   assert.equal((await m.read(revised)).previous,result.revision);assert.equal((await m.read(result)).content.measurement.note,measurement.note);
   const invalid=structuredClone(measurement);invalid.quantity.conversion=null;await assert.rejects(m.measurements.save({recordId:f.recordId,title:'No implicit voltage',measurement:invalid}),{code:'MEASUREMENT_INVALID'});

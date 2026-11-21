@@ -9,7 +9,7 @@ import {validateNotebook} from '../src/model.js';
 import {saveStructure} from '../src/structure.js';
 import {starterTemplate,copyConfiguration,projectTypeChoices,projectTypeChoice,recommendedProfile,templateChoices,newLabBookConfiguration,retainedTemplateAvailable} from '../src/web/project-templates.js';
 import {templateFrom} from '../src/web/notebook-schema.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
@@ -43,8 +43,7 @@ test('project templates copy into independent lab books without rewriting existi
 
 test('project-only templates stay private even when the project and its records are public',async()=>{
  const book=sampleNotebook();book.projects[0].labBookTemplate=starterTemplate('computer-it');book.projects[0].labBookTemplate.name='PRIVATE TEMPLATE SENTINEL';book.projects[0].labBookTemplate.configuration.sections[0].description='C:/Users/synthetic/private/build';
- validateNotebook(book);const projection=publicProjection(book);assert.ok(!JSON.stringify(projection).includes('PRIVATE TEMPLATE'));assert.ok(!JSON.stringify(projection).includes('C:/Users'));
- const {files}=buildPublication(book);for(const value of files.values())assert.ok(!Buffer.from(value).includes(Buffer.from('PRIVATE TEMPLATE')));
+ validateNotebook(book);const copies=copiesText(await recordCopies(book));assert.ok(!copies.includes('PRIVATE TEMPLATE'));assert.ok(!copies.includes('C:/Users'));
 });
 
 test('encrypted project templates survive restart, conflict rejection and portable backup',async t=>{

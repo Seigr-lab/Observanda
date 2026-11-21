@@ -1,4 +1,3 @@
-import {renderingSample} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,writeFile,rm} from 'node:fs/promises';
@@ -10,7 +9,9 @@ import {MediaStore} from '../src/media.js';
 import {Workspace,digest} from '../src/storage.js';
 import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {createNotebook} from '../src/model.js';
-import {buildPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
+import {sampleNotebook} from '../src/sample.js';
+import {contentBuffer} from '../src/file-content.js';
 const svg=body=>Buffer.from(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">${body}</svg>`);
 async function fixture(t,vault=null){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-svg-'));t.after(async()=>{vault?.key?.fill(0);await rm(root,{recursive:true,force:true});});if(vault)await new Workspace(root,vault).create(createNotebook('Media study'));return {root,store:new MediaStore(root,vault)};}
 
@@ -25,10 +26,10 @@ test('SVG originals remain exact and encrypted; only a static prepared image rea
  assert.equal(metadata.originalSha256,digest(original));assert.equal(metadata.originalBytes,original.length);
  const prepared=await store.get(asset.id);assert.equal(prepared.mime,'image/png');
  assert.equal(prepared.bytes.readUInt32BE(16),120);assert.equal(prepared.bytes.readUInt32BE(20),80);
- const book=renderingSample();book.entries[0].share=true;book.entries[0].attachments.push({...asset,caption:'Studio mark',alt:'Studio mark',transcript:'',share:true});
- const candidate=buildPublication(book,{mediaFiles:await store.publicFiles(book)});
- assert.ok([...candidate.files.keys()].some(name=>name.endsWith(asset.id+'.png')));
- for(const content of candidate.files.values())assert.ok(!Buffer.from(content).includes(Buffer.from('PRIVATE')));
+ const book=sampleNotebook();book.entries[0].share=true;book.entries[0].attachments.push({...asset,caption:'Studio mark',alt:'Studio mark',transcript:'',share:true});
+ const copy=await convertPublicationRecord(ws,book,book.entries[0]),assets=await Promise.all(copy.assets.map(async value=>({...value,bytes:value.bytes?Buffer.from(value.bytes):await contentBuffer(value.content)})));
+ const png=assets.find(value=>value.contentType==='image/png'&&value.bytes.equals(prepared.bytes));assert.ok(png);assert.ok(copy.html.includes(png.path));
+ for(const value of [copy.html,copy.css,...assets.map(a=>a.bytes)])assert.ok(!Buffer.from(value).includes(Buffer.from('PRIVATE')));
  assert.ok(!prepared.bytes.includes(Buffer.from('<svg')));
 });
 

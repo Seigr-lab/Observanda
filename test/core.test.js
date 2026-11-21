@@ -1,15 +1,14 @@
-import {renderingSample} from './fixtures/rendering-book.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, lstat, symlink, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createNotebook, validateNotebook, MAX_BYTES } from '../src/model.js';
-import { Workspace, serialize, digest } from '../src/storage.js';
+import { Workspace, serialize } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
 import { hasPrivateText } from '../src/privacy.js';
-import { buildPublication, publicationZip, verifyPublication, writePublication, renderChart } from '../src/publication.js';
+import { convertPublicationRecord } from '../src/publication-conversion-render.js';
 import { safeError } from '../src/errors.js';
 
 const temp = () => mkdtemp(path.join(os.tmpdir(), 'observanda-test-'));
@@ -20,7 +19,6 @@ test('new lab books contain no automatic public entries or machine metadata', ()
   assert.deepEqual(book.projects,[]);assert.deepEqual(book.notebooks,[]);
   assert.equal(book.entries.length, 0);
   assert.equal(book.formatVersion, 22);
-  assert.equal(buildPublication(book).entries.length, 0);
   assert.ok(!JSON.stringify(book).includes(os.homedir()));
 });
 
@@ -88,20 +86,17 @@ test('a held writer lock and symlinked internal directory fail closed', async ()
   assert.deepEqual(await readdir(outside), []);
 });
 
-test('private records and unused collections never reach the public projection', () => {
+test('private records and unused collections never reach a website copy', async () => {
   const book = sampleNotebook(), privateEntry = book.entries[2];
   privateEntry.body = String.raw`PRIVATE_SENTINEL_938 C:\Users\ImaginaryResearcher\private.txt`;
   const privateProject = { id: randomUUID(), title: 'PRIVATE_PROJECT_938', description: 'Hidden', share: false, logoId: null };
   book.projects.push(privateProject);
-  const candidate = buildPublication(book), joined = [...candidate.files.values()].join('\n');
-  assert.equal(candidate.entries.length, 2);
+  const copies = [];for (const entry of book.entries) copies.push(await convertPublicationRecord({}, book, entry));
+  assert.deepEqual(copies.map(copy => copy.visible), book.entries.map(entry => entry !== privateEntry));
+  const joined = copies.map(copy => copy.html + copy.css).join('\n');
   assert.ok(!joined.includes('PRIVATE_SENTINEL_938'));
   assert.ok(!joined.includes('PRIVATE_PROJECT_938'));
   assert.ok(!joined.includes(privateEntry.id));
-  // The explicit public product credit is independent of workspace metadata.
-  const repository='https://github.com/Seigr-lab/Observanda';
-  assert.ok(joined.includes('href="'+repository+'"'));
-  assert.ok(!joined.replaceAll(repository,'').includes('Seigr'));
 });
 
 for (const [kind, value] of [
@@ -113,10 +108,10 @@ for (const [kind, value] of [
   ['JSON escape', String.raw`D\u003a\u005cUsers\u005cImaginaryResearcher`],
   ['base64', Buffer.from('/home/imaginary-researcher/private.txt').toString('base64')],
   ['token', 'ghp_' + 'a'.repeat(36)], ['credential URL', 'https://someone:secret@example.invalid/repo']
-]) test(`selected ${kind} information blocks publication without echoing the value`, () => {
+]) test(`selected ${kind} information blocks a website copy without echoing the value`, async () => {
   assert.ok(hasPrivateText(value));
   const book = sampleNotebook(); book.entries[0].body = value;
-  assert.throws(() => buildPublication(book), error => {
+  await assert.rejects(convertPublicationRecord({}, book, book.entries[0]), error => {
     assert.equal(error.code, 'PRIVACY');
     assert.equal(error.details[0].recordId, book.entries[0].id);
     assert.ok(!JSON.stringify(safeError(error)).includes(value));
@@ -124,57 +119,16 @@ for (const [kind, value] of [
   });
 });
 
-test('private figure labels and metadata fields block export too', () => {
+test('private figure labels block a website copy too', async () => {
   const book = sampleNotebook(); book.entries[0].figures[0].series[0].points[1].x = '/home/fictitious/raw';
-  assert.throws(() => buildPublication(book), code('PRIVACY'));
-  book.entries[0].figures = []; book.description = 'machine-id-fixture';
-  assert.throws(() => buildPublication(book, { blockedValues: ['machine-id-fixture'] }), code('PRIVACY'));
+  await assert.rejects(convertPublicationRecord({}, book, book.entries[0]), code('PRIVACY'));
 });
 
-test('legitimate URLs, safe relative references, and markup-as-text remain readable', () => {
-  const book = renderingSample();
+test('legitimate URLs, safe relative references, and markup-as-text remain readable', async () => {
+  const book = sampleNotebook();
   book.entries[0].body = 'https://example.org/articles/1 /lab/notes ./figures/plot.svg <script>alert(1)</script>';
-  const html = buildPublication(book).files.get('index.html');
+  const {html} = await convertPublicationRecord({}, book, book.entries[0]);
+  assert.ok(html.includes('https://example.org/articles/1 /lab/notes ./figures/plot.svg'));
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
   assert.ok(!html.includes('<script>'));
-});
-
-test('output and ZIP bytes are independent of build location and deterministic', () => {
-  const book = sampleNotebook();
-  const a = buildPublication(book, { blockedValues: ['/home/fixture-a/book'] });
-  const b = buildPublication(book, { blockedValues: [String.raw`Q:\fixture-b\book`] });
-  assert.deepEqual([...a.files], [...b.files]);
-  assert.deepEqual(publicationZip(a), publicationZip(b));
-  const zip = publicationZip(a);
-  assert.equal(zip.readUInt32LE(0), 0x04034b50);
-  assert.equal(zip.readUInt32LE(zip.length - 22), 0x06054b50);
-  assert.equal(zip.readUInt16LE(zip.length - 12), a.files.size);
-});
-
-test('manifest covers all payload bytes; mutation after preview blocks download', () => {
-  const candidate = buildPublication(sampleNotebook());
-  const manifest = JSON.parse(candidate.files.get('publication.json'));
-  for (const file of manifest.files) assert.equal(file.sha256, digest(candidate.files.get(file.path)));
-  candidate.files.set('index.html', candidate.files.get('index.html') + '\nchanged');
-  assert.throws(() => verifyPublication(candidate), code('STALE'));
-  assert.throws(() => publicationZip(candidate), code('STALE'));
-});
-
-test('directory export is complete and refuses to replace an existing destination', async () => {
-  const root = await temp(), destination = path.join(root, 'site');
-  const candidate = buildPublication(renderingSample());
-  await writePublication(candidate, destination);
-  for (const [name, bytes] of candidate.files) assert.equal(digest(await readFile(path.join(destination, name))), digest(bytes), name);
-  await assert.rejects(writePublication(candidate, destination), code('EXISTS'));
-  assert.ok((await lstat(path.join(destination, 'index.html'))).isFile());
-  assert.ok(!(await readdir(root)).some(name => name.startsWith('.observanda-build-')));
-});
-
-test('chart geometry remains finite for constant, negative, and zero observations', () => {
-  for (const kind of ['bar', 'line']) for (const values of [[0, 0], [-5, -5], [-3, 4], [1e12, -1e12]]) {
-    const chart = { title: 'Illustration', kind, xLabel: 'Sample', yLabel: 'Value', points: values.map((value, i) => ({ label: String(i), value })) };
-    const svg = renderChart(chart);
-    assert.ok(!/NaN|Infinity/.test(svg));
-    assert.ok(svg.includes('role="img"'));
-  }
 });

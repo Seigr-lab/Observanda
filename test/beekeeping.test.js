@@ -17,7 +17,7 @@ import {recordBrowse} from '../src/web/record-query.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {RecordValues} from '../src/record-values.js';
 import {relationValue} from '../src/web/record-relation-value.js';
 
@@ -61,10 +61,10 @@ test('linked history stays paged, private and revision-anchored across saves and
  clearVault(f.vault);await assert.rejects(queries.list(command),{code:'ACCESS_LOCKED'});
 });
 
-test('a published hive never discloses its private linked inspections or query metadata',()=>{
+test('a published hive never discloses its private linked inspections or query metadata',async()=>{
  const {book,hive,inspection}=beekeepingFixture();hive.share=true;
- const projected=publicProjection(book);assert.ok(!projected.entries.some(e=>e.id===inspection.id));
- for(const file of buildPublication(book).files.values()){const text=Buffer.from(file).toString();assert.ok(!text.includes('PRIVATE HEALTH NOTES'));assert.ok(!text.includes(inspection.id));assert.ok(!text.includes('referenceTargets'));}
+ const copies=await recordCopies(book);assert.equal(copies.get(inspection.id).visible,false);assert.equal(copies.get(hive.id).visible,true);
+ const text=copiesText(copies);assert.ok(!text.includes('PRIVATE HEALTH NOTES'));assert.ok(!text.includes(inspection.id));assert.ok(!text.includes('referenceTargets'));
 });
 
 // The record editor links a saved inspection to its hive or colony as one new research link of the

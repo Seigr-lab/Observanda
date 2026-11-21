@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 // Nothing but the website build is imported: no interface module has
 // prepared the lab book profile catalogue in this process.
-import {buildPublication} from '../src/publication.js';
+import {recordPage} from './fixtures/record-page.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateDetachedRecords} from '../src/model.js';
 import {localizedRecordPage} from '../src/website-record-language.js';
@@ -18,7 +18,7 @@ test('a website page with a lab book profile label builds with nothing loaded an
  const book=upgradeNotebook(sampleNotebook()),record=book.entries.find(e=>e.share);
  record.template={id:randomUUID(),profileId:null,label:'Batch inspection',description:'',fields:[{key:'batch',label,type:'text',unit:'',required:false,choices:[]}],values:{batch:'Lot 7'}};
  validateDetachedRecords([record]);
- const html=buildPublication(book).files.get('entries/'+record.id+'.html');
+ const html=recordPage(book,record).html;
  // The build itself makes the profile catalogue available; it never throws.
  assert.ok(loadedMessages('labBookProfiles'));
  assert.match(html,new RegExp('<h2 data-observanda-term="profile">'+label+'</h2>'));

@@ -19,7 +19,7 @@ import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {applyRecordPatch} from '../src/web/record-patch.js';
 import {startingAppearance} from '../src/web/themes.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {publicProjection} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {validateWorkspaceOutline} from '../src/web/workspace-reader.js';
 
 async function fixture(t,count=8){
@@ -81,7 +81,7 @@ test('mixed publication selections and deletion commit together and restore with
  assert.deepEqual(result.recordPatch.removed,[removed.id]);assert.equal(result.recordPatch.records.length,2);
  const saved=await f.ws.read();assert.deepEqual(patch(f.base,result).book,saved.book);assert.deepEqual(saved.book.entries.slice(2),f.base.book.entries.slice(2,-1));
  assert.deepEqual(await f.ws.catalogue(s=>s.read(f.base.etag)),f.base);
- const publication=JSON.stringify(publicProjection(saved.book));assert.ok(publication.includes(saved.book.entries[0].title));assert.ok(!publication.includes('A revised interpretation'));assert.ok(!publication.includes(removed.id));
+ const publication=copiesText(await recordCopies(saved.book,f.ws));assert.ok(publication.includes(saved.book.entries[0].title));assert.ok(!publication.includes('A revised interpretation'));assert.ok(!publication.includes(removed.id));
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(saved.book)));
  const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','synthetic authoring restore secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));

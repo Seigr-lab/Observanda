@@ -9,8 +9,6 @@ import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
-import {buildPublication,verifyPublication} from '../../src/publication.js';
-import {contentBuffer} from '../../src/file-content.js';
 import {MediaStore} from '../../src/media.js';
 
 test('author book blocks and follow a saved reading journey through exact methods and linked results',async({page},testInfo)=>{
@@ -58,17 +56,3 @@ test('author book blocks and follow a saved reading journey through exact method
  }finally{await app.close();await clearVault(storage.vault);await rm(directory,{recursive:true,force:true,maxRetries:4,retryDelay:100});}
 });
 
-test('public book index works under nested hosting with combined filters, return state, anchors, print and no JavaScript',async({browser},testInfo)=>{
- const f=journeyBook(),{book,concept,experiment,table}=f;table.attrs.rows=Array.from({length:100},(_,i)=>[String(i).padStart(4,'0'),'9007199254740993']);const output=buildPublication(book);verifyPublication(output);
- for(const [key,value] of output.files)if(typeof value==='string'){expect(value).not.toContain(f.privateRecord.id);expect(value).not.toContain(f.privateRecord.title);}
- async function context(javaScriptEnabled){const ctx=await browser.newContext({javaScriptEnabled});await ctx.route('https://edition.invalid/nested/site/**',async route=>{const key=new URL(route.request().url()).pathname.slice('/nested/site/'.length),value=output.files.get(key);await route.fulfill({status:value===undefined?404:200,contentType:key.endsWith('.html')?'text/html':key.endsWith('.css')?'text/css':key.endsWith('.js')?'text/javascript':'application/octet-stream',body:value===undefined?'Missing':typeof value==='string'?value:await contentBuffer(value)});});return ctx;}
- const ctx=await context(true),page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- try{
-  await page.goto('https://edition.invalid/nested/site/browse.html');await page.getByLabel('Search public records').fill('Named experiment');await page.getByLabel('Tag',{exact:true}).fill('bench');await page.getByLabel('Reading journey').selectOption('experiments');await page.getByLabel('From date').fill('2026-10-01');await expect(page.locator('[data-public-record]:visible')).toHaveCount(3);expect(new URL(page.url()).searchParams.get('journey')).toBe('experiments');
-  await page.getByRole('link',{name:experiment.title,exact:true}).click();await expect(page.locator('[data-book-next]')).toContainText(f.run1.title);await page.locator('[data-book-next]').click();await expect(page.locator('h1')).toContainText(f.run1.title);await page.locator('[data-book-back]').click();await expect(page.getByLabel('Tag',{exact:true})).toHaveValue('bench');await expect(page.locator('[data-public-record]:visible')).toHaveCount(3);await page.reload();await expect(page.locator('[data-public-record]:visible')).toHaveCount(3);
-  await page.getByRole('button',{name:'Clear filters'}).click();await expect(page.locator('[data-public-record]:visible')).toHaveCount(6);expect(new URL(page.url()).search).toBe('');await page.getByRole('link',{name:experiment.title,exact:true}).click();await page.locator('.record-related').getByRole('link',{name:concept.title,exact:true}).last().click();expect(page.url()).toContain('#record-table-'+table.attrs.id);await expect(page.locator('#record-table-'+table.attrs.id)).toBeVisible();
-  await page.evaluate(()=>document.documentElement.style.zoom='2');expect(await page.evaluate(()=>document.documentElement.getBoundingClientRect().width<=innerWidth+1)).toBe(true);await page.getByText('Read table row by row',{exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('.book-table-linear')).toHaveAttribute('open','');await page.evaluate(()=>document.documentElement.style.zoom='');
-  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.styleSheets[0].insertRule('html{font-size:200%}',0));expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.locator('.book-table').scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('public-book-phone.png')});await page.emulateMedia({media:'print'});await expect(page.locator('.book-table-scroll')).toBeHidden();await expect(page.locator('.book-table-linear ol')).toBeVisible();expect(errors).toEqual([]);
- }finally{await ctx.close();}
- const nojs=await context(false),staticPage=await nojs.newPage();try{await staticPage.goto('https://edition.invalid/nested/site/browse.html');await expect(staticPage.locator('[data-public-record]')).toHaveCount(6);await expect(staticPage.locator('[data-book-browse]')).toBeHidden();await staticPage.getByRole('link',{name:concept.title,exact:true}).click();await expect(staticPage.locator('math')).toHaveCount(1);await expect(staticPage.locator('code').filter({hasText:'EMIT'})).toHaveText('  EMIT 105\n\tFORM 0005  \n');await staticPage.locator('[data-book-back]').click();await expect(staticPage.locator('[data-public-record]')).toHaveCount(6);}finally{await nojs.close();}
-});

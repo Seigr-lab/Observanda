@@ -15,7 +15,7 @@ import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {contentBuffer} from '../src/file-content.js';
 import {AppError} from '../src/errors.js';
-import {buildPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><!-- private original note --><circle cx="16" cy="16" r="12" fill="teal"/></svg>');
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-jobs-')),root=path.join(directory,'workspace'),access=await createAccess('','media test password'),vault=takeCreatedVault(access);
@@ -30,14 +30,14 @@ async function uploaded(f,bytes=svg){
 }
 async function finished(queue,id){for(let n=0;n<400;n++){const j=await queue.read(id);if(['failed','completed','cancelled'].includes(j.state))return j;await delay(25);}assert.fail('Media job did not finish');}
 
-test('conversion publishes a prepared copy atomically while originals and private names stay out of publication',async t=>{
+test('conversion prepares a copy atomically while originals and private names stay out of website copies',async t=>{
  const f=await fixture(t),u=await uploaded(f);f.worker.start();const done=await finished(f.queue,u.s.id);await f.worker.stop();assert.equal(done.state,'completed');
  const original=await f.imports.original(u.s.id);assert.deepEqual(await contentBuffer(original.content),svg);
  const encrypted=await readFile(original.content.file);assert.ok(!encrypted.includes(svg));
  const media=new MediaStore(f.root,f.vault),copy=await media.get(u.s.id);assert.equal(copy.mime,'image/png');assert.notDeepEqual(copy.bytes,svg);
  const book=(await f.workspace.read()).book;book.entries[0].attachments=[{id:u.s.id,kind:'image',caption:'Public study',alt:'Teal circle',share:true,transcript:''}];
- const candidate=buildPublication(book,{mediaFiles:await media.publicFiles(book)});
- const all=Buffer.concat([...candidate.files.values()].map(v=>Buffer.from(v)));assert.ok(!all.includes('private-study.svg'));assert.ok(!all.includes('private original note'));assert.ok(!all.includes(f.root));
+ const record=await convertPublicationRecord(f.workspace,book,book.entries[0]);assert.ok(record.assets.some(asset=>asset.contentType==='image/png'));
+ const all=Buffer.concat([Buffer.from(record.html),Buffer.from(record.css),...await Promise.all(record.assets.map(async asset=>asset.bytes?Buffer.from(asset.bytes):await contentBuffer(asset.content)))]);assert.ok(!all.includes('private-study.svg'));assert.ok(!all.includes('private original note'));assert.ok(!all.includes(f.root));
  assert.deepEqual((await f.queue.enqueue(u.intent)).result,done.result);assert.equal((await f.imports.list()).length,1);
 });
 

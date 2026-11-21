@@ -111,7 +111,7 @@ export async function verifyRetainedTableEntry(input,identifier,value,{signal}={
   if(!validRetainedTableChunk(prefix+'summary',summary)||value.ordinal>=summary.count)fail();
  }
 }
-export async function* publicationTableChunks(input,recordId,statement,{signal}={}){
+async function* publicationTableChunks(input,recordId,statement,{signal}={}){
  if(!input.native||!input.document.collectionNames().includes('retainedTables'))fail();
  const prefix=key(recordId,statement.id),summary=await input.document.get('retainedTables',prefix+'summary',{signal});
  if(!validRetainedTableChunk(prefix+'summary',summary)||summary.queryHash!==retainedTableQueryHash(statement))fail();

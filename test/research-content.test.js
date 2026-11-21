@@ -6,7 +6,7 @@ import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {validateNotebook} from '../src/model.js';
-import {publicProjection,buildPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {plainRichText} from '../src/web/rich-text-model.js';
 import {researchReference} from '../src/web/research-reference.js';
 import {proseReferences} from '../src/web/prose-model.js';
@@ -15,15 +15,16 @@ import {renderFigure} from '../src/web/figure-renderer.js';
 import {validateTask} from '../src/modules/planning.js';
 import {reconcileRecords} from '../src/web/record-merge.js';
 const link=(text,target)=>({type:'text',text,marks:[{type:'strong'},{type:'link',attrs:{href:researchReference(target),target:'_self',title:'',nofollow:false}}]});
-test('rich research links publish only selected destinations, with private labels and identifiers removed',()=>{
+test('rich research links in a website copy carry no labels or identifiers of other records',async()=>{
  const book=sampleNotebook(),record=book.entries[0],shared=book.entries[1],secret=book.entries[2];shared.share=true;secret.share=false;
  const target=id=>({workspaceId:book.id,kind:'record',id});
  record.body={type:'doc',content:[{type:'paragraph',content:[link('Shared experiment',target(shared.id)),link('Secret title',target(secret.id)),link('Other workspace title',{workspaceId:randomUUID(),kind:'record',id:randomUUID()})]}]};
  record.sections=[{id:randomUUID(),title:'Interpretation',body:plainRichText('Further context')}];validateNotebook(book);
  assert.equal(proseReferences(record.body).length,3);
- const projection=JSON.stringify(publicProjection(book));assert.ok(!projection.includes(secret.id));assert.ok(!projection.includes('Secret title'));assert.ok(!projection.includes('observanda://'));
- const publication=buildPublication(book),html=publication.files.get('entries/'+record.id+'.html');
- assert.match(html,/<strong>Shared experiment<\/strong>/);assert.ok(html.includes('../entries/'+shared.id+'.html'));assert.ok(!html.includes('Other workspace title'));
+ // The website copy holds this record only: links to other records never carry their identities or titles.
+ const {html,css}=await convertPublicationRecord({},book,record),copy=html+css;
+ for(const value of [secret.id,'Secret title','observanda://','Other workspace title',shared.id])assert.ok(!copy.includes(value),value);
+ assert.ok(html.includes('Further context'));
  assert.equal(record.body.content[0].content[1].text,'Secret title');
 });
 test('numeric spacing, gaps, uncertainty and CSV round trips use the same figure contract',()=>{

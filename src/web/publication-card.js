@@ -1,5 +1,5 @@
 import {proseText} from './prose-model.js';
-export function publicationExcerpt(value){
+function publicationExcerpt(value){
  const text=proseText(value).replace(/\s+/g,' ').trim();
  if(text.length<=240)return text;
  const cut=text.slice(0,237),space=cut.lastIndexOf(' ');

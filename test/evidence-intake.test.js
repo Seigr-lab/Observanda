@@ -16,7 +16,7 @@ import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {contentBuffer} from '../src/file-content.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
-import {buildPublication,verifyPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {associateOriginal} from '../src/evidence-associations.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-intake-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),jobs=workspaceJobs(f.workspace),book=(await f.workspace.read()).book;
@@ -55,8 +55,8 @@ test('folder intake preserves distinct source paths through byte reuse, replay, 
  const shared=await associateOriginal(f.m,{recordId:f.otherId,ref:refs[1]});assert.equal((await f.m.read(shared)).content.sourcePath,files[1].sourcePath);
  const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'folder-copy'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));
  await restored.verify();assert.equal((await restored.read(shared)).content.sourcePurpose,'current-return');
- const book=(await f.workspace.read()).book;book.entries.forEach(r=>{r.attachments=[];r.share=true;});const release=buildPublication(book);verifyPublication(release);
- for(const file of files)assert.ok(!JSON.stringify([...release.files]).includes(file.sourcePath));
+ const book=(await f.workspace.read()).book;book.entries.forEach(r=>{r.attachments=[];r.share=true;});const copies=copiesText(await recordCopies(book,f.workspace));
+ for(const file of files)assert.ok(!copies.includes(file.sourcePath));
  const next=await f.m.intakes.start({recordId:f.recordId,title:'Historical inputs',count:2,bytes:2*bytes.length,sourceMode:'folder',purpose:'historical-input'});
  for(const sourcePath of ['/analysis.json','../analysis.json','C:/analysis.json','tree//analysis.json','tree/../analysis.json','tree/other.json']){
   await assert.rejects(f.m.intakes.append({id:next.id,offset:0,items:[{...file,sourcePath}]}),{code:'MATERIAL_INVALID'});
@@ -93,8 +93,7 @@ test('64 MiB originals, distinct identical acquisitions, empty files and same-re
  const disk=await readFile(path.join(await f.m.directory('originals/'+a.doc.id),a.doc.content.storageId+'.original'));assert.ok(!disk.subarray(0,1024).equals(bytes.subarray(0,1024)));
  assert.equal((await f.m.intakes.list(f.recordId)).items.length,0);
  const publicBook=(await f.workspace.read()).book;publicBook.entries.forEach(r=>{r.attachments=[];});publicBook.entries.find(r=>r.id===f.recordId).share=true;
- const release=buildPublication(publicBook,{blockedValues:['E:\\private\\']});verifyPublication(release);
- const output=JSON.stringify([...release.files]);for(const value of ['capture.bin','second-acquisition.bin','Private field acquisitions',command.provenance,a.content.sha256])assert.ok(!output.includes(value));
+ const output=copiesText(await recordCopies(publicBook,f.workspace));for(const value of ['capture.bin','second-acquisition.bin','Private field acquisitions',command.provenance,a.content.sha256])assert.ok(!output.includes(value));
  const next=await start(f,[files[0]]);await f.m.intakes.append({id:next.batch.id,offset:0,items:[files[0]]});
  assert.equal((await f.m.intakes.page({id:next.batch.id})).items[0].reused,true);await finish(f,next.batch.id);
  const other=await start(f,[files[0]],f.otherId);await f.m.intakes.append({id:other.batch.id,offset:0,items:[files[0]]});

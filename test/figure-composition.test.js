@@ -7,7 +7,7 @@ import {createComposition,cloneFigure,linkedPanelPlots} from '../src/web/figure-
 import {renderFigure,figureTable,plotDomains} from '../src/web/figure-renderer.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateDetachedRecords} from '../src/model.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies} from './fixtures/record-copies.js';
 import {copyFigureResults,figureHasResults,sameFigureCalculation} from '../src/web/figure-result-links.js';
 import {validateResultSources} from '../src/result-statements.js';
 import {figureResultView} from '../src/web/result-statements.js';
@@ -41,13 +41,13 @@ test('shared panel ranges are derived from retained copies, include uncertainty 
  }
  assert.match(figureCSV(f),/"A","Measurement"/);assert.match(figureCSV(f),/"B","Measurement"/);assert.match(figureCSV(f),/"Second acquisition","Time \(s\)","Response \(V\)"/);assert.match(figureTable(f),/Second acquisition/);
 });
-test('compound figures remain in narrative position and public exports include only selected record figures',()=>{
+test('compound figures remain in narrative position and website copies include only selected record figures',async()=>{
  const book=upgradeNotebook(sampleNotebook()),r=book.entries[0],f=createComposition([annotated(),plot('Second panel')]);f.title='Compound acquisition';r.figures=[f];
  r.sections=[];r.body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Before the compound figure.'}]},{type:'book_figure',attrs:{version:1,id:randomUUID(),figureId:f.id,alternative:'Compare both acquisitions.'}},{type:'paragraph',content:[{type:'text',text:'After the compound figure.'}]}]};r.share=true;book.projects.forEach(p=>p.share=true);
  const privateFigure=createComposition([plot('PRIVATE FIGURE MARKER'),plot()]);book.entries[1].figures=[privateFigure];book.entries[1].share=false;
- validateDetachedRecords([r,book.entries[1]]);const publication=buildPublication(book),values=[...publication.files.values()].map(String).join('\n');
+ validateDetachedRecords([r,book.entries[1]]);const copies=await recordCopies(book),values=[...copies.values()].map(copy=>copy.html+copy.assets.map(a=>String(a.bytes)).join('')).join('\n');
  assert.match(values,/Compound acquisition/);assert.match(values,/figure-panel/);assert.match(values,/Acquisition window/);assert.ok(!values.includes('PRIVATE FIGURE MARKER'));
- const page=[...publication.files].find(([name,body])=>name.endsWith('.html')&&String(body).includes('id="record-figure-'+f.id+'"'))?.[1];assert.ok(page);const html=String(page);assert.ok(html.indexOf('Before the compound figure.')<html.indexOf('id="record-figure-'+f.id+'"'));assert.ok(html.indexOf('id="record-figure-'+f.id+'"')<html.indexOf('After the compound figure.'));
+ const html=copies.get(r.id).html;assert.ok(html.includes('id="record-figure-'+f.id+'"'));assert.ok(html.indexOf('Before the compound figure.')<html.indexOf('id="record-figure-'+f.id+'"'));assert.ok(html.indexOf('id="record-figure-'+f.id+'"')<html.indexOf('After the compound figure.'));
 });
 test('panel snapshots copy supporting results and exact analysis references without changing the originals',async()=>{
  const original=annotated(),copy=cloneFigure(original),results={version:1,statements:[{id:randomUUID(),kind:'figure',figureId:original.id,title:'Returned capture comparison',text:'Result from the retained decoder.',limitations:'Only this apparatus state was tested.',basis:'retained',source:{kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)}}]},before=structuredClone(results);

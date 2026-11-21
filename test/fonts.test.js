@@ -9,7 +9,7 @@ import {fontCSS} from '../src/fonts.js';
 import {WorkspaceFonts,inspectUploadedFont} from '../src/workspace-fonts.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
-import {buildPublication,publicProjection,verifyPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {Workspace} from '../src/storage.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
@@ -39,21 +39,23 @@ test('bundled editions match original hashes and actual variable axes, weights a
  assert.deepEqual(Object.fromEntries(provenance.filter(p=>p.file.startsWith('scheherazade-new')).map(p=>[p.file,[p.sha256,p.source.split('/').at(-1)]])),{'scheherazade-new.ttf':['794bac8dc9e83d1d620bc471ea694f5f31d0965ce8006490a79dfc51a2d283b3','ScheherazadeNew-Regular.ttf'],'scheherazade-new-1.ttf':['060b801307ec55d996d635578fffba0d95169f63e1d0f6061402185eaf4fa6af','ScheherazadeNew-Medium.ttf'],'scheherazade-new-2.ttf':['155056d27ea5a34ab739170abeff8d45b44a494e39be329f0a4d1e6cbd173390','ScheherazadeNew-SemiBold.ttf'],'scheherazade-new-3.ttf':['91363517a63dbc7448b5814226d33d845b26b32a461cd159ea0b3f23c7effd2d','ScheherazadeNew-Bold.ttf'],'scheherazade-new-OFL.txt':['5b9fd21ce2377fc542debebd9edfe1c48f2d3525e78a2a8abdba4a0ec3280163','OFL.txt']});
  assert.equal(fontStack('url(https://remote.example/font)'),undefined);
 });
-test('custom variable fonts survive encrypted backup; only publicly used font bytes are exported',async t=>{
+test('custom variable fonts survive encrypted backup; only publicly used font bytes reach a website copy',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-fonts-')),root=path.join(directory,'workspace'),access=await createAccess('','Synthetic font test password'),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),fonts=new WorkspaceFonts(ws),original=await bytes();
  const added=await fonts.import(original);assert.equal(added.embed,false);assert.equal((await fonts.import(original)).id,added.id);assert.equal((await fonts.list()).length,1);assert.deepEqual((await fonts.get(added.id)).bytes,original);
- book.appearance.font=added.id;book.appearance.headingFont='dm-sans';book.appearance.fontAxes={wght:475,opsz:18};validateNotebook(book);
- assert.throws(()=>buildPublication(book,{fontFiles:new Map([[added.id,{...added,bytes:original}]])}),{code:'FONT_EMBED'});
- await fonts.update(added.id,{embed:true,hidden:false});const files=await fonts.files(publicProjection(book)),candidate=buildPublication(book,{fontFiles:files});verifyPublication(candidate);
- const name='fonts/'+added.faces[0].file;assert.deepEqual(candidate.files.get(name),original);assert.ok(candidate.files.get('styles.css').includes('--reading-weight:475'));assert.ok(candidate.files.get('styles.css').includes('"opsz" 18'));
+ // A shared record's writing set in the added font carries the font with its website copy.
+ const shared=book.entries.find(e=>e.share),specimen=text=>({type:'doc',content:[{type:'paragraph',content:[{type:'text',text,marks:[{type:'font_family',attrs:{font:added.id}}]}]}]});
+ shared.body=specimen('Public font specimen');validateNotebook(book);
+ await assert.rejects(convertPublicationRecord(ws,book,shared),{code:'FONT_EMBED'});
+ await fonts.update(added.id,{embed:true,hidden:false});const copy=await convertPublicationRecord(ws,book,shared);
+ const font=copy.assets.find(asset=>asset.contentType==='font/ttf'&&Buffer.from(asset.bytes).equals(original));assert.ok(font);assert.ok(copy.css.includes(font.path));
  // The workspace's appearance names the added font and its axes.
  const current=await ws.read();current.book.appearance={...current.book.appearance,font:added.id,headingFont:'dm-sans',fontAxes:{wght:475,opsz:18}};await ws.save(current.book,current.etag);
  const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'restored'),{vault}),{vault}),restored=new WorkspaceFonts(new Workspace(backup,vault));assert.deepEqual((await restored.get(added.id)).bytes,original);assert.deepEqual((await new Workspace(backup,vault).read()).book.appearance.fontAxes,{wght:475,opsz:18});
  await fonts.update(added.id,{embed:true,hidden:true});assert.deepEqual((await fonts.get(added.id)).bytes,original);
- book.appearance.font='atkinson';book.appearance.fontAxes={};book.entries.find(e=>!e.share).body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Private font specimen',marks:[{type:'font_family',attrs:{font:added.id}}]}]}]};
- const publicFonts=await fonts.files(publicProjection(book));assert.equal(publicFonts.size,0);assert.ok(!buildPublication(book,{fontFiles:publicFonts}).files.has(name));
- const modified=new Map(candidate.files);modified.set(name,Buffer.concat([original,Buffer.from('private addition')]));assert.throws(()=>verifyPublication({...candidate,files:modified}));
+ // A private record's font never reaches the copies of shared records.
+ shared.body='Plain public writing';book.entries.find(e=>!e.share).body=specimen('Private font specimen');
+ assert.ok(!(await convertPublicationRecord(ws,book,shared)).assets.some(asset=>Buffer.from(asset.bytes??[]).equals(original)));
 });
 test('invalid and cancelled uploads cannot create library entries; CSS identities cannot inject URLs',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-font-errors-'));t.after(()=>rm(directory,{recursive:true,force:true}));const ws=new Workspace(directory);await ws.create(sampleNotebook());const fonts=new WorkspaceFonts(ws);

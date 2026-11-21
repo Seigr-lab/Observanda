@@ -18,17 +18,11 @@ import {LabBookStorage} from '../../src/lab-book-storage.js';
 import { test, expect } from '@playwright/test';
 import { mediaFixtures } from '../media-fixtures.js';
 import {mediaToolsAvailable} from '../media-tools.js';
-import http from 'node:http';
-import {defaultEditionRecord} from '../../src/web/publication-selection.js';
-import {recordRevision} from '../../src/research.js';
-import {upgradeNotebook} from '../../src/model.js';
-import { buildPublication } from '../../src/publication.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {testServer as startServer} from '../device-fixture.js';
 import { Workspace } from '../../src/storage.js';
-import { startingAppearance } from '../../src/web/themes.js';
 import { sampleNotebook } from '../../src/sample.js';
 
 let app, root, parent, deviceStore, databaseOwner, detachDatabase, workspaceVault;
@@ -192,55 +186,6 @@ test('desktop and mobile layouts remain usable with real sample content', async 
   await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.getByLabel('Summary / context',{exact:true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.screenshot({ path:test.info().outputPath('notebook-mobile.png'), fullPage: true });
-});
-
-
-test('exported themes work as standalone sites at root and nested paths with JavaScript disabled', async ({ browser }) => {
-  const book=upgradeNotebook(sampleNotebook()),choice=defaultEditionRecord(book.entries[0],recordRevision(book.entries[0]));choice.figures.forEach(f=>f.data=true);const edition={version:1,records:[choice]};
-  let files = buildPublication(book,{edition}).files;
-  const standalone = http.createServer((req, res) => {
-    const pathname = new URL(req.url, 'http://localhost').pathname;
-    const name = pathname.replace(/^\/(?:lab\/field-notes\/)?/, '') || 'index.html';
-    const content = files.get(name);
-    if (content === undefined) { res.writeHead(404); res.end(); return; }
-    res.setHeader('Content-Type', name.endsWith('.css') ? 'text/css' : name.endsWith('.svg') ? 'image/svg+xml' : 'text/html');
-    res.end(content);
-  });
-  await new Promise(resolve => standalone.listen(0, '127.0.0.1', resolve));
-  const origin = `http://127.0.0.1:${standalone.address().port}`;
-  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1440, height: 1000 } });
-  try {
-    const page = await context.newPage(), requests = [], failures = [];
-    page.on('request', request => requests.push(request.url()));
-    page.on('requestfailed', request => failures.push(request.url()));
-    page.on('response', response => { if (response.status() >= 400) failures.push(response.url()); });
-    for (const theme of ['research', 'studio']) {
-      book.appearance = startingAppearance(theme); files = buildPublication(book,{edition}).files;
-      for (const base of ['/', '/lab/field-notes/']) {
-        await page.goto(origin + base);
-        await page.getByRole('link', { name: 'Watching a seed unfold', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'Watching a seed unfold' })).toBeVisible();
-        await expect(page.locator('body')).not.toContainText('Listening to the room');
-        expect(await page.locator('body').evaluate(el => getComputedStyle(el).margin)).toBe('0px');
-        expect(await page.locator('figure img').evaluate(el => el.complete && el.naturalWidth > 0)).toBeTruthy();
-        await page.getByText('View the data', { exact: true }).click();
-        await expect(page.getByRole('table')).toBeVisible();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      }
-      await page.screenshot({ path:test.info().outputPath(`${theme}-site.png`), fullPage: true });
-      await page.setViewportSize({ width: 390, height: 844 });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      await page.setViewportSize({ width: 1440, height: 1000 });
-      await page.emulateMedia({ media: 'print' });
-      await expect(page.getByRole('heading', { name: 'Watching a seed unfold' })).toBeVisible();
-      await page.emulateMedia({ media: 'screen' });
-    }
-    expect(failures).toEqual([]);
-    expect(requests.every(url => url.startsWith(origin + '/'))).toBeTruthy();
-  } finally {
-    await context.close();
-    await new Promise(resolve => { standalone.close(resolve); standalone.closeAllConnections(); });
-  }
 });
 
 

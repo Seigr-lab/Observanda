@@ -17,7 +17,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {retainedTable} from '../src/retained-tables.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 
@@ -51,7 +51,7 @@ test('explicit structured facts are reviewable, private by default, pinned and r
  assert.deepEqual(restoredRecord,record);assert.equal((await new ResearchMaterials(restored).read(protocol)).body,method.body);
  assert.equal((await new MigrationImport(restored).detail({...command,index:1})).mapping.research.path,'/facts');
  const published=structuredClone(saved.book);published.entries=published.entries.filter(r=>r.id===record.id).map(r=>({...r,share:true}));published.projects.forEach(p=>p.share=true);
- const output=[...buildPublication(published).files.values()].filter(v=>typeof v==='string').join('\n');assert.ok(output.includes('Acquisition alone does not establish recognition.'));assert.ok(!output.includes('PRIVATE_UNMAPPED_METADATA'));assert.ok(!output.includes(method.id));
+ const output=copiesText(await recordCopies(published,f.workspace));assert.ok(output.includes('Acquisition alone does not establish recognition.'));assert.ok(!output.includes('PRIVATE_UNMAPPED_METADATA'));assert.ok(!output.includes(method.id));
 });
 
 test('continuing imports merge independent additions and refuse silent replacement even with source conflict resolution',async t=>{

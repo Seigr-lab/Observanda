@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Laboratory } from '../src/laboratory.js';
 import { Workspace } from '../src/storage.js';
 import { createNotebook } from '../src/model.js';
-import { buildPublication } from '../src/publication.js';
+import { recordCopies, copiesText } from './fixtures/record-copies.js';
 
 import {sampleDecimal} from './sample-analysis-fixture.js';
 const result = () => ({ method: 'Optical method v1', analyte: 'Absorbance', kind: 'numeric', numericVersion: 2, value: sampleDecimal('0.3'), unit: 'AU', lower: sampleDecimal('0'), upper: sampleDecimal('1'), notes: 'Synthetic result\nSecond line' });
@@ -58,11 +58,11 @@ test('laboratory rejects duplicate identity, invalid units/intervals and incompl
   await assert.rejects(s.change({ action: 'review', id: s.id, reviewer: 'R', comment: '', decision: 'reject', checked: true }), { code: 'LAB_TRANSITION' });
 });
 
-test('reviewed result tampering is rejected and private laboratory data never enters static output', async () => {
+test('reviewed result tampering is rejected and private laboratory data never enters a website copy', async () => {
   const s = await setup(); await s.change({ action: 'submit', id: s.id });
   await s.change({ action: 'review', id: s.id, reviewer: 'R', comment: '', decision: 'approve', checked: true });
-  const files = buildPublication((await new Workspace(s.root).read()).book).files;
-  assert.ok(![...files.values()].join('').includes('PRIVATE_SUBJECT_SENTINEL'));
+  const workspace = new Workspace(s.root);
+  assert.ok(!copiesText(await recordCopies((await workspace.read()).book, workspace)).includes('PRIVATE_SUBJECT_SENTINEL'));
   const file = path.join(s.root, '.observanda', 'laboratory.json'), data = JSON.parse(await readFile(file));
   data.analyses[0].result.value = 77; await writeFile(file, JSON.stringify(data));
   await assert.rejects(s.lab.read(), { code: 'LAB_INVALID' });

@@ -13,7 +13,7 @@ import {upgradeNotebook} from '../src/model.js';
 import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {associateOriginal} from '../src/evidence-associations.js';
 import {contentBuffer} from '../src/file-content.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-associations-')),book=upgradeNotebook(sampleNotebook());
@@ -53,8 +53,8 @@ test('one original has independent record associations, exact provenance and rec
  const restored=new ResearchMaterials(new Workspace(destination,f.vault));await restored.verify();
  for(const ref of [other,again])assert.deepEqual(await contentBuffer((await restored.artifact(ref)).content),bytes);
  assert.deepEqual((await restored.overview(second.id)).items[0].file,(await f.materials.overview(second.id)).items[0].file);
- const publication=buildPublication({...changed.book,entries:changed.book.entries.map(r=>({...r,share:true}))});
- assert.ok(![...publication.files.values()].map(String).join('\n').includes('PRIVATE-disk-image.img'));
+ const copies=await recordCopies({...changed.book,entries:changed.book.entries.map(r=>({...r,share:true}))},f.workspace);
+ assert.ok(!copiesText(copies).includes('PRIVATE-disk-image.img'));
 });
 
 test('retries and concurrent attachment do not duplicate associations or move evidence',async t=>{

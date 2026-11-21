@@ -9,7 +9,7 @@ import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import {RecordQuery} from '../src/record-query.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {RunReadiness} from '../src/run-readiness.js';
-import {buildPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {figureValueFixture} from './record-figure-values-fixture.js';
 import {preparation,event,assessment} from './fixtures/attempts.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -129,5 +129,5 @@ test('selected facts continue beyond former history limits with recovery, correc
  const found=await new RecordQuery(f.workspace).list({workspaceId:f.book.id,query:{projectId:null,notebookId:null,filter:'all',search:e.label,browse:recordBrowse()}});assert.deepEqual(found.records.map(record=>record.id),[f.record.id]);
  await f.workspace.catalogue(async store=>{await store.verifySnapshot(undefined,f.book.id);const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async document=>{const index=await RecordAttemptIndex.open(document);await index.verify();assert.equal((await index.correction(e.id)).id,correction.id);});});
  t.mock.restoreAll();const saved=(await f.workspace.read()).book,record=saved.entries.find(record=>record.id===f.record.id);for(const group of ['preparations','events','assessments'])assert.deepEqual(record.attempt[group].slice(0,f.record.attempt[group].length),f.record.attempt[group]);assert.deepEqual(record.attempt.preparations.at(-1),p);
- saved.entries.forEach(item=>item.share=item.id===record.id);saved.projects.forEach(project=>project.share=true);const publication=buildPublication(saved),html=publication.files.get('entries/'+record.id+'.html');assert.equal((html.match(/class="attempt-event"/g)??[]).length,258);assert.equal((html.match(/class="attempt-assessment"/g)??[]).length,257);assert.match(html,/Preparation revision 33/);assert.match(html,/Late criterion observation/);assert.match(html,/Corrected zirconium acquisition/);const all=[...publication.files.values()].filter(value=>typeof value==='string').join('\n');assert.ok(!all.includes(reference.label));assert.ok(!all.includes(reference.id));
+ saved.entries.forEach(item=>item.share=item.id===record.id);saved.projects.forEach(project=>project.share=true);const copy=await convertPublicationRecord(f.workspace,saved,saved.entries.find(item=>item.id===record.id)),html=copy.html;assert.equal((html.match(/class="attempt-event"/g)??[]).length,258);assert.equal((html.match(/class="attempt-assessment"/g)??[]).length,257);assert.match(html,/Preparation revision 33/);assert.match(html,/Late criterion observation/);assert.match(html,/Corrected zirconium acquisition/);const all=copy.html+copy.css;assert.ok(!all.includes(reference.label));assert.ok(!all.includes(reference.id));
 });

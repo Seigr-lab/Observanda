@@ -1,16 +1,12 @@
-import {renderingNotebook} from './publication-rendering-book.js';
 import {sourcePublicationRecord} from './web/source-publication-permissions.js';
-import {upgradeNotebook} from './model.js';
 import {withoutFigureSources} from './web/figure-provenance.js';
 import {AppError} from './errors.js';
-import {digest} from './storage.js';
-import {revisionText} from './web/revision-model.js';
 import {proseText,projectProse,proseReferences} from './web/prose-model.js';
 import {researchReference} from './web/research-reference.js';
 import {projectedRegions,resolveRegion} from './web/website-regions.js';
 import {websiteTypography} from './web/website-typography.js';
 import {usedAssetIds} from './web/website-layouts.js';
-import {homeIntroduction,siteIdentity,selectedContent,publicSections,linkAvailable} from './web/website-model.js';
+import {homeIntroduction,siteIdentity,publicSections,linkAvailable} from './web/website-model.js';
 import {logosFor} from './web/branding.js';
 import {admitPublicationPage} from './publication-context.js';
 import {projectAttempt} from './web/attempt-view.js';
@@ -18,44 +14,11 @@ import {projectResults} from './web/result-statements.js';
 import {selectorAnchor} from './web/book-selectors.js';
 import {readingJourney} from './web/book-journeys.js';
 import {publicationLinkResolver,publicationRecordText,publicationRecordDestination,publicationCollectionDestination,publicationTargetSelector} from './publication-prose.js';
-import {selectEditionRecord} from './web/publication-selection.js';
 import {editionReferences} from './web/publication-record-references.js';
-import {validateEditionSelection,validateEditionRecord} from './publication-selection.js';
 import {customFieldLabel} from './web/custom-field-presentation.js';
 // Template field labels may be shipped profile text, which reads its catalogue;
 // a website build registers it itself instead of relying on the interface.
 import './web/i18n/catalogues/labBookProfiles.js';
-
-export function publicProjection(source, options={}) {
-  const {designPageId=null,designTarget=null,workspaceContent=false}=options;
-  const book = renderingNotebook(source),selection=selectedContent(book);
-  if(designPageId){const page=book.pages.find(p=>p.id===designPageId);if(!page)throw new AppError('INVALID');if(!selection.pages.some(p=>p.id===page.id))selection.pages=[...selection.pages,page];}
-  if(designTarget!==null&&(typeof designTarget!=='string'||! /^(home|(?:page|project|notebook|entry):[a-f0-9-]{36})$/.test(designTarget)))throw new AppError('INVALID');
-  if(designTarget&&designTarget!=='home'){
-    const [kind,id]=designTarget.split(':'),key={project:'projects',notebook:'notebooks',entry:'entries',page:'pages'}[kind],item=book[key]?.find(v=>v.id===id);
-    if(!item||kind==='entry'&&(!item.share||book.notebooks.find(n=>n.id===item.notebookId)?.share===false)||kind==='notebook'&&item.share===false)throw new AppError('INVALID');
-    const include=(key,item)=>{if(item&&!selection[key].some(v=>v.id===item.id))selection[key]=[...selection[key],item];};
-    include(key,item);
-    const notebook=kind==='entry'?book.notebooks.find(n=>n.id===item.notebookId):kind==='notebook'?item:null;
-    if(notebook){include('notebooks',notebook);include('projects',book.projects.find(p=>p.id===notebook.projectId));}
-  }
-  // The authenticated composer uses actual workspace content, including items
-  // not yet selected for publication. This never changes their sharing flags.
-  if(workspaceContent){
-    if(!designTarget)throw new AppError('INVALID');
-    selection.projects=book.projects;selection.pages=book.pages;
-    selection.notebooks=book.notebooks.filter(n=>n.share!==false);
-    selection.entries=book.entries.filter(e=>e.share===true&&selection.notebooks.some(n=>n.id===e.notebookId));
-  }
-  if(options.edition){
-    if(workspaceContent||designTarget||designPageId)throw new AppError('INVALID');
-    validateEditionSelection(options.edition);if(options.edition.history?.some(r=>r.include))throw new AppError('INVALID');const choices=new Map(options.edition.records.map(r=>[r.id,r]));
-    if([...choices.keys()].some(id=>!selection.entries.some(r=>r.id===id)))throw new AppError('RECORD_CHANGED');
-    selection.entries=selection.entries.flatMap(record=>{const choice=choices.get(record.id);validateEditionRecord(record,choice);return choice?.include===false?[]:[{...selectEditionRecord(record,choice),revision:digest(revisionText(record))}];});
-    selection.notebooks=selection.notebooks.filter(n=>selection.entries.some(r=>r.notebookId===n.id));
-  }
-  return projectPublication(book,selection,options);
-}
 
 // Internal projection boundary: the caller has validated metadata and originals.
 // Destination summaries resolve links/counts; they are never rendered as records.

@@ -8,7 +8,8 @@ import {MediaStore} from '../src/media.js';
 import {mediaToolsAvailable} from './media-tools.js';
 import {Workspace,digest} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {buildPublication,writePublication,publicationZip} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
+import {contentBuffer} from '../src/file-content.js';
 import {testServer as startServer} from './device-fixture.js';
 
 let available, fixtures;
@@ -17,7 +18,7 @@ before(async () => {
   if (available) fixtures = await mediaFixtures(await mkdtemp(path.join(os.tmpdir(), 'observanda-fixtures-')));
 });
 
-for (const kind of ['image', 'audio', 'video']) test(`${kind} originals survive unchanged while prepared copies are playable publication assets`, async t => {
+for (const kind of ['image', 'audio', 'video']) test(`${kind} originals survive unchanged while prepared copies are playable website copy assets`, async t => {
   if (!available) return t.skip('FFmpeg and ffprobe are required for this test.');
   const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-media-'));
   const book = sampleNotebook(), workspace = new Workspace(root); await workspace.create(book);
@@ -27,18 +28,15 @@ for (const kind of ['image', 'audio', 'video']) test(`${kind} originals survive 
   assert.ok(!prepared.bytes.includes(Buffer.from(PRIVATE_MARKER)));
   if (kind === 'image') assert.ok(!prepared.bytes.includes(Buffer.from('zTXt')));
   book.entries[0].attachments.push({ ...asset, caption: 'A synthetic recording', alt: 'Test evidence', transcript: 'A synthetic sound or image.', share: true });
-  const candidate = buildPublication(book, { mediaFiles: await store.publicFiles(book) });
-  const name = `media/${asset.id}.${prepared.extension}`;
-  assert.deepEqual(candidate.files.get(name), prepared.bytes);
-  const html = candidate.files.get(`entries/${book.entries[0].id}.html`);
-  assert.ok(html.includes(`../${name}`)); assert.ok(html.includes(kind === 'image' ? '<img' : `<${kind} controls`));
-  const output = path.join(root, 'site'); await writePublication(candidate, output);
-  assert.deepEqual(await readFile(path.join(output, name)), prepared.bytes);
-  assert.ok(publicationZip(candidate).includes(prepared.bytes));
-  assert.ok(![...candidate.files.values()].some(bytes => Buffer.from(bytes).includes(Buffer.from(PRIVATE_MARKER))));
-  book.entries[0].attachments[0].share = false;
-  const privateCopy = buildPublication(book, { mediaFiles: await store.publicFiles(book) });
-  assert.ok(!privateCopy.files.has(name));
+  const copy = await convertPublicationRecord(workspace, book, book.entries[0]);
+  const bytesOf = async value => value.bytes ? Buffer.from(value.bytes) : contentBuffer(value.content);
+  const assets = await Promise.all(copy.assets.map(async value => ({ path: value.path, bytes: await bytesOf(value) })));
+  const media = assets.find(value => value.bytes.equals(prepared.bytes)); assert.ok(media);
+  assert.ok(copy.html.includes(media.path)); assert.ok(copy.html.includes(kind === 'image' ? '<img' : `<${kind} controls`));
+  assert.ok(!assets.some(value => value.bytes.includes(Buffer.from(PRIVATE_MARKER))));
+  book.entries[0].attachments[book.entries[0].attachments.length - 1].share = false;
+  const privateCopy = await convertPublicationRecord(workspace, book, book.entries[0]);
+  assert.ok(!(await Promise.all(privateCopy.assets.map(bytesOf))).some(value => value.equals(prepared.bytes)));
   await writeFile(path.join(root, '.observanda', 'media', asset.id, `public.${prepared.extension}`), Buffer.from('changed'));
   await assert.rejects(store.get(asset.id), error => error.code === 'MEDIA_INVALID');
 });
@@ -68,8 +66,8 @@ test('media endpoints require authentication, support byte ranges, and expose no
   assert.equal((await fetch(app.origin + '/api/media/' + asset.id, { headers: { 'X-Observanda-Session': cookie, Range: 'bytes=999999999-' } })).status, 416);
 });
 
-test('file-backed publication matches buffered publication and refuses modified media',async t=>{
- if(!available)return t.skip('FFmpeg required');const root=await mkdtemp(path.join(os.tmpdir(),'observanda-stream-site-')),book=sampleNotebook();await new Workspace(root).create(book);const store=new MediaStore(root),asset=await store.import(fixtures.audio.bytes,'audio');book.entries[0].attachments.push({...asset,caption:'Audio',alt:'',transcript:'',share:true});
- const streamed=buildPublication(book,{mediaFiles:await store.publicFiles(book,{streamed:true})}),buffered=buildPublication(book,{mediaFiles:await store.publicFiles(book)});assert.equal(streamed.id,buffered.id);const target=path.join(root,'site');await writePublication(streamed,target);for(const [name,bytes] of buffered.files)assert.deepEqual(await readFile(path.join(target,name)),Buffer.from(bytes));
- await writeFile(path.join(root,'.observanda','media',asset.id,'public.wav'),Buffer.alloc(100));await assert.rejects(writePublication(streamed,path.join(root,'changed')),e=>e.code==='MEDIA_INVALID');
+test('a website copy refuses modified prepared media',async t=>{
+ if(!available)return t.skip('FFmpeg required');const root=await mkdtemp(path.join(os.tmpdir(),'observanda-stream-site-')),book=sampleNotebook(),workspace=new Workspace(root);await workspace.create(book);const store=new MediaStore(root),asset=await store.import(fixtures.audio.bytes,'audio');book.entries[0].attachments.push({...asset,caption:'Audio',alt:'Audio',transcript:'',share:true});
+ assert.ok((await convertPublicationRecord(workspace,book,book.entries[0])).assets.some(value=>value.contentType==='audio/wav'));
+ await writeFile(path.join(root,'.observanda','media',asset.id,'public.wav'),Buffer.alloc(100));await assert.rejects(convertPublicationRecord(workspace,book,book.entries[0]),e=>e.code==='MEDIA_INVALID');
 });

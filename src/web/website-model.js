@@ -51,7 +51,7 @@ export function validWebsiteComposition(site,extended=true,composed=true,rich=tr
   const h=site.home;
   return keys(h,['title','showTitle','sections',...(optionalHome?['enabled','introduction','templateLink'].filter(k=>Object.hasOwn(h??{},k)):[])])&&(!Object.hasOwn(h,'templateLink')||validTemplateLink(h.templateLink))&&(h.enabled===undefined||typeof h.enabled==='boolean')&&(h.introduction===undefined||text(h.introduction,1500))&&(h.title===null||text(h.title,160))&&typeof h.showTitle==='boolean'&&validSections(h.sections,extended,composed,rich,extendedText,tree);
 }
-export function selectedContent(book){
+function selectedContent(book){
   const projects=book.projects.filter(p=>p.share),projectIds=new Set(projects.map(p=>p.id));
   const eligible=book.notebooks.filter(n=>n.share!==false&&projectIds.has(n.projectId)),notebookIds=new Set(eligible.map(n=>n.id));
   const entries=book.entries.filter(e=>e.share&&notebookIds.has(e.notebookId));

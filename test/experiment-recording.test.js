@@ -13,7 +13,7 @@ import {recordRevision,ResearchRecords} from '../src/research.js';
 import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {queryRecords,recordQueryDocument,recordQueryMatcher} from '../src/web/record-query.js';
 import {validateNotebook} from '../src/model.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 
 // A complete physical experiment as a firmware lab notebook records it: a
 // hypothesis and method, criteria declared before the run, two boots of one
@@ -94,9 +94,8 @@ test('a physical experiment with two boots, frozen criteria, raw captures and pr
  assert.deepEqual(stored(experiment.id).relations.map(r=>r.type),['Builds on','Supports']);
  assert.deepEqual(saved.entries.map(recordQueryDocument).filter(recordQueryMatcher({relatedTo:{workspaceId:book.id,id:concept.id}})).map(e=>e.id),[experiment.id]);
  // The website receives the shared parts; the private reproduction never does.
- const projection=publicProjection(saved),published=projection.entries.find(e=>e.id===experiment.id);
- assert.deepEqual(published.sections.map(s=>s.title),['Hypothesis','Assessment criteria','Results']);
- const output=buildPublication(saved),html=[...output.files.values()].map(String).join('\n');
+ const copy=await convertPublicationRecord(ws,saved,saved.entries.find(e=>e.id===experiment.id)),html=copy.html+copy.css;
+ assert.deepEqual([...copy.html.matchAll(/data-observanda-part="section:[^"]*"><h3[^>]*>([^<]*)</g)].map(m=>m[1]),['Hypothesis','Assessment criteria','Results']);
  assert.ok(html.includes('0.7474498–0.7530615'),'the band table is published');
  assert.ok(html.includes('Passed: 144/144'),'the outcome is published');
  assert.equal(html.includes('C:/lab/private'),false);assert.equal(html.includes('Reproduction on the lab computer'),false);

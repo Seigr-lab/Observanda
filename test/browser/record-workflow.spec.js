@@ -6,8 +6,8 @@ import {randomUUID} from 'node:crypto';
 import {Workspace} from '../../src/storage.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
-import {buildPublication} from '../../src/publication.js';
-import {contentBuffer} from '../../src/file-content.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
+import {routeRecordCopy} from './record-copy-page.js';
 test('investigation and creative take journeys retain methods, separate outcomes and stable links',async({page,browser})=>{
  test.setTimeout(120000);page.setDefaultTimeout(12000);
  const directory=await mkdtemp(path.join(await workDirectory('test-work'),'run-navigation-')),root=path.join(directory,'workspace'),book=sampleNotebook();
@@ -84,18 +84,11 @@ test('investigation and creative take journeys retain methods, separate outcomes
   await page.getByRole('link',{name:'Acoustic sessions',exact:true}).click();
   await expect(page.locator('.run-list')).toContainText('Curtains closed take');
   await expect(page.locator('.run-list')).toContainText('Warm, intimate sound');
-  const output=buildPublication((await ws.read()).book);
+  const saved=(await ws.read()).book,copy=id=>convertPublicationRecord(ws,saved,saved.entries.find(e=>e.id===id));
   const context=await browser.newContext({javaScriptEnabled:false}),publicPage=await context.newPage();
-  await publicPage.route('https://edition.invalid/section/**',async route=>{
-   const key=new URL(route.request().url()).pathname.slice('/section/'.length),value=output.files.get(key);
-   if(value===undefined)return route.fulfill({status:404,body:'Missing'});
-   return route.fulfill({status:200,contentType:key.endsWith('.html')?'text/html':key.endsWith('.css')?'text/css':'application/octet-stream',body:typeof value==='string'?value:await contentBuffer(value)});
-  });
-  await publicPage.goto('https://edition.invalid/section/entries/'+experiment.id+'.html');
-  await publicPage.getByRole('link',{name:'Pigment run one',exact:true}).click();
-  await expect(publicPage).toHaveURL(new RegExp(first.id+'.html$'));
+  await publicPage.goto(await routeRecordCopy(context,'https://run.invalid',await copy(first.id)));
   await expect(publicPage.locator('.record-page')).toContainText('Negative result');
-  await publicPage.getByRole('link',{name:'Pigment stability',exact:true}).click();
+  await publicPage.goto(await routeRecordCopy(context,'https://experiment.invalid',await copy(experiment.id)));
   await expect(publicPage.locator('body')).not.toContainText('Pigment run two');
   await expect(publicPage.locator('body')).not.toContainText('Colour comparison method');
   await context.close();expect(errors).toEqual([]);

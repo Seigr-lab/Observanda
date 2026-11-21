@@ -6,7 +6,7 @@ import {createNotebook} from './model.js';
 import {AppError} from './errors.js';
 import {projectPublication} from './publication-projection.js';
 import {publicationPage} from './publication-page.js';
-import {renderPublication,escapeHTML} from './publication.js';
+import {renderRecordPage,escapeHTML} from './publication.js';
 import {retainedArticleCSS} from './website-entry-styles.js';
 import {sourcePublicationRecord,sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {publicationPartAllowed} from './web/record-publication-privacy.js';
@@ -68,6 +68,19 @@ export function nestRecordHeadings(article){
  return article;
 }
 
+// The admitted projection of one selected record. Only that record's own
+// composition is built: no other owner's names, navigation, homepage, records,
+// or publication choices are visited.
+export function recordProjection(metadata,record){
+ const notebook=metadata.notebooks.find(item=>item.id===record.notebookId),project=metadata.projects.find(item=>item.id===notebook.projectId);
+ if(!project)throw new AppError('CATALOGUE_DAMAGED');
+ const book=withRenderingWebsite(createNotebook(record.title));book.id=metadata.id;
+ book.projects=[{id:project.id,title:project.title,description:'',share:true,logoId:null}];
+ book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
+ const selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};
+ return projectPublication(book,selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record]});
+}
+
 // Called only by an explicit publication-visibility operation while its exact
 // research owner is available. The returned HTML and assets have no source I/O.
 export async function convertPublicationRecord(storage,metadata,original,{signal,target:channel='website'}={}){
@@ -83,15 +96,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
   }
  }
  const selected=sourcePublicationRecord(original,channel,retainedTargets),record={...selected,share:true,sections:selected.sections.map(item=>({...item,share:true})),attachments:selected.attachments.map(item=>({...item,share:true}))};
- const notebook=metadata.notebooks.find(item=>item.id===record.notebookId),project=metadata.projects.find(item=>item.id===notebook.projectId);
- if(!project)throw new AppError('CATALOGUE_DAMAGED');
- // Build only the selected entry's composition. No other owner's names,
- // navigation, homepage, records, or publication choices are visited.
- const book=withRenderingWebsite(createNotebook(record.title));book.id=metadata.id;
- book.projects=[{id:project.id,title:project.title,description:'',share:true,logoId:null}];
- book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
- const target='entry:'+record.id,selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};
- const context=projectPublication(book,selection,{publicationTarget:target,entryDestinations:[record]}),plan=publicationPage(context,target),mediaFiles=new Map(),media=plan.media.size?new MediaStore(storage):null;
+ const context=recordProjection(metadata,record),plan=publicationPage(context,'entry:'+record.id),mediaFiles=new Map(),media=plan.media.size?new MediaStore(storage):null;
  for(const [id,kind] of plan.media){signal?.throwIfAborted();const asset=await media.get(id,{streamed:true,signal,headerBytes:kind==='image'&&channel==='website'?24:12});if(asset.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,asset);}
  const fontFiles=await new WorkspaceFonts(storage).files(plan.fonts,{signal}),fragments=new PublicationFragments(),retainedAssets=new Map(),tables=new Map(),figures=new Map();
  for(const figure of record.figures){
@@ -107,8 +112,8 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  }
  let materials;
  for(const statement of record.results?.statements??[])if(statement.table?.version===3){materials??=new ResearchMaterials(storage);tables.set(statement.id,fragments.add(()=>retainedTableHTML(materials,statement,{signal})));}
- const editionParts={navigation:()=>'',retainedFigure:(_recordId,id)=>{if(!figures.has(id))throw new AppError('MATERIAL_MISSING');return figures.get(id);},retainedTable:(_recordId,id)=>{if(!tables.has(id))throw new AppError('MATERIAL_MISSING');return tables.get(id);}};
- const candidate=renderPublication(context,{mediaFiles,fontFiles,editionParts,emitBrowse:false,figureLanguages:channel==='website'?figureVariantLanguages:null}),html=await text(fragments.expand(candidate.files.get('entries/'+record.id+'.html'))),document=parse(html);
+ const editionParts={retainedFigure:(_recordId,id)=>{if(!figures.has(id))throw new AppError('MATERIAL_MISSING');return figures.get(id);},retainedTable:(_recordId,id)=>{if(!tables.has(id))throw new AppError('MATERIAL_MISSING');return tables.get(id);}};
+ const candidate=renderRecordPage(context,{mediaFiles,fontFiles,editionParts,figureLanguages:channel==='website'?figureVariantLanguages:null}),html=await text(fragments.expand(candidate.html)),document=parse(html);
  const article=[...nodes(document)].find(node=>node.tagName==='article'&&classes(node).includes('record-page'));if(!article)throw new AppError('INVALID');
  annotatePublicationParts(article,record);
  if(channel==='website')nestRecordHeadings(article);

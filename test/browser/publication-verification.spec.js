@@ -7,14 +7,14 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {clearVault} from '../../src/encryption.js';
 import {Publisher,defaultPublishing} from '../../src/publishing.js';
-import {buildPublication} from '../../src/publication.js';
+import {bookWebsiteCandidate} from '../fixtures/website-candidate.js';
 import {digest,serialize} from '../../src/storage-format.js';
 import {recordDeploymentInventory,prepareDeploymentInventory} from '../../src/publication-live.js';
 import {startServer} from '../../src/server.js';
 import {navigate} from './preferences-helper.js';
 
 test('live checks can be stopped and resumed from Publishing and a failed recheck replaces success',async({page})=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-live-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),candidate=buildPublication(book),config=defaultPublishing();
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-live-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),candidate=bookWebsiteCandidate(book),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook'});config.publicUrl='https://synthetic.example/';let mode='stall',reads=0;
  const request=async url=>{const name=new URL(url).pathname.slice(1);reads++;if(mode==='stall'&&name==='index.html')return new Response(new ReadableStream());if(name==='old.html')return new Response(mode==='cached'?'Old page':null,{status:mode==='cached'?200:404});return new Response(candidate.files.get(name));};
  const publisher=new Publisher(f.workspace.root,{request,liveRequest:request},f.vault);await publisher.save(config,'new');const key=publisher.destinationKey(config),receipt={commit:'a'.repeat(40),releaseId:candidate.id,manifestHash:digest(candidate.files.get('publication.json')),deploymentId:randomUUID()};

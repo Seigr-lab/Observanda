@@ -1,7 +1,5 @@
 import {AppError} from './errors.js';
 import {figureDrawingLanguages} from './website-figure-variants.js';
-import {serialize} from './storage-format.js';
-import {openPublicationFigure} from './publication-retained-figures.js';
 import {retainedFigureSVG} from './web/retained-figure-svg.js';
 import {retainedFigureTable,retainedFigureCSV} from './web/retained-figure-data.js';
 import {figureTextChunks,escapeFigureText as esc} from './web/retained-figure-text.js';
@@ -34,12 +32,6 @@ async function* resultLinks(reader,header,figure,results,signal){
   // A panel without a linked result gets no public note: asking for a
   // supporting result is an authoring prompt for the lab book only.
  }
-}
-export async function* publicationFigureContents(input,recordId,figure,{writer,data=false,results,signal}={}){
- signal?.throwIfAborted();const selected=await input.get('records',recordId),choice=selected?.selection?.figures.find(value=>value.id===figure.id);
- if(!choice||data&&!choice.data)fail();
- const original=await openPublicationFigure(input,recordId,figure.id,{signal});if(serialize(original.originalFigure??original.figure)!==serialize(figure))fail();
- yield* renderApprovedFigureContents(original,recordId,figure,{writer,data,results,signal});
 }
 export async function* renderApprovedFigureContents(original,recordId,figure,{writer,data=false,results,signal,languages=[]}={}){
  const reader=publicFigureReader(original),{header}=await reader.header(),selection={collection:'header',id:header.id,field:'title'},stem=recordId+'-'+figure.id;

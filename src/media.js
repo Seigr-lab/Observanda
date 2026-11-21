@@ -1,4 +1,3 @@
-import {renderingNotebook} from './publication-rendering-book.js';
 import {adoptRecordOwnerMedia} from './record-owner-resources.js';
 import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
@@ -12,15 +11,13 @@ import {fileURLToPath} from 'node:url';
 import {pipeline} from 'node:stream/promises';
 import {PassThrough} from 'node:stream';
 import {Workspace} from './storage.js';
-import { publicProjection } from './publication.js';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile, lstat, unlink, rmdir, realpath } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, rmdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { AppError } from './errors.js';
-import { digest, serialize, assertRegular, privateDirectory } from './storage.js';
-import { upgradeNotebook } from './model.js';
+import { serialize, assertRegular, privateDirectory } from './storage.js';
 import { hasPrivateText } from './privacy.js';
 
 const run = promisify(execFile);
@@ -229,24 +226,5 @@ export class MediaStore {
     if(streamed){await content.verify({signal});if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.readChunks(0,headerLength-1,{signal}))header.push(chunk);content.header=Buffer.concat(header);}bytes=content;}
     else{bytes=await contentBuffer(content,{signal,maxBytes:metadata.bytes});if(includeHeader&&metadata.kind!=='file')content.header=Buffer.from(bytes.subarray(0,headerBytes));}
     return { id, kind: metadata.kind, extension: metadata.extension, mime: metadata.mime, bytes,...(metadata.kind==='file'?downloadInfo(metadata):{}) };
-  }
-
-  async publicFiles(source,{signal,streamed=false,designPageId=null,designTarget=null,workspaceContent=false}={}) {
-    const book = renderingNotebook(source), files = new Map();
-    const context = publicProjection(book,{designPageId,designTarget,workspaceContent});
-    for(const entry of context.entries)for(const attachment of entry.attachments){
-      signal?.throwIfAborted();
-      if(files.has(attachment.id))continue;
-      const file=await this.get(attachment.id,{streamed});
-      if(file.kind!==attachment.kind)throw new AppError('MEDIA_INVALID');
-      files.set(attachment.id,file);
-    }
-    for(const asset of context.website.assets){signal?.throwIfAborted();if(files.has(asset.id))continue;const file=await this.get(asset.id,{streamed});if(file.kind!==asset.kind)throw new AppError('MEDIA_INVALID');files.set(asset.id,file);}
-    for (const id of [context.website, ...context.projects, ...context.notebooks, ...context.pages, ...context.entries].flatMap(item => item.logos.map(logo => logo.id))) {
-      signal?.throwIfAborted();const file = await this.get(id,{streamed});
-      if (file.kind !== 'image') throw new AppError('MEDIA_INVALID');
-      if (!files.has(id)) { files.set(id, file); }
-    }
-    return files;
   }
 }

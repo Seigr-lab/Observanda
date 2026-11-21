@@ -17,17 +17,9 @@ export function validAction(value,{close=false}={}){
 }
 export const actionAppearance=(section,close=false)=>close?section.close?.appearance??'link':section.action?.appearance??'button';
 export const actionClasses=(section,close=false)=>'site-action site-action--'+actionAppearance(section,close)+(close?' public-popup-close':'');
-export const actionArrow=section=>section.action?.arrow??section.kind==='link';
 export const actionStyleKey=(section,close=false)=>actionAppearance(section,close)==='link'?'linkStyle':'style';
 export const actionStyle=(section,close=false)=>section[close?'close':'action']?.[actionStyleKey(section,close)]??{};
 export function actionFonts(design,sections){return [design.buttons?.font,design.links?.font,...sections.flatMap(s=>[actionStyle(s).font,actionStyle(s,true).font])].filter(Boolean);}
-export function sectionActionRules(section,root){
- const rules=[],selector={download:' > .site-action',link:' > .site-action',hero:' > .hero-copy > .site-action',popup:' > details > summary.site-action','copy-text':' > .public-copy > .site-action'}[section.kind];
- const render=close=>actionStyleRules(actionStyle(section,close),'action',actionAppearance(section,close));
- if(selector&&Object.keys(actionStyle(section)).length)rules.push(root+selector+'{'+render(false)+'}');
- if(section.kind==='popup'&&Object.keys(actionStyle(section,true)).length)rules.push(root+' > .public-popup > .popup-body > .popup-controls > .site-action,'+root+' > details > .popup-body > .popup-controls > .site-action{'+render(true)+'}');
- return rules;
-}
 // Emit variables, not author-supplied CSS. Link and button defaults have separate
 // scopes, so changing button colours cannot turn ordinary text links into buttons.
 export function actionStyleRules(style={},prefix='action',appearance=prefix==='link'?'link':'button'){

@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateDetachedRecords} from '../src/model.js';
-import {projectPublication} from '../src/publication-projection.js';
-import {renderPublication} from '../src/publication.js';
-import {selectedContent} from '../src/web/website-model.js';
+import {recordPage} from './fixtures/record-page.js';
+import {recordProjection} from '../src/publication-conversion-render.js';
 import {sourcePublicationRecord} from '../src/web/source-publication-permissions.js';
 import {validMediaCaptions,validMediaDetails,mediaDetails} from '../src/web/record-media-value.js';
 
@@ -34,10 +33,10 @@ test('a published video carries its captions as tracks on a website and none in 
  assert.ok(pdf.attachments.every(item=>!Object.hasOwn(item,'captions')));
  const book=upgradeNotebook(sampleNotebook()),entry=book.entries.find(e=>e.share);
  entry.attachments=[attachment];
- const context=projectPublication(book,selectedContent(book));
+ const context=recordProjection(book,{...entry,share:true});
  const mp4=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(12)]);
- const output=renderPublication(context,{mediaFiles:new Map([[attachment.id,{kind:'video',extension:'mp4',bytes:mp4}]])});
- const html=output.files.get('entries/'+entry.id+'.html');
+ const output=recordPage(book,entry,{mediaFiles:new Map([[attachment.id,{kind:'video',extension:'mp4',bytes:mp4}]])});
+ const html=output.html;
  assert.match(html,new RegExp('<track kind="captions" src="../media/'+attachment.id+'.ca.vtt" srclang="ca" label="Català" default><track kind="captions" src="../media/'+attachment.id+'.en.vtt" srclang="en" label="English">'));
  // A track whose cues cannot be read is left out; the page is still published.
  assert.doesNotMatch(html,/srclang="es"/);assert.ok(!output.files.has('media/'+attachment.id+'.es.vtt'));
@@ -66,7 +65,7 @@ test('a published track keeps its readable cues and drops the unreadable ones',(
  const attachment=video({captions:[{language:'nb',label:'Norsk',vtt:mixed}]});
  const book=upgradeNotebook(sampleNotebook()),entry=book.entries.find(e=>e.share);entry.attachments=[attachment];
  const mp4=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(12)]);
- const output=renderPublication(projectPublication(book,selectedContent(book)),{mediaFiles:new Map([[attachment.id,{kind:'video',extension:'mp4',bytes:mp4}]])});
- assert.match(output.files.get('entries/'+entry.id+'.html'),/srclang="nb" label="Norsk" default>/);
+ const output=recordPage(book,entry,{mediaFiles:new Map([[attachment.id,{kind:'video',extension:'mp4',bytes:mp4}]])});
+ assert.match(output.html,/srclang="nb" label="Norsk" default>/);
  assert.equal(output.files.get('media/'+attachment.id+'.nb.vtt'),'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nOne\n');
 });

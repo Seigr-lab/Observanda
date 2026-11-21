@@ -9,7 +9,8 @@ import {createFigure} from '../../src/web/figure-model.js';
 import {createComposition} from '../../src/web/figure-composition.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {buildPublication} from '../../src/publication.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
+import {routeRecordCopy} from './record-copy-page.js';
 
 function fixtureBook(){
  const book=upgradeNotebook(sampleNotebook()),record=book.entries[0],plot=createFigure();
@@ -30,7 +31,8 @@ async function inspect(page,root,{image=false,keyboard=false}={}){
   await expect.poll(()=>viewport.evaluate(el=>el.scrollWidth>el.clientWidth+100)).toBe(true);await noOverflow(page);
   if(image&&i===0){await expect.poll(()=>viewport.locator('img').evaluate(el=>el.complete&&el.naturalWidth===840&&el.getBoundingClientRect().width>=840)).toBe(true);}
   else{
-   const fonts=await viewport.locator('.figure-value-tick,.figure-coordinate-tick').evaluateAll(nodes=>nodes.map(node=>parseFloat(getComputedStyle(node).fontSize)*node.ownerSVGElement.getBoundingClientRect().width/node.ownerSVGElement.viewBox.baseVal.width));
+   // A website copy also carries hidden drawings for other languages; measure the one shown.
+   const fonts=await viewport.locator('.figure-value-tick,.figure-coordinate-tick').evaluateAll(nodes=>nodes.filter(node=>node.getClientRects().length).map(node=>parseFloat(getComputedStyle(node).fontSize)*node.ownerSVGElement.getBoundingClientRect().width/node.ownerSVGElement.viewBox.baseVal.width));
    expect(fonts.length).toBeGreaterThan(3);expect(Math.min(...fonts)).toBeGreaterThanOrEqual(10);
   }
   await test.step('Pan figure '+i+' using the keyboard',async()=>{await viewport.focus();await page.keyboard.press('ArrowRight');await expect.poll(()=>viewport.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);});
@@ -52,16 +54,11 @@ test('record and lab-book readers enlarge precise figures without entering editi
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
-test('exported scientific figures can be inspected at native size with JavaScript disabled',async({browser},info)=>{
- const {book,record}=fixtureBook(),publication=buildPublication(book),filename=[...publication.files].find(([name,body])=>name.endsWith('.html')&&String(body).includes('id="record-figure-'+record.figures[0].id+'"'))[0];
+test('scientific figures on a website copy can be inspected at native size with JavaScript disabled',async({browser},info)=>{
+ const {book,record}=fixtureBook(),copy=await convertPublicationRecord({},book,record);
  const context=await browser.newContext({javaScriptEnabled:false,viewport:{width:390,height:844}}),page=await context.newPage();
- await page.context().route('https://figure-reading.test/**',route=>{
-  const file=publication.files.get(decodeURIComponent(new URL(route.request().url()).pathname.slice(1)));
-  const extension=path.extname(new URL(route.request().url()).pathname),type={'.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.js':'text/javascript'}[extension]??'application/octet-stream';
-  return route.fulfill(file===undefined?{status:404}:{status:200,contentType:type,body:typeof file==='string'?file:Buffer.from(file)});
- });
  try{
-  await page.goto('https://figure-reading.test/'+filename);await inspect(page,page.locator('.record-page'),{image:true,keyboard:true});
+  await page.goto(await routeRecordCopy(page.context(),'https://figure-reading.test',copy));await inspect(page,page.locator('.record-page'),{image:true,keyboard:true});
   const plot=page.locator('#record-figure-'+record.figures[0].id);await plot.getByRole('checkbox',{name:'Enlarge figure',exact:true}).focus();await page.keyboard.press('Space');await page.screenshot({path:info.outputPath('exported-figure-native-size.png')});
  }finally{await context.close().catch(()=>{});}
 });

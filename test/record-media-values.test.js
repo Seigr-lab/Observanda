@@ -17,7 +17,7 @@ import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {digest} from '../src/storage-format.js';
 import {MediaStore} from '../src/media.js';
-import {buildPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {withQueryValue} from '../src/record-query-storage.js';
 const checkpoint=(f,base,value)=>({id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:base.field,revision:base.revision,storageRevision:base.storageRevision},value:{value}});
 const forbidRecord=(t,recordId)=>{const read=ResearchCatalogue.prototype.record;t.mock.method(ResearchCatalogue.prototype,'record',function(id,...args){if(id===recordId)throw Error('Media details reconstructed the selected record');return read.call(this,id,...args);});};
@@ -34,8 +34,8 @@ test('media descriptions compose by attachment, retain old revisions and update 
  assert.deepEqual((await reader.read({...target,windows:{attachments:8}})).header.attachments,[{...f.record.attachments[8],...b}]);
  const publication=structuredClone(f.book);publication.entries[0].share=true;
  await f.workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id),[query]=await Array.fromAsync(new RecordQueryDocuments(store).read([row],snapshot.metadata,{search:false,cards:true,publication:true,inventory:true}));assert.equal(query.publicationCard.attachments[0].caption,a.caption);assert.deepEqual(query.publication.attachments.map(item=>item.share),[true,false,false,false,false,false,false,false,true]);assert.deepEqual(query.editionInventory.choice.attachments,[f.record.attachments[0].id,f.record.attachments[8].id]);publication.entries[0].attachments=await withRecordDocument(store,row.id,row.revision,async document=>(await document.field(['attachments'])).value);await store.verifySnapshot(undefined,f.book.id);});
- const candidate=buildPublication(publication,{mediaFiles:await f.media.publicFiles(publication)}),html=candidate.files.get('entries/'+f.record.id+'.html');
- assert.match(html,/Reviewed image/);assert.match(html,/A green rectangle/);assert.match(html,/Reviewed video/);assert.ok(candidate.files.has('media/'+f.record.attachments[8].id+'.mp4'));assert.ok(!candidate.files.has('media/'+f.record.attachments[1].id+'.wav'));
+ const {html}=await convertPublicationRecord(f.workspace,publication,publication.entries.find(item=>item.id===f.record.id));
+ assert.match(html,/Reviewed image/);assert.match(html,/A green rectangle/);assert.match(html,/Reviewed video/);assert.ok(html.includes('data-media-id="'+f.record.attachments[8].id+'"'));assert.ok(!html.includes(f.record.attachments[1].id));
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','Filtered media recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [f.workspace,new Workspace(copy,f.vault),new Workspace(fresh,vault)])await workspace.catalogue(async store=>{

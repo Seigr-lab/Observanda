@@ -1,4 +1,3 @@
-import {renderingSample} from './fixtures/rendering-book.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -6,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
-import {buildPublication} from '../src/publication.js';
+import {bookWebsiteCandidate} from './fixtures/website-candidate.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Publisher,defaultPublishing,readRemoteFiles} from '../src/publishing.js';
@@ -57,7 +56,7 @@ test('websites share one server login with their own folders, records and file o
  const first=await site('Atlas','/public_html/atlas'),second=await site('Diary','/public_html/diary');
  assert.equal(first.saved.server.name,'Shared hosting');assert.deepEqual(first.saved.server.password,{saved:true,persistent:false});
  assert.notEqual(first.publisher.destinationKey(first.saved.config),second.publisher.destinationKey(second.saved.config));
- const book=renderingSample(),atlas=buildPublication(book),diary=buildPublication({...structuredClone(book),title:'Bee yard diary'});
+ const book=sampleNotebook(),atlas=bookWebsiteCandidate(book),diary=bookWebsiteCandidate({...structuredClone(book),title:'Bee yard diary'});
  await first.publisher.deploy(atlas,first.saved.etag,randomUUID());await second.publisher.deploy(diary,second.saved.etag,randomUUID());
  assert.ok(host.files.has('/public_html/atlas/index.html'));assert.ok(host.files.has('/public_html/diary/index.html'));
  assert.deepEqual(passwords,['host secret','host secret']);

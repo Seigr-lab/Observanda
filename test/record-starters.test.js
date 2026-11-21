@@ -13,7 +13,7 @@ import {upgradeNotebook} from '../src/model.js';
 import {createAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {testServer} from './device-fixture.js';
 import {sealStarter} from '../src/record-starter-package.js';
 const blueprint=()=>({name:'Private controlled protocol',type:'experiment',title:'Next precision trial',body:plainRichText('Follow these private instructions.'),sections:[{title:'Method',body:'Measure the declared interval.'},{title:'Results',body:''}],tags:['trial']});
@@ -69,7 +69,7 @@ test('encrypted package review, independent import, metadata backup and public p
  const destination=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.dir,'backup'),{vault:f.vault}),{vault:f.vault});
  const vault=await verifyAccess(await readAccess(destination),'','synthetic starter password');
  try{const restored=new RecordStarters(new Workspace(destination,vault),{});assert.deepEqual(await restored.release(query),await f.store.release(query));assert.deepEqual(await restored.read({workspaceId,id:r.id}),await f.store.read({workspaceId,id:r.id}));}finally{clearVault(vault);}
- const publication=buildPublication((await f.ws.read()).book);const text=[...publication.files.values()].filter(v=>typeof v==='string').join('\n');assert.ok(!text.includes('private instructions'));assert.ok(!text.includes('Private controlled protocol'));assert.ok(![...publication.files.keys()].some(k=>k.includes('record-starters')));
+ const text=copiesText(await recordCopies((await f.ws.read()).book,f.ws));assert.ok(!text.includes('private instructions'));assert.ok(!text.includes('Private controlled protocol'));assert.ok(!text.includes('record-starters'));
 });
 
 test('template library and history use bounded pages without loading record bodies',async t=>{

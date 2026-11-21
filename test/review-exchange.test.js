@@ -1,4 +1,4 @@
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
@@ -27,5 +27,5 @@ test('two installations exchange pinned, encrypted, signed reviews and preserve 
  assert.deepEqual(await restoredReviews.run('list',{workspaceId:book.id}),await A('list'));assert.deepEqual((await workspaceModules(restored).current()).entities.find(e=>e.id===toolId).data.original,original);
  assert.deepEqual(await new Reviews(restored,b.deviceStore).run('list',{workspaceId:book.id}),await A('list'));
  await A('untrust',{fingerprint:reviewHash(bc)});await assert.rejects(A('import',response));assert.equal((await A('list')).items[0].decisions.length,2);await assert.rejects(A('export',{id}));
- const publicBook=(await restored.read()).book;assert.ok(!JSON.stringify(publicBook).includes('Incomplete results.'));assert.ok(!JSON.stringify(publicBook).includes(original.sha256));const publication=buildPublication(publicBook);for(const content of publication.files.values()){const text=String(content);assert.ok(!text.includes('Incomplete results.'));assert.ok(!text.includes(original.sha256));assert.ok(!text.includes(ac.signing.publicKey));}
+ const publicBook=(await restored.read()).book;assert.ok(!JSON.stringify(publicBook).includes('Incomplete results.'));assert.ok(!JSON.stringify(publicBook).includes(original.sha256));const text=copiesText(await recordCopies(publicBook,restored));assert.ok(!text.includes('Incomplete results.'));assert.ok(!text.includes(original.sha256));assert.ok(!text.includes(ac.signing.publicKey));
 });

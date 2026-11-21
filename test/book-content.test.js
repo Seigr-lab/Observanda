@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {validRichText,renderRichText,richTextPlain} from '../src/web/rich-text-model.js';
 import {researchReference,parseResearchReference,validTarget} from '../src/web/research-reference.js';
-import {selectorExists,selectorAnchor} from '../src/web/book-selectors.js';
+import {selectorExists} from '../src/web/book-selectors.js';
 import {validateNotebook} from '../src/model.js';
-import {buildPublication,verifyPublication} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {assertPublicFiles} from '../src/privacy.js';
 import {PUBLIC_BOOK_SCRIPT} from '../src/publication-browse.js';
 import {importContent} from '../src/migration/content.js';
@@ -19,11 +19,13 @@ test('book blocks keep exact text, inert MathML, tables, citations and strict ve
  for(const source of [String.raw`\href{javascript:alert(1)}{x}`,String.raw`\includegraphics{https://example.org/secret}`,String.raw`\def\loop{\loop}\loop`]){const result=renderRichText({type:'doc',content:[block('equation',{source,label:'Untrusted source'})]});assert.ok(!/<a\b|<img\b|<script\b/.test(result));}
  for(const mutate of [d=>d.content[1].attrs.version=2,d=>d.content[1].attrs.rows[0].push('extra'),d=>d.content[1].attrs.rows[0][0]='x'.repeat(60001),d=>d.content[3].attrs.url='javascript:alert(1)',d=>d.content[1].attrs.onclick='alert(1)',d=>d.content.push(d.content[1])]){const d=structuredClone(concept.body);mutate(d);assert.equal(validRichText(d),false);}
 });
-test('versioned selectors survive names and ordering, retain unavailable identities and export selected targets',()=>{
+test('versioned selectors survive names and ordering, retain unavailable identities and keep other records out of a website copy',async()=>{
  const {book,concept,experiment,table}=richBook(),target=experiment.relations[0].target,ref=researchReference(target);assert.deepEqual(parseResearchReference(ref),target);assert.ok(validTarget({...target,revision:recordRevision(concept)}));assert.equal(parseResearchReference(ref.replace('#v1-','#v2-')),null);
- concept.title='Renamed definition';concept.body.content.reverse();table.attrs.title='Renamed table';assert.ok(selectorExists(concept,target.selector));const output=buildPublication(book);verifyPublication(output);const html=output.files.get('entries/'+experiment.id+'.html');assert.ok(html.includes(concept.id+'.html#'+selectorAnchor(target.selector)));assert.ok(output.files.get('entries/'+concept.id+'.html').includes('Referenced by'));
- concept.body.content=concept.body.content.filter(n=>n!==table);assert.equal(selectorExists(concept,target.selector),false);const absent=buildPublication(book);assert.ok(!absent.files.get('entries/'+experiment.id+'.html').includes('#record-table-'+table.attrs.id));
- concept.share=false;const hidden=buildPublication(book);assert.ok(!hidden.files.get('browse.html').includes(concept.id));assert.ok(!hidden.files.get('entries/'+experiment.id+'.html').includes(concept.title));assert.throws(()=>assertPublicFiles(new Map([['public-book.js',PUBLIC_BOOK_SCRIPT+'\nalert(1)']])),{code:'UNSAFE'});
+ concept.title='Renamed definition';concept.body.content.reverse();table.attrs.title='Renamed table';assert.ok(selectorExists(concept,target.selector));
+ // A website copy holds one record: links to other records are left to the website editor.
+ const copy=await convertPublicationRecord({},book,experiment);assert.equal(copy.visible,true);assert.ok(!copy.html.includes(concept.id));
+ concept.body.content=concept.body.content.filter(n=>n!==table);assert.equal(selectorExists(concept,target.selector),false);
+ concept.share=false;assert.ok(!(await convertPublicationRecord({},book,experiment)).html.includes(concept.title));assert.throws(()=>assertPublicFiles(new Map([['public-book.js',PUBLIC_BOOK_SCRIPT+'\nalert(1)']])),{code:'UNSAFE'});
 });
 test('reading journeys are filters over original records with saved-query semantics and unchanged counts',()=>{
  const {book,concept}=richBook();const result=queryRecords(book.entries,{browse:{journey:'concepts'}});assert.deepEqual(result.map(r=>r.id),[concept.id]);assert.equal(recordCounts(result).experiments,0);assert.equal(new Set(book.entries.map(r=>r.id)).size,book.entries.length);

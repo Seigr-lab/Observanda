@@ -5,8 +5,8 @@ import os from 'node:os';
 import {sampleNotebook} from '../../src/sample.js';
 import {Workspace} from '../../src/storage.js';
 import {testServer} from '../device-fixture.js';
-import {buildPublication} from '../../src/publication.js';
-import {contentBuffer} from '../../src/file-content.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
+import {routeRecordCopy} from './record-copy-page.js';
 
 test('record dates can be unknown or estimated through editing, history, browsing and a static edition',async({page,browser})=>{
  test.setTimeout(90000);
@@ -66,17 +66,11 @@ test('record dates can be unknown or estimated through editing, history, browsin
   await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);
   await page.getByText('Filters',{exact:true}).click();await page.getByLabel('From date',{exact:true}).fill('2024-02-29');await page.getByLabel('Through date',{exact:true}).fill('2024-02-29');
   await expect(page.locator('.records-table tbody tr')).toHaveCount(1);await expect(page.locator('.records-table')).toContainText('Estimated: February 2024');
-  const output=buildPublication((await ws.read()).book),context=await browser.newContext({javaScriptEnabled:false}),publicPage=await context.newPage();
-  try{
-   await publicPage.route('https://edition.invalid/**',async route=>{
-    const pathname=new URL(route.request().url()).pathname,key=pathname.slice(pathname.startsWith('/section/')?9:1);
-    const value=output.files.get(key);return route.fulfill(value===undefined?{status:404,body:'Missing'}:{status:200,contentType:key.endsWith('.html')?'text/html':key.endsWith('.css')?'text/css':'application/octet-stream',body:typeof value==='string'?value:await contentBuffer(value)});
-   });
-   for(const base of ['', 'section/']){
-    await publicPage.goto('https://edition.invalid/'+base+'entries/'+field.id+'.html');await expect(publicPage.locator('.record-page')).toContainText('Estimated: February 2024');
-    await publicPage.goto('https://edition.invalid/'+base+'entries/'+art.id+'.html');await expect(publicPage.locator('.record-page')).toContainText('Date unknown');
-   }
-  }finally{await context.close();}
+  const saved=(await ws.read()).book;
+  for(const [record,text] of [[field,'Estimated: February 2024'],[art,'Date unknown']]){
+   const copy=await convertPublicationRecord(ws,saved,saved.entries.find(e=>e.id===record.id)),context=await browser.newContext({javaScriptEnabled:false}),publicPage=await context.newPage();
+   try{await publicPage.goto(await routeRecordCopy(context,'https://edition.invalid',copy));await expect(publicPage.locator('.record-page')).toContainText(text);}finally{await context.close();}
+  }
   expect(errors).toEqual([]);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

@@ -7,7 +7,8 @@ import {sampleNotebook} from '../../src/sample.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {buildPublication} from '../../src/publication.js';
+import {convertPublicationRecord} from '../../src/publication-conversion-render.js';
+import {routeRecordCopy} from './record-copy-page.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
@@ -63,10 +64,9 @@ test('preparation, assessment, amendment and repeat are dedicated app journeys w
   await page.getByRole('button',{name:'Read record',exact:true}).click();await page.getByRole('link',{name:'Synthetic recognition investigation',exact:true}).click();await page.getByRole('button',{name:'Compare conditions and changes',exact:true}).click();await expect(page.getByRole('region',{name:'Run comparison'})).toContainText('Differs from the first run');
   await page.getByRole('link',{name:'Recognition attempt one',exact:true}).first().click();await expect(page.locator('.record-reader h1')).toHaveText('Recognition attempt one');await page.setViewportSize({width:390,height:844});await page.locator('.attempt-assessment').first().scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:testInfo.outputPath('attempt-reader-phone.png')});
   await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByLabel('Include in website',{exact:false}).check();await save();
-  snapshot=await f.workspace.read();first=snapshot.book.entries.find(r=>r.id===first.id);const output=buildPublication(snapshot.book),html=output.files.get('entries/'+first.id+'.html');expect(html).not.toContain('PRIVATE recognition method');expect(html).not.toContain('PRIVATE independent decoder');expect(html).not.toContain(analysis.id);expect(html).toContain('Recognition — Unresolved');
+  snapshot=await f.workspace.read();first=snapshot.book.entries.find(r=>r.id===first.id);const copy=await convertPublicationRecord(f.workspace,snapshot.book,first),html=copy.html;expect(html).not.toContain('PRIVATE recognition method');expect(html).not.toContain('PRIVATE independent decoder');expect(html).not.toContain(analysis.id);expect(html).toContain('Recognition — Unresolved');
   const publicContext=await browser.newContext({javaScriptEnabled:false}),publicPage=await publicContext.newPage();
-  await publicPage.route('https://attempt.invalid/**',route=>{const name=new URL(route.request().url()).pathname.slice(1),value=output.files.get(name);return route.fulfill({status:typeof value==='string'?200:404,contentType:name.endsWith('.css')?'text/css':'text/html',body:typeof value==='string'?value:''});});
-  await publicPage.goto('https://attempt.invalid/entries/'+first.id+'.html');await expect(publicPage.locator('.attempt-details')).toContainText('Recognition — Unresolved');await expect(publicPage.locator('.attempt-details')).toContainText('Evidence acquired — Complete');await publicPage.screenshot({path:testInfo.outputPath('attempt-public.png'),fullPage:true});await publicContext.close();
+  await publicPage.goto(await routeRecordCopy(publicPage,'https://attempt.invalid',copy));await expect(publicPage.locator('.attempt-details')).toContainText('Recognition — Unresolved');await expect(publicPage.locator('.attempt-details')).toContainText('Evidence acquired — Complete');await publicPage.screenshot({path:testInfo.outputPath('attempt-public.png'),fullPage:true});await publicContext.close();
   expect(errors).toEqual([]);expect(wholeReads).toEqual([]);
  }catch(error){await testInfo.attach('attempt-dom',{body:await page.content(),contentType:'text/html'});throw error;}
  finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

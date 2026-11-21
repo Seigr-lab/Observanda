@@ -20,7 +20,7 @@ import {queryRecords,recordQueryDocument} from '../src/web/record-query.js';
 import {validateNotebook} from '../src/model.js';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
-import {buildPublication,publicProjection} from '../src/publication.js';
+import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
@@ -86,10 +86,11 @@ test('repeats retain preparation as inherited conditions, compare one changed pa
  const view=attemptComparisonView(attemptComparison(second.attempt),attemptComparison(first.attempt),esc);assert.match(view,/Differs from the first run/);assert.match(view,/240/);
  assert.match(view,/Requested pattern recognized/);assert.match(view,/Preparation revision 1/);
  const removed=structuredClone(second.attempt);removed.preparations[0].conditions=[];assert.match(attemptComparisonView(attemptComparison(removed),attemptComparison(first.attempt),esc),/Not present in this preparation/);
- const book=(await f.ws.read()).book;validateNotebook(book);const projection=publicProjection(book),published=projection.entries.find(e=>e.id===first.id);
- assert.deepEqual(published.attempt.preparations[0].protocols,[{withheld:true}]);const output=buildPublication(book),html=output.files.get('entries/'+first.id+'.html');
+ const book=(await f.ws.read()).book;validateNotebook(book);
+ // The website copy states the outcomes; the private method protocol stays withheld.
+ const copy=await convertPublicationRecord(f.ws,book,book.entries.find(e=>e.id===first.id)),html=copy.html;
  assert.match(html,/Recognition — Unresolved/);assert.match(html,/Native logging — Met/);assert.match(html,/Return copied — Complete/);
- const all=[...output.files.values()].filter(v=>typeof v==='string').join('\n');assert.ok(!all.includes(f.method.id));assert.ok(!all.includes(f.method.title));
+ const all=[copy.html,copy.css].join('\n');assert.ok(!all.includes(f.method.id));assert.ok(!all.includes(f.method.title));
  const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.root,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(backup,f.vault);
  assert.deepEqual((await restored.read()).book.entries.find(e=>e.id===first.id).attempt,first.attempt);
 });

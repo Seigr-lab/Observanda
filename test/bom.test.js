@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {moduleDraftOwners,moduleDomainStore} from './module-domain-fixture.js';
-import {buildPublication} from '../src/publication.js';
+import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
@@ -74,8 +74,8 @@ test('one BOM reserves distinct stock sources, records partial use and scrap, re
  assert.equal((await s.get(id)).data.status,'finished');assert.equal((await s.get(reservation.id)).data.status,'settled');
  assert.deepEqual((await s.workspace.read()).book.entries[0],recordBefore,'Inventory use never asserts execution or success');
  await assertPrivateBOMOwners(s.workspace,s.book.id,'PRIVATE resistor','PRIVATE BOM','PRIVATE drawer path');
- const edition=buildPublication((await s.workspace.read()).book);
- for(const [name,bytes] of edition.files)for(const privateText of ['PRIVATE BOM','PRIVATE resistor','PRIVATE drawer path','PRIVATE board build','PRIVATE source'])assert.ok(!String(name).includes(privateText)&&!String(bytes).includes(privateText));
+ const copies=copiesText(await recordCopies((await s.workspace.read()).book,s.workspace));
+ for(const privateText of ['PRIVATE BOM','PRIVATE resistor','PRIVATE drawer path','PRIVATE board build','PRIVATE source'])assert.ok(!copies.includes(privateText));
  const copy=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'backup'),{vault:s.vault}),{vault:s.vault});
  assert.deepEqual(await workspaceModules(new Workspace(copy,s.vault)).current(),finished);
  const invalid=structuredClone(finished);invalid.entities.find(e=>e.type==='movement'&&e.data.reservationId).data.delta='-1.5';
@@ -158,8 +158,8 @@ test('BOM import verifies the pinned original, preserves it through backup and p
  const backup=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'import-backup'),{vault:s.vault}),{vault:s.vault}),restored=new Workspace(backup,s.vault);
  assert.deepEqual((await workspaceModules(restored).current()).entities.find(e=>e.id===id),entity);
  assert.deepEqual((await readBOMSource(restored,{artifact})).table,table);
- const edition=buildPublication((await s.workspace.read()).book);
- for(const [name,content] of edition.files)assert.ok(!String(name).includes('PRIVATE-bom')&&!String(content).includes('PRIVATE source path')&&!String(content).includes(source.sha256));
+ const copies=copiesText(await recordCopies((await s.workspace.read()).book,s.workspace));
+ assert.ok(!copies.includes('PRIVATE-bom')&&!copies.includes('PRIVATE source path')&&!copies.includes(source.sha256));
  await assertPrivateBOMOwners(s.workspace,s.book.id,'PRIVATE-bom.csv','PRIVATE source path');
 });
 test('BOM original parsing rejects invalid UTF-8 and oversized artifacts before import',async t=>{
