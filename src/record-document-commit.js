@@ -22,7 +22,7 @@ export async function commitRecordDocument(store,{etag,snapshot,row,document,sum
   await readiness.documentCompletion(previous,document,header,snapshot.metadata);return header;
  };
  const header=row?await withRecordDocument(store,row.id,row.revision,admit):await admit(null);
- const encoding=await operationStage('write-record-blocks',{},()=>document.encoding()),current=await store.indexed(snapshot);
+ const encoding=await operationStage('write-record-blocks',{},()=>document.encoding()),current=snapshot;
  const metadata={...current.metadata,revision:current.metadata.revision+1,updatedAt:now};
  const updated=await new RecordMemberCollections(store).retain({...member,...(!row?{position:current.nextPosition}:{}),type:header.type,share:header.share,occurredOn:header.occurredOn,revision:encoding.revision,updatedAt:now,bytes:encoding.memberBytes,...await operationStage('index-records',{},()=>new RecordQueryDocuments(store).retainDocument(document,encoding.contentRevision,{previous:row}))});
  const nextEtag=digest('Observanda/catalogue-snapshot/'+randomUUID()),ordinal=(await store.db.get('SELECT MAX(ordinal)+1 AS n FROM snapshots')).n;

@@ -44,17 +44,13 @@ test('reading order preserves exact date ordering, reverse cursors and immutable
  assert.deepEqual(await rows(restored,etag),first);assert.deepEqual(await rows(restored),await rows(f.workspace));
  assert.deepEqual((await rows(restored,etag,{order:'date-asc'})).map(r=>r.id),ascending.map(r=>r.id));
 });
-test('old snapshots page beyond the fallback window and are not rewritten when a later save builds the index',async t=>{
+test('a stored snapshot without its reading index is refused as damage and never rewritten',async t=>{
  const f=await fixture(t),etag=(await f.workspace.outline()).etag;
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const value=await store.snapshot();delete value.readingIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',etag,value),etag);}));
- const expected=[...f.book.entries].sort(order).map(r=>r.id);
- assert.deepEqual((await rows(f.workspace,etag)).map(r=>r.id),expected);
- assert.deepEqual((await rows(f.workspace,etag,{backward:true})).map(r=>r.id),[...expected].reverse());
- const ascending=[...f.book.entries].sort((a,b)=>compareRecordDates(a,b)||(a.id<b.id?-1:a.id>b.id?1:0)).map(r=>r.id);
- assert.deepEqual((await rows(f.workspace,etag,{order:'date-asc'})).map(r=>r.id),ascending);
- const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Indexed'}}]},{recordIds:[record.id]});
- await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(etag)).readingIndex,undefined);await new RecordReadingIndex(store).verify(await store.snapshot());});
- assert.deepEqual((await rows(f.workspace,etag)).map(r=>r.id),expected);
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.readingIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',etag,snapshot),etag);}));
+ const stored=()=>f.workspace.catalogue(store=>store.db.get('SELECT payload FROM snapshots WHERE id=$1',etag)),before=await stored();
+ await assert.rejects(rows(f.workspace,etag),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(f.workspace.outline(),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await stored(),before);
 });
 test('missing or substituted reading entries fail verification',async t=>{
  const f=await fixture(t,8);

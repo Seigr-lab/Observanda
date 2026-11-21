@@ -68,7 +68,7 @@ export class ResearchRecords {
         // revision. Removing membership needs that identity, not all its prose.
         // Older summaries still use the history owner's compatibility reader.
         if((await history.display(saved.item)).revision!==command.expectedRevision)throw new AppError('RECORD_CHANGED',[{field:'record',recordId:command.recordId}]);
-        const current=await store.indexed(source),metadata=currentWorkspaceMetadata(structuredClone(current.metadata));
+        const current=source,metadata=currentWorkspaceMetadata(structuredClone(current.metadata));
         await store.validateMetadata(current,metadata,{removed:[command.recordId]});
         await store.commitChanges(head,current,metadata,[],{removed:[command.recordId]});
       }

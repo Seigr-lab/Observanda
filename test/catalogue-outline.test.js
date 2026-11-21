@@ -4,7 +4,8 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {legacyCatalogueFixture} from './legacy-catalogue-fixture.js';
+import {largeCatalogueFixture} from './large-catalogue-fixture.js';
+import {MAX_BYTES,MAX_WORKSPACE_RECORDS} from '../src/web/workspace-limits.js';
 import {WorkspaceReader} from '../src/workspace-reader.js';
 import {workspaceReader} from '../src/web/workspace-reader.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -17,13 +18,14 @@ import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 async function fixture(t,options){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-legacy-outline-')),f=await legacyCatalogueFixture(directory,options);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-large-outline-')),f=await largeCatalogueFixture(directory,options);
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,reader:new WorkspaceReader(f.workspace)};
 }
-test('flat catalogues beyond legacy count and byte budgets open an outline and select only requested originals',async t=>{
- for(const count of [60,1200]){
-  const f=await fixture(t,{count}),read=ResearchCatalogue.prototype.read,record=ResearchCatalogue.prototype.record,loaded=[];
+test('catalogues beyond the complete-document byte and count budgets open an outline and select only requested originals',async t=>{
+ for(const [count,size] of [[60,40000],[1200,20]]){
+  const f=await fixture(t,{count,size}),read=ResearchCatalogue.prototype.read,record=ResearchCatalogue.prototype.record,loaded=[];
+  const stored=await f.workspace.catalogue(store=>store.snapshot());assert.ok(count>MAX_WORKSPACE_RECORDS||stored.bytes>MAX_BYTES);
   ResearchCatalogue.prototype.read=()=>{throw Error('Complete workspace requested');};
   ResearchCatalogue.prototype.record=function(id,...args){loaded.push(id);return record.call(this,id,...args);};
   try{
@@ -37,9 +39,11 @@ test('flat catalogues beyond legacy count and byte budgets open an outline and s
   }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;}
  }
 });
-test('flat pages remain pinned, resume after interruption and preserve order across later writes and backup',async t=>{
+test('catalogue pages remain pinned, resume after interruption and preserve order across later writes and backup',async t=>{
  const f=await fixture(t,{count:46}),start=await f.reader.start(),command={workspaceId:f.book.id,cursor:start.cursor};
- const first=await f.reader.page(command);assert.equal(first.records.length,20);assert.deepEqual(first.records.map(r=>r.record.id),f.records.slice(0,20).map(r=>r.id));
+ // Pages follow authenticated membership order; the client restores saved positions.
+ const first=await f.reader.page(command);assert.equal(first.records.length,20);assert.deepEqual(first.records.map(r=>r.record.id),f.records.map(r=>r.id).toSorted().slice(0,20));
+ assert.deepEqual(first.records.map(r=>r.position),first.records.map(r=>f.records.findIndex(x=>x.id===r.record.id)));
  const selected=await f.reader.selection({workspaceId:f.book.id,ids:[f.records[0].id]}),original=selected.book.entries[0];
  await f.service.save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,title:'Edited after first page'}}]},{recordIds:[original.id]});
  let interrupt=true,failed,requests=[];
@@ -57,7 +61,7 @@ test('flat pages remain pinned, resume after interruption and preserve order acr
  assert.equal((await reader.start({workspaceId:f.book.id,snapshotId:f.etag})).total,46);
 });
 test('declared ownership with a missing authenticated index entry is rejected, never repaired by a fallback',async t=>{
- const f=await fixture(t,{kind:'indexed'});
+ const f=await fixture(t,{});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const source=await store.snapshot(),index=new SnapshotIndex(store),row=await store.member(source,f.records[0].id);
   source.membership=await index.change(source.membership,'book:'+row.notebookId+':'+row.id,null);await index.flush(source.membership);

@@ -138,7 +138,7 @@ export class MigrationImport{
   return this.store.locked(()=>this.workspace.catalogue(async catalogue=>{
    const batch=await this.store.bound(command);if(batch.state==='committed')return batchSummary(batch);
    if(batch.state!=='ready'||!hashValue(command.review)||batch.review!==command.review)throw new AppError('IMPORT_REVIEW');
-   const head=await catalogue.head(),snapshot=await catalogue.indexed(await catalogue.snapshot(head)),index=new SnapshotIndex(catalogue);
+   const head=await catalogue.head(),snapshot=await catalogue.snapshot(head),index=new SnapshotIndex(catalogue);
    // Revalidate every reviewed identity before the first write. Independent
    // workspace activity is allowed; changed import targets require a new review.
    for(let i=0;i<batch.count;i++){
@@ -189,7 +189,7 @@ export class MigrationImport{
   return this.store.locked(()=>this.workspace.catalogue(async catalogue=>{
    const batch=await this.store.bound(command);if(batch.state==='reversed')return batchSummary(batch);
    if(batch.state!=='committed'||command.review!==batch.review)throw new AppError('IMPORT_REVIEW');
-   const head=await catalogue.head(),snapshot=await catalogue.indexed(await catalogue.snapshot(head)),restore=[],removed=[],candidates=[],results=new Map(),counts={removed:0,restored:0,unchanged:0,'preserved-edits':0,'preserved-references':0,'preserved-facts':0,'already-absent':0};
+   const head=await catalogue.head(),snapshot=await catalogue.snapshot(head),restore=[],removed=[],candidates=[],results=new Map(),counts={removed:0,restored:0,unchanged:0,'preserved-edits':0,'preserved-references':0,'preserved-facts':0,'already-absent':0};
    const result=(index,kind,id,disposition)=>{const row=results.get(index)??{};row[kind]={id,disposition};results.set(index,row);counts[disposition]++;};
    const editedDatasets=new Set();
    for(const change of batch.receipt.materialChanges??[]){

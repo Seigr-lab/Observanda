@@ -84,14 +84,13 @@ test('sharing, moves, removal and failed index writes preserve pinned choices an
  const controller=new AbortController();controller.abort();await assert.rejects(indexedRows(f,current,{signal:controller.signal}),{name:'AbortError'});
 });
 
-test('older snapshots keep their identity and fallback until the next atomic write builds the selection index',async t=>{
+test('a stored snapshot without its publication index is refused as damage and never rewritten',async t=>{
  const f=await fixture(t);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.publicationIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.source.etag,snapshot),f.source.etag);}));
-assert.equal((await f.workspace.outline()).etag,f.source.etag);
- const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Revised'}}]},{recordIds:[record.id]});
- await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex,undefined);await new RecordPublicationIndex(store).verify(await store.snapshot());await store.verify(catalogueDescriptor(f.book));});
+ const stored=()=>f.workspace.catalogue(store=>store.db.get('SELECT payload FROM snapshots WHERE id=$1',f.source.etag)),before=await stored();
+ await assert.rejects(f.workspace.outline(),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await stored(),before);
 });
-
 test('missing, substituted and unrelated changed index entries cannot pass full or incremental verification',async t=>{
  const f=await fixture(t),service=new ResearchRecords(f.workspace,{}),record=f.book.entries[0];
  await service.save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,share:!record.share}}]},{recordIds:[record.id]});

@@ -13,7 +13,7 @@ export async function synchronizeWorkspaceName(workspace){
  }else await workspace.withLock(()=>workspace.catalogue(async store=>{
   const head=await store.head(),snapshot=await store.snapshot(head);
   if(snapshot.metadata.title===title)return;
-  const current=await store.indexed(snapshot);
+  const current=snapshot;
   await store.commitChanges(head,current,{...current.metadata,title},[],{now:new Date().toISOString()});
  }));
  return workspace.outline();

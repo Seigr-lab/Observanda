@@ -285,7 +285,7 @@ export class RecordOwnerTransfer{
   }finally{await db.close();}
  }
  async activate(store,value,{signal}){
-  signal?.throwIfAborted();const currentId=await store.head(),current=await store.indexed(await store.snapshot(currentId)),prepared=value.progress.prepared;
+  signal?.throwIfAborted();const currentId=await store.head(),current=await store.snapshot(currentId),prepared=value.progress.prepared;
   if(current.metadata.id!==value.targetOwner.workspaceId||await store.member(current,value.command.recordId)||!prepared)throw new AppError('CONFLICT');
   await withRecordOwnerDocument(store,prepared.descriptor,document=>retainStoredDocument(store,document,prepared.descriptor.encoding));
   const etag=digest('Observanda/catalogue-snapshot/'+randomUUID()),ordinal=(await store.db.get('SELECT MAX(ordinal)+1 AS n FROM snapshots')).n,metadata={...current.metadata,revision:current.metadata.revision+1,updatedAt:now()},member={...prepared.member,position:current.nextPosition};
@@ -311,7 +311,7 @@ export class RecordOwnerTransfer{
   },{signal});
  } async retire(value){
   await this.source.withLock(()=>this.source.catalogue(async store=>withRecordOwnerTransferWrite(store,value,async()=>{
-   const currentId=await store.head(),current=await store.indexed(await store.snapshot(currentId)),row=await store.member(current,value.command.recordId);
+   const currentId=await store.head(),current=await store.snapshot(currentId),row=await store.member(current,value.command.recordId);
    if(row){
     if(row.revision!==value.command.expectedStorageRevision||row.notebookId!==value.command.sourceNotebookId)throw new AppError('RECORD_CHANGED');
     const metadata=currentWorkspaceMetadata(structuredClone(current.metadata));

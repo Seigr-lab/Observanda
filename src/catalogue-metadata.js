@@ -13,7 +13,7 @@ export async function validateIndexedMetadata(store,current,metadata,{removed=[]
  async function context(before,book){
   const known=new Set(identities(before)),reservedIds=[],entryTargets=[],notebooks=new Set(values(book.notebooks).map(n=>n.id));
   for(const id of identities(book))if(identifier(id)&&!known.has(id)){
-   const collision=current.indexVersion?await index.member(await index.find({root:current.membership},'identity:'+id)):current.records.find(row=>row.id===id||row.sections.includes(id));
+   const collision=await index.member(await index.find({root:current.membership},'identity:'+id));
    if(collision&&!excluded.has(collision.id))reservedIds.push(id);
   }
   const targets=new Set([...values(book.branding),...values(book.website?.layouts)].map(v=>v?.target).filter(t=>typeof t==='string'&&t.startsWith('entry:')));

@@ -13,7 +13,7 @@ import {verifyIndexChanges} from './index-change-verification.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 export async function verifySearchChange(store,before,after){
- if(!before?.indexVersion||!after.indexVersion||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex)||before.searchIndex.version!==after.searchIndex.version)return false;
+ if(!before||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex)||before.searchIndex.version!==after.searchIndex.version)return false;
  const members=new SnapshotIndex(store,{cacheSize:4096}),search=new RecordSearchIndex(store,{cacheSize:4096});
  await withScratch(async work=>{
   const pending=new Map();

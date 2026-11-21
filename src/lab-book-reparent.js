@@ -126,7 +126,7 @@ export class LabBookReparents{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId||![value.sourceProjectId,value.targetProjectId].includes(snapshot.metadata.notebooks[0].projectId))throw new AppError('DATABASE_LOCATION');
     const book=snapshot.metadata.notebooks[0],admitted=book.projectId===value.targetProjectId;
     const metadataUnchanged=admitted&&book.share===false&&book.sharePdf!==true;
-    const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[projectSummaryForBook(value.parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId,...privatePublicationFlags(book)}))};
+    const current=snapshot,metadata={...current.metadata,projects:[projectSummaryForBook(value.parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId,...privatePublicationFlags(book)}))};
     if(!admitted)await reparentConfigurationMetadata(store,current.metadata,metadata);
     await store.validateMetadata(current,metadata);
     const publication=new PublicationConversion(this.workspace),index=new SnapshotIndex(store),bookId=this.labBookId;

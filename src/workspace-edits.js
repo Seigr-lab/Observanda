@@ -25,7 +25,7 @@ export class WorkspaceEdits{
   const head=await store.head(),source=await store.snapshot(head);
   if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(head!==command.baseEtag)throw new AppError('CONFLICT');
-  const current=await store.indexed(source),metadata=workspaceEditMetadata(current.metadata,command);
+  const current=source,metadata=workspaceEditMetadata(current.metadata,command);
   const previous=new Map(),removed=command.removed.map(r=>r.id),deleted=new Set(removed);
   for(const change of [...command.changes,...command.removed]){
    const row=await store.member(current,change.id);

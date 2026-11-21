@@ -35,7 +35,7 @@ import {metadataBatchIndex,shareWriterNodes} from './metadata-batch.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {ModuleCatalogue} from './modules/catalogue.js';
-import {SnapshotIndex,validMember} from './snapshot-index.js';
+import {SnapshotIndex} from './snapshot-index.js';
 import {catalogueOutline} from './catalogue-outline.js';
 import {recordPublicationSummary} from './web/record-publication-summary.js';
 import {recordEditionInventory} from './web/publication-inventory.js';
@@ -106,19 +106,18 @@ export class ResearchCatalogue{
   if(!value||!identifier(value.metadata?.id)||!Array.isArray(value.metadata.entries)||value.metadata.entries.length||value.websiteDocuments!==undefined&&value.websiteDocuments!==1)fail();
   assertConfigurationMetadata(value.metadata);
   // Snapshots saved by earlier versions may carry websiteDocuments:1; it no longer means anything.
-  if(value.indexVersion===undefined){
-   if(!Array.isArray(value.records)||!value.records.every(validMember)||new Set(value.records.map(r=>r.id)).size!==value.records.length)fail();
-  }else if(value.indexVersion!==1||!SnapshotIndex.valid(value.membership)||!Number.isSafeInteger(value.count)||value.count<0||
+  if(value.indexVersion!==1||!SnapshotIndex.valid(value.membership)||!Number.isSafeInteger(value.count)||value.count<0||
    !Number.isSafeInteger(value.bytes)||value.bytes<0||!Number.isSafeInteger(value.nextPosition)||value.nextPosition<value.count||
    value.count===0&&value.membership!==null||value.count>0&&!value.membership||
    value.delta&&(!revision(value.delta.parent)||!Array.isArray(value.delta.changed)||!value.delta.changed.every(identifier)||new Set(value.delta.changed).size!==value.delta.changed.length||
     value.delta.removed!==undefined&&(!Array.isArray(value.delta.removed)||!value.delta.removed.every(identifier)||new Set(value.delta.removed).size!==value.delta.removed.length||value.delta.removed.some(id=>value.delta.changed.includes(id)))))fail();
-  if(value.searchIndex!==undefined&&(!value.indexVersion||!RecordSearchIndex.valid(value.searchIndex)||Boolean(value.searchIndex.root)!==Boolean(value.count)))fail();
-  if(value.typeIndex!==undefined&&(!value.indexVersion||!RecordTypeIndex.valid(value.typeIndex)||(value.typeIndex.root?.count??0)>value.count))fail();
-  if(value.recentIndex!==undefined&&(!value.indexVersion||!RecordRecentIndex.valid(value.recentIndex)||(value.recentIndex.root?.count??0)!==value.count))fail();
-  if(value.readingIndex!==undefined&&(!value.indexVersion||!RecordReadingIndex.valid(value.readingIndex)||(value.readingIndex.root?.count??0)!==value.count*2))fail();
-  if(value.facetIndex!==undefined&&(!value.indexVersion||!RecordFacetIndex.valid(value.facetIndex)||(value.facetIndex.root?.count??0)!==value.count*2))fail();
-  if(value.publicationIndex!==undefined&&(!value.indexVersion||!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
+  // Every writer stores all six derived indexes with the membership.
+  if(!RecordSearchIndex.valid(value.searchIndex)||Boolean(value.searchIndex.root)!==Boolean(value.count))fail();
+  if(!RecordTypeIndex.valid(value.typeIndex)||(value.typeIndex.root?.count??0)>value.count)fail();
+  if(!RecordRecentIndex.valid(value.recentIndex)||(value.recentIndex.root?.count??0)!==value.count)fail();
+  if(!RecordReadingIndex.valid(value.readingIndex)||(value.readingIndex.root?.count??0)!==value.count*2)fail();
+  if(!RecordFacetIndex.valid(value.facetIndex)||(value.facetIndex.root?.count??0)!==value.count*2)fail();
+  if((!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
   return value;
  }
  async recordSnapshot(id,recordId){
@@ -126,19 +125,13 @@ export class ResearchCatalogue{
  }
  async member(snapshot,id){
   if(!identifier(id))throw new AppError('INVALID');
-  return snapshot.indexVersion?new SnapshotIndex(this).get(snapshot.membership,id):snapshot.records.find(row=>row.id===id)??null;
+  // Retained record-owner history holds the one member it was transferred with.
+  return snapshot.recordOwnerHistory?snapshot.records.find(row=>row.id===id)??null:new SnapshotIndex(this).get(snapshot.membership,id);
  }
  async manifest(id){
   const value=await this.snapshot(id);
-  if(!value.indexVersion)return value;
   const records=(await new SnapshotIndex(this).rows(value)).sort((a,b)=>a.position-b.position).map(({position,...row})=>row);
   return {metadata:value.metadata,records};
- }
- async indexed(snapshot){
-  if(snapshot.indexVersion)return snapshot;
-  const rows=snapshot.records.map((row,position)=>({...row,position}));
-  return {indexVersion:1,metadata:snapshot.metadata,membership:await new SnapshotIndex(this).build(rows),
-   count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length};
  }
  async scopeKey(scopeId,generation=1,{create=false}={}){
   if(!identifier(scopeId)||!Number.isSafeInteger(generation)||generation<1)throw new AppError('INVALID');
@@ -171,27 +164,26 @@ export class ResearchCatalogue{
  async *searchMembers(snapshot,notebookIds,search,{signal,relatedTo=null}={}){
   const needle=search.trim().toLocaleLowerCase();
   if(snapshot.searchIndex&&(needle||relatedTo&&snapshot.searchIndex.version===2)){yield* new RecordSearchIndex(this).candidates(snapshot.searchIndex,notebookIds,needle,{signal,relatedTo:snapshot.searchIndex.version===2?relatedTo:null});return;}
-  // Retained snapshots made before search indexing keep their original identity.
-  // Their next write builds an index in the same transaction, never on a read.
+  // Without a search term every member in scope is a candidate.
   yield* this.members(snapshot,{signal,notebookIds});
  }
  async *members(snapshot,{signal,notebookIds=null}={}){
-  if(snapshot.indexVersion&&notebookIds&&notebookIds.size<snapshot.metadata.notebooks.length&&await new SnapshotIndex(this).scopedCount(snapshot.membership)===snapshot.count){
-   const index=new SnapshotIndex(this);
+  if(notebookIds&&notebookIds.size<snapshot.metadata.notebooks.length){
+   // Every member carries its lab book ownership key; a shortfall is damage.
+   const index=new SnapshotIndex(this);if(await index.scopedCount(snapshot.membership)!==snapshot.count)fail();
    for(const notebookId of notebookIds)for await(const row of index.members(snapshot.membership,{notebookId})){signal?.throwIfAborted();yield row;}
    return;
   }
-  const rows=snapshot.indexVersion?new SnapshotIndex(this).members(snapshot.membership):snapshot.records;
   let count=0,bytes=0;
-  for await(const stored of rows){
-   signal?.throwIfAborted();const row=snapshot.indexVersion?stored:{...stored,position:count};count++;bytes+=row.bytes;
+  for await(const row of new SnapshotIndex(this).members(snapshot.membership)){
+   signal?.throwIfAborted();count++;bytes+=row.bytes;
    if(!notebookIds||notebookIds.has(row.notebookId))yield row;
   }
-  if(snapshot.indexVersion&&(count!==snapshot.count||bytes!==snapshot.bytes))fail();
+  if(count!==snapshot.count||bytes!==snapshot.bytes)fail();
  }
  async read(id){
   id??=await this.head();
-  const snapshot=await this.snapshot(id),count=snapshot.count??snapshot.records.length,bytes=snapshot.bytes??snapshot.records.reduce((sum,row)=>sum+row.bytes,0);
+  const snapshot=await this.snapshot(id),count=snapshot.count,bytes=snapshot.bytes;
   // This compatibility response intentionally promises a complete document.
   // Reject it before original reads; ordinary app views use outline/selection
   // and bounded query owners instead of silently assembling a large corpus.
@@ -236,7 +228,7 @@ export class ResearchCatalogue{
    });
   }
   const oldHead=await this.db.get("SELECT payload FROM state WHERE slot='head'");
-  const current=oldHead?await this.indexed(await this.snapshot(this.decode('state','head',oldHead.payload).id)):null,index=new SnapshotIndex(this);
+  const current=oldHead?await this.snapshot(this.decode('state','head',oldHead.payload).id):null,index=new SnapshotIndex(this);
   const rows=records.map((row,position)=>({...row,position})),before=[],after=[];let membership;
   if(!current)membership=await index.build(rows);
   else{
@@ -249,15 +241,15 @@ export class ResearchCatalogue{
   await assertProjectHierarchyChange(this,current?.metadata??null,metadata);
   const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current?.metadata??null,metadata);await authority.fullBookRecords(current,metadata,before,after,rows);}
   const snapshot={indexVersion:1,metadata,membership,count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length},search=new RecordSearchIndex(this);
-  snapshot.searchIndex=current?.searchIndex?await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata}):await search.build(snapshot);
+  snapshot.searchIndex=current?await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata}):await search.build(snapshot);
   const types=new RecordTypeIndex(this);
-  snapshot.typeIndex=current?.typeIndex?await types.replace(current.typeIndex,before,after):await types.build(snapshot);
+  snapshot.typeIndex=current?await types.replace(current.typeIndex,before,after):await types.build(snapshot);
   const recent=new RecordRecentIndex(this);
-  snapshot.recentIndex=current?.recentIndex?await recent.replace(current.recentIndex,before,after):await recent.build(snapshot);
+  snapshot.recentIndex=current?await recent.replace(current.recentIndex,before,after):await recent.build(snapshot);
   const reading=new RecordReadingIndex(this);
-  snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
+  snapshot.readingIndex=current?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
   const facets=new RecordFacetIndex(this,{metadata,previousMetadata:current?.metadata??null});
-  snapshot.facetIndex=current?.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
+  snapshot.facetIndex=current?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
@@ -318,7 +310,7 @@ export class ResearchCatalogue{
    }
    const current=await operationStage('validate-records',{},async()=>{
     validateRecordChanges(source.metadata,modified,[]);
-    const current=await this.indexed(source),index=new SnapshotIndex(this);
+    const current=source,index=new SnapshotIndex(this);
     validateRecordChanges(current.metadata,modified,await index.validationRows(current.membership,modified));return current;
    });
    await this.commitChanges(currentId,current,current.metadata,modified,{now});
@@ -333,7 +325,7 @@ export class ResearchCatalogue{
  }
  // Shared commit owner for record and structure commands; caller validation and
  // all immutable branches, history receipts and the head share one transaction.
- async commitChanges(currentId,current,proposed,modified,{removed=[],now=new Date().toISOString(),membershipRebuilt=false}={}){
+ async commitChanges(currentId,current,proposed,modified,{removed=[],now=new Date().toISOString()}={}){
    if(proposed.id!==current.metadata.id||proposed.revision!==current.metadata.revision||proposed.createdAt!==current.metadata.createdAt)throw new AppError('CONFLICT');
    const bulk=removed.length>20||!Array.isArray(modified)||modified.length>20;
    const index=new SnapshotIndex(this,bulk?{cacheSize:4096,cacheMembers:true}:{});
@@ -373,12 +365,12 @@ export class ResearchCatalogue{
     operationAdvance();
    }
    });
-   return this.finishRecordChanges(currentId,current,metadata,before,after,{removed,changedIds,now,membershipRebuilt,bulk,index,etag,ordinal,count,bytes,nextPosition});
+   return this.finishRecordChanges(currentId,current,metadata,before,after,{removed,changedIds,now,bulk,index,etag,ordinal,count,bytes,nextPosition});
  }
  // Every writer, including selected-block edits, publishes through the same
  // membership, history and derived-index transaction. No head is advanced until
  // all the retained values and indexes have been written successfully.
- async finishRecordChanges(currentId,current,metadata,before,after,{removed=[],changedIds=new Set(after.map(row=>row.id)),membershipRebuilt=false,bulk=false,index=new SnapshotIndex(this),etag,ordinal,count=current.count-before.length+after.length,bytes=current.bytes-before.reduce((n,row)=>n+row.bytes,0)+after.reduce((n,row)=>n+row.bytes,0),nextPosition=current.nextPosition}={}){
+ async finishRecordChanges(currentId,current,metadata,before,after,{removed=[],changedIds=new Set(after.map(row=>row.id)),bulk=false,index=new SnapshotIndex(this),etag,ordinal,count=current.count-before.length+after.length,bytes=current.bytes-before.reduce((n,row)=>n+row.bytes,0)+after.reduce((n,row)=>n+row.bytes,0),nextPosition=current.nextPosition}={}){
    await assertRecordOwnerRowsWritable(this,before,after);
    await assertProjectHierarchyChange(this,current.metadata,metadata);
    const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current.metadata,metadata);await authority.recordRows(current.metadata,before);await authority.recordRows(metadata,after);}
@@ -387,23 +379,22 @@ export class ResearchCatalogue{
    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    const membership=await index.replace(current.membership,before,after);
    const snapshot={indexVersion:1,metadata,membership,count,bytes,nextPosition,
-    // Reconstructed old membership changes authenticated descriptors even when
-    // no original changed. A record-only delta cannot describe that transition.
-    ...(!membershipRebuilt&&count===current.count-removed.length?{delta:{parent:currentId,changed:[...changedIds],...(removed.length?{removed}: {})}}:{})};
+    // A record-only delta is kept only when no member was added.
+    ...(count===current.count-removed.length?{delta:{parent:currentId,changed:[...changedIds],...(removed.length?{removed}: {})}}:{})};
    const search=new RecordSearchIndex(this,bulk?{cacheSize:4096}:{});
-   snapshot.searchIndex=current.searchIndex?await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata}):await search.build(snapshot);
+   snapshot.searchIndex=await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata});
    operationAdvance();
    const types=new RecordTypeIndex(this);
-   snapshot.typeIndex=current.typeIndex?await types.replace(current.typeIndex,before,after):await types.build(snapshot);
+   snapshot.typeIndex=await types.replace(current.typeIndex,before,after);
    operationAdvance();
    const recent=new RecordRecentIndex(this);
-   snapshot.recentIndex=current.recentIndex?await recent.replace(current.recentIndex,before,after):await recent.build(snapshot);
+   snapshot.recentIndex=await recent.replace(current.recentIndex,before,after);
    operationAdvance();
    const reading=new RecordReadingIndex(this);
-   snapshot.readingIndex=current.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
+   snapshot.readingIndex=await reading.replace(current.readingIndex,before,after);
    operationAdvance();
    const facets=new RecordFacetIndex(this,{metadata,previousMetadata:current?.metadata??null});
-   snapshot.facetIndex=current.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
+   snapshot.facetIndex=await facets.replace(current.facetIndex,before,after);
    operationAdvance();
    const publication=new RecordPublicationIndex(this);
    snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
@@ -419,39 +410,14 @@ export class ResearchCatalogue{
  async changeResponse(baseEtag,records,{removed=[],appended=[]}={}){
   if(records.length+removed.length>UPDATE_RECORDS||records.reduce((n,record)=>n+Buffer.byteLength(JSON.stringify(record)),0)>UPDATE_BYTES)return this.recordPatch(baseEtag);
   const etag=await this.head(),snapshot=await this.snapshot(etag);
-  return {etag,recordPatch:{baseEtag,metadata:snapshot.metadata,order:null,count:snapshot.count??snapshot.records.length,records,removed,appended},
+  return {etag,recordPatch:{baseEtag,metadata:snapshot.metadata,order:null,count:snapshot.count,records,removed,appended},
    recordRevisions:Object.fromEntries(records.map(r=>[r.id,recordRevision(r)]))};
  }
  async recordPatch(baseEtag,{signal}={}){
   signal?.throwIfAborted();
   const head=await this.head(),next=await this.snapshot(head),base=await this.snapshot(baseEtag);
   if(base.metadata.id!==next.metadata.id)throw new AppError('WORKSPACE_CHANGED');
-  if(base.indexVersion&&next.indexVersion)return recordUpdate(this,baseEtag,{signal});
-  const count=next.count??next.records.length,bytes=next.bytes??next.records.reduce((n,row)=>n+row.bytes,0);
-  if(count>MAX_WORKSPACE_RECORDS||assembledBytes(next.metadata,count,bytes)>MAX_BYTES)throw new AppError('WORKSPACE_READ_LIMIT');
-  const changed=new Set();let cursor=head,source=next;
-  // Compatibility with flat retained bases: recent deltas may still provide a
-  // small response. Older flat history retains its complete reconciliation path.
-  for(let depth=0;depth<64;depth++){
-   if(cursor===baseEtag){
-    const records=[],removed=[];
-    for(const id of changed){
-     const row=await this.member(next,id),prior=await this.member(source,id);if(!prior)fail();
-     if(!row)removed.push(id);else if(row.revision!==prior.revision)records.push(await this.record(id,row.revision));
-    }
-    return {etag:head,recordPatch:{baseEtag,metadata:next.metadata,order:null,count:next.count??next.records.length,records,removed},
-     recordRevisions:Object.fromEntries(records.map(r=>[r.id,recordRevision(r)]))};
-   }
-   if(!source.delta)break;
-   for(const id of [...source.delta.changed,...(source.delta.removed??[])])changed.add(id);
-   cursor=source.delta.parent;source=await this.snapshot(cursor);
-   if(source.metadata.id!==next.metadata.id)fail();
-  }
-  const previous=await this.manifest(baseEtag),complete=await this.manifest(head);
-  const prior=new Map(previous.records.map(r=>[r.id,r.revision])),nextIds=new Set(complete.records.map(r=>r.id));
-  const records=await Promise.all(complete.records.filter(r=>prior.get(r.id)!==r.revision).map(r=>this.record(r.id,r.revision)));
-  return {etag:head,recordPatch:{baseEtag,metadata:complete.metadata,order:complete.records.map(r=>r.id),records,removed:previous.records.filter(r=>!nextIds.has(r.id)).map(r=>r.id)},
-    recordRevisions:Object.fromEntries(records.map(r=>[r.id,recordRevision(r)]))};
+  return recordUpdate(this,baseEtag,{signal});
  }
  async snapshots(){return (await this.db.all('SELECT id FROM snapshots ORDER BY ordinal DESC')).map(r=>r.id);}
  async rememberHistory(record,metadata,snapshotId,initialize=false,fresh=false){
@@ -608,31 +574,10 @@ export class ResearchCatalogue{
  async *verifiedObjects(){
   yield* verifiedCatalogueObjects(this);
  }
- async *orderedMembers(snapshot){
-  if(snapshot.indexVersion){yield* this.members(snapshot);return;}
-  // Only the old, intrinsically flat representation needs an array here.
-  yield* snapshot.records.map((row,position)=>({...row,position})).sort((a,b)=>a.id<b.id?-1:1);
- }
  async verifyDelta(snapshot){
   const parent=await this.snapshot(snapshot.delta.parent);
   if(parent.metadata.id!==snapshot.metadata.id||parent.metadata.revision+1!==snapshot.metadata.revision)fail();
-  if(await verifyIndexedDelta(this,parent,snapshot))return;
-  const changed=new Set(snapshot.delta.changed),removed=new Set(snapshot.delta.removed??[]);
-  let changes=0,deletions=0;
-  const iterator=this.orderedMembers(parent);
-  try{
-   let prior=await iterator.next();
-   for await(const row of this.orderedMembers(snapshot)){
-    while(!prior.done&&prior.value.id<row.id){
-     if(!removed.has(prior.value.id))fail();deletions++;prior=await iterator.next();
-    }
-    if(prior.done||row.id!==prior.value.id||removed.has(row.id)||row.position!==prior.value.position)fail();
-    if(changed.has(row.id))changes++;else if(hash(row)!==hash(prior.value))fail();
-    prior=await iterator.next();
-   }
-   while(!prior.done){if(!removed.has(prior.value.id))fail();deletions++;prior=await iterator.next();}
-  }finally{await iterator.return();}
-  if(changes!==changed.size||deletions!==removed.size)fail();
+  await verifyIndexedDelta(this,parent,snapshot);
  }
  async verifySnapshot(id,workspaceId,verified={once:(_identity,check)=>check()},previous=null,media=null){
   if(!verified.stableSnapshot)previous=null;
@@ -647,14 +592,14 @@ export class ResearchCatalogue{
   };
   for(const notebook of snapshot.metadata.notebooks)await configuration({workspaceId,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'},notebook.configuration);
   for(const project of snapshot.metadata.projects)await configuration({workspaceId,projectId:project.id,notebookId:null,slot:'labBookTemplate'},project.labBookTemplate?.configuration);
-  if(snapshot.indexVersion)await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
+  await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
    if(!previous||!await verifyMembershipChange(this,previous,snapshot))await index.verify(snapshot);
   });
   if(snapshot.metadata.formatVersion>=21){
    try{await this.validateMetadata(snapshot,snapshot.metadata);}catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))fail();throw error;}
   }
   if(media)await verified.once(['media-metadata',context],()=>media.metadata(snapshot.metadata));
-  const unchangedContext=previous?.indexVersion&&snapshot.indexVersion&&snapshot.metadata.formatVersion>=21&&hash(verificationContext(previous.metadata))===context;
+  const unchangedContext=previous&&snapshot.metadata.formatVersion>=21&&hash(verificationContext(previous.metadata))===context;
   const members=unchangedContext?changedVerificationMembers(this,previous,snapshot):this.members(snapshot);
   for await(const row of members){
    // The member contains every identity/workflow field used to resolve the
@@ -662,7 +607,7 @@ export class ResearchCatalogue{
    // of the receipt, so changed ownership or run relationships force a check.
    // Full membership verification already proves section identity ownership.
    // Workflow validation needs the parent/child relationships, not every ID.
-   const validation=snapshot.indexVersion&&snapshot.metadata.formatVersion>=21?await index.validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:row.runOf.map(target=>({role:'run-of',target}))}]):[];
+   const validation=snapshot.metadata.formatVersion>=21?await index.validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:row.runOf.map(target=>({role:'run-of',target}))}]):[];
    await verified.once(['record',context,row,validation],async()=>{
    if(snapshot.metadata.formatVersion>=21&&row.queryRevision&&(row.bytes>65535||row.collections||row.hasAttempt)){
     try{await verifyRecordDocument(this,row,snapshot.metadata,validation,media);}
@@ -675,7 +620,7 @@ export class ResearchCatalogue{
    if(hash(stored)!==hash(expected))fail();
    if(media)await media.record(record);
    await validateFigureSources(this.workspace,record);
-   if(snapshot.indexVersion&&snapshot.metadata.formatVersion>=21){
+   if(snapshot.metadata.formatVersion>=21){
     try{validateRecordChanges(snapshot.metadata,[record],validation);}
     catch(error){if(['INVALID','FORMAT','LIMIT','RECORD_SIZE_LIMIT'].includes(error.code))fail();throw error;}
    }

@@ -184,14 +184,10 @@ test('template snapshots, private moves and selected media use the shared record
  assert.equal(stored.entries[0].share,false);assert.equal(stored.entries[0].attachments[0].share,false);
  assert.deepEqual(stored.entries[0].template,base.book.entries[0].template);assert.deepEqual(patch(base,result).book,stored);
 });
-test('pre-index metadata edits and unchanged retries preserve history and reconcile counts',async t=>{
+test('metadata edits and unchanged retries preserve history and reconcile counts',async t=>{
  const f=await fixture(t);
- await f.ws.withLock(()=>f.ws.catalogue(async store=>{
-  const manifest=await store.manifest(f.base.etag);
-  await store.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',f.base.etag,store.encode('snapshot',f.base.etag,manifest));
- }));
  const unchanged=await f.service.save(request(f.base,f.base.book));assert.deepEqual(patch(f.base,unchanged).book,f.base.book);
- const draft=structuredClone(f.base.book);draft.description='Older workspace edited';
+ const draft=structuredClone(f.base.book);draft.description='Workspace edited';
  const result=await f.service.save(request(f.base,draft));assert.deepEqual(patch(f.base,result).book,(await f.ws.read()).book);
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.base.book)));
 });

@@ -53,7 +53,6 @@ export async function* changedVerificationMembers(store,before,after){
  for await(const change of records(index,before,after))if(change.after)yield change.after;
 }
 export async function verifyIndexedDelta(store,parent,snapshot){
- if(!parent.indexVersion||!snapshot.indexVersion)return false;
  const index=new SnapshotIndex(store,{cacheSize:4096}),changed=new Set(snapshot.delta.changed),removed=new Set(snapshot.delta.removed??[]);
  if(snapshot.count!==parent.count-removed.size)fail();
  for(const id of changed){
@@ -67,7 +66,7 @@ export async function verifyIndexedDelta(store,parent,snapshot){
  return true;
 }
 export async function verifyMembershipChange(store,before,after){
- if(!before?.indexVersion||!after.indexVersion||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex)||after.nextPosition<before.nextPosition)return false;
+ if(!before||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex)||after.nextPosition<before.nextPosition)return false;
  const index=new SnapshotIndex(store,{cacheSize:4096});let count=before.count,bytes=before.bytes;
  async function* changes(){for await(const change of records(index,before,after)){
   count+=Number(Boolean(change.after))-Number(Boolean(change.before));bytes+=(change.after?.bytes??0)-(change.before?.bytes??0);yield change;
@@ -76,7 +75,7 @@ export async function verifyMembershipChange(store,before,after){
  if(count!==after.count||bytes!==after.bytes)fail();return true;
 }
 export async function verifyDerivedRecordChange(store,index,field,before,after){
- if(!before?.indexVersion||!after.indexVersion||!index.constructor.valid(before[field])||!index.constructor.valid(after[field])||before[field].version!==after[field].version)return false;
+ if(!before||!index.constructor.valid(before[field])||!index.constructor.valid(after[field])||before[field].version!==after[field].version)return false;
  if(before[field].workspaceId!==undefined||after[field].workspaceId!==undefined){
   if(before[field].workspaceId!==before.metadata.id||after[field].workspaceId!==after.metadata.id)fail();
   if(before[field].workspaceId!==after[field].workspaceId)return false;

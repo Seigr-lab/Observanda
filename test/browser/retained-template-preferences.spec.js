@@ -16,7 +16,7 @@ test('retained template choices recover without losing typed names, focus or sav
  let app,release=()=>{};
  try{
   await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-   const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),owner={workspaceId:book.id,projectId,notebookId:null,slot:'labBookTemplate'};
+   const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),owner={workspaceId:book.id,projectId,notebookId:null,slot:'labBookTemplate'};
    metadata.projects[0].labBookTemplate={name:'Computer / IT',configuration:await new ConfigurationDocuments(store).retainInline(owner,starterTemplate('computer-it').configuration)};
    await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[]);
   }));

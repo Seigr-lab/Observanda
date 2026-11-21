@@ -25,7 +25,7 @@ test('selected configuration pages preserve late edits and create from the saved
  notebook.configuration={profiles:[],sections:[section]};const prior=book.entries[0];prior.notebookId=notebook.id;prior.template=templateFrom(section);prior.template.values.field_24='Condition choice 68';book.entries=[prior];const originalTemplate=structuredClone(prior.template);
  const fixture=await encryptedFixture(directory,book);
  await fixture.workspace.withLock(()=>fixture.workspace.catalogue(async store=>{
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),selected=metadata.notebooks.find(value=>value.id===notebook.id);
+  const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),selected=metadata.notebooks.find(value=>value.id===notebook.id);
   selected.configuration=await new ConfigurationDocuments(store).retainInline({workspaceId:book.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'},largeSchema);
   await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[]);
  }));

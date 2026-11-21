@@ -75,7 +75,7 @@ export class LocalIntake{
    if(manifest.record.notebookId!==bound.record.notebookId)throw new AppError('INTAKE_INVALID');
    await this.records().prepare({...bound.book,partialRecords:true},{workspaceId:manifest.workspaceId,changes:[{id:manifest.recordId,expectedRevision:manifest.expectedRevision,record:manifest.record}]});
    await this.workspace.catalogue(async store=>{
-    const current=await store.indexed(await store.snapshot()),row=await store.member(current,manifest.recordId);
+    const current=await store.snapshot(),row=await store.member(current,manifest.recordId);
     if((await recordReplacementBase(store,row))?.revision!==manifest.expectedRevision)throw new AppError('RECORD_CHANGED');
     validateRecordChanges(current.metadata,[manifest.record],await new SnapshotIndex(store).validationRows(current.membership,[manifest.record]));
     await validateReplacementAttempt(store,row,manifest.record,current.metadata);

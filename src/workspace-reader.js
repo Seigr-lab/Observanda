@@ -39,7 +39,7 @@ export class WorkspaceReader {
      if(snapshot.metadata.id!==outline.metadata.id)throw new AppError('WORKSPACE_CHANGED');
      if(snapshot.metadata.formatVersion<21)return null;
      signal?.throwIfAborted();
-     const anchor={version:snapshot.indexVersion?1:2,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
+     const anchor={version:1,workspaceId:snapshot.metadata.id,etag,after:null,offset:0,bytes:0};
      const counts=await catalogueOutline(store,snapshot,{signal});
      return {metadata:snapshot.metadata,etag,...counts,
       cursor:store.encode('workspace-page',anchor.workspaceId,anchor).toString('base64url')};
@@ -118,30 +118,26 @@ export class WorkspaceReader {
   return this.workspace.catalogue(async store=>{
    let anchor;
    try{anchor=store.decode('workspace-page',workspaceId,Buffer.from(cursor,'base64url'));}catch(error){if(error.code==='ACCESS_LOCKED')throw error;cursorError();}
-   if(!anchor||![1,2].includes(anchor.version)||anchor.workspaceId!==workspaceId||!revisionId(anchor.etag)||
+   if(!anchor||anchor.version!==1||anchor.workspaceId!==workspaceId||!revisionId(anchor.etag)||
     !Number.isSafeInteger(anchor.offset)||anchor.offset<0||!Number.isSafeInteger(anchor.bytes)||anchor.bytes<0||
-    (anchor.after!==null&&(anchor.version===1?!researchId(anchor.after):!Number.isSafeInteger(anchor.after)||anchor.after<0||anchor.after+1!==anchor.offset))||(anchor.offset===0)!==(anchor.after===null))cursorError();
+    (anchor.after!==null&&!researchId(anchor.after))||(anchor.offset===0)!==(anchor.after===null))cursorError();
    const current=await store.snapshot();
    if(current.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const snapshot=await store.snapshot(anchor.etag);
-   const {total,totalBytes}=snapshotTotals(snapshot),flat=anchor.version===2;
-   if(snapshot.metadata.id!==workspaceId||snapshot.metadata.formatVersion<21||(flat?snapshot.indexVersion!==undefined:snapshot.indexVersion!==1))cursorError();
+   const {total,totalBytes}=snapshotTotals(snapshot);
+   if(snapshot.metadata.id!==workspaceId||snapshot.metadata.formatVersion<21)cursorError();
    if(anchor.offset>total||anchor.bytes>totalBytes)cursorError();
    const records=[];let bytes=0,after=anchor.after,more=false;
-   async function* rows(){
-    if(!flat){yield* new SnapshotIndex(store).members(snapshot.membership,{after});return;}
-    for(let position=anchor.offset;position<total;position++)yield {...snapshot.records[position],position};
-   }
-   for await(const row of rows()){
+   for await(const row of new SnapshotIndex(store).members(snapshot.membership,{after})){
     signal?.throwIfAborted();
     // A valid record larger than the target travels alone, without truncation.
     if(records.length&&(records.length===WORKSPACE_PAGE_RECORDS||bytes+row.bytes>WORKSPACE_PAGE_BYTES)){more=true;break;}
-    if(row.position>=(flat?total:snapshot.nextPosition))damaged();
+    if(row.position>=snapshot.nextPosition)damaged();
     const record=await store.record(row.id,row.revision);
     signal?.throwIfAborted();
     const actualBytes=Buffer.byteLength(JSON.stringify(record,null,2).split('\n').map(line=>'    '+line).join('\n'));
     if(actualBytes!==row.bytes)damaged();
-    records.push({record,revision:recordRevision(record),position:row.position});bytes+=row.bytes;after=flat?row.position:row.id;
+    records.push({record,revision:recordRevision(record),position:row.position});bytes+=row.bytes;after=row.id;
    }
    const loaded=anchor.offset+records.length,bytesLoaded=anchor.bytes+bytes;
    if(loaded>total||bytesLoaded>totalBytes||more&&loaded>=total||

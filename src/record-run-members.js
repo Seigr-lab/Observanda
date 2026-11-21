@@ -11,7 +11,6 @@ export async function hasRunParent(store,row,recordId){
 export async function* recordRunMembers(store,snapshot,recordId,{signal,notebookIds}={}){
  const index=new SnapshotIndex(store);
  const rows=async function*(){
-  if(!snapshot.indexVersion){yield* store.members(snapshot,{signal,notebookIds});return;}
   for await(const entry of index.entries({root:snapshot.membership},'run:'+recordId+':')){
    signal?.throwIfAborted();const row=await index.member(entry);
    if(entry.id!=='run:'+recordId+':'+row.id||!row.runOf.some(target=>target.id===recordId))throw new AppError('CATALOGUE_DAMAGED');

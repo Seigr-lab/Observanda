@@ -207,18 +207,14 @@ test('client rejects incomplete deletion deltas and never silently keeps stale r
  }
 });
 
-test('pre-index catalogues validate structure and upgrade membership without changing original records',async t=>{
+test('structure previews and saves validate membership without changing original records',async t=>{
  const f=await fixture(t,6);
- await f.ws.withLock(()=>f.ws.catalogue(async store=>{
-  const manifest=await store.manifest(f.base.etag);
-  await store.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',f.base.etag,store.encode('snapshot',f.base.etag,manifest));
- }));
  const change={workspaceTitle:'Restored workspace',workspaceDescription:'',projectId:f.base.book.projects[0].id};
  const preview=await f.service.execute('reorganize',{etag:f.base.etag,change},{preview:true});
  assert.equal(preview.summary.records,3);
- const result=await command(f,f.base,'notebook',{...f.base.book.notebooks[0],title:'Renamed legacy book'});
+ const result=await command(f,f.base,'notebook',{...f.base.book.notebooks[0],title:'Renamed lab book'});
  const latest=patch(f.base,result).book;
- assert.equal(latest.notebooks[0].title,'Renamed legacy book');assert.deepEqual(latest.entries,f.base.book.entries);
+ assert.equal(latest.notebooks[0].title,'Renamed lab book');assert.deepEqual(latest.entries,f.base.book.entries);
  assert.equal((await f.ws.catalogue(s=>s.snapshot())).indexVersion,1);
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.base.book)));
 });

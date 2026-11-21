@@ -38,7 +38,7 @@ test('retained material membership never bypasses live project handover or scope
  })));
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>withMetadataBatch(store,async()=>{
   await materials.assertOwner(record.id,{write:true});
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head));
+  const head=await store.head(),current=await store.snapshot(head);
   await store.commitChanges(head,current,current.metadata,[],{removed:[record.id]});
   await assert.rejects(materials.assertOwner(record.id,{write:true}),{code:'MATERIAL_INVALID'});
  })));

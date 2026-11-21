@@ -133,7 +133,7 @@ export class ProjectRenames{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId)throw new AppError('STORAGE_RENAME_STATE');
     if(snapshot.metadata.title===name&&snapshot.metadata.projects[0].title===name&&(!value.settings||serialize(snapshot.metadata.projects[0])===serialize(value.settings.project)))return;
     if(value.settings&&head!==value.settings.etag)throw new AppError('CONFLICT');
-    const current=await store.indexed(snapshot),metadata={...current.metadata,title:name,projects:value.settings?[value.settings.project]:current.metadata.projects.map(project=>({...project,title:name}))};await store.validateMetadata(current,metadata,{records:[]});await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:this.projectId,notebookId:null,slot:'labBookTemplate'},value.settings.checkpoint);
+    const current=snapshot,metadata={...current.metadata,title:name,projects:value.settings?[value.settings.project]:current.metadata.projects.map(project=>({...project,title:name}))};await store.validateMetadata(current,metadata,{records:[]});await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:this.projectId,notebookId:null,slot:'labBookTemplate'},value.settings.checkpoint);
    })));await checkpoint('metadata',value);
    for(let attempt=0;;attempt++){
     const entries=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];

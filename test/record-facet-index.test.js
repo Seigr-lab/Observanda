@@ -31,12 +31,13 @@ test('record facets and indexed pages agree with complete scans before and after
  await records.remove({workspaceId:f.book.id,recordId:target.id,expectedRevision:recordRevision(saved.book.entries[0])});const removed=await f.reader.list(f.query);assert.equal(removed.total,expected.length-1);assert.deepEqual(removed.domains,['arts-creative']);assert.deepEqual(removed.counts,recordCounts(expected.filter(value=>value.id!==target.id)));
  await f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();await new RecordFacetIndex(store).verify(snapshot);});
 });
-test('older snapshots keep the scan fallback and the next successful write creates verified facets',async t=>{
+test('a stored snapshot without its facet index is refused as damage and never rewritten',async t=>{
  const f=await fixture(t),first=await f.reader.list(f.query);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.facetIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',first.snapshotId,snapshot),first.snapshotId);}));
- assert.deepEqual((await f.reader.list(f.query)).records,first.records);
- const target=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:target.id,expectedRevision:recordRevision(target),record:{...target,title:'After upgrade'}}]},{recordIds:[target.id]});
- await f.workspace.catalogue(async store=>{const current=await store.snapshot();assert.ok(current.facetIndex);await new RecordFacetIndex(store).verify(current);assert.equal((await store.snapshot(first.snapshotId)).facetIndex,undefined);});
+ const stored=()=>f.workspace.catalogue(store=>store.db.get('SELECT payload FROM snapshots WHERE id=$1',first.snapshotId)),before=await stored();
+ await assert.rejects(f.reader.list(f.query),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(f.workspace.outline(),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await stored(),before);
 });
 test('an altered record facet branch cannot supply trusted counts',async t=>{
  const f=await fixture(t);

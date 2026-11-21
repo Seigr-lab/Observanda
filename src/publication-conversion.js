@@ -4,6 +4,7 @@ import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
 import {SnapshotIndex} from './snapshot-index.js';
+import {assertSnapshotOwnership} from './snapshot-ownership.js';
 import {WebsiteFileStore,websiteSourceId} from './website-file-store.js';
 import {sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {PUBLICATION_PARTS,publicationPartAllowed,figureSharingId} from './web/record-publication-privacy.js';
@@ -107,8 +108,7 @@ async function states(storage,targets,workspaceId,selectedChannels=channels){
   const snapshotId=await store.head(),snapshot=await store.snapshot(snapshotId),metadata=snapshot.metadata;if(workspaceId&&metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const rows=new Map(),result=new Map();
   for(const notebookId of targets.books){
-   if(!snapshot.indexVersion)throw new AppError('STORAGE_UPGRADE_REQUIRED');
-   const index=new SnapshotIndex(store);if(await index.scopedCount(snapshot.membership)!==snapshot.count)throw new AppError('STORAGE_UPGRADE_REQUIRED');
+   await assertSnapshotOwnership(store,snapshot);const index=new SnapshotIndex(store);
    for await(const row of index.members(snapshot.membership,{notebookId}))rows.set(row.id,row);
   }
   for(const [id] of targets.records)if(!rows.has(id)){const row=await store.member(snapshot,id);if(row)rows.set(id,row);}

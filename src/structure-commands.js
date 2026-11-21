@@ -8,8 +8,7 @@ import {SnapshotIndex} from './snapshot-index.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {digest,serialize} from './storage-format.js';
-import {hasSnapshotOwnership,completeSnapshotOwnership} from './snapshot-ownership.js';
-import {legacyStructurePreview} from './structure-preview.js';
+import {assertSnapshotOwnership} from './snapshot-ownership.js';
 
 const actions={structure:saveStructure,notebook:editNotebook,reorganize:reorganizeWorkspace};
 const extras=result=>({...(result.projectId?{projectId:result.projectId}:{}),moved:result.moved??false});
@@ -76,10 +75,8 @@ export class StructureCommands{
   const collection=kind==='structure'&&['project','notebook'].includes(data.change?.kind)?data.change.kind==='project'?'projects':'notebooks':null;
   if((collection&&!source.metadata[collection].some(value=>value.id===data.change.value?.id))||(kind==='reorganize'&&data.change.projectId==='new'))throw new AppError('INVALID');
   // Website documents own every logo, so the workspace has none to copy.
-  const complete=await hasSnapshotOwnership(store,source);
-  if(preview&&!complete)return legacyStructurePreview(store,source,data.change,etag,{signal});
-  if(!complete)onProgress?.({stage:'indexing'});
-  const current=complete?source:await completeSnapshotOwnership(store,source,{signal}),index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),change=structuredClone(data.change);
+  await assertSnapshotOwnership(store,source);
+  const current=source,index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),change=structuredClone(data.change);
   let configuration=null;
   if(data.configurationDraft!==undefined||data.configurationPin!==undefined){
    const owner=configurationOwner(data.configurationPin);if(kind!=='structure'||!['project','notebook'].includes(change.kind)||change.kind==='notebook'&&(owner.slot!=='configuration'||owner.notebookId!==change.value?.id||owner.projectId!==source.metadata.notebooks.find(n=>n.id===change.value?.id)?.projectId)||change.kind==='project'&&(owner.slot!=='labBookTemplate'||owner.projectId!==change.value?.id))throw new AppError('INVALID');
@@ -109,7 +106,7 @@ export class StructureCommands{
   }
   if(preview)return {summary:result.summary,etag};
   const targets=new Map(result.book.entries.map(r=>[r.id,r])),now=new Date().toISOString();
-  await commitStructureDocuments(store,etag,current,metadata,selected,targets,{removed,now,membershipRebuilt:!complete,signal,onProgress});
+  await commitStructureDocuments(store,etag,current,metadata,selected,targets,{removed,now,signal,onProgress});
   if(configuration?.draft)await discardConfigurationCheckpoint(store,configuration.owner,{id:configuration.draft.id,revision:configuration.revision});
   signal?.throwIfAborted();
   if(receiptFile)await this.workspace.writeMetadata(receiptFile,serialize({version:1,workspaceId,fingerprint,etag:await store.head(),extras:extras(result)}));

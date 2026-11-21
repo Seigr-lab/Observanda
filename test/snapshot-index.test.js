@@ -172,10 +172,8 @@ test('failed snapshot commits roll back every new index node; restored copies re
  assert.equal((await restored.read()).book.entries.length,base.book.entries.length);
 });
 
-test('missing or swapped immutable branches fail closed and legacy snapshots update in place',async t=>{
+test('missing or swapped immutable branches fail closed',async t=>{
  const f=await fixture(t),{ws,base}=f;
- // Simulate a retained flat snapshot without changing its identity or contents.
- await ws.withLock(()=>ws.catalogue(async s=>{const manifest=await s.manifest(base.etag);await s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',base.etag,s.encode('snapshot',base.etag,manifest));}));
  await save(f,base,[{...base.book.entries[0],title:'Indexed in the same workspace'}]);
  const head=await ws.catalogue(s=>s.snapshot()),slot='snapshot-index:'+head.membership.hash,db=await ws.openCatalogue();
  try{

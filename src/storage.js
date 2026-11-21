@@ -227,7 +227,7 @@ export class Workspace {
             const etag=await store.head(),snapshot=await store.snapshot(etag);
             if(snapshot.metadata.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');
             const {entries,...metadata}=snapshot.metadata;void entries;
-            return {metadata,etag,recordCount:snapshot.count??snapshot.records.length};
+            return {metadata,etag,recordCount:snapshot.count};
           }
           const result=await store.read();
           if(result.book.id!==book.workspaceId)throw new AppError('CATALOGUE_DAMAGED');

@@ -29,7 +29,7 @@ test('configuration larger than the former metadata budget supports a bounded se
  last.fields=[{key:'condition',label:'Condition',type:'select',unit:'',required:false,choices:Array.from({length:97},(_,i)=>'Condition '+i)}];
  const fullBytes=Buffer.byteLength(serialize(configuration));assert.ok(fullBytes>MAX_METADATA_BYTES,{fullBytes,limit:MAX_METADATA_BYTES});
  const reference=await workspace.withLock(()=>workspace.catalogue(async store=>{
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),reference=await new ConfigurationDocuments(store).retainInline(owner,configuration);
+  const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),reference=await new ConfigurationDocuments(store).retainInline(owner,configuration);
   metadata.notebooks.find(value=>value.id===notebook.id).configuration=reference;assert.ok(Buffer.byteLength(serialize(metadata))<MAX_METADATA_BYTES);
   await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[]);return reference;
  }));
@@ -58,7 +58,7 @@ test('complete workspace reads expand small retained configurations and refuse o
  t.after(async()=>{await databases.close();detach();await clearVault(f.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-read-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const section=i=>({id:randomUUID(),profileId:null,key:'section-'+i,label:'Observation '+i,description:'Retained schema',enabled:true,fields:[]}),small={profiles:[],sections:[section(0)]};
  const configure=value=>workspace.withLock(()=>workspace.catalogue(async store=>{
-  const head=await store.head(),snapshot=await store.indexed(await store.snapshot(head)),metadata=structuredClone(snapshot.metadata),documents=new ConfigurationDocuments(store);
+  const head=await store.head(),snapshot=await store.snapshot(head),metadata=structuredClone(snapshot.metadata),documents=new ConfigurationDocuments(store);
   metadata.notebooks[0].configuration=await documents.retainInline(owner,value);
   metadata.projects.find(value=>value.id===notebook.projectId).labBookTemplate={name:'Read compatibility',configuration:await documents.retainInline({...owner,notebookId:null,slot:'labBookTemplate'},small)};
   await store.validateMetadata(snapshot,metadata);await store.commitChanges(head,snapshot,metadata,[]);return {head:await store.head(),reference:metadata.notebooks[0].configuration};

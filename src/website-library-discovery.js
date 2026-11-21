@@ -12,7 +12,6 @@ import {setTimeout as delay} from 'node:timers/promises';
 const windowSize=40;
 const discoveryVersion=2;
 const locked=error=>['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code);
-function* flatMembers(records,after){for(let i=(after??-1)+1;i<records.length;i++)yield records[i];}
 
 // New grants are materialized by the research writer. The initial sweep also
 // covers grants made before that writer existed, independently of site usage.
@@ -22,7 +21,7 @@ async function grantWindow(store,snapshot,after,signal){
  if(!books.size)return {grants,after:null};
  const indexed=RecordPublicationIndex.valid(snapshot.publicationIndex);
  const members=indexed?new RecordPublicationIndex(store).rows(snapshot,new Map([...books.keys()].map(id=>[id,'shared'])),{after,signal}):
-  snapshot.indexVersion?new SnapshotIndex(store).members(snapshot.membership,{after}):flatMembers(snapshot.records,after);
+  new SnapshotIndex(store).members(snapshot.membership,{after});
  let count=0,last;
  for await(const row of members){
   signal?.throwIfAborted();
@@ -31,7 +30,7 @@ async function grantWindow(store,snapshot,after,signal){
   }));
   const book=books.get(info.notebookId);
   if(info.share===true&&book)grants.push({workspaceId:snapshot.metadata.id,projectId:book.projectId,notebookId:book.id,recordId:row.id,target:'website'});
-  last=indexed?row.position:snapshot.indexVersion?row.id:(after??-1)+count+1;
+  last=indexed?row.position:row.id;
   if(++count===windowSize)return {grants,after:last};
  }
  return {grants,after:null};

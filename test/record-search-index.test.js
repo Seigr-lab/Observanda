@@ -189,22 +189,16 @@ test('missing branches fail closed, verification rejects incomplete postings, an
  try{await assert.rejects(f.queries.list({workspaceId:f.book.id,query:query('field')},{signal:controller.signal}),{name:'AbortError'});}
  finally{RecordSearchIndex.prototype.rank=original;}
  assert.equal((await list(f,query('field'))).total,12);
- const {searchIndex,...legacy}=snapshot;
- await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,legacy))));
- assert.equal((await list(f,query('field'))).total,12);
- const base=await f.ws.read();await save(f,base,[{...base.book.entries[0],body:'New searchable sound'}]);
- assert.ok((await f.ws.catalogue(s=>s.snapshot())).searchIndex);
- assert.equal((await f.ws.catalogue(s=>s.snapshot(head))).searchIndex,undefined);
+ // Every stored snapshot carries its search index; one without it is damage.
+ const {searchIndex,...indexless}=snapshot;void searchIndex;
+ await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,indexless))));
+ await assert.rejects(list(f,query('field')),{code:'CATALOGUE_DAMAGED'});
+ await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,snapshot))));
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.book)));
 });
 
-test('pre-summary members use retained record ownership when their next save creates a search index',async t=>{
+test('moving a record to another lab book moves its search scope in the same save',async t=>{
  const f=await fixture(t,5),base=await f.ws.read();
- await f.ws.withLock(()=>f.ws.catalogue(async s=>{
-  const manifest=await s.manifest(base.etag);
-  manifest.records=manifest.records.map(({notebookId,queryRevision,summaryRevision,...row})=>row);
-  await s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',base.etag,s.encode('snapshot',base.etag,manifest));
- }));
  assert.equal((await list(f,query('field'))).total,5);
  await save(f,base,[{...base.book.entries[0],body:'Listening to birds',notebookId:f.book.notebooks.at(-1).id}]);
  assert.equal((await list(f,query('field'))).total,4);

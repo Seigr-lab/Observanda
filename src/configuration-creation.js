@@ -56,7 +56,7 @@ const clonedId=(commandId,sourceId)=>{
 export async function populateCreationConfiguration(storage,parent,frozen,{commandId,projectId,notebookId,slot,withConfigurationSource=localConfigurationSource(parent),check=async()=>{}}){
  if(!validCreationConfiguration(frozen)||!researchId(commandId))invalid();await check();
  const apply=async reader=>storage.catalogue(async store=>{
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),owner={workspaceId:metadata.id,projectId,notebookId,slot};
+  const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),owner={workspaceId:metadata.id,projectId,notebookId,slot};
   const configuration=await new ConfigurationDocuments(store,{write:async operation=>{await check();return operation(store);}}).clone(owner,reader,{freshSectionIds:true,uuid:sourceId=>clonedId(commandId,sourceId)});
   if(slot==='configuration'){const book=metadata.notebooks.find(value=>value.id===notebookId&&value.projectId===projectId);if(!book)throw new AppError('CATALOGUE_DAMAGED');book.configuration=configuration;}
   else{const project=metadata.projects.find(value=>value.id===projectId);if(!project)throw new AppError('CATALOGUE_DAMAGED');project.labBookTemplate={name:frozen.name?.trim()?frozen.name:project.title,configuration};}

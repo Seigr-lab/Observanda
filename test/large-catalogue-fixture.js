@@ -2,9 +2,9 @@ import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {ResearchRecords} from '../src/research.js';
-import {SnapshotIndex} from '../src/snapshot-index.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
-export async function legacyCatalogueFixture(directory,{count=60,size=2000,kind='flat'}={}){
+// A current catalogue saved through the product, in record batches of 40, across two lab books.
+export async function largeCatalogueFixture(directory,{count=60,size=2000}={}){
  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0],first=book.notebooks[0];
  book.entries=[];book.notebooks=[first,{...structuredClone(first),id:randomUUID(),title:'Other observations'}];
  const f=await encryptedFixture(directory,book),service=new ResearchRecords(f.workspace,{}),records=[];
@@ -14,10 +14,5 @@ export async function legacyCatalogueFixture(directory,{count=60,size=2000,kind=
   await service.save({workspaceId:book.id,changes:entries.map(record=>({id:record.id,expectedRevision:null,record}))},{receipt:true});
  }
  const etag=(await f.workspace.outline()).etag;
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const original=await store.snapshot(etag),manifest=await store.manifest(etag);
-  const value=kind==='flat'?manifest:{indexVersion:1,metadata:manifest.metadata,membership:await new SnapshotIndex(store).build(manifest.records.map((row,position)=>({...row,position}))),count:count,bytes:original.bytes,nextPosition:count};
-  await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',etag,value),etag);
- }));
  return {...f,book,records,etag,service};
 }

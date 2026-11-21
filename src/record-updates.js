@@ -12,7 +12,7 @@ const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const invalid=()=>{throw new AppError('WORKSPACE_READ_CURSOR');};
 const integer=value=>Number.isSafeInteger(value)&&value>=0;
 const encode=(store,value)=>store.encode('record-update-page',value.workspaceId,value).toString('base64url');
-const identities=(source,value)=>source.metadata.id===value.workspaceId&&source.indexVersion===1;
+const identities=(source,value)=>source.metadata.id===value.workspaceId;
 function anchor(workspaceId,baseEtag,etag,base){return {version:1,workspaceId,baseEtag,etag,phase:'changes',after:null,offset:0,count:base.count,bytes:base.bytes,reordered:false};}
 
 async function page(store,value,{signal}={}){

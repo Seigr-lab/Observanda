@@ -16,7 +16,7 @@ import {RunReadiness} from './run-readiness.js';
 import {MediaStore} from './media.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 
-export async function commitStructureDocuments(store,currentId,current,proposed,selected,targets,{removed=[],now=new Date().toISOString(),membershipRebuilt=false,metadataUnchanged=false,signal,onProgress=()=>{}}={}){
+export async function commitStructureDocuments(store,currentId,current,proposed,selected,targets,{removed=[],now=new Date().toISOString(),metadataUnchanged=false,signal,onProgress=()=>{}}={}){
  if(proposed.id!==current.metadata.id||proposed.revision!==current.metadata.revision||proposed.createdAt!==current.metadata.createdAt)throw new AppError('CONFLICT');
  const index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),before=[],after=[],removedIds=new Set(removed);
  if(removedIds.size!==removed.length)throw new AppError('INVALID');
@@ -61,5 +61,5 @@ export async function commitStructureDocuments(store,currentId,current,proposed,
  });
  signal?.throwIfAborted();if(metadataUnchanged&&!before.length&&!after.length)return currentId;
  onProgress({stage:'indexing'});
- return store.finishRecordChanges(currentId,current,metadata,before,after,{removed,now,membershipRebuilt,bulk:true,index,etag,ordinal});
+ return store.finishRecordChanges(currentId,current,metadata,before,after,{removed,now,bulk:true,index,etag,ordinal});
 }

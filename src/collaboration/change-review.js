@@ -127,7 +127,7 @@ export class ChangeReview{
    const chosen=new Set(choices.filter(c=>c.choice==='incoming').map(c=>c.id)),heads=await packageHeads(parts),materials=new ResearchMaterials(this.workspace),currentHeads=new Map();
    for await(const head of materials.headEntries())currentHeads.set(head.id,head);
    await this.workspace.catalogue(async store=>{
-    const head=await store.head(),snapshot=await store.indexed(await store.snapshot(head));
+    const head=await store.head(),snapshot=await store.snapshot(head);
     for(const row of review.rows){const member=await store.member(snapshot,row.id),record=member?await store.record(row.id,member.revision):null;valid(stamp(record?{revision:recordRevision(record)}:null,evidence(currentHeads,row.id))===row.currentStamp,'RECORD_CHANGED');}
     // Immutable history remains available for exact links, including retained
     // incoming variants the reviewer elects not to make current.

@@ -21,7 +21,7 @@ import {serialize} from '../src/storage-format.js';
 import {validateNotebook} from '../src/model.js';
 const schema=(id,label)=>({profiles:[],sections:[{id,profileId:null,key:'observations',label,description:'Exact configured source',enabled:true,fields:[{key:'condition',label:'Condition',type:'select',unit:'',required:false,choices:Array.from({length:97},(_,i)=>'Choice '+i)}]}]});
 async function template(workspace,projectId,value){return workspace.withLock(()=>workspace.catalogue(async store=>{
- const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),owner={workspaceId:metadata.id,projectId,notebookId:null,slot:'labBookTemplate'};
+ const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),owner={workspaceId:metadata.id,projectId,notebookId:null,slot:'labBookTemplate'};
  metadata.projects.find(value=>value.id===projectId).labBookTemplate={name:'Saved observation types',configuration:await new ConfigurationDocuments(store).retainInline(owner,value)};
  await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[]);return owner;
 }));}

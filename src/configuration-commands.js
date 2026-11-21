@@ -170,7 +170,7 @@ export class ConfigurationCommands{
    const checkpoint=await configurationCheckpoint(store,owner,{id:data.draftId,revision:data.expectedRevision},data.configurationPin,{...options,validate:false}),etag=await store.head(),snapshot=await store.snapshot(etag),metadata=structuredClone(snapshot.metadata);
    if(owner.slot==='configuration')metadata.notebooks.find(value=>value.id===owner.notebookId).configuration=checkpoint.configuration;
    else metadata.projects.find(value=>value.id===owner.projectId).labBookTemplate={name:checkpoint.name,configuration:checkpoint.configuration};
-   await store.validateMetadata(snapshot,metadata);await store.commitChanges(etag,await store.indexed(snapshot),metadata,[]);
+   await store.validateMetadata(snapshot,metadata);await store.commitChanges(etag,snapshot,metadata,[]);
    await discardConfigurationCheckpoint(store,owner,{id:checkpoint.draft.id,revision:checkpoint.revision});
    const context=await this.context(store,{...owner},options);return this.envelope(context);
   },options);

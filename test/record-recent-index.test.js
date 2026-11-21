@@ -59,15 +59,14 @@ test('recent ordering follows edits, moves and removals while earlier pages keep
  await f.workspace.catalogue(async store=>new RecordRecentIndex(store).verify(await store.snapshot()));
 });
 
-test('pre-index snapshots stay readable and a later save builds the ordering without rewriting history',async t=>{
+test('a stored snapshot without its recent index is refused as damage and never rewritten',async t=>{
  const f=await fixture(t,12);
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const source=await store.snapshot();delete source.recentIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.command.etag,source),f.command.etag);}));
- const old=await f.query.read(f.command),original=f.book.entries[0];
- await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,title:'New index'}}]},{recordIds:[original.id]});
- assert.deepEqual((await f.query.read(f.command)).records,old.records);
- await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.command.etag)).recentIndex,undefined);await new RecordRecentIndex(store).verify(await store.snapshot());});
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.recentIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.command.etag,snapshot),f.command.etag);}));
+ const stored=()=>f.workspace.catalogue(store=>store.db.get('SELECT payload FROM snapshots WHERE id=$1',f.command.etag)),before=await stored();
+ await assert.rejects(f.query.read(f.command),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(f.workspace.outline(),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await stored(),before);
 });
-
 test('missing recent ordering entries fail verification rather than silently dropping records',async t=>{
  const f=await fixture(t,8);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{

@@ -26,7 +26,7 @@ const schema=(sectionId,label,count)=>({profiles:[{id:'synthetic',version:1,enab
 const ownerFor=(metadata,notebook)=>({workspaceId:metadata.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'});
 async function configure(workspace,notebookId,value){
  return workspace.withLock(()=>workspace.catalogue(async store=>{
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),notebook=metadata.notebooks.find(value=>value.id===notebookId),project=metadata.projects.find(value=>value.id===notebook.projectId),documents=new ConfigurationDocuments(store);
+  const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),notebook=metadata.notebooks.find(value=>value.id===notebookId),project=metadata.projects.find(value=>value.id===notebook.projectId),documents=new ConfigurationDocuments(store);
   notebook.configuration=await documents.retainInline(ownerFor(metadata,notebook),value);
   project.labBookTemplate={name:'Retained project template',configuration:await documents.retainInline({workspaceId:metadata.id,projectId:project.id,notebookId:null,slot:'labBookTemplate'},value)};
   await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[]);
@@ -35,7 +35,7 @@ async function configure(workspace,notebookId,value){
 }
 async function reviseConfiguration(workspace,notebookId,sectionId){
  return workspace.withLock(()=>workspace.catalogue(async store=>{
-  const head=await store.head(),current=await store.indexed(await store.snapshot(head)),metadata=structuredClone(current.metadata),notebook=metadata.notebooks.find(value=>value.id===notebookId),project=metadata.projects.find(value=>value.id===notebook.projectId),documents=new ConfigurationDocuments(store);
+  const head=await store.head(),current=await store.snapshot(head),metadata=structuredClone(current.metadata),notebook=metadata.notebooks.find(value=>value.id===notebookId),project=metadata.projects.find(value=>value.id===notebook.projectId),documents=new ConfigurationDocuments(store);
   const operations=[{type:'replace',collection:'sections',key:sectionId,value:{label:'Later schema'}},{type:'append',collection:'choices',sectionId,fieldKey:'condition',value:'Choice 33'}];
   notebook.configuration=await documents.applySelected(await documents.open(ownerFor(metadata,notebook),notebook.configuration),operations,{draft:false});
   project.labBookTemplate.configuration=await documents.applySelected(await documents.open({workspaceId:metadata.id,projectId:project.id,notebookId:null,slot:'labBookTemplate'},project.labBookTemplate.configuration),operations,{draft:false});

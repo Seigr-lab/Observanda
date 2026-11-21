@@ -76,17 +76,14 @@ test('type index tracks edited and moved records, deduplicates renamed types, an
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();snapshot.typeIndex.root=null;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',removed.etag,snapshot),removed.etag);}));
  await assert.rejects(f.workspace.catalogue(async store=>new RecordTypeIndex(store).verify(await store.snapshot())),{code:'CATALOGUE_DAMAGED'});
 });
-test('retained pre-index snapshots use bounded identity windows without writes and gain an index on save',async t=>{
+test('a stored snapshot without its type index is refused as damage and never rewritten',async t=>{
  const f=await fixture(t,140);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const snapshot=await store.snapshot();delete snapshot.typeIndex;await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.command.etag,snapshot),f.command.etag);}));
- const original=await f.workspace.catalogue(store=>store.snapshot()),all=[];let cursor=null;
- do{const page=await f.query.read({...f.command,search:'Type',cursor});all.push(...page.items);cursor=page.nextCursor;}while(cursor);
- assert.equal(all.length,140);assert.equal(new Set(all.map(v=>v.value)).size,140);assert.deepEqual(all,[...all].sort(order));
- assert.deepEqual(await f.workspace.catalogue(store=>store.snapshot()),original);
- const record=f.book.entries[0];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Edited'}}]},{compact:true});
- await f.workspace.catalogue(async store=>{const next=await store.snapshot();assert.ok(next.typeIndex);await new RecordTypeIndex(store).verify(next);});
+ const stored=()=>f.workspace.catalogue(store=>store.db.get('SELECT payload FROM snapshots WHERE id=$1',f.command.etag)),before=await stored();
+ await assert.rejects(f.query.read({...f.command,search:'Type',cursor:null}),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(f.workspace.outline(),{code:'CATALOGUE_DAMAGED'});
+ assert.deepEqual(await stored(),before);
 });
-
 test('choice adapter rejects unbounded, foreign and inconsistent replies',async()=>{
  const book={id:randomUUID()},panel={config:defaultPanelConfig(),options:{}},context={book,etag:'pinned'};
  const valid={workspaceId:book.id,etag:context.etag,items:[{value:'experiment',label:'Experiment'}],selected:null,total:1,offset:0,nextCursor:null,previousCursor:null};
@@ -95,14 +92,8 @@ test('choice adapter rejects unbounded, foreign and inconsistent replies',async(
  for(const change of [{workspaceId:randomUUID()},{items:Array(26).fill(valid.items[0])},{offset:1},{total:2},{previousCursor:'wrong'},{nextCursor:'wrong'},{selected:{value:'note',label:'Note'}},{items:[{value:'experiment',label:'x'.repeat(161)}]}])await assert.rejects(load({...valid,...change}),/choices response is invalid/);
 });
 
-test('old summaries with no ownership or template fields still obey the selected lab book without rewriting history',async t=>{
+test('type discovery obeys the selected lab book without writing to the workspace',async t=>{
  const f=await fixture(t,6);
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const snapshot=await store.snapshot(),records=await Array.fromAsync(store.members(snapshot));
-  for(const row of records)for(const key of ['notebookId','template','updatedAt','queryRevision','summaryRevision'])delete row[key];
-  const legacy={metadata:snapshot.metadata,records};
-  await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.command.etag,legacy),f.command.etag);
- }));
  const before=await f.workspace.catalogue(store=>store.snapshot());
  const result=await f.query.read({...f.command,search:'Type',options:{notebookMode:'selected',notebookIds:[f.book.notebooks[0].id]}});
  assert.equal(result.total,3);
