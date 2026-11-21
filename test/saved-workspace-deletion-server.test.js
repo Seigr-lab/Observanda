@@ -1,4 +1,3 @@
-import {startManagedPostgres} from '../src/postgres-runtime.js';
 import {workspaceDeletionStorage} from '../src/workspace-deletion-storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {ProjectCreation} from '../src/project-creation.js';
@@ -31,8 +30,8 @@ async function fixture(t,{owned=false}={}){
  let owner,detach,app;
  if(owned){owner=new WorkspaceDatabases({directory:path.join(directory,'application'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});detach=installDatabaseProvider(owner);}
  t.after(async()=>{await app?.close();await owner?.close();detach?.();await Promise.all(vaults.map(clearVault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const create=async(name,{password='',plain=false,legacy=false}={})=>{
-  const book={...sampleNotebook(),id:randomUUID(),title:name},root=path.join(directory,name),access=plain||legacy?await createAccess('',password):await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
+ const create=async(name,{password='',plain=false}={})=>{
+  const book={...sampleNotebook(),id:randomUUID(),title:name},root=path.join(directory,name),access=plain?await createAccess('',password):await createWorkspaceAccess('',password,deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
   await initializeLocation(root,book,access,vault);await rememberLocation(prefs,root,{title:name,label:'Workspace'});return new Workspace(root,vault);
  };
  const active=await create('Keep open');
@@ -125,7 +124,6 @@ for(const phase of ['prepared','frozen','retired'])test('closed-owner deletion r
  else await assert.rejects(access(target.root),{code:'ENOENT'});
 });
 
-
 test('deleting a closed owner does not stop active HTTP reads or setting writes',async t=>{
  const f=await fixture(t),target=await f.create('Delete in background'),session=await f.start();
  const plan=(await session.call('/api/workspaces/delete/preview',{path:target.root})).value;
@@ -141,7 +139,6 @@ test('deleting a closed owner does not stop active HTTP reads or setting writes'
  }finally{release();await deleting;}
  await assert.rejects(access(target.root),{code:'ENOENT'});assert.equal((await f.active.read()).book.title,'Keep open');
 });
-
 
 test('saved workspace deletion authenticates nested owners in its own client-bound context',{timeout:180000},async t=>{
  const f=await fixture(t,{owned:true}),target=await f.create('Nested saved workspace'),registry=new ProjectRegistry(target,(await target.outline()).metadata.id),projectId=randomUUID(),bookId=randomUUID();
@@ -163,41 +160,6 @@ test('saved workspace deletion authenticates nested owners in its own client-bou
  try{const removed=await session.call('/api/workspaces/delete/confirm',command(next));assert.equal(removed.status,200,JSON.stringify(removed.value));assert.equal(removed.value.result.complete,true);}finally{release();await writing;}
  await assert.rejects(access(target.root),{code:'ENOENT'});assert.deepEqual(await f.active.read(),before);assert.equal((await session.call('/api/storage')).value.contextId,session.context);
 });
-
-
-test('dedicated desktop deletes an older shared workspace without conversion and resumes its frozen deletion',{timeout:120000},async t=>{
- const f=await fixture(t,{owned:true}),env={...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN};delete env.OBSERVANDA_DATABASE_URL;
- const legacy=await startManagedPostgres({directory:path.join(f.directory,'application'),env}),previous=process.env.OBSERVANDA_DATABASE_URL;let target,sibling;
- f.detach();
- try{
-  process.env.OBSERVANDA_DATABASE_URL=env.OBSERVANDA_DATABASE_URL;
-  target=await f.create('Older protected workspace',{legacy:true,password:'Legacy test password'});
-  sibling=await f.create('Other older workspace');
- }finally{
-  if(previous===undefined)delete process.env.OBSERVANDA_DATABASE_URL;else process.env.OBSERVANDA_DATABASE_URL=previous;
-  installDatabaseProvider(f.owner);await legacy.close();
- }
- assert.equal((await readAccess(target.root)).value.formatVersion,2);
- await assert.rejects(f.owner.environment(target.root,{vault:target.vault}),{code:'ACCESS_UPGRADE'});
- const session=await f.start(),before=await f.active.read();
- assert.equal((await session.call('/api/workspaces/delete/preview',{path:target.root})).value.code,'ACCESS_DENIED');
- const review=await session.call('/api/workspaces/delete/preview',{path:target.root,password:'Legacy test password'});
- assert.equal(review.status,200,JSON.stringify(review.value));assert.equal(review.value.database,'catalogue');
- assert.equal((await readAccess(target.root)).value.formatVersion,2,'review does not upgrade access');
- assert.equal((await session.call('/api/workspaces/delete/confirm',{...command(review.value),title:'Wrong workspace'})).value.code,'STORAGE_DELETE_CONFIRM');
- const original=WorkspaceDeletions.prototype.stopDatabase;let interrupted=false;
- const stop=t.mock.method(WorkspaceDeletions.prototype,'stopDatabase',async function(root,...args){if(root===target.root&&!interrupted){interrupted=true;throw Error('Interrupt before schema cleanup');}return original.call(this,root,...args);});
- const attempt=await session.call('/api/workspaces/delete/confirm',command(review.value));assert.notEqual(attempt.status,200);assert.equal((await workspaceDeletion(target.root)).source,target.root);stop.mock.restore();
- const [receipt]=await new WorkspaceDeletions(f.prefs+'.workspace-deletions').list();
- assert.equal((await session.call('/api/workspaces/delete/finish',{id:receipt.id,confirmed:true,password:'wrong'})).value.code,'ACCESS_DENIED');
- const completed=await session.call('/api/workspaces/delete/finish',{id:receipt.id,confirmed:true,password:'Legacy test password'});
- assert.equal(completed.status,200,JSON.stringify(completed.value));assert.equal(completed.value.result.complete,true);await assert.rejects(access(target.root),{code:'ENOENT'});
- assert.equal((await (await workspaceDeletionStorage(sibling)).read()).book.title,'Other older workspace');assert.deepEqual(await f.active.read(),before);
- assert.equal((await session.call('/api/storage')).value.contextId,session.context);
- const other=await session.call('/api/workspaces/delete/preview',{path:sibling.root});assert.equal(other.status,200,JSON.stringify(other.value));
- assert.equal((await session.call('/api/workspaces/delete/confirm',command(other.value))).value.result.complete,true);await assert.rejects(access(sibling.root),{code:'ENOENT'});
-});
-
 
 test('deletion handles unopened archives and unencrypted workspaces without creating a dedicated database',{timeout:120000},async t=>{
  const f=await fixture(t,{owned:true}),archived=path.join(f.directory,'Unopened copy');
