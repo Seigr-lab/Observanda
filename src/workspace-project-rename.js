@@ -5,7 +5,6 @@ import {WorkspaceProjectOwners} from './workspace-project-owners.js';
 import {validateRenameProjects} from './rename-owner-receipts.js';
 export {validateRenameProjects} from './rename-owner-receipts.js';
 import {ProjectBookRename,clearRenamedBooks} from './project-book-rename.js';
-import {withWriterLease} from './writer-lease.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 // Each nested project authorizes and freezes its own storage before the parent
 // directory moves. The encrypted recovery capability survives interruption.
