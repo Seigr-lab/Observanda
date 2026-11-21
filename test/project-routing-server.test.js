@@ -34,13 +34,14 @@ import {recordRevision} from '../src/research.js';
 import {seedModuleCurrent} from './module-current-fixture.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 async function fixture(t,{publishingOptions,diagnostics,nestedB=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-http-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let app;
  t.after(async()=>{await app?.close();await owner.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-http-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,'workspace'),book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
  // nestedB keeps b inside a, as an earlier version could; new projects are never nested.
- const create=async(name,password='',parent=null)=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(parent?parent.storage.root:f.workspace.root,name),id,book,access,vault);await registry.attach(storage,{...(parent?{parentId:parent.id}:{}),expected:(await registry.read()).revision});return {id,book,storage,vault};};
+ const create=async(name,password='',parent=null)=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(parent?parent.storage.root:f.workspace.root,name),id,book,access,vault);await attachAsEarlierVersion(registry,storage,{parentId:parent?.id??null,expected:(await registry.read()).revision});return {id,book,storage,vault};};
  const a=await create('a'),b=await create('b','',nestedB?a:null),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0];
  const context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;

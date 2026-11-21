@@ -79,6 +79,8 @@ export class ProjectCreation{
   const {password,...request}=command;const fingerprint=digest(revisionText(request));
   // Validate editable content before generating keys or writing a request.
   const parentId=command.project.parentId??null;if(parentId!==null&&!researchId(parentId))throw new AppError('INVALID');
+  // A project is created at the workspace's top level, before any folder is made.
+  if(parentId!==null)throw new AppError('PROJECT_NESTING');
   validateStorageName(command.project.title);
   const draft=createNotebook(command.project.title,command.project.description);draft.projects=[{...command.project,parentId:null}];if(hasConfigurationCreation(command))delete draft.projects[0].labBookTemplate;validateNotebook(draft);
   await check();const directory=await privateDirectory(this.workspace.root,'.observanda/project-creation'),file=path.join(directory,command.id+'.obsv');

@@ -90,7 +90,10 @@ export class ProjectRegistry{
   const metadata=staged?await storage.catalogue(async store=>(await store.snapshot()).metadata):(await storage.outline()).metadata;
   return {projectId:storage.projectId,root,vaultId:storage.vault.id,namespaceId:metadata.id,parentId,summary:summaryOf(metadata.projects.find(project=>project.id===storage.projectId))};
  }
+ // Workspace > Project > Lab book: a project is never newly placed inside another project.
+ // A project nested by an earlier version keeps its parent and can only move to the top level.
  async attach(storage,{parentId=null,expected}={}){
+  if(parentId!==null)throw new AppError('PROJECT_NESTING');
   const entry=await this.describe(storage,parentId);assertProjectInsideWorkspace(this.workspace.root,entry.root);
   return this.apply(expected,[{state:'active',entry}],{check:async(directory,head)=>{if(await directory.find(head,entry.projectId))throw new AppError('EXISTS');}});
  }
@@ -100,6 +103,7 @@ export class ProjectRegistry{
   return this.apply(expected,[{state:'active',entry:{...prior.entry,root:entry.root}}]);
  }
  async reparent(projectId,parentId,{expected}={}){
+  if(parentId!==null)throw new AppError('PROJECT_NESTING');
   const current=await this.state(projectId);if(current.revision!==expected)throw new AppError('CONFLICT');if(current.state!=='active')throw new AppError('NOT_FOUND');
   const parent=parentId===null?this.workspace.root:(await this.state(parentId)).entry?.root;if(!parent||path.dirname(current.entry.root)!==parent)throw new AppError('STORAGE_PATH');
   return this.apply(expected,[{state:'active',entry:{...current.entry,parentId}}]);
@@ -122,7 +126,10 @@ export class ProjectRegistry{
    });}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
   }
  }
+ // Registering an existing folder moves nothing: a project an earlier version nested keeps that
+ // place only when its folder already sits directly inside its active parent project's folder.
  async registerExisting(expected,entry,{aliases}={}){assertProjectInsideWorkspace(this.workspace.root,entry?.root);return this.apply(expected,[{state:'active',entry}],{aliases,check:async(directory,head)=>{
+  if(entry.parentId!=null){const parent=await directory.find(head,entry.parentId);if(parent?.state!=='active'||path.dirname(entry.root)!==parent.entry.root)throw new AppError('PROJECT_NESTING');}
   const prior=await directory.find(head,entry.projectId);if(prior?.state==='active')throw new AppError('EXISTS');if(prior&&['namespaceId','vaultId'].some(key=>prior.entry[key]!==entry[key]))throw new AppError('DATABASE_LOCATION');
  }});}
  async reference(target){

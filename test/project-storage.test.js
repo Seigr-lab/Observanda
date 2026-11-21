@@ -19,6 +19,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {catalogueBinding,CATALOGUE_FILE} from '../src/postgres-activation.js';
 import {openCatalogue,backupCatalogue} from '../src/postgres.js';
 import {withScratch} from '../src/scratch-work.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-project-storage-')),vaults=[];
@@ -138,7 +139,8 @@ test('project registry and references retain identity across relocation without 
  const {ProjectRegistry}=await import('../src/project-registry.js'),{ProjectRouter}=await import('../src/project-router.js'),{ProjectReferences}=await import('../src/project-references.js'),{projectReference,parseProjectReference}=await import('../src/web/project-reference.js');
  await f.owner.closeProject(a.storage.root);await f.owner.closeProject(b.storage.root);const aRoot=path.join(w.workspace.root,path.basename(a.storage.root)),bRoot=path.join(aRoot,path.basename(b.storage.root));if(a.storage.root!==aRoot)await rename(a.storage.root,aRoot);await rename(b.storage.root,bRoot);a.storage=new ProjectStorage(aRoot,a.id,a.vault);b.storage=new ProjectStorage(bRoot,b.id,b.vault);
  const registry=new ProjectRegistry(w.workspace,(await w.workspace.outline()).metadata.id);let state=await registry.read();
- state=await registry.attach(a.storage,{expected:state.revision});state=await registry.attach(b.storage,{expected:state.revision,parentId:a.id});
+ state=await registry.attach(a.storage,{expected:state.revision});// b sits inside a, as an earlier version could place a project.
+ state=await attachAsEarlierVersion(registry,b.storage,{expected:state.revision,parentId:a.id});
  const raw=await readFile(registry.file);assert.ok(!raw.includes(Buffer.from(a.storage.root)));assert.ok(!raw.includes(Buffer.from(b.id)));
  const opened=[],vaults=new Map([[a.id,a.vault],[b.id,b.vault]]);let allowed=true,locked=false;
  const router=new ProjectRouter(registry,{authorize:async()=>allowed,unlock:async entry=>{opened.push(entry.projectId);return locked?null:vaults.get(entry.projectId);}}),references=new ProjectReferences(router);
@@ -151,7 +153,7 @@ test('project registry and references retain identity across relocation without 
  assert.equal((await references.locate({...target,revision:undefined}).catch(e=>e)).code,'INVALID');
  allowed=false;const count=opened.length;await assert.rejects(references.locate(target),{code:'ACCESS_DENIED'});assert.equal(opened.length,count);allowed=true;
  locked=true;await assert.rejects(references.locate(target),{code:'ACCESS_LOCKED'});locked=false;
- const revision=state.revision;await assert.rejects(registry.reparent(a.id,b.id,{expected:revision}),{code:'STORAGE_PATH'});assert.equal((await registry.read()).revision,revision);
+ const revision=state.revision;await assert.rejects(registry.reparent(a.id,b.id,{expected:revision}),{code:'PROJECT_NESTING'});assert.equal((await registry.read()).revision,revision);
  let entered,release;const enteredPromise=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve),busy=w.workspace.withLock(async()=>{entered();await held;});await enteredPromise;
  try{const placed=await new ProjectRenames(registry,b.id).run(b.storage,{id:randomUUID(),name:path.basename(b.storage.root),expectedName:path.basename(b.storage.root),placement:{parentId:null,expectedParentId:a.id}});b.storage=new ProjectStorage(placed.project.root,b.id,b.vault);state=await registry.read();assert.deepEqual(same(await retained()),same(old));}finally{release();await busy;}
  await f.owner.closeProject(b.storage.root);const moved=path.join(w.workspace.root,'relocated',path.basename(b.storage.root));await mkdir(path.dirname(moved));await rename(b.storage.root,moved);
@@ -159,7 +161,7 @@ test('project registry and references retain identity across relocation without 
  state=await registry.relocate(movedStorage,{from:b.storage.root,expected:state.revision});assert.deepEqual(same(await retained()),same(old));assert.equal(projectReference(target),link);
  assert.ok(opened.every(id=>id===b.id));
  await assert.rejects(registry.attach(movedStorage,{expected:state.revision}),{code:'EXISTS'});
- await assert.rejects(registry.reparent(b.id,a.id,{expected:revision}),{code:'CONFLICT'});
+ await assert.rejects(registry.reparent(b.id,null,{expected:revision}),{code:'CONFLICT'});
  const current=(await movedStorage.read()).book.entries[0];await new ResearchRecords(movedStorage).remove({workspaceId:(await movedStorage.outline()).metadata.id,recordId:old.id,expectedRevision:recordRevision(current)});
  assert.deepEqual(same(await retained()),same(old));const {revision:pinned,...latest}=target;await assert.rejects(references.locate(latest),{code:'NOT_FOUND'});
 });

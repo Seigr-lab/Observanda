@@ -5,7 +5,7 @@ import {placementOwners,validProjectPlacementTransfer} from '../src/project-plac
 
 const proof=()=>({snapshots:{max:0,count:1,digest:'a'.repeat(64)},module_events:{max:-1,count:0,digest:'b'.repeat(64)}});
 function receipt(){
- const value={version:2,id:randomUUID(),projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),phase:'copying',placement:{parentId:randomUUID(),expectedParentId:null},rootBooks:{books:[]},projects:[{projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),relative:'Project Z',books:[]},{projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),relative:'Project \u00c5',books:[{labBookId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),directory:'Original Notes'}]}]};
+ const value={version:2,id:randomUUID(),projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),phase:'copying',placement:{parentId:null,expectedParentId:randomUUID()},rootBooks:{books:[]},projects:[{projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),relative:'Project Z',books:[]},{projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),relative:'Project \u00c5',books:[{labBookId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),directory:'Original Notes'}]}]};
  value.transfer={owners:placementOwners(value).map((owner,index)=>({...owner,id:randomUUID(),sourceId:randomUUID(),sourceIdentity:{dev:'1',ino:String(index+1)}}))};return value;
 }
 test('tree transfer receipts require every authenticated owner before registration or retirement',()=>{

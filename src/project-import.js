@@ -43,6 +43,8 @@ const identity=folderIdentity;
 const ownerRoot=(root,entry)=>path.join(root,...entry.relative.split('/'));
 const credentials=command=>{
  if(!command||!researchId(command.id)||Object.keys(command).some(key=>!['id','path','parentId','username','password','recovery','owners'].includes(key))||['username','password','recovery'].some(key=>typeof command[key]!=='string'||command[key].length>1024)||command.parentId!==undefined&&command.parentId!==null&&!researchId(command.parentId)||command.owners!==undefined&&(!Array.isArray(command.owners)||command.owners.length>8192))throw new AppError('INVALID');
+ // An imported project lands at the workspace's top level; its own child projects keep their place in it.
+ if(command.parentId!=null)throw new AppError('PROJECT_NESTING');
  const values=[{relative:'',username:command.username,password:command.password,recovery:command.recovery},...(command.owners??[])];const paths=new Set();
  for(const item of values){if(Object.keys(item).sort().join()!=='password,recovery,relative,username'||typeof item.relative!=='string'||item.relative.length>16384||paths.has(item.relative)||['username','password','recovery'].some(key=>typeof item[key]!=='string'||item[key].length>1024))throw new AppError('INVALID');paths.add(item.relative);}return values;
 };
@@ -124,6 +126,8 @@ export class ProjectImports{
      }
      for(const item of value.owners.filter(item=>item.kind==='lab-book')){const parent=entries.find(entry=>entry.projectId===item.projectId),storage=new ProjectStorage(parent.root,parent.projectId,inventory.keys.get(value.owners.find(owner=>owner.kind==='project'&&owner.projectId===parent.projectId).relative));await new LabBookRegistry(storage).describe(importOwnerStorage(ownerRoot(value.destination,item),item,inventory.keys.get(item.relative)),{staged:true});}
      const rootStorage=new ProjectStorage(value.destination,value.manifest.projectId,inventory.keys.get(''));await writeProjectTree(rootStorage,value.manifest);
+     // An unfinished import into another project is never completed.
+     if(value.parentId!=null)throw new AppError('PROJECT_NESTING');
      await withProjectMembership(this.registry,[value.parentId],async()=>{for(let attempt=0;;attempt++){
       const current=await this.registry.inspect(view=>({revision:view.revision,aliases:view.aliases}));let references=current.aliases??null;for(const bundle of portable)if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());await this.admit(value);await check();
       try{await this.registry.applyBatch(current.revision,(async function*(){for(const entry of entries)yield {state:'active',entry};})(),{aliases:references,check:async(directory,head)=>{for(const entry of entries){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted')throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}

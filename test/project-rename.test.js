@@ -104,27 +104,31 @@ test('workspace rename completes an interrupted nested project rename before mov
 });
 
 
-test('project placement moves existing nested owners and recovers interruption without copying',{timeout:300000},async t=>{
- const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId);
- const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
- await assert.rejects(f.registry.reparent(selected.projectId,target.projectId,{expected:(await f.registry.read()).revision}),{code:'STORAGE_PATH'});
- await assert.rejects(renames.run(new ProjectStorage(selected.root,selected.projectId,selected.key),{id:randomUUID(),name:path.basename(selected.root),expectedName:path.basename(selected.root),placement:{parentId:f.projects[1].projectId,expectedParentId:null},...callbacks}),{code:'STORAGE_PATH'});
- let parentId=null;
- for(const boundary of ['prepared','book-stopped','renamed','registered','complete']){
-  const old=await f.registry.locate(selected.projectId),destinationParent=parentId===null?target.projectId:null,storage=new ProjectStorage(old.root,old.projectId,selected.key),head=(await storage.outline()).etag,operation=randomUUID();
-  await assert.rejects(renames.run(storage,{id:operation,name:path.basename(old.root),expectedName:path.basename(old.root),placement:{parentId:destinationParent,expectedParentId:parentId},...callbacks,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted placement '+boundary);}}),new RegExp('Interrupted placement '+boundary));
+test('project placement refuses nesting, moves a nested project to the top level and recovers interruption without copying',{timeout:600000},async t=>{
+ const owners=f=>({withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))});
+ await t.test('nesting is refused',async t=>{
+  // Workspace > Project > Lab book: no project is placed inside another one.
+  const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId);
+  await assert.rejects(f.registry.reparent(selected.projectId,target.projectId,{expected:(await f.registry.read()).revision}),{code:'PROJECT_NESTING'});
+  await assert.rejects(renames.run(new ProjectStorage(selected.root,selected.projectId,selected.key),{id:randomUUID(),name:path.basename(selected.root),expectedName:path.basename(selected.root),placement:{parentId:target.projectId,expectedParentId:null},...owners(f)}),{code:'PROJECT_NESTING'});
+  assert.equal((await f.registry.locate(selected.projectId)).root,selected.root);
+ });
+ // A project nested by an earlier version moves to the top level; an interruption at any point resumes there.
+ for(const boundary of ['prepared','book-stopped','renamed','registered','complete'])await t.test('resumes after '+boundary,async t=>{
+  const f=await fixture(t),parent=f.projects[0],selected=f.projects[1],callbacks=owners(f);
+  const old=await f.registry.locate(selected.projectId),storage=new ProjectStorage(old.root,old.projectId,selected.key),head=(await storage.outline()).etag;
+  await assert.rejects(new ProjectRenames(f.registry,selected.projectId).run(storage,{id:randomUUID(),name:path.basename(old.root),expectedName:path.basename(old.root),placement:{parentId:null,expectedParentId:parent.projectId},...callbacks,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted placement '+boundary);}}),new RegExp('Interrupted placement '+boundary));
   if(boundary==='book-stopped'){
-   // Independent parent edits remain available while only its placement is reserved.
-   const container=new ProjectStorage(target.root,target.projectId,target.key);await container.update(value=>{value.projects[0].description='Independent parent edit';return value;});
-   await assert.rejects(new ProjectRenames(f.registry,target.projectId).run(container,{id:randomUUID(),name:'Cannot move reserved parent',expectedName:path.basename(target.root),...callbacks}),error=>['STORAGE_PROJECT_BUSY','STORAGE_RENAMING'].includes(error.code));
+   // Independent edits of the former parent remain available while only the placement is reserved.
+   const container=new ProjectStorage(parent.root,parent.projectId,parent.key);await container.update(value=>{value.projects[0].description='Independent parent edit';return value;});
+   await assert.rejects(new ProjectRenames(f.registry,parent.projectId).run(container,{id:randomUUID(),name:'Cannot move reserved parent',expectedName:path.basename(parent.root),...callbacks}),error=>['STORAGE_PROJECT_BUSY','STORAGE_RENAMING'].includes(error.code));
   }
-  const result=await new ProjectRenames(f.registry,selected.projectId).resume(selected.key,{...callbacks});assert.equal(result.complete,true);assert.equal(result.project.parentId,destinationParent);
-  const expected=path.join(destinationParent?target.root:f.root,path.basename(selected.root));assert.equal(result.project.root,expected);await assert.rejects(readdir(old.root),{code:'ENOENT'});assert.equal((await new ProjectStorage(expected,selected.projectId,selected.key).outline()).etag,head);
-  for(const saved of f.projects){const entry=await f.registry.locate(saved.projectId),project=new ProjectStorage(entry.root,entry.projectId,saved.key);assert.equal(entry.root,saved.projectId===selected.projectId?expected:path.join(expected,path.basename(saved.root)));assert.deepEqual(await catalogueBinding(entry.root),saved.binding);assert.equal((await stat(path.join(entry.root,'.observanda/research.observanda'))).ino,saved.inode);
+  const result=await new ProjectRenames(f.registry,selected.projectId).resume(selected.key,{...callbacks});assert.equal(result.complete,true);assert.equal(result.project.parentId,null);
+  const expected=path.join(f.root,path.basename(selected.root));assert.equal(result.project.root,expected);await assert.rejects(readdir(old.root),{code:'ENOENT'});assert.equal((await new ProjectStorage(expected,selected.projectId,selected.key).outline()).etag,head);
+  for(const saved of f.projects){const entry=await f.registry.locate(saved.projectId),project=new ProjectStorage(entry.root,entry.projectId,saved.key);assert.equal(entry.root,saved.projectId===selected.projectId?expected:saved.root);assert.deepEqual(await catalogueBinding(entry.root),saved.binding);assert.equal((await stat(path.join(entry.root,'.observanda/research.observanda'))).ino,saved.inode);
    for(const book of f.books.filter(book=>book.projectId===saved.projectId)){const item=await new LabBookRegistry(project).locate(book.labBookId);assert.deepEqual(await new LabBookStorage(item.root,item.labBookId,book.key).read(),book.before);assert.equal((await stat(path.join(item.root,'.observanda/research.observanda'))).ino,book.inode);assert.equal(await workspaceRename(item.root),null);}
   }
-  parentId=destinationParent;
- }
+ });
 });
 
 for(const crossFilesystem of [false,true])test('HTTP project placement refuses nesting, moves a project to the workspace top level with nested-book access and survives restart'+(crossFilesystem?' across filesystems':''),{timeout:300000},async t=>{
@@ -149,25 +153,25 @@ test('HTTP reads complete a pending top-level project placement after restart on
 });
 
 
-test('workspace rename resolves a prepared project placement and retains its new ancestry',{timeout:180000},async t=>{
- const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],keys=new Map([...f.projects,target].map(entry=>[entry.projectId,entry.key])),renames=new ProjectRenames(f.registry,selected.projectId);
+test('workspace rename resolves a prepared move of a nested project to the top level',{timeout:180000},async t=>{
+ const f=await fixture(t),selected=f.projects[1],keys=new Map(f.projects.map(entry=>[entry.projectId,entry.key])),renames=new ProjectRenames(f.registry,selected.projectId);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,keys.get(id))),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
- await assert.rejects(renames.run(new ProjectStorage(selected.root,selected.projectId,selected.key),{id:randomUUID(),name:path.basename(selected.root),expectedName:path.basename(selected.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks,checkpoint:async stage=>{if(stage==='prepared')throw Error('Interrupted placement admission');}}),/Interrupted placement admission/);
+ await assert.rejects(renames.run(new ProjectStorage(selected.root,selected.projectId,selected.key),{id:randomUUID(),name:path.basename(selected.root),expectedName:path.basename(selected.root),placement:{parentId:null,expectedParentId:f.projects[0].projectId},...callbacks,checkpoint:async stage=>{if(stage==='prepared')throw Error('Interrupted placement admission');}}),/Interrupted placement admission/);
  const moved=await new WorkspaceRenames(path.join(f.directory,'workspace-renames')).begin(f.workspace,'Renamed Research Workspace',{...callbacks,withProject:async(id,use)=>{if(id===selected.projectId)await renames.resume(selected.key,callbacks);return callbacks.withProject(id,use);}});
- const workspace=new Workspace(moved.destination,f.workspace.vault),registry=new ProjectRegistry(workspace,(await workspace.outline()).metadata.id),entry=await registry.locate(selected.projectId);assert.equal(entry.parentId,target.projectId);assert.equal(entry.root,path.join(moved.destination,'Destination Project',path.basename(selected.root)));
+ const workspace=new Workspace(moved.destination,f.workspace.vault),registry=new ProjectRegistry(workspace,(await workspace.outline()).metadata.id),entry=await registry.locate(selected.projectId);assert.equal(entry.parentId,null);assert.equal(entry.root,path.join(moved.destination,path.basename(selected.root)));
  for(const book of f.books){const owner=await registry.locate(book.projectId),project=new ProjectStorage(owner.root,owner.projectId,keys.get(owner.projectId)),item=await new LabBookRegistry(project).locate(book.labBookId);assert.deepEqual(await new LabBookStorage(item.root,item.labBookId,book.key).read(),book.before);assert.equal((await stat(path.join(item.root,'.observanda/research.observanda'))).ino,book.inode);}
 });
 
 
 test('legacy volume cancellation restores the entire project tree through interrupted cleanup',{timeout:240000},async t=>{
- const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId),source=new ProjectStorage(selected.root,selected.projectId,selected.key);
+ const f=await fixture(t),selected=f.projects[1],renames=new ProjectRenames(f.registry,selected.projectId),source=new ProjectStorage(selected.root,selected.projectId,selected.key);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
  for(const boundary of ['cancelling','cancel-projects-cleared','cancel-books-cleared','keys-erased','cancel-unfrozen','cancelled']){
-  const command={id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks};
+  const command={id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:null,expectedParentId:f.projects[0].projectId},...callbacks};
   await assert.rejects(renames.run(source,{...command,checkpoint:async(stage,value)=>{if(stage==='stopped'){value.phase='cancelling';value.cancelReason='volume';await renames.save(value);throw Error('Legacy cancellation');}}}),/Legacy cancellation/);
   if(boundary!=='cancelling')await assert.rejects(renames.run(source,{...command,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted '+boundary);}}),new RegExp('Interrupted '+boundary));
   await assert.rejects(renames.run(source,command),{code:'STORAGE_RENAME_VOLUME'});assert.equal((await renames.read()).phase,'cancelled');
-  await assert.rejects(stat(path.join(target.root,path.basename(source.root))),{code:'ENOENT'});
+  await assert.rejects(stat(path.join(f.root,path.basename(source.root))),{code:'ENOENT'});
   for(const saved of f.projects){
    const entry=await f.registry.locate(saved.projectId);assert.equal(entry.root,saved.root);assert.equal(entry.parentId,saved.parentId);assert.equal(await workspaceRename(entry.root),null);
    assert.equal((await stat(path.join(entry.root,'.observanda/research.observanda'))).ino,saved.inode);
@@ -176,5 +180,5 @@ test('legacy volume cancellation restores the entire project tree through interr
    for(const book of f.books.filter(book=>book.projectId===saved.projectId)){const item=await new LabBookRegistry(project).locate(book.labBookId);assert.equal(await workspaceRename(item.root),null);assert.deepEqual(await new LabBookStorage(item.root,item.labBookId,book.key).read(),book.before);}
   }
  }
- const moved=await renames.run(source,{id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks});assert.equal(moved.project.parentId,target.projectId);assert.equal(moved.complete,true);
+ const moved=await renames.run(source,{id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:null,expectedParentId:f.projects[0].projectId},...callbacks});assert.equal(moved.project.parentId,null);assert.equal(moved.complete,true);
 });

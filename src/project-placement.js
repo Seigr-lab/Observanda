@@ -10,6 +10,8 @@ import {AppError} from './errors.js';
 export function validProjectPlacement(value){return value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()==='expectedParentId,parentId'&&[value.parentId,value.expectedParentId].every(id=>id===null||researchId(id));}
 export function projectPlacementLocation(registry,directory,entry,name,placement){
  if(placement!==null&&!validProjectPlacement(placement))throw new AppError('INVALID');
+ // A project moves only to the workspace's top level, never inside another project.
+ if(placement&&placement.parentId!==null)throw new AppError('PROJECT_NESTING');
  const parentId=placement?.parentId??(placement?null:entry.parentId),byId=new Map(directory.projects.map(item=>[item.projectId,item]));
  if(placement&&entry.parentId!==placement.expectedParentId)throw new AppError('CONFLICT');
  const seen=new Set([entry.projectId]);for(let id=parentId;id!==null;){if(seen.has(id))throw new AppError('STORAGE_PATH');seen.add(id);const owner=byId.get(id);if(!owner)throw new AppError('NOT_FOUND');id=owner.parentId;}
@@ -26,6 +28,8 @@ export function selectedProjectPlacement(registry,entry,name,placement){
 }
 export async function checkPlacementParent(registry,value){
  if(!value.placement)return;
+ // An unfinished placement into another project is never completed.
+ if(value.placement.parentId!==null)throw new AppError('PROJECT_NESTING');
  const selected=value.placement.parentId===null?null:await registry.state(value.placement.parentId),parent=value.placement.parentId===null?registry.workspace.root:selected?.state==='active'?selected.entry.root:null;
  if(!parent||path.relative(registry.workspace.root,parent).split(path.sep).join('/')!==value.placementParent.relative)throw new AppError('STORAGE_RENAME_STATE');
  // Native receipts retain exact 64-bit file identities. Number-based stat

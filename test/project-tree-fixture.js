@@ -16,6 +16,7 @@ import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
+import {nestAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 export async function projectTreeFixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-rename-')),runtime={directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}},vaults=[];let provider=new WorkspaceDatabases(runtime),detach=installDatabaseProvider(provider);
@@ -24,7 +25,11 @@ export async function projectTreeFixture(t){
  const deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),metadata=createNotebook('Research Workspace 1'),root=path.join(directory,metadata.title),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);vaults.push(vault);await initializeLocation(root,metadata,access,vault);
  const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,metadata.id),creation=new ProjectCreation(registry,deviceStore),projects=[],books=[];
  for(const title of ['Field Project 1','Nested Project \u00c5 2']){
-  const projectId=randomUUID(),{project:entry}=await creation.create({id:randomUUID(),username:'',password:'',project:{id:projectId,title,description:'',parentId:projects[0]?.projectId??null,share:false,logoId:null}}),key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore});vaults.push(key);
+  const projectId=randomUUID();let {project:entry}=await creation.create({id:randomUUID(),username:'',password:'',project:{id:projectId,title,description:'',parentId:null,share:false,logoId:null}});
+  // Projects are created at the top level now; an earlier version could nest one inside another.
+  // The second project is placed the way that version left it, so nested trees keep working.
+  if(projects.length){const nested=await nestAsEarlierVersion({provider,registry,projectId,parent:projects[0]});entry={...entry,root:nested.root,parentId:nested.parentId};}
+  const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore});vaults.push(key);
   const storage=new ProjectStorage(entry.root,projectId,key);projects.push({...entry,key,binding:await catalogueBinding(entry.root),inode:(await stat(path.join(entry.root,'.observanda/research.observanda'))).ino});
   const {book}=await new LabBookCreation(storage,deviceStore).create({id:randomUUID(),username:'',password:'Protected observations 456!',book:{id:randomUUID(),projectId,title:'Observations for '+title}}),bookKey=await verifyAccess(await readAccess(book.root),'','Protected observations 456!',{deviceStore});vaults.push(bookKey);const bookStorage=new LabBookStorage(book.root,book.labBookId,bookKey);
   await bookStorage.update(value=>{value.entries=[{...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId,title:'Retained observation'}];return value;});books.push({...book,projectId,key:bookKey,binding:await catalogueBinding(book.root),before:await bookStorage.read(),inode:(await stat(path.join(book.root,'.observanda/research.observanda'))).ino});
