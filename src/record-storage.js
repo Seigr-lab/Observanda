@@ -18,7 +18,7 @@ import {AppError} from './errors.js';
 import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {RecordBlockStore,blockedRecord,validBlockedRecord,recordBlockResource} from './record-block-store.js';
-import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,catalogueRequiresSourcePublicationControls,requireSourcePublicationControls,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes,catalogueRequiresPagedResearchTables,requirePagedResearchTables} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,catalogueRequiresSourcePublicationControls,requireSourcePublicationControls,requireRecordBlocks,requireRecordMethodIndexes,requireRecordResultIndexes,catalogueRequiresPagedResearchTables,requirePagedResearchTables} from './catalogue-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {recordEncoding} from './record-encoding.js';
 import {retainRecordOwnerResource} from './record-owner-resources.js';
@@ -28,7 +28,6 @@ import {RecordMethodIndex} from './record-method-index.js';
 import {RecordResultIndex} from './record-result-index.js';
 import {pagedTableDocument} from './retained-tables.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
-const requireIndexFormat=(db,index)=>index.version>=3?requireNestedAttemptCollections(db):index.version>=2?requireCurrentAttemptIndexes(db):requireAttemptIndexes(db);
 function recordResources(value,generation){
  if(!blockedRecord(value))return [];
  const ref=(kind,revision)=>recordBlockResource(value.notebookId,generation,kind,revision),dependencies=[ref('value',value.root)];
@@ -49,7 +48,7 @@ export async function withStoredRecord(store,id,revision,consume){
   if(retiredProjectRecord(value)){if(await catalogueFormat(store.db)<23)fail();return withRetiredProjectRecord(store,value,id,revision,row.scope_id,consume);}
   let blocks=null;
   if(blockedRecord(value)){
-   if(!validBlockedRecord(value)||await catalogueFormat(store.db)<(value.version===4?26:value.version===3?14:value.attemptIndex?.version===2?12:value.version===2?11:4))fail();blocks=new RecordBlockStore(store,row.scope_id,row.generation,key);
+   if(!validBlockedRecord(value)||await catalogueFormat(store.db)<(value.version===4?26:value.version===3?14:value.version===2?11:4))fail();blocks=new RecordBlockStore(store,row.scope_id,row.generation,key);
    for(const [name,expected] of [['id',id],['notebookId',row.scope_id]]){const selected=await blocks.tree().selected(value.root,[name]);if(!selected.found||selected.value!==expected)fail();}
    if(value.attemptIndex?.version===3&&!catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db)))fail();
    if(value.attemptIndex){const document=new RecordDocument(blocks,value.root);if(value.attemptIndex.source!==await document.reference(['attempt']))fail();}
@@ -76,7 +75,7 @@ export async function retainStoredRecord(store,record,revision){
   if(record.attempt||record.results||record.relations?.some(link=>link.role==='uses-method')||!jsonFitsBytes(record,65535,{pretty:true})){
    await requireRecordBlocks(store.db);if(record.attempt)await requireNestedAttemptCollections(store.db);
    const blocks=new RecordBlockStore(store,scopeId,generation,key),value=await blocks.retain(record),document=new RecordDocument(blocks,value.root),attemptIndex=await RecordAttemptIndex.retain(document);
-   if(attemptIndex){await requireIndexFormat(store.db,attemptIndex);value.version=2;value.attemptIndex=attemptIndex;}
+   if(attemptIndex){await requireNestedAttemptCollections(store.db);value.version=2;value.attemptIndex=attemptIndex;}
    const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex){await requireRecordMethodIndexes(store.db);value.version=3;value.methodIndex=methodIndex;}
    const resultIndex=await RecordResultIndex.retain(document);if(resultIndex){await requireRecordResultIndexes(store.db);value.version=4;value.resultIndex=resultIndex;}await blocks.flush();
    retained=serialize(value);dependencies=recordResources(value,generation);
@@ -113,7 +112,7 @@ export async function retainStoredDocument(store,document,encoding,{unchanged=as
   if((await document.tree.selected(section.value,['share'])).found){await requireSourcePublicationControls(store.db);break;}
  }
  if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&!await unchanged(['results','statements'])&&await pagedTableDocument(document))await requirePagedResearchTables(store.db);
- await requireRecordBlocks(store.db);if(await document.reference(['attempt'])&&document.attemptIndex?.source!==await document.reference(['attempt']))await requireNestedAttemptCollections(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
+ await requireRecordBlocks(store.db);if(await document.reference(['attempt'])&&document.attemptIndex?.source!==await document.reference(['attempt']))await requireNestedAttemptCollections(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireNestedAttemptCollections(store.db);
  const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
  const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();
  const value={format:'observanda-record-blocks',version:resultIndex?4:methodIndex?3:attemptIndex?2:1,id,notebookId:scopeId,root:document.root,...(attemptIndex?{attemptIndex}:{}),...(methodIndex?{methodIndex}:{}),...(resultIndex?{resultIndex}:{})};

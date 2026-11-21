@@ -86,8 +86,8 @@ test('independent result verification rejects missing associations, forged ident
  const invalidFigure=await f.document.replace(['results','statements','1','figureId'],'unknown');await assert.rejects(RecordResultIndex.retain(invalidFigure),{code:'CATALOGUE_DAMAGED'});
 });
 
-test('current record manifests require result indexes while older representations remain readable',async()=>{
- const f=await fixture(0),base={format:'observanda-record-blocks',version:1,id:f.record.id,notebookId:f.record.notebookId,root:f.document.root},attemptIndex={version:2,source:digest('attempt'),root:null,preparations:0,events:0,assessments:0},methodIndex={version:1,source:digest('relations'),relations:0,root:null};
+test('record manifests carry the indexes their content needs, and result manifests require a result index',async()=>{
+ const f=await fixture(0),base={format:'observanda-record-blocks',version:1,id:f.record.id,notebookId:f.record.notebookId,root:f.document.root},attemptIndex={version:3,source:digest('attempt'),root:null,preparations:0,events:0,assessments:0},methodIndex={version:1,source:digest('relations'),relations:0,root:null};
  for(const manifest of [base,{...base,version:2,attemptIndex},{...base,version:3,methodIndex},{...base,version:3,attemptIndex,methodIndex}])assert.ok(validBlockedRecord(manifest));
  for(const addition of [{},{attemptIndex},{methodIndex},{attemptIndex,methodIndex}])assert.ok(validBlockedRecord({...base,version:4,resultIndex:f.resultIndex,...addition}));
  for(const manifest of [{...base,version:4},{...base,version:4,resultIndex:null},{...base,version:4,resultIndex:{...f.resultIndex,count:1}},{...base,resultIndex:f.resultIndex},{...base,version:4,resultIndex:f.resultIndex,extra:true}])assert.ok(!validBlockedRecord(manifest));

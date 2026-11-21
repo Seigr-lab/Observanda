@@ -59,15 +59,6 @@ test('run index verification rejects omissions, invented entries, wrong position
  // Even an internally consistent index of an invalid source cannot loop.
  const cycle=await document.replace(['attempt','events','0','supersedes'],record.attempt.events.at(-1).id);
  await assert.rejects(RecordAttemptIndex.retain(cycle),{code:'CATALOGUE_DAMAGED'});
- // A damaged older descriptor can still contain a cyclic source. Its reader
- // must reject backward correction positions, rather than following forever.
- const legacy=new RecordAttemptIndex(cycle,{...attemptIndex,version:1,source:await cycle.reference(['attempt']),root:null});
- for await(const entry of pristine.index.entries(pristine.value))if(!entry.id.startsWith('current:')){
-  const row=await document.tree.read(entry.revision),changed=row.id===original.id?{...row,supersedes:record.attempt.events.at(-1).id}:row;
-  legacy.value.root=await legacy.index.change(legacy.value.root,entry.id,await document.tree.retain(changed));
- }
- legacy.value.root=await legacy.index.change(legacy.value.root,'correction:'+record.attempt.events.at(-1).id,await document.tree.retain({...original,supersedes:record.attempt.events.at(-1).id}));await legacy.index.flush(legacy.value.root);
- await assert.rejects(attemptSuccessor(new RecordDocument(document.blocks,cycle.root,{attemptIndex:legacy.value}),'events',original.id),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('counted current-fact windows seek past corrected history without scanning it',async t=>{
@@ -93,7 +84,7 @@ test('current comparison windows preserve exact preparation context and old immu
  assert.equal(after.attempt.assessments[0].preparationNumber,1);assert.equal(after.attempt.assessments[0].criterion,f.record.attempt.preparations[0].criteria[0].label);
 });
 
-test('current-fact indexes reject omitted and superseded entries and retain version-one compatibility',async()=>{
+test('current-fact indexes reject omitted and superseded entries',async()=>{
  const {document,attemptIndex,record}=await fixture(96),index=await RecordAttemptIndex.open(document),first=record.attempt.events[0],current=record.attempt.events[1];
  const key=position=>'current:events:'+String(position).padStart(16,'0');
  for(const damage of ['omitted','superseded']){
@@ -102,14 +93,6 @@ test('current-fact indexes reject omitted and superseded entries and retain vers
   else altered.value.root=await altered.index.change(altered.value.root,key(0),(await index.index.find(index.value,'id:'+first.id)).revision);
   await altered.index.flush(altered.value.root);await assert.rejects(altered.verify(),{code:'CATALOGUE_DAMAGED'});
  }
- // Rebuild the original version-one key set, with no counted-current entries.
- const legacy=new RecordAttemptIndex(document,{...attemptIndex,version:1,root:null});
- for await(const entry of index.index.entries(index.value))if(!entry.id.startsWith('current:')&&!entry.id.startsWith('nested:'))legacy.value.root=await legacy.index.change(legacy.value.root,entry.id,entry.revision);
- await legacy.index.flush(legacy.value.root);await legacy.verify();
- const old=new RecordDocument(document.blocks,document.root,{mutable:true,attemptIndex:legacy.value});assert.deepEqual(await RecordAttemptIndex.retain(old),legacy.value);
- assert.equal((await (await RecordAttemptIndex.open(old)).fact(current.id,'events')).position,1);
- const changed=await old.splice(['attempt','events'],record.attempt.events.length,0,[event(record.attempt.preparations[1])]),upgraded=await RecordAttemptIndex.retain(changed);assert.equal(upgraded.version,3);await new RecordAttemptIndex(changed,upgraded).verify();
- assert.equal((await new RecordAttemptIndex(changed,upgraded).currentWindow('events')).total,97);
 });
 
 test('successive correction batches remove obsolete current leaves without changing older windows',async()=>{

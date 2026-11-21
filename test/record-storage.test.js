@@ -19,12 +19,10 @@ import {digest,serialize} from '../src/storage-format.js';
 import {CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {interruptWorkspace} from './fixtures/interrupt-workspace.js';
 import {preparation,event,assessment} from './fixtures/attempts.js';
-import {RecordDocument,withRecordDocument} from '../src/record-document.js';
+import {withRecordDocument} from '../src/record-document.js';
 import {RecordAttemptIndex} from '../src/record-attempt-index.js';
 import {RecordBlockStore} from '../src/record-block-store.js';
 import {attemptFactPosition} from '../src/record-attempt-context.js';
-import {RecordValues} from '../src/record-values.js';
-import {ResearchCatalogue} from '../src/research-catalogue.js';
 const runFacts=()=>{const p=preparation();return {version:1,preparations:[p],events:[event(p)],assessments:[assessment(p)]};};
 
 async function fixture(t){
@@ -143,26 +141,4 @@ test('the first run index upgrades atomically, rejects damaged descriptors and r
   })),{code:'CATALOGUE_DAMAGED'});
   assert.deepEqual(await f.workspace.read(),expected);
  }
-});
-
-test('version-one run indexes remain unchanged until an atomic counted-index append and survive its rollback',async t=>{
- const f=await fixture(t);f.record={...f.base.book.entries[0],attempt:runFacts()};const saved=await save(f),revision=storageVersion(saved);let legacy;
- await f.workspace.withLock(()=>f.workspace.catalogue(store=>withStoredRecord(store,saved.id,revision,async({value,key,row,blocks})=>{
-  const document=new RecordDocument(blocks,value.root),index=new RecordAttemptIndex(document,value.attemptIndex),old=new RecordAttemptIndex(document,{...value.attemptIndex,version:1,root:null});
-  for await(const entry of index.index.entries(index.value))if(!entry.id.startsWith('current:'))old.value.root=await old.index.change(old.value.root,entry.id,entry.revision);
-  await old.index.flush(old.value.root);await blocks.flush();legacy=old.value;value.attemptIndex=legacy;
-  await store.db.run('UPDATE records SET payload=$1 WHERE id=$2 AND revision=$3',seal(Buffer.from(serialize(value)),key,store.recordAAD(saved.id,revision,row.scope_id,row.generation)),saved.id,revision);
-  await store.db.run('UPDATE catalogue_format SET version=11');
- })));
- await f.workspace.catalogue(store=>store.verifySnapshot(undefined,f.base.book.id));
- const values=new RecordValues(f.workspace),target={workspaceId:f.base.book.id,recordId:saved.id},title=await values.read({...target,field:'title'});
- await values.save({...target,field:'title',expectedRevision:title.revision,value:{value:'Prose edit keeps original index'}});assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),11);
- const added=event(saved.attempt.preparations[0]),field='attempt:event:'+added.id,base=await values.read({...target,field}),command={...target,field,expectedRevision:base.revision,value:{value:added}},head=(await f.workspace.outline()).etag,finish=ResearchCatalogue.prototype.finishRecordChanges;
- t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);throw Error('Interrupted counted index upgrade');});
- await assert.rejects(values.save(command),/Interrupted counted index upgrade/);ResearchCatalogue.prototype.finishRecordChanges.mock.restore();assert.equal((await f.workspace.outline()).etag,head);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),11);
- await values.save(command);await f.workspace.catalogue(async store=>{
-  assert.equal(await catalogueFormat(store.db),12);await store.verifySnapshot(undefined,f.base.book.id);
-  const member=await store.member(await store.snapshot(),saved.id);await withRecordDocument(store,member.id,member.revision,async document=>{assert.equal(document.attemptIndex.version,2);assert.equal((await (await RecordAttemptIndex.open(document)).currentWindow('events')).total,2);});
- });
- assert.deepEqual((await manifest(f.workspace,saved)).value.attemptIndex,legacy);assert.deepEqual(await f.workspace.catalogue(store=>store.record(saved.id,revision)),saved);
 });
