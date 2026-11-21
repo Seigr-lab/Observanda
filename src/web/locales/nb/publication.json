@@ -231,8 +231,6 @@
   "liveChecking": "Kontrollerer det aktive nettstedet",
   "liveProgress": "Nettstedskontroll: {done} av {total} filer og fjernede URL-er kontrollert.",
   "liveStopped": "Nettstedskontrollen er stoppet. Fortsett starter verifiseringen på nytt mot bytene som leveres nå.",
-  "liveCheckStop": "Stopp nettstedskontroll",
-  "liveCheckResume": "Fortsett nettstedskontroll",
   "sidebar": "Sidenavigasjon",
   "disclosure": "Les mer",
   "galleryViewer": "Bildegalleri",

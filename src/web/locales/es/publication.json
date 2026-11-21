@@ -231,8 +231,6 @@
   "liveChecking": "Comprobando el sitio web publicado",
   "liveProgress": "Comprobación del sitio publicado: {done} de {total} archivos y URL eliminadas comprobados.",
   "liveStopped": "Comprobación del sitio publicado detenida. Reanudar reinicia la verificación contra los bytes servidos actuales.",
-  "liveCheckStop": "Detener la comprobación del sitio publicado",
-  "liveCheckResume": "Reanudar la comprobación del sitio publicado",
   "sidebar": "Navegación de páginas",
   "disclosure": "Leer más",
   "galleryViewer": "Galería de imágenes",

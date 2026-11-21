@@ -231,8 +231,6 @@
   "liveChecking": "Checking the live website",
   "liveProgress": "Live check: {done} of {total} files and removed URLs checked.",
   "liveStopped": "Live check stopped. Resume restarts verification against the current served bytes.",
-  "liveCheckStop": "Stop live check",
-  "liveCheckResume": "Resume live check",
   "sidebar": "Page navigation",
   "disclosure": "Read more",
   "galleryViewer": "Image gallery",
