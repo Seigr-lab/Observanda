@@ -1,38 +1,32 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {publicationLinkResolver,publicationRecordDestination} from '../src/publication-prose.js';
+import {publicationLinkResolver,publicationRecordDestination,publicationCollectionDestination} from '../src/publication-prose.js';
 import {researchReference} from '../src/web/research-reference.js';
 
-test('publication links resolve the namespace before choosing between copied record identities',()=>{
- const home=randomUUID(),one=randomUUID(),two=randomUUID(),recordId=randomUUID(),revision='a'.repeat(64);
- const first={id:randomUUID(),recordId,revision,title:'First owner',referenceNamespaces:[one],selectors:[]},second={id:randomUUID(),recordId,revision,title:'Second owner',referenceNamespaces:[two],selectors:[]};
- const selection={entries:[first,second],projects:[],notebooks:[],homeEnabled:false},resolve=publicationLinkResolver(home,selection),target={workspaceId:two,kind:'record',id:recordId};
- assert.equal(publicationRecordDestination(selection.entries,target,home),second);
- assert.equal(resolve(researchReference(target)),'entry:'+second.id);
- assert.equal(resolve(researchReference({...target,workspaceId:one})),'entry:'+first.id);
- assert.equal(resolve(researchReference({...target,workspaceId:home})),null);
- assert.equal(resolve(researchReference({...target,workspaceId:randomUUID()})),null);
+const record=(fields={})=>({id:randomUUID(),title:'Shared record',revision:'a'.repeat(64),body:'',sections:[],attachments:[],figures:[],...fields});
+
+test('links resolve only to records of this workspace, at a matching pinned revision',()=>{
+ const home=randomUUID(),shared=record(),selection={entries:[shared],projects:[],notebooks:[],homeEnabled:false},resolve=publicationLinkResolver(home,selection);
+ const target={workspaceId:home,kind:'record',id:shared.id};
+ assert.equal(publicationRecordDestination(selection.entries,target,home),shared);
+ assert.equal(resolve(researchReference(target)),'entry:'+shared.id);
+ assert.equal(resolve(researchReference({...target,revision:'a'.repeat(64)})),'entry:'+shared.id);
  assert.equal(resolve(researchReference({...target,revision:'b'.repeat(64)})),null);
- assert.equal(publicationLinkResolver(home,{...selection,entries:[first]})(researchReference(target)),null);
-});
-test('retained revision preference and admitted aliases are specific to the selected owner',()=>{
- const home=randomUUID(),one=randomUUID(),two=randomUUID(),alias=randomUUID(),recordId=randomUUID(),revision='a'.repeat(64);
- const current={id:recordId,revision,selectors:[]},foreign={id:randomUUID(),recordId,revision,historical:true,referenceNamespaces:[one],selectors:[]},historical={id:randomUUID(),recordId,revision,historical:true,referenceNamespaces:[two,alias],selectors:[]},entries=[foreign,current,historical],resolve=publicationLinkResolver(home,{entries,projects:[],notebooks:[],homeEnabled:true});
- const target={workspaceId:alias,kind:'record',id:recordId,revision};
- assert.equal(publicationRecordDestination(entries,target,home),historical);assert.equal(resolve(researchReference(target)),'entry:'+historical.id);
- assert.equal(resolve(researchReference({...target,workspaceId:home,revision:undefined})),'entry:'+current.id);
- assert.equal(resolve(researchReference({...target,workspaceId:two,revision:undefined})),null);
- assert.equal(resolve(researchReference({...target,kind:'notebook'})),null);
+ // A record of another workspace, or one not given as a destination, has no page here.
+ assert.equal(resolve(researchReference({...target,workspaceId:randomUUID()})),null);
+ assert.equal(resolve(researchReference({...target,id:randomUUID()})),null);
+ // The workspace itself has no page without a homepage.
+ assert.equal(resolve(researchReference({workspaceId:home,kind:'workspace',id:home})),null);
 });
 
-test('copied aliases cannot choose an arbitrary owner or override an explicit canonical namespace',()=>{
- const home=randomUUID(),one=randomUUID(),two=randomUUID(),alias=randomUUID(),recordId=randomUUID(),revision='a'.repeat(64);
- const first={id:randomUUID(),recordId,revision,sourceWorkspaceId:one,referenceNamespaces:[one,alias]},second={id:randomUUID(),recordId,revision,sourceWorkspaceId:two,referenceNamespaces:[two,alias,one]};
- assert.equal(publicationRecordDestination([first,second],{workspaceId:alias,id:recordId},home),null);
- assert.equal(publicationRecordDestination([second,first],{workspaceId:one,id:recordId},home),first);
- assert.equal(publicationRecordDestination([second,{...first,revision:'b'.repeat(64)}],{workspaceId:one,id:recordId,revision},home),null);
- const resolve=publicationLinkResolver(home,{entries:[],projects:[{...first,sourceId:recordId},{...second,sourceId:recordId}],notebooks:[]});
- assert.equal(resolve(researchReference({workspaceId:alias,id:recordId,kind:'project'})),null);
- assert.equal(resolve(researchReference({workspaceId:one,id:recordId,kind:'project'})),'project:'+first.id);
+test('project and lab book links resolve by identity within this workspace; section links need a shown section',()=>{
+ const home=randomUUID(),project={id:randomUUID(),title:'Field work'},notebook={id:randomUUID(),title:'Hives',projectId:project.id};
+ const section={id:randomUUID(),title:'Method',body:'Steps'},shared=record({sections:[section]}),selection={entries:[shared],projects:[project],notebooks:[notebook],homeEnabled:false},resolve=publicationLinkResolver(home,selection);
+ assert.equal(publicationCollectionDestination(selection,{workspaceId:home,kind:'project',id:project.id},home),project);
+ assert.equal(resolve(researchReference({workspaceId:home,kind:'notebook',id:notebook.id})),'notebook:'+notebook.id);
+ assert.equal(resolve(researchReference({workspaceId:randomUUID(),kind:'project',id:project.id})),null);
+ const linked=resolve(researchReference({workspaceId:home,kind:'record',id:shared.id,selector:{version:1,kind:'section',id:section.id}}));
+ assert.match(linked,new RegExp('^entry:'+shared.id+'#'));
+ assert.equal(resolve(researchReference({workspaceId:home,kind:'record',id:shared.id,selector:{version:1,kind:'section',id:randomUUID()}})),null);
 });

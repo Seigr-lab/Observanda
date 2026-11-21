@@ -6,11 +6,3 @@ export function brandingTargets(book) {
     ...book.pages.map(p => ({ target: `page:${p.id}`, label: `Page: ${p.title}` })),
     ...book.entries.map(e => ({ target: `entry:${e.id}`, label: `Record: ${e.title}` }))];
 }
-
-export function logosFor(book, target) {
-  const override = book.branding?.find(item => item.target === target);
-  if (override) return override.logos;
-  if (target === 'home') return book.website.logoId ? [{ id: book.website.logoId, alt: book.website.logoAlt }] : [];
-  const project = book.projects.find(p => `project:${p.id}` === target);
-  return project?.logoId ? [{ id: project.logoId, alt: project.title }] : [];
-}
