@@ -163,6 +163,7 @@
   "unsupportedPaste": "Este documento pegado contiene bloques no compatibles. Conserva el bloque de origen o establece una correspondencia explícita antes de insertarlo.",
   "headingAnchor": "Copiar referencia al encabezado",
   "privateFigure": "Referencia a figura privada",
+  "privateReference": "Referencia de investigación privada",
   "tableHint": "Los valores de las celdas permanecen como texto; utiliza la herramienta de hojas de cálculo para realizar cálculos.",
   "equationHint": "Se conserva el código fuente TeX. La representación funciona sin conexión, con los recursos externos y las órdenes HTML de confianza desactivados.",
   "preservedHint": "Conserva literalmente un bloque importado no compatible. Describe su formato y por qué se conserva en lugar de representarse.",

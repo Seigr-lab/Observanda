@@ -8,6 +8,7 @@ import {WebsiteFileStore,websiteSourceId} from './website-file-store.js';
 import {sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {PUBLICATION_PARTS,publicationPartAllowed,figureSharingId} from './web/record-publication-privacy.js';
 import {researchId} from './web/research-reference.js';
+import {proseReferences} from './web/prose-model.js';
 import {revisionId} from './web/revision-model.js';
 import {convertPublicationRecord} from './publication-conversion-render.js';
 import {enrichWebsiteSources} from './website-file-library.js';
@@ -119,6 +120,23 @@ async function states(storage,targets,workspaceId,selectedChannels=channels){
  });
 }
 
+// Shared records a website copy links to, read in the copy's own snapshot. A
+// link to one of them keeps its words and becomes a record link; a private or
+// missing record stays unnamed. PDF output links to no other record.
+const LINKED_RECORDS=200;
+async function linkedRecords(store,snapshot,record,target){
+ if(target!=='website')return [];
+ const ids=new Set(),add=value=>{if(value?.kind==='record'&&value.workspaceId===snapshot.metadata.id&&value.id!==record.id&&ids.size<LINKED_RECORDS)ids.add(value.id);};
+ for(const value of [record.body,...(record.sections??[]).map(section=>section.body)])for(const reference of proseReferences(value))add(reference);
+ for(const link of record.relations??[])add(link.target);
+ const linked=[];
+ for(const id of ids){
+  const row=await store.member(snapshot,id);if(!row)continue;
+  const value=await withRecordDocument(store,row.id,row.revision,async doc=>sourceRecordAllowed({id:row.id,notebookId:row.notebookId,share:(await doc.field(['share'])).value},snapshot.metadata,'website')?{...await permittedOriginal(doc,'website'),revision:row.revision}:null);
+  if(value)linked.push(value);
+ }
+ return linked;
+}
 async function permittedOriginal(doc,target){
  const record={},publication=(await doc.field(['publication'])).value;
  for(const key of await doc.tree.propertyNames(doc.root)){
@@ -192,11 +210,12 @@ export class PublicationConversion{
  }
  async composition(storage,state){
   const {sourceId,provenance}=state,target=provenance.target;
-  const {metadata,record}=await storage.catalogue(async store=>{
+  const {metadata,record,linked}=await storage.catalogue(async store=>{
    const snapshot=await store.snapshot(),row=await store.member(snapshot,provenance.recordId);if(!row||row.revision!==state.revision)throw new AppError('RECORD_CHANGED');
-   return withRecordDocument(store,row.id,row.revision,async doc=>({metadata:snapshot.metadata,record:await permittedOriginal(doc,target)}));
+   const record=await withRecordDocument(store,row.id,row.revision,doc=>permittedOriginal(doc,target));
+   return {metadata:snapshot.metadata,record,linked:await linkedRecords(store,snapshot,record,target)};
   });
-  const output=await convertPublicationRecord(storage,metadata,record,{target});if(!output.visible)throw new AppError('RECORD_CHANGED');
+  const output=await convertPublicationRecord(storage,metadata,record,{target,linked});if(!output.visible)throw new AppError('RECORD_CHANGED');
   return {sourceId,target,provenance:{...provenance,revision:state.revision,recordRevision:state.revision,snapshotId:state.snapshotId??null,...(target==='website'?{feedCompositionVersion:1}:{})},pickerContext:target==='website'?libraryContext(metadata,provenance):undefined,title:record.title,...output};
  }
  async capture(storage,state,token){
@@ -252,7 +271,8 @@ export class PublicationConversion{
    return this.files.beginSourceUpdate({sourceId,target:'website',provenance:source.provenance,liveOnly:!repairPermissions,feedBackfill:true,signal});
   },{write:true,signal});
   const record=await withRecordDocument(store,row.id,row.revision,doc=>permittedOriginal(doc,'website'));
-  const output=await convertPublicationRecord(storage,metadata,record,{signal,target:'website'});if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+  const linked=await linkedRecords(store,await store.snapshot(snapshotId),record,'website');
+  const output=await convertPublicationRecord(storage,metadata,record,{signal,target:'website',linked});if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
   const composition={title:record.title,provenance:{...source.provenance,revision:row.revision,recordRevision:row.revision,snapshotId,feedCompositionVersion:1},pickerContext:context,...output};
   if(repairPermissions){
    await this.files.putSource({sourceId,target:'website',...composition,signal},{token});
@@ -378,7 +398,7 @@ export class PublicationConversion{
         !sourceRecordAllowed({id:row.id,notebookId:book,share:(await doc.field(['share'])).value},metadata,'website'))throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
        return permittedOriginal(doc,'website');
       });
-      const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal});
+      const output=await convertPublicationRecord(storage,metadata,record,{target:'website',signal,linked:await linkedRecords(store,snapshot,record,'website')});
       if(!output.visible)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
       group.push({sourceId,token,provenance,row,metadata,record,output});
      }

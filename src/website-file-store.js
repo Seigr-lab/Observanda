@@ -25,6 +25,7 @@ import {websiteSourceLocation} from './website-source-location.js';
 import {validateDiscovery} from './website-discovery-settings.js';
 import {applyDiscovery,discoveryNames} from './website-discovery-output.js';
 import {applyWebsiteLogos,applyPageLogos,websiteLogoPlan,LOGOS_STYLESHEET,LOGOS_CSS} from './website-logos.js';
+import {applyRecordLinks,applyWebsiteRecordLinks,websiteRecordPages} from './website-record-links.js';
 import {cssStructureIssue} from './web/website-source-text.js';
 import {readSiteMenu,saveSiteMenu,inheritSiteMenu} from './website-menu-storage.js';
 import {REGION_FILES,placeSiteRegions,regionFiles} from './website-region-storage.js';
@@ -727,7 +728,8 @@ export class WebsiteFileStore{
   const blocked=!editor&&manifest.publicPageFiles===undefined&&/\.(?:html|css)$/.test(name)?privateWebsiteNames(manifest):null;
   const content=legacy||blocked?.size?await RenderedWebsiteFile.open(this,manifest,descriptor,signal,blocked):new WebsiteFileContent(this,id,manifest.revision,descriptor);
   if(editor!==true&&name.endsWith('.html')){
-   const html=(await contentBuffer(content,{signal,maxBytes:websiteHTMLByteLimit})).toString('utf8'),output=applyPageLogos(html,name,await websiteLogoPlan(this,manifest,[{name,html}],{signal})).html;
+   const html=(await contentBuffer(content,{signal,maxBytes:websiteHTMLByteLimit})).toString('utf8'),logos=applyPageLogos(html,name,await websiteLogoPlan(this,manifest,[{name,html}],{signal})).html;
+   const output=logos.includes('#observanda-record-')?applyRecordLinks(logos,name,await websiteRecordPages(this,manifest,{signal})):logos;
    if(output!==html){const bytes=Buffer.from(output);return {content:bytes,contentType:descriptor.contentType,revision:manifest.revision,size:bytes.length,sha256:contentHash(bytes)};}
   }
   return {content,contentType:descriptor.contentType,revision:manifest.revision,size:content.size,sha256:content.sha256};
@@ -742,6 +744,7 @@ export class WebsiteFileStore{
    if(blocked.size)for(const [name,file] of descriptors)if(/\.(?:html|css)$/.test(name))files.set(name,await RenderedWebsiteFile.open(this,manifest,file,signal,blocked));
   }
   await applyWebsiteLogos(this,manifest,files,descriptors,{signal});
+  await applyWebsiteRecordLinks(this,manifest,files,{signal});
   await applyDiscovery(manifest,files,{site,signal});
   return {revision:manifest.revision,site,files};
  },{signal});}

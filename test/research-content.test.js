@@ -1,4 +1,7 @@
 
+import {recordLinkHref} from '../src/website-record-links.js';
+import {recordRevision} from '../src/research.js';
+import {bookText} from '../src/web/book-messages.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -15,15 +18,20 @@ import {renderFigure} from '../src/web/figure-renderer.js';
 import {validateTask} from '../src/modules/planning.js';
 import {reconcileRecords} from '../src/web/record-merge.js';
 const link=(text,target)=>({type:'text',text,marks:[{type:'strong'},{type:'link',attrs:{href:researchReference(target),target:'_self',title:'',nofollow:false}}]});
-test('rich research links in a website copy carry no labels or identifiers of other records',async()=>{
+test('rich research links in a website copy keep only shared labels and a record link the website resolves',async()=>{
  const book=sampleNotebook(),record=book.entries[0],shared=book.entries[1],secret=book.entries[2];shared.share=true;secret.share=false;
  const target=id=>({workspaceId:book.id,kind:'record',id});
  record.body={type:'doc',content:[{type:'paragraph',content:[link('Shared experiment',target(shared.id)),link('Secret title',target(secret.id)),link('Other workspace title',{workspaceId:randomUUID(),kind:'record',id:randomUUID()})]}]};
  record.sections=[{id:randomUUID(),title:'Interpretation',body:plainRichText('Further context')}];validateNotebook(book);
  assert.equal(proseReferences(record.body).length,3);
- // The website copy holds this record only: links to other records never carry their identities or titles.
- const {html,css}=await convertPublicationRecord({},book,record),copy=html+css;
- for(const value of [secret.id,'Secret title','observanda://','Other workspace title',shared.id])assert.ok(!copy.includes(value),value);
+ // A link to a shared record keeps its words; one to a private record keeps only an unnamed
+ // record link; a record in another workspace is not linked. The website resolves record links.
+ const linked=[{...shared,revision:recordRevision(shared)}],{html,css}=await convertPublicationRecord({},book,record,{linked}),copy=html+css;
+ assert.ok(new RegExp('<a href="'+recordLinkHref(book.id,shared.id)+'"[^>]*>(?:<strong>)?'+'Shared experiment').test(html));
+ assert.ok(new RegExp('<a href="'+recordLinkHref(book.id,secret.id)+'"[^>]*>(?:<strong>)?'+bookText('privateReference')).test(html));
+ for(const value of ['Secret title','observanda://','Other workspace title'])assert.ok(!copy.includes(value),value);
+ // Without the shared record's grant, its words are not named either.
+ assert.ok(!(await convertPublicationRecord({},book,record)).html.includes('Shared experiment'));
  assert.ok(html.includes('Further context'));
  assert.equal(record.body.content[0].content[1].text,'Secret title');
 });

@@ -163,6 +163,7 @@
   "unsupportedPaste": "Aquest document enganxat conté blocs no admesos. Conserva el bloc d'origen o assigna'l explícitament abans d'inserir-lo.",
   "headingAnchor": "Copia la referència de la capçalera",
   "privateFigure": "Referència a una figura privada",
+  "privateReference": "Referència de recerca privada",
   "tableHint": "Els valors de les cel·les es mantenen com a text; utilitza l'eina de full de càlcul per fer càlculs.",
   "equationHint": "Es conserva la font TeX. La renderització és sense connexió, amb els recursos externs i les ordres HTML de confiança desactivats.",
   "preservedHint": "Conserva literalment un bloc importat no admès. Descriu-ne el format i per què es preserva en lloc de renderitzar-lo.",

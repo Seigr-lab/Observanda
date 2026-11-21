@@ -163,6 +163,7 @@
   "unsupportedPaste": "Dette innlimte dokumentet inneheld blokker som ikkje er støtta. Bevar kjeldeblokka eller tilordne henne eksplisitt før innsetjing.",
   "headingAnchor": "Kopier overskriftsreferanse",
   "privateFigure": "Privat figurreferanse",
+  "privateReference": "Privat forskingsreferanse",
   "tableHint": "Celleverdiar held fram som tekst; bruk reknearkverktøyet til utrekningar.",
   "equationHint": "TeX-kjelda blir bevart. Visinga skjer fråkopla, med eksterne ressursar og klarerte HTML-kommandoar slått av.",
   "preservedHint": "Bevar ei importert blokk som ikkje er støtta, ordrett. Skildre formatet og kvifor ho blir bevart i staden for vist.",

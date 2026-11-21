@@ -1,6 +1,7 @@
 
 import {validRichText,plainRichText,richTextPlain,renderRichText,RICH_TEXT_LIMITS} from './rich-text-model.js';
 import {parseResearchReference} from './research-reference.js';
+import {bookText} from './book-messages.js';
 
 // Strings are legacy plain prose, never HTML or implicit Markdown. A rich
 // document is the only persisted source once edited; plain text is a projection.
@@ -21,8 +22,10 @@ export function projectProse(value,resolve){
   node.marks=(node.marks??[]).flatMap(mark=>{
    if(mark.type!=='link')return [mark];
    const href=resolve(mark.attrs.href);
+   // A record that cannot be named keeps an unnamed link to its identity.
+   if(href?.private){node.text=bookText('privateReference');return [{...mark,attrs:{...mark.attrs,href:href.href}}];}
    if(href)return [{...mark,attrs:{...mark.attrs,href}}];
-   if(parseResearchReference(mark.attrs.href))node.text='Private research reference';return [];
+   if(parseResearchReference(mark.attrs.href))node.text=bookText('privateReference');return [];
   });
   if(!node.marks.length)delete node.marks;
   for(const child of node.content??[])visit(child);

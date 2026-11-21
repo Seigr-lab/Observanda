@@ -22,7 +22,7 @@ import './web/i18n/catalogues/labBookProfiles.js';
 
 // Internal projection boundary: the caller has validated metadata and originals.
 // Destination summaries resolve links/counts; they are never rendered as records.
-export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,previewBrowseAvailable=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',referenceResolver=null,recordResolver=null,collectionResolver=null,edition}={}) {
+export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,previewBrowseAvailable=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',referenceResolver=null,recordResolver=null,collectionResolver=null,privateRecordLink=null,edition}={}) {
   if((referenceResolver||recordResolver||collectionResolver)&&!publicationTarget)throw new AppError('INVALID');
   if(browsePage&&publicationTarget!=='browse')throw new AppError('INVALID');
   if(publicationCounts&&!publicationTarget)throw new AppError('INVALID');
@@ -48,7 +48,8 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
     return (edition?.availability??[]).filter(note=>note.recordId===record.id&&references.has(researchReference(note.target))&&!projectLink(researchReference(note.target))).map(note=>note.statement);
   };
   const publicText=value=>projectProse(value,projectLink);
-  const recordText=(value,record)=>publicationRecordText(value,record,projectLink,{workspaceContent});
+  const proseLink=privateRecordLink?href=>projectLink(href)??privateRecordLink(href):projectLink;
+  const recordText=(value,record)=>publicationRecordText(value,record,proseLink,{workspaceContent});
   const cleanSections=sections=>sections.map(section=>section.richText?{...section,richText:publicText(section.richText),body:proseText(publicText(section.richText))}:section);
   const projects = selection.projects.map(p => ({ id: p.id, title: p.title, description: p.description, ...(p.recordCount===undefined?{}:{recordCount:p.recordCount}), logos: logosFor(book, 'project:' + p.id) }));
   const entries = selection.entries.map(e => ({

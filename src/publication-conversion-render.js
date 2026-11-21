@@ -25,6 +25,8 @@ import {ResearchMaterials} from './research-materials.js';
 import {retainedTableHTML} from './publication-retained-tables.js';
 import {addPhotoRenditions} from './website-image-renditions.js';
 import {figureVariantKey,figureVariantLanguages,mapFigureVariants} from './website-figure-variants.js';
+import {recordLinkHref} from './website-record-links.js';
+import {parseResearchReference} from './web/research-reference.js';
 
 const attr=(node,name)=>node.attrs?.find(value=>value.name===name)?.value;
 const classes=node=>(attr(node,'class')??'').split(/\s+/);
@@ -70,20 +72,24 @@ export function nestRecordHeadings(article){
 
 // The admitted projection of one selected record. Only that record's own
 // composition is built: no other owner's names, navigation, homepage, records,
-// or publication choices are visited.
-export function recordProjection(metadata,record){
+// or publication choices are visited. Shared records it links to are given as
+// destinations, so those links keep their words and their target; a link to a
+// record that is not shared keeps only its target, unnamed. The website links
+// either one when it places that record, which it can only when it is shared.
+export function recordProjection(metadata,record,linked=[]){
  const notebook=metadata.notebooks.find(item=>item.id===record.notebookId),project=metadata.projects.find(item=>item.id===notebook.projectId);
  if(!project)throw new AppError('CATALOGUE_DAMAGED');
  const book=withRenderingWebsite(createNotebook(record.title));book.id=metadata.id;
  book.projects=[{id:project.id,title:project.title,description:'',share:true,logoId:null}];
  book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
  const selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};
- return projectPublication(book,selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record]});
+ const privateRecordLink=href=>{const target=parseResearchReference(href);return target?.kind==='record'&&target.workspaceId===metadata.id&&target.id!==record.id?{private:true,href:recordLinkHref(target.workspaceId,target.id)}:null;};
+ return projectPublication(book,selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record,...linked.filter(item=>item.id!==record.id)],privateRecordLink});
 }
 
 // Called only by an explicit publication-visibility operation while its exact
 // research owner is available. The returned HTML and assets have no source I/O.
-export async function convertPublicationRecord(storage,metadata,original,{signal,target:channel='website'}={}){
+export async function convertPublicationRecord(storage,metadata,original,{signal,target:channel='website',linked=[]}={}){
  if(!sourceRecordAllowed(original,metadata,channel))return {visible:false,html:'',css:'',assets:[]};
  signal?.throwIfAborted();
  const hidden=new Set(original.publication?.[channel]?.hiddenFigures),retainedTargets=new Set();
@@ -96,7 +102,7 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
   }
  }
  const selected=sourcePublicationRecord(original,channel,retainedTargets),record={...selected,share:true,sections:selected.sections.map(item=>({...item,share:true})),attachments:selected.attachments.map(item=>({...item,share:true}))};
- const context=recordProjection(metadata,record),plan=publicationPage(context,'entry:'+record.id),mediaFiles=new Map(),media=plan.media.size?new MediaStore(storage):null;
+ const context=recordProjection(metadata,record,channel==='website'?linked:[]),plan=publicationPage(context,'entry:'+record.id),mediaFiles=new Map(),media=plan.media.size?new MediaStore(storage):null;
  for(const [id,kind] of plan.media){signal?.throwIfAborted();const asset=await media.get(id,{streamed:true,signal,headerBytes:kind==='image'&&channel==='website'?24:12});if(asset.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,asset);}
  const fontFiles=await new WorkspaceFonts(storage).files(plan.fonts,{signal}),fragments=new PublicationFragments(),retainedAssets=new Map(),tables=new Map(),figures=new Map();
  for(const figure of record.figures){
@@ -127,11 +133,23 @@ export async function convertPublicationRecord(storage,metadata,original,{signal
  for(const node of nodes(article))for(const value of node.attrs??[])if(value.name===figureVariantKey)value.value=mapFigureVariants(value.value,url=>{
   const replacement=assetPaths.get(path.posix.normalize(path.posix.join('entries',url)));if(!replacement)throw new AppError('MEDIA_MISSING');return replacement;
  });
+ const unlinked=new Set();
  for(const node of nodes(article))for(const value of node.attrs??[])if(['src','href','poster'].includes(value.name)&&!value.value.startsWith('#')&&!/^[a-z][a-z0-9+.-]*:/i.test(value.value)){
   const name=path.posix.normalize(path.posix.join('entries',value.value)),replacement=assetPaths.get(name);
   if(replacement)value.value=replacement;
-  else if(value.name==='href'){value.value='#';}
+  else if(value.name==='href'){
+   // A shared record's page becomes a record link the website resolves; its
+   // own anchors stay in the copy. Other destinations have no page here.
+   const [page,fragment]=name.split('#'),entry=/^entries\/([0-9a-f-]{36})\.html$/.exec(page);
+   if(entry&&entry[1]===record.id)value.value='#'+(fragment??'');
+   else if(entry)value.value=recordLinkHref(metadata.id,entry[1],fragment??null);
+   else unlinked.add(node);
+  }
   else throw new AppError('MEDIA_MISSING');
+ }
+ for(const node of unlinked){
+  if(node.tagName!=='a'){node.attrs=node.attrs.map(value=>value.name==='href'?{...value,value:'#'}:value);continue;}
+  const parent=node.parentNode,at=parent.childNodes.indexOf(node);for(const child of node.childNodes)child.parentNode=parent;parent.childNodes.splice(at,1,...node.childNodes);
  }
  // Restrict the renderer's composition styles to copied fragments. Its sample
  // page header, body typography and root variables must not restyle the website.

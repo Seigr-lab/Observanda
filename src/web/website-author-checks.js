@@ -17,6 +17,8 @@ export function checkAuthoredPage(doc,path,directory,pages,{files,crossLink,anch
  if(!doc.title.trim())add('missingTitle',doc.documentElement);
  if(!doc.documentElement.lang.trim())add('missingLang',doc.documentElement);
  const check=(raw,node,link)=>{
+  // A record copy's link to another record is resolved when the site is published.
+  if(link&&raw.startsWith('#observanda-record-'))return;
   let url;try{url=new URL(raw,pageURL);}catch{add(link?'brokenLink':'missingFile',node,raw);return;}
   if(url.origin!==directory.origin)return;
   const ref=savedFileReference(raw,pageURL,directory);
