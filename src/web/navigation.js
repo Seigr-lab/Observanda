@@ -4,8 +4,7 @@ import {bookSelectors,selectorAnchor} from './book-selectors.js';
 const preferenceRoutes={interface:'interface',preferences:'general','user-profile':'user','dashboard-settings':'dashboard',templates:'templates',fonts:'fonts',integrations:'integrations',storage:'storage'};
 // URLs identify locations by stable IDs, never by titles or filesystem paths.
 export function routeFor(state) {
-  if((state.websiteId||state.websiteDefaultRoute)&&['website','publishing'].includes(state.page))return '#/websites/'+(state.websiteId??'default')+'/'+(state.page==='website'?'editor':state.page)+(state.page==='review'?'/'+state.preview.id:state.page==='branding'?'/'+encodeURIComponent(state.brandTarget??'home'):'');
-  if(state.page==='review'&&state.preview?.releaseId)return '#/review/'+state.preview.id;
+  if((state.websiteId||state.websiteDefaultRoute)&&['website','publishing'].includes(state.page))return '#/websites/'+(state.websiteId??'default')+'/'+(state.page==='website'?'editor':state.page);
   if(state.page==='laboratory')return '#/laboratory/samples';
   if(state.page==='module')return '#/modules/'+encodeURIComponent(state.moduleId)+(state.modulePath?'/'+state.modulePath.split('/').map(encodeURIComponent).join('/'):'');
   if(state.page==='project')return '#/projects/'+state.project;
@@ -42,7 +41,5 @@ export function resolveRoute(hash,book,{contentReading=false}={}) {
   if(parts[0]==='projects'&&parts.length<=3){const p=book.projects.find(p=>p.id===parts[1]);if(p&&(!parts[2]||parts[2]==='records'))return {...base,page:parts[2]?'entries':'project',project:p.id};}
   if(parts[0]==='notebooks'&&(parts.length===2||parts.length===3&&parts[2]==='read')){const n=book.notebooks.find(n=>n.id===parts[1]);if(n)return {...base,page:'entries',project:n.projectId,notebook:n.id,bookReading:parts[2]==='read'};}
   if(parts[0]==='records'&&(parts.length===2||(parts[2]==='read'&&parts.length<=4))){const e=book.entries.find(e=>e.id===parts[1]),n=book.notebooks.find(n=>n.id===e?.notebookId);if(e&&n)return {...base,page:'editor',project:n.projectId,notebook:n.id,selected:e.id,recordReading:parts[2]==='read',recordSection:e.sections.some(s=>s.id===parts[3])||bookSelectors(e).some(s=>selectorAnchor(s)===parts[3])?parts[3]:null};}
-  if(parts[0]==='branding'&&parts.length===2){let target;try{target=decodeURIComponent(parts[1]);}catch{return base;}if(target==='home'||target.startsWith('entry:')&&researchId(target.slice(6))||contentReading&&target.startsWith('page:')&&researchId(target.slice(5))||['project','notebook','page'].some((type,i)=>[book.projects,book.notebooks,book.pages][i].some(item=>target===type+':'+item.id)))return {...base,page:'branding',brandTarget:target};}
-  if(parts[0]==='review')return parts.length===2&&/^[a-f0-9]{64}$/.test(parts[1])?{...base,page:'review',reviewId:parts[1]}:{...base,page:'website'};
   return base;
 }

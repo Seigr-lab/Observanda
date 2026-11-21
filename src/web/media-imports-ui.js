@@ -17,10 +17,10 @@ export function mediaImportsUI({state,api,esc,showDialog,notify,apply,busy}){
  let timer,watch=0,target=null,context=null,xhr=null,items=[],uploadId=null,receiving=false,cursor=null,next=null,previous=[];
  const button=(label,action,id='',extra='')=>`<button type="button" class="button" data-action="media-import-${action}" data-id="${esc(id)}" ${extra}>${esc(label)}</button>`;
  const guard=()=>{if(context!==researchContext(state)||target?.websiteId!==(state.websiteId??null))throw Error(tr('mediaDestinationChanged'));};
- const destination=input=>({purpose:input.dataset.upload,workspaceId:state.book?.id,websiteId:state.websiteId??null,recordId:state.selected,projectId:input.dataset.projectId,brandTarget:input.dataset.target,page:state.page});
+ const destination=input=>({purpose:input.dataset.upload,workspaceId:state.book?.id,websiteId:state.websiteId??null,recordId:state.selected,projectId:input.dataset.projectId,page:state.page});
  const stop=()=>{clearTimeout(timer);watch++;};
  const live=token=>token===watch&&context===researchContext(state)&&!state.access?.locked;
- const currentDestination=intent=>intent.workspaceId===state.book?.id&&intent.websiteId===(state.websiteId??null)&&state.page===intent.page&&state.selected===intent.recordId&&[...document.querySelectorAll('input[data-upload]')].some(input=>['purpose','projectId','brandTarget'].every(key=>destination(input)[key]===intent[key]));
+ const currentDestination=intent=>intent.workspaceId===state.book?.id&&intent.websiteId===(state.websiteId??null)&&state.page===intent.page&&state.selected===intent.recordId&&[...document.querySelectorAll('input[data-upload]')].some(input=>['purpose','projectId'].every(key=>destination(input)[key]===intent[key]));
  function bind(){
   if(!state.storage?.encrypted)return;
   for(const input of document.querySelectorAll('input[data-upload]')){
