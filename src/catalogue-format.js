@@ -41,7 +41,7 @@ export function parseCatalogueFeatureText(text){
 export function sameCatalogueGeneration(a,b){return a instanceof ExtendedCatalogueGeneration||b instanceof ExtendedCatalogueGeneration?catalogueFeatureText(a)!==null&&catalogueFeatureText(a)===catalogueFeatureText(b):a===b;}
 // Archive inspection serves the format from a portable backup header.
 export function archivedCatalogueFormatRows(sql,header){
- if(sql===CATALOGUE_FORMAT_SQL)return [{version:header?.catalogueVersion}];
+ if(sql===CATALOGUE_FORMAT_SQL)return [{version:header?.catalogueVersion??3}];
  if(sql===CATALOGUE_FEATURES_SQL&&typeof header?.catalogueFeatures==='string')return [{features:header.catalogueFeatures}];
  return null;
 }
