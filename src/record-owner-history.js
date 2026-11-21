@@ -8,9 +8,17 @@ import {revisionId} from './web/revision-model.js';
 import {validMember} from './snapshot-index.js';
 import {validRecordOwner} from './record-owner-transfer-state.js';
 import {catalogueFormat,catalogueRequiresRecordOwnerTransfers} from './catalogue-format.js';
-import {websiteMetadataShell} from './website-owned-metadata.js';
+import {startingAppearance} from './web/themes.js';
+import {websiteDefaults,emptyHomepage,siteLayoutDefaults} from './web/website-model.js';
+import {presentationDefaults} from './web/media-presentation.js';
 import {retainRecordOwnerResource} from './record-owner-resources.js';
 const prefix='record-owner-history:';
+// Format 21 metadata carried the earlier website settings; retained history
+// keeps neutral defaults for them, exactly as earlier versions wrote it.
+function formatTwentyOneShell(metadata){
+ const {websites,...base}=metadata;void websites;
+ return {...base,website:{...websiteDefaults(),home:emptyHomepage(),design:siteLayoutDefaults(),assets:[],layouts:[],templates:[],typography:{},presentation:presentationDefaults(),palette:{},logoId:null,logoAlt:'',footer:'',navigation:[]},pages:[],branding:[],appearance:startingAppearance('research'),themes:[],activeThemeId:null};
+}
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 function* configurations(metadata){
@@ -28,7 +36,7 @@ export function recordOwnerHistoryMetadata(metadata,notebookId,workspaceId){
  const notebook=metadata.notebooks.find(value=>value.id===notebookId);if(!notebook)fail();
  const project=metadata.projects.find(value=>value.id===notebook.projectId);if(!project)fail();
  // Format 21 kept the earlier website settings; format 22 metadata has none to clear.
- const value=metadata.formatVersion===21?websiteMetadataShell(metadata):structuredClone(metadata);
+ const value=metadata.formatVersion===21?formatTwentyOneShell(metadata):structuredClone(metadata);
  value.id=workspaceId;value.entries=[];value.notebooks=[structuredClone(notebook)];value.projects=[{...structuredClone(project),parentId:null}];
  if(value.pages)value.pages=[];if(value.branding)value.branding=[];delete value.websites;
  if(value.website){value.website={...value.website,navigation:[],layouts:[]};}

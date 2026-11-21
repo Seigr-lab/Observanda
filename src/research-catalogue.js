@@ -15,7 +15,6 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 // never titles, prose or file paths. Workspace owns locking and key custody.
 import {catalogueContext} from './catalogue-context.js';
 import {cachedMaterialText,rememberMaterialText} from './catalogue-material-text-cache.js';
-import {assertWebsiteMetadataShell} from './website-owned-metadata.js';
 import {withCatalogueVerification,verificationContext} from './catalogue-verification.js';
 import {verifiedCatalogueObjects} from './catalogue-object-verification.js';
 import {randomUUID,randomBytes} from 'node:crypto';
@@ -106,7 +105,7 @@ export class ResearchCatalogue{
   const value=this.decode('snapshot',id,row.payload);
   if(!value||!identifier(value.metadata?.id)||!Array.isArray(value.metadata.entries)||value.metadata.entries.length||value.websiteDocuments!==undefined&&value.websiteDocuments!==1)fail();
   assertConfigurationMetadata(value.metadata);
-  if(value.websiteDocuments===1){try{assertWebsiteMetadataShell(value.metadata);}catch(error){if(error.code==='INVALID')fail();throw error;}}
+  // Snapshots saved by earlier versions may carry websiteDocuments:1; it no longer means anything.
   if(value.indexVersion===undefined){
    if(!Array.isArray(value.records)||!value.records.every(validMember)||new Set(value.records.map(r=>r.id)).size!==value.records.length)fail();
   }else if(value.indexVersion!==1||!SnapshotIndex.valid(value.membership)||!Number.isSafeInteger(value.count)||value.count<0||
@@ -133,13 +132,13 @@ export class ResearchCatalogue{
   const value=await this.snapshot(id);
   if(!value.indexVersion)return value;
   const records=(await new SnapshotIndex(this).rows(value)).sort((a,b)=>a.position-b.position).map(({position,...row})=>row);
-  return {metadata:value.metadata,records,...(value.websiteDocuments===1?{websiteDocuments:1}:{})};
+  return {metadata:value.metadata,records};
  }
  async indexed(snapshot){
   if(snapshot.indexVersion)return snapshot;
   const rows=snapshot.records.map((row,position)=>({...row,position}));
   return {indexVersion:1,metadata:snapshot.metadata,membership:await new SnapshotIndex(this).build(rows),
-   count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length,...(snapshot.websiteDocuments===1?{websiteDocuments:1}:{})};
+   count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length};
  }
  async scopeKey(scopeId,generation=1,{create=false}={}){
   if(!identifier(scopeId)||!Number.isSafeInteger(generation)||generation<1)throw new AppError('INVALID');
