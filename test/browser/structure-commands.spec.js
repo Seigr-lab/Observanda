@@ -13,7 +13,9 @@ const click=(scope,name)=>scope.getByRole('button',{name,exact:true}).click();
 const card=(page,name)=>page.locator('.project-notebook').filter({has:page.getByRole('button',{name,exact:true})});
 async function fixture(page){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-structure-ui-')),book=sampleNotebook();
- book.projects.push({id:randomUUID(),title:'Listening studio',description:'',share:true,logoId:null});
+ const studio={id:randomUUID(),title:'Listening studio',description:'',share:true,logoId:null};book.projects.push(studio);
+ // Projects held in the workspace accept edits, moves and deletions; new lab books belong to dedicated projects.
+ book.notebooks.push({id:randomUUID(),projectId:studio.id,title:'Transferred takes'});
  book.entries.forEach(e=>e.share=true);
  const {workspace:ws,vault,deviceStore}=await encryptedFixture(directory,book);
  const app=await startServer({root:ws.root,deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
@@ -39,10 +41,7 @@ test('existing project and lab-book forms reconcile indexed saves, moved content
   await click(main,'Settings');await dialog.getByLabel('Name',{exact:true}).fill('Research studio');
   const project=await saved(page,()=>click(dialog,'Save project'),f.ws);
   expect(project.total).toBe(f.book.entries.length);await expect(main.locator('h1')).toHaveText('Research studio');
-  await click(main,'New lab book');await dialog.getByLabel('Lab book name',{exact:true}).fill('Transferred takes');
-  await dialog.getByLabel('Project',{exact:true}).selectOption(f.book.projects[1].id);
-  await saved(page,()=>click(dialog,'Save lab book'),f.ws);await expect(dialog).not.toBeVisible();
-  const destination=(await f.ws.read()).book.notebooks.find(n=>n.title==='Transferred takes');
+  const destination=f.book.notebooks.find(n=>n.title==='Transferred takes');
   await click(card(page,f.book.notebooks[0].title),'Lab book settings');await click(dialog,'Delete lab book');
   await dialog.getByLabel('What should happen to its records?',{exact:true}).selectOption('move');
   await dialog.getByLabel('Destination lab book',{exact:true}).selectOption(destination.id);
@@ -54,10 +53,12 @@ test('existing project and lab-book forms reconcile indexed saves, moved content
   await f.navigate(f.book.projects[1].id);await expect(card(page,'Transferred takes')).toContainText(f.book.entries.length+' records');
   // A record save must use the new saved base/revision, not an obsolete client copy.
   await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);
-  await page.getByLabel('Record title',{exact:true}).fill('Edited after transfer');
-  const recordResponse=page.waitForResponse(r=>r.url().endsWith('/api/research/records/save'));
-  await page.locator('.section-save [data-action="save"]').click();expect((await recordResponse).ok()).toBe(true);
-  await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.getByRole('button',{name:'Edit record title',exact:true}).click();
+  const titleEdit=page.locator('dialog[open]').filter({has:page.getByRole('button',{name:'Save changes',exact:true})});
+  await titleEdit.getByLabel('Record title',{exact:true}).fill('Edited after transfer');
+  const recordResponse=page.waitForResponse(r=>/\/api\/research\/records\/(?:values\/|writing\/)?save$/.test(new URL(r.url()).pathname));
+  await titleEdit.getByRole('button',{name:'Save changes',exact:true}).click();expect((await recordResponse).ok()).toBe(true);
+  await expect(titleEdit).toHaveCount(0);
   expect((await f.ws.read()).book.entries[0].title).toBe('Edited after transfer');
   await f.navigate(f.book.projects[1].id);await click(card(page,'Transferred takes'),'Lab book settings');await click(dialog,'Delete lab book');
   await dialog.getByLabel('What should happen to its records?',{exact:true}).selectOption('delete');
@@ -74,13 +75,16 @@ test('stale structure forms keep their draft and remain keyboard usable at a nar
  const f=await fixture(page),dialog=page.locator('#dialog'),main=page.locator('main');
  try{
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='150%');
-  await click(main,'New lab book');await dialog.getByLabel('Lab book name',{exact:true}).fill('Unsent field notes');
+  await click(card(page,f.book.notebooks[0].title),'Lab book settings');await dialog.getByLabel('Lab book name',{exact:true}).fill('Unsent field notes');
   const base=await f.ws.read();
   await new StructureCommands(f.ws).execute('structure',{etag:base.etag,change:{kind:'project',value:{...base.book.projects[0],description:'Concurrent project change'}}});
+  // The open form may refresh after the concurrent change; keep focus on Save before pressing Enter.
+  const save=dialog.getByRole('button',{name:'Save lab book',exact:true});
+  await expect(async()=>{await save.focus();await expect(save).toBeFocused({timeout:500});}).toPass();
   const response=page.waitForResponse(r=>r.url().endsWith('/api/workspace/structure'));
-  await dialog.getByRole('button',{name:'Save lab book',exact:true}).focus();await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
   expect((await response).headers()['content-type']).toContain('application/x-ndjson');
-  await expect(dialog.getByRole('alert')).toContainText('Your choices are still here');
+  await expect(dialog.locator('[data-notebook-error]')).toContainText('Your choices are still here');
   await expect(dialog.getByLabel('Lab book name',{exact:true})).toHaveValue('Unsent field notes');
   expect((await f.ws.read()).book.notebooks.some(n=>n.title==='Unsent field notes')).toBe(false);
   expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);
@@ -89,7 +93,7 @@ test('stale structure forms keep their draft and remain keyboard usable at a nar
  }finally{await f.close();}
 });
 
-test('retrying a lost structure acknowledgement reuses its receipt without creating another project',async({page})=>{
+test('retrying a lost structure acknowledgement reuses its receipt without applying the project change twice',async({page})=>{
  const f=await fixture(page),dialog=page.locator('#dialog'),commands=[];let lost=true,committed=null;
  try{
   await page.context().route('**/api/workspace/structure',async route=>{
@@ -97,9 +101,9 @@ test('retrying a lost structure acknowledgement reuses its receipt without creat
    if(lost){lost=false;const response=await route.fetch();expect(response.ok()).toBe(true);committed=(await f.ws.outline()).etag;await route.abort('failed');}
    else await route.continue();
   });
-  await page.locator('main [data-action="new-project"]').first().click();
+  await click(page.locator('main'),'Settings');
   await dialog.getByLabel('Name',{exact:true}).fill('Retried project');
-  await click(dialog,'Save project');await expect(dialog.getByRole('alert')).toBeVisible();
+  await click(dialog,'Save project');await expect(dialog.locator('[data-project-error]')).toBeVisible();
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('Retried project');
   await click(dialog,'Save project');await expect(dialog).not.toBeVisible();
   expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);
@@ -119,9 +123,9 @@ test('a pending structure operation can be stopped from its form and retried wit
  };
  try{
   const before=(await f.ws.outline()).etag;
-  await page.locator('main [data-action="new-project"]').first().click();await dialog.getByLabel('Name',{exact:true}).fill('Stopped and resumed');
+  await click(page.locator('main'),'Settings');await dialog.getByLabel('Name',{exact:true}).fill('Stopped and resumed');
   await click(dialog,'Save project');await click(dialog,'Stop waiting');
-  await expect(dialog.getByRole('alert')).toContainText('requested cancellation');
+  await expect(dialog.locator('[data-project-error]')).toContainText('requested cancellation');
   await expect.poll(()=>aborted).toBe(true);expect((await f.ws.outline()).etag).toBe(before);
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('Stopped and resumed');
   await click(dialog,'Save project');await expect(dialog).not.toBeVisible();
