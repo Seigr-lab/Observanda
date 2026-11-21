@@ -1,5 +1,5 @@
 
-import {t} from './i18n/index.js';
+import {t,prepareNamespaces} from './i18n/index.js';
 import {textTools,editorBookText} from './text-tools.js';
 import {proseDocument} from './prose-model.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
@@ -7,7 +7,8 @@ export {applyRichTextStyles} from './rich-text-stylesheet.js';
 import {editorLinkInspector} from './record-links-ui.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let engine,loading;
-const loadEngine=()=>loading??=(import('./vendor/rich-text-editor.js').then(value=>engine=value).catch(error=>{loading=null;throw error;}));
+// The engine can insert sketches; their editor's texts load with it.
+const loadEngine=()=>loading??=(Promise.all([import('./vendor/rich-text-editor.js'),prepareNamespaces(['sketch'])]).then(([value])=>engine=value).catch(error=>{loading=null;throw error;}));
 // Fields supply identity, content and a setter. The editor owns formatting,
 // linking, selection and undo; it has no knowledge of record or module storage.
 export function documentEditors({context,destinations,onOpenLink,onError,figures,book,fonts}){
