@@ -21,7 +21,7 @@ export async function retiredProjectProofFixture(t,{objects=64}={}){
  const book=sampleNotebook(),from=await encryptedFixture(path.join(parent,'source'),book);vaults.push(from.vault);
  const projectBook=structuredClone(book),projectId=projectBook.projects[0].id;projectBook.id=randomUUID();projectBook.title='Owned project';projectBook.projects[0].title=projectBook.title;
  const device=new TestDeviceStore({file:path.join(parent,'project.device')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
- const project=await initializeProjectLocation(path.join(parent,'Owned project'),projectId,projectBook,access,vault),source=from.workspace;
+ const project=await initializeProjectLocation(path.join(from.workspace.root,'Owned project'),projectId,projectBook,access,vault),source=from.workspace;
  const receipt={version:1,operationId:randomUUID(),projectId,sourceNamespace:book.id,namespaceId:projectBook.id,vaultId:vault.id,sourceHead:await source.catalogue(store=>store.head())};
  const values=Array.from({length:objects},(_,n)=>({id:'metadata:.observanda/proof/item-'+String(n).padStart(5,'0')+'.json',value:{text:JSON.stringify({version:1,ordinal:n,retained:'original-'+n})}}));
  for(const row of values)row.revision=digest(serialize(row.value));
