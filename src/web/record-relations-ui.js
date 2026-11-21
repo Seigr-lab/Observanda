@@ -52,6 +52,11 @@ export function recordRelationView({state,api,esc,field,access},lifecycle){
  }
  return {
   busy:()=>pending,
+  // A new link opened for a workflow purpose starts with that purpose chosen.
+  initialize(base,value,input){
+   const role=WORKFLOW_ROLES.find(item=>item.id===input?.role&&(base.definition.recordType==='run'||!['run-of','follows-run'].includes(item.id)));
+   if(role&&!base.definition.original&&value.value==null)value.value={...empty(),role:role.id,type:roleLabel(role.id)};
+  },
   fields(base,value,changed){
    retained=value.value??base.definition.original??empty();current={base,value,changed,context:lifecycle.context(),dialog:null};
    const roles=WORKFLOW_ROLES.filter(role=>base.definition.recordType==='run'||!['run-of','follows-run'].includes(role.id));

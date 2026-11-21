@@ -1030,6 +1030,12 @@ async function rawAction(button) {
   if(name?.startsWith('project-directory-'))return projectDirectoryUI.action(button);
   if(name?.startsWith('project-storage-'))return structureUI.projectStorage.action(button);
   if(['workflow-new-run','material-repeat'].includes(name)&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){await runCreation.open(state.selected);return;}
+  // A workflow link (method, series, comparison) is a saved research link with its purpose
+  // chosen; a run has one series, so changing it edits that link.
+  if(name==='record-workflow-link'&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion>=21){
+   const role=button.dataset.role,series=role==='run-of'?displayedRecord()?.relations?.find(link=>link.role==='run-of'):null;
+   return recordValues.open({recordId:state.selected,field:'relation:'+(series?.id??crypto.randomUUID()),...(series?{}:{role}),focusTarget:button});
+  }
   if(await recordContent.action(button))return;
   if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField,focusTarget:button});
   if(button.dataset.action==='record-value-add-contributor')return recordValues.open({recordId:state.selected,field:'contributor:'+crypto.randomUUID()});
