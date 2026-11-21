@@ -16,6 +16,7 @@ import {copyWorkspace,copyPlan} from '../src/locations.js';
 import {contentBuffer} from '../src/file-content.js';
 import {readDataset} from '../src/dataset-reader.js';
 import {createFigure} from '../src/web/figure-model.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {attemptFixture} from './fixtures/attempts.js';
 import {buildPublication} from '../src/publication.js';
@@ -111,7 +112,7 @@ test('decimal precision policy and single-step approximation retain the exact so
  const command={recordId:f.recordId,title:'Declared display projection',dataset,mapping:{x:0,xKind:'number',values:[{column:1,error:null}],group:null,operation:'raw',kind:'line',order:'source',mode:'replace',decimal:'.'},base:createFigure()};
  await assert.rejects(m.plot(command),{code:'MATERIAL_PRECISION'});
  const result=await m.plot({...command,mapping:{...command.mapping,numericPolicy:'approximate'}}),retained=await m.read(result.ref);
- assert.deepEqual(result.figure.series[0].points.map(p=>p.y),spellings.map(Number));
+ const reader=await new RetainedFigureDocuments(m.workspace,{readOnly:true}).open(result.figure),plotted=[];for await(const entry of reader.pointEntries())plotted.push(entry.value.y);assert.deepEqual(plotted,spellings.map(Number));
  assert.deepEqual(retained.content.numericTransform,{algorithm:'exact-rational-to-binary64',version:2,policy:'approximate',significantDigits:17});
  assert.deepEqual((await m.datasetRows(dataset)).map(r=>r.cells[1]),spellings);
  assert.deepEqual(await contentBuffer((await m.artifact(artifact)).content),bytes);
