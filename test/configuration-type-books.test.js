@@ -19,6 +19,7 @@ import {clearVault} from '../src/encryption.js';
 import {defaultPanelConfig} from '../src/web/dashboard-model.js';
 import {starterTemplate} from '../src/web/project-templates.js';
 import {emptyConfiguration} from '../src/web/notebook-schema.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 // Preferences lists the lab books that use a lab-book type across the workspace and its project and
 // lab book stores (configuration-type-settings.js), through the workspace's structural collection.
@@ -26,7 +27,7 @@ test('lab books using a type are listed across project and lab book stores in pa
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-type-books-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const original=ResearchCatalogue.prototype.record;
  try{
   const root=sampleNotebook(),f=await encryptedFixture(directory,root);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,root.id);
-  const create=async name=>{const book=sampleNotebook();book.title=book.projects[0].title=name;const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);keys.push(vault);const storage=await initializeProjectLocation(path.join(f.workspace.root,name),book.projects[0].id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision,parentId:null});return {book,storage};};
+  const create=async name=>{const book=sampleNotebook();book.title=book.projects[0].title=name;const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);keys.push(vault);const storage=await initializeProjectLocation(path.join(f.workspace.root,name),book.projects[0].id,book,access,vault);await attachAsEarlierVersion(registry,storage,{expected:(await registry.read()).revision,parentId:null});return {book,storage};};
   const apiary=await create('Apiary project'),other=await create('Other project');
   const book=async(project,title,configuration)=>{
    const created=await new LabBookCreation(project.storage,f.deviceStore,{publish:entry=>new LabBookDirectory(registry).register(project.storage.projectId,entry)}).create({id:randomUUID(),username:'',password:'Book password',book:{id:randomUUID(),projectId:project.storage.projectId,title,configuration}});

@@ -28,13 +28,14 @@ import {beginCatalogueActivation,catalogueBinding,CATALOGUE_FILE} from '../src/p
 import {databaseCapacity} from '../src/postgres.js';
 import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {withProjectLifecycle} from '../src/project-lifecycle.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 test('a selected project with books and independent children is never moved out of its workspace',{timeout:180000},async t=>{
  const f=await fixture(t),device=new TestDeviceStore({file:path.join(f.root,'device')}),metadata=createNotebook('Workspace'),root=path.join(f.root,metadata.title),grant=await createWorkspaceAccess('','',device),workspaceKey=takeCreatedVault(grant);t.after(()=>clearVault(workspaceKey));
  await initializeLocation(root,metadata,grant,workspaceKey);const workspace=new Workspace(root,workspaceKey),registry=new ProjectRegistry(workspace,metadata.id);await workspace.outline();
  // A folder outside the workspace is never registered as one of its projects.
  await assert.rejects(registry.attach(f.storage,{expected:'new'}),{code:'PROJECT_OUTSIDE_WORKSPACE'});assert.equal((await registry.read()).value.projects.length,0);
- const owner=async(parent,title,parentId=null)=>{const data=createNotebook(title),id=randomUUID();data.projects=[{id,title,parentId:null,description:'',share:false,logoId:null}];const access=await createWorkspaceAccess('','',device),key=takeCreatedVault(access);t.after(()=>clearVault(key));const storage=await initializeProjectLocation(path.join(parent,title),id,data,access,key);await registry.attach(storage,{parentId,expected:await registry.version()});return storage;};
+ const owner=async(parent,title,parentId=null)=>{const data=createNotebook(title),id=randomUUID();data.projects=[{id,title,parentId:null,description:'',share:false,logoId:null}];const access=await createWorkspaceAccess('','',device),key=takeCreatedVault(access);t.after(()=>clearVault(key));const storage=await initializeProjectLocation(path.join(parent,title),id,data,access,key);await attachAsEarlierVersion(registry,storage,{parentId,expected:await registry.version()});return storage;};
  const project=await owner(root,'Selected Project'),child=await owner(project.root,'Independent Child',project.projectId),childBefore=await child.read();
  const created=await new LabBookCreation(project,device).create({id:randomUUID(),username:'',password:'Independent book',book:{id:randomUUID(),projectId:project.projectId,title:'Field Notes'}}),key=await verifyAccess(await readAccess(created.book.root),'','Independent book',{deviceStore:device});t.after(()=>clearVault(key));
  const book=new LabBookStorage(created.book.root,created.book.labBookId,key),before=await book.read(),revision=(await registry.read()).revision;

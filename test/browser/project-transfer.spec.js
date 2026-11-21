@@ -14,8 +14,9 @@ import {NativeProjectRelocation} from '../../src/native-project-relocation.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {catalogueBinding,CATALOGUE_ARCHIVE} from '../../src/postgres-activation.js';
 import {clearVault} from '../../src/encryption.js';
+import {attachAsEarlierVersion} from '../fixtures/earlier-nested-project.js';
 
-test('project copy and move remain visible in their page across navigation and reload',async({page})=>{
+test('project copy and a move to the top level remain visible in their page across navigation and reload',async({page})=>{
  test.setTimeout(180000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-transfer-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];let app,release,entered;
  const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),finish=NativeProjectRelocation.prototype.finish,errors=[];
@@ -28,10 +29,9 @@ test('project copy and move remain visible in their page across navigation and r
   const source=await initializeProjectLocation(path.join(f.workspace.root,book.projects[0].title),id,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(source,{expected:'new'});
   const childBook=sampleNotebook(),childAccess=await createWorkspaceAccess('','',f.deviceStore),childVault=takeCreatedVault(childAccess);vaults.push(childVault);
   childBook.title=childBook.projects[0].title='Child Project 1';
-  const child=await initializeProjectLocation(path.join(source.root,'Child Project 1'),childBook.projects[0].id,childBook,childAccess,childVault);await registry.attach(child,{parentId:id,expected:(await registry.read()).revision});
-  const targetBook=sampleNotebook();targetBook.title=targetBook.projects[0].title='Collection';const targetAccess=await createWorkspaceAccess('','',f.deviceStore),targetKey=takeCreatedVault(targetAccess);vaults.push(targetKey);
-  const target=await initializeProjectLocation(path.join(f.workspace.root,targetBook.title),targetBook.projects[0].id,targetBook,targetAccess,targetKey);await registry.attach(target,{expected:(await registry.read()).revision});
-  const destination=path.join(target.root,book.title),copy=path.join(directory,'copied',book.title);await mkdir(path.dirname(copy));
+  const child=await initializeProjectLocation(path.join(source.root,'Child Project 1'),childBook.projects[0].id,childBook,childAccess,childVault);await attachAsEarlierVersion(registry,child,{parentId:id,expected:(await registry.read()).revision});
+  // The child an earlier version placed inside the project moves to the workspace's top level.
+  const destination=path.join(f.workspace.root,'Child Project 1'),copy=path.join(directory,'copied',book.title);await mkdir(path.dirname(copy));
   // A move inside the workspace renames the folders: the catalogue bindings,
   // and the schemas they name in the workspace cluster, stay as they are.
   const binding=await catalogueBinding(source.root),childBinding=await catalogueBinding(child.root),inode=(await stat(path.join(source.root,'.observanda/research.observanda'))).ino,childInode=(await stat(path.join(child.root,'.observanda/research.observanda'))).ino;
@@ -43,21 +43,22 @@ test('project copy and move remain visible in their page across navigation and r
   const storage=page.locator('[data-project-storage="'+id+'"]');await expect(storage).toContainText(source.root,{timeout:60000});
   await storage.getByRole('button',{name:'Copy project',exact:true}).click();await page.locator('#project-storage-path').fill(path.dirname(copy));await page.locator('#project-storage-form').getByRole('button',{name:'Copy project',exact:true}).click();
   await expect(page.locator('#project-storage-form')).not.toBeVisible();await expect(storage).toContainText('Copied to '+copy,{timeout:60000});assert.ok(await stat(source.root));
-  await storage.getByRole('button',{name:'Move project',exact:true}).click();const placement=page.locator('#project-placement-form');await placement.getByLabel('Move into',{exact:true}).selectOption(target.projectId);await placement.getByRole('button',{name:'Move project',exact:true}).click();await ready;
-  const status=await page.evaluate(async id=>{const context=(await(await fetch('/api/storage')).json()).contextId;const response=await fetch('/api/projects/'+id+'/storage/details',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context},body:'{}',signal:AbortSignal.timeout(3000)});return {status:response.status,value:await response.json()};},id);expect(status.status).toBe(200);expect(status.value.move.mode).toBe('placement');expect(status.value.move.running).toBe(true);
+  await page.goto(app.origin+'/#/owners/'+child.projectId+'/projects/'+child.projectId);const childStorage=page.locator('[data-project-storage="'+child.projectId+'"]');await expect(childStorage).toContainText(child.root,{timeout:60000});
+  await childStorage.getByRole('button',{name:'Move project',exact:true}).click();const placement=page.locator('#project-placement-form');await placement.getByLabel('Move into',{exact:true}).selectOption('');await placement.getByRole('button',{name:'Move project',exact:true}).click();await ready;
+  const status=await page.evaluate(async id=>{const context=(await(await fetch('/api/storage')).json()).contextId;const response=await fetch('/api/projects/'+id+'/storage/details',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context},body:'{}',signal:AbortSignal.timeout(3000)});return {status:response.status,value:await response.json()};},child.projectId);expect(status.status).toBe(200);expect(status.value.move.mode).toBe('placement');expect(status.value.move.running).toBe(true);
   await page.getByRole('button',{name:'Preferences',exact:true}).click();await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue(rootBook.title);
   await page.goBack();await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');
   await page.reload();await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeEnabled();
   await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');release();
-  await expect(storage).toContainText(destination,{timeout:60000});await expect(storage.getByRole('button',{name:'Move project',exact:true})).toBeEnabled();
-  expect((await new ProjectRenames(registry,id).read()).phase).toBe('complete');assert.equal((await registry.locate(id)).root,destination);await assert.rejects(stat(path.join(source.root,'.observanda/postgresql')),{code:'ENOENT'});
-  const childRoot=path.join(destination,'Child Project 1');assert.equal((await registry.locate(child.projectId)).root,childRoot);assert.deepEqual((await new ProjectStorage(childRoot,child.projectId,childVault).read()).book,childBook);for(const targetRoot of [destination,copy])await assert.rejects(stat(path.join(targetRoot,'Child Project 1','.observanda/postgresql')),{code:'ENOENT'});
-  assert.equal((await stat(path.join(destination,'.observanda/research.observanda'))).ino,inode);assert.equal((await stat(path.join(childRoot,'.observanda/research.observanda'))).ino,childInode);
-  assert.deepEqual(await catalogueBinding(destination),binding);assert.deepEqual(await catalogueBinding(childRoot),childBinding);
+  await expect(childStorage).toContainText(destination,{timeout:60000});await expect(childStorage.getByRole('button',{name:'Move project',exact:true})).toBeEnabled();
+  expect((await new ProjectRenames(registry,child.projectId).read()).phase).toBe('complete');assert.equal((await registry.locate(child.projectId)).root,destination);assert.equal((await registry.locate(child.projectId)).parentId,null);await assert.rejects(stat(child.root),{code:'ENOENT'});
+  assert.deepEqual((await new ProjectStorage(destination,child.projectId,childVault).read()).book,childBook);assert.equal((await registry.locate(id)).root,source.root);await assert.rejects(stat(path.join(copy,'Child Project 1','.observanda/postgresql')),{code:'ENOENT'});
+  assert.equal((await stat(path.join(source.root,'.observanda/research.observanda'))).ino,inode);assert.equal((await stat(path.join(destination,'.observanda/research.observanda'))).ino,childInode);
+  assert.deepEqual(await catalogueBinding(source.root),binding);assert.deepEqual(await catalogueBinding(destination),childBinding);
   // A copy outside the workspace has no database there: it is kept in archive
   // form, with its keyring, and activates where it is later opened.
   for(const copied of [copy,path.join(copy,'Child Project 1')]){assert.equal(await catalogueBinding(copied),null);assert.ok(await stat(path.join(copied,CATALOGUE_ARCHIVE)));}
-  assert.deepEqual((await new ProjectStorage(destination,id,vault).read()).book,book);
+  assert.deepEqual((await new ProjectStorage(source.root,id,vault).read()).book,book);await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);
   await expect(page.locator('#project-recent-records')).toContainText(book.entries[0].title);await expect(page.locator('#project-recent-records [role=alert]')).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('project-storage.png'),fullPage:true});expect(errors).toEqual([]);
  }finally{release();NativeProjectRelocation.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();await Promise.all(vaults.map(clearVault));assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

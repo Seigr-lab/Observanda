@@ -29,6 +29,7 @@ import {assertOwnersInCluster,assertArchiveCopy} from './owner-workspace-fixture
 import {catalogueBinding} from '../src/postgres-activation.js';
 import {readLabBookArchiveIdentity} from '../src/lab-book-archive.js';
 import {startServer} from '../src/server.js';
+import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
 
 // The mounted copy request has its own ten-minute deadline. Allow setup,
 // interrupted retry and independent reopening outside that request budget.
@@ -44,7 +45,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and n
  const makeProject=async(root,parentId=null)=>{
   await mkdir(path.dirname(root),{recursive:true});const book=createNotebook(path.basename(root)),project={id:randomUUID(),title:path.basename(root),description:'',share:false,logoId:null};book.projects=[project];
   const grant=await createWorkspaceAccess('',password,f.deviceStore),key=takeCreatedVault(grant);keys.push(key);
-  const storage=await initializeProjectLocation(root,project.id,book,grant,key);await registry.attach(storage,{parentId,expected:(await registry.read()).revision});
+  const storage=await initializeProjectLocation(root,project.id,book,grant,key);await attachAsEarlierVersion(registry,storage,{parentId,expected:(await registry.read()).revision});
   const value={projectId:project.id,root,storage};projects.push(value);return value;
  };
  const contained=await makeProject(path.join(f.workspace.root,'Contained Project')),independent=await makeProject(path.join(f.workspace.root,'Independent Project')),nested=await makeProject(path.join(independent.root,'Nested Project'),independent.projectId);
