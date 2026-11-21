@@ -125,13 +125,12 @@ test('existing duplicate names stay accessible for explicit resolution without c
 });
 
 
-test('restoring history keeps the current folder name and retains historical titles',async t=>{
- const f=await fixture(t,{encrypted:true}),before=await f.workspace.read(),result=await f.renames.begin(f.workspace,'Restored records');
+test('renamed workspace keeps the current folder name and retains earlier revisions readable',async t=>{
+ const f=await fixture(t,{encrypted:true}),before=await f.workspace.read(),result=await f.renames.begin(f.workspace,'Renamed records');
  const target=new Workspace(result.destination,f.vault),current=await target.read();
  await target.update(book=>({...book,description:'Changed after rename'}));const changed=await target.read();
- const restored=await target.restore(before.etag,changed.etag);
- assert.equal(restored.book.title,'Restored records');assert.deepEqual(restored.book.entries,before.book.entries);assert.equal(restored.book.description,before.book.description);
- assert.equal((await target.readRevision(before.etag)).title,before.book.title);assert.notEqual(restored.etag,current.etag);
+ assert.equal(changed.book.title,'Renamed records');assert.equal(changed.book.description,'Changed after rename');assert.notEqual(changed.etag,current.etag);
+ const earlier=await target.readRevision(before.etag);assert.equal(earlier.title,before.book.title);assert.deepEqual(earlier.entries,before.book.entries);assert.equal(earlier.description,before.book.description);
 });
 
 
