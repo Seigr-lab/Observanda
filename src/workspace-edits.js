@@ -3,19 +3,16 @@ import {ResearchRecords,recordRevision} from './research.js';
 import {validateRecordChanges} from './model.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {validateWorkspaceEditCommand,workspaceEditMetadata} from './workspace-edit-command.js';
-import {websiteSelectionRecords} from './website-selection.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
-// Research edits retain an exact base. Website choices use their independent
-// owner; only older inline workspaces accept the legacy mixed selection edit.
+// Research edits retain an exact base. Website choices belong to each website.
 export class WorkspaceEdits{
  constructor(workspace,evidence,{publicationConversion}={}){this.workspace=workspace;this.records=new ResearchRecords(workspace,evidence);this.publicationConversion=publicationConversion;}
  async save(command){
   const response=command?.response;
   if(response!==undefined){if(response!=='outline')throw new AppError('INVALID');const {response:_,...rest}=command;command=rest;}
   validateWorkspaceEditCommand(command);
-  if(command.selection&&response!=='outline')throw new AppError('INVALID');
   // Outline validates the workspace descriptor/access before entering storage.
   const outline=await this.workspace.outline();
   if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -28,7 +25,6 @@ export class WorkspaceEdits{
   const head=await store.head(),source=await store.snapshot(head);
   if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(head!==command.baseEtag)throw new AppError('CONFLICT');
-  if(source.websiteDocuments===1&&command.selection)throw new AppError('INVALID');
   const current=await store.indexed(source),metadata=workspaceEditMetadata(current.metadata,command);
   const previous=new Map(),removed=command.removed.map(r=>r.id),deleted=new Set(removed);
   for(const change of [...command.changes,...command.removed]){
@@ -50,8 +46,8 @@ export class WorkspaceEdits{
   }
   const index=new SnapshotIndex(store);
   validateRecordChanges(metadata,modified,(await index.validationRows(current.membership,modified)).filter(r=>!deleted.has(r.id)));
-  if(!equal(metadata,current.metadata)||modified.length||removed.length||command.selection){
-   async function* records(){yield* modified;yield* websiteSelectionRecords(store,current,command.selection,{now,excluded:[...command.changes.map(r=>r.id),...removed]});}
+  if(!equal(metadata,current.metadata)||modified.length||removed.length){
+   async function* records(){yield* modified;}
    await store.commitChanges(head,current,metadata,records(),{removed,now});
   }
   return response==='outline'?store.recordOutline():store.changeResponse(head,modified,{removed,appended:modified.filter(r=>!previous.has(r.id)).map(r=>r.id)});

@@ -99,6 +99,8 @@ test('invalid identities, selections, structure mutations and stale bases never 
  const invalid=[
   // Websites keep their own settings; the workspace refuses the earlier ones.
   ...[['website',{}],['pages',[]],['branding',[]],['websites',[]]].map(([key,value])=>({...base,metadata:{[key]:value}})),
+  // Website sharing choices belong to each website, never to a workspace save.
+  {...base,selection:{includeProjects:[],records:[]}},
   {...base,metadata:{themes:null}},
   {...base,metadata:{id:randomUUID()}},
   {...base,projects:[{id:randomUUID(),share:true,logoId:null}]},
