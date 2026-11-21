@@ -35,19 +35,19 @@ test('type discovery pages alphabetically without originals or membership scans 
  for(const key of Object.keys(methods))ResearchCatalogue.prototype[key]=()=>{throw Error('Discovery loaded '+key);};
  try{
   const first=await f.query.read(f.command),second=await f.query.read({...f.command,cursor:first.nextCursor});
-  assert.equal(first.items.length,25);assert.equal(first.total,count+10);assert.equal(first.previousCursor,null);
+  assert.equal(first.items.length,25);assert.equal(first.total,count+RECORD_TYPES.length);assert.equal(first.previousCursor,null);
   assert.deepEqual((await f.query.read({...f.command,cursor:second.previousCursor})).items,first.items);
   const all=[...first.items,...second.items];let next=second;
   while(next.nextCursor){next=await f.query.read({...f.command,cursor:next.nextCursor});assert.ok(next.items.length<=25);all.push(...next.items);}
   const expected=[...RECORD_TYPES.map(v=>({value:v.id,label:v.label})),...f.book.entries.map(e=>({value:'template:'+e.template.id,label:e.template.label}))].sort(order);
-  assert.deepEqual(all,expected);assert.equal(next.offset,Math.floor((count+9)/25)*25);assert.equal(next.items.length,(count+9)%25+1);
+  assert.deepEqual(all,expected);const last=count+RECORD_TYPES.length-1;assert.equal(next.offset,Math.floor(last/25)*25);assert.equal(next.items.length,last%25+1);
   const selected=f.book.entries.at(-1).template,value='template:'+selected.id;
   const searched=await f.query.read({...f.command,search:'Type 1',options:{recordType:value}});
   assert.deepEqual(searched.selected,{value,label:selected.label});assert.equal(searched.total,f.book.entries.filter(r=>r.template.label.includes('Type 1')).length);
   assert.ok(searched.items.every(item=>item.label.includes('Type 1')));
   const scoped=await f.query.read({...f.command,options:{notebookMode:'selected',notebookIds:[f.book.notebooks[0].id]},search:'Type'});
   assert.equal(scoped.total,f.book.entries.filter(e=>e.notebookId===f.book.notebooks[0].id).length);
-  const empty=await f.query.read({...f.command,options:{scopeMode:'selected',projectIds:[],includeWorkspace:false}});assert.equal(empty.total,10);
+  const empty=await f.query.read({...f.command,options:{scopeMode:'selected',projectIds:[],includeWorkspace:false}});assert.equal(empty.total,RECORD_TYPES.length);
   assert.ok(Buffer.byteLength(JSON.stringify(first))<16000);t.diagnostic(count+' distinct types: at most 25 choices, no originals or membership scans.');
   await assert.rejects(f.query.read({...f.command,cursor:first.nextCursor,search:'changed'}),{code:'RECORD_QUERY_CURSOR'});
   const bytes=Buffer.from(first.nextCursor,'base64url');bytes[20]^=1;
