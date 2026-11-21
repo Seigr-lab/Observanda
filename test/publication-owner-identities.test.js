@@ -1,7 +1,7 @@
 import '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {projectPublication} from '../src/publication-projection.js';
-import {withRenderingWebsite} from '../src/publication-rendering-book.js';
+import {siteLayoutDefaults} from '../src/web/website-model.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
@@ -19,7 +19,7 @@ test('a record relation to its own project uses the admitted project label and i
  const book=sampleNotebook(),selection={projects:book.projects,notebooks:book.notebooks,entries:book.entries.filter(entry=>entry.share),pages:[],homeEnabled:false};
  const record=selection.entries[0],project=book.projects.find(item=>book.notebooks.some(n=>n.id===record.notebookId&&n.projectId===item.id));
  record.relations=[{id:id(),type:'related',role:'related',target:{workspaceId:book.id,kind:'project',id:project.id}},{id:id(),type:'related',target:{workspaceId:id(),kind:'project',id:project.id}}];
- const projected=projectPublication(withRenderingWebsite(book),selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record]});
+ const projected=projectPublication({...book,website:{design:siteLayoutDefaults(),palette:{},typography:{}}},selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record]});
  assert.deepEqual(projected.entries[0].relations.map(link=>[link.kind,link.id,link.label]),[['project',project.id,project.title]]);
  assert.deepEqual(projected.projects.map(item=>Object.keys(item).sort()),book.projects.map(()=>['id','title']));
 });

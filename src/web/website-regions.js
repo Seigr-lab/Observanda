@@ -27,11 +27,6 @@ export function validRegions(value,validSections){
   });
 }
 export function regionsOf(website){return website.design.regions??{definitions:[],assignments:[]};}
-export function regionAssignment(website,target,kind){return regionsOf(website).assignments.find(a=>a.target===target&&a.kind===kind);}
-export function resolveRegion(website,target,kind){
-  const assignment=regionAssignment(website,target,kind)??regionAssignment(website,'*',kind);
-  return regionsOf(website).definitions.find(r=>r.id===assignment?.regionId&&r.kind===regionKind(kind))??null;
-}
 export function assignRegion(website,target,kind,regionId){
   const regions=website.design.regions??={definitions:[],assignments:[]};
   regions.assignments=regions.assignments.filter(a=>a.target!==target||a.kind!==kind);
@@ -49,12 +44,4 @@ export function createRegion(website,kind,name,{copy=null,makeId=()=>crypto.rand
   if(regions.definitions.length>=100)throw new Error('Region limit reached.');
   const region=copy?{...structuredClone(copy),id:makeId(),name,sections:cloneElements(copy.sections,makeId)}:{id:makeId(),name,kind:regionKind(kind),side:kind==='secondary-sidebar'?'right':'left',width:260,sticky:true,background:null,color:null,padding:20,sections:[],mobile:'expanded',mobileTitle:''};
   regions.definitions.push(region);return region;
-}
-export function projectedRegions(website,targets,projectSections){
-  return targets.flatMap(target=>REGION_SLOTS.flatMap(kind=>{
-    const region=resolveRegion(website,target,kind);
-    if(!region)return [];
-    const {side,width,sticky,background,color,padding,mobile='expanded',mobileTitle=''}=region;
-    return [{target,kind,side,width,sticky,background,color,padding,mobile,mobileTitle,sections:projectSections(region.sections,target,kind)}];
-  }));
 }

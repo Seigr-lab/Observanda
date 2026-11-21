@@ -1,4 +1,4 @@
-import {withRenderingWebsite} from './publication-rendering-book.js';
+import {siteLayoutDefaults} from './web/website-model.js';
 import {parse,serializeOuter} from 'parse5';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -79,9 +79,10 @@ export function nestRecordHeadings(article){
 export function recordProjection(metadata,record,linked=[]){
  const notebook=metadata.notebooks.find(item=>item.id===record.notebookId),project=metadata.projects.find(item=>item.id===notebook.projectId);
  if(!project)throw new AppError('CATALOGUE_DAMAGED');
- const book=withRenderingWebsite(createNotebook(record.title));book.id=metadata.id;
+ // The copy's own page settings: the standard layout without navigation or contents.
+ const book={...createNotebook(record.title),id:metadata.id,website:{design:{...siteLayoutDefaults(),navigation:'none',contents:false},palette:{},typography:{}}};
  book.projects=[{id:project.id,title:project.title,description:'',share:true,logoId:null}];
- book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];book.website.design.navigation='none';book.website.design.contents=false;
+ book.notebooks=[{id:notebook.id,projectId:project.id,title:notebook.title,share:true}];book.entries=[record];
  const selection={projects:book.projects,notebooks:book.notebooks,entries:[record],pages:[],homeEnabled:false};
  const privateRecordLink=href=>{const target=parseResearchReference(href);return target?.kind==='record'&&target.workspaceId===metadata.id&&target.id!==record.id?{private:true,href:recordLinkHref(target.workspaceId,target.id)}:null;};
  return projectPublication(book,selection,{publicationTarget:'entry:'+record.id,entryDestinations:[record,...linked.filter(item=>item.id!==record.id)],privateRecordLink});

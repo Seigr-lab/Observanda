@@ -14,7 +14,6 @@ import {TimelineQuery} from '../src/timeline-query.js';
 import {queryRecords,recordBrowse} from '../src/web/record-query.js';
 import {defaultPanelConfig} from '../src/web/dashboard-model.js';
 import {runsOf} from '../src/web/record-workflow.js';
-import {sectionItems} from '../src/web/website-model.js';
 import {createDataRegistry} from '../src/web/data-registry.js';
 import {registerResearchData} from '../src/web/research-data.js';
 import {queryPanel} from '../src/web/dashboard-queries.js';
@@ -45,7 +44,6 @@ test('English title order, date ties and recent cards agree across English and N
   assert.deepEqual(queryPanel(book,panel).entries.map(r=>r.id),ids);
   assert.deepEqual(registry.get('records').items({book},null).map(r=>r.key),ids);
   assert.deepEqual([...book.entries].sort(timelineOrder(timelineDefaults())).map(r=>r.id),ids);
-  assert.deepEqual(sectionItems({kind:'records'},{entries:book.entries,notebooks:book.notebooks}).map(r=>r.id),ids);
   const runs=book.entries.map(r=>({...r,type:'run',relations:[{role:'run-of',target:{workspaceId:book.id,id:'investigation'}}]}));
   assert.deepEqual(runsOf({...book,entries:runs},'investigation').map(r=>r.id),ids);
  });

@@ -1,16 +1,12 @@
 import {validTemplateLink} from './website-template-inheritance.js';
 import {validActionStyle,validAction,ACTION_KINDS} from './website-action-style.js';
-import {validPublicationSources,selectedPublicationSources} from './publication-sources-model.js';
+import {validPublicationSources} from './publication-sources-model.js';
 import {websiteLink,safeWebsiteLink} from './website-links.js';
-import {compareKey} from './query-order.js';
-import {validFeed,orderFeed} from './website-feed-model.js';
-import {publicationCollection,publicationCollectionKey,publicationCollectionRecords} from './publication-collections.js';
-import {compareRecordDates} from './record-date.js';
+import {validFeed} from './website-feed-model.js';
 import {validTree,MAX_ELEMENTS} from './composition-tree.js';
 import {validRichText} from './rich-text-model.js';
-import {usedAssetIds,hasHomepage} from './website-layouts.js';
-import {validRegions,projectedRegions} from './website-regions.js';
-// Website composition is presentation data. Selection never grants access or changes research.
+import {validRegions} from './website-regions.js';
+// Website composition is presentation data; it never grants access or changes research.
 export const SECTION_KINDS = ['text', 'projects', 'records', 'pages', 'media', 'callout', 'link', 'divider', 'asset', 'hero', 'gallery', 'container', 'heading', 'contents', 'disclosure', 'popup', 'copy-text', 'download'];
 export const websiteDefaults = () => ({title:null, description:null, home:{title:null, showTitle:true, sections:[
   {id:'projects',kind:'projects',title:'Projects',show:true,layout:'inherit'},
@@ -18,7 +14,6 @@ export const websiteDefaults = () => ({title:null, description:null, home:{title
   {id:'pages',kind:'pages',title:'Pages',show:true,layout:'inherit'}
 ]}});
 export const emptyHomepage = () => ({enabled:false,title:'Home',introduction:'',showTitle:true,sections:[]});
-export const homeIntroduction = book => book.website.home.introduction ?? siteIdentity(book).description;
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const keys=(v,names)=>object(v)&&Object.keys(v).length===names.length&&names.every(n=>Object.hasOwn(v,n));
 const text=(v,max)=>typeof v==='string'&&v.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(v);
@@ -51,69 +46,12 @@ export function validWebsiteComposition(site,extended=true,composed=true,rich=tr
   const h=site.home;
   return keys(h,['title','showTitle','sections',...(optionalHome?['enabled','introduction','templateLink'].filter(k=>Object.hasOwn(h??{},k)):[])])&&(!Object.hasOwn(h,'templateLink')||validTemplateLink(h.templateLink))&&(h.enabled===undefined||typeof h.enabled==='boolean')&&(h.introduction===undefined||text(h.introduction,1500))&&(h.title===null||text(h.title,160))&&typeof h.showTitle==='boolean'&&validSections(h.sections,extended,composed,rich,extendedText,tree);
 }
-function selectedContent(book){
-  const projects=book.projects.filter(p=>p.share),projectIds=new Set(projects.map(p=>p.id));
-  const eligible=book.notebooks.filter(n=>n.share!==false&&projectIds.has(n.projectId)),notebookIds=new Set(eligible.map(n=>n.id));
-  const entries=book.entries.filter(e=>e.share&&notebookIds.has(e.notebookId));
-  const includedNotebooks=new Set(entries.map(e=>e.notebookId));
-  return {homeEnabled:hasHomepage(book),projects,entries,assets:book.website.assets??[],notebooks:eligible.filter(n=>includedNotebooks.has(n.id)),pages:book.pages.filter(p=>p.share),blockedEntries:book.entries.filter(e=>e.share&&!notebookIds.has(e.notebookId))};
-}
-export function siteIdentity(book){return {title:book.website.title??book.title,description:book.website.description??book.description};}
-export function sectionItems(section,selection,{region=''}={}){
-  if(section.kind==='records'&&publicationCollection(selection,publicationCollectionKey(section,region)))return publicationCollectionRecords(selection,publicationCollectionKey(section,region),[]);
-  let items=(section.kind==='records'?selection.recordCards??selection.entries:selection[section.kind])??[];
-  const f=section.filter;
-  if(f?.projectId){const notebooks=new Set(selection.notebooks.filter(n=>n.projectId===f.projectId).map(n=>n.id));items=items.filter(v=>section.kind==='projects'?v.id===f.projectId:section.kind==='records'?notebooks.has(v.notebookId):false);}
-  if(f?.tag)items=items.filter(v=>v.tags?.includes(f.tag));
-  if(section.kind==='records')items=[...items].sort((a,b)=>compareRecordDates(a,b,{descending:true})||compareKey(a.id,b.id));
-  if(section.feed)items=orderFeed(items,section.kind,section.feed.order);
-  return f?.limit?items.slice(0,f.limit):items;
-}
 export function linkAvailable(href,selection){
   const parsed=websiteLink(href);if(!parsed)return false;if(parsed.external||!parsed.target)return true;href=parsed.target;
   if(href==='home')return selection.homeEnabled!==false;
   if(/^https:\/\//i.test(href))return true;
   const [kind,id]=href.split(':');if(kind==='entry'&&selection.entryDestinations)return selection.entryDestinations.some(v=>v.id===id);return (selection[{project:'projects',notebook:'notebooks',page:'pages',entry:'entries'}[kind]]??[]).some(v=>v.id===id);
 }
-export function publicSections(sections,selection,{editing=false,includeUnpublished=false,region=''}={}){
-  const source=sections??[];
-  const included=new Set(source.filter(s=>s.show&&(
-    ['text','callout'].includes(s.kind)?Boolean(s.title.trim()||s.body.trim()):
-    s.kind==='heading'?Boolean(s.title.trim()):
-    ['container','disclosure','popup'].includes(s.kind)?true:
-    s.kind==='copy-text'?Boolean(s.value.length):
-    s.kind==='hero'?Boolean(s.title.trim()||s.body.trim()||s.assetId||s.label.trim()&&linkAvailable(s.href,selection)):
-    s.kind==='gallery'?s.assetIds.some(id=>(selection.assets??[]).some(a=>a.id===id)):
-    ['divider','contents'].includes(s.kind)?true:s.kind==='link'?linkAvailable(s.href,selection):
-    ['asset','download'].includes(s.kind)?(selection.assets??[]).some(a=>a.id===s.assetId&&(s.kind==='download'?a.kind==='file':a.kind!=='file')):
-    s.kind==='media'?selection.entries.some(e=>e.id===s.entryId&&e.attachments.some(a=>a.id===s.attachmentId&&(includeUnpublished||a.share))):
-    sectionItems(s,selection,{region}).length>0||(s.kind==='records'&&[publicationCollection(selection,publicationCollectionKey(s,region))].some(page=>page?.previousCursor||page?.nextCursor||page?.visitor)))).map(s=>s.id));
-  return source.filter(s=>{
-    if(editing&&!['media','projects','records','pages'].includes(s.kind))return true;
-    if(!included.has(s.id))return false;
-    let parent=s.parentId;
-    while(parent){if(!included.has(parent))return false;parent=source.find(p=>p.id===parent)?.parentId;}
-    return true;
-  });
-}
-export function publicHomeSections(book,selection=selectedContent(book)){return hasHomepage(book)?publicSections(book.website.home.sections,selection):[];}
-export function websiteSummary(book){
-  const selected=selectedContent(book),sections=publicHomeSections(book,selected),identity=siteIdentity(book);
-  const layouts=(book.website.layouts??[]).filter(l=>linkAvailable(l.target,selected));
-  const regionSections=projectedRegions(book.website,[...(selected.homeEnabled?['home']:[]),...['projects','notebooks','entries','pages'].flatMap(key=>selected[key].map(v=>({projects:'project',notebooks:'notebook',entries:'entry',pages:'page'}[key])+':'+v.id))],s=>publicSections(s,selected)).flatMap(r=>r.sections);
-  const used=new Set(usedAssetIds([...regionSections,...sections,...selected.pages.flatMap(p=>publicSections(p.sections,selected)),...layouts.flatMap(l=>publicSections(l.sections,selected))]));
-  const media=[...new Map([...selected.entries.flatMap(e=>e.attachments.filter(a=>a.share)),...selected.assets.filter(a=>used.has(a.id))].map(a=>[a.id,a])).values()];
-  const sourceCount=selectedPublicationSources(book.website.researchSources).length;
-  return {...selected,media,sections,sourceCount,canPublish:Boolean(sourceCount||selected.projects.length||selected.pages.length||hasHomepage(book)&&(homeIntroduction(book).trim()||sections.length))};
-}
-export function navigationItems(book,selection=selectedContent(book)){
-  const s=selection,targets=[...(hasHomepage(book)?[{target:'home',label:'Home',show:true,available:true}]:[]),
-    ...book.projects.map(p=>({target:'project:'+p.id,label:p.title,show:true,available:p.share})),
-    ...book.notebooks.map(n=>({target:'notebook:'+n.id,label:n.title,show:false,available:s.notebooks.some(v=>v.id===n.id)})),
-    ...book.pages.map(p=>({target:'page:'+p.id,label:p.title,show:true,available:p.share}))];
-  return [...book.website.navigation.map(item=>{const target=targets.find(t=>t.target===item.target);return target?{...target,...item,label:item.label||target.label}:null;}).filter(Boolean),...targets.filter(t=>!book.website.navigation.some(s=>s.target===t.target))];
-}
-export const storedNavigation=items=>items.map(({target,label,show,parent})=>({target,label,show,parent:parent??null}));
 export function menuCanNest(items,target,parent){
   const seen=new Set([target]);let current=parent;
   while(current){if(seen.has(current)||seen.size>8)return false;seen.add(current);const item=items.find(i=>i?.target===current);if(!item)return false;current=item.parent;}return true;

@@ -9,9 +9,6 @@ export const layoutTargets = book => [
   ...book.entries.map(e=>({target:'entry:'+e.id,title:e.title,path:'entries/'+e.id+'.html'}))
 ];
 export const defaultPageLayout = target => ({target,showHeading:true,heading:'',description:'',placement:'before',sections:[]});
-export function usedAssetIds(sections) {
-  return sections.flatMap(s => s.kind==='gallery'?s.assetIds:['hero','asset','download'].includes(s.kind)&&s.assetId?[s.assetId]:[]);
-}
 // Starters contain structure, with empty authored text. Applying never publishes a record.
 export const PAGE_STARTERS = [
   {id:'journal',name:'Research journal',description:'An introduction followed by a chronological record list.',sections:[

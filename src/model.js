@@ -19,7 +19,6 @@ import {upgradeRecord,validContributors,validRelations} from './web/record-model
 import {validPresentation,presentationDefaults} from './web/media-presentation.js';
 import {validTypography,validPalette} from './web/website-typography.js';
 import {layoutTargets} from './web/website-layouts.js';
-import {websiteRenderingDefaults} from './publication-rendering-book.js';
 import {emptyHomepage,websiteDefaults,validWebsiteComposition,siteLayoutDefaults,validSiteLayout,validSections,validMenuParents} from './web/website-model.js';
 import { validIdentity } from './web/workspace-identity.js';
 import {validLabBookTemplate} from './web/project-templates.js';
