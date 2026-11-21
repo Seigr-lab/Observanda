@@ -12,7 +12,7 @@ const hash=value=>digest(serialize(value));
 export class RecordFacetIndex extends ObjectIndex{
  constructor(store,{cacheSize=128,metadata=null,previousMetadata=null}={}){super(store,{namespace:'record-facet-index:',immutable:true,cacheSize});this.membership=new SnapshotIndex(store,{cacheSize});this.metadata=metadata;this.previousMetadata=previousMetadata;}
  static valid(value){return value?.version===1&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
- async keys(row,_version,_workspaceId,metadata=null){
+ async keys(row,_workspaceId,metadata=null){
   metadata??=this.metadata??=(await this.store.snapshot()).metadata;
   const values=await Array.fromAsync(this.store.queryDocuments([row],metadata,{search:false}));if(values.length!==1)fail();
   const value=values[0];if(value.id!==row.id||value.notebookId!==row.notebookId)fail();
@@ -27,7 +27,7 @@ export class RecordFacetIndex extends ObjectIndex{
  async replace(value,before,after){
   if(!RecordFacetIndex.valid(value))fail();let root=value.root;const next=new Map();
   for(const row of after)for(const id of await this.keys(row))next.set(id,await this.membership.retain(row));
-  for(const row of before)for(const id of await this.keys(row,null,null,this.previousMetadata))if(!next.has(id))root=await this.change(root,id,null);
+  for(const row of before)for(const id of await this.keys(row,null,this.previousMetadata))if(!next.has(id))root=await this.change(root,id,null);
   for(const [id,revision] of next)root=await this.change(root,id,revision);
   await this.flush(root);return {version:1,root};
  }

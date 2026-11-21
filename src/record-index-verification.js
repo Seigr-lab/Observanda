@@ -81,6 +81,6 @@ export async function verifyDerivedRecordChange(store,index,field,before,after){
   if(before[field].workspaceId!==after[field].workspaceId)return false;
  }
  const members=new SnapshotIndex(store,{cacheSize:4096});
- await audit(index,before[field].root,after[field].root,records(members,before,after),async (row,side)=>{const snapshot=side==='before'?before:after;if(index.keys)return index.keys(row,snapshot[field].version,snapshot.metadata.id,snapshot.metadata);const key=await index.key(row);return key===null?[]:[key];});
+ await audit(index,before[field].root,after[field].root,records(members,before,after),async (row,side)=>{const snapshot=side==='before'?before:after;if(index.keys)return index.keys(row,snapshot.metadata.id,snapshot.metadata);const key=await index.key(row);return key===null?[]:[key];});
  return true;
 }

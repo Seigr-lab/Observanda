@@ -117,7 +117,7 @@ export class ResearchCatalogue{
   if(!RecordRecentIndex.valid(value.recentIndex)||(value.recentIndex.root?.count??0)!==value.count)fail();
   if(!RecordReadingIndex.valid(value.readingIndex)||(value.readingIndex.root?.count??0)!==value.count*2)fail();
   if(!RecordFacetIndex.valid(value.facetIndex)||(value.facetIndex.root?.count??0)!==value.count*2)fail();
-  if((!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
+  if((!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.ENTRIES_PER_RECORD))fail();
   return value;
  }
  async recordSnapshot(id,recordId){
@@ -251,7 +251,7 @@ export class ResearchCatalogue{
   const facets=new RecordFacetIndex(this,{metadata,previousMetadata:current?.metadata??null});
   snapshot.facetIndex=current?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
   const publication=new RecordPublicationIndex(this);
-  snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
+  snapshot.publicationIndex=current?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
 
@@ -397,7 +397,7 @@ export class ResearchCatalogue{
    snapshot.facetIndex=await facets.replace(current.facetIndex,before,after);
    operationAdvance();
    const publication=new RecordPublicationIndex(this);
-   snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
+   snapshot.publicationIndex=await publication.replace(current.publicationIndex,before,after);
    operationAdvance();
    await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
