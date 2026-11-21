@@ -31,13 +31,18 @@ async function fixture(t,{legacy=false}={}){
  return {root,source,ws:new Workspace(destination,vault),sourceWorkspace:ws,vault,before};
 }
 
+// Earlier workspace revisions with their identity, revision number and record count.
+async function revisions(workspace){
+ const list=[];for await(const {id,book} of workspace.revisionSnapshots())list.push({id,revision:book.revision,updatedAt:book.updatedAt,entries:book.entries.length});
+ return list.sort((a,b)=>b.revision-a.revision);
+}
 test('new encrypted workspaces start with transactional records and backups preserve their history',async t=>{
  const f=await fixture(t),actual=await f.ws.read(),original=await f.sourceWorkspace.read();
  assert.deepEqual(actual,original);
  assert.equal(await f.ws.storageKind(),'catalogue');
  assert.deepEqual(await workspaceManifest(f.source),f.before);
- assert.deepEqual(await f.ws.history(),await f.sourceWorkspace.history());
- for(const version of await f.sourceWorkspace.history())assert.deepEqual(await f.ws.readRevision(version.id),await f.sourceWorkspace.readRevision(version.id));
+ assert.deepEqual(await revisions(f.ws),await revisions(f.sourceWorkspace));
+ for(const version of await revisions(f.sourceWorkspace))assert.deepEqual(await f.ws.readRevision(version.id),await f.sourceWorkspace.readRevision(version.id));
  const raw=await readFile(path.join(f.ws.root,CATALOGUE_FILE));
  assert.ok(!raw.includes(Buffer.from('PRIVATE')));
  assert.ok(!raw.includes(Buffer.from(original.book.title)));
@@ -74,7 +79,7 @@ test('verified backups and fresh-key successors preserve catalogue revisions',as
   const successor=await encryptedCopy(await copyPlan(ws.root,path.join(root,'successor'),{vault}),access,nextVault,vault);
   const next=new Workspace(successor,nextVault);
   assert.deepEqual(await next.read(),original);
-  assert.deepEqual(await next.history(),await ws.history());
+  assert.deepEqual(await revisions(next),await revisions(ws));
   await assert.rejects(new Workspace(successor,vault).read(),{code:'ENCRYPTION_DAMAGED'});
  }finally{clearVault(backupVault);clearVault(nextVault);}
 });
