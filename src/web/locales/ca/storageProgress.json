@@ -105,10 +105,6 @@
   "book-delete-files": "S'estan eliminant els fitxers del llibre de laboratori",
   "rename-book-databases": "S'estan tancant les bases de dades dels llibres de laboratori",
   "rename-reopen-books": "S'estan obrint les bases de dades dels llibres de laboratori",
-  "rename-close-project": "S'està tancant la base de dades del projecte",
-  "rename-project-folder": "S'està canviant el nom de la carpeta del projecte",
-  "rename-project-settings": "S'està guardant la configuració del projecte",
-  "place-project-folder": "S'està movent el projecte a la carpeta pare seleccionada",
   "delete-book-databases": "S'estan aturant les bases de dades dels llibres de laboratori",
   "delete-preserve-projects": "S'estan conservant els subprojectes a l'espai de treball",
   "delete-check-owners": "S'està comprovant la propietat de l'espai de treball",
@@ -126,9 +122,5 @@
   "copy-child-projects": "S'estan copiant els subprojectes",
   "import-project-tree": "S'està important el projecte",
   "import-project-owners": "S'estan obrint les bases de dades dels projectes i llibres de laboratori",
-  "import-project-register": "S'està afegint la jerarquia del projecte",
-  "move-project-verify": "S'estan verificant el projecte traslladat i els llibres de laboratori",
-  "move-project-register": "S'està registrant el projecte a l'espai de treball de destinació",
-  "move-project-departure": "S'està actualitzant el directori de l'espai de treball d'origen",
-  "move-project-release": "S'està acabant el trasllat del projecte"
+  "import-project-register": "S'està afegint la jerarquia del projecte"
 }

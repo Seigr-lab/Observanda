@@ -105,10 +105,6 @@
   "book-delete-files": "Removing lab book files",
   "rename-book-databases": "Closing lab book databases",
   "rename-reopen-books": "Opening lab book databases",
-  "rename-close-project": "Closing the project database",
-  "rename-project-folder": "Renaming the project folder",
-  "rename-project-settings": "Saving project settings",
-  "place-project-folder": "Moving the project into its selected parent folder",
   "delete-book-databases": "Stopping lab book databases",
   "delete-preserve-projects": "Keeping subprojects in the workspace",
   "delete-check-owners": "Checking workspace ownership",
@@ -126,9 +122,5 @@
   "copy-child-projects": "Copying subprojects",
   "import-project-tree": "Importing project",
   "import-project-owners": "Opening project and lab-book databases",
-  "import-project-register": "Adding the project hierarchy",
-  "move-project-verify": "Verifying the moved project and lab books",
-  "move-project-register": "Registering the project in its destination workspace",
-  "move-project-departure": "Updating the source workspace directory",
-  "move-project-release": "Finishing the project move"
+  "import-project-register": "Adding the project hierarchy"
 }

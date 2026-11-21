@@ -105,10 +105,6 @@
   "book-delete-files": "Fjerner labbokfiler",
   "rename-book-databases": "Lukker labbokdatabaser",
   "rename-reopen-books": "Åpner labbokdatabaser",
-  "rename-close-project": "Lukker prosjektdatabasen",
-  "rename-project-folder": "Endrer navn på prosjektmappen",
-  "rename-project-settings": "Lagrer prosjektinnstillinger",
-  "place-project-folder": "Flytter prosjektet til den valgte overordnede mappen",
   "delete-book-databases": "Stopper labbokdatabaser",
   "delete-preserve-projects": "Beholder underprosjekter i arbeidsområdet",
   "delete-check-owners": "Kontrollerer arbeidsområdets eierskap",
@@ -126,9 +122,5 @@
   "copy-child-projects": "Kopierer underprosjekter",
   "import-project-tree": "Importerer prosjekt",
   "import-project-owners": "Åpner prosjekt- og labbokdatabaser",
-  "import-project-register": "Legger til prosjekthierarkiet",
-  "move-project-verify": "Kontrollerer det flyttede prosjektet og labbøkene",
-  "move-project-register": "Registrerer prosjektet i målarbeidsområdet",
-  "move-project-departure": "Oppdaterer katalogen i kildearbeidsområdet",
-  "move-project-release": "Fullfører prosjektflyttingen"
+  "import-project-register": "Legger til prosjekthierarkiet"
 }

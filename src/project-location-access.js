@@ -83,7 +83,7 @@ export class ProjectLocationAccess {
   async adoptProjectRename(renames){
     const receipt=await renames.read(),scope=renames.scope(receipt),root=await locateProjectRename(renames.registry,receipt);
     if(receipt.phase!=='complete'||root!==scope.destination||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');
-    const owners=receipt.ownerDirectoryVersion===2?{nativeOwners:nativeRelocationOwners(renames.registry,receipt)}:{projects:[{projectId:receipt.projectId,namespaceId:receipt.namespaceId,vaultId:receipt.vaultId,relative:'',...receipt.rootBooks},...(receipt.projects??[])]};
+    const owners={nativeOwners:nativeRelocationOwners(renames.registry,receipt)};
     await this.renamed({read:async()=>({...scope,...owners}),completedSource:async()=>scope.source},receipt.id,scope.source,scope.destination,{includeRoot:true});
     await renames.registry.inspect(async view=>{for(const [id,grant] of this.#grants){const row=await view.get(id),entry=row?.entry;if(row?.state!=='active'||entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id)throw new AppError('DATABASE_LOCATION');}});
     await this.check();if(this.application.closed)throw new AppError('ACCESS_LOCKED');

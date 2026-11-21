@@ -1,4 +1,3 @@
-import {folderIdentity} from './folder-identity.js';
 import {nativeRelocationOwners} from './native-relocation-state.js';
 // Pending source addresses follow the authenticated handoff location. Storage
 // fences still prevent ordinary writes until both directories agree.
@@ -11,10 +10,10 @@ import {projectTransferRunning} from './project-transfer-tasks.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 export async function locateWorkspaceProjectMove(registry,value){
- const native=value.ownerDirectoryVersion===2,transferred=native?value.copied===true:value.version===2,scope=workspaceMoveScope(registry,value),owner=transferred?(native?await nativeRelocationOwners(registry,value).get(''):value.transfer.owners.find(item=>item.relative==='')):null;
- for(const root of transferred?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
+ const scope=workspaceMoveScope(registry,value),owner=value.copied?await nativeRelocationOwners(registry,value).get(''):null;
+ for(const root of value.copied?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
   const stat=await assertRegular(root,{directory:true,missing:true});if(!stat||await realpath(root)!==root)continue;
-  const actual=transferred||native?await projectMoveDirectory(root):await folderIdentity(root),expected=transferred?(root===scope.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity;
+  const actual=await projectMoveDirectory(root),expected=value.copied?(root===scope.source?owner.identity:owner.destinationIdentity):value.identity;
   if(actual.dev!==expected?.dev||actual.ino!==expected?.ino||await realpath(root)!==root)continue;
   if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(['preparing','prepared'].includes(value.phase)&&root===scope.source))throw new AppError('STORAGE_MOVE_STATE');return root;
  }
@@ -34,7 +33,7 @@ export async function pendingWorkspaceProjectMove(registry,projectId,projects){
 }
 export async function workspaceProjectMoveLocation(registry,entry,projects){
  const value=await pendingWorkspaceProjectMove(registry,entry.projectId,projects);if(!value)return entry;
- const selected=value.ownerDirectoryVersion===2?(value.phase==='preparing'?{...entry,relative:path.relative(workspaceMoveScope(registry,value).source,entry.root).split(path.sep).join('/')}:await nativeRelocationOwners(registry,value).find('project',entry.projectId)):value.entries.find(item=>item.projectId===entry.projectId);if(!selected||selected.namespaceId!==entry.namespaceId||selected.vaultId!==entry.vaultId)throw new AppError('STORAGE_MOVE_STATE');
+ const selected=value.phase==='preparing'?{...entry,relative:path.relative(workspaceMoveScope(registry,value).source,entry.root).split(path.sep).join('/')}:await nativeRelocationOwners(registry,value).find('project',entry.projectId);if(!selected||selected.namespaceId!==entry.namespaceId||selected.vaultId!==entry.vaultId)throw new AppError('STORAGE_MOVE_STATE');
  return {...entry,root:path.join(await locateWorkspaceProjectMove(registry,value),...selected.relative.split('/'))};
 }
 export async function pendingWorkspaceProjectMoves(registry,{after=null,limit=20}={}){

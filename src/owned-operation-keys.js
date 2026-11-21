@@ -9,8 +9,7 @@ export const RENAME_KEYS_FILE='.observanda/rename-project-keys.observanda';
 export const DELETE_PROJECT_KEYS_FILE='.observanda/delete-project-keys.observanda';
 export const MOVE_BOOK_KEYS_FILE='.observanda/move-book-keys.observanda';
 export const DELETE_BOOK_KEYS_FILE='.observanda/delete-book-keys.observanda';
-export const RENAME_BOOK_KEYS_FILE='.observanda/rename-book-keys.observanda';
-function keyFile(workspace,file){if(![RENAME_KEYS_FILE,RENAME_BOOK_KEYS_FILE,DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE,MOVE_BOOK_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
+function keyFile(workspace,file){if(![RENAME_KEYS_FILE,DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE,MOVE_BOOK_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const width=104,limit=50000;
 function authority(workspace,id,file){

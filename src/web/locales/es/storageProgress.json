@@ -105,10 +105,6 @@
   "book-delete-files": "Eliminando los archivos del cuaderno de laboratorio",
   "rename-book-databases": "Cerrando las bases de datos de cuadernos de laboratorio",
   "rename-reopen-books": "Abriendo las bases de datos de cuadernos de laboratorio",
-  "rename-close-project": "Cerrando la base de datos del proyecto",
-  "rename-project-folder": "Cambiando el nombre de la carpeta del proyecto",
-  "rename-project-settings": "Guardando la configuración del proyecto",
-  "place-project-folder": "Moviendo el proyecto a su carpeta superior seleccionada",
   "delete-book-databases": "Deteniendo las bases de datos de cuadernos de laboratorio",
   "delete-preserve-projects": "Conservando los subproyectos en el espacio de trabajo",
   "delete-check-owners": "Comprobando la propiedad del espacio de trabajo",
@@ -126,9 +122,5 @@
   "copy-child-projects": "Copiando subproyectos",
   "import-project-tree": "Importando el proyecto",
   "import-project-owners": "Abriendo las bases de datos de proyectos y cuadernos de laboratorio",
-  "import-project-register": "Añadiendo la jerarquía del proyecto",
-  "move-project-verify": "Verificando el proyecto y los cuadernos de laboratorio trasladados",
-  "move-project-register": "Registrando el proyecto en su espacio de trabajo de destino",
-  "move-project-departure": "Actualizando el directorio del espacio de trabajo de origen",
-  "move-project-release": "Terminando el traslado del proyecto"
+  "import-project-register": "Añadiendo la jerarquía del proyecto"
 }

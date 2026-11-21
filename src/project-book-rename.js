@@ -17,15 +17,14 @@ import {AppError} from './errors.js';
 const identity=folderIdentity;
 const hash=async file=>digest(await readFile(file));
 export class ProjectBookRename extends ProjectBookOwners{
- constructor(project,{keyFile=RENAME_KEYS_FILE}={}){super(project);this.keyFile=keyFile;}
  async persist(id,item){
   await this.ready();if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');
-  if(!this.books.length)return;item.books=this.books;item.bookRegistryRevision=this.revision;item.bookKeysHash=await saveRenameKeys(this.project,id,this.keys,this.keyFile);
+  if(!this.books.length)return;item.books=this.books;item.bookRegistryRevision=this.revision;item.bookKeysHash=await saveRenameKeys(this.project,id,this.keys);
  }
  async load(id,item){
   this.books=item.books??[];if(!this.books.length)return;
   validateRenameBooks(this.books);if(await this.registry.version()!==item.bookRegistryRevision)throw new AppError('STORAGE_RENAME_STATE');
-  this.keys=await loadRenameKeys(this.project,id,item.bookKeysHash,this.keyFile);
+  this.keys=await loadRenameKeys(this.project,id,item.bookKeysHash);
   if(this.keys.size!==this.books.length||this.books.some(book=>this.keys.get(book.labBookId)?.id!==book.vaultId))throw new AppError('STORAGE_RENAME_STATE');
  }
  async freezeAndStop(value,{checkpoint=async()=>{}}={}){
@@ -49,12 +48,12 @@ export class ProjectBookRename extends ProjectBookOwners{
  }
 
 }
-export async function clearRenamedBooks(projectRoot,item,value,keyFile=RENAME_KEYS_FILE){
+export async function clearRenamedBooks(projectRoot,item,value){
  for(const book of item.books??[]){
   const root=nestedRenameRoot(projectRoot,book.directory),stat=await assertRegular(root,{directory:true});
   if(await realpath(root)!==root||serialize(await identity(root))!==serialize(book.identity)||await hash(path.join(root,'.observanda/access.json'))!==book.accessHash)throw new AppError('STORAGE_RENAME_STATE');
   const marker=await workspaceRename(root);if(!marker)continue;
   if(marker.version!==3||marker.id!==value.id||marker.labBookId!==book.labBookId||marker.projectId!==item.projectId||marker.parentDestination!==value.destination)throw new AppError('STORAGE_RENAME_STATE');await unlink(path.join(root,RENAME_MARKER));
  }
- if(item.books?.length){const file=path.join(projectRoot,keyFile);if(await assertRegular(file,{missing:true})){if(await hash(file)!==item.bookKeysHash)throw new AppError('STORAGE_RENAME_STATE');await unlink(file);}}
+ if(item.books?.length){const file=path.join(projectRoot,RENAME_KEYS_FILE);if(await assertRegular(file,{missing:true})){if(await hash(file)!==item.bookKeysHash)throw new AppError('STORAGE_RENAME_STATE');await unlink(file);}}
 }

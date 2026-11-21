@@ -78,12 +78,12 @@ export class WorkspaceProjectRename extends WorkspaceProjectOwners {
  }
 
 }
-export async function clearRenamedProjects(root,value,{atSource=false}={}){
+export async function clearRenamedProjects(root,value){
  for(const item of value.projects??[]){
   const target=nestedRenameRoot(root,item.relative),stat=await assertRegular(target,{directory:true});
   if(await realpath(target)!==target||serialize(await identity(target))!==serialize(item.identity)||await hash(path.join(target,'.observanda/access.json'))!==item.accessHash)throw new AppError('STORAGE_RENAME_STATE');
   await clearRenamedBooks(target,item,value);const marker=await workspaceRename(target);if(!marker)continue;
-  if(marker.id!==value.id||marker.projectId!==item.projectId||marker.parentDestination!==value.destination||marker.parentSource!==value.source||root!==(atSource?value.source:value.destination))throw new AppError('STORAGE_RENAME_STATE');
+  if(marker.id!==value.id||marker.projectId!==item.projectId||marker.parentDestination!==value.destination||marker.parentSource!==value.source||root!==value.destination)throw new AppError('STORAGE_RENAME_STATE');
   await unlink(path.join(target,RENAME_MARKER));
  }
  if(value.projects?.length){const file=path.join(root,RENAME_KEYS_FILE);if(await assertRegular(file,{missing:true})){if(await hash(file)!==value.projectKeysHash)throw new AppError('STORAGE_RENAME_STATE');await unlink(file);}}

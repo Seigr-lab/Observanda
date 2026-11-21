@@ -4,7 +4,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {verifyProjectTreeDirectory} from '../src/project-tree-manifest.js';
 import {recordProjectDeparture} from '../src/project-relocation-directory.js';
-import {admitWorkspaceProjectTree} from '../src/project-workspace-move-registration.js';
+import {admitNativeWorkspaceTree} from '../src/native-relocation-publication.js';
 import {ownerDirectoryKeys,ownerDirectoryRow} from '../src/owner-directory-model.js';
 import {LabBookDirectory} from '../src/lab-book-directory.js';
 import {AppError} from '../src/errors.js';
@@ -35,13 +35,13 @@ test('departure refuses omitted descendants, misplaced physical owners and concu
 });
 test('destination admission rejects retired and foreign identities while accepting an exact authorized return',async t=>{
  t.mock.method(LabBookDirectory.prototype,'read',async()=>null);
- const selected=entry(path.resolve('Workspace','Selected')),value={entries:[{...selected,relative:''}],placement:{parentId:null},projectId:selected.projectId,rootBooks:{books:[]}},f=fixture([]);
- assert.deepEqual(await admitWorkspaceProjectTree(f.registry,value,selected.root),[selected]);
+ const selected=entry(path.resolve('Workspace','Selected')),item={kind:'project',relative:'',projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,parentId:null,summary:null},moving={value:{placement:{parentId:null}},command:{scope:()=>({destination:selected.root})},owners:{async *entries(){yield item;}}},f=fixture([]);
+ await admitNativeWorkspaceTree(f.registry,moving);
  f.set({state:'relocated',entry:{projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,workspaceId:randomUUID(),operationId:randomUUID()}});
- assert.deepEqual(await admitWorkspaceProjectTree(f.registry,value,selected.root),[selected]);
- const foreign=entry(path.resolve('Workspace','Other'));foreign.namespaceId=selected.namespaceId;const collision=fixture([foreign]);await assert.rejects(admitWorkspaceProjectTree(collision.registry,value,selected.root),{code:'DATABASE_LOCATION'});
- const deleted=fixture([],[{state:'deleted',entry:{projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,operationId:randomUUID()}}]);await assert.rejects(admitWorkspaceProjectTree(deleted.registry,value,selected.root),{code:'DATABASE_LOCATION'});
- const active=fixture([selected]);await assert.rejects(admitWorkspaceProjectTree(active.registry,value,selected.root,{fresh:true}),{code:'PROJECT_LOCATION_EXISTS'});assert.deepEqual(await admitWorkspaceProjectTree(active.registry,value,selected.root),[selected]);
+ await admitNativeWorkspaceTree(f.registry,moving);
+ const foreign=entry(path.resolve('Workspace','Other'));foreign.namespaceId=selected.namespaceId;const collision=fixture([foreign]);await assert.rejects(admitNativeWorkspaceTree(collision.registry,moving),{code:'DATABASE_LOCATION'});
+ const deleted=fixture([],[{state:'deleted',entry:{projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,operationId:randomUUID()}}]);await assert.rejects(admitNativeWorkspaceTree(deleted.registry,moving),{code:'DATABASE_LOCATION'});
+ const active=fixture([selected]);await assert.rejects(admitNativeWorkspaceTree(active.registry,moving,{fresh:true}),{code:'PROJECT_LOCATION_EXISTS'});await admitNativeWorkspaceTree(active.registry,moving);
 });
 
 test('portable tree discovery is independent of sibling count and refuses logical children outside its folders',async()=>{

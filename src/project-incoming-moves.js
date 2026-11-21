@@ -19,9 +19,8 @@ async function read(registry,id,owner=false){
   if(Object.keys(value).sort().join()!=='id,projectId,sourceWorkspaceId,version,workspaceId'||value.projectId!==id)throw new AppError('STORAGE_MOVE_STATE');
   return value;
  }
- if(value.version===2){if(Object.keys(value).sort().join()!=='id,owners,parentId,projectId,sourceWorkspaceId,version,workspaceId'||value.id!==id||value.parentId!==null&&!researchId(value.parentId)||!validPortabilityCollection(value.owners)||value.owners.count<1)throw new AppError('STORAGE_MOVE_STATE');return value;}
- if(Object.keys(value).sort().join()!=='addresses,id,parentId,projectId,projects,sourceWorkspaceId,version,workspaceId'||value.id!==id||value.parentId!==null&&!researchId(value.parentId)||!Array.isArray(value.projects)||!value.projects.length||value.projects.length>4097||!value.projects.every(researchId)||new Set(value.projects).size!==value.projects.length||!value.projects.includes(value.projectId)||!Array.isArray(value.addresses)||value.addresses.length<value.projects.length||value.addresses.length>8192)throw new AppError('STORAGE_MOVE_STATE');
- const namespaces=new Set(),vaults=new Set();for(const address of value.addresses){if(!address||Object.keys(address).sort().join()!=='namespaceId,vaultId'||!researchId(address.namespaceId)||!researchId(address.vaultId)||namespaces.has(address.namespaceId)||vaults.has(address.vaultId))throw new AppError('STORAGE_MOVE_STATE');namespaces.add(address.namespaceId);vaults.add(address.vaultId);}return value;
+ if(value.version!==2||Object.keys(value).sort().join()!=='id,owners,parentId,projectId,sourceWorkspaceId,version,workspaceId'||value.id!==id||value.parentId!==null&&!researchId(value.parentId)||!validPortabilityCollection(value.owners)||value.owners.count<1)throw new AppError('STORAGE_MOVE_STATE');
+ return value;
 }
 async function* pending(registry){
  const directory=path.join(registry.workspace.root,'.observanda/project-incoming-moves');if(!await assertRegular(directory,{directory:true,missing:true}))return;
@@ -30,43 +29,24 @@ async function* pending(registry){
 export function incomingProjectMove(registry,projectId){return read(registry,projectId,true);}
 export async function assertIncomingProjectAddresses(registry,owners,{except=null}={}){
  const selected=Array.isArray(owners)?projectImportOwners(registry,{owners}):owners;
- for await(const value of pending(registry))if(value.id!==except){const addresses=value.version===2?portabilityCollection(registry.workspace,value.owners).entries():value.addresses;for await(const address of addresses)if(await selected.find('namespace',address.namespaceId)||await selected.find('vault',address.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');}
-}
-export async function reserveIncomingProjectMove(registry,value,{owners:nativeOwners}={}){
- if(nativeOwners)return reserveNativeIncoming(registry,value,nativeOwners);
- const owners=[...value.entries.map(entry=>({...entry,kind:'project'})),...(value.rootBooks.books??[]).map(entry=>({...entry,kind:'lab-book'})),...(value.projects??[]).flatMap(project=>(project.books??[]).map(entry=>({...entry,kind:'lab-book'})))];
- if(owners.length>8192)throw new AppError('LIMIT');
- const incoming={version:1,id:value.id,workspaceId:registry.workspaceId,sourceWorkspaceId:value.workspaceId,projectId:value.projectId,parentId:value.placement.parentId,projects:value.entries.map(entry=>entry.projectId).sort(),addresses:owners.map(({namespaceId,vaultId})=>({namespaceId,vaultId})).sort((a,b)=>a.namespaceId.localeCompare(b.namespaceId))};
- await privateDirectory(registry.workspace.root,'.observanda/project-incoming-moves');const directory=await privateDirectory(registry.workspace.root,'.observanda/project-incoming-owners'),raw=serialize(incoming),locks=[];
- for(const owner of owners){const directory=await privateDirectory(registry.workspace.root,owner.kind==='project'?'.observanda/project-import-addresses':'.observanda/lab-book-directory');locks.push(path.join(directory,owner.namespaceId+'.lock'));}
- locks.sort();locks.push(...incoming.projects.map(id=>path.join(directory,id+'.lock')));
- const next=async index=>{
-  if(index<locks.length)return withWriterLease(locks[index],()=>next(index+1),{wait:false});
-  await assertIncomingProjectAddresses(registry,owners,{except:incoming.id});
-  const projectIds=new Set(incoming.projects),namespaces=new Set(incoming.addresses.map(address=>address.namespaceId)),vaults=new Set(incoming.addresses.map(address=>address.vaultId));
-  for await(const importing of pendingProjectImports(registry))for await(const owner of projectImportOwners(registry,importing).entries())if(projectIds.has(owner.projectId)||namespaces.has(owner.namespaceId)||vaults.has(owner.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');
-  for(const id of incoming.projects){const previous=await read(registry,id,true);if(previous&&(previous.id!==incoming.id||previous.sourceWorkspaceId!==incoming.sourceWorkspaceId))throw new AppError('STORAGE_PROJECT_BUSY');}
-  const previous=await read(registry,incoming.id);if(previous&&serialize(previous)!==raw)throw new AppError('CONFLICT');
-  await registry.workspace.writeFile(file(registry,incoming.id),raw);
-  for(const projectId of incoming.projects)await registry.workspace.writeFile(file(registry,projectId,true),serialize({version:1,id:incoming.id,workspaceId:registry.workspaceId,sourceWorkspaceId:incoming.sourceWorkspaceId,projectId}));
- };return next(0);
+ for await(const value of pending(registry))if(value.id!==except){for await(const address of portabilityCollection(registry.workspace,value.owners).entries())if(await selected.find('namespace',address.namespaceId)||await selected.find('vault',address.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');}
 }
 export async function releaseIncomingProjectMove(registry,value){
- const incoming=await read(registry,value.id);if(!incoming&&value.ownerDirectoryVersion===2)return;
- const ids=incoming?.version===2?(async function*(){for await(const owner of portabilityCollection(registry.workspace,incoming.owners).entries({index:'project'}))yield owner.projectId;})():value.entries.map(entry=>entry.projectId).sort();
+ const incoming=await read(registry,value.id);if(!incoming)return;
+ const ids=(async function*(){for await(const owner of portabilityCollection(registry.workspace,incoming.owners).entries({index:'project'}))yield owner.projectId;})();
  // A reservation refused before its first owner pointer has no pointer folder.
  const owners=await assertRegular(path.join(registry.workspace.root,'.observanda/project-incoming-owners'),{directory:true,missing:true});
  if(owners)for await(const id of ids){const selected=file(registry,id,true);await withWriterLease(path.join(path.dirname(selected),id+'.lock'),async()=>{const prior=await read(registry,id,true);if(!prior)return;if(prior.id!==value.id||prior.sourceWorkspaceId!==value.workspaceId)throw new AppError('CONFLICT');await unlink(selected);});}
  const selected=file(registry,value.id),prior=await read(registry,value.id);if(prior){if(prior.sourceWorkspaceId!==value.workspaceId)throw new AppError('CONFLICT');await unlink(selected);}
 }
 export async function assertIncomingProjectMovesSettled(registry,parents){
- const ids=new Set(parents);for await(const value of pending(registry)){if(ids.has(value.parentId))throw new AppError('STORAGE_PROJECT_BUSY');if(value.version===2){const owners=portabilityCollection(registry.workspace,value.owners);for(const id of ids)if(id!==null&&await owners.find('project',id))throw new AppError('STORAGE_PROJECT_BUSY');}else if(value.projects.some(id=>ids.has(id)))throw new AppError('STORAGE_PROJECT_BUSY');}
+ const ids=new Set(parents);for await(const value of pending(registry)){if(ids.has(value.parentId))throw new AppError('STORAGE_PROJECT_BUSY');const owners=portabilityCollection(registry.workspace,value.owners);for(const id of ids)if(id!==null&&await owners.find('project',id))throw new AppError('STORAGE_PROJECT_BUSY');}
 }
 
 // A complete reservation becomes visible before individual address checks.
 // New imports observe it; an already admitted import still holds its existing
 // address lease. Both orders refuse collisions without retaining every lease.
-async function reserveNativeIncoming(registry,value,owners){
+export async function reserveIncomingProjectMove(registry,value,{owners}){
  const directory=await privateDirectory(registry.workspace.root,'.observanda/project-incoming-moves');
  return withWriterLease(path.join(directory,'admission.lock'),async()=>{
   let incoming=await read(registry,value.id);

@@ -62,8 +62,7 @@ export class ScopedLocationAccess{
  }
  async adoptProjectRename(renames){
   const value=await renames.read(),scope=renames.scope(value);if(value.phase!=='complete'||await locateProjectRename(renames.registry,value)!==scope.destination||await workspaceRename(scope.destination))throw new AppError('STORAGE_RENAME_STATE');
-  const owners=value.ownerDirectoryVersion===2?nativeRelocationOwners(renames.registry,value):{async find(index,id){const project=id===value.projectId?{...value,...value.rootBooks,relative:''}:value.projects?.find(item=>item.projectId===id);if(index==='project')return project?{...project,kind:'project'}:null;for(const item of [{...value,...value.rootBooks,relative:''},...(value.projects??[])]){const book=item.books?.find(book=>book.labBookId===id);if(book)return {...book,kind:'lab-book',projectId:item.projectId,relative:path.posix.join(item.relative,book.directory)};}return null;}};
-  await this.renamed(owners,scope.source,scope.destination);await this.install();
+  await this.renamed(nativeRelocationOwners(renames.registry,value),scope.source,scope.destination);await this.install();
  }
  async install(application=this.application,client=this.client){
   if(client!==this.client||this.closed||application.closed||!this.destination||application!==this.application&&application.workspace.root!==this.destination)throw new AppError('ACCESS_DENIED');const session=application.session(client);
