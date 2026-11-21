@@ -28,6 +28,7 @@ export async function readProjectTree(storage,owner){
  let value;try{value=JSON.parse(await storage.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_COPY');}return validateProjectTree(value,owner);
 }
 export async function writeProjectTree(storage,value){await storage.writeFile(path.join(storage.root,PROJECT_TREE_FILE),serialize(validateProjectTree(value)));}
+// Proves that the selected entries form one physical project tree under its root.
 export function selectProjectTree(root,entries){
  const selected=entries.find(entry=>entry.projectId===root.projectId);if(!selected||selected.root!==root.root||selected.vaultId!==root.vault.id)throw new AppError('CONFLICT');
  const children=new Map();for(const entry of entries){const list=children.get(entry.parentId)??[];list.push(entry);children.set(entry.parentId,list);}
@@ -37,22 +38,7 @@ export function selectProjectTree(root,entries){
  }
  const physical=entries.filter(entry=>{const rel=path.relative(root.root,entry.root);return rel!==''&&rel!=='..'&&!rel.startsWith('..'+path.sep)&&!path.isAbsolute(rel);});
  if(physical.length!==result.length||physical.some(entry=>!seen.has(entry.projectId)))throw new AppError('STORAGE_PATH');
- const manifest=validateProjectTree({version:1,projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,projects:result.map(({projectId,namespaceId,vaultId,parentId,root:folder})=>({projectId,namespaceId,vaultId,parentId,relative:path.relative(root.root,folder).split(path.sep).join('/')}))});
- return {entries:result,manifest};
-}
-
-// Read only the selected physical tree, then prove that its logical children
-// agree. An unrelated project does not enlarge this inventory or its checks.
-export function readProjectTreeDirectory(registry,storage){
- return registry.inspect(async view=>{
-  const root=await view.get(storage.projectId);if(root?.state!=='active')throw new AppError('CONFLICT');
-  const entries=[root.entry];for await(const row of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(storage.root,registry.workspace.root)})){
-   entries.push(row.entry);if(entries.length>4097)throw new AppError('LIMIT');
-  }
-  const tree=selectProjectTree(storage,entries),ids=new Set(entries.map(entry=>entry.projectId));
-  for(const entry of entries)for await(const child of view.entries({index:'parent',prefix:entry.projectId+':'}))if(!ids.has(child.entry.projectId))throw new AppError('STORAGE_PATH');
-  return tree;
- });
+ return {entries:result};
 }
 
 export function projectTreeCollection(storage,manifest){

@@ -42,7 +42,7 @@ export class ProjectCopies{
    }
    const tree=new ProjectTreeCopy(this.registry,storage,{withProject,withProjectBook,portable:this.portable});
    try{requireStorageName(value.destination,storageFolderName(storage.root));await this.prepare(storage,{withBook});await tree.prepare();}catch(error){if(created)error.operationNotStarted=true;throw error;}if(created)await this.workspace.writeFile(this.file(storage.projectId),serialize(value));
-   await tree.using(()=>this.transfer(storage,value,{onProgress,checkpoint,withBook,onCopiedBook,excludeProject:tree.exclude(storage.root),boundaryRevision:tree.boundary(storage.root),legacyProjectRoots:()=>tree.legacyRoots(storage.root),beforeVerified:(target,receipt,save)=>tree.copy(target,receipt,save,{checkpoint})}));value.phase='complete';await this.workspace.writeFile(this.file(storage.projectId),serialize(value));return value;
+   await tree.using(()=>this.transfer(storage,value,{onProgress,checkpoint,withBook,onCopiedBook,excludeProject:tree.exclude(storage.root),boundaryRevision:tree.boundary(storage.root),beforeVerified:(target,receipt,save)=>tree.copy(target,receipt,save,{checkpoint})}));value.phase='complete';await this.workspace.writeFile(this.file(storage.projectId),serialize(value));return value;
   });
  }
 }

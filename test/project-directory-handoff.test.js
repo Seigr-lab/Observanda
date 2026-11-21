@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {readProjectTreeDirectory} from '../src/project-tree-manifest.js';
+import {verifyProjectTreeDirectory} from '../src/project-tree-manifest.js';
 import {recordProjectDeparture} from '../src/project-relocation-directory.js';
 import {admitWorkspaceProjectTree} from '../src/project-workspace-move-registration.js';
 import {ownerDirectoryKeys,ownerDirectoryRow} from '../src/owner-directory-model.js';
@@ -46,6 +46,9 @@ test('destination admission rejects retired and foreign identities while accepti
 
 test('portable tree discovery is independent of sibling count and refuses logical children outside its folders',async()=>{
  const root=entry(path.resolve('Workspace','Selected')),child=entry(path.join(root.root,'Child'),root.projectId),others=Array.from({length:5000},(_,i)=>entry(path.resolve('Workspace','Other '+i))),f=fixture([root,child,...others]),storage={...root,vault:{id:root.vaultId}};
- assert.deepEqual((await readProjectTreeDirectory(f.registry,storage)).entries,[child]);assert.deepEqual(f.stats(),{reads:1,streamed:2,writes:0});
- f.set({state:'active',entry:{...others[0],parentId:root.projectId}});await assert.rejects(readProjectTreeDirectory(f.registry,storage),{code:'STORAGE_PATH'});
+ // The portable tree a copy captured is checked against the registry through the selected folders only.
+ const row=value=>({kind:'project',projectId:value.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,parentId:value.projectId===root.projectId?null:value.parentId,relative:path.relative(root.root,value.root).split(path.sep).join('/')});
+ const captured=new Map([root,child].map(value=>[row(value).relative,row(value)])),tree={collection:{count:captured.size,get:async relative=>captured.get(relative)??null}};
+ await verifyProjectTreeDirectory(f.registry,storage,tree);assert.deepEqual(f.stats(),{reads:2,streamed:2,writes:0});
+ f.set({state:'active',entry:{...others[0],parentId:root.projectId}});await assert.rejects(verifyProjectTreeDirectory(f.registry,storage,tree),{code:'STORAGE_PATH'});
 });

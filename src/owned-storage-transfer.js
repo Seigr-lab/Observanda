@@ -42,7 +42,7 @@ async function intent(storage){
 }
 
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
-async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],excludeProject,boundaryRevision,legacyProjectRoots,portable=false,retainIncomplete=false,relocation=false}={}){
+async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],excludeProject,boundaryRevision,portable=false,retainIncomplete=false,relocation=false}={}){
  if(!(source instanceof Storage)||!researchId(id)||typeof checkpoint!=='function'||afterVerified!==undefined&&typeof afterVerified!=='function'||beforeVerified!==undefined&&typeof beforeVerified!=='function'||onVerified!==undefined&&typeof onVerified!=='function'||sourceHandoff!==undefined&&typeof sourceHandoff!=='function'||typeof portable!=='boolean'||typeof retainIncomplete!=='boolean'||typeof relocation!=='boolean'||portable&&relocation||portable&&afterVerified!==undefined)throw new AppError('INVALID');
  if(boundaryRevision!==undefined&&(!/^[a-f0-9]{64}$/.test(boundaryRevision)||typeof excludeProject!=='function'))throw new AppError('INVALID');
  await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
@@ -66,7 +66,6 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
    let receipt=await intent(target);
    if(receipt){
     admittedReceipt(receipt,admitted);
-    if(receipt.boundaryRevision===undefined&&boundaryRevision!==undefined&&typeof legacyProjectRoots==='function'){boundaries=projectCopyBoundaries(sourceRoot,await legacyProjectRoots());boundaryRevision=undefined;}
     if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
     if(receipt.phase==='verified'&&!afterVerified){
