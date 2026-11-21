@@ -7,6 +7,7 @@ import os from 'node:os';
 import {randomUUID,createHash} from 'node:crypto';
 import {journeyBook,block} from './book-fixture.js';
 import {researchReference} from '../src/web/research-reference.js';
+import {applyRecordLinks} from '../src/website-record-links.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {populateImageEvidence} from './image-evidence-fixture.js';
 import {clearVault} from '../src/encryption.js';
@@ -59,7 +60,11 @@ test('retained card excerpts and book pages share public reference and inline fi
  const {book}=await storage.workspace.read();let copies=0;
  for(const record of book.entries.filter(item=>item.share)){
   const copy=await websiteRecordCopy(storage.workspace,record);if(!copy)continue;copies++;
-  assert.ok(!copy.text.includes('PRIVATE'),record.title);assert.ok(!copy.text.includes(privateImage));assert.ok(!copy.text.includes(f.privateRecord.id));
+  assert.ok(!copy.text.includes('PRIVATE'),record.title);assert.ok(!copy.text.includes(privateImage));
+  // A link to another record stays a marker in the copy; a private record is never placed on a website,
+  // so publishing leaves only the linked words and its identifier never reaches a published page.
+  assert.ok(!copy.text.replace(/#observanda-record-[0-9a-f-]{36}_[0-9a-f-]{36}(?:~[A-Za-z0-9_:.%-]{1,200})?/g,'').includes(f.privateRecord.id));
+  const published=applyRecordLinks(copy.html,'index.html',new Map());assert.ok(!published.includes(f.privateRecord.id));assert.ok(!published.includes('#observanda-record-'));
  }
  assert.ok(copies>0);
 });
