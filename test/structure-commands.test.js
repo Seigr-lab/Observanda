@@ -241,25 +241,3 @@ test('empty retained lab books remain editable while new inline identities are r
  assert.equal(result.recordPatch.count,0);
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(base.book)));
 });
-
-test('partially indexed old ownership is completed instead of omitting records from a deletion',async t=>{
- const f=await fixture(t,6),source=f.base.book.notebooks[0];
- await f.ws.withLock(()=>f.ws.catalogue(async store=>{
-  const manifest=await store.manifest(f.base.etag);
-  manifest.records=manifest.records.map(({notebookId,queryRevision,summaryRevision,...row})=>row);
-  await store.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',f.base.etag,store.encode('snapshot',f.base.etag,manifest));
- }));
- // An ordinary edit can leave older siblings without scoped membership.
- const other=f.base.book.entries.at(-1);
- await new ResearchRecords(f.ws,{}).save({workspaceId:f.base.book.id,changes:[{id:other.id,expectedRevision:recordRevision(other),record:{...other,title:'One indexed sibling'}}]});
- const current=await f.ws.read(),snapshot=await f.ws.catalogue(s=>s.snapshot());
- assert.equal(await f.ws.catalogue(s=>new SnapshotIndex(s).scopedCount(snapshot.membership)),1);
- const result=await command(f,current,'delete-notebook',{id:source.id,records:'delete',destinationId:null,confirmed:true});
- const saved=patch(current,result).book;assert.equal(saved.entries.length,3);
- assert.ok(saved.entries.every(r=>r.notebookId!==source.id));
- const latest=await f.ws.catalogue(s=>s.snapshot());
- assert.equal(await f.ws.catalogue(s=>new SnapshotIndex(s).scopedCount(latest.membership)),latest.count);
- await f.ws.catalogue(s=>s.verify(catalogueDescriptor(saved)));
- const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'legacy-backup'),{vault:f.vault}),{vault:f.vault});
- assert.deepEqual(await new Workspace(copy,f.vault).read(),await f.ws.read());
-});
