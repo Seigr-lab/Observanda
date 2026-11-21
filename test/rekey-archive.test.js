@@ -15,6 +15,7 @@ import {ResearchCatalogue,rekeyCatalogue} from '../src/research-catalogue.js';
 import {catalogueStamp,CATALOGUE_FILE,CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {CATALOGUE_ACTIVATION} from '../src/postgres-activation.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
+import {workspaceRevisions} from './fixtures/workspace-revisions.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rekey-archive-')),f=await encryptedFixture(directory,upgradeNotebook(sampleNotebook()));
@@ -45,7 +46,7 @@ test('connected fresh-key copying audits the exported archive exactly once befor
  assert.equal(published,true);assert.equal(audits,1);
  await absent(path.join(f.destination,CATALOGUE_ARCHIVE));await absent(path.join(f.destination,CATALOGUE_ACTIVATION));await absent(path.join(f.destination,'.observanda/copy-in-progress'));
  const reopened=new Workspace(f.destination,f.freshVault);assert.deepEqual(await reopened.read(),f.before);assert.equal(audits,1,'Reopening reuses the verified committed binding');
- assert.deepEqual(await reopened.history(),await f.workspace.history());
+ assert.deepEqual(await workspaceRevisions(reopened),await workspaceRevisions(f.workspace));
  await assert.rejects(new Workspace(f.destination,f.vault).read(),{code:'ENCRYPTION_DAMAGED'});
  await sourceUnchanged(f);
 });

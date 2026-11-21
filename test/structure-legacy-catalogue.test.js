@@ -23,7 +23,7 @@ const counts=workspace=>workspace.catalogue(async store=>({states:(await store.d
 for(const kind of ['flat','indexed'])test(kind+' older catalogue can preview and save structure beyond whole-book limits without assembling records',async t=>{
  const count=kind==='flat'?80:1002,f=await fixture(t,{kind,count,size:kind==='flat'?40000:20}),service=f.service;
  const read=ResearchCatalogue.prototype.read;ResearchCatalogue.prototype.read=()=>{throw Error('Complete research document requested');};t.after(()=>{ResearchCatalogue.prototype.read=read;});
- const change={workspaceTitle:'A wider research workspace',workspaceDescription:'Independent work',projectId:f.book.projects[0].id,copyLogos:false},before=await f.workspace.outline();
+ const change={workspaceTitle:'A wider research workspace',workspaceDescription:'Independent work',projectId:f.book.projects[0].id},before=await f.workspace.outline();
  const rowsBefore=await counts(f.workspace),preview=await service.execute('reorganize',{etag:before.etag,change},{preview:true});
  assert.equal(preview.summary.records,count);assert.deepEqual(await counts(f.workspace),rowsBefore);assert.equal((await f.workspace.outline()).etag,before.etag);
  const saved=await service.execute('structure',{etag:before.etag,response:'outline',change:{kind:'notebook',value:{...f.book.notebooks[0],title:'Renamed without a whole-book load'}}});

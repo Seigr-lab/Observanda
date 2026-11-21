@@ -7,6 +7,7 @@ import os from 'node:os';
 import {testServer as startServer} from './device-fixture.js';
 import { Workspace } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
+import {workspaceRevisions} from './fixtures/workspace-revisions.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-http-'));
@@ -34,15 +35,15 @@ test('loopback service requires session, expected Host, and same-origin mutation
 });
 
 test('reviewed workspace changes are atomic, retain prior revisions and reject a stale plan',async t=>{
-  const app=await setup(t), original=await app.ws.read(), change={workspaceTitle:original.book.title,workspaceDescription:'Broader context',projectId:original.book.projects[0].id,copyLogos:false};
+  const app=await setup(t), original=await app.ws.read(), change={workspaceTitle:original.book.title,workspaceDescription:'Broader context',projectId:original.book.projects[0].id};
   const plan=await (await app.request('/api/workspace/reorganize/preview',{etag:original.etag,change})).json();
   assert.equal(plan.summary.projectTitle,original.book.title);assert.equal((await app.ws.read()).etag,original.etag);
   assert.equal((await app.request('/api/workspace/reorganize',{etag:original.etag,change,reviewed:false})).status,422);
   const response=await app.request('/api/workspace/reorganize',{etag:original.etag,change,reviewed:true});assert.equal(response.status,200);
   const result=await response.json();assert.equal(result.book.title,original.book.title);assert.deepEqual(result.book.entries,original.book.entries);
-  assert.ok((await app.ws.history()).some(r=>r.id===original.etag));
+  assert.ok((await workspaceRevisions(app.ws)).some(r=>r.id===original.etag));
   assert.equal((await app.request('/api/workspace/reorganize',{etag:plan.etag,change,reviewed:true})).status,409);
   assert.equal((await app.ws.read()).etag,result.etag);
 });
 
-
+

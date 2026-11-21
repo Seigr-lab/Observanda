@@ -20,6 +20,7 @@ import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 import {PortableBackupHistory} from '../src/portable-backup-history.js';
 import {restorePortable} from '../src/portable-restore.js';
 import {CATALOGUE_ARCHIVE} from '../src/postgres-activation.js';
+import {workspaceRevisions} from './fixtures/workspace-revisions.js';
 
 test('recheck and restore a moved independent backup after the source is unavailable',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-restore-test-'));
@@ -33,7 +34,7 @@ test('recheck and restore a moved independent backup after the source is unavail
  const previousKey=await changeRecovery();
  const originalRecord=await f.workspace.read();
  const changed=await f.workspace.update(book=>{book.entries[0].body='Final measured observation';return book;});
- const records=await f.workspace.history();
+ const records=await workspaceRevisions(f.workspace);
  const materials=new ResearchMaterials(f.workspace),pixels=await readFile(new URL('../src/preview-assets/image.png',import.meta.url));
  const upload=await materials.startImport({recordId:changed.book.entries[0].id,name:'field-camera.png',size:pixels.length});
  await materials.appendImport(upload.id,0,[pixels]);const artifact=await materials.finishImport(upload.id);
@@ -83,7 +84,7 @@ test('recheck and restore a moved independent backup after the source is unavail
  const key=await verifyAccess(access,'','',{deviceStore:fresh,recovery:currentKey.recovery});
  try{
   const independent=new Workspace(destination,key),site=new WebsiteFileStore(independent);
-  assert.deepEqual(await independent.read(),changed);assert.deepEqual(await independent.history(),records);
+  assert.deepEqual(await independent.read(),changed);assert.deepEqual(await workspaceRevisions(independent),records);
   assert.deepEqual(await independent.readRevision(originalRecord.etag),originalRecord.book);
   assert.deepEqual(await contentBuffer((await new ResearchMaterials(independent).artifact(artifact)).content),pixels);
   const latest=await site.open(siteId);
