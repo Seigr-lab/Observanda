@@ -3,20 +3,25 @@ import os from 'node:os';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {WorkspaceDatabases} from '../../src/workspace-databases.js';
+import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 
 test('navigation retains live nodes, disclosure, scroll and focus while pages and workspace contents change',async({page})=>{
- test.setTimeout(60000);
+ test.setTimeout(300000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-navigation-'));
+ // Creating a dedicated project needs the application's database owner.
+ const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
  const book=sampleNotebook(),first=book.projects[0],second={...first,id:randomUUID(),title:'Instrument research'};
  book.projects.push(second);
  const moved=book.notebooks[0];
  for(let i=0;i<9;i++)book.notebooks.push({id:randomUUID(),projectId:first.id,title:'Field notebook '+(i+1)});
  book.notebooks.push({id:randomUUID(),projectId:second.id,title:'Calibration'});
- await new Workspace(path.join(directory,'notebook')).create(book);
- const app=await startServer({root:path.join(directory,'notebook'),port:0,preferencesFile:path.join(directory,'preferences.json')});
+ const f=await encryptedFixture(path.join(directory,'workspace'),book);
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  const nav=page.locator('#main-navigation');
  const go=async(action)=>nav.locator('button[data-action="'+action+'"]').click();
@@ -67,10 +72,14 @@ test('navigation retains live nodes, disclosure, scroll and focus while pages an
   await expect(nav.locator('.notebook-link .tree-title').filter({hasText:'Retained field journal'})).toBeVisible();
   await stable();
   expect(await page.evaluate(()=>kept.notebook.closest('.tree-project')===kept.projects[1])).toBe(true);
-  await nav.locator('[data-action="open-project"][data-id="'+second.id+'"]').click();
-  await page.getByRole('button',{name:'New lab book',exact:true}).click();await page.getByLabel('Lab book name',{exact:true}).fill('New lab book');
-  await page.getByRole('button',{name:'Save lab book',exact:true}).click();
-  await expect(nav.getByText('New lab book',{exact:true})).toBeVisible();await stable();
+  // New lab books belong to dedicated projects; projects held in the workspace keep theirs.
+  const dialog=page.locator('#dialog');
+  await go('projects');await page.locator('main').getByRole('button',{name:'New project',exact:true}).click();
+  await dialog.getByLabel('Name',{exact:true}).fill('Field instruments');await dialog.getByRole('button',{name:'Create project',exact:true}).click();
+  await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('main h1')).toHaveText('Field instruments');
+  await page.locator('main').getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('New lab book');
+  await dialog.getByLabel('Lab-book template',{exact:true}).selectOption('blank');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();
+  await expect(nav.getByText('New lab book',{exact:true})).toBeVisible({timeout:60000});await stable();
   await go('workspace');
   await page.evaluate(()=>{kept.sidebar.scrollTop=170;scrollTo(0,0);});
   await page.screenshot({path:test.info().outputPath('persistent-sidebar.png')});
@@ -83,5 +92,5 @@ test('navigation retains live nodes, disclosure, scroll and focus while pages an
   await expect(nav).toBeVisible();await stable();
   expect(await page.evaluate(()=>kept.projects.every(node=>node.open))).toBe(true);
   expect(errors).toEqual([]);
- } finally {await app.close();if(path.dirname(directory)===path.resolve(os.tmpdir()))await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
+ } finally {await app.close();await owner.close();detach();await clearVault(f.vault);if(path.dirname(directory)===path.resolve(os.tmpdir()))await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });
