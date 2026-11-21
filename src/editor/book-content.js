@@ -88,7 +88,8 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validation
     if(!validBookBlock({type,attrs})){panel.querySelector('[data-book-error]').textContent=message('invalid');return;}
     const node=schema.nodes[type].create(attrs),tr=closeHistory(view.state.tr);
     if(position!==null)tr.replaceWith(position,position+view.state.doc.nodeAt(position).nodeSize,node);else if(selection.node)tr.insert(selection.to,node);else tr.setSelection(selection).replaceSelectionWith(node);
-    const problem=validationMessage(tr.doc.toJSON());if(problem){panel.querySelector('[data-book-error]').textContent=problem;return;}
+    // Say that the content was refused and kept, then which limit it would exceed.
+    const problem=validationMessage(tr.doc.toJSON());if(problem){panel.querySelector('[data-book-error]').textContent=message('documentLimit')+' '+problem;return;}
     view.dispatch(tr.scrollIntoView());close();return;
    }paint();
   });panel.showModal();panel.querySelector('input,textarea,select')?.focus();
