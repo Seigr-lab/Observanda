@@ -10,7 +10,7 @@ import {ResearchMaterials} from '../src/research-materials.js';
 import {MetadataFeed} from '../src/metadata-feed.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {Workspace} from '../src/storage.js';
+import {Workspace,digest,serialize} from '../src/storage.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 async function fixture(t,count=4){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-draft-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,record=book.entries[0],refs=[];
@@ -93,12 +93,18 @@ test('analysis outputs stay pinned, unfinished revisions cannot replace concurre
  await f.m.verify();
 });
 
+// Damaged bytes appear in a workspace without passing Observanda's own write checks,
+// which refuse unreadable record-owned metadata. Store them as such a file would be found.
+const damage=(workspace,key,text)=>workspace.withLock(()=>workspace.catalogue(async store=>{
+ const id='metadata:'+key,value={text},index=store.objectIndex();
+ await index.update(await index.head(),id,digest(serialize(value)));await store.db.run('UPDATE objects SET payload=$1 WHERE id=$2',store.encode('object',id,value),id);
+}));
 test('altered or missing accepted-batch receipts fail replay and backup verification visibly',async t=>{
  const f=await fixture(t),draft=await f.m.drafts.start(plan(f,4)),batch={id:draft.id,offset:0,items:f.refs.slice(0,2)};
  await f.m.drafts.append(batch);
  const key='.observanda/materials/drafts/'+draft.id+'/accepted/inputs/0.json',original=await f.workspace.readMetadata(key,1024);
  for(const bytes of ['{',JSON.stringify({hash:'a'.repeat(64),count:2}),JSON.stringify({...JSON.parse(original),count:3})]){
-  await f.workspace.withLock(()=>f.workspace.writeMetadata(key,bytes));
+  await damage(f.workspace,key,bytes);
   await assert.rejects(f.m.drafts.append(batch),{code:'CATALOGUE_DAMAGED'});
   await assert.rejects(f.m.verify(),{code:'CATALOGUE_DAMAGED'});
  }
