@@ -42,8 +42,8 @@ async function intent(storage){
 }
 
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
-async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],excludeProject,boundaryRevision,portable=false,retainIncomplete=false,relocation=false}={}){
- if(!(source instanceof Storage)||!researchId(id)||typeof checkpoint!=='function'||afterVerified!==undefined&&typeof afterVerified!=='function'||beforeVerified!==undefined&&typeof beforeVerified!=='function'||onVerified!==undefined&&typeof onVerified!=='function'||sourceHandoff!==undefined&&typeof sourceHandoff!=='function'||typeof portable!=='boolean'||typeof retainIncomplete!=='boolean'||typeof relocation!=='boolean'||portable&&relocation||portable&&afterVerified!==undefined)throw new AppError('INVALID');
+async function copy(source,input,{id,onProgress,checkpoint=async()=>{},beforeVerified,onVerified,projectRoots=[],excludeProject,boundaryRevision,portable=false,retainIncomplete=false,relocation=false}={}){
+ if(!(source instanceof Storage)||!researchId(id)||typeof checkpoint!=='function'||beforeVerified!==undefined&&typeof beforeVerified!=='function'||onVerified!==undefined&&typeof onVerified!=='function'||typeof portable!=='boolean'||typeof retainIncomplete!=='boolean'||typeof relocation!=='boolean'||portable&&relocation)throw new AppError('INVALID');
  if(boundaryRevision!==undefined&&(!/^[a-f0-9]{64}$/.test(boundaryRevision)||typeof excludeProject!=='function'))throw new AppError('INVALID');
  await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  if(!relocation)await assertInventoryObligationsSettled(source);
@@ -68,7 +68,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
     admittedReceipt(receipt,admitted);
     if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
-    if(receipt.phase==='verified'&&!afterVerified){
+    if(receipt.phase==='verified'){
      const binding=await catalogueBinding(destination);
      if(archive){const identity=await readArchive(destination,source.vault);if(binding||identity[ownerId]!==source[ownerId]||identity.namespaceId!==receipt.namespaceId||identity.archiveDigest!==receipt.archiveDigest)throw new AppError('STORAGE_COPY');}
      else{if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');if(!relocation)await assertInventoryObligationsSettled(target);if(retainIncomplete){const metadata=await target.catalogue(async store=>(await store.snapshot()).metadata);if(metadata.id!==receipt.namespaceId)throw new AppError('DATABASE_LOCATION');}else await target.outline();}
@@ -80,7 +80,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
     for await(const entry of admitted.directory.entries())if(entry.name!=='.observanda')throw new AppError('EXISTS');
     for await(const entry of admitted.internalDirectory.entries())if(entry.name!==path.basename(leaseName))throw new AppError('EXISTS');
    }
-   const handoff=sourceHandoff??(operation=>source.withStorageHandoff(operation,{existing:true}));
+   const handoff=operation=>source.withStorageHandoff(operation,{existing:true});
    return handoff(async()=>{
     await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  if(!relocation)await assertInventoryObligationsSettled(source);
@@ -141,7 +141,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
      if(beforeVerified)await beforeVerified(target,receipt,()=>save(target,receipt));
      receipt.archiveDigest=digest;delete receipt.nextDigest;receipt.phase='verified';await save(target,receipt);await checkpoint('verified');if(onVerified)await onVerified(target,receipt);
     }finally{await copied?.close();await original.close();}
-    await admitted.assertNamed();if(!retainIncomplete)await admitted.remove(marker);if(afterVerified)await afterVerified(target,receipt);return target;
+    await admitted.assertNamed();if(!retainIncomplete)await admitted.remove(marker);return target;
    });
   });
  }));

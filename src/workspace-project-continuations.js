@@ -6,7 +6,7 @@ import {assertRegular,privateDirectory} from './storage.js';
 import {researchId} from './web/research-reference.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import {AppError} from './errors.js';
-const commands={copy:'project-copies',archive:'project-archives',move:'project-moves',delete:'project-deletions'};
+const commands={copy:'project-copies',archive:'project-archives',delete:'project-deletions'};
 export async function retainCopiedProjectCommands(target,id,{checkpoint=async()=>{}}={}){
  if(!researchId(id))throw new AppError('INVALID');
  await assertRegular(path.join(target.root,'.observanda/copy-in-progress'));
@@ -18,7 +18,7 @@ export async function retainCopiedProjectCommands(target,id,{checkpoint=async()=
    if(isStorageTemporary(entry.name))continue;
    if(entry.name.endsWith('.lock')){await unlink(file);continue;}
    const projectId=entry.name.slice(0,-5);
-   if(!entry.name.endsWith('.obsv')||!researchId(projectId)||stat.size>(kind==='move'?16*1024*1024:32768))throw new AppError('STORAGE_COPY');
+   if(!entry.name.endsWith('.obsv')||!researchId(projectId)||stat.size>32768)throw new AppError('STORAGE_COPY');
    const raw=await target.readFile(file,'utf8');let value;
    try{value=JSON.parse(raw);}catch{throw new AppError('STORAGE_COPY');}
    if(!researchId(value?.id)||value.projectId!==projectId||![1,2].includes(value.version)||typeof value.phase!=='string')throw new AppError('STORAGE_COPY');

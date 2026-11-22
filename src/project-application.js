@@ -66,7 +66,6 @@ import {ProjectRegistry} from './project-registry.js';
 import {projectDirectoryChoices,projectDirectoryPage} from './project-directory-query.js';
 import path from 'node:path';
 import {resolveLocation} from './locations.js';
-import {ProjectMoves} from './project-move.js';
 import {ProjectCopies} from './project-copy.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {ProjectOpening} from './project-opening.js';
@@ -102,7 +101,7 @@ export function projectRequest(route,method){
  if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules','dashboard-collection/calendar','dashboard-collection/samples'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
- if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/delete','storage/delete/resume'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details'].includes(match[2]),limit:16384};
+ if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/delete','storage/delete/resume'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details'].includes(match[2]),limit:16384};
  const command=inventoryMaintenanceRequest('/api/'+match[2],method)??pdfDocumentRequest('/api/'+match[2],method)??recordOwnerTransferRequest('/api/'+match[2],method)??bookConversionRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
@@ -305,11 +304,11 @@ export class ProjectApplication{
   if(['directory/reparent','storage/move'].includes(selected.operation)&&data?.parentId!=null)throw new AppError('PROJECT_NESTING');
   if(selected.operation==='storage/move'&&Object.hasOwn(data??{},'target'))return this.tracked(()=>this.workspaceMoves.run(client,selected.projectId,data,{check}),selected.projectId);
   if(['directory/reparent','storage/move'].includes(selected.operation))return this.tracked(()=>this.renames.reparent(client,selected.projectId,data,{check}),selected.projectId);
-  if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;}
+  if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;throw new AppError('NOT_FOUND');}
   if(selected.operation==='settings/save')return this.tracked(()=>this.renames.save(client,selected.projectId,data,{check}),selected.projectId);
   return this.tracked(async()=>{
-   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:!['storage/details','storage/move/resume','storage/move/cancel'].includes(selected.operation),deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
-   const assertCurrent=()=>owner.check(),acceptRelocation=latest=>owner.relocated(latest),moves=new ProjectMoves(registry),copies=new ProjectCopies(registry),archives=new ProjectArchives(registry);
+   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:selected.operation!=='storage/details',deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
+   const assertCurrent=()=>owner.check(),copies=new ProjectCopies(registry),archives=new ProjectArchives(registry);
    try{
     const router=await owner.router();
     setCheck(assertCurrent);
@@ -331,15 +330,10 @@ export class ProjectApplication{
        await access.remember(selected.projectId,owner.sessionEntry);
        return command.run(storage,{...options,withBook:(id,use)=>access.withBook(storage,id,use),withProject:(id,use)=>access.withProject(id,use),withProjectBook:(project,id,use)=>access.withBook(project,id,use),checkpoint:async(stage,item)=>{const projectId=item?.projectId??(stage==='project'&&researchId(item)?item:selected.projectId),labBookId=item?.labBookId??item?.file?.labBookId??(stage==='book'&&researchId(item)?item:undefined);await access.check(['files','database','database-committed','verified','project-tree'].includes(stage)?undefined:{projectId,...(labBookId?{labBookId}:{})});if(options.checkpoint)await options.checkpoint(stage,item);}});
       });
-      const moveOwner=options=>ScopedLocationAccess.run(this,client,{check,parent:id=>id===selected.projectId?owner:null},async access=>{
-       await access.remember(selected.projectId,owner.sessionEntry);
-       return moves.run(selected.projectId,owner.vault,{...options,withBook:(id,use)=>access.withBook(storage,id,use),checkpoint:(stage,bookId)=>access.check(['prepared','owners-frozen','verified','registry','adopted','retired','releasing','complete'].includes(stage)?undefined:{projectId:selected.projectId,...((stage.startsWith('book-')||stage.startsWith('copy:book'))&&researchId(bookId)?{labBookId:bookId}:{})}),onCopiedBook:book=>access.check({projectId:selected.projectId,labBookId:book.labBookId}),onAdopt:async latest=>{await acceptRelocation(latest);const value=await moves.read(selected.projectId);await access.renamed(moves.ownerDirectory(value),value.source,value.destination);await access.install();}});
-      });
       if(selected.write&&!selected.operation.startsWith('storage/export')&&!selected.operation.endsWith('/cancel'))await this.jobs.invalidateProject(selected.projectId);
-      if(selected.operation==='storage/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {path:storage.root,projectId:storage.projectId,parentId:(await registry.locate(storage.projectId)).parentId,move:await this.renames.moveStatus(selected.projectId,await moves.status(selected.projectId),storage.root),copy:await copies.status(selected.projectId),export:await archives.status(selected.projectId)};}
-      if(['storage/copy/cancel','storage/export/cancel','storage/move/cancel'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return ({copy:copies,export:archives,move:moves}[selected.operation.split('/')[1]]).cancel(storage,{id:data.id});}
+      if(selected.operation==='storage/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {path:storage.root,projectId:storage.projectId,parentId:(await registry.locate(storage.projectId)).parentId,move:await this.renames.moveStatus(selected.projectId,storage.root),copy:await copies.status(selected.projectId),export:await archives.status(selected.projectId)};}
+      if(['storage/copy/cancel','storage/export/cancel'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return ({copy:copies,export:archives}[selected.operation.split('/')[1]]).cancel(storage,{id:data.id});}
       if(['storage/copy/resume','storage/export/resume'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return copyOwner(selected.operation==='storage/export/resume'?archives:copies,{id:data.id,resume:true,onProgress});}
-      if(selected.operation==='storage/move/resume'){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return moveOwner({id:data.id,resume:true,onProgress});}
       if(data&&Object.keys(data).sort().join()==='id,parent'&&['storage/copy','storage/export'].includes(selected.operation)){if(typeof data.parent!=='string')throw new AppError('INVALID');data={id:data.id,path:storageCreationPath(data.parent,path.basename(storage.root))};}
       if(!data||Object.keys(data).sort().join()!=='id,path'||!researchId(data.id)||typeof data.path!=='string')throw new AppError('INVALID');
       const destination=await resolveLocation(data.path);await assertProjectTransferDestination(registry,destination);
@@ -360,7 +354,7 @@ export class ProjectApplication{
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
      };return withQueryCacheScope(this,client,[owner.sessionEntry],()=>reuseRequestConnections(selected)?storage.withCatalogueConnections(execute):execute());
-    },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
+    },{action:selected.write?'write':'read',locationOnly:selected.bookOperation==='list'||selected.operation==='storage/details'});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}
   },selected.projectId,selected.operation==='lab-books/access/lock'?undefined:selected.labBookId);

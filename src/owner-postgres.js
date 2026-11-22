@@ -17,7 +17,7 @@ import {ownerRoleCredentials,verifyOwnerLogin} from './owner-database-role.js';
 import {authenticateKeyring,ACCESS_LIMIT} from './security/keyring.js';
 import {Client} from 'pg';
 import {assertNotDeleting,workspaceDeletion} from './workspace-delete-state.js';
-import {assertNotMoving,ownedMoveSource} from './workspace-move-state.js';
+import {assertNotMoving,moveSource} from './workspace-move-state.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {assertRegular} from './storage.js';
@@ -166,7 +166,7 @@ export class OwnerPostgres{
  // The role stays while it still owns the copied catalogue in this cluster.
  async retireCatalogue(root,ownerId,vault,operationId){
   ownerVault(ownerId,vault);root=await resolved(root);
-  if((await workspaceRename(root))?.id!==operationId&&(await ownedMoveSource(root))?.id!==operationId)throw new AppError('STORAGE_MOVE_STATE');
+  if((await workspaceRename(root))?.id!==operationId&&(await moveSource(root))?.id!==operationId)throw new AppError('STORAGE_MOVE_STATE');
   if(this.isOpen(root))throw new AppError('DATABASE_WORKSPACE_RUNNING');
   await authenticateOwnerKeyring(root,vault);
   await this.#dropCatalogue(root,await ownerWorkspaceRoot(root),ownerId,vault);

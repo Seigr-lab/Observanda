@@ -328,7 +328,6 @@
   "PROJECT_FOLDER": "Tria una carpeta que contingui un projecte dedicat d'Observanda.",
   "PROJECT_LOCATION_EXISTS": "Aquest projecte ja està registrat en una altra carpeta. Obre'l des de Projectes o utilitza Mou el projecte per canviar-ne la ubicació.",
   "PROJECT_OUTSIDE_WORKSPACE": "La carpeta d'aquest projecte és fora de la carpeta de l'espai de treball. Observanda manté cada projecte dins la carpeta del seu espai de treball, per això no pot obrir aquest projecte aquí. Els fitxers no s'han modificat.",
-  "STORAGE_OUTSIDE_WORKSPACE": "Els projectes es queden dins la carpeta del seu espai de treball. Per canviar on és aquest projecte, tria un altre pare dins aquest espai de treball o mou tot l'espai de treball.",
   "STORAGE_PROJECT_BUSY": "Acaba la còpia, el trasllat o l'eliminació pendents d'aquest projecte abans d'iniciar una altra operació d'emmagatzematge.",
   "PROJECT_MIGRATION_OWNERSHIP": "Aquest projecte té contingut històric amb titularitat absent o en conflicte. Resol aquests propietaris abans de traslladar-lo a una base de dades dedicada.",
   "PROJECT_MIGRATION_FORMAT": "Aquest projecte té un historial antic que necessita una conversió explícita de titularitat abans de poder-lo separar.",

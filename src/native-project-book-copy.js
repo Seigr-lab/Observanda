@@ -38,38 +38,14 @@ export function withProjectBookCopyDirectory(registry,pin,operation){
   return operation({count:pin.head.roots.active?.count??0,get:id=>directory.find(pin.head,id),entries:()=>directory.rows(pin.head,{index:'active'}),page:options=>directory.page(pin.head,options)});
  });
 }
-// A pending older copy may pin the envelope digest which native adoption
-// retained. Admit that receipt only after authenticating the original envelope
-// and proving every active owner still has its exact identity and placement.
-export async function projectBookCopyMatchesLegacy(registry,pin,revision){
- if(!validPin(pin)||pin.head.receipt.legacyDigest!==revision)return false;
- return withProjectBookCopyDirectory(registry,pin,view=>registry.project.catalogue(async store=>{
-  const directory=new NativeOwnerDirectory(store,{kind:'books',ownerId:pin.head.ownerId}),chunks=[];let bytes=0,count=0;
-  for await(const row of directory.index.entries({root:pin.head.receipt.original})){
-   if(row.id!==String(count++).padStart(16,'0'))throw new AppError('CATALOGUE_DAMAGED');
-   const value=await directory.blocks.read('original',row.revision);if(!value||Object.keys(value).join()!=='base64'||typeof value.base64!=='string')throw new AppError('CATALOGUE_DAMAGED');
-   const chunk=Buffer.from(value.base64,'base64');bytes+=chunk.length;
-   if(!chunk.length||chunk.length>32768||chunk.toString('base64')!==value.base64||bytes>16*1024*1024)throw new AppError('CATALOGUE_DAMAGED');chunks.push(chunk);
-  }
-  const raw=Buffer.concat(chunks,bytes);if(digest(raw)!==revision)throw new AppError('CATALOGUE_DAMAGED');let original;
-  try{original=registry.validate(JSON.parse(raw.toString('utf8')));}catch{throw new AppError('CATALOGUE_DAMAGED');}
-  if(original.books.length!==view.count)return false;
-  for(const entry of original.books){const current=await view.get(entry.labBookId);if(current?.state!=='active'||['labBookId','directory','namespaceId','vaultId'].some(key=>current.entry[key]!==entry[key]))return false;}
-  return true;
- }));
-}
 export function projectBookCopyTransferId(receipt,labBookId){
  if(!researchId(receipt.id)||!researchId(labBookId))throw new AppError('STORAGE_COPY');
- const id=receipt.bookTransfersVersion===2?workspaceCopyTransferId(receipt.id,labBookId):receipt.bookTransfers?.find(item=>item.labBookId===labBookId)?.id;
- if(!researchId(id))throw new AppError('STORAGE_COPY');return id;
+ if(receipt.bookTransfersVersion!==2)throw new AppError('STORAGE_COPY');return workspaceCopyTransferId(receipt.id,labBookId);
 }
 export async function validateProjectBookCopyTransfers(receipt,view,revision){
  if(receipt.bookRegistryRevision!==revision||!researchId(receipt.id))throw new AppError('CONFLICT');
- if(receipt.bookTransfersVersion===2){if(receipt.bookTransfers!==undefined||receipt.bookCount!==view.count)throw new AppError('STORAGE_COPY');return;}
- if(receipt.bookTransfersVersion!==undefined||!Array.isArray(receipt.bookTransfers)||receipt.bookTransfers.length!==view.count)throw new AppError('STORAGE_COPY');
- await withScratch(async ids=>{let index=0;for await(const {entry} of view.entries()){
-  const item=receipt.bookTransfers[index++];if(!item||Object.keys(item).sort().join()!=='id,labBookId'||item.labBookId!==entry.labBookId||!researchId(item.id)||!await ids.add(item.id))throw new AppError('STORAGE_COPY');
- }if(index!==view.count)throw new AppError('STORAGE_COPY');});
+ // Every copy since alpha.29 records version-2 transfer ids, derived from the copy and each book.
+ if(receipt.bookTransfersVersion!==2||receipt.bookTransfers!==undefined||receipt.bookCount!==view.count)throw new AppError('STORAGE_COPY');
 }
 export class NativeProjectBookCopy{
  constructor(owner){this.owner=owner;this.project=owner.project;this.registry=owner.registry;this.proofs=null;}
@@ -97,10 +73,8 @@ export class NativeProjectBookCopy{
   if(this.count&&typeof withBook!=='function')throw new AppError('ACCESS_LOCKED');await assertInventoryObligationsSettled(this.project);
   this.ownerProof=await this.proof({portable,obligations:true});await this.current();
  }
- async using(operation,{holdBooks=false}={}){
-  // Relocation needs all owner writers held until source retirement and uses
-  // ProjectBookOwners. Ordinary copies never retain all owner keys or leases.
-  if(holdBooks)throw new AppError('INVALID');
+ async using(operation){
+  // Ordinary copies never retain all owner keys or leases.
   await privateDirectory(this.project.root,'.observanda/lab-book-creation');
   return withWriterLease(path.join(this.project.root,'.observanda/lab-books.lock'),()=>withScratch(async proofs=>{
    await this.current();if(await this.proof({store:proofs,lifecycle:true})!==this.ownerProof)throw new AppError('STORAGE_RENAME_STATE');
@@ -117,13 +91,9 @@ export class NativeProjectBookCopy{
    if(!before||serialize(before)!==serialize(current))throw new AppError('STORAGE_RENAME_STATE');return operation(storage);
   }));
  }
- async copy(target,receipt,save,{portable=false,archive=portable,relocation=false,checkpoint=async()=>{}}={}){
-  if(relocation)throw new AppError('INVALID');if(!this.count)return;
-  if(receipt.bookRegistryRevision!==undefined&&receipt.bookRegistryRevision!==this.pin.revision){
-   if(receipt.bookTransfersVersion!==undefined||!Array.isArray(receipt.bookTransfers)||!await projectBookCopyMatchesLegacy(this.registry,this.pin,receipt.bookRegistryRevision))throw new AppError('CONFLICT');
-   await this.view(view=>validateProjectBookCopyTransfers({...receipt,bookRegistryRevision:this.pin.revision},view,this.pin.revision));
-   receipt.bookRegistryRevision=this.pin.revision;await save();
-  }
+ async copy(target,receipt,save,{portable=false,archive=portable,checkpoint=async()=>{}}={}){
+  if(!this.count)return;
+  if(receipt.bookRegistryRevision!==undefined&&receipt.bookRegistryRevision!==this.pin.revision)throw new AppError('CONFLICT');
   if(receipt.bookTransfers===undefined&&receipt.bookTransfersVersion===undefined){receipt.bookRegistryRevision=this.pin.revision;receipt.bookTransfersVersion=2;receipt.bookCount=this.count;await save();}
   await this.view(view=>validateProjectBookCopyTransfers(receipt,view,this.pin.revision));await this.current();
   if(await this.owner.targetRevision(target,archive)!==this.pin.revision)throw new AppError('CONFLICT');

@@ -10,16 +10,16 @@ async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observ
 test('same-project lifecycle commands serialize while another project proceeds',async t=>{
  const registry=await fixture(t),a=randomUUID(),b=randomUUID();let release,started,second=false;const held=new Promise(resolve=>release=resolve),entered=new Promise(resolve=>started=resolve);
  const first=withProjectLifecycle(registry,a,'copy',async()=>{started();await held;});t.after(()=>{release();return first.catch(()=>{});});await entered;
- const next=withProjectLifecycle(registry,a,'move',async()=>{second=true;});await delay(30);assert.equal(second,false);
- assert.equal(await withProjectLifecycle(registry,b,'move',async()=>42),42);release();await Promise.all([first,next]);assert.equal(second,true);
+ const next=withProjectLifecycle(registry,a,'delete',async()=>{second=true;});await delay(30);assert.equal(second,false);
+ assert.equal(await withProjectLifecycle(registry,b,'delete',async()=>42),42);release();await Promise.all([first,next]);assert.equal(second,true);
 });
 test('interrupted ownership command blocks other lifecycle kinds until its receipt completes',async t=>{
  const registry=await fixture(t),id=randomUUID(),file=path.join(registry.workspace.root,'.observanda/project-copies',id+'.obsv');await mkdir(path.dirname(file));
  await writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'copying'}));
- await assert.rejects(withProjectLifecycle(registry,id,'move',async()=>assert.fail('Must not start')),{code:'STORAGE_PROJECT_BUSY'});
+ await assert.rejects(withProjectLifecycle(registry,id,'delete',async()=>assert.fail('Must not start')),{code:'STORAGE_PROJECT_BUSY'});
  assert.equal(await withProjectLifecycle(registry,id,'copy',async()=>true),true);
- await writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'complete'}));assert.equal(await withProjectLifecycle(registry,id,'move',async()=>true),true);
- await writeFile(file,JSON.stringify({version:1,projectId:randomUUID(),id:randomUUID(),phase:'complete'}));await assert.rejects(withProjectLifecycle(registry,id,'move',async()=>true),{code:'STORAGE_PROJECT_BUSY'});
+ await writeFile(file,JSON.stringify({version:1,projectId:id,id:randomUUID(),phase:'complete'}));assert.equal(await withProjectLifecycle(registry,id,'delete',async()=>true),true);
+ await writeFile(file,JSON.stringify({version:1,projectId:randomUUID(),id:randomUUID(),phase:'complete'}));await assert.rejects(withProjectLifecycle(registry,id,'delete',async()=>true),{code:'STORAGE_PROJECT_BUSY'});
 });
 test('a project held by a paused import cannot be renamed, moved or deleted, but can still be opened and copied',async t=>{
  const registry=await fixture(t),id=randomUUID(),root=path.join(registry.workspace.root,'Project'),record=path.join(registry.workspace.root,'pending.obsv');

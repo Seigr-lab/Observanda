@@ -1,10 +1,7 @@
-import {projectGrantRelocation} from './project-grant-relocation.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 // A selected project's credentials live only for the authorized operation.
 // Source-history readers can reuse this owner without reopening it per record.
 import {ProjectRouter} from './project-router.js';
-import {ProjectMoves} from './project-move.js';
-import {moveSource} from './workspace-move-state.js';
 import {readAccess,verifyAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
@@ -35,12 +32,6 @@ export class ProjectSessionOwner{
   const saved={root:latest.root,etag,vault:cloneVault(this.vault),expires:Date.now()+8*60*60*1000};
   this.session.set(this.projectId,saved);app.credentials.add(saved);this.sessionEntry=saved;this.etag=etag;
  }
- async relocated(latest){
-  this.application.calendars.invalidateProject(latest.projectId);
-  if(!this.entry||latest.projectId!==this.entry.projectId||latest.vaultId!==this.entry.vaultId||latest.namespaceId!==this.entry.namespaceId)throw new AppError('CONFLICT');
-  const access=await readAccess(latest.root);authenticateKeyring(access.value,this.vault);this.entry=latest;this.etag=access.etag;
-  if(this.sessionEntry?.vault){this.sessionEntry.root=latest.root;this.sessionEntry.etag=access.etag;}
- }
  async router(){
   if(this.closed)throw new AppError('ACCESS_LOCKED');
   // Retire an expired cached grant before attempting fresh device authentication.
@@ -53,17 +44,12 @@ export class ProjectSessionOwner{
    }
   }
   await this.check();if(this.selectedRouter)return this.selectedRouter;
-  this.registry=await this.registrySource();const moves=new ProjectMoves(this.registry);
+  this.registry=await this.registrySource();
   return this.selectedRouter=new ProjectRouter(this.registry,{
-   recover:async(entry,key)=>{const marker=await moveSource(entry.root);if(marker)await moves.run(entry.projectId,key,{id:marker.id,resume:true,adoptOnly:true,onAdopt:latest=>this.relocated(latest)});},
-   transit:async entry=>{const value=await moves.read(entry.projectId);return value?.workspaceMoveId!==undefined&&value.destination===entry.root;},
    authorize:async({projectId})=>{if(projectId!==this.projectId)throw new AppError('ACCESS_DENIED');await this.check();return true;},
    unlock:async(entry,access)=>{
     const saved=this.session.get(entry.projectId);if(saved?.locked)throw new AppError('ACCESS_LOCKED');
-    if(saved?.vault&&saved.root!==entry.root){
-     const relocated=await projectGrantRelocation(this.registry,entry,access,saved);
-     if(this.application.closed||this.session.get(entry.projectId)!==saved||this.sessionEntry!==saved||saved.locked||saved.expires<=Date.now())throw new AppError('ACCESS_LOCKED');if(relocated)saved.root=entry.root;
-    }
+    if(saved?.vault&&saved.root!==entry.root&&(this.application.closed||this.sessionEntry!==saved||saved.expires<=Date.now()))throw new AppError('ACCESS_LOCKED');
     await clearVault(this.vault);this.vault=null;
     if(saved?.vault&&saved.root===entry.root&&saved.etag===access.etag&&saved.expires>Date.now())this.vault=cloneVault(saved.vault);
     else{if(saved)this.application.forget(this.session,entry.projectId);this.sessionEntry=undefined;this.vault=this.application.deviceUnlock?await this.application.deviceUnlock(this.session,entry.projectId,entry.root,access):await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});}

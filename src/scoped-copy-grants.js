@@ -4,7 +4,6 @@
 import path from 'node:path';
 import {Workspace,assertRegular} from './storage.js';
 import {ProjectRegistry} from './project-registry.js';
-import {LabBookRegistry} from './lab-book-registry.js';
 import {LabBookStorage} from './lab-book-storage.js';
 import {projectTransferReceipt} from './project-transfer.js';
 import {labBookTransferReceipt} from './lab-book-transfer.js';
@@ -51,23 +50,6 @@ export class ScopedCopyGrants{
    return this.capture(new LabBookStorage(storage.root,storage.labBookId,saved.vault),proof,receipt,{source:source??receipt.source,moving:true});
   }
   return this.capture(storage,proof,receipt,{source:source??proof.source.root,moving});
- }
- async moved(storage,source,latest){
-  const scope=this.scope,parent=scope.parents.getStore();if(!parent||parent.projectId!==storage.projectId||![source,storage.root].includes(parent.entry?.root)||latest.root!==storage.root)throw new AppError('ACCESS_DENIED');
-  const receipt=await projectTransferReceipt(storage);if(receipt?.source!==source||receipt.phase!=='verified')throw new AppError('STORAGE_MOVE_STATE');
-  await parent.relocated(latest);await this.copiedProject(storage,{source,moving:true});
-  const registry=new LabBookRegistry(storage);
-  await registry.inspect(async view=>{for await(const {entry:book} of view.entries()){
-   const entry=registry.location(book),id='book:'+storage.projectId+':'+book.labBookId,saved=scope.session.get(id),proof=await scope.proofs.get(id),previous=path.join(source,entry.directory);
-   if(saved?.vault?.key&&this.live(saved)&&proof&&scope.valid(proof)&&[previous,entry.root].includes(saved.root)&&saved.vault.id===entry.vaultId)await this.copiedBook(new LabBookStorage(entry.root,book.labBookId,saved.vault),{projectId:storage.projectId,source:previous,moving:true});
-   // Preserve immediate access after this owner's adoption, without scanning
-   // grants belonging to projects already visited elsewhere in the workspace.
-   const grant=await scope.grants.get(id);if(!grant||!this.validGrant(grant))continue;
-   if(grant.root!==entry.root||grant.namespaceId!==entry.namespaceId||grant.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
-   if(saved?.vault){saved.root=grant.root;saved.etag=grant.etag;saved.expires=Math.min(saved.expires,grant.expires);}
-   else{const next={root:grant.root,etag:grant.etag,vault:{id:grant.vaultId,key:Buffer.from(grant.key,'base64')},expires:grant.expires};scope.session.set(grant.id,next);scope.application.credentials.add(next);const token=this.identity(next),admitted=await scope.proofs.get(grant.id);await scope.proofs.put(grant.id,{...admitted,token});await scope.grants.put(grant.id,{...grant,token});}
-  }});
-  await parent.check();
  }
  async prepareMove(input){
   const scope=this.scope,marker=await moveSource(scope.application.workspace.root);if(!marker)return;

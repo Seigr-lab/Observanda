@@ -328,7 +328,6 @@
   "PROJECT_FOLDER": "Vel ei mappe som inneheld eit eige Observanda-prosjekt.",
   "PROJECT_LOCATION_EXISTS": "Dette prosjektet er allereie registrert i ei anna mappe. Opne det frå Prosjekt eller bruk Flytt prosjekt for å endre plasseringa.",
   "PROJECT_OUTSIDE_WORKSPACE": "Mappa til dette prosjektet ligg utanfor arbeidsområdemappa. Observanda held kvart prosjekt inne i arbeidsområdemappa si, så prosjektet kan ikkje opnast her. Filene er uendra.",
-  "STORAGE_OUTSIDE_WORKSPACE": "Prosjekt blir verande i arbeidsområdemappa si. For å endre kvar prosjektet ligg, vel ein annan overordna i dette arbeidsområdet, eller flytt heile arbeidsområdet.",
   "STORAGE_PROJECT_BUSY": "Fullfør den ventande kopieringa, flyttinga eller slettinga av dette prosjektet før du startar ein ny lagringsoperasjon.",
   "PROJECT_MIGRATION_OWNERSHIP": "Dette prosjektet har historisk innhald med manglande eigarskap eller eigarskapskonfliktar. Avklar eigarane før du flyttar det til ein eigen database.",
   "PROJECT_MIGRATION_FORMAT": "Dette prosjektet har eldre historikk som treng ei uttrykkeleg eigarskapskonvertering før det kan skiljast ut.",

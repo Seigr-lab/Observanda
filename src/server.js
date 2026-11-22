@@ -20,8 +20,7 @@ import {discoverEligibleWebsiteSources} from './website-library-discovery.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
 import {withWorkspaceDeletionSession} from './workspace-deletion-session.js';
 import {projectContentHttp} from './project-content-http.js';
-import {withWorkspaceMoveSession} from './workspace-move-session.js';
-import {checkWorkspaceMoveDestination,finishWorkspaceProjectMove} from './workspace-project-move.js';
+import {checkWorkspaceMoveDestination} from './workspace-move-destination.js';
 import {withWorkspaceRenameSession} from './workspace-rename-session.js';
 import {withWorkspaceCopySession,checkWorkspaceCopyDestination} from './workspace-copy-session.js';
 import {materialHttp} from './material-http.js';
@@ -63,7 +62,7 @@ import {ChangeReview} from './collaboration/change-review.js';
 import {sharedReviewFigure} from './collaboration/review-figures.js';
 import {httpDrain} from './http-drain.js';
 import {storageResponse} from './storage-response.js';
-import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt,sameWorkspaceVolume} from './workspace-move.js';
+import {moveWorkspaceTo,finishWorkspaceMove,workspaceMoveStatus,readMoveReceipt,sameWorkspaceVolume} from './workspace-move.js';
 import {recordWorkspaceRelocation,workspaceRelocationStatus} from './workspace-relocation-receipt.js';
 import {WORKSPACE_MOVE_CLEANUP_JOB} from './workspace-move-jobs.js';
 import {moveSource} from './workspace-move-state.js';
@@ -995,7 +994,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           }
           if(url.pathname==='/api/storage/move/finish'){
             if(data.reviewed!==true)throw new AppError('INVALID');
-            return await storageResponse(req,res,async()=>{await finishWorkspaceProjectMove(context.workspace);return metadata();},json);
+            return await storageResponse(req,res,async()=>{await finishWorkspaceMove(context.workspace.root,{vault:context.workspace.vault});return metadata();},json);
           }
           throw new AppError('NOT_FOUND');
         }finally{selectedContext.settingsClosed=false;selectedContext.concurrentReads=false;selectedContext.readers.open();changing=false;startJobs(context);}

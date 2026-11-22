@@ -19,10 +19,9 @@ import {relocationNotStarted} from './native-relocation-owners.js';
 import {AppError} from './errors.js';
 export class ProjectRenameApplication{
  constructor(application){this.application=application;}
- async moveStatus(projectId,legacy,root){
-  if(legacy&&!['complete','cancelled'].includes(legacy.phase))return legacy;
-  const registry=await this.application.registry(),renames=new ProjectRenames(registry,projectId),value=await renames.read();if(!value?.placement)return legacy;
-  const scope=renames.scope(value);if(['complete','cancelled'].includes(value.phase)&&![scope.source,scope.destination].includes(root))return legacy;
+ async moveStatus(projectId,root){
+  const registry=await this.application.registry(),renames=new ProjectRenames(registry,projectId),value=await renames.read();if(!value?.placement)return null;
+  const scope=renames.scope(value);if(['complete','cancelled'].includes(value.phase)&&![scope.source,scope.destination].includes(root))return null;
   return {id:value.id,projectId,source:scope.source,destination:scope.destination,phase:value.phase,mode:'placement',running:projectTransferRunning(projectRenameFile(registry,projectId)),canCancel:false};
  }
  async resumeMove(client,projectId,data,options){

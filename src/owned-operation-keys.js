@@ -7,14 +7,13 @@ import {assertRegular,atomicWrite,digest} from './storage.js';
 import {AppError} from './errors.js';
 export const RENAME_KEYS_FILE='.observanda/rename-project-keys.observanda';
 export const DELETE_PROJECT_KEYS_FILE='.observanda/delete-project-keys.observanda';
-export const MOVE_BOOK_KEYS_FILE='.observanda/move-book-keys.observanda';
 export const DELETE_BOOK_KEYS_FILE='.observanda/delete-book-keys.observanda';
-function keyFile(workspace,file){if(![RENAME_KEYS_FILE,DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE,MOVE_BOOK_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
+function keyFile(workspace,file){if(![RENAME_KEYS_FILE,DELETE_BOOK_KEYS_FILE,DELETE_PROJECT_KEYS_FILE].includes(file))throw new AppError('INVALID');return path.join(workspace.root,file);}
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const width=104,limit=50000;
 function authority(workspace,id,file){
  if(!uuid(id)||!uuid(workspace.vault?.id)||!Buffer.isBuffer(workspace.vault?.key)||workspace.vault.key.length!==32)throw new AppError('ACCESS_LOCKED');
- return (file===MOVE_BOOK_KEYS_FILE?'Observanda/project-book-move/v1/':file===DELETE_PROJECT_KEYS_FILE?'Observanda/workspace-project-deletion/v1/':file===DELETE_BOOK_KEYS_FILE?'Observanda/project-book-deletion/v1/':'Observanda/workspace-project-rename/v1/')+workspace.vault.id+'/'+id;
+ return (file===DELETE_PROJECT_KEYS_FILE?'Observanda/workspace-project-deletion/v1/':file===DELETE_BOOK_KEYS_FILE?'Observanda/project-book-deletion/v1/':'Observanda/workspace-project-rename/v1/')+workspace.vault.id+'/'+id;
 }
 export async function saveOwnerKeys(workspace,id,keys,file=RENAME_KEYS_FILE){
  const aad=authority(workspace,id,file);if(!(keys instanceof Map)||!keys.size||keys.size>limit)throw new AppError('INVALID');

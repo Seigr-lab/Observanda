@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {mkdtemp,rm,rename,mkdir,copyFile,readFile,writeFile,stat} from 'node:fs/promises';
+import {mkdtemp,rm,rename,mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -159,7 +159,7 @@ test('independent module schemas survive archived and rekeyed project copies wit
 
 test('project copy and deletion fence module writes and carry retained domain history while projects stay inside their workspace', {timeout:180000},async t=>{
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);const saved=calculation(f);await command(f,'calculator',saved);await command(f,'calendars',calendar(f));
- const {copyProjectLocation}=await import('../src/project-transfer.js'),{ProjectRegistry}=await import('../src/project-registry.js'),{ProjectMoves}=await import('../src/project-move.js'),{ProjectDeletions}=await import('../src/project-deletion.js'),{Workspace}=await import('../src/storage.js'),{databaseRetention,validDatabaseRetention,verifyDatabaseRetention}=await import('../src/workspace-database-retention.js');
+ const {copyProjectLocation}=await import('../src/project-transfer.js'),{ProjectRegistry}=await import('../src/project-registry.js'),{ProjectDeletions}=await import('../src/project-deletion.js'),{Workspace}=await import('../src/storage.js'),{databaseRetention,validDatabaseRetention,verifyDatabaseRetention}=await import('../src/workspace-database-retention.js');
  const destination=path.join(f.workspace.root,'stream-copy','project'),copyId=randomUUID(),held=gate();await mkdir(path.dirname(destination));
  const writer=detached(()=>f.domains.run(['calculator'],async get=>{await get('calculator').putObject('checkpoint',{value:1});held.enter();await held.hold;},{write:['calculator']}));await held.started;
  try{await assert.rejects(copyProjectLocation(f.storage,destination,{id:copyId}),{code:'LOCKED'});}
@@ -170,10 +170,10 @@ test('project copy and deletion fence module writes and carry retained domain hi
  const proof=await f.storage.catalogue(store=>databaseRetention(store.db));assert.ok(validDatabaseRetention(proof));assert.equal(proof.domains.calculator.count,1);assert.equal(proof.domains.calendars.count,1);await verifyDatabaseRetention(copied,proof);
  const {initializeLocation}=await import('../src/locations.js'),registryRoot=path.join(f.root,'registry'),registryBook=sampleNotebook();await initializeLocation(registryRoot,registryBook,f.access,f.vault);const registry=new ProjectRegistry(new Workspace(registryRoot,f.vault),registryBook.id);
  // Every project lives inside its workspace folder: an outside folder is never
- // registered, and a registered project is never moved out of its workspace.
+ // registered.
  await assert.rejects(registry.attach(f.storage,{expected:'new'}),{code:'PROJECT_OUTSIDE_WORKSPACE'});assert.equal((await registry.read()).value.projects.length,0);
  const movedRoot=path.join(registryRoot,'project');const placed=await copyProjectLocation(f.storage,movedRoot,{id:randomUUID()});await registry.attach(placed,{expected:(await registry.read()).revision});
- const outside=path.join(f.root,'moved-project','project');await mkdir(path.dirname(outside));await assert.rejects(new ProjectMoves(registry).run(f.projectId,f.vault,{id:randomUUID(),path:outside}),{code:'STORAGE_OUTSIDE_WORKSPACE'});await assert.rejects(stat(outside),{code:'ENOENT'});assert.equal((await registry.locate(f.projectId)).root,movedRoot);
+ assert.equal((await registry.locate(f.projectId)).root,movedRoot);
  const moved=new ProjectStorage(movedRoot,f.projectId,f.vault),movedContext={...f,storage:moved,domains:new ProjectDomains(moved,f.book.id)};assert.equal((await command(movedContext,'calculator',saved)).replayed,true);await verifyDatabaseRetention(moved,proof);
  const deleting=new ProjectDeletions(registry,f.projectId),pending=gate(),pendingWriter=detached(()=>movedContext.domains.run(['calendars'],async get=>{await get('calendars').putObject('before-delete',{value:2});pending.enter();await pending.hold;},{write:['calendars']}));await pending.started;
  try{await assert.rejects(deleting.run(f.vault,{id:randomUUID(),expectedRoot:movedRoot}),{code:'LOCKED'});}

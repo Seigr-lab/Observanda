@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile,stat,mkdir,writeFile,unlink} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
 import {ProjectStorage,initializeProjectLocation} from '../src/project-storage.js';
-import {ProjectMoves} from '../src/project-move.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {Workspace,serialize} from '../src/storage.js';
 import {initializeLocation} from '../src/locations.js';
@@ -34,10 +33,8 @@ async function fixture(t,{registered=false}={}){
  if(registry)await registry.attach(source,{expected:'new'});
  return {root,book,id,owner,vault,access,source,target,registry,workspace};
 }
-// A copy inside the workspace is a live owner in its cluster; a destination
-// outside every workspace is only ever named by a refused move.
+// A copy inside the workspace is a live owner in its cluster.
 async function destinationFor(f,name){const parent=path.join(f.workspace.root,name);await mkdir(parent,{recursive:true});return path.join(parent,path.basename(f.source.root));}
-async function outsideFor(f,name){const parent=path.join(f.root,name);await mkdir(parent,{recursive:true});return path.join(parent,path.basename(f.source.root));}
 
 test('project copy streams a complete portable owner without creating a database archive',async t=>{
  const f=await fixture(t),id=randomUUID(),destination=await destinationFor(f,'copy'),before=await f.source.read(),history=await new RecordHistory(f.source,{}).list({workspaceId:f.book.id,recordId:f.target.recordId});
@@ -61,27 +58,10 @@ test('interrupted project copies resume their claimed destination and reject unr
  await assert.rejects(copyProjectLocation(f.source,f.source.root,{id:randomUUID()}),{code:'STORAGE_PATH'});
 });
 
-async function legacyPendingMove(f,moves,id,destination){
- await mkdir(path.dirname(moves.file(f.id)),{recursive:true});const sourceId=(await catalogueBinding(f.source.root)).id;const value={version:2,boundaries:[],id,projectId:f.id,source:f.source.root,destination,vaultId:f.vault.id,namespaceId:(await f.source.outline()).metadata.id,sourceId,phase:'copying'};await moves.save(value);return value;
-}
-test('a project is never moved out of its workspace and an earlier unfinished outside move is refused unchanged',async t=>{
- const f=await fixture(t,{registered:true}),registry=f.registry,moves=new ProjectMoves(registry),before=await f.source.read(),revision=(await registry.read()).revision,destination=await outsideFor(f,'moved');
- await assert.rejects(moves.run(f.id,f.vault,{id:randomUUID(),path:destination}),error=>error.code==='STORAGE_OUTSIDE_WORKSPACE'&&error.operationNotStarted===true);
- assert.equal(await moves.status(f.id),null);await assert.rejects(stat(destination),{code:'ENOENT'});assert.equal((await registry.read()).revision,revision);assert.equal((await registry.locate(f.id)).root,f.source.root);
- // A move out begun by an earlier version is not resumed: it stays recorded
- // as it was, and the project stays usable at its folder inside the workspace.
- const id=randomUUID(),saved=await legacyPendingMove(f,moves,id,destination);
- await assert.rejects(moves.run(f.id,f.vault,{id,resume:true}),error=>error.code==='STORAGE_OUTSIDE_WORKSPACE'&&error.operationNotStarted===false);
- assert.deepEqual(await moves.read(f.id),saved);await assert.rejects(stat(destination),{code:'ENOENT'});assert.equal((await registry.locate(f.id)).root,f.source.root);assert.deepEqual(await f.source.read(),before);
-});
-
-
-test('an interrupted project copy resumes its destination while a move out of the workspace stays refused',async t=>{
- const f=await fixture(t,{registered:true}),registry=f.registry,copies=new ProjectCopies(registry),moves=new ProjectMoves(registry),copyId=randomUUID(),copyRoot=await destinationFor(f,'lifecycle-copy'),moveRoot=await outsideFor(f,'lifecycle-move');
+test('an interrupted project copy resumes its destination',async t=>{
+ const f=await fixture(t,{registered:true}),registry=f.registry,copies=new ProjectCopies(registry),copyId=randomUUID(),copyRoot=await destinationFor(f,'lifecycle-copy');
  await assert.rejects(copies.run(f.source,{id:copyId,path:copyRoot,checkpoint:async stage=>{if(stage==='files')throw Error('Interrupted copy');}}),/Interrupted copy/);
- await assert.rejects(moves.run(f.id,f.vault,{id:randomUUID(),path:moveRoot}),{code:'STORAGE_PROJECT_BUSY'});await assert.rejects(stat(moveRoot),{code:'ENOENT'});
  assert.equal((await copies.run(f.source,{id:copyId,resume:true})).phase,'complete');
- await assert.rejects(moves.run(f.id,f.vault,{id:randomUUID(),path:moveRoot}),{code:'STORAGE_OUTSIDE_WORKSPACE'});await assert.rejects(stat(moveRoot),{code:'ENOENT'});
  assert.equal((await registry.locate(f.id)).root,f.source.root);assert.deepEqual(await new ProjectStorage(copyRoot,f.id,f.vault).read(),await f.source.read());
 });
 

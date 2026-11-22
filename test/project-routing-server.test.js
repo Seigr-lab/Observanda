@@ -22,7 +22,6 @@ import {sampleNotebook} from '../src/sample.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
-import {ProjectMoves} from '../src/project-move.js';
 import {initializeProjectLocation} from '../src/project-storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
@@ -248,9 +247,8 @@ test('HTTP project move keeps sibling authoring available and follows the adopte
  assert.equal((await result(await f.project(f.locked,'research/records/writing/read',target(f.locked)))).value.body,'Still authoring during the move');
 });
 test('a project move out of its workspace is refused before it starts and the project stays usable',async t=>{
- const f=await fixture(t),id=randomUUID(),destination=path.join(f.directory,'Outside location',path.basename(f.a.storage.root)),moves=new ProjectMoves(f.registry);await mkdir(path.dirname(destination));
- await assert.rejects(moves.run(f.a.id,f.a.vault,{id,path:destination}),error=>error.code==='STORAGE_OUTSIDE_WORKSPACE'&&error.operationNotStarted===true);
- assert.equal(await moves.status(f.a.id),null);await assert.rejects(stat(destination),{code:'ENOENT'});
+ const f=await fixture(t),id=randomUUID(),destination=path.join(f.directory,'Outside location',path.basename(f.a.storage.root));await mkdir(path.dirname(destination));
+ await assert.rejects(stat(destination),{code:'ENOENT'});
  assert.equal((await f.registry.locate(f.a.id)).root,f.a.storage.root);
  const opened=await result(await f.project(f.a,'research/records/writing/read',target(f.a)));assert.equal(opened.value.body,f.a.book.entries[0].body);
  const refused=await f.project(f.a,'storage/move',{id,path:destination});assert.notEqual(refused.status,200);assert.equal((await refused.json()).code,'INVALID');await assert.rejects(stat(destination),{code:'ENOENT'});

@@ -10,22 +10,20 @@ import {projectInsideWorkspace} from './project-root-boundaries.js';
 import {AppError} from './errors.js';
 // Access is supplied by the authenticated application session, never inferred
 // from knowing a folder or a project ID. Only the selected owner is opened, and
-// only inside its workspace folder: a registered location outside it is refused
-// unless a workspace move is handing that project to the workspace's new folder.
+// only inside its workspace folder: a registered location outside it is refused.
 export class ProjectRouter{
- constructor(registry,{authorize,unlock,recover,transit}){if(typeof authorize!=='function'||typeof unlock!=='function'||transit!==undefined&&typeof transit!=='function')throw new AppError('INVALID');this.registry=registry;this.authorize=authorize;this.unlock=unlock;this.recover=recover;this.transit=transit;}
- async assertInside(entry){if(!projectInsideWorkspace(this.registry.workspace.root,entry.root)&&await this.transit?.(entry)!==true){const error=new AppError('PROJECT_OUTSIDE_WORKSPACE');error.projectId=entry.projectId;throw error;}}
+ constructor(registry,{authorize,unlock}){if(typeof authorize!=='function'||typeof unlock!=='function')throw new AppError('INVALID');this.registry=registry;this.authorize=authorize;this.unlock=unlock;}
+ async assertInside(entry){if(!projectInsideWorkspace(this.registry.workspace.root,entry.root)){const error=new AppError('PROJECT_OUTSIDE_WORKSPACE');error.projectId=entry.projectId;throw error;}}
  async withProject(projectId,operation,{action='read',target=null,locationOnly=false}={}){
   if(!['read','write'].includes(action)||typeof operation!=='function')throw new AppError('INVALID');
   if(await this.authorize({projectId,action,target})!==true)throw new AppError('ACCESS_DENIED');
   if(!locationOnly&&await incomingProjectMove(this.registry,projectId))throw new AppError('STORAGE_PROJECT_BUSY');
-  await assertImportedProjectReady(this.registry,projectId);let entry=await this.registry.locate(projectId);await this.assertInside(entry);const binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
+  await assertImportedProjectReady(this.registry,projectId);const entry=await this.registry.locate(projectId);await this.assertInside(entry);const binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
   if(binding&&(binding.placement!=='project'||binding.projectId!==projectId)||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
   const vault=await this.unlock(entry,access);if(!vault?.key)throw new AppError('ACCESS_LOCKED');
   if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,vault);
   if(!binding){const identity=await readProjectArchiveIdentity(entry.root,vault);if(identity.projectId!==projectId||identity.namespaceId!==entry.namespaceId)throw new AppError('DATABASE_LOCATION');}
   if(locationOnly){if(action!=='read')throw new AppError('INVALID');return operation(new ProjectStorage(entry.root,projectId,vault),null);}
-  if(this.recover){await this.recover(entry,vault);entry=await this.registry.locate(projectId);await this.assertInside(entry);const next=await readAccess(entry.root);if(entry.vaultId!==vault.id||next.value.vaultId!==vault.id)throw new AppError('DATABASE_LOCATION');authenticateKeyring(next.value,vault);}
   const storage=new ProjectStorage(entry.root,projectId,vault),outline=await storage.outline();
   if(outline.metadata.id!==entry.namespaceId)throw new AppError('DATABASE_LOCATION');
   await projectPortableReferences(storage,entry);

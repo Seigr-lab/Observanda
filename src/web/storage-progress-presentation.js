@@ -22,7 +22,7 @@ export function storageProgressPresentation(value,{project=false,book=false}={})
  const stages=(value.stages??[value.stage]).filter(stage=>stage&&stage!=='preparing');
  const path=stages.filter(stage=>stage!==value.stage).map(stage=>prefix?optionalText(prefix+stage)||optionalText(stage):optionalText(stage)).filter(Boolean).join(' › ');
  const explanation=[value.stage,...stages.toReversed()].map(stage=>(prefix?optionalText(prefix+'describe-'+stage):'')||optionalText('describe-'+stage)).find(Boolean)??'';
- const count=['copy-workspace-projects','move-workspace-projects'].includes(value.stage)?text(value.stage==='move-workspace-projects'?'projectsMoved':'projectsCopied',{count:number(value.completed),total:number(total)}):value.stage==='read-archive'
+ const count=value.stage==='copy-workspace-projects'?text('projectsCopied',{count:number(value.completed),total:number(total)}):value.stage==='read-archive'
   ?text('archiveProcessed',{count:storageSize(value.completed),total:storageSize(total)})
   :unit==='items'&&total===undefined&&!value.completed?'':detail;
  return {path,count,work:explanation,

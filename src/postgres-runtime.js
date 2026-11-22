@@ -217,7 +217,7 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   if(workspace){
    const {assertNotDeleting,workspaceDeletion}=await import('./workspace-delete-state.js');await assertNotDeleting(workspace.root,stopOnly?workspace.deleteId:undefined);
    if(!stopOnly){const {assertNotMoving}=await import('./workspace-move-state.js');await assertNotMoving(workspace.root);}
-   if(stopOnly&&workspace.moveId){const {ownedMoveSource}=await import('./workspace-move-state.js');if((await ownedMoveSource(workspace.root))?.id!==workspace.moveId)throw new AppError('STORAGE_MOVE_STATE');await assertNotRenaming(workspace.root);}
+   if(stopOnly&&workspace.moveId){const {moveSource}=await import('./workspace-move-state.js');if((await moveSource(workspace.root))?.id!==workspace.moveId)throw new AppError('STORAGE_MOVE_STATE');await assertNotRenaming(workspace.root);}
    else if(stopOnly&&workspace.renameId){const marker=await workspaceRename(workspace.root);if(marker?.id!==workspace.renameId)throw new AppError('STORAGE_RENAME_STATE');}
    else{await assertNotRenaming(workspace.root);if(stopOnly){const marker=await workspaceDeletion(workspace.root);if(marker?.id!==workspace.deleteId||marker.source!==workspace.root)throw new AppError('STORAGE_DELETE_STATE');}}
   }

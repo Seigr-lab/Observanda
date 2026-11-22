@@ -67,9 +67,7 @@ test('a project folder outside the workspace is never registered, reopened or op
  await f.registry.apply('new',[{state:'active',entry}]);const revision=(await f.registry.read()).revision;
  await assert.rejects(f.opening.open({...f.command,id:randomUUID()}),{code:'PROJECT_OUTSIDE_WORKSPACE'});assert.equal((await f.registry.read()).revision,revision);
  const {ProjectRouter}=await import('../src/project-router.js');let unlocked=0;
- for(const transit of [undefined,async()=>false]){
-  const router=new ProjectRouter(f.registry,{authorize:async()=>true,unlock:async()=>{unlocked++;return f.storage.vault;},...(transit?{transit}:{})});
-  await assert.rejects(router.withProject(f.id,()=>assert.fail('An outside owner was opened')),error=>error.code==='PROJECT_OUTSIDE_WORKSPACE'&&error.projectId===f.id);
- }
+ const router=new ProjectRouter(f.registry,{authorize:async()=>true,unlock:async()=>{unlocked++;return f.storage.vault;}});
+ await assert.rejects(router.withProject(f.id,()=>assert.fail('An outside owner was opened')),error=>error.code==='PROJECT_OUTSIDE_WORKSPACE'&&error.projectId===f.id);
  assert.equal(unlocked,0);assert.equal((await f.registry.read()).revision,revision);
 });

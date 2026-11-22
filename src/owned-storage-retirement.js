@@ -8,7 +8,7 @@ import {assertRegular} from './storage.js';
 import {MOVE_SOURCE,moveSource} from './workspace-move-state.js';
 import {hashWorkspaceFile} from './workspace-inventory.js';
 import {isStorageTemporary} from './storage-temporary.js';
-import {protectsDirectory,assertProjectMoveDirectory} from './project-move-boundaries.js';
+import {assertProjectMoveDirectory} from './project-move-boundaries.js';
 import {operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
 const inside=(root,file)=>{const relative=path.relative(root,file);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
@@ -19,11 +19,12 @@ export function retirementCheck(check,interval=1000){let last=0;return async(...
 export const removeRetiredProject=(value,options)=>removeRetiredOwner(value,options);
 export const removeRetiredLabBook=(value,options)=>removeRetiredOwner(value,{...options,labBook:true});
 async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDirectories=[],ownerRelative=null,boundaryState=null}){
- const boundaries=value.boundaries??[],nested=boundaryState?boundaryState.count>0:!!boundaries.length,contains=relative=>boundaryState?boundaryState.contains(relative):boundaries.includes(relative),protects=relative=>boundaryState?boundaryState.protects(relative):protectsDirectory(boundaries,relative),root=nested?value.source:path.join(path.dirname(value.source),'.observanda-'+(labBook?'lab-book':'project')+'-move-'+value.id);
+ // Nested owners kept inside the moved folder are named by the move's paged boundary state.
+ const nested=boundaryState?boundaryState.count>0:false,contains=async relative=>boundaryState?boundaryState.contains(relative):false,protects=async relative=>boundaryState?boundaryState.protects(relative):false,root=nested?value.source:path.join(path.dirname(value.source),'.observanda-'+(labBook?'lab-book':'project')+'-move-'+value.id);
  if(!await assertRegular(root,{directory:true,missing:true})){if(nested)throw new AppError('STORAGE_MOVE_STATE');return;}
  if(await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('UNSAFE');
  if(nested||labBook||value.sourceDirectory)await assertProjectMoveDirectory(root,value.sourceDirectory);
- const marker=await moveSource(root),ownerRoots=[...(value.books??[]).map(book=>book.directory),...ownerDirectories];
+ const marker=await moveSource(root),ownerRoots=[...ownerDirectories];
  for(const relative of ownerRoots)if(typeof relative!=='string'||!relative||relative.includes('\\')||path.posix.normalize(relative)!==relative||relative.split('/').some(part=>!part||part==='.'||part==='..')||!inside(root,path.resolve(root,...relative.split('/'))))throw new AppError('STORAGE_MOVE_STATE');
  ownerRoots.sort((a,b)=>b.length-a.length);
  const ownedRelative=relative=>{const owner=ownerRoots.find(prefix=>relative.startsWith(prefix+'/'));return owner?relative.slice(owner.length+1):relative;};

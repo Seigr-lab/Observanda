@@ -8,7 +8,7 @@ const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics',
 const controlPost=new Set([
  '/api/access/lock','/api/writer-recovery',
  '/api/media-imports/job','/api/media-imports/cancel',
- '/api/v1/intake/status','/api/v1/intake/cancel','/api/storage/copy/cancel','/api/storage/export/cancel','/api/storage/move/cancel',
+ '/api/v1/intake/status','/api/v1/intake/cancel','/api/storage/copy/cancel','/api/storage/export/cancel',
  '/api/record-transfer/cancel'
 ]);
 export function requestLane(method,pathname){

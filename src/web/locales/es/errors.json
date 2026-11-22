@@ -328,7 +328,6 @@
   "PROJECT_FOLDER": "Elige una carpeta que contenga un proyecto dedicado de Observanda.",
   "PROJECT_LOCATION_EXISTS": "Este proyecto ya está registrado en otra carpeta. Ábrelo desde Proyectos o utiliza Mover el proyecto para cambiar su ubicación.",
   "PROJECT_OUTSIDE_WORKSPACE": "La carpeta de este proyecto está fuera de la carpeta del espacio de trabajo. Observanda mantiene cada proyecto dentro de la carpeta de su espacio de trabajo, por eso no puede abrir este proyecto aquí. Sus archivos no se han modificado.",
-  "STORAGE_OUTSIDE_WORKSPACE": "Los proyectos permanecen dentro de la carpeta de su espacio de trabajo. Para cambiar dónde está este proyecto, elige otro superior en este espacio de trabajo o mueve todo el espacio de trabajo.",
   "STORAGE_PROJECT_BUSY": "Termina la copia, traslado o eliminación pendientes de este proyecto antes de iniciar otra operación de almacenamiento.",
   "PROJECT_MIGRATION_OWNERSHIP": "Este proyecto tiene contenido histórico con propiedad ausente o en conflicto. Resuelve esos propietarios antes de moverlo a una base de datos dedicada.",
   "PROJECT_MIGRATION_FORMAT": "Este proyecto tiene historial antiguo que necesita una conversión explícita de propiedad antes de poder separarlo.",

@@ -1,4 +1,4 @@
-import {ownedMoveSource,assertNotMoving} from './workspace-move-state.js';
+import {moveSource,assertNotMoving} from './workspace-move-state.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // Dedicated PostgreSQL lifecycles. This owner never redirects a workspace to
 // another workspace's cluster and never changes the process environment.
@@ -68,7 +68,7 @@ export class WorkspacePostgres{
   await service.close();
  }
  async authorizeMove(root,vault,moveId){
-  root=await realpath(root);if((await ownedMoveSource(root))?.id!==moveId)throw new AppError('STORAGE_MOVE_STATE');
+  root=await realpath(root);if((await moveSource(root))?.id!==moveId)throw new AppError('STORAGE_MOVE_STATE');
   const identity=keyIdentity(vault),prior=this.instances.get(root);if(prior&&prior.identity!==identity)throw new AppError('ACCESS_DENIED');return root;
  }
  async stopForMove(root,vault,moveId){
