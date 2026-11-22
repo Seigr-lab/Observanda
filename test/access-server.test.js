@@ -130,6 +130,31 @@ test('missing remembered locations never turn into a replacement workspace',asyn
 });
 
 
+test('a remembered location that appears after startup opens with this device, keeps a manual lock and still asks for a password',async t=>{
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reconnect-')),preferencesFile=path.join(parent,'preferences.json'),deviceStore=new TestDeviceStore({file:preferencesFile+'.device-key'});
+ const open=async(root,{password=''}={})=>{
+  const app=await startServer({root,port:0,expectedExisting:true,preferencesFile,deviceStore});t.after(()=>app.close());
+  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
+  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json','X-Observanda-Wait':'1'};
+  const request=(route,data)=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers,signal:AbortSignal.timeout(20000)});
+  assert.equal((await (await request('/api/storage')).json()).unavailableReason,'folder-missing');
+  // The folder becomes available while the app waits on its previous location.
+  const book=sampleNotebook();book.title=path.basename(root);const access=await createWorkspaceAccess(password?'Researcher':'',password,deviceStore),vault=takeCreatedVault(access);
+  try{await initializeLocation(root,book,access,vault);}finally{clearVault(vault);}
+  return {request,title:book.title};
+ };
+ const device=await open(path.join(parent,'Reconnected research'));
+ const status=await (await device.request('/api/access/status')).json();assert.equal(status.locked,false);
+ // Opening reads the workspace in full without waiting on the unlock that admitted it.
+ const start=await device.request('/api/workspace/read/start',{});assert.equal(start.status,200);assert.equal((await start.json()).metadata.title,device.title);
+ assert.equal((await device.request('/api/access/lock',{})).status,200);
+ // A manual lock holds until the user unlocks, however often the page asks.
+ for(let i=0;i<2;i++)assert.equal((await (await device.request('/api/access/status')).json()).locked,true);
+ assert.equal((await device.request('/api/access/unlock',{})).status,200);assert.equal((await device.request('/api/workspace/read/start',{})).status,200);
+ const secured=await open(path.join(parent,'Password research'),{password:'synthetic password 123'});
+ const locked=await secured.request('/api/access/status');assert.equal(locked.status,200);assert.equal((await locked.json()).locked,true);
+});
+
 test('personal display settings survive a service restart and are available on the lock screen without exposing workspace data',async t=>{
   const app=await setup(t,{protected:true}),client=await app.client(),workspaceBefore=await workspaceManifest(app.root);
   assert.equal((await fetch(app.origin+'/api/interface')).status,401);

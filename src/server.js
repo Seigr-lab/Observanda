@@ -511,7 +511,25 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }finally{changing=false;}
       }
       if(req.method==='GET'&&url.pathname==='/api/access/status'){
-        const {access,locked}=await status(client);return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value.username});
+        let state=await status(client);
+        // A workspace this device opens without a password also unlocks here, for example when its folder
+        // became available after this session started. A manual lock and a changed access file are kept.
+        if(state.locked&&state.access.value.formatVersion===3&&!state.access.updateRequired&&!context.manualLock&&!changing&&!loginBusy&&context===selectedContext){
+         // Replacing the key drains snapshot readers; they must be admitted again afterwards, as after an unlock.
+         loginBusy=true;let drained=false;
+         try{
+          const vault=await verifyAccess(state.access,'','',{deviceStore}),latest=await contextAccess();
+          if(context!==selectedContext||context.manualLock||latest.etag!==state.access.etag)await clearVault(vault);
+          else{
+           if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key))await clearVault(vault);
+           else{drained=true;await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}
+           if(!client.filesOnly)await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);
+           client.access=state.access.etag;client.expires=Date.now()+8*60*60*1000;if(!client.filesOnly)startJobs(context);state=await status(client);
+          }
+         }catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
+         finally{if(drained)selectedContext.readers.open();loginBusy=false;}
+        }
+        const {access,locked}=state;return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value.username});
       }
       if(req.method==='POST'&&url.pathname==='/api/access/checkpoint'){
        const data=await body(req,600000);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
