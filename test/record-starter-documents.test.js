@@ -17,7 +17,6 @@ import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {TestDeviceStore} from './device-fixture.js';
-import {catalogueFormat} from '../src/catalogue-format.js';
 const password='separate template test password',sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const blueprint=count=>({name:'Wide native template',title:'Next declared experiment',type:'experiment',body:'Reviewed instructions',tags:['precision'],sections:Array.from({length:count},(_,i)=>({title:'Section '+(i+1),body:'Instruction '+i+' '+('exact measurement '.repeat(700))}))});
 async function fixture(t){
@@ -63,14 +62,13 @@ test('streamed portable packages retain exact releases, resume upload and reject
  }
  await verifyRecordStarters(dest.workspace);
 });
-test('legacy roots upgrade atomically, remain exact and survive fresh-key recovery with interrupted uploads',async t=>{
- const f=await fixture(t),saved=await save(f,2),published=await publish(f,saved),target={workspaceId:f.workspaceId,id:saved.id,release:published.release.revision},release=await f.owner.release(target),{revision,...legacy}=release;
- await f.workspace.withLock(async()=>{await f.workspace.writeMetadata('.observanda/record-starters/drafts/'+saved.id+'.json',JSON.stringify(saved.draft));await f.workspace.writeMetadata('.observanda/record-starters/releases/'+saved.id+'/'+revision+'.json',JSON.stringify(legacy));await f.workspace.catalogue(store=>store.db.run('UPDATE catalogue_format SET version=20'));});
+test('retained roots stay exact through an interrupted edit and survive fresh-key recovery with interrupted uploads',async t=>{
+ const f=await fixture(t),saved=await save(f,2),published=await publish(f,saved),target={workspaceId:f.workspaceId,id:saved.id,release:published.release.revision},release=await f.owner.release(target),{revision}=release;
  await verifyRecordStarters(f.workspace);assert.deepEqual(await f.owner.release(target),release);
  const write=f.workspace.writeMetadata.bind(f.workspace),command={workspaceId:f.workspaceId,id:saved.id,expectedRevision:published.header.revision,commandId:randomUUID(),operation:'section',position:1,value:{title:'Corrected heading',body:'New instruction'}};
  f.workspace.writeMetadata=async(file,text)=>{if(file.includes('/headers/'))throw Error('Injected interrupted header');return write(file,text);};
- await assert.rejects(f.owner.change(command),/Injected interrupted header/);f.workspace.writeMetadata=write;assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),20);assert.equal((await f.owner.read({workspaceId:f.workspaceId,id:saved.id})).header.revision,published.header.revision);
- await f.owner.change(command);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),21);assert.deepEqual(await f.owner.release(target),release);
+ await assert.rejects(f.owner.change(command),/Injected interrupted header/);f.workspace.writeMetadata=write;assert.equal((await f.owner.read({workspaceId:f.workspaceId,id:saved.id})).header.revision,published.header.revision);
+ await f.owner.change(command);assert.deepEqual(await f.owner.release(target),release);
  const old=await f.owner.export({...target,password}),oldBytes=Buffer.from(old.encoded,'base64'),oldTarget=await upload(f,oldBytes);assert.equal((await f.owner.review({...oldTarget,password})).fingerprint,revision);assert.equal((await f.owner.packageView({...oldTarget,offset:0})).sections.total,2);
  const partial=Buffer.alloc(180000,73),partialId=randomUUID(),part={workspaceId:f.workspaceId,uploadId:partialId};await f.owner.upload({...part,bytes:partial.length,sha256:sha(partial)});await f.owner.uploadPart({...part,index:0,encoded:partial.subarray(0,128*1024).toString('base64')});
  const access=await createWorkspaceAccess('','fresh template recovery password',new TestDeviceStore({file:path.join(f.dir,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.dir,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new RecordStarterTransfer(new Workspace(root,vault));await verifyRecordStarters(restored.workspace);
@@ -93,7 +91,7 @@ test('native capture commits selected instructions in resumable batches from a p
 
 test('small legacy packages remain readable without writing during their preview',async t=>{
  const f=await fixture(t),saved=await save(f,0),published=await publish(f,saved),old=await f.owner.export({workspaceId:f.workspaceId,id:saved.id,release:published.release.revision,password});
- const target=await upload(f,Buffer.from(old.encoded,'base64'));await f.owner.review({...target,password});
+ const target=await upload(f,Buffer.from(old.encoded,'base64'));assert.equal((await f.owner.review({...target,password})).fingerprint,published.release.revision);
  assert.equal((await f.owner.packageView({...target,offset:0})).sections.total,0);
  assert.equal((await f.owner.packageField({...target,field:'body',position:0})).value,'Reviewed instructions');
 });

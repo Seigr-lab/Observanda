@@ -15,11 +15,11 @@ const prefix='.observanda/record-starter-values',format='observanda-starter-docu
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export const starterDocumentPointer=value=>value?.format===format;
 export class StarterValueBlocks{
- constructor(workspace,{temporary=false,staging=null}={}){if(staging!==null&&!researchId(staging))fail();this.workspace=workspace;this.prefix=staging?'.observanda/record-starter-staging/'+staging:prefix;this.temporary=temporary;this.values=new Map();this.bytes=0;}
+ constructor(workspace,{staging=null}={}){if(staging!==null&&!researchId(staging))fail();this.workspace=workspace;this.prefix=staging?'.observanda/record-starter-staging/'+staging:prefix;this.values=new Map();this.bytes=0;}
  file(kind,revision){if(!['value','index'].includes(kind)||!revisionId(revision))fail();return this.prefix+'/'+kind+'/'+revision+'.json';}
  keep(file,text){
   if(this.values.has(file))return;
-  if(!this.temporary)while(this.values.size>=32||this.bytes+Buffer.byteLength(text)>1024*1024){const [key,value]=this.values.entries().next().value;this.values.delete(key);this.bytes-=Buffer.byteLength(value);}
+  while(this.values.size>=32||this.bytes+Buffer.byteLength(text)>1024*1024){const [key,value]=this.values.entries().next().value;this.values.delete(key);this.bytes-=Buffer.byteLength(value);}
   this.values.set(file,text);this.bytes+=Buffer.byteLength(text);
  }
  async read(kind,revision){
@@ -29,19 +29,16 @@ export class StarterValueBlocks{
  async put(kind,value){
   const text=serialize(value);if(Buffer.byteLength(text)>65536)throw new AppError('INVALID');const revision=digest(text),file=this.file(kind,revision);
   if(this.values.has(file))return revision;
-  if(!this.temporary){const prior=await this.workspace.readMetadata(file,65536);if(prior!==null&&prior!==text)fail();if(prior===null)await this.workspace.writeMetadata(file,text);}
+  const prior=await this.workspace.readMetadata(file,65536);if(prior!==null&&prior!==text)fail();if(prior===null)await this.workspace.writeMetadata(file,text);
   this.keep(file,text);return revision;
  }
  async flush(){}
  tree(){return new RecordValueTree(this);}
 }
 export async function starterDocument(workspace,value,{mutable=false}={}){
- const retained=starterDocumentPointer(value);
- if(retained&&!(Object.keys(value).sort().join()==='fingerprint,format,root,version'&&value.version===1&&revisionId(value.root)&&revisionId(value.fingerprint)))fail();
- if(retained&&await workspace.catalogue(store=>catalogueFormat(store.db))<21)fail();
- const blocks=new StarterValueBlocks(workspace,{temporary:!retained&&!mutable});
- if(!retained&&!validStarter(value))fail();
- return new RecordDocument(blocks,retained?value.root:await blocks.tree().retain(value),{mutable});
+ if(!starterDocumentPointer(value)||!(Object.keys(value).sort().join()==='fingerprint,format,root,version'&&value.version===1&&revisionId(value.root)&&revisionId(value.fingerprint)))fail();
+ if(await workspace.catalogue(store=>catalogueFormat(store.db))<21)fail();
+ return new RecordDocument(new StarterValueBlocks(workspace),value.root,{mutable});
 }
 export async function starterFingerprint(document,{signal}={}){
  const hash=createHash('sha256');for await(const text of document.tree.json(document.root,{canonical:true,signal}))hash.update(text);return hash.digest('hex');
@@ -59,8 +56,4 @@ export async function validateStarterDocument(document,{portable=true,signal}={}
  }
  const tags=await document.tree.arrayLength(document.root,['tags']);if(tags)await withScratch(async seen=>{for(let index=0;index<tags;index++){const tag=(await document.field(['tags',String(index)],{signal})).value;if(!validStarter({...header,body:'',tags:[tag]},{portable})||!await seen.add(tag))throw new AppError('STARTER_INVALID');}},{signal});
  rememberSemanticWriting(document,semantic);return header;
-}
-export async function verifyStarterDocument(workspace,pointer,{signal,portable=true}={}){
- const document=await starterDocument(workspace,pointer);await validateStarterDocument(document,{signal,portable});
- if(starterDocumentPointer(pointer)&&await starterFingerprint(document,{signal})!==pointer.fingerprint)fail();return document;
 }

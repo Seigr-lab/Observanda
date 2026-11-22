@@ -21,14 +21,12 @@ export class RecordStarters{
  async object(file){const raw=await this.workspace.readMetadata(file,STARTER_BYTES+16384);if(raw===null)return null;try{return JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}}
  async header(id){const v=await this.object(headers+'/'+identifier(id)+'.json');if(!v)throw new AppError('NOT_FOUND');if(v.id!==id||v.version!==1||!['active','archived'].includes(v.status)||!Number.isSafeInteger(v.sequence))throw new AppError('CATALOGUE_DAMAGED');return stamp(v);}
  async list(c){check(c,['workspaceId','cursor']);await this.context(c.workspaceId);return this.workspace.catalogue(async()=>{const page=await this.feed.page({cursor:c.cursor,limit:20}),items=[];for(const item of page.items)items.push(await this.header(item.id));return {items,next:page.next};});}
- async draftDocument(header,options){const value=await this.object(ROOT+'/drafts/'+header.id+'.json');if(!value||(starterDocumentPointer(value)?value.fingerprint:packageDigest(value))!==header.draftHash)throw new AppError('CATALOGUE_DAMAGED');return starterDocument(this.workspace,value,options);}
+ async draftDocument(header,options){const value=await this.object(ROOT+'/drafts/'+header.id+'.json');if(!starterDocumentPointer(value)||value.fingerprint!==header.draftHash)throw new AppError('CATALOGUE_DAMAGED');return starterDocument(this.workspace,value,options);}
  async read(c){check(c,['workspaceId','id']);return this.workspace.catalogue(async()=>{await this.context(c.workspaceId);const header=await this.header(c.id),document=await this.draftDocument(header);return {header,draft:await document.tree.read(document.root)};});}
  async releaseDocument(c){
   check(c,['workspaceId','id','release']);await this.context(c.workspaceId);identifier(c.id);if(!revisionId(c.release))throw new AppError('INVALID');
   const value=await this.object(releases+'/'+c.id+'/'+c.release+'.json');if(!value)throw new AppError('NOT_FOUND');
-  if(starterDocumentPointer(value)){if(value.fingerprint!==c.release)throw new AppError('CATALOGUE_DAMAGED');return starterDocument(this.workspace,value);}
-  if(packageDigest(value)!==c.release||!validStarter(value.blueprint))throw new AppError('CATALOGUE_DAMAGED');
-  const blocks=new StarterValueBlocks(this.workspace,{temporary:true});return new RecordDocument(blocks,await blocks.tree().retain(value));
+  if(!starterDocumentPointer(value)||value.fingerprint!==c.release)throw new AppError('CATALOGUE_DAMAGED');return starterDocument(this.workspace,value);
  }
  async release(c){return this.workspace.catalogue(async()=>{const document=await this.releaseDocument(c);return {...await document.tree.read(document.root),revision:c.release};});}
  async history(c){check(c,['workspaceId','id','cursor']);await this.context(c.workspaceId);await this.header(c.id);if(c.cursor!==null&&(typeof c.cursor!=='string'||!/^\d{9}\.json$/.test(c.cursor)))throw new AppError('INVALID');const page=await this.workspace.metadataPage(ROOT+'/history/'+c.id,{after:c.cursor,limit:20});return {items:page.items.map(v=>JSON.parse(v.text)),next:page.next};}

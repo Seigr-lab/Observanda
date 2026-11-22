@@ -44,9 +44,9 @@ export async function verifyRecordStarters(workspace,{signal}={}){
   if(!name.endsWith('.json'))continue;signal?.throwIfAborted();if(!researchId(name.slice(0,-5)))fail();const value=await owner.object(STARTER_ROOT+'/captures/'+name);
   const document=new RecordDocument(new StarterValueBlocks(workspace),value.root);await validateStarterDocument(document,{portable:false,signal});await checkStyles(document);if(await document.tree.arrayLength(document.root,['sections'])!==value.received)fail();
  }
- // Detect retained roots in an old-generation catalogue even if a header was
- // lost. Ordinary header traversal above validates the referenced content.
- for await(const name of workspace.metadataNames(STARTER_ROOT+'/drafts')){const value=await owner.object(STARTER_ROOT+'/drafts/'+name);if(starterDocumentPointer(value)&&!await owner.object(STARTER_ROOT+'/headers/'+name))fail();}
+ // Every draft is a retained root with a header; header traversal above
+ // validates the referenced content.
+ for await(const name of workspace.metadataNames(STARTER_ROOT+'/drafts')){const value=await owner.object(STARTER_ROOT+'/drafts/'+name);if(!starterDocumentPointer(value)||!await owner.object(STARTER_ROOT+'/headers/'+name))fail();}
  for await(const name of workspace.metadataNames('.observanda/record-starter-uploads')){
   if(name==='by-file')continue;if(!name.endsWith('.json')||!researchId(name.slice(0,-5)))fail();const content=await owner.object('.observanda/record-starter-uploads/'+name),chunks=new RecordDraftChunks(workspace,name.slice(0,-5),{starter:true});
   const hash=createHash('sha256');for await(const bytes of chunks.chunks(content,{signal,complete:false}))hash.update(bytes);
