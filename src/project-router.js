@@ -1,7 +1,6 @@
 import {incomingProjectMove} from './project-incoming-moves.js';
 import {assertImportedProjectReady} from './project-import-state.js';
 import {readProjectArchiveIdentity} from './project-archive.js';
-import {projectPortableReferences} from './project-portable-references.js';
 import {ProjectStorage} from './project-storage.js';
 import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
@@ -26,7 +25,6 @@ export class ProjectRouter{
   if(locationOnly){if(action!=='read')throw new AppError('INVALID');return operation(new ProjectStorage(entry.root,projectId,vault),null);}
   const storage=new ProjectStorage(entry.root,projectId,vault),outline=await storage.outline();
   if(outline.metadata.id!==entry.namespaceId)throw new AppError('DATABASE_LOCATION');
-  await projectPortableReferences(storage,entry);
   await this.registry.refreshSummary(projectId,outline.metadata);
   return operation(storage,outline);
  }

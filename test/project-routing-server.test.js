@@ -354,20 +354,6 @@ test('HTTP project deletion authenticates its owner and preserves sibling author
 });
 
 
-test('HTTP legacy project references use indexed owners and retain project authorization',async t=>{
- const f=await fixture(t),{ProjectReferenceAliases}=await import('../src/project-reference-aliases.js'),aliases=new ProjectReferenceAliases(f.workspace),sourceNamespace=f.registry.workspaceId,selected=f.a.book.entries[0],reference={workspaceId:sourceNamespace,kind:'record',id:selected.id,revision:recordRevision(selected)},current=await f.registry.read();
- const root=await aliases.prepare(null,{version:1,sourceNamespace,namespaceId:f.a.book.id,projectId:f.a.id},[{kind:'project',id:f.a.id},{kind:'notebook',id:selected.notebookId},{kind:'record',id:selected.id}]);
- await f.registry.change(current.revision,value=>({...value,aliases:root}));
- let release,entered;const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),busy=f.workspace.withLock(async()=>{entered();await gate;});await ready;
- try{
-  const located=await result(await f.call('/api/projects/reference-location',reference));assert.equal(located.projectId,f.a.id);assert.equal(located.namespaceId,f.a.book.id);assert.deepEqual(located.target,reference);
-  const resolved=await result(await f.call('/api/projects/material-reference/record',{ref:reference}));assert.equal(resolved.value.previous.record.body,selected.body);assert.equal(resolved.value.ref.revision,reference.revision);
-  await result(await f.project(f.a,'access/lock'));const denied=await result(await f.call('/api/projects/material-reference/record',{ref:reference}),401);assert.equal(denied.projectId,f.a.id);
-  assert.deepEqual(await result(await f.call('/api/projects/reference-location',{...reference,id:randomUUID()})),{registered:false});
- }finally{release();await busy;}
-});
-
-
 test('HTTP domain commands and summary reads bypass unrelated writers and keep credentials scoped',async t=>{
  const f=await fixture(t),{ProjectModuleCommands}=await import('../src/project-module-commands.js'),{ProjectDomains}=await import('../src/project-domains.js');
  await new ProjectModuleCommands(f.a.storage,f.a.book.id).initialize();await new ProjectModuleCommands(f.b.storage,f.b.book.id).initialize();

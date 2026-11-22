@@ -23,8 +23,6 @@ import {copyLabBookLocation} from './lab-book-transfer.js';
 import {writeProjectTree} from './project-tree-manifest.js';
 import {reconcileProjectFiles} from './project-transfer-files.js';
 import {withProjectMembership} from './project-membership.js';
-import {projectPortableReferences} from './project-portable-references.js';
-import {ProjectReferenceAliases} from './project-reference-aliases.js';
 import {assertRegular,atomicWrite,privateDirectory,serialize} from './storage.js';
 import {catalogueBinding,CATALOGUE_FILE,CATALOGUE_ACTIVATION,CATALOGUE_ARCHIVE} from './postgres-activation.js';
 import {hashWorkspaceFile} from './workspace-inventory.js';
@@ -120,18 +118,18 @@ export class ProjectImports{
     });
     if(value.phase==='prepared'){value.phase='copied';await saveProjectImport(this.registry,value);}await checkpoint('copied',value);
     await operationStage('import-project-register',{},async()=>{
-     await check();await this.admit(value);const entries=[],aliases=new ProjectReferenceAliases(this.workspace),portable=[];
+     await check();await this.admit(value);const entries=[];
      for(const item of value.owners.filter(item=>item.kind==='project')){
       const storage=new ProjectStorage(ownerRoot(value.destination,item),item.projectId,inventory.keys.get(item.relative));
-      const parentId=item.relative?value.manifest.projects.find(project=>project.projectId===item.projectId).parentId:value.parentId,entry=await this.registry.describe(storage,parentId,{staged:true});if(entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId)throw new AppError('DATABASE_LOCATION');entries.push(entry);portable.push(await projectPortableReferences(storage,entry));
+      const parentId=item.relative?value.manifest.projects.find(project=>project.projectId===item.projectId).parentId:value.parentId,entry=await this.registry.describe(storage,parentId,{staged:true});if(entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId)throw new AppError('DATABASE_LOCATION');entries.push(entry);
      }
      for(const item of value.owners.filter(item=>item.kind==='lab-book')){const parent=entries.find(entry=>entry.projectId===item.projectId),storage=new ProjectStorage(parent.root,parent.projectId,inventory.keys.get(value.owners.find(owner=>owner.kind==='project'&&owner.projectId===parent.projectId).relative));await new LabBookRegistry(storage).describe(importOwnerStorage(ownerRoot(value.destination,item),item,inventory.keys.get(item.relative)),{staged:true});}
      const rootStorage=new ProjectStorage(value.destination,value.manifest.projectId,inventory.keys.get(''));await writeProjectTree(rootStorage,value.manifest);
      // An unfinished import into another project is never completed.
      if(value.parentId!=null)throw new AppError('PROJECT_NESTING');
      await withProjectMembership(this.registry,[value.parentId],async()=>{for(let attempt=0;;attempt++){
-      const current=await this.registry.inspect(view=>({revision:view.revision,aliases:view.aliases}));let references=current.aliases??null;for(const bundle of portable)if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());await this.admit(value);await check();
-      try{await this.registry.applyBatch(current.revision,(async function*(){for(const entry of entries)yield {state:'active',entry};})(),{aliases:references,check:async(directory,head)=>{for(const entry of entries){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted')throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+      const current=await this.registry.inspect(view=>({revision:view.revision}));await this.admit(value);await check();
+      try{await this.registry.applyBatch(current.revision,(async function*(){for(const entry of entries)yield {state:'active',entry};})(),{check:async(directory,head)=>{for(const entry of entries){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted')throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
      }});value.phase='registered';await saveProjectImport(this.registry,value);await checkpoint('registered',value);
      for(const item of value.owners.filter(item=>item.kind==='lab-book'))await new LabBookDirectory(this.registry).register(item.projectId,item);await checkpoint('addressed',value);
      for(const item of value.owners)await unlink(path.join(ownerRoot(value.destination,item),'.observanda/copy-in-progress')).catch(error=>{if(error.code!=='ENOENT')throw error;});

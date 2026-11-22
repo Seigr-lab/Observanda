@@ -1,10 +1,8 @@
-// Publication consumes paged relocation proofs. Alias preparation and owner
-// description retain one independently authorized project at a time.
+// Publication consumes paged relocation proofs. Owner description retains one
+// independently authorized project at a time.
 import path from 'node:path';
 import {LabBookDirectory} from './lab-book-directory.js';
 import {withProjectMembership} from './project-membership.js';
-import {ProjectReferenceAliases} from './project-reference-aliases.js';
-import {projectPortableReferences} from './project-portable-references.js';
 import {projectRegistryLocationKey} from './project-registry-locations.js';
 import {withScratch} from './scratch-work.js';
 import {relocationOwnerRoot} from './native-relocation-owners.js';
@@ -28,15 +26,14 @@ export async function admitNativeWorkspaceTree(registry,selected,{fresh=false}={
  }});
 }
 export async function publishNativeWorkspaceTree(registry,selected,{check=async()=>{},checkpoint=async()=>{}}={}){
- const value=selected.value,destination=selected.command.scope(value).destination,aliases=new ProjectReferenceAliases(registry.workspace);
+ const value=selected.value,destination=selected.command.scope(value).destination;
  await withScratch(async staged=>{
   await admitNativeWorkspaceTree(registry,selected);
   for await(const item of selected.owners.entries({index:'project'}))await selected.use(destination,item,async storage=>{const expected=nativeMovedProjectEntry(item,value,destination),actual=await registry.describe(storage,expected.parentId);if(!same(actual,expected))throw new AppError('DATABASE_LOCATION');await staged.add(item.projectId,actual);});
   await withProjectMembership(registry,[value.placement.parentId],async()=>{for(let attempt=0;;attempt++){
-   const current=await registry.inspect(view=>({revision:view.revision,aliases:view.aliases}));let references=current.aliases;
-   for await(const item of selected.owners.entries({index:'project'}))await selected.use(destination,item,async storage=>{const bundle=await projectPortableReferences(storage,await staged.get(item.projectId));if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());});
+   const current=await registry.inspect(view=>({revision:view.revision}));
    await check();await admitNativeWorkspaceTree(registry,selected);
-   try{await registry.applyBatch(current.revision,(async function*(){for await(const entry of staged.items())yield {state:'active',entry};})(),{aliases:references});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+   try{await registry.applyBatch(current.revision,(async function*(){for await(const entry of staged.items())yield {state:'active',entry};})());break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
   }},{wait:false});
  });
  await checkpoint('destination-registry',value);for await(const item of selected.owners.entries())if(item.kind==='lab-book')await new LabBookDirectory(registry).register(item.projectId,item);await checkpoint('destination-addresses',value);

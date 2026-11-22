@@ -20,7 +20,6 @@ import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {Workspace} from '../src/storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
-import {ProjectReferenceAliases} from '../src/project-reference-aliases.js';
 import {createComparisonSourceAccess} from '../src/comparison-source-access.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
@@ -95,9 +94,7 @@ test('retained comparison sources are read-only, client-bound and survive the in
   const live=await createComparisonSourceAccess(publicationApp,publicationClient,{workspace:f.sibling});
   try{
    assert.equal(await live.use(reference,async(storage,canonical)=>(await new ResearchMaterials(storage).read(canonical)).title),'Retained source readings');
-   mark('alias amendment');const before=await f.registry.read(),aliases=await new ProjectReferenceAliases(f.workspace).prepare(before.value.aliases??null,{version:1,sourceNamespace:randomUUID(),namespaceId:f.project.namespaceId,projectId:f.projectId},[{kind:'dataset',id:reference.id}]);
-   mark('publish aliases');await f.registry.change(before.revision,value=>({...value,aliases}));
-   mark('verify aliases');await live.verify();mark('read after aliases');assert.equal(await live.use(reference,async(storage,canonical)=>(await new ResearchMaterials(storage).read(canonical)).title),'Retained source readings');
+   mark('verify');await live.verify();mark('read after verify');assert.equal(await live.use(reference,async(storage,canonical)=>(await new ResearchMaterials(storage).read(canonical)).title),'Retained source readings');
   }finally{await live.close();}
   await publicationApp.run(publicationClient,projectRequest(f.own+'/access/lock','POST'),{});
   await assert.rejects(publicationDependencyState(output,dependencySources,{sourceReader}),{code:'ACCESS_LOCKED'});

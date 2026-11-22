@@ -6,7 +6,6 @@ import {projectRenameLocation} from './project-rename-receipt.js';
 import {decodeProjectRegistryLocations,projectRegistryLocationKey} from './project-registry-locations.js';
 import {detachLegacyProjectChildren,legacyProjectChildren} from './project-retirement-children.js';
 import {projectHierarchyLock} from './project-hierarchy-authority.js';
-import {ProjectReferenceAliases} from './project-reference-aliases.js';
 import {validTableRef} from './retained-table-index.js';
 import {validProjectReferenceTarget} from './project-reference-target.js';
 // Workspace membership uses its own indexed encrypted directory and lease.
@@ -128,7 +127,7 @@ export class ProjectRegistry{
  }
  // Registering an existing folder moves nothing: a project an earlier version nested keeps that
  // place only when its folder already sits directly inside its active parent project's folder.
- async registerExisting(expected,entry,{aliases}={}){assertProjectInsideWorkspace(this.workspace.root,entry?.root);return this.apply(expected,[{state:'active',entry}],{aliases,check:async(directory,head)=>{
+ async registerExisting(expected,entry){assertProjectInsideWorkspace(this.workspace.root,entry?.root);return this.apply(expected,[{state:'active',entry}],{check:async(directory,head)=>{
   if(entry.parentId!=null){const parent=await directory.find(head,entry.parentId);if(parent?.state!=='active'||path.dirname(entry.root)!==parent.entry.root)throw new AppError('PROJECT_NESTING');}
   const prior=await directory.find(head,entry.projectId);if(prior?.state==='active')throw new AppError('EXISTS');if(prior&&['namespaceId','vaultId'].some(key=>prior.entry[key]!==entry[key]))throw new AppError('DATABASE_LOCATION');
  }});}
@@ -138,8 +137,7 @@ export class ProjectRegistry{
    const direct=await view.get(target.workspaceId,{index:'namespace'});this.assertState(direct);
    if(direct)return projectRenameLocation(this,direct.entry,await view.ancestors(direct.entry.projectId));
    const book=await new LabBookDirectory(this).locate(target.workspaceId);if(book)return book;
-   const alias=await new ProjectReferenceAliases(this.workspace).locate(view.aliases,target);if(!alias)throw new AppError('NOT_FOUND');
-   const row=await view.get(alias.projectId);this.assertState(row);if(!row||row.entry.namespaceId!==alias.namespaceId)throw new AppError('DATABASE_LOCATION');return projectRenameLocation(this,row.entry,await view.ancestors(row.entry.projectId));
+   throw new AppError('NOT_FOUND');
   });
  }
  assertState(row){if(!row)return;if(row.state==='deleted')throw new AppError('PROJECT_DELETED');if(row.state==='relocated'){const error=new AppError('PROJECT_MOVED');error.projectId=row.entry.projectId;error.workspaceId=row.entry.workspaceId;throw error;}}

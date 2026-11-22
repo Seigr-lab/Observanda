@@ -13,8 +13,6 @@ import {LabBookDirectory} from './lab-book-directory.js';
 import {copyProjectOwnerLocation} from './project-transfer.js';
 import {copyLabBookLocation} from './lab-book-transfer.js';
 import {withProjectMembership} from './project-membership.js';
-import {projectPortableReferences} from './project-portable-references.js';
-import {ProjectReferenceAliases} from './project-reference-aliases.js';
 import {acceptRelocatedProject} from './project-relocation-directory.js';
 import {assertRegular,privateDirectory,serialize,digest} from './storage.js';
 import {catalogueBinding,CATALOGUE_ARCHIVE} from './postgres-activation.js';
@@ -95,7 +93,7 @@ export class NativeProjectImport{
   }));}finally{inventory.close();}
  }
  async register(value,owners,inventory,{check,checkpoint}){
-  await check();await this.owner.admit(value);const aliases=new ProjectReferenceAliases(this.workspace),tree=projectTreeCollection(this.workspace,value.manifest);
+  await check();await this.owner.admit(value);const tree=projectTreeCollection(this.workspace,value.manifest);
   await withScratch(async staged=>{
    for await(const item of owners.entries({index:'project'}))await this.use(inventory,value.destination,item,async storage=>{
     const parentId=item.relative?(await tree.find('project',item.projectId)).parentId:value.parentId,entry=await this.registry.describe(storage,parentId,{staged:true});if(entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId)throw new AppError('DATABASE_LOCATION');await staged.add(entry.projectId,entry);
@@ -107,10 +105,9 @@ export class NativeProjectImport{
     const projects=await createPortabilityCollection(storage,tree.entries(),{id:root.projectId});await writeProjectTree(storage,{...value.manifest,projects});
    });
    await withProjectMembership(this.registry,[value.parentId],async()=>{for(let attempt=0;;attempt++){
-    const current=await this.registry.inspect(view=>({revision:view.revision,aliases:view.aliases}));let references=current.aliases??null;
-    for await(const item of owners.entries({index:'project'}))await this.use(inventory,value.destination,item,async storage=>{const bundle=await projectPortableReferences(storage,await staged.get(item.projectId));if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());});
+    const current=await this.registry.inspect(view=>({revision:view.revision}));
     await this.owner.admit(value);await check();try{
-     await this.registry.applyBatch(current.revision,(async function*(){for await(const entry of staged.items())yield {state:'active',entry};})(),{aliases:references,check:async(directory,head)=>{for await(const entry of staged.items()){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted'&&['projectId','namespaceId','vaultId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;
+     await this.registry.applyBatch(current.revision,(async function*(){for await(const entry of staged.items())yield {state:'active',entry};})(),{check:async(directory,head)=>{for await(const entry of staged.items()){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted'&&['projectId','namespaceId','vaultId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;
     }catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
    }});
   });

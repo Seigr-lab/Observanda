@@ -16,8 +16,6 @@ import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {Workspace} from '../src/storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
-import {ProjectReferenceAliases} from '../src/project-reference-aliases.js';
-import {referenceOriginKey} from '../src/research-reference-namespace.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
@@ -76,25 +74,16 @@ test('module reference APIs discover and resolve owner summaries, save links, is
  const removed={...retained,commandId:randomUUID(),payload:{...retained.payload,expectedRevision:2,data:{...retained.payload.data,links:[]}}};await result(await f.call(f.other+'/modules/command',removed));
  const operations=(await result(await f.call('/api/activity'))).operations;assert.equal(operations.some(row=>row.kind.includes('/modules/references/')),false);
 });
-test('saved legacy research references use the exact authenticated identity witness, never whole namespace equivalence',{timeout:120000},async t=>{
- const f=await fixture(t),namespace=f.project.namespaceId,record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:randomUUID(),title:'Retained target'},book=(await f.parent.read()).book;
- // Seed historical inline headings as migration input. Public structure
- // commands intentionally create no new inline owners in current catalogues.
- record.notebookId=book.notebooks[0]?.id;
- if(!record.notebookId){const notebook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:f.projectId};record.notebookId=notebook.id;await f.parent.update(book=>{book.notebooks.push(notebook);return book;});}
- await result(await f.call(f.base+'/research/records/save',{workspaceId:namespace,changes:[{id:record.id,expectedRevision:null,record}]}));
- const rootProject={...sampleNotebook().projects[0],id:randomUUID()},rootBook={...sampleNotebook().notebooks[0],id:randomUUID(),projectId:rootProject.id};
- await f.workspace.update(book=>{book.projects.push(rootProject);book.notebooks.push(rootBook);return book;});
- await result(await f.call('/api/research/records/save',{workspaceId:f.initial.id,changes:[{id:record.id,expectedRevision:null,record:{...record,notebookId:rootBook.id,title:'Stale retained copy'}}]}));
- const sourceNamespace=f.initial.id,ref={workspaceId:sourceNamespace,type:'record',id:record.id},witness={version:1,projectId:f.projectId,namespaceId:namespace,sourceNamespace,kind:'record',id:record.id};
- await f.parent.withLock(()=>f.parent.catalogue(async store=>{await store.putObject('project:research-migration',{version:1,projectId:f.projectId,namespaceId:namespace,sourceNamespace});await store.putObject(referenceOriginKey(witness),witness);}));
- const before=await f.registry.read(),aliases=await new ProjectReferenceAliases(f.workspace).prepare(before.value.aliases,{version:1,sourceNamespace,namespaceId:namespace,projectId:f.projectId},[{kind:'record',id:record.id}]);await f.registry.change(before.revision,value=>({...value,aliases}));
- const route=f.other+'/modules/references/resolve',host=f.b.namespaceId,opened=await result(await f.call(route,{workspaceId:host,target:ref}));assert.deepEqual(opened.reference,ref);assert.equal(opened.owner.workspaceId,namespace);assert.equal(opened.title,record.title);
- await result(await f.call('/api/modules/command',calculation(f.initial.id,randomUUID(),'Link from retained address',[ref])));
- await result(await f.call(f.base+'/access/lock',{}));
- await result(await f.call('/api/modules/command',calculation(f.initial.id,randomUUID(),'Stale copy must not grant access',[ref])),401);
- await result(await f.call(f.base+'/access/unlock',{}));
+test('the first structured calculation saved in a workspace may link a record in a project lab book in the same request',{timeout:120000},async t=>{
+ const f=await fixture(t),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:f.a.labBookId,title:'Linked target'},ref={workspaceId:f.a.namespaceId,type:'record',id:record.id};
+ await result(await f.call(f.own+'/research/records/save',{workspaceId:f.a.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]}));
+ // No calculator exists in the workspace yet: this save also upgrades its catalogue features,
+ // while the link is admitted through the project registry on another connection.
+ const started=Date.now(),saved=await result(await f.call('/api/modules/command',calculation(f.initial.id,randomUUID(),'First linked calculation',[ref])));
+ assert.deepEqual(saved.entities[0].data.links,[ref]);assert.ok(Date.now()-started<20000,'The first linked save does not wait on its own catalogue upgrade');
+ const route=f.other+'/modules/references/resolve',host=f.b.namespaceId,opened=await result(await f.call(route,{workspaceId:host,target:ref}));assert.deepEqual(opened.reference,ref);assert.equal(opened.owner.labBookId,f.a.labBookId);assert.equal(opened.title,record.title);
+ await result(await f.call(f.own+'/access/lock',{}));
+ await result(await f.call('/api/modules/command',calculation(f.initial.id,randomUUID(),'Locked target must not grant access',[ref])),401);
+ await result(await f.call(f.own+'/access/unlock',{}));
  await result(await f.call(route,{workspaceId:host,target:{...ref,id:randomUUID()}}),404);
- await f.parent.withLock(()=>f.parent.catalogue(store=>store.putObject(referenceOriginKey(witness),{...witness,id:randomUUID()})));
- await result(await f.call(route,{workspaceId:host,target:ref}),404);
 });
