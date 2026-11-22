@@ -1,13 +1,15 @@
 import {test,expect} from '@playwright/test';
-import {mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {queryFixture} from '../record-query-fixture.js';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
+// Each result row links to the record by its research address (app.js renderRecordTable, owner rows).
 test('combined browsing survives reading, back/forward and reload, and resets when changing scope',async({page})=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-query-')),book=queryFixture(),ws=new Workspace(root);book.title=path.basename(root);await ws.create(book);
- const before=await ws.read(),app=await testServer({root,port:0,headless:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-query-')),book=queryFixture();book.title='workspace';const {workspace:ws,vault,deviceStore}=await encryptedFixture(directory,book);
+ const before=await ws.read(),app=await testServer({root:ws.root,port:0,headless:true,deviceStore}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/projects/'+id+'/records',book.projects[0].id);
   await page.getByText('Filters',{exact:true}).click();
@@ -17,12 +19,12 @@ test('combined browsing survives reading, back/forward and reload, and resets wh
   await page.getByLabel('Sort records',{exact:true}).selectOption('date-asc');
   const rows=page.locator('.records-table tbody tr');
   await expect(rows).toHaveCount(2);await expect(rows.first()).toContainText('Summer take 1');await expect(rows.last()).toContainText('Summer take 2');
-  await page.getByRole('button',{name:'Summer take 2',exact:true}).click();
+  await page.locator('.records-table').getByRole('link',{name:'Summer take 2',exact:true}).click();
   await expect(page.locator('.record-reader')).toContainText('Recorder stopped early');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();
   await expect(page.getByLabel('Tags',{exact:true})).toHaveValue('sound, summer');await expect(rows).toHaveCount(2);
   await page.reload();await expect(page.getByLabel('Lab type',{exact:true})).toHaveValue('arts-creative');await expect(rows).toHaveCount(2);
-  await page.getByRole('button',{name:'Summer take 1',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Summer take 1');await page.goBack();await expect(rows).toHaveCount(2);
+  await page.locator('.records-table').getByRole('link',{name:'Summer take 1',exact:true}).click();await expect(page.locator('.record-reader h1')).toHaveText('Summer take 1');await page.goBack();await expect(rows).toHaveCount(2);
   await page.getByLabel('Progress',{exact:true}).selectOption('incomplete');await expect(rows).toHaveCount(1);
   await page.getByRole('searchbox',{name:'Search records',exact:true}).fill('Recorder stopped');await expect(rows).toHaveCount(1);
   await page.getByLabel('From date',{exact:true}).fill('2026-07-01');await expect(page.getByRole('alert')).toContainText('start date');
@@ -40,5 +42,5 @@ test('combined browsing survives reading, back/forward and reload, and resets wh
   // New scope starts clean; history filters never become workspace content.
   await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[1].id);await expect(rows).toHaveCount(3);
   expect((await ws.read()).etag).toBe(before.etag);expect(errors).toEqual([]);
- }finally{await app.close();await rm(root,{recursive:true,force:true});}
+ }finally{await app.close();await clearVault(vault);await rm(directory,{recursive:true,force:true});}
 });

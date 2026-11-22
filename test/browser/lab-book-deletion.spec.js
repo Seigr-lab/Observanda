@@ -3,44 +3,51 @@ import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
+import {WorkspaceDatabases} from '../../src/workspace-databases.js';
+import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
-import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 
 async function setup(page){
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-lab-book-deletion-'));
- const ws=new Workspace(path.join(dir,'workspace')),book=sampleNotebook();
+ const book=sampleNotebook();
+ // A project created in the app has its own store, as the lab books it receives do.
+ const owner=new WorkspaceDatabases({directory:path.join(dir,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
  book.projects[0].tools=['resources'];
  book.notebooks.push({id:randomUUID(),projectId:book.projects[0].id,title:'Inventory'});
- await ws.create(book);
+ const {workspace:ws,vault,deviceStore}=await encryptedFixture(dir,book);
  const preferencesFile=path.join(dir,'preferences.json'),settings=defaultDashboard();settings.enabledModules.push('resources');
- await saveDashboard(preferencesFile,settings,dashboardSnapshot(defaultDashboard()).etag);
- const app=await startServer({root:ws.root,port:0,preferencesFile});
+ await writeWorkspaceDashboard(ws,settings,(await readWorkspaceDashboard(ws)).etag);
+ const app=await startServer({root:ws.root,port:0,preferencesFile,deviceStore});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(app.url);
  await expect(page.locator('main h1')).toBeVisible();
  const projectURL=new URL('/#/projects/'+book.projects[0].id,app.url).href;
  await page.goto(projectURL);
  await expect(page.locator('main h1')).toHaveText(book.projects[0].title);
- return {dir,ws,book,app,errors,projectURL};
+ return {dir,ws,vault,book,app,errors,projectURL,owner,detach};
 }
 const click=(scope,name)=>scope.getByRole('button',{name,exact:true}).click();
 const card=(page,name)=>page.locator('.project-notebook').filter({has:page.getByRole('button',{name,exact:true})});
 const savedBooks=async ws=>(await ws.read()).book.notebooks;
 
 test('empty lab books can be deleted without losing drafts on cancel or disturbing project tools',async({page})=>{
- test.setTimeout(60000);page.setDefaultTimeout(10000);
- const {dir,ws,book,app,errors}=await setup(page),dialog=page.locator('#dialog');
+ test.setTimeout(120000);page.setDefaultTimeout(10000);
+ const {dir,ws,vault,book,app,errors,owner,detach}=await setup(page),dialog=page.locator('#dialog');
  try{
-  await expect(page).toHaveTitle('Observanda');
+  // The window title follows the page heading.
+  await expect(page).toHaveTitle(book.projects[0].title+' · Observanda');
   await page.evaluate(()=>{document.querySelectorAll('.tree-project').forEach(n=>n.open=true);window.keptProjects=[...document.querySelectorAll('.tree-project')];});
   await click(card(page,'Inventory'),'Lab book settings');
   await dialog.getByLabel('Lab book name',{exact:true}).fill('Unsaved name');
   await click(dialog,'Delete lab book');
   await expect(dialog).toContainText('This lab book is empty.');
-  await expect(dialog.locator('strong')).toHaveText('Inventory');
+  // The confirmation names the lab book in its question.
+  await expect(dialog).toContainText('Delete Inventory from');
   await click(dialog,'Cancel');
   await expect(dialog.getByLabel('Lab book name',{exact:true})).toHaveValue('Unsaved name');
   expect((await savedBooks(ws)).find(n=>n.id===book.notebooks[1].id).title).toBe('Inventory');
@@ -54,15 +61,19 @@ test('empty lab books can be deleted without losing drafts on cancel or disturbi
   expect(await page.evaluate(()=>keptProjects.every(n=>n.isConnected&&n.open))).toBe(true);
   await expect(page.locator('#main-navigation .location-tool-link[data-module-id="resources"]')).toHaveCount(1);
   await page.reload();await expect(card(page,'Inventory')).toHaveCount(0);
+  // A project held in the workspace itself takes no new lab books (src/web/workspace-ui.js:69);
+  // a project created in the app does, and its unsaved new lab book cannot be deleted.
+  await page.locator('#workspace-navigation [data-action=projects]').click();await click(page.locator('main'),'New project');
+  await dialog.getByLabel('Name',{exact:true}).fill('Studio');await click(dialog,'Create project');await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('main h1')).toHaveText('Studio');
   await click(page.locator('main'),'New lab book');await expect(dialog.getByRole('button',{name:'Delete lab book',exact:true})).toHaveCount(0);
   await click(dialog,'Cancel');
   expect(errors).toEqual([]);
- }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+ }finally{await app.close();await owner.close();detach();await clearVault(vault);await rm(dir,{recursive:true,force:true});}
 });
 
 test('populated lab books require a records decision, support moves, and can be deleted on mobile',async({page})=>{
  test.setTimeout(60000);page.setDefaultTimeout(10000);
- const {dir,ws,book,app,errors}=await setup(page),dialog=page.locator('#dialog'),source=book.notebooks[0],destination=book.notebooks[1];
+ const {dir,ws,vault,book,app,errors,owner,detach}=await setup(page),dialog=page.locator('#dialog'),source=book.notebooks[0],destination=book.notebooks[1];
  try{
   await click(card(page,source.title),'Lab book settings');await click(dialog,'Delete lab book');
   const disposition=dialog.getByLabel('What should happen to its records?',{exact:true});
@@ -100,5 +111,5 @@ test('populated lab books require a records decision, support moves, and can be 
   await page.reload();await expect(page.locator('.project-notebook')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   expect(errors).toEqual([]);
- }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+ }finally{await app.close();await owner.close();detach();await clearVault(vault);await rm(dir,{recursive:true,force:true});}
 });
