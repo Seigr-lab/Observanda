@@ -1,28 +1,36 @@
 import {randomUUID} from 'node:crypto';
 import {test,expect} from '@playwright/test';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {startServer} from '../../src/server.js';
-import {Workspace} from '../../src/storage.js';
-import {readPreferences,saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {DashboardEdits} from '../../src/dashboard-edits.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {navigate,preferences} from './preferences-helper.js';
 
 // The dashboard is the card desktop (src/web/dashboard-desktop.js, dashboard-ui.js).
-// Layout edits save automatically; a plain workspace keeps them in the preferences
-// file beside the workspace, never in its research.
-let app,parent,root,file;
+// On a current workspace, layout edits save automatically as an encrypted pending
+// edit (POST /api/dashboard/pending, src/server.js:668; src/dashboard-edits.js) which the
+// server applies into the workspace's own settings (src/server.js:239-253), never into its research.
+let app,parent,root,file,f;
 test.beforeEach(async({page})=>{
- parent=await mkdtemp(path.join(os.tmpdir(),'observanda-dashboard-ui-'));root=path.join(parent,'workspace');file=path.join(parent,'preferences.json');
- await new Workspace(root).create({...sampleNotebook(),title:'workspace'});
- app=await startServer({root,preferencesFile:file,port:0,headless:true});await page.goto(app.url);
+ parent=await mkdtemp(path.join(os.tmpdir(),'observanda-dashboard-ui-'));file=path.join(parent,'preferences.json');
+ f=await encryptedFixture(parent,{...sampleNotebook(),title:'workspace'});root=f.workspace.root;
+ app=await startServer({root,preferencesFile:file,port:0,headless:true,deviceStore:f.deviceStore});await page.goto(app.url);
  await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.locator('.desk-desktop[data-placed]').waitFor();
+ // Current workspaces load card data after the layout is placed.
+ await expect(card(page,'Recent records')).toContainText('Watching a seed unfold');
 });
-test.afterEach(async()=>{await app.close();await rm(parent,{recursive:true,force:true});});
+test.afterEach(async()=>{await app.close();await clearVault(f.vault);await rm(parent,{recursive:true,force:true});});
 
-const research=()=>readFile(path.join(root,'observanda.json'),'utf8');
-const saved=async()=>(await readPreferences(file)).dashboard;
+const research=async()=>(await f.workspace.read()).etag;
+// The workspace's settings as stored now, and once the server has applied every pending edit.
+const stored=async()=>(await readWorkspaceDashboard(f.workspace)).settings;
+async function saved(){await expect.poll(()=>new DashboardEdits(file+'.pending-settings').read(f.workspace)).toBeNull();return stored();}
+const settingsSave=request=>request.method()==='POST'&&/\/api\/dashboard(\/pending)?$/.test(new URL(request.url()).pathname);
 const cards=page=>page.locator('.desk-desktop .desk-card');
 const card=(page,name)=>page.locator('.desk-desktop').getByRole('region',{name,exact:true});
 const status=page=>page.locator('#desk-save-state');
@@ -59,16 +67,17 @@ async function settings(page,title,tab='Content'){
 }
 const fits=page=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
 
-test('dashboard opens real work; view settings save on this computer, survive leaving and reload, and never touch research',async({page})=>{
+test('dashboard opens real work; view settings save in the workspace, survive leaving and reload, and never touch research',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await expect(page.locator('.topbar [data-action=save]')).toHaveCount(0);
  const before=await research();
  await card(page,'Recent records').getByRole('button',{name:'Watching a seed unfold',exact:true}).click();
- await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('Watching a seed unfold');
+ // Records open in the record reader (#/records/<id>), titled by the record.
+ await expect(page).toHaveURL(/#\/records\/[^/]+/);await expect(page.getByRole('heading',{level:1,name:'Watching a seed unfold',exact:true})).toBeVisible();
  await navigate(page,'Dashboard');
  await (await views(page)).fill('Audio fieldwork');
  // Leaving straight away flushes the pending automatic save.
- await navigate(page,'Preferences');await expect.poll(async()=>(await saved()).views[0].name).toBe('Audio fieldwork');
+ await navigate(page,'Preferences');await expect.poll(async()=>(await stored()).views[0].name).toBe('Audio fieldwork');
  expect(await research()).toBe(before);
  await page.reload();await expect(page.locator('.preferences-heading')).toBeVisible();await navigate(page,'Dashboard');
  await expect(await views(page)).toHaveValue('Audio fieldwork');await settled(page);expect(errors).toEqual([]);
@@ -87,7 +96,7 @@ test('named views and the default view survive restart; a closed card keeps its 
  const value=await saved(),view=value.views.find(v=>v.id===value.defaultId),media=view.panels.find(p=>p.source?.provider==='media');
  expect(view.name).toBe('Kitchen journal');expect(media.hidden).toBe(true);
  expect(view.panels.find(p=>p.source?.provider==='records')).toMatchObject({width:12,count:3,hidden:false});
- await app.close();app=await startServer({root,preferencesFile:file,port:0,headless:true});await page.goto(app.url);
+ await app.close();app=await startServer({root,preferencesFile:file,port:0,headless:true,deviceStore:f.deviceStore});await page.goto(app.url);
  await expect(page.locator('[data-desk-view]')).toHaveValue(value.defaultId);await expect(cards(page)).toHaveCount(1);
  await customize(page);await page.getByRole('button',{name:'Restore cards',exact:true}).click();
  const region=page.getByRole('region',{name:'Data library',exact:true});await expect(region.getByLabel('Show',{exact:true})).toHaveValue('closed');
@@ -118,37 +127,40 @@ test('card order supports real mouse dragging, keyboard cancellation and explici
 
 test('save errors and another window retain the draft; discarding loads the latest saved layout',async({page,context})=>{
  await (await views(page)).fill('First saved name');await settled(page);
- await page.context().route('**/api/dashboard',route=>route.request().method()==='POST'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Temporary disk failure'})}):route.continue());
+ // A current workspace submits each save as a pending edit; this window's submissions fail.
+ await page.context().route('**/api/dashboard/pending',route=>route.request().method()==='POST'&&JSON.parse(route.request().postData()).action==='save'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Temporary disk failure'})}):route.continue());
  await (await views(page)).fill('My retained draft');
  await expect(status(page)).toHaveText('The settings could not be saved. Your pending changes are retained.');
  await expect(page.getByLabel('View name',{exact:true})).toHaveValue('My retained draft');expect((await saved()).views[0].name).toBe('First saved name');
- await page.context().unroute('**/api/dashboard');
+ await page.context().unroute('**/api/dashboard/pending');
  const other=await context.newPage();await other.goto(app.url);await expect(other.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
  await (await views(other)).fill('Saved in another window');await settled(other);expect((await saved()).views[0].name).toBe('Saved in another window');
+ // The retried edit is accepted, then refused when applied over the other window's save.
  await page.locator('#desk-save-recovery').getByRole('button',{name:'Retry',exact:true}).click();
  await expect(status(page)).toHaveText('The saved settings changed in another session. Your pending changes are retained for review.');
- await expect(page.getByLabel('View name',{exact:true})).toHaveValue('My retained draft');expect((await saved()).views[0].name).toBe('Saved in another window');
+ await expect(page.getByLabel('View name',{exact:true})).toHaveValue('My retained draft');expect((await stored()).views[0].name).toBe('Saved in another window');
  await page.getByRole('button',{name:'Discard pending changes',exact:true}).click();
  await expect(await views(page)).toHaveValue('Saved in another window');await settled(page);await other.close();
 });
 
 test('edits during an in-flight save are saved afterwards and a failing card stays within its card',async({page})=>{
  const names=[];let release;const wait=new Promise(resolve=>release=resolve);
- await page.context().route('**/api/dashboard',async route=>{if(route.request().method()==='POST'){names.push(JSON.parse(route.request().postData()).settings.views[0].name);if(names.length===1)await wait;}await route.continue();});
+ await page.context().route('**/api/dashboard/pending',async route=>{const data=route.request().method()==='POST'?JSON.parse(route.request().postData()):null;if(data?.action==='save'){names.push(data.settings.views[0].name);if(names.length===1)await wait;}await route.continue();});
  await (await views(page)).fill('Submitted');await expect.poll(()=>names.length).toBe(1);
  await page.getByLabel('View name',{exact:true}).fill('Newer edit');await expect(status(page)).toHaveText('Saving…');release();
- await expect.poll(async()=>(await saved()).views[0].name).toBe('Newer edit');await settled(page);
+ await expect.poll(async()=>(await stored()).views[0].name).toBe('Newer edit');await settled(page);
  expect(names).toEqual(['Submitted','Newer edit']);await expect(page.getByLabel('View name',{exact:true})).toHaveValue('Newer edit');
- await page.context().unroute('**/api/dashboard');
+ await page.context().unroute('**/api/dashboard/pending');
  await navigate(page,'Preferences');await preferences(page,'Modules');await page.locator('[data-desk-module="laboratory"]').check();
- await expect.poll(async()=>(await saved()).enabledModules).toContain('laboratory');
+ await expect.poll(async()=>(await stored()).enabledModules).toContain('laboratory');
  await navigate(page,'Dashboard');await addCard(page,'Sample analysis overview');
  const laboratory=card(page,'Sample analysis overview');await expect(laboratory).toContainText('Awaiting review');
- await expect.poll(async()=>(await saved()).views[0].panels.some(p=>p.source?.provider==='laboratory')).toBe(true);
- await page.context().route('**/api/laboratory/read/query',route=>route.fulfill({status:503,contentType:'application/json',body:'{"code":"IO"}'}));
+ await expect.poll(async()=>(await stored()).views[0].panels.some(p=>p.source?.provider==='laboratory')).toBe(true);
+ // A current workspace reads the overview through its sample collection (src/web/laboratory-data.js:34).
+ await page.context().route('**/api/projects/dashboard-collection/samples',route=>route.fulfill({status:503,contentType:'application/json',body:'{"code":"IO"}'}));
  await page.reload();await expect(laboratory.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await expect(laboratory).not.toContainText('Awaiting review');
  await expect(card(page,'Recent records')).toContainText('Watching a seed unfold');await expect(card(page,'Projects')).toContainText('Patterns in the everyday');
- await page.context().unroute('**/api/laboratory/read/query');await laboratory.getByRole('button',{name:'Retry',exact:true}).click();
+ await page.context().unroute('**/api/projects/dashboard-collection/samples');await laboratory.getByRole('button',{name:'Retry',exact:true}).click();
  await expect(laboratory).toContainText('Awaiting review');
 });
 
@@ -185,7 +197,7 @@ test('section navigation keeps the workspace header and page origin stable witho
 });
 
 test('two record cards keep independent saved filters, previews and creation context without modifying research',async({page})=>{
- const workspace=new Workspace(root),before=await workspace.read(),b=before.book,projectId=randomUUID(),notebookId=randomUUID();
+ const workspace=f.workspace,before=await workspace.read(),b=before.book,projectId=randomUUID(),notebookId=randomUUID();
  b.projects.push({id:projectId,title:'Kitchen',description:'Recipes',share:false,logoId:null});b.notebooks.push({id:notebookId,projectId,title:'Recipe trials'});
  b.entries.push({...structuredClone(b.entries[0]),id:randomUUID(),notebookId,title:'Soup trial',type:'note',status:'draft',tags:['recipe'],sections:[]});b.entries[0].status='completed';b.entries[0].tags=['garden'];
  await workspace.save(b,before.etag);await page.reload();await page.locator('.desk-desktop[data-placed]').waitFor();const original=await research();
@@ -213,12 +225,14 @@ test('two record cards keep independent saved filters, previews and creation con
  // "New record" action carries no lab book (src/web/research-data.js:72), so chooseEntry
  // (src/web/app.js:1099, 1275) opens the general destination chooser instead.
  await kitchen.getByRole('button',{name:'New record',exact:true}).click();
- await expect(page.locator('#dialog')).toContainText('New record in Recipe trials');await expect(page.locator('#entry-notebook')).toHaveValue(notebookId);
+ // A current workspace opens the type chooser for that book (src/web/record-creation-ui.js:23); its
+ // starter library carries the chosen book (src/web/configuration-type-choices.js:23).
+ await expect(page.locator('#dialog')).toContainText('New record in Recipe trials');await expect(page.locator('#dialog [data-action="starter-library"]')).toHaveAttribute('data-notebook',notebookId);
  await page.locator('#dialog').getByRole('button',{name:'Cancel',exact:true}).click();expect(await research()).toBe(original);
 });
 
 test('card search finds names and categories, keeps the layout draft, and never saves while searching',async({page})=>{
- const writes=[];page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/api/dashboard'))writes.push(request.url());});
+ const writes=[];page.on('request',request=>{if(settingsSave(request))writes.push(request.url());});
  const region=await library(page),find=region.getByRole('searchbox',{name:'Find data to display',exact:true});
  const row=label=>region.locator('.desk-library-item').filter({has:page.locator('strong').getByText(label,{exact:true})});
  await find.fill('media');await expect(row('Media collection')).toBeVisible();await expect(row('Recent records')).toHaveCount(0);
@@ -236,14 +250,20 @@ test('card search also finds a card by its purpose',async({page})=>{
 });
 
 test('a card from another workspace stays unavailable until explicitly reassigned, including matching project IDs',async({page})=>{
- const b=(await new Workspace(root).read()).book,original=await research();
- const settingsValue=(await readPreferences(file)).dashboard,etag=dashboardSnapshot(settingsValue).etag;
+ const b=(await f.workspace.read()).book,original=await research();
+ const {settings:settingsValue,etag}=await readWorkspaceDashboard(f.workspace);
  Object.assign(settingsValue.views[0].panels[0].config,{workspaceId:randomUUID(),projectId:b.projects[0].id,notebookId:b.notebooks[0].id});
- await saveDashboard(file,settingsValue,etag);await page.reload();const recent=card(page,'Recent records');
+ await writeWorkspaceDashboard(f.workspace,settingsValue,etag);await page.reload();const recent=card(page,'Recent records');
  await expect(recent).toContainText('Open the workspace this card belongs to to display its data.');await expect(recent).not.toContainText('Watching a seed unfold');await expect(recent.getByRole('button',{name:'New record',exact:true})).toHaveCount(0);
- const content=await settings(page,'Recent records','Content');const project=content.getByRole('checkbox',{name:b.projects[0].title,exact:true});
- // Matching project IDs alone do not make the card belong here: the user chooses the project again.
- await expect(project).toBeChecked();await project.uncheck();await project.check();
+ const content=await settings(page,'Recent records','Content');
+ // Project choices of a card from another workspace are not listed here (src/dashboard-collection-contract.js:17);
+ // its retained project shows as a saved selection (src/web/dashboard-choice-ui.js:27).
+ const retained=content.getByRole('group',{name:'Projects to include',exact:true}).getByRole('checkbox',{name:'Saved selection',exact:true});await expect(retained).toBeChecked();
+ // Matching project IDs alone do not make the card belong here: clearing the selection reassigns the card
+ // (src/web/dashboard-ui.js:333) and the user chooses the project again from this workspace's projects.
+ // The inspector redraws for this workspace after the click, so the next state is checked, not the old box.
+ await retained.click();const project=content.getByRole('checkbox',{name:b.projects[0].title,exact:true});
+ await expect(project).not.toBeChecked();await project.check();await expect(project).toBeChecked();
  await expect(recent).toContainText('Watching a seed unfold');await settled(page);
  expect((await saved()).views[0].panels[0].config.workspaceId).toBe(b.id);expect((await saved()).views[0].panels[0].options.projectIds).toEqual([b.projects[0].id]);
  expect(await research()).toBe(original);

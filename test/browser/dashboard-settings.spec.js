@@ -2,11 +2,11 @@ import {test,expect} from '@playwright/test';
 import {workDirectory} from '../../scripts/work-directory.js';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
 import {defaultDashboard,createPanel} from '../../src/web/dashboard-model.js';
-import {saveDashboard,dashboardSnapshot} from '../../src/preferences.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 
 const settled=page=>page.evaluate(async()=>{
  await document.fonts.ready;
@@ -25,21 +25,27 @@ const geometry=page=>page.evaluate(()=>{
   navigation:document.querySelector('#main-navigation').scrollTop
  };
 });
+// Current workspaces load card data after the layout is placed; measure loaded cards.
+async function loaded(page){
+ await expect(page.locator('.desk-card [role="status"]')).toHaveCount(0);
+ await expect(page.locator('[data-desk-card="records"] .desk-item').first()).toBeVisible();
+ await expect(page.locator('[data-desk-card="projects"] .desk-item').first()).toBeVisible();
+}
+const settingsSave=request=>request.method()==='POST'&&/\/api\/dashboard(\/pending)?$/.test(new URL(request.url()).pathname);
 async function openFixture(page,layout,many=false){
  const directory=await mkdtemp(path.join(await workDirectory('test-work'),'card-settings-'));
  const book=sampleNotebook();book.title='Example workspace';book.projects[0].title='Example project';book.notebooks[0].title='Research records';
  book.entries=book.entries.slice(0,1);
  book.entries[0].title='Comparing observations across different light conditions, materials and repeated measurements over time';
  if(many)for(let i=0;i<8;i++)book.entries.push({...structuredClone(book.entries[0]),id:crypto.randomUUID()});
- const root=path.join(directory,'notebook'),preferences=path.join(directory,'preferences.json');
- await new Workspace(root).create(book);
+ const preferences=path.join(directory,'preferences.json'),{workspace,deviceStore}=await encryptedFixture(directory,book),root=workspace.root;
  const settings=defaultDashboard(),projects=createPanel('projects','projects',4),records=createPanel('records','records',8);
  projects.column=0;records.column=layout==='stacked'?0:4;
  settings.views[0].panels=[projects,records];
- await saveDashboard(preferences,settings,dashboardSnapshot(defaultDashboard()).etag);
- const app=await startServer({root,port:0,preferencesFile:preferences});
- await page.goto(app.url);await page.locator('.desk-desktop[data-placed]').waitFor();await settled(page);
- return {app,directory};
+ await writeWorkspaceDashboard(workspace,settings,(await readWorkspaceDashboard(workspace)).etag);
+ const app=await startServer({root,port:0,preferencesFile:preferences,deviceStore});
+ await page.goto(app.url);await page.locator('.desk-desktop[data-placed]').waitFor();await loaded(page);await settled(page);
+ return {app,directory,workspace};
 }
 async function rememberNodes(page){
  await page.evaluate(()=>{
@@ -66,7 +72,7 @@ for(const layout of ['stacked','side-by-side']){
   await page.setViewportSize({width:1834,height:900});
   const {app,directory}=await openFixture(page,layout);
   const writes=[],errors=[];
-  page.on('request',req=>{if(req.method()==='POST'&&req.url().endsWith('/api/dashboard'))writes.push(req);});
+  page.on('request',req=>{if(settingsSave(req))writes.push(req);});
   page.on('pageerror',error=>errors.push(error.message));
   try{
    await page.evaluate(()=>{document.querySelector('.tree-project').open=true;document.querySelector('#main-navigation').scrollTop=75;});
@@ -104,7 +110,7 @@ for(const layout of ['stacked','side-by-side']){
  });
 }
 test('settings retain a scrolled desktop on narrow screens; deliberate edits still persist',async({page})=>{
- const {app,directory}=await openFixture(page,'stacked',true);
+ const {app,directory,workspace}=await openFixture(page,'stacked',true);
  try{
   await page.setViewportSize({width:600,height:800});await settled(page);
   await page.evaluate(()=>scrollTo(0,100));await settled(page);
@@ -122,9 +128,10 @@ test('settings retain a scrolled desktop on narrow screens; deliberate edits sti
   await page.screenshot({path:path.join(directory,'phone-settings.png')});
   await page.getByLabel('Card title',{exact:true}).fill('Research projects');
   await expect(page.locator('[data-desk-card="projects"] h2')).toHaveText('Research projects');
-  await expect.poll(()=>page.evaluate(async()=>(await (await fetch('/api/dashboard')).json()).settings.views[0].panels[0].config.title)).toBe('Research projects');
+  // A current workspace stores the edit in its own settings once the pending save is applied.
+  await expect.poll(async()=>(await readWorkspaceDashboard(workspace)).settings.views[0].panels[0].config.title).toBe('Research projects');
   await page.getByRole('button',{name:'Close card settings',exact:true}).click();
-  await page.reload();await page.locator('.desk-desktop[data-placed]').waitFor();
+  await page.reload();await page.locator('.desk-desktop[data-placed]').waitFor();await loaded(page);
   await expect(page.locator('[data-desk-card="projects"] h2')).toHaveText('Research projects');
   await page.setViewportSize({width:1834,height:900});await settled(page);
   await page.getByRole('button',{name:'Settings for Research projects',exact:true}).click();
