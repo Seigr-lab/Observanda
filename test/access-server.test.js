@@ -3,26 +3,27 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {testServer as startServer} from './device-fixture.js';
+import {testServer as startServer,TestDeviceStore} from './device-fixture.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {initializeLocation,readPreference,workspaceManifest} from '../src/locations.js';
-import {createAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
 import {setTimeout as delay} from 'node:timers/promises';
 
-async function setup(t,{protected:secure=false,create=true,currentAccess=false}={}){
+async function setup(t,{protected:secure=false,create=true}={}){
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-auth-service-')),root=path.join(parent,'workspace'),preferencesFile=path.join(parent,'settings','preferences.json');
-  const encrypted=create&&currentAccess?await encryptedFixture(parent,sampleNotebook()):null;
-  if(create&&!encrypted)await initializeLocation(root,sampleNotebook(),await createAccess(secure?'Researcher':'',secure?'synthetic password 123':''));
-  const app=await startServer({root,port:0,preferencesFile,deviceStore:encrypted?.deviceStore});t.after(async()=>{try{await app.close();}finally{clearVault(encrypted?.vault);}});
+  // Unprotected workspaces open with this device; protected ones need the password.
+  const encrypted=create&&!secure?await encryptedFixture(parent,sampleNotebook()):null,deviceStore=encrypted?.deviceStore??new TestDeviceStore({file:path.join(parent,'device.key')});
+  if(create&&secure){const access=await createWorkspaceAccess('Researcher','synthetic password 123',deviceStore),vault=takeCreatedVault(access);try{await initializeLocation(root,sampleNotebook(),access,vault);}finally{clearVault(vault);}}
+  const app=await startServer({root,port:0,preferencesFile,deviceStore});t.after(async()=>{try{await app.close();}finally{clearVault(encrypted?.vault);}});
   async function client(){
     const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
     const cookie=session.headers.get('x-observanda-session').split(';')[0];
     const c={context:null,request:(route,data,options={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...options}})};if(encrypted)assert.equal((await c.request('/api/access/unlock',{})).status,200);return c;
   }
-  return {...app,parent,root,preferencesFile,client,vault:encrypted?.vault};
+  return {...app,parent,root,preferencesFile,client,deviceStore,vault:encrypted?.vault};
 }
 
 
@@ -62,14 +63,14 @@ test('access changes require the existing password and invalidate other authenti
 
 test('password attempts are limited across new launch sessions and the Open workspace route',async t=>{
   const app=await setup(t),client=await app.client(),protectedRoot=path.join(app.parent,'protected');
-  await initializeLocation(protectedRoot,sampleNotebook(),await createAccess('Owner','another synthetic password'));
+  const access=await createWorkspaceAccess('Owner','another synthetic password',app.deviceStore),vault=takeCreatedVault(access);try{await initializeLocation(protectedRoot,sampleNotebook(),access,vault);}finally{clearVault(vault);}
   for(let i=0;i<5;i++)assert.equal((await client.request('/api/storage/open',{path:protectedRoot,username:'Owner',password:'wrong'})).status,401);
   const fresh=await app.client();assert.equal((await fresh.request('/api/storage/open',{path:protectedRoot,username:'Owner',password:'wrong'})).status,429);
   assert.ok((await (await client.request('/api/notebook')).json()).book);
 });
 
 test('copying switches only after review and verification and rejects old-tab writes',async t=>{
-  const app=await setup(t,{currentAccess:true}),client=await app.client(),other=await app.client(),before=await new Workspace(app.root,app.vault).read();
+  const app=await setup(t),client=await app.client(),other=await app.client(),before=await new Workspace(app.root,app.vault).read();
   const initial=await (await client.request('/api/storage')).json();client.context=initial.contextId;other.context=initial.contextId;
   const destination=path.join(app.parent,'new storage'),planResponse=await client.request('/api/storage/copy/preview',{path:destination}),plan=await planResponse.json();assert.equal(planResponse.status,200,JSON.stringify(plan));
   assert.equal((await client.request('/api/storage/copy',{id:plan.id,reviewed:false})).status,409);
@@ -112,7 +113,7 @@ test('workspace creation keeps its admitted response alive through slow initiali
   assert.equal(created.book.title,title);assert.equal(created.storage.root,destination);assert.equal(created.storage.available,true);assert.ok(created.storage.contextId);assert.equal(requests,1);
   assert.equal(await readPreference(app.preferencesFile),destination);assert.ok((await readdir(destination)).includes('workspace.observanda'));
   await app.close();
-  const reopened=await startServer({root:destination,port:0,preferencesFile:app.preferencesFile,expectedExisting:true});t.after(()=>reopened.close());
+  const reopened=await startServer({root:destination,port:0,preferencesFile:app.preferencesFile,expectedExisting:true,deviceStore:app.deviceStore});t.after(()=>reopened.close());
   const session=await fetch(reopened.origin+'/api/session',{method:'POST',headers:{Origin:reopened.origin,'Content-Type':'application/json'},body:JSON.stringify({token:reopened.launchToken})});assert.equal(session.status,200);
   const saved=await fetch(reopened.origin+'/api/notebook',{headers:{'X-Observanda-Session':session.headers.get('x-observanda-session').split(';')[0]}});assert.equal(saved.status,200);const current=await saved.json();
   assert.equal(current.book.id,created.book.id);assert.equal(current.book.title,title);assert.deepEqual(current.book.entries,created.book.entries);
@@ -136,7 +137,7 @@ test('personal display settings survive a service restart and are available on t
   assert.equal((await client.request('/api/interface',settings)).status,200);
   assert.deepEqual(await (await client.request('/api/interface')).json(),settings);
   assert.equal((await client.request('/api/interface',{...settings,secret:'ignored?'})).status,422);
-  const next=await startServer({root:app.root,port:0,preferencesFile:app.preferencesFile});t.after(()=>next.close());
+  const next=await startServer({root:app.root,port:0,preferencesFile:app.preferencesFile,deviceStore:app.deviceStore});t.after(()=>next.close());
   const auth=await fetch(next.origin+'/api/session',{method:'POST',headers:{Origin:next.origin,'Content-Type':'application/json'},body:JSON.stringify({token:next.launchToken})});
   const cookie=auth.headers.get('x-observanda-session').split(';')[0];
   assert.deepEqual(await (await fetch(next.origin+'/api/interface',{headers:{'X-Observanda-Session':cookie}})).json(),settings);
