@@ -13,6 +13,7 @@ import {InventoryReader} from '../src/modules/inventory-reader.js';
 import {seedModuleCurrent} from './module-current-fixture.js';
 import {ModuleReader} from '../src/modules/reader.js';
 import {Workspace} from '../src/storage.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 
@@ -43,7 +44,8 @@ for(const count of [65,650])test('inventory queries include all ledger facts whi
 
 test('inventory filter facts survive ordinary and fresh-key restore, support older heads, and fail closed on damage',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-facts-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ // Restored workspaces pin search results whose leases must be released before the folder is removed.
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const entity=(type,data)=>({id:randomUUID(),type,revision:1,createdAt:now,updatedAt:now,data}),projectId=book.projects[0].id;
  const category=entity('category',{name:'Active category',description:'Private schema notes',archived:false,fields:[]}),archived=entity('category',{name:'Archived category',description:'',archived:true,fields:[]});
  const resource=entity('resource',{projectId:null,placementId:projectId,name:'Shared scope',code:'',kind:'object',description:'Private item',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'',capacity:1,status:'available',links:[]});
