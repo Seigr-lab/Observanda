@@ -54,6 +54,8 @@ test('access changes require the existing password and invalidate other authenti
   let response=await first.request('/api/access/change',{username:'Private account',password:'first synthetic password',currentPassword:'synthetic password 123'});assert.equal(response.status,200);
   assert.equal((await second.request('/api/notebook')).status,401);
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'wrong'});assert.equal(response.status,401);
+  // Without the current password the unlocked session's device trust is not enough.
+  for(const missing of [{},{currentPassword:''}]){response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',...missing});assert.equal(response.status,401);}
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'first synthetic password'});assert.equal(response.status,200);
   assert.equal((await (await first.request('/api/notebook')).json()).etag,original.etag);
 });

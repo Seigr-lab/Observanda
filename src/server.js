@@ -1002,7 +1002,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/access/change'){
         if(!workspace)throw new AppError('MISSING');
         if(changing||loginBusy||activeWrites)throw new AppError('LOCKED');changing=true;
-        try{const data=await body(req);if(accessState.access.value.formatVersion!==3){const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword??'');await clearVault(verified);}const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce ||= requiresAccess(next.value);client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
+        try{const data=await body(req);
+        // A password-protected workspace changes its credentials only with its current password, even in an unlocked session. An empty password would fall back to this device's trust, so it is refused before checking.
+        if(accessState.access.value.password){if(typeof data.currentPassword!=='string'||!data.currentPassword)throw new AppError('ACCESS_DENIED');const verified=await authenticate(context.root,accessState.access,accessState.access.value.username,data.currentPassword);await clearVault(verified);}
+        const next=await changeAccess(context.root,data,accessState.access.etag,{deviceStore,vault:context.vault});context.protectedOnce ||= requiresAccess(next.value);client.access=next.etag;client.expires=Date.now()+8*60*60*1000;return json({...await accessSummary(next.value,deviceStore),locked:false});}
         finally{changing=false;}
       }
       if(!releaseRead)await waitForWriter(async()=>{if(changing||loginBusy)throw new AppError('LOCKED');});
