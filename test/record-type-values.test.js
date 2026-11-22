@@ -16,11 +16,16 @@ import {RecordQueryDocuments} from '../src/record-query-documents.js';
 import {createRun} from '../src/web/record-workflow.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
 import {digest,serialize} from '../src/storage-format.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
-import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {Workspace} from '../src/storage.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {RecordDraftReview,verifyRecordDraftReviews} from '../src/record-draft-review.js';
 import {retainedDraft} from './fixtures/record-draft-review.js';
+import {mkdir} from 'node:fs/promises';
+import {fixture as labBookFixture} from './project-domain-fixture.js';
+import {copyProjectLocation} from '../src/project-transfer.js';
+import {ProjectStorage} from '../src/project-storage.js';
+import {rekeyCatalogue} from '../src/research-catalogue.js';
+import {workspaceFile,atomicWrite} from '../src/storage.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-type-values-')),book=sampleNotebook(),record=book.entries[2],parent=book.entries[0];
@@ -52,39 +57,55 @@ test('record type changes preserve content and history, update queries and enfor
  });
 });
 test('recoverable type changes atomically guard their format and survive ordinary and fresh-key copying',async t=>{
- const f=await fixture(t),base=await f.values.read(f.target()),drafts=new RecordValueDrafts(f.workspace),before=await f.workspace.catalogue(store=>catalogueFormat(store.db));assert.ok(before<13);
- const command={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:'type',revision:base.revision,storageRevision:base.storageRevision},value:{value:'analysis'}};
- const write=f.workspace.writeMetadata.bind(f.workspace);t.mock.method(f.workspace,'writeMetadata',async(name,...rest)=>{if(name==='.observanda/drafts/'+command.id+'.json')throw Error('Interrupted checkpoint');return write(name,...rest);});
- await assert.rejects(drafts.write(command),/Interrupted checkpoint/);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),before);assert.equal(await new ResearchDrafts(f.workspace).read(command.id,{header:true}),null);f.workspace.writeMetadata.mock.restore();
+ // A workspace catalogue is created past generation 13 (its settings); a lab
+ // book catalogue stays below it until its first recoverable type change.
+ const book=sampleNotebook(),record=book.entries[2];record.type='note';record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained observation '+i}));
+ const f=await labBookFixture(t,{book}),storage=f.storage,generation=(owner=storage)=>owner.catalogue(store=>catalogueFormat(store.db));
+ const base=await new RecordValues(storage).read({workspaceId:book.id,recordId:record.id,field:'type'}),drafts=new RecordValueDrafts(storage),before=await generation();assert.ok(Number.isSafeInteger(before)&&before<13);
+ const command={id:randomUUID(),workspaceId:book.id,recordId:record.id,expectedRevision:null,selection:{field:'type',revision:base.revision,storageRevision:base.storageRevision},value:{value:'analysis'}};
+ const write=storage.writeMetadata.bind(storage);t.mock.method(storage,'writeMetadata',async(name,...rest)=>{if(name==='.observanda/drafts/'+command.id+'.json')throw Error('Interrupted checkpoint');return write(name,...rest);});
+ await assert.rejects(drafts.write(command),/Interrupted checkpoint/);assert.equal(await generation(),before);assert.equal(await new ResearchDrafts(storage).read(command.id,{header:true}),null);storage.writeMetadata.mock.restore();
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Type recovery reconstructed an entire record');});
- const receipt=await drafts.write(command);assert.deepEqual(await drafts.write(command),receipt);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),13);
- const lookup={id:command.id,workspaceId:f.book.id,expectedRevision:receipt.revision};assert.deepEqual((await drafts.read(lookup)).value,command.value);
- await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await new ResearchDrafts(f.workspace).read(command.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),13);
+ // requireRecordTypeDrafts raises an older catalogue to exactly generation 13.
+ const receipt=await drafts.write(command);assert.deepEqual(await drafts.write(command),receipt);assert.equal(await generation(),13);
+ const lookup={id:command.id,workspaceId:book.id,expectedRevision:receipt.revision};assert.deepEqual((await drafts.read(lookup)).value,command.value);
+ await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await new ResearchDrafts(storage).read(command.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),13);
  ResearchCatalogue.prototype.record.mock.restore();
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','synthetic type recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
- for(const workspace of [new Workspace(copied,f.vault),new Workspace(fresh,vault)]){assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),13);assert.deepEqual((await new RecordValueDrafts(workspace).read(lookup)).value,command.value);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));}
+ const destination=path.join(f.workspace.root,'type-copy','project');await mkdir(path.dirname(destination));const copied=await copyProjectLocation(storage,destination,{id:randomUUID()});
+ const access=await createWorkspaceAccess('','synthetic type recovery password',new TestDeviceStore({file:path.join(f.root,'type-recovery-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),fresh=new ProjectStorage(path.join(await f.receivingWorkspace(),'project'),f.projectId,vault);
+ await mkdir(path.join(fresh.root,'.observanda'),{recursive:true});await atomicWrite(path.join(fresh.root,'.observanda/access.json'),serialize(access));await fresh.writeFile(await workspaceFile(fresh.root,{secure:true}),descriptor);await rekeyCatalogue(storage,fresh,JSON.parse(descriptor));
+ // A copy may add later catalogue features; it must still admit record type drafts (generation 13 or later).
+ for(const copy of [copied,fresh]){assert.ok(await generation(copy)>=13);assert.deepEqual((await new RecordValueDrafts(copy).read(lookup)).value,command.value);await copy.catalogue(store=>store.verifySnapshot(undefined,book.id));}
 });
 
 test('whole-record checkpoint type corrections are guarded, recoverable and retain template ownership',async t=>{
- const f=await fixture(t),book=(await f.workspace.read()).book,original=book.entries.find(r=>r.id===f.record.id),mine={...structuredClone(original),title:'Recovered observations'};
- const draft=await retainedDraft(f.workspace,f.book.id,original,mine),media={get:async()=>{throw Error('Unexpected media');}},review=new RecordDraftReview(f.workspace,media);
- const prepare={workspaceId:f.book.id,id:draft.draft.id,expectedRevision:draft.revision};let plan=await review.prepare(prepare);
+ // The lab book catalogue holds a retained draft (generation 10) and is still
+ // below generation 13 when the first type correction is checkpointed.
+ const source=sampleNotebook(),record=source.entries[2];record.type='note';record.status='draft';record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained observation '+i}));
+ const templatedId=randomUUID();source.entries.push(createRun(source,source.entries[0]),{...structuredClone(record),id:templatedId,sections:[],template:{id:randomUUID(),profileId:null,label:'Saved template',description:'',fields:[],values:{}}});
+ const f=await labBookFixture(t,{book:source}),storage=f.storage,generation=()=>storage.catalogue(store=>catalogueFormat(store.db));
+ const book=(await storage.read()).book,original=book.entries.find(r=>r.id===record.id),mine={...structuredClone(original),title:'Recovered observations'};
+ const draft=await retainedDraft(storage,book.id,original,mine),media={get:async()=>{throw Error('Unexpected media');}},review=new RecordDraftReview(storage,media);
+ const prepare={workspaceId:book.id,id:draft.draft.id,expectedRevision:draft.revision};let plan=await review.prepare(prepare);
  const target=p=>({id:p.id,workspaceId:p.workspaceId,expectedRevision:p.revision});
  assert.ok((await review.editFields({...target(plan),group:'details',offset:0})).items.some(i=>i.field==='type'));
- const selected=await review.editRead({...target(plan),field:'type'}),command={...target(plan),field:'type',value:{value:'analysis'},valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()},before=await f.workspace.catalogue(store=>catalogueFormat(store.db)),put=ResearchCatalogue.prototype.putObject;
+ const selected=await review.editRead({...target(plan),field:'type'}),command={...target(plan),field:'type',value:{value:'analysis'},valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()},before=await generation(),put=ResearchCatalogue.prototype.putObject;
+ assert.ok(Number.isSafeInteger(before)&&before>=10&&before<13);
  t.mock.method(ResearchCatalogue.prototype,'putObject',async function(id,value){await put.call(this,id,value);if(id.startsWith('record-draft-edit-operation:'))throw Error('Interrupted type correction');});
  await assert.rejects(review.editWrite(command),/Interrupted type correction/);ResearchCatalogue.prototype.putObject.mock.restore();
- assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),before);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,original.type);
+ assert.equal(await generation(),before);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,original.type);
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Checkpoint correction reconstructed a complete record');});
- const corrected=await review.editWrite(command);assert.deepEqual(await review.editWrite(command),corrected);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),13);
- await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await verifyRecordDraftReviews(store);})),{code:'CATALOGUE_DAMAGED'});
- plan=await review.prepare(prepare);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,'analysis');await f.workspace.catalogue(store=>verifyRecordDraftReviews(store));
+ const corrected=await review.editWrite(command);assert.deepEqual(await review.editWrite(command),corrected);assert.equal(await generation(),13);
+ await assert.rejects(storage.withLock(()=>storage.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await verifyRecordDraftReviews(store);})),{code:'CATALOGUE_DAMAGED'});assert.equal(await generation(),13);
+ plan=await review.prepare(prepare);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,'analysis');await storage.catalogue(store=>verifyRecordDraftReviews(store));
  ResearchCatalogue.prototype.record.mock.restore();
- const access=await createAccess('','synthetic corrected type password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'corrected-copy'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const access=await createWorkspaceAccess('','synthetic corrected type password',new TestDeviceStore({file:path.join(f.root,'corrected-type-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),copied=new ProjectStorage(path.join(await f.receivingWorkspace(),'project'),f.projectId,vault);
+ await mkdir(path.join(copied.root,'.observanda'),{recursive:true});await atomicWrite(path.join(copied.root,'.observanda/access.json'),serialize(access));await copied.writeFile(await workspaceFile(copied.root,{secure:true}),descriptor);await rekeyCatalogue(storage,copied,JSON.parse(descriptor));
+ const restored=new RecordDraftReview(copied,media);assert.equal(await copied.catalogue(store=>catalogueFormat(store.db)),13);
  assert.deepEqual(await restored.prepare(prepare),plan);await restored.apply(target(plan));
- const result=(await workspace.read()).book.entries.find(r=>r.id===original.id);assert.equal(result.type,'analysis');assert.equal(result.title,mine.title);assert.deepEqual(result.sections,original.sections);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
- const templated=book.entries.find(r=>r.id===f.templated.id),templateDraft=await retainedDraft(f.workspace,f.book.id,templated,{...templated,title:'Template draft'}),templatePlan=await review.prepare({workspaceId:f.book.id,id:templateDraft.draft.id,expectedRevision:templateDraft.revision});
+ const result=(await copied.read()).book.entries.find(r=>r.id===original.id);assert.equal(result.type,'analysis');assert.equal(result.title,mine.title);assert.deepEqual(result.sections,original.sections);await copied.catalogue(store=>store.verifySnapshot(undefined,book.id));
+ const templated=book.entries.find(r=>r.id===templatedId),templateDraft=await retainedDraft(storage,book.id,templated,{...templated,title:'Template draft'}),templatePlan=await review.prepare({workspaceId:book.id,id:templateDraft.draft.id,expectedRevision:templateDraft.revision});
  assert.ok(!(await review.editFields({...target(templatePlan),group:'details',offset:0})).items.some(i=>i.field==='type'));await assert.rejects(review.editRead({...target(templatePlan),field:'type'}),{code:'INVALID'});
 });

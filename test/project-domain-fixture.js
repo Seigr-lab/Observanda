@@ -12,11 +12,11 @@ import {clearVault} from '../src/encryption.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
-export async function fixture(t){
+export async function fixture(t,{book=sampleNotebook()}={}){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-domains-')),vaults=[];
  const runtime=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);
  t.after(async()=>{await runtime.close();detach();for(const vault of vaults)await clearVault(vault);assert.equal(path.dirname(path.resolve(root)),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-project-domains-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const book=sampleNotebook(),projectId=book.projects[0].id,access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),vault=takeCreatedVault(access);vaults.push(vault);
+ const projectId=book.projects[0].id,access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),vault=takeCreatedVault(access);vaults.push(vault);
  book.title=book.projects[0].title='project';
  // Every project lives inside an open workspace and uses its cluster.
  const {initializeLocation}=await import('../src/locations.js'),{createNotebook}=await import('../src/model.js'),{Workspace}=await import('../src/storage.js'),home=path.join(root,'Home workspace'),homeAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'device')})),homeVault=takeCreatedVault(homeAccess);vaults.push(homeVault);await initializeLocation(home,createNotebook('Home workspace',''),homeAccess,homeVault);const workspace=new Workspace(home,homeVault);await workspace.outline();
