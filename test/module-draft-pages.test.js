@@ -45,7 +45,8 @@ test('module recovery discovers ten summaries per page without reading checkpoin
   ProjectDraftCatalogue.prototype.objectValue=function(id,...args){if(id.startsWith(source))bodies++;if(id.startsWith(summary))summaries++;return original.call(this,id,...args);};
   try{
    const options={workspaceId:f.book.id,excludeId:f.commands.at(-1).id},start=performance.now(),first=await f.drafts.list(moduleId,options),elapsed=performance.now()-start;
-   assert.equal(first.drafts.length,10);assert.equal(first.previousCursor,null);assert.ok(first.nextCursor);assert.equal(summaries,10);assert.equal(bodies,0);
+   // Ten summaries are shown and one more is read to learn whether a visible next page exists.
+   assert.equal(first.drafts.length,10);assert.equal(first.previousCursor,null);assert.ok(first.nextCursor);assert.equal(summaries,11);assert.equal(bodies,0);
    assert.ok(elapsed<5000);assert.ok(JSON.stringify(first).length<12000);assert.ok(!JSON.stringify(first).includes('PRIVATE_CHECKPOINT'));
    const second=await f.drafts.list(moduleId,{...options,cursor:first.nextCursor}),back=await f.drafts.list(moduleId,{...options,cursor:second.previousCursor});assert.deepEqual(back.drafts,first.drafts);
    const seen=first.drafts.map(d=>d.id);let page=second;
