@@ -20,6 +20,7 @@ import {Workspace} from '../src/storage.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
 import {RecordValues} from '../src/record-values.js';
 import {relationValue} from '../src/web/record-relation-value.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 const query=()=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()});
 const relatedTo=(book,id)=>({workspaceId:book.id,id});
@@ -42,7 +43,7 @@ test('linked history stays paged, private and revision-anchored across saves and
  for(let i=0;i<24;i++){const r=record('inspection','Visit '+i,'2026-09-'+String(i+1).padStart(2,'0'));r.status=i===23?'incomplete':'completed';r.body='PRIVATE BODY '.repeat(200);documentRecord(book.id,r,hive);book.entries.push(r);}
  const external=record('inspection','Same ID in another workspace'),foreign=randomUUID();documentRecord(foreign,external,hive);book.entries.push(external);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-')),f=await encryptedFixture(directory,book),queries=new RecordQuery(f.workspace),records=new ResearchRecords(f.workspace,{});
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const command={workspaceId:book.id,query:query(),relatedTo:relatedTo(book,hive.id),limit:10},read=ResearchCatalogue.prototype.read,load=ResearchCatalogue.prototype.record;let first;
  ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace loaded for hive history');};ResearchCatalogue.prototype.record=()=>{throw Error('Record body loaded for hive history');};
  try{
@@ -71,7 +72,7 @@ test('a published hive never discloses its private linked inspections or query m
 // inspection's own values (record-activity-ui.js linkSubject), never through a workspace read.
 test('a saved inspection gains its subject through its own values without reading the workspace or the subject',async t=>{
  const {book,other,inspection}=beekeepingFixture(),directory=await mkdtemp(path.join(os.tmpdir(),'observanda-bees-subject-')),f=await encryptedFixture(directory,book);
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const values=new RecordValues(f.workspace),read=ResearchCatalogue.prototype.read,load=ResearchCatalogue.prototype.record,bodies=[];
  ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace loaded to link a subject');};ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return load.call(this,id,...args);};
  const before=(await new RecordQuery(f.workspace).list({workspaceId:book.id,query:query(),relatedTo:relatedTo(book,other.id)})).total;

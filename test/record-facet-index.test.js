@@ -12,11 +12,12 @@ import {RecordFacetIndex} from '../src/record-facet-index.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {recordBrowse,recordQueryOrder} from '../src/web/record-query.js';
 import {recordCounts} from '../src/web/record-workflow.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 async function fixture(t){
  const temporaryRoot=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(temporaryRoot,'observanda-record-facets-')),book=queryFixture(),seed=book.entries.at(-1);
  for(let i=0;i<60;i++)book.entries.push({...structuredClone(seed),id:randomUUID(),title:'Additional '+i,occurredOn:i%4?'2026-06-01':{kind:'unknown'},sections:[],attachments:[],figures:[],relations:[]});
- const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),temporaryRoot);assert.ok(path.basename(directory).startsWith('observanda-record-facets-'));await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);assert.equal(path.dirname(directory),temporaryRoot);assert.ok(path.basename(directory).startsWith('observanda-record-facets-'));await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  return {...f,book,reader:new RecordQuery(f.workspace),query:{workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()},limit:7}};
 }
 test('record facets and indexed pages agree with complete scans before and after edits, deletion and historical reads',async t=>{

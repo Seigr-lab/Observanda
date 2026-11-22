@@ -22,6 +22,7 @@ import {applyRecordPatch} from '../src/web/record-patch.js';
 import {starterTemplate} from '../src/web/project-templates.js';
 import {validateWorkspaceOutline} from '../src/web/workspace-reader.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 async function fixture(t,count=12){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-structure-index-'));
@@ -30,7 +31,7 @@ async function fixture(t,count=12){
  book.projects.push(project);book.notebooks.push(notebook,empty);
  book.entries=Array.from({length:count},(_,n)=>({...structuredClone(seed),id:randomUUID(),notebookId:n<3?book.notebooks[0].id:notebook.id,title:'Private take '+n,body:'Original working material',share:true,sections:[{id:randomUUID(),title:'Notes',body:''}],figures:[],attachments:[],relations:[]}));
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
- t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  return {directory,ws,vault,base:await ws.read(),service:new StructureCommands(ws)};
 }
 const command=(f,base,kind,value)=>f.service.execute('structure',{etag:base.etag,change:{kind,value}});

@@ -16,12 +16,13 @@ import {validDiscoveryPage} from '../src/web/data-discovery.js';
 import {RecordQuery} from '../src/record-query.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {digest,serialize} from '../src/storage-format.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-discovery-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,body:'BODY MUST NOT LEAVE DISCOVERY',sections:[],attachments:[],figures:[],relations:[],contributors:[{id:randomUUID(),name:'Artist '+i,role:'Performer'}]}));
  const f=await encryptedFixture(directory,book),etag=(await f.workspace.read()).etag;
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  return {...f,book,service:new DashboardDiscovery(f.workspace),command:{workspaceId:book.id,etag,provider:'contributors',offset:0,limit:12,search:''}};
 }
 test('card discovery retains a label-only page and reads no bodies across tenfold record growth',async t=>{

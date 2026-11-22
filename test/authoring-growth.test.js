@@ -19,6 +19,7 @@ import {validateRecordScope} from '../src/web/record-scope.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 test('normal authoring, filtered browsing, structure and recovery exceed the old corpus limits at A1 counts and tenfold growth',async t=>{
  t.diagnostic(JSON.stringify({platform:process.platform,node:process.version,cpu:os.cpus()[0].model,memoryGiB:Math.round(os.totalmem()/1024**3)}));
@@ -27,7 +28,7 @@ test('normal authoring, filtered browsing, structure and recovery exceed the old
  for(const copies of [1,10])await t.test(copies+' corpus copies',{timeout:1200000},async t=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-authoring-growth-'));let f,peak=0;
   const sampler=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().heapUsed);},25);sampler.unref();
-  t.after(async()=>{clearInterval(sampler);if(f)await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{clearInterval(sampler);if(f)await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
   f=await authoringGrowthFixture(directory,{copies});assert.equal(f.ids.length,copies*113);assert.ok(f.metrics.originalBytes>5*1024*1024*copies);
   const reader=new WorkspaceReader(f.workspace),record=ResearchCatalogue.prototype.record;let bodies=0,activeBodies=0,maximumBodies=0;
   // A recording mock retains every returned original and would itself turn a

@@ -15,12 +15,13 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {lookupRecordTypes} from '../src/web/record-type-lookup.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 test('record pages omit the type catalogue; independent discovery is scoped, pinned and body-free',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-types-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Second book'});
  book.entries=Array.from({length:65},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Take '+i,notebookId:book.notebooks[i%2].id,body:'Private original',sections:[],attachments:[],figures:[],relations:[],
   template:{id:randomUUID(),profileId:null,label:'Type '+i,description:'',fields:[],values:{}}}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const records=new RecordQuery(f.workspace),types=new RecordTypeQuery(f.workspace),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()},etag=await f.workspace.catalogue(s=>s.head());
  const command={workspaceId:book.id,etag,projectId:null,notebookId:null,selected:'all',limit:25,search:'',cursor:null};
  const methods={record:ResearchCatalogue.prototype.record,read:ResearchCatalogue.prototype.read};let first,second;

@@ -14,6 +14,7 @@ import {withRecordTerms,withChangedRecordTerms,recordTerms} from '../src/record-
 import {documentTerms} from '../src/record-search-terms.js';
 import {recordQueryDocument,recordBrowse} from '../src/web/record-query.js';
 import {queryTextMatches} from '../src/record-query-storage.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 test('substring matching preserves chunk seams and verifies trailing data after a match',async()=>{
  for(const needle of ['bridge','🌿','\ud800','x','absent']){
@@ -31,7 +32,7 @@ test('large private vocabulary spills exactly; matching and audits never assembl
  let vocabulary='';for(let i=0;i<3500;i++)vocabulary+=String.fromCharCode(0x4e00+i);
  const seed={...book.entries[0],type:'note',title:'Long field book',body:vocabulary+'x'.repeat(24000)+' a bridge 🌿 with "quotes" and \\ escapes',sections:[],attachments:[],figures:[],relations:[],contributors:[],tags:[]};
  seed.sections=Array.from({length:8},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Repeated observations. '.repeat(500)}));
- book.entries=[seed];const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ book.entries=[seed];const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const selected=RecordValueTree.prototype.selected;
  t.mock.method(RecordValueTree.prototype,'selected',function(root,path){if(path[0]==='searchText')throw Error('Loaded complete search text');return selected.call(this,root,path);});
  const expected=documentTerms(recordQueryDocument(seed));assert.ok(expected.size>8192);

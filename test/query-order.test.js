@@ -20,6 +20,7 @@ import {queryPanel} from '../src/web/dashboard-queries.js';
 import {timelineDefaults,timelineQuery,timelineOrder} from '../src/web/tools/timeline-model.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 
 const ids=['aaaaaaaa','bbbbbbbb','cccccccc','dddddddd'].map(prefix=>prefix+'-0000-4000-8000-000000000000');
 function fixtureBook(){
@@ -51,7 +52,7 @@ test('English title order, date ties and recent cards agree across English and N
 
 test('record, dashboard and timeline cursors survive a restored workspace with another host locale',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portable-order-')),book=fixtureBook(),f=await encryptedFixture(directory,book);
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  const etag=await f.workspace.catalogue(s=>s.head()),query={projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse({sort:'title'})};
  const records={workspaceId:book.id,query,limit:2},cards={workspaceId:book.id,etag,config:defaultPanelConfig(),options:{},limit:2,key:null,provider:'records'},timeline={workspaceId:book.id,query:timelineQuery(timelineDefaults()),limit:2};
  const readers=workspace=>[command=>new RecordQuery(workspace).list(command),command=>new DashboardRecords(workspace).read(command),command=>new TimelineQuery(workspace).list(command)];

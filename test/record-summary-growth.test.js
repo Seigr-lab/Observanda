@@ -14,12 +14,13 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {recordBrowse,queryRecords} from '../src/web/record-query.js';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 const query=browse=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse(browse)});
 async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-summary-growth-')),book=sampleNotebook(),seed=book.entries[2];
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Study '+i,
   body:'Private original prose, absent from metadata browsing. '.repeat(20),sections:[],relations:[],figures:[],attachments:[],contributors:[],tags:[i%2?'field':'studio'],share:false}));
- const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  return {...f,book,service:new RecordQuery(f.workspace)};
 }
 

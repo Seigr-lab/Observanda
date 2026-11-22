@@ -16,13 +16,14 @@ import {RecordValueTree} from '../src/record-value-tree.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {withQueryValue} from '../src/record-query-storage.js';
 import {digest,serialize} from '../src/storage-format.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 const prose=(workspaceId,id)=>({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Linked observation',marks:[{type:'link',attrs:{href:'observanda://'+workspaceId+'/record/'+id,title:'',target:'_self',nofollow:false}}]}]}]});
 
 test('selected reference edits preserve duplicate backlinks, verify every index and recover earlier linked queries',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-index-')),book=sampleNotebook(),record=book.entries[0],target=book.entries[1];book.entries=[record,target];
  for(const value of book.entries){value.figures=[];value.attachments=[];value.relations=[];value.sections=[];}
  record.body=prose(book.id,target.id);record.sections=[{id:randomUUID(),title:'Independent reference',body:prose(book.id,target.id)}];
- const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(directory,book);t.after(async()=>{await pinnedQueryResults.clear();await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const writing=new RecordWriting(f.workspace),where={workspaceId:book.id,recordId:record.id,sectionId:null};
  const initial=await writing.read(where),retained=structuredClone(record.body);retained.content[0].content[0].text='Retained linked observation';await writing.save({...where,expectedRevision:initial.revision,value:{body:retained}});
  const before=(await f.workspace.outline()).etag,read=RecordValueTree.prototype.page;t.mock.method(RecordValueTree.prototype,'page',function(root,path,...args){assert.notEqual(path[0],'referenceTargets','Reference update enumerated its full query array');return read.call(this,root,path,...args);});

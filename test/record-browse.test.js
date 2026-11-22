@@ -20,10 +20,11 @@ import {recordsIn} from '../src/web/workspace-structure.js';
 import {applyRecordPatch} from '../src/web/record-patch.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {digest,serialize} from '../src/storage-format.js';
+import {pinnedQueryResults} from '../src/pinned-query-result.js';
 const query=(extra={})=>({projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse(),...extra});
 async function fixture(t,book=upgradeNotebook(queryFixture())){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-browse-')),f=await encryptedFixture(directory,book);
- t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ t.after(async()=>{await clearVault(f.vault);await pinnedQueryResults.clear();await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,queries:new RecordQuery(f.workspace),records:new ResearchRecords(f.workspace,{})};
 }
 const visible=records=>records.map(record=>{const {searchText,referenceTargets,cardSources,...value}=recordQueryDocument(record);return value;});
