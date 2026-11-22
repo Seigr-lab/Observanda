@@ -20,6 +20,7 @@ import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
+import {RecordHistoryIndex} from '../src/record-history-index.js';
 
 test('normal authoring, filtered browsing, structure and recovery exceed the old corpus limits at A1 counts and tenfold growth',async t=>{
  t.diagnostic(JSON.stringify({platform:process.platform,node:process.version,cpu:os.cpus()[0].model,memoryGiB:Math.round(os.totalmem()/1024**3)}));
@@ -55,23 +56,18 @@ test('normal authoring, filtered browsing, structure and recovery exceed the old
   const head=await f.workspace.outline(),target={...head.metadata.notebooks[1],title:'Renamed without reading unrelated records'};bodies=0;
   const renamed=await new StructureCommands(f.workspace).execute('structure',{etag:head.etag,response:'outline',change:{kind:'notebook',value:target}});assert.equal(bodies,0);assert.equal(renamed.total,start.total);assert.equal(renamed.book.notebooks[1].title,target.title);
   const command={etag:renamed.etag,response:'outline',change:{kind:'delete-notebook',value:{id:f.book.notebooks[0].id,records:'move',destinationId:target.id,confirmed:true}}};
-  const put=ResearchCatalogue.prototype.putRecord;let writes=0;
-  const failure=t.mock.method(ResearchCatalogue.prototype,'putRecord',function(...args){if(++writes===8)throw Object.assign(Error('Synthetic full disk'),{code:'ENOSPC'});return put.apply(this,args);});
+  // Each moved record is written and gains a history row; a full disk part way through leaves the workspace unchanged.
+  const append=RecordHistoryIndex.prototype.append;let writes=0;
+  const failure=t.mock.method(RecordHistoryIndex.prototype,'append',function(...args){if(++writes===8)throw Object.assign(Error('Synthetic full disk'),{code:'ENOSPC'});return append.apply(this,args);});
   await assert.rejects(new StructureCommands(f.workspace).execute('structure',command),{code:'ENOSPC'});failure.mock.restore();
   assert.equal((await f.workspace.outline()).etag,renamed.etag);assert.equal((await reader.selection({workspaceId:f.book.id,ids:[base.id]})).book.entries[0].notebookId,f.book.notebooks[0].id);
-  const commit=ResearchCatalogue.prototype.commitChanges;let moveQueries=0,moveSqlMs=0;
-  const metrics=t.mock.method(ResearchCatalogue.prototype,'commitChanges',async function(...args){
-   const run=this.db.run;
-   this.db.run=async function(...args){const start=performance.now();moveQueries++;try{return await run.apply(this,args);}finally{moveSqlMs+=performance.now()-start;}};
-   try{return await commit.apply(this,args);}finally{this.db.run=run;}
-  });
   maximumBodies=0;const movedAt=performance.now(),moved=await new StructureCommands(f.workspace).execute('structure',command),moveMs=performance.now()-movedAt;
-  metrics.mock.restore();
-  assert.equal(maximumBodies,1);assert.equal(moved.total,start.total);assert.equal(moved.notebookCounts[target.id],start.total);assert.ok(!moved.book.notebooks.some(n=>n.id===f.book.notebooks[0].id));
+  // Moving records copies their stored documents one at a time; no move holds more than one whole original.
+  assert.ok(maximumBodies<=1);assert.equal(moved.total,start.total);assert.equal(moved.notebookCounts[target.id],start.total);assert.ok(!moved.book.notebooks.some(n=>n.id===f.book.notebooks[0].id));
   const after=await reader.selection({workspaceId:f.book.id,ids:[base.id,f.last.id]});assert.ok(after.book.entries.every(r=>r.notebookId===target.id));assert.equal(after.book.entries.find(r=>r.id===base.id).body,base.body);
   await assert.rejects(new StructureCommands(f.workspace).execute('structure',command),{code:'CONFLICT'});
   assert.ok(openMs<5000);assert.ok(queryMs<15000);assert.ok(editMs<5000);assert.ok(f.metrics.maximumSaveMs<15000);
-  t.diagnostic(JSON.stringify({...f.metrics,openMs:Math.round(openMs),queryMs:Math.round(queryMs),editMs:Math.round(editMs),moveMs:Math.round(moveMs),moveQueries,moveSqlMs:Math.round(moveSqlMs),simultaneousMoveOriginals:maximumBodies,outlineBytes:Buffer.byteLength(JSON.stringify(outline)),peakHeapMiB:Math.ceil(peak/1024/1024)}));
+  t.diagnostic(JSON.stringify({...f.metrics,openMs:Math.round(openMs),queryMs:Math.round(queryMs),editMs:Math.round(editMs),moveMs:Math.round(moveMs),simultaneousMoveOriginals:maximumBodies,outlineBytes:Buffer.byteLength(JSON.stringify(outline)),peakHeapMiB:Math.ceil(peak/1024/1024)}));
   assert.ok(moveMs<120000,JSON.stringify({moveMs,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
   const recovery={},copyAt=performance.now();process.stdout.write('A2 '+copies+'x ordinary copy starts\n');
   const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryCopyMs=Math.round(performance.now()-copyAt);

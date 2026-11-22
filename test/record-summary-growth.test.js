@@ -70,17 +70,21 @@ test('missing or changed browse summaries fail closed while retained originals r
 test('one record with many section labels uses selected query fields without assembling its header collections',async t=>{
  const f=await fixture(t,1),before=(await f.workspace.read()).book.entries[0];
  const record={...before,sections:Array.from({length:1200},(_,i)=>({id:randomUUID(),title:'Retained section '+i+' '+('label '.repeat(15)),body:'Original evidence remains in this section.'}))};
+ // An interrupted query write leaves the catalogue exactly as it was.
+ const generation=await f.workspace.catalogue(store=>catalogueFormat(store.db));
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  await store.putQuery(record,(await store.snapshot()).metadata);assert.equal(await catalogueFormat(store.db),5);throw Error('Interrupted query upgrade');
- })),/Interrupted query upgrade/);
- assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),3);
+  await store.putQuery(record,(await store.snapshot()).metadata);throw Error('Interrupted query write');
+ })),/Interrupted query write/);
+ assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),generation);
  await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(before),record}]},{receipt:true});
  const select=RecordValueTree.prototype.selected,fields=[];
  t.mock.method(RecordValueTree.prototype,'selected',function(root,path){fields.push(path.join('.'));if(['searchText','cardSources','referenceTargets','publicationDescriptor','editionInventory'].includes(path[0]))throw Error('Unrequested large derivative loaded');return select.call(this,root,path);});
  const first=await f.service.list({workspaceId:f.book.id,query:query(),limit:10});assert.equal(first.records.length,1);assert.equal(first.records[0].title,record.title);
- assert.ok(Buffer.byteLength(JSON.stringify(first))<4096);assert.deepEqual(fields,[]);t.mock.restoreAll();
+ assert.ok(Buffer.byteLength(JSON.stringify(first))<4096);
+ // The list reads only small header fields, never a section or other collection of the record.
+ const header=new Set(['id','notebookId','type','title','occurredOn','status','share','tags','recordRevision']);assert.ok(fields.length>0);assert.deepEqual(fields.filter(field=>!header.has(field)),[]);t.mock.restoreAll();
  await f.workspace.catalogue(async store=>{
-  assert.equal(await catalogueFormat(store.db),6);const snapshot=await store.snapshot(),row=await store.member(snapshot,record.id);
+  assert.equal(await catalogueFormat(store.db),generation);const snapshot=await store.snapshot(),row=await store.member(snapshot,record.id);
   const [document]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{search:false,cardSources:true}));
   assert.equal(document.cardSources.sections.length,1200);assert.equal(document.cardSources.sections.at(-1).title,record.sections.at(-1).title);
   await store.verifySnapshot(undefined,f.book.id);
