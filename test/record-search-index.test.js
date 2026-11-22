@@ -70,16 +70,6 @@ test('relationship and prose backlinks only read matching records across tenfold
  }
 });
 
-test('legacy text-only indexes remain valid and never hide new relationships',async t=>{
- const f=await fixture(t),snapshot=await f.ws.catalogue(s=>s.snapshot()),head=await f.ws.catalogue(s=>s.head());
- // This fixture has no links: its postings are also a valid version-one index.
- await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,{...snapshot,searchIndex:{...snapshot.searchIndex,version:1}}))));
- const base=await f.ws.read(),target=base.book.entries[0],child=structuredClone(base.book.entries[1]);child.relations=[{id:randomUUID(),type:'Uses',label:target.title,target:{workspaceId:f.book.id,kind:'record',id:target.id}}];
- await save(f,base,[child]);assert.equal((await f.ws.catalogue(s=>s.snapshot())).searchIndex.version,1);
- assert.equal((await list(f,query('',{relatedTo:{workspaceId:f.book.id,id:target.id}}))).total,1);
- await f.ws.catalogue(async s=>s.verifySnapshot(await s.head(),f.book.id));
-});
-
 test('indexed substring search reads candidates only across tenfold record growth and bitmap boundaries',async t=>{
  for(const count of [40,400]){
   const f=await fixture(t,count),base=await f.ws.read(),selected=[0,Math.min(255,count-3),Math.min(256,count-2),count-1];
@@ -180,7 +170,7 @@ test('missing branches fail closed, verification rejects incomplete postings, an
  await f.ws.withLock(()=>f.ws.catalogue(async s=>{
   const index=new RecordSearchIndex(s),first=(await index.entries({root:snapshot.searchIndex.root},'book:').next()).value;
   const root=await index.change(snapshot.searchIndex.root,first.id,null);await index.flush(root);
-  await s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,{...snapshot,searchIndex:{version:1,root}}));
+  await s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,{...snapshot,searchIndex:{version:2,root}}));
  }));
  await assert.rejects(f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.book))),{code:'CATALOGUE_DAMAGED'});
  await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,snapshot))));
@@ -192,6 +182,9 @@ test('missing branches fail closed, verification rejects incomplete postings, an
  // Every stored snapshot carries its search index; one without it is damage.
  const {searchIndex,...indexless}=snapshot;void searchIndex;
  await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,indexless))));
+ await assert.rejects(list(f,query('field')),{code:'CATALOGUE_DAMAGED'});
+ // Only the current search index version is read.
+ await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,{...snapshot,searchIndex:{...snapshot.searchIndex,version:1}}))));
  await assert.rejects(list(f,query('field')),{code:'CATALOGUE_DAMAGED'});
  await f.ws.withLock(()=>f.ws.catalogue(s=>s.db.run('UPDATE snapshots SET payload=$2 WHERE id=$1',head,s.encode('snapshot',head,snapshot))));
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.book)));
@@ -219,7 +212,7 @@ test('streamed verification rejects extra posting bits, zero words and extra pos
    ['position:0000000000000999','1'.repeat(64)]
   ]){
    const root=await index.change(head.root,id,value);await index.flush(root);
-   await assert.rejects(index.verify({...snapshot,searchIndex:{version:1,root}}),{code:'CATALOGUE_DAMAGED'});
+   await assert.rejects(index.verify({...snapshot,searchIndex:{version:2,root}}),{code:'CATALOGUE_DAMAGED'});
   }
   await index.verify(snapshot);
  }));

@@ -5,7 +5,6 @@ import {groupRecordProjection} from './record-projection-groups.js';
 import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
 import {recordReferenceTargets} from './web/record-query.js';
 import {proseReferences} from './web/prose-model.js';
-import {attemptDocumentReferences} from './record-attempt-document.js';
 import {attemptReferenceGroups} from './record-attempt-query.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -17,22 +16,22 @@ const index=blocks=>new RetainedTableIndex(blocks,{namespace:'index',allowSparse
 const encoded=value=>value.toString(16).padStart(64,'0');
 const count=value=>{const result=BigInt('0x'+value);if(result<1n||result>BigInt(Number.MAX_SAFE_INTEGER))fail();return result;};
 const termKey=value=>/^ref-[a-f0-9-]{36}-[a-f0-9-]{36}$/.test(value);
-export const validReferenceIndex=value=>value&&Object.keys(value).sort().join()==='occurrences,raw,root,terms,version'&&[1,2].includes(value.version)&&revisionId(value.raw)&&revisionId(value.root)&&validTableRef(value.occurrences)&&validTableRef(value.terms);
+export const validReferenceIndex=value=>value&&Object.keys(value).sort().join()==='occurrences,raw,root,terms,version'&&value.version===2&&revisionId(value.raw)&&revisionId(value.root)&&validTableRef(value.occurrences)&&validTableRef(value.terms);
 async function item(tree,revision){
  const node=await tree.node(revision);if(node.type!=='item')fail();const value=await tree.read(node.value);
  if(!value||!['id,type,workspaceId','id,revision,type,workspaceId'].includes(Object.keys(value).sort().join())||!researchId(value.id)||!researchId(value.workspaceId)||typeof value.type!=='string'||Object.hasOwn(value,'revision')&&!revisionId(value.revision))fail();
  return value;
 }
 async function arrayRoot(tree,revision){const node=await tree.node(revision);if(node.type!=='keyed-array')fail();return node.root;}
-export async function retainReferenceIndex(document,{previous,signal,version=2}={}){
- signal?.throwIfAborted();const {blocks,tree}=document,retained=previous?.referenceIndex;if(![1,2].includes(version)||retained&&!validReferenceIndex(retained))fail();const old=retained?.version===version?retained:null;
+export async function retainReferenceIndex(document,{previous,signal}={}){
+ signal?.throwIfAborted();const {blocks,tree}=document,retained=previous?.referenceIndex;if(retained&&!validReferenceIndex(retained))fail();const old=retained??null;
  const target=(value,type)=>({workspaceId:value.workspaceId,id:value.id,type,...(value.revision?{revision:value.revision}:{})});
  const mentions=body=>proseReferences(body).filter(value=>value.kind==='record').map(value=>target(value,'Mentioned in text'));
  const raw=await groupRecordProjection(document,old?previous:null,{previousRoot:old?.raw,groups:[
   {collection:['relations'],fields:['type','target'],project:value=>recordReferenceTargets({relations:[value]})},
   {field:['body'],project:mentions},
   {collection:['sections'],fields:['body'],project:value=>mentions(value.body)},
-  ...(version===1?[{field:['attempt'],read:()=>null,async *project(){for await(const value of attemptDocumentReferences(document,{signal}))if(value.kind==='record')yield target(value,value.label);}}]:attemptReferenceGroups(value=>value.kind==='record'?[target(value,value.label)]:[]))
+  ...attemptReferenceGroups(value=>value.kind==='record'?[target(value,value.label)]:[])
  ]},{signal});
  const rawBefore=old?await arrayRoot(tree,old.raw):null,rawAfter=await arrayRoot(tree,raw),positions=index(blocks),output=index(blocks),terms=index(blocks);
  let occurrences=old?.occurrences??null,root=old?await arrayRoot(tree,old.root):null,termRoot=old?.terms??null,pending=0;
@@ -50,7 +49,7 @@ export async function retainReferenceIndex(document,{previous,signal,version=2}=
   signal?.throwIfAborted();if(entry.before)await change(entry.before,-1);if(entry.after)await change(entry.after,1);if(++pending===32)await flush();
  }
  await flush();signal?.throwIfAborted();if((occurrences?.count??0)!==(rawAfter?.count??0)||(root?.count??0)>(occurrences?.count??0))fail();
- return {version,raw,occurrences,terms:termRoot,root:await blocks.put('value',{type:'keyed-array',root})};
+ return {version:2,raw,occurrences,terms:termRoot,root:await blocks.put('value',{type:'keyed-array',root})};
 }
 export async function verifyReferenceIndex(blocks,actual,expectedBlocks,expected,{signal}={}){
  if(!validReferenceIndex(actual)||!validReferenceIndex(expected)||actual.version!==expected.version)fail();const tree=blocks.tree(),expectedTree=expectedBlocks.tree();

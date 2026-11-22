@@ -50,8 +50,7 @@ test('legacy inline bases keep their own meaning and recovery receipts roll back
 
 test('compact and streamed legacy checkpoints recover through stored fields without expanding history',async t=>{
  const f=await figureValueFixture();t.after(f.close);const base=(await f.workspace.read()).book.entries[0],mine={...base,title:'Compact recovery'},revision=recordRevision(base),draft=await legacy(f,[{baseRevision:revision,expectedRevision:revision,record:mine}]),review=new RecordDraftReview(f.workspace,media);forbid(t);
- const oldHistory=await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{const index=store.historyIndex(base.id),head=await index.get(index.root),versions=[];for await(const item of index.items(await index.head()))versions.push({revision:item.revision,snapshotId:item.snapshotId});await index.saveHead({recordId:base.id,versions});return head;}));
- let plan=await review.prepare(command(f,draft));assert.equal(plan.count,0);await f.workspace.withLock(()=>f.workspace.catalogue(store=>store.historyIndex(base.id).saveHead(oldHistory)));await review.apply(target(plan));
+ let plan=await review.prepare(command(f,draft));assert.equal(plan.count,0);await review.apply(target(plan));
  const record=fresh(f,3);record.sections=Array.from({length:83},(_,i)=>({id:randomUUID(),title:'Acquisition '+i,body:'Exact values '.repeat(2200)}));const retained=await retainedDraft(f.workspace,f.book.id,null,record);assert.ok(retained.draft.content.bytes>2*1024*1024);
  const {document,...old}=retained.draft;void document;old.formatVersion=3;const raw=serialize(old),streamed={draft:old,revision:digest(raw)};
  await f.workspace.withLock(async()=>{const drafts=new ResearchDrafts(f.workspace);await drafts.index.removeLocked(retained.draft);await f.workspace.writeMetadata('.observanda/drafts/'+old.id+'.json',raw);await drafts.index.putLocked(streamed,digest(serialize({text:raw})));});

@@ -36,16 +36,10 @@ test('appending run facts reuses earlier search text and every publication/refer
  assert.ok(Math.abs(measured[1]-measured[0])<300,'Query work grew with earlier history');
 });
 
-test('run query text keeps exact empty seams, labels, correction history and earlier format identity',async()=>{
+test('run query text keeps exact empty seams, labels and correction history',async()=>{
  const blocks=memory(),p=preparation({protocols:[ref('')]}),a=event(p,{label:'',circumstances:'𐀀',references:[ref(''),ref('Boundary 🌿')]}),b=assessment(p,0,{references:[a.references[1]]});let document=new RecordDocument(blocks,await blocks.tree().retain(record()),{mutable:true}),prior=await retain(document);
  for(const attempt of [emptyAttempt(),{...emptyAttempt(),preparations:[p]},{version:1,preparations:[p],events:[a],assessments:[b]}, {version:1,preparations:[p],events:[a,{...a,id:randomUUID(),supersedes:a.id,reason:'Correction',references:[]}],assessments:[b]},emptyAttempt(),undefined]){
   const next=attempt?await document.property([],'attempt',attempt):await document.property([],'attempt',undefined,{remove:true}),result=await retain(next,prior);await check(next,result);document=next;prior=result;
- }
- document=await document.property([],'attempt',{version:1,preparations:[p],events:[a],assessments:[b]});
- for(const version of [1,2]){
-  const vocabulary=await retainSearchVocabulary(document,{version}),referenceIndex=await retainReferenceIndex(document,{version:1}),root=(await retainedQueryProjection(document,'a'.repeat(64),{searchText:vocabulary.text,referenceTargets:referenceIndex.root})).root;
-  const old={document,tree:document.tree,root,vocabulary,referenceIndex},next=await document.splice(['attempt','events'],1,0,[event(p,{label:'Later observation'})]),result=await retain(next,old);await check(next,result);
-  await verifySearchVocabulary(blocks,vocabulary,blocks,await retainSearchVocabulary(document,{version}));await verifyReferenceIndex(blocks,referenceIndex,blocks,await retainReferenceIndex(document,{version:1}));
  }
  await assert.rejects(retainSearchVocabulary(document,{signal:AbortSignal.abort()}),{name:'AbortError'});await assert.rejects(retainReferenceIndex(document,{signal:AbortSignal.abort()}),{name:'AbortError'});
 });

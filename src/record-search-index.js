@@ -26,7 +26,7 @@ export class RecordSearchIndex extends ObjectIndex{
   const retained=await retiredSearchNodes(this.store,ref);for(const item of retained)this.cacheNode(item.ref,item.node);
   return retained[0]?.node??null;
  }
- static valid(value){return [1,2].includes(value?.version)&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
+ static valid(value){return value?.version===2&&Object.keys(value).sort().join()==='root,version'&&validIndexRef(value.root);}
  async positionRevision(value,position){
   if(!RecordSearchIndex.valid(value)||!Number.isSafeInteger(position)||position<0)fail();
   return (await this.find({root:value.root},positionKey(position)))?.revision??null;
@@ -42,7 +42,7 @@ export class RecordSearchIndex extends ObjectIndex{
     const position=positionKey(row.position);if(batch.has(position))fail();batch.set(position,hash(row));
     if(batch.size===wordLimit)yield* drain();
     const bit=1n<<BigInt(row.position%blockSize);
-    for await(const {term,notebookId} of recordTerms(self.store,row,snapshot.metadata,2)){
+    for await(const {term,notebookId} of recordTerms(self.store,row,snapshot.metadata)){
      const id=wordKey({...row,notebookId},term);
      batch.set(id,hex(BigInt('0x'+(batch.get(id)??zero))|bit));if(batch.size===wordLimit)yield* drain();
     }
@@ -88,7 +88,7 @@ export class RecordSearchIndex extends ObjectIndex{
     if(!row)continue;
     const same=a&&b&&a.position===b.position&&a.notebookId===b.notebookId;
     const context=action==='remove'?beforeMetadata:metadata;
-    await withChangedRecordTerms(this.store,row,context,same?(action==='remove'?b:a):null,action==='remove'?metadata:beforeMetadata,value.version,async(terms,notebookId)=>{
+    await withChangedRecordTerms(this.store,row,context,same?(action==='remove'?b:a):null,action==='remove'?metadata:beforeMetadata,async(terms,notebookId)=>{
      for await(const gram of terms){
       const key=wordKey({...row,notebookId},gram),bit=1n<<BigInt(row.position%blockSize);
       words.set(key,(words.get(key)??0n)|bit);if(words.size===2048)await flush();
@@ -101,7 +101,7 @@ export class RecordSearchIndex extends ObjectIndex{
   for(const row of before)positions.set(positionKey(row.position),null);
   for(const row of after)positions.set(positionKey(row.position),hash(row));
   for(const [key,revision] of positions){root=await this.change(root,key,revision);if(this.pendingBytes>=4*1024*1024)await this.flush(root);}
-  await this.flush(root);return {version:value.version,root};
+  await this.flush(root);return {version:2,root};
  }
 
  async rank(root,key,{signal}={}){
@@ -114,7 +114,7 @@ export class RecordSearchIndex extends ObjectIndex{
   return rank;
  }
  async *candidates(value,notebookIds,needle,{signal,relatedTo=null,after=null,backward=false}={}){
-  if(!RecordSearchIndex.valid(value)||!needle&&!relatedTo||relatedTo&&value.version!==2)fail();
+  if(!RecordSearchIndex.valid(value)||!needle&&!relatedTo)fail();
   if(after!==null&&(!Number.isSafeInteger(after)||after<0)||typeof backward!=='boolean')throw new AppError('INVALID');
   const root=value.root,terms=[...(needle?searchGrams(needle):[]),...(relatedTo?[referenceTerm(relatedTo)]:[])],members=new SnapshotIndex(this.store);
   for(const notebookId of notebookIds){
@@ -167,7 +167,7 @@ export class RecordSearchIndex extends ObjectIndex{
   for await(const row of recordOrder(this.store,snapshot,{cacheSize:4096})){
    if((await this.find(head,positionKey(row.position)))?.revision!==hash(row))fail();
    expectedPositions++;const bit=1n<<BigInt(row.position%blockSize);
-   await withRecordTerms(this.store,row,snapshot.metadata,snapshot.searchIndex.version,async bag=>{
+   await withRecordTerms(this.store,row,snapshot.metadata,async bag=>{
     for await(const gram of bag.items()){
      const key=wordKey({...row,notebookId:bag.notebookId},gram);
      expected.set(key,(expected.get(key)??0n)|bit);expectedBits++;if(expected.size===2048)await checkBatch();
@@ -181,7 +181,7 @@ export class RecordSearchIndex extends ObjectIndex{
   for await(const entry of this.entries(head)){
    if(/^position:[0-9]{16}$/.test(entry.id)){actualPositions++;continue;}
    const word=/^book:[a-f0-9-]{36}:gram:(?:[a-f0-9]{4}){1,3}:[0-9]{16}$/.test(entry.id);
-   const reference=snapshot.searchIndex.version===2&&/^book:[a-f0-9-]{36}:gram:ref-[a-f0-9-]{36}-[a-f0-9-]{36}:[0-9]{16}$/.test(entry.id);
+   const reference=/^book:[a-f0-9-]{36}:gram:ref-[a-f0-9-]{36}-[a-f0-9-]{36}:[0-9]{16}$/.test(entry.id);
    if(!(word||reference)||entry.revision===zero)fail();
    let bits=BigInt('0x'+entry.revision);while(bits){bits&=bits-1n;actualBits++;}
   }

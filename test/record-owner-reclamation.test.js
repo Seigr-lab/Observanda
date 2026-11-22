@@ -24,7 +24,7 @@ const missing=file=>stat(file).then(()=>false,error=>{if(error.code==='ENOENT')r
 
 // Two native owners exercise the real allocation hooks; no project tree,
 // release workflow, or unrelated owner transport is needed for reclamation.
-test('cancelled record allocations restore native and legacy history, drafts and shared children',{timeout:240000},async t=>{
+test('cancelled record allocations restore native history, drafts and shared children',{timeout:240000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-reclaim-')),book=sampleNotebook();
  for(const record of book.entries){record.attachments=[];record.figures=[];record.share=false;}
  const sourceFixture=await encryptedFixture(path.join(directory,'source'),book),targetBook={...structuredClone(book),id:randomUUID()},targetFixture=await encryptedFixture(path.join(directory,'target'),targetBook);
@@ -32,7 +32,7 @@ test('cancelled record allocations restore native and legacy history, drafts and
  t.after(async()=>{await clearVault(sourceFixture.vault);await clearVault(targetFixture.vault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-reclaim-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const initial=(await source.read()).book.entries[0],sibling=(await target.read()).book.entries[1],records=new ResearchRecords(source,media),targetRecords=new ResearchRecords(target,media);
  await targetRecords.remove({workspaceId:targetBook.id,recordId:initial.id,expectedRevision:recordRevision(initial)});
- const originalState=await target.catalogue(async store=>{const history=store.historyIndex(initial.id),head=await history.head();return {head,raw:await history.get(history.root),rows:await Array.fromAsync(history.items(head)),revision:recordEncoding(initial).revision,generation:await retainedHistoryGeneration(store,initial.id)};});
+ const originalState=await target.catalogue(async store=>{const history=store.historyIndex(initial.id),head=await history.head();return {head,raw:await history.get(history.root),revision:recordEncoding(initial).revision,generation:await retainedHistoryGeneration(store,initial.id)};});
  const body=('Selected transferred observation '+randomUUID()+' ').repeat(700),companion='Companion selected observation. '.repeat(900),section={id:randomUUID(),title:'Selected companion',body:companion};
  await records.save({workspaceId:book.id,changes:[{id:initial.id,expectedRevision:recordRevision(initial),record:{...initial,title:'New selected transfer original',body,sections:[...initial.sections,section,...Array.from({length:64},(_,i)=>({id:randomUUID(),title:'Selected detail '+i,body:'Recorded detail '+i}))]}}]});
  const current=(await source.read()).book.entries.find(value=>value.id===initial.id),drafts=new ResearchDrafts(source),draftId=randomUUID(),sourceSibling=(await source.read()).book.entries[1];
@@ -82,12 +82,4 @@ test('cancelled record allocations restore native and legacy history, drafts and
  assert.equal(await source.readMetadata('.observanda/drafts/'+draftId+'.json',16*1024*1024),originalDraft);
  assert.equal((await target.read()).book.entries.find(value=>value.id===sibling.id).body,body);
  assert.equal(await copyWorkspaceTo(target.root,destination,{vault:targetFixture.vault}),destination);
- // A real legacy head must be restored before its converted lookup slots are
- // pruned; the existing original remains readable after every cleanup group.
- const legacy={recordId:current.id,versions:originalState.rows};
- await target.withLock(()=>target.catalogue(async store=>{const history=store.historyIndex(current.id);await store.db.run('DELETE FROM state WHERE starts_with(slot,$1)',history.prefix);await history.saveHead(legacy);}));
- const next={...command,id:randomUUID()};await assert.rejects(engine.start(next,{checkpoint:async stage=>{if(stage==='history')throw Error('Pause legacy conversion');}}),/Pause legacy conversion/);
- assert.equal((await target.catalogue(store=>store.historyIndex(current.id).head())).formatVersion,2);
- let groups=0;await engine.cancel(request(next.id),{checkpoint:async stage=>{if(stage!=='mutations')return;groups++;await target.catalogue(async store=>{const history=store.historyIndex(current.id),head=await history.head();await history.check(head);assert.ok((await history.lookup(head,'version',originalState.revision)).item);});}});
- assert.ok(groups>0);await target.catalogue(async store=>{const history=store.historyIndex(current.id);assert.deepEqual(await history.get(history.root),legacy);assert.equal((await store.db.get('SELECT COUNT(*)::text AS n FROM state WHERE starts_with(slot,$1)',history.prefix)).n,'0');assert.deepEqual(await store.record(current.id,originalState.revision),initial);await verifyRecordOwnerResources(store);});
 });

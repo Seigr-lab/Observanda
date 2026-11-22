@@ -18,14 +18,14 @@ async function fixture(t){
  const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...f,book,record:book.entries[0]};
 }
 const target=workspaceId=>({workspaceId,id:randomUUID(),type:'Mentioned in text'});
-const difference=(own,other,version)=>{const opposite=documentTerms(other,version);return new Set([...documentTerms(own,version)].filter(term=>!opposite.has(term)));};
-const changed=(store,row,other,version=2,options={})=>withChangedRecordTerms(store,row,{},other,{},version,async terms=>new Set(await Array.fromAsync(terms)),options);
+const difference=(own,other)=>{const opposite=documentTerms(other);return new Set([...documentTerms(own)].filter(term=>!opposite.has(term)));};
+const changed=(store,row,other,options={})=>withChangedRecordTerms(store,row,{},other,{},async terms=>new Set(await Array.fromAsync(terms)),options);
 async function retain(store,record,value){
  const query={id:record.id,notebookId:record.notebookId,...value};
  return {...record,...await new RecordQueryDocuments(store).retainValues(record.id,query,{id:query.id,notebookId:query.notebookId})};
 }
 
-test('changed search domains preserve exact differences for inline, retained and legacy query sources',async t=>{
+test('changed search domains preserve exact differences for inline, retained and unretained query sources',async t=>{
  const f=await fixture(t),a=target(f.book.id),b=target(f.book.id),c=target(f.book.id);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   for(const padding of ['', 'preserved field observations '.repeat(3000)]){
@@ -36,20 +36,16 @@ test('changed search domains preserve exact differences for inline, retained and
     {searchText:'',referenceTargets:[c]}, {referenceTargets:[b,a]}
    ]){
     const next={...base,...amendment},after=await retain(store,f.record,next);
-    for(const version of [1,2]){
-     assert.deepEqual(await changed(store,after,before,version),difference(next,base,version));
-     assert.deepEqual(await changed(store,before,after,version),difference(base,next,version));
-     assert.deepEqual(await changed(store,after,null,version),documentTerms(next,version),'Insert/move path enumerates all terms');
-    }
+    assert.deepEqual(await changed(store,after,before),difference(next,base));
+    assert.deepEqual(await changed(store,before,after),difference(base,next));
+    assert.deepEqual(await changed(store,after,null),documentTerms(next),'Insert/move path enumerates all terms');
    }
   }
-  const legacy={id:f.record.id,notebookId:f.record.notebookId,searchText:'legacy bridge',referenceTargets:[a]},newer={...legacy,searchText:'retained bridge',referenceTargets:[b]};
+  const inline={id:f.record.id,notebookId:f.record.notebookId,searchText:'inline bridge',referenceTargets:[a]},newer={...inline,searchText:'retained bridge',referenceTargets:[b]};
   const after=await retain(store,f.record,newer),before={id:f.record.id,notebookId:f.record.notebookId};
-  t.mock.method(store,'queryDocuments',async function*(){yield legacy;});
-  for(const version of [1,2]){
-   assert.deepEqual(await changed(store,after,before,version),difference(newer,legacy,version));
-   assert.deepEqual(await changed(store,before,after,version),difference(legacy,newer,version));
-  }
+  t.mock.method(store,'queryDocuments',async function*(){yield inline;});
+  assert.deepEqual(await changed(store,after,before),difference(newer,inline));
+  assert.deepEqual(await changed(store,before,after),difference(inline,newer));
  }));
 });
 
@@ -66,7 +62,7 @@ test('unchanged search domains use fixed work as prose and linked-record collect
    const fresh=target(f.book.id),linked=await retain(store,f.record,{...base,referenceTargets:[...base.referenceTargets,fresh]});allowReferences=true;
    assert.deepEqual(await changed(store,linked,before),new Set([referenceTerm(fresh)]));assert.deepEqual(await changed(store,before,linked),new Set());allowReferences=false;
    const edited={...base,searchText:base.searchText+' amendment'},changedText=await retain(store,f.record,edited);allowText=true;
-   assert.deepEqual(await changed(store,changedText,before),difference(edited,base,2));assert.deepEqual(await changed(store,before,changedText),difference(base,edited,2));
+   assert.deepEqual(await changed(store,changedText,before),difference(edited,base));assert.deepEqual(await changed(store,before,changedText),difference(base,edited));
    RecordBlockStore.prototype.read.mock.restore();RecordValueTree.prototype.text.mock.restore();RecordValueTree.prototype.page.mock.restore();
   }
  }));
@@ -83,13 +79,11 @@ test('changed search admission checks field types, ownership and cancellation ev
   }
   const row=await retain(store,f.record,{searchText:'valid',referenceTargets:[]}),other={...row,notebookId:randomUUID()};
   await assert.rejects(changed(store,row,other),{code:'CATALOGUE_DAMAGED'});await assert.rejects(changed(store,other,row),{code:'CATALOGUE_DAMAGED'});
-  const abort=new AbortController();abort.abort(Error('Cancelled search change'));await assert.rejects(changed(store,row,row,2,{signal:abort.signal}),/Cancelled search change/);
+  const abort=new AbortController();abort.abort(Error('Cancelled search change'));await assert.rejects(changed(store,row,row,{signal:abort.signal}),/Cancelled search change/);
   const missingReferences=await retain(store,f.record,{searchText:'legacy optional references'});assert.deepEqual(await changed(store,missingReferences,missingReferences),new Set());
   const retainedMissing=await retain(store,f.record,{searchText:'z'.repeat(70000)});await assert.rejects(changed(store,retainedMissing,retainedMissing),{code:'CATALOGUE_DAMAGED'});
-  // Version-one indexes have no reference vocabulary, as before.
-  assert.deepEqual(await changed(store,retainedMissing,retainedMissing,1),new Set());
   const stored=await retain(store,f.record,{searchText:'chunk '.repeat(13000),referenceTargets:[]}),text=RecordValueTree.prototype.text;
   t.mock.method(RecordValueTree.prototype,'text',async function*(...args){yield* text.apply(this,args);throw Error('Invalid trailing text block');});
-  await assert.rejects(withRecordTerms(store,stored,{},2,()=>assert.fail('Audit accepted incomplete text')),/Invalid trailing text block/);
+  await assert.rejects(withRecordTerms(store,stored,{},()=>assert.fail('Audit accepted incomplete text')),/Invalid trailing text block/);
  }));
 });

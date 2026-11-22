@@ -12,5 +12,5 @@ export function grams(text,width){
 }
 const allGrams=text=>new Set([1,2,3].flatMap(width=>[...grams(text,width)]));
 export const referenceTerm=target=>'ref-'+target.workspaceId+'-'+target.id;
-export const documentTerms=(document,version)=>version===1?allGrams(document.searchText):new Set([...allGrams(document.searchText),...(document.referenceTargets??[]).map(referenceTerm)]);
+export const documentTerms=document=>new Set([...allGrams(document.searchText),...(document.referenceTargets??[]).map(referenceTerm)]);
 export const wordKey=(row,gram)=>termPrefix(row.notebookId,gram)+ordinal(Math.floor(row.position/SEARCH_BLOCK_SIZE));

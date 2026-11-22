@@ -15,10 +15,7 @@ export function recoveryRecord(draft,position=0){
  return change?{recordId:change.record.id,revision:change.expectedRevision,title:change.record.title}:{...draft.base,title:draft.titles[0]};
 }
 export async function recoveryHistoryBase(store,recordId,revision){
- const index=store.historyIndex(recordId),head=await index.head();let found=await index.lookup(head,'view',revision,{optional:true});
- // Earlier history summaries did not cache canonical revisions. Inspect each
- // immutable original through its document reader instead of loading history.
- if(!found&&head.legacy)for(const item of head.legacy){if((await index.display(item)).revision===revision){found={item};break;}}
+ const index=store.historyIndex(recordId),found=await index.lookup(await index.head(),'view',revision,{optional:true});
  if(!found)throw new AppError('RECORD_HISTORY_MISSING');return found.item;
 }
 export async function withRecoveryDraft(store,draft,position,consume){

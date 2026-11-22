@@ -120,7 +120,6 @@ export class ResearchTransfer{
        const index=store.historyIndex(ref.id),head=await index.head();
        const found=await index.lookup(head,'view',ref.revision,{optional:true});
        if(found){const source=await store.historyItem(ref.id,found.item);return historicalBook(source.metadata,source.record).entries[0];}
-       if(head.legacy)for await(const row of index.items(head)){const source=await store.historyItem(ref.id,row),record=historicalBook(source.metadata,source.record).entries[0];if(recordRevision(record)===ref.revision)return record;}
        throw new AppError('MATERIAL_MISSING');
       });
      }

@@ -20,7 +20,7 @@ async function withQuery(store,row,metadata,consume,{signal}={}){
  const found=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot);
  return withQueryValue(store,store.decode('state',source.slot,found?.payload),source,row,consume);
 }
-async function* rawTerms({value,tree},version,{signal}={},selection={text:true,references:true}){
+async function* rawTerms({value,tree},{signal}={},selection={text:true,references:true}){
  const text=selection.text?(tree?tree.text(value.root,['searchText'],{signal}):[value.searchText]):[];let tail='';
  for await(const chunk of text){
   signal?.throwIfAborted();if(typeof chunk!=='string')fail();
@@ -30,7 +30,7 @@ async function* rawTerms({value,tree},version,{signal}={},selection={text:true,r
    tail=window.slice(-2);
   }
  }
- if(version===2&&selection.references){
+ if(selection.references){
   if(!tree){for(const target of value.referenceTargets??[])yield referenceTerm(target);}
   else{
    const count=await tree.arrayLength(value.root,['referenceTargets']);
@@ -84,30 +84,30 @@ async function withUniqueTerms(source,consume,{signal}={}){
   },{signal});
  }finally{await iterator.return?.();}
 }
-export async function withRecordTerms(store,row,metadata,version,consume,options={}){
+export async function withRecordTerms(store,row,metadata,consume,options={}){
  return withQuery(store,row,metadata,async source=>{
   const notebookId=queryNotebook(source,row);
-  return withUniqueTerms(rawTerms(source,version,options),bag=>consume({...bag,notebookId}),options);
+  return withUniqueTerms(rawTerms(source,options),bag=>consume({...bag,notebookId}),options);
  },options);
 }
-export function recordTerms(store,row,metadata,version,options={}){
- return scopedIterator(consume=>withRecordTerms(store,row,metadata,version,consume,options),async function*(bag){
+export function recordTerms(store,row,metadata,options={}){
+ return scopedIterator(consume=>withRecordTerms(store,row,metadata,consume,options),async function*(bag){
   for await(const term of bag.items())yield {term,notebookId:bag.notebookId};
  });
 }
-export async function withChangedRecordTerms(store,row,metadata,other,otherMetadata,version,consume,options={}){
- if(!other)return withRecordTerms(store,row,metadata,version,own=>consume(own.items(),own.notebookId),options);
+export async function withChangedRecordTerms(store,row,metadata,other,otherMetadata,consume,options={}){
+ if(!other)return withRecordTerms(store,row,metadata,own=>consume(own.items(),own.notebookId),options);
  return withQuery(store,row,metadata,source=>{
   const notebookId=queryNotebook(source,row);
   return withQuery(store,other,otherMetadata,async opposite=>{
    queryNotebook(opposite,other);
-   const selection={text:await fieldIdentity(source,'searchText',options)!==await fieldIdentity(opposite,'searchText',options),references:version===2&&await fieldIdentity(source,'referenceTargets',options)!==await fieldIdentity(opposite,'referenceTargets',options)};
+   const selection={text:await fieldIdentity(source,'searchText',options)!==await fieldIdentity(opposite,'searchText',options),references:await fieldIdentity(source,'referenceTargets',options)!==await fieldIdentity(opposite,'referenceTargets',options)};
    const retained=!options.audit&&source.tree&&opposite.tree&&source.value.vocabulary&&opposite.value.vocabulary&&source.value.notebookId===opposite.value.notebookId&&source.value.generation===opposite.value.generation;
    const vocabulary=retained&&selection.text; if(vocabulary)selection.text=false;
    const references=retained&&selection.references&&source.value.referenceIndex&&opposite.value.referenceIndex;if(references)selection.references=false;
    // Text grams are hexadecimal; reference keys begin with "ref-". These
    // disjoint vocabularies allow unchanged domains to be omitted from both bags.
-   return withUniqueTerms(rawTerms(source,version,options,selection),own=>withUniqueTerms(rawTerms(opposite,version,options,selection),skip=>{
+   return withUniqueTerms(rawTerms(source,options,selection),own=>withUniqueTerms(rawTerms(opposite,options,selection),skip=>{
     async function* difference(){
      if(vocabulary)yield* changedSearchVocabulary(source.tree.storage,source.value.vocabulary,opposite.value.vocabulary,options);
      if(references)yield* changedReferenceTerms(source.tree.storage,source.value.referenceIndex,opposite.value.referenceIndex,options);

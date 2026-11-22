@@ -14,15 +14,16 @@ function memory(){const nodes=new Map();return {nodes,reads:0,writes:0,async put
 const table=blocks=>new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});
 const vocabulary=async(blocks,value)=>new Set((await Array.fromAsync(table(blocks).entries({root:value.terms}))).map(entry=>entry.id));
 const seed=()=>({...sampleNotebook().entries[0],title:'',body:'',outcome:'',sections:[],contributors:[],tags:[],relations:[],attachments:[],figures:[]});
-async function check(document,value){const record=await document.tree.read(document.root),text=recordSearchText(record);assert.deepEqual(await vocabulary(document.blocks,value),documentTerms({searchText:text},1));if(value.version>=2){assert.equal((await Array.fromAsync(document.tree.text(value.text,[]))).join(''),text);assert.equal((await Array.fromAsync(document.tree.json(value.text,{canonical:true}))).join(''),JSON.stringify(text));}}
+async function check(document,value){const record=await document.tree.read(document.root),text=recordSearchText(record);assert.deepEqual(await vocabulary(document.blocks,value),documentTerms({searchText:text}));assert.equal((await Array.fromAsync(document.tree.text(value.text,[]))).join(''),text);assert.equal((await Array.fromAsync(document.tree.json(value.text,{canonical:true}))).join(''),JSON.stringify(text));}
 
-test('older vocabularies remain verifiable and upgrade without changing source values',async()=>{
+test('vocabularies verify exactly, keep source values and reject a wrong joined-text association or retired version',async()=>{
  const blocks=memory(),record={...seed(),body:'Preserved 🌿 original',sections:[{id:randomUUID(),title:'Before',body:'Exact earlier evidence'}]},document=new RecordDocument(blocks,await blocks.tree().retain(record),{mutable:true});
- const before=await retainSearchVocabulary(document,{version:1}),expected=await retainSearchVocabulary(document,{version:1});await verifySearchVocabulary(blocks,before,blocks,expected);
- const next=await document.replace(['sections','0','title'],'Amended title'),upgraded=await retainSearchVocabulary(next,{previous:{document,vocabulary:before}});assert.equal(upgraded.version,3);await check(next,upgraded);await verifySearchVocabulary(blocks,upgraded,blocks,await retainSearchVocabulary(next));
+ const before=await retainSearchVocabulary(document),expected=await retainSearchVocabulary(document);await verifySearchVocabulary(blocks,before,blocks,expected);
+ const next=await document.replace(['sections','0','title'],'Amended title'),amended=await retainSearchVocabulary(next,{previous:{document,vocabulary:before}});assert.equal(amended.version,3);await check(next,amended);await verifySearchVocabulary(blocks,amended,blocks,await retainSearchVocabulary(next));
  assert.deepEqual(await document.tree.read(document.root),record);await verifySearchVocabulary(blocks,before,blocks,expected);
- const textNode=await next.tree.node(upgraded.text),index=table(blocks),entry=await index.entryAt({root:textNode.root},0),wrong=await index.change(textNode.root,entry.id,await blocks.put('value',{type:'item',value:await next.tree.retain('Wrong association')}));await index.flush(wrong);
- const damaged={...upgraded,text:await blocks.put('value',{type:'joined-string',root:wrong})};await assert.rejects(verifySearchVocabulary(blocks,damaged,blocks,upgraded),{code:'CATALOGUE_DAMAGED'});
+ const textNode=await next.tree.node(amended.text),index=table(blocks),entry=await index.entryAt({root:textNode.root},0),wrong=await index.change(textNode.root,entry.id,await blocks.put('value',{type:'item',value:await next.tree.retain('Wrong association')}));await index.flush(wrong);
+ const damaged={...amended,text:await blocks.put('value',{type:'joined-string',root:wrong})};await assert.rejects(verifySearchVocabulary(blocks,damaged,blocks,amended),{code:'CATALOGUE_DAMAGED'});
+ for(const version of [1,2])await assert.rejects(verifySearchVocabulary(blocks,{...amended,version},blocks,amended),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('retained vocabulary equals complete text through empty-field seams, Unicode and source owners',async()=>{

@@ -10,10 +10,7 @@ export async function researchDraftBase(workspace,workspaceId,change,{read=true}
   const index=store.historyIndex(change.record.id);
   if(!await index.get(index.root))throw new AppError('RECORD_HISTORY_MISSING');
   const head=await index.head();
-  let found=await index.lookup(head,'view',change.baseRevision,{optional:true});
-  // Old summaries may not cache the canonical display revision. Inspect them
-  // individually, keeping only the requested original if it matches.
-  if(!found&&head.legacy)for(const item of head.legacy){if((await index.display(item)).revision===change.baseRevision){found={item};break;}}
+  const found=await index.lookup(head,'view',change.baseRevision,{optional:true});
   if(!found)throw new AppError('RECORD_HISTORY_MISSING');
   if(!read)return null;
   const source=await store.historyItem(change.record.id,found.item);

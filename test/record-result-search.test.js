@@ -27,11 +27,9 @@ test('result search preserves absent, empty, Unicode and large legacy contributi
   const legacy=structuredClone(record);
   if(fields.length)legacy.results.statements=[statement(fields.at(-2),fields.slice(0,-2).join(' '),fields.at(-1))];
   const baseline=new RecordDocument(blocks,await blocks.tree().retain(legacy));
-  for(const version of [1,3]){
-   const actual=await retainSearchVocabulary(document,{version}),before=await retainSearchVocabulary(baseline,{version});
-   await verifySearchVocabulary(blocks,before,blocks,actual);
-   if(version>=2)assert.equal((await Array.fromAsync(document.tree.text(actual.text,[]))).join(''),recordSearchText(record));
-  }
+  const actual=await retainSearchVocabulary(document),before=await retainSearchVocabulary(baseline);
+  await verifySearchVocabulary(blocks,before,blocks,actual);
+  assert.equal((await Array.fromAsync(document.tree.text(actual.text,[]))).join(''),recordSearchText(record));
   const projected=await retainedQueryProjection(document,'a'.repeat(64),{referenceTargets:await document.tree.retain([])});
   assert.equal((await Array.fromAsync(document.tree.text(projected.root,['searchText']))).join(''),recordSearchText(record));
  }

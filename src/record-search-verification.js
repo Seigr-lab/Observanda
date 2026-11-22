@@ -13,7 +13,7 @@ import {verifyIndexChanges} from './index-change-verification.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 export async function verifySearchChange(store,before,after){
- if(!before||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex)||before.searchIndex.version!==after.searchIndex.version)return false;
+ if(!before||!RecordSearchIndex.valid(before.searchIndex)||!RecordSearchIndex.valid(after.searchIndex))return false;
  const members=new SnapshotIndex(store,{cacheSize:4096}),search=new RecordSearchIndex(store,{cacheSize:4096});
  await withScratch(async work=>{
   const pending=new Map();
@@ -63,7 +63,7 @@ export async function verifySearchChange(store,before,after){
    await flush();
    for await(const {side,row,other} of ordered.items()){
     const source=side==='before'?before:after,opposite=side==='before'?after:before;
-    await withChangedRecordTerms(store,row,source.metadata,other,opposite.metadata,after.searchIndex.version,
+    await withChangedRecordTerms(store,row,source.metadata,other,opposite.metadata,
      (terms,notebookId)=>words({...row,notebookId},terms,side==='before'?'remove':'add'),{audit:true});
    }
   });

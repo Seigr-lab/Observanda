@@ -163,7 +163,7 @@ export class ResearchCatalogue{
  queryDocuments(rows,metadata,options){return new RecordQueryDocuments(this).read(rows,metadata,options);}
  async *searchMembers(snapshot,notebookIds,search,{signal,relatedTo=null}={}){
   const needle=search.trim().toLocaleLowerCase();
-  if(snapshot.searchIndex&&(needle||relatedTo&&snapshot.searchIndex.version===2)){yield* new RecordSearchIndex(this).candidates(snapshot.searchIndex,notebookIds,needle,{signal,relatedTo:snapshot.searchIndex.version===2?relatedTo:null});return;}
+  if(snapshot.searchIndex&&(needle||relatedTo)){yield* new RecordSearchIndex(this).candidates(snapshot.searchIndex,notebookIds,needle,{signal,relatedTo});return;}
   // Without a search term every member in scope is a candidate.
   yield* this.members(snapshot,{signal,notebookIds});
  }
@@ -437,8 +437,8 @@ export class ResearchCatalogue{
   for await(const row of index.items(head)){
    const snapshot=await this.recordSnapshot(row.snapshotId,id);if((await this.member(snapshot,id))?.revision!==row.revision)fail();
    const display=await retainedRecordDisplay(this,id,row.revision,snapshot.metadata);
-   if(row.view&&hash(row.view)!==hash(display))fail();
-   if(!head.legacy&&(await index.lookup(head,'view',display.revision)).ordinal!==ordinal)fail();ordinal++;
+   if(hash(row.view)!==hash(display))fail();
+   if((await index.lookup(head,'view',display.revision)).ordinal!==ordinal)fail();ordinal++;
   }
   // Verify every raw revision's lookup, including alternate serialized forms of
   // one canonical revision. Stream identities rather than retaining all bodies.

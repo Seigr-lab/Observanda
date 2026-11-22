@@ -27,17 +27,18 @@ export async function withQueryValue(store,value,source,row,consume){
  if(!value||value.id!==row.id||value.notebookId!==row.notebookId||digest(serialize(value))!==source.revision)fail();
  if(value.format!==format)return consume({value,tree:null});
  if(await catalogueFormat(store.db)<5)fail();
- const keys=['format','generation','id','notebookId','root','version',...(value.version>=2?['vocabulary']:[]),...(value.version>=5?['referenceIndex']:[])].sort().join();
- if(![1,2,3,4,5,6].includes(value.version)||Object.keys(value).sort().join()!==keys||!Number.isSafeInteger(value.generation)||value.generation<1||!revisionId(value.root))fail();
- if(value.version>=2&&(!validSearchVocabulary(value.vocabulary)||value.vocabulary.version!==(value.version===2?1:value.version<6?2:3)||await catalogueFormat(store.db)<value.version+14))fail();
- if(value.version>=5&&(!validReferenceIndex(value.referenceIndex)||value.referenceIndex.version!==value.version-4))fail();
+ // Version 1 holds a summary or an oversized plain query document; version 6
+ // holds a full query document with its search vocabulary and reference index.
+ const keys=['format','generation','id','notebookId','root','version',...(value.version===6?['referenceIndex','vocabulary']:[])].sort().join();
+ if(![1,6].includes(value.version)||Object.keys(value).sort().join()!==keys||!Number.isSafeInteger(value.generation)||value.generation<1||!revisionId(value.root))fail();
+ if(value.version===6&&(!validSearchVocabulary(value.vocabulary)||!validReferenceIndex(value.referenceIndex)||await catalogueFormat(store.db)<20))fail();
  return withProjectRecordBlockOwner(store,value.notebookId,value.generation,async owner=>{
  const key=await owner.scopeKey(value.notebookId,value.generation);
  try{
   const tree=new RecordBlockStore(owner,value.notebookId,value.generation,key).tree();
   for(const field of ['id','notebookId'])if((await tree.selected(value.root,[field])).value!==row[field])fail();
-  if(value.version>=3){const text=await tree.select(value.root,['searchText']);if(!text||text.inline||text.revision!==value.vocabulary.text)fail();}
-  if(value.version>=5){const references=await tree.select(value.root,['referenceTargets']);if(!references||references.inline||references.revision!==value.referenceIndex.root)fail();}
+  if(value.version===6){const text=await tree.select(value.root,['searchText']);if(!text||text.inline||text.revision!==value.vocabulary.text)fail();
+   const references=await tree.select(value.root,['referenceTargets']);if(!references||references.inline||references.revision!==value.referenceIndex.root)fail();}
   return await consume({value,tree});
  }finally{key.fill(0);}
  });

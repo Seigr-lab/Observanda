@@ -3,8 +3,7 @@ import {recordReferenceNamespaces} from './research-reference-namespace.js';
 
 // Merge each book's authenticated postings in saved record order. One frontier
 // per book and the index's bounded cache survive between emitted candidates.
-export async function* recordReferenceCandidates({store,snapshot,notebooks,workspaceId,signal,fallback,search=''},id,{after=null,backward=false}={}){
- if(snapshot.searchIndex?.version!==2){yield* fallback({after,backward});return;}
+export async function* recordReferenceCandidates({store,snapshot,notebooks,workspaceId,signal,search=''},id,{after=null,backward=false}={}){
  const needle=search.trim().toLocaleLowerCase(),index=new RecordSearchIndex(store),frontiers=[],namespaces=await recordReferenceNamespaces(store,{workspaceId,id});let last=null;
  try{
   for(const notebook of notebooks)for(const namespace of namespaces){

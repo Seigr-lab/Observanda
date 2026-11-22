@@ -96,22 +96,18 @@ test('retained-only revisions remain reviewable and copied history pages preserv
  await assert.rejects(f.history.list(f.command),{code:'CATALOGUE_DAMAGED'});
 });
 
-test('older history indexes fall back only for a selected page and verification checks cached summaries',async t=>{
- const f=await fixture(t,25),slot='history:'+f.command.recordId;
+test('unversioned history heads are damage and verification checks cached summaries',async t=>{
+ const f=await fixture(t,25),slot='history:'+f.command.recordId,saved=await f.ws.catalogue(store=>store.db.get('SELECT payload FROM state WHERE slot=$1',slot));
+ // Only releases before alpha.29 wrote a head holding every version inline.
  await f.ws.withLock(()=>f.ws.catalogue(async store=>{
   const index=store.historyIndex(f.command.recordId),head=await index.head(),versions=[];
-  for await(const item of index.items(head)){const {view,...row}=item;versions.push(row);}
-  await store.db.run('DELETE FROM state WHERE starts_with(slot,$1)',index.prefix);
-  const value={recordId:f.command.recordId,versions};
-  await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',store.encode('state',slot,value),slot);
+  for await(const item of index.items(head)){const {view,...row}=item;void view;versions.push(row);}
+  await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',store.encode('state',slot,{recordId:f.command.recordId,versions}),slot);
  }));
- const record=ResearchCatalogue.prototype.record,loaded=[];let olderPage;
- ResearchCatalogue.prototype.record=function(id,revision){loaded.push(id);return record.call(this,id,revision);};
- try{const first=await f.history.list({...f.command,limit:5});olderPage=first;assert.equal(first.versions.length,5);assert.ok(loaded.length<=6);assert.ok(loaded.every(id=>id===f.command.recordId));}
- finally{ResearchCatalogue.prototype.record=record;}
+ await assert.rejects(f.history.list({...f.command,limit:5}),{code:'CATALOGUE_DAMAGED'});
+ await f.ws.withLock(()=>f.ws.catalogue(store=>store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',saved.payload,slot)));
  const current=f.versions.at(-1);
  await f.service.save({workspaceId:f.command.workspaceId,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,title:'With cached summary'}}]});
- await assert.rejects(f.history.list({...f.command,limit:5,cursor:olderPage.nextCursor}),{code:'RECORD_HISTORY_CURSOR'});
  await f.ws.withLock(()=>f.ws.catalogue(async store=>{
   const index=store.historyIndex(current.id),head=await index.head();assert.equal(head.formatVersion,2);
   const key=index.prefix+'row:'+(head.count-1),value=await index.get(key);value.view.title='Incorrect cached title';

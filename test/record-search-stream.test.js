@@ -34,15 +34,15 @@ test('large private vocabulary spills exactly; matching and audits never assembl
  book.entries=[seed];const f=await encryptedFixture(directory,book);t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const selected=RecordValueTree.prototype.selected;
  t.mock.method(RecordValueTree.prototype,'selected',function(root,path){if(path[0]==='searchText')throw Error('Loaded complete search text');return selected.call(this,root,path);});
- const expected=documentTerms(recordQueryDocument(seed),2);assert.ok(expected.size>8192);
+ const expected=documentTerms(recordQueryDocument(seed));assert.ok(expected.size>8192);
  await f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),row=await store.member(snapshot,seed.id);t.mock.method(store,'record',()=>{throw Error('Loaded original record');});
-  await withRecordTerms(store,row,snapshot.metadata,2,async bag=>assert.deepEqual(new Set(await Array.fromAsync(bag.items())),expected));
-  await withChangedRecordTerms(store,row,snapshot.metadata,row,snapshot.metadata,2,async terms=>assert.deepEqual(await Array.fromAsync(terms),[]));
+  await withRecordTerms(store,row,snapshot.metadata,async bag=>assert.deepEqual(new Set(await Array.fromAsync(bag.items())),expected));
+  await withChangedRecordTerms(store,row,snapshot.metadata,row,snapshot.metadata,async terms=>assert.deepEqual(await Array.fromAsync(terms),[]));
   await new RecordSearchIndex(store).verify(snapshot);
-  let count=0;for await(const value of recordTerms(store,row,snapshot.metadata,2)){assert.ok(expected.has(value.term));count++;break;}assert.equal(count,1);
+  let count=0;for await(const value of recordTerms(store,row,snapshot.metadata)){assert.ok(expected.has(value.term));count++;break;}assert.equal(count,1);
   const abort=new AbortController();abort.abort(Error('Cancelled'));
-  await assert.rejects(withRecordTerms(store,row,snapshot.metadata,2,()=>assert.fail('Cancelled work consumed'),{signal:abort.signal}),/Cancelled/);
+  await assert.rejects(withRecordTerms(store,row,snapshot.metadata,()=>assert.fail('Cancelled work consumed'),{signal:abort.signal}),/Cancelled/);
  });
  const query=new RecordQuery(f.workspace);
  for(const text of ['bridge 🌿','"quotes"','\\ escapes',vocabulary.slice(1000,1010),'absent phrase']){

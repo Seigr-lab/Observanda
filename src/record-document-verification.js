@@ -43,8 +43,8 @@ export async function verifyRecordDocument(store,row,metadata,summaries,media,{s
    for(const [kind,revision] of [['record-query',row.queryRevision],['record-summary',row.summaryRevision]]){
     if(!revision)continue;const source={revision,slot:kind+':'+row.id+':'+revision},found=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot);
     await withQueryValue(store,store.decode('state',source.slot,found?.payload),source,row,async({value,tree})=>{
-     if(tree&&value.vocabulary)await verifySearchVocabulary(tree.storage,value.vocabulary,projection.blocks,await retainSearchVocabulary(projection,{signal,version:value.vocabulary.version}),{signal});
-     if(tree&&value.referenceIndex)await verifyReferenceIndex(tree.storage,value.referenceIndex,projection.blocks,await retainReferenceIndex(projection,{signal,version:value.referenceIndex.version}),{signal});
+     if(tree&&value.vocabulary)await verifySearchVocabulary(tree.storage,value.vocabulary,projection.blocks,await retainSearchVocabulary(projection,{signal}),{signal});
+     if(tree&&value.referenceIndex)await verifyReferenceIndex(tree.storage,value.referenceIndex,projection.blocks,await retainReferenceIndex(projection,{signal}),{signal});
      const names=tree?await tree.propertyNames(value.root):Object.keys(value);
      const required=Object.keys(expected.browse).filter(key=>key!=='recordRevision');if(kind==='record-query')required.push('searchText');
      if(required.some(name=>!names.includes(name)))fail();
@@ -71,9 +71,9 @@ export async function verifyRecordDocument(store,row,metadata,summaries,media,{s
 export async function verifyRecordVocabulary(store,row,{signal}={}){
  if(!row.queryRevision)return;
  const source={revision:row.queryRevision,slot:'record-query:'+row.id+':'+row.queryRevision},found=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot),descriptor=store.decode('state',source.slot,found?.payload);
- if(descriptor?.format!=='observanda-record-query-blocks'||![2,3,4,5,6].includes(descriptor.version))return;
+ if(descriptor?.format!=='observanda-record-query-blocks'||descriptor.version!==6)return;
  await withQueryValue(store,descriptor,source,row,({value,tree})=>withRecordDocument(store,row.id,row.revision,document=>withRecordProjectionScratch(document,async projected=>{
-  await verifySearchVocabulary(tree.storage,value.vocabulary,projected.blocks,await retainSearchVocabulary(projected,{signal,version:value.vocabulary.version}),{signal});
-  if(value.referenceIndex)await verifyReferenceIndex(tree.storage,value.referenceIndex,projected.blocks,await retainReferenceIndex(projected,{signal,version:value.referenceIndex.version}),{signal});
+  await verifySearchVocabulary(tree.storage,value.vocabulary,projected.blocks,await retainSearchVocabulary(projected,{signal}),{signal});
+  await verifyReferenceIndex(tree.storage,value.referenceIndex,projected.blocks,await retainReferenceIndex(projected,{signal}),{signal});
  },{signal})));
 }
