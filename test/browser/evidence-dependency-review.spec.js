@@ -21,7 +21,7 @@ async function fixture(page,{readonly=false,holdExtras=false}={}){
    if(name==='overview'){if(window.failNextOverview){window.failNextOverview=false;throw Error('Page interrupted');}return {items:structuredClone(body.cursor?evidence.slice(20):evidence.slice(0,20)),next:body.cursor?null:'older',imports:[],importsNext:null,changed:false};}
    if(name==='dependency-review')return new Promise((resolve,reject)=>{const request={body:structuredClone(body),options,resolve,reject,aborted:false};options.signal.addEventListener('abort',()=>{request.aborted=true;});requests.push(request);});
    if(name==='dataset-jobs'&&holdExtras)return new Promise(resolve=>extras.push(()=>resolve({items:[],next:null})));
-   if(['dataset-jobs','drafts','association-list'].includes(name))return {items:[],next:null};
+   if(['dataset-jobs','drafts','association-list','scientific-draft-list'].includes(name))return {items:[],next:null};
    const item=evidence.find(value=>value.id===body.ref?.id);
    let value;if(name==='read')value={...item,recordId:record.id,createdAt:'2026-10-01T12:00:00.000Z',content:{size:12,sha256:'f'.repeat(64),provenance:'Disposable observation',inputs:[]}};
    else if(name==='correction-status')value={retired:false,current:body.ref};

@@ -10,7 +10,7 @@ async function fixture(page){
    if(name==='source-resolve'){dialogWasOpen.push(document.getElementById('dialog').open);if(hold&&body.ref.revision===references.first.revision)await new Promise(resolve=>release=resolve);return {workspaceId:state.book.id,reference:body.ref,owner:{workspaceId:state.book.id,projectId:null,labBookId:null},title:'Pinned record'};}
    if(name!=='retained-figure')throw Error('Unexpected '+name);const revision=body.ref.revision;let value;
    if(body.operation==='header')value={header:{kind:'line',title:'Pinned '+revision[0],x:{label:'X'},y:{label:'Y'}},counts:{series:1}};
-   else if(body.operation==='svg')value={svg:'<svg data-pinned="'+revision+'"><text>Pinned '+revision[0]+'</text></svg>'};
+   else if(body.operation==='svg')value={language:body.language,svg:'<svg data-pinned="'+revision+'"><text>Pinned '+revision[0]+'</text></svg>'};
    else if(body.operation==='window'){const collection=body.selection.collection;value={items:collection==='panels'?[{plotId,value:{plotId}}]:collection==='series'?[{id:seriesId,position:0,value:{name:'Series '+revision[0]}}]:[{id:pointId,position:0,value:{x:'Reading',y:1}}],total:1,next:null};}
    else throw Error('Unexpected figure operation');return {value:{...value,revision},namespaceId:state.book.id,projectId:null,labBookId:null};
   }});
