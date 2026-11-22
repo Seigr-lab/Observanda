@@ -8,7 +8,11 @@ import {initializeLocation,workspaceManifest} from '../../src/locations.js';
 import {createNotebook} from '../../src/model.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
+import setupMessages from '../../src/web/locales/en/setup.json' with {type:'json'};
 import {defaultPreferences,readPreferences,rememberLocation,rememberInterface} from '../../src/preferences.js';
+// Opening a workspace may add these background control files once; any other change still fails the comparison.
+const productControlFiles=new Set(['.observanda/staging-reservations/namespace']),productControlFolders=['.observanda/website-files/feed-owner-upgrade/','.observanda/website-files/upgrades/'];
+const manifest=async root=>(await workspaceManifest(root)).filter(file=>!productControlFiles.has(file.path)&&!productControlFolders.some(folder=>file.path.startsWith(folder)));
 let app,parent,root,file;
 test.beforeEach(async()=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reset-browser-'));root=path.join(parent,'old-workspace');file=path.join(parent,'preferences.json');await rememberLocation(file,root);await rememberInterface(file,{fontSize:24,lineHeight:1.9});});
 test.afterEach(async()=>{await app?.close();});
@@ -22,7 +26,8 @@ test('reset from a missing location cancels safely, then restarts the complete w
  const backup=(await readdir(parent)).find(name=>name.includes('before-reset'));expect(await readFile(path.join(parent,backup))).toEqual(original);await expect(async()=>readdir(root)).rejects.toMatchObject({code:'ENOENT'});
  await page.reload();await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Text size',exact:true})).toHaveCount(0);await expect(page.getByText('Previous location',{exact:true})).toHaveCount(0);
  await page.screenshot({path:test.info().outputPath('preferences-reset-setup.png')});
- await page.getByLabel('Workspace name',{exact:true}).fill('New research');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();const destination=path.join(parent,'fresh-workspace');await page.getByLabel('Workspace folder',{exact:true}).fill(destination);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+ await page.getByLabel('Workspace name',{exact:true}).fill('New research');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();// Setup asks where to create the workspace; its folder takes the workspace's name.
+ const destination=path.join(parent,'New research');await page.getByLabel(setupMessages.parentFolder,{exact:true}).fill(parent);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
  await expect(page.locator('.workspace-name')).toHaveText('New research');expect((await readPreferences(file)).workspace).toBe(destination);
  await preferences(page,'Storage & access');await expect(page.getByText(file,{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Reset app preferences',exact:true})).toBeVisible();expect(errors).toEqual([]);
 });
@@ -30,9 +35,11 @@ test('reset from a missing location cancels safely, then restarts the complete w
 test('reset from an open workspace preserves files and asks before abandoning unsaved access edits',async({page})=>{
  // The test server keeps its device store next to the preferences file.
  const access=await createWorkspaceAccess('Owner','synthetic reset password',new TestDeviceStore({file:file+'.device-key'})),vault=takeCreatedVault(access);
- try{await initializeLocation(root,createNotebook('Protected research'),access,vault);}finally{clearVault(vault);}const before=await workspaceManifest(root);
+ try{await initializeLocation(root,createNotebook('Protected research'),access,vault);}finally{clearVault(vault);}
  app=await startServer({root,port:0,preferencesFile:file,expectedExisting:true});await page.goto(app.url);await page.getByLabel('Username',{exact:true}).fill('Owner');await page.getByLabel('Password',{exact:true}).fill('synthetic reset password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await preferences(page,'Storage & access');
+ // Opening names the workspace after its folder; compare files from the opened state on.
+ await expect(page.locator('.workspace-name')).toHaveText(path.basename(root));const before=await manifest(root);
  await page.getByLabel('Username (optional)',{exact:true}).fill('Unwanted edit');await page.getByRole('button',{name:'Reset app preferences',exact:true}).click();const guard=page.getByRole('dialog',{name:'Unsaved changes',exact:true});await expect(guard).toBeVisible();await guard.getByRole('button',{name:'Stay here',exact:true}).click();await expect(page.getByLabel('Username (optional)',{exact:true})).toHaveValue('Unwanted edit');
- await page.getByRole('button',{name:'Reset app preferences',exact:true}).click();await guard.getByRole('button',{name:'Discard changes',exact:true}).click();await page.getByRole('button',{name:'Reset and restart setup',exact:true}).click();await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible();expect(await workspaceManifest(root)).toEqual(before);
- await page.getByRole('button',{name:'Open existing workspace',exact:true}).click();await page.getByRole('dialog').getByLabel('Workspace folder',{exact:true}).fill(root);await page.getByLabel('Workspace username (if protected)',{exact:true}).fill('Owner');await page.getByLabel('Workspace password (if protected)',{exact:true}).fill('synthetic reset password');await page.getByRole('dialog').getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Protected research');expect(await workspaceManifest(root)).toEqual(before);
+ await page.getByRole('button',{name:'Reset app preferences',exact:true}).click();await guard.getByRole('button',{name:'Discard changes',exact:true}).click();await page.getByRole('button',{name:'Reset and restart setup',exact:true}).click();await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible();expect(await manifest(root)).toEqual(before);
+ await page.getByRole('button',{name:'Open existing workspace',exact:true}).click();await page.getByRole('dialog').getByLabel('Workspace folder',{exact:true}).fill(root);await page.getByLabel('Workspace username (if protected)',{exact:true}).fill('Owner');await page.getByLabel('Workspace password (if protected)',{exact:true}).fill('synthetic reset password');await page.getByRole('dialog').getByRole('button',{name:'Open workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(root));expect(await manifest(root)).toEqual(before);
 });
