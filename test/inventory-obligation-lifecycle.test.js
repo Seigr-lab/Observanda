@@ -27,15 +27,16 @@ test('pending and live external stock obligations block copies before creating d
  assert.equal(await catalogueBinding(destination),null);await assertInventoryObligationsSettled(f.storage);
 });
 
-test('copy receipts bind new transfer modes while older paused transfers retain recovery compatibility',{timeout:90000},async t=>{
+test('copy receipts bind their transfer mode and refuse receipts without one',{timeout:90000},async t=>{
  const f=await fixture(t),id=randomUUID(),destination=path.join(f.workspace.root,'mode-copy','project');await mkdir(path.dirname(destination));
  const target=await copyProjectOwnerLocation(f.storage,destination,{id});
  try{
   const receipt=await projectTransferReceipt(target);assert.equal(receipt.relocation,false);
   await assert.rejects(copyProjectOwnerLocation(f.storage,destination,{id,relocation:true}),{code:'CONFLICT'});
-  const legacy={...receipt};delete legacy.relocation;
-  const file=path.join(target.root,'.observanda/project-transfer.observanda');await target.writeFile(file,JSON.stringify(legacy));
-  assert.equal((await copyProjectOwnerLocation(f.storage,destination,{id,relocation:true})).root,destination);
+  // Every receipt since alpha.29 records its mode; one without it is damaged, not an older transfer to resume.
+  const unbound={...receipt};delete unbound.relocation;
+  const file=path.join(target.root,'.observanda/project-transfer.observanda');await target.writeFile(file,JSON.stringify(unbound));
+  await assert.rejects(copyProjectOwnerLocation(f.storage,destination,{id,relocation:true}),{code:'STORAGE_COPY'});
   await target.writeFile(file,JSON.stringify({...receipt,relocation:'move'}));
   await assert.rejects(copyProjectOwnerLocation(f.storage,destination,{id}),{code:'STORAGE_COPY'});
  }finally{await f.runtime.closeProject(destination);}

@@ -37,8 +37,8 @@ function admittedReceipt(receipt,admitted){if(!identity(receipt.destinationIdent
 async function intent(storage){
  const file=path.join(storage.root,intentName),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>16*1024*1024)throw new AppError('STORAGE_COPY');
  let value;try{value=JSON.parse(await storage.readFile(file,'utf8',16*1024*1024));}catch{throw new AppError('STORAGE_COPY');}
- if(![1,2].includes(value?.version)||!researchId(value.id)||value[ownerId]!==storage[ownerId]||value.vaultId!==storage.vault.id||!researchId(value.sourceId)||!researchId(value.namespaceId)||!['files','database','verified'].includes(value.phase)||!path.isAbsolute(value.source??'')||value.source!==path.resolve(value.source)||value.destination!==storage.root||!/^[a-f0-9]{64}$/.test(value.head??'')||value.portable!==undefined&&value.portable!==true||value.relocation!==undefined&&typeof value.relocation!=='boolean'||value.filesVersion!==undefined&&value.filesVersion!==1||[value.archiveDigest,value.nextDigest].some(hash=>hash!==undefined&&!/^[a-f0-9]{64}$/.test(hash)))throw new AppError('STORAGE_COPY');
- if(value.boundaryRevision!==undefined&&!/^[a-f0-9]{64}$/.test(value.boundaryRevision)||[value.destinationIdentity,value.internalIdentity].some(value=>value!==undefined&&!identity(value)))throw new AppError('STORAGE_COPY');retainedCopyRoots(value);return value;
+ if(value?.version!==2||!researchId(value.id)||value[ownerId]!==storage[ownerId]||value.vaultId!==storage.vault.id||!researchId(value.sourceId)||!researchId(value.namespaceId)||!['files','database','verified'].includes(value.phase)||!path.isAbsolute(value.source??'')||value.source!==path.resolve(value.source)||value.destination!==storage.root||!/^[a-f0-9]{64}$/.test(value.head??'')||value.portable!==undefined&&value.portable!==true||typeof value.relocation!=='boolean'||value.filesVersion!==1||!Array.isArray(value.boundaries)||[value.archiveDigest,value.nextDigest].some(hash=>hash!==undefined&&!/^[a-f0-9]{64}$/.test(hash)))throw new AppError('STORAGE_COPY');
+ if(value.boundaryRevision!==undefined&&!/^[a-f0-9]{64}$/.test(value.boundaryRevision)||[value.destinationIdentity,value.internalIdentity].some(value=>!identity(value)))throw new AppError('STORAGE_COPY');retainedCopyRoots(value);return value;
 }
 
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
@@ -66,7 +66,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},beforeVer
    let receipt=await intent(target);
    if(receipt){
     admittedReceipt(receipt,admitted);
-    if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
+    if(!!receipt.portable!==portable||receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries)!==serialize(boundaries))throw new AppError('CONFLICT');
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
     if(receipt.phase==='verified'){
      const binding=await catalogueBinding(destination);

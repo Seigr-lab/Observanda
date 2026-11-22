@@ -52,7 +52,9 @@ test('interrupted project copies resume their claimed destination and reject unr
  await assert.rejects(copyProjectLocation(f.source,destination,{id,checkpoint:async stage=>{if(stage==='files'&&!stopped){stopped=true;throw Error('Interrupted after files');}}}),/Interrupted after files/);
  await assert.rejects(new ProjectStorage(destination,f.id,f.vault).outline(),{code:'STORAGE_INCOMPLETE'});
  await assert.rejects(copyProjectLocation(f.source,destination,{id:randomUUID()}),{code:'CONFLICT'});
- const legacyTarget=new ProjectStorage(destination,f.id,f.vault),legacy=await projectTransferReceipt(legacyTarget);legacy.version=1;delete legacy.boundaries;await legacyTarget.writeFile(path.join(destination,'.observanda/project-transfer.observanda'),serialize(legacy));
+ // A receipt only an earlier release wrote is refused; the current receipt then resumes the copy.
+ const pausedTarget=new ProjectStorage(destination,f.id,f.vault),paused=await projectTransferReceipt(pausedTarget),receiptFile=path.join(destination,'.observanda/project-transfer.observanda');
+ await pausedTarget.writeFile(receiptFile,serialize({...paused,version:1}));await assert.rejects(copyProjectLocation(f.source,destination,{id}),{code:'STORAGE_COPY'});await pausedTarget.writeFile(receiptFile,serialize(paused));
  const copied=await copyProjectLocation(f.source,destination,{id,checkpoint:async stage=>{if(stage==='database')throw Error('Interrupted after database');}}).then(()=>assert.fail('Expected interruption'),error=>{assert.match(error.message,/Interrupted after database/);return null;});assert.equal(copied,null);
  await f.owner.closeProject(destination);const resumed=await copyProjectLocation(f.source,destination,{id});assert.deepEqual(await resumed.read(),await f.source.read());
  await assert.rejects(copyProjectLocation(f.source,f.source.root,{id:randomUUID()}),{code:'STORAGE_PATH'});

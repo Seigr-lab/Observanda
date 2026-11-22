@@ -39,9 +39,8 @@ test('removing an obsolete staged file refuses a replaced parent directory',asyn
 });
 
 
-test('earlier interrupted transfers retire only their own reserved stream files',async t=>{
- const f=await fixture(t);delete f.receipt.filesVersion;const parent=path.join(f.target.root,'.observanda');const owned=path.join(parent,'.stream-project-'+f.receipt.id),unrelated=path.join(parent,'keep.bin');await writeFile(owned,'Incomplete old stream');await writeFile(unrelated,'Keep this unrelated file');
- await f.run();await assert.rejects(stat(owned),{code:'ENOENT'});assert.equal((await stat(unrelated)).size,24);
+test('a files receipt without its batched staging version is refused',async t=>{
+ const f=await fixture(t);delete f.receipt.filesVersion;await assert.rejects(f.run(),{code:'STORAGE_COPY'});
 });
 
 for(const remove of [false,true])test('a parent replaced during '+(remove?'deletion':'publication')+' cannot redirect a nested owner transfer',async t=>{

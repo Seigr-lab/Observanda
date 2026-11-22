@@ -16,6 +16,8 @@ const same=(a,b)=>a===null?b===null:b!==null&&a.bytes===b.bytes&&a.sha256===b.sh
 const contentFingerprint=value=>value===null?null:{bytes:value.bytes,sha256:value.sha256};
 const relative=value=>typeof value==='string'&&value.length<=32768&&!value.includes('\\')&&!value.includes('\0')&&!path.isAbsolute(value)&&!path.posix.isAbsolute(value)&&path.posix.normalize(value)===value&&!value.split('/').some(part=>['..','.',''].includes(part));
 export async function reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory=PROJECT_TRANSFER_FILES,projectRoots,excludeProject,checkpoint=async()=>{}}){
+ // Every transfer since alpha.29 stages its files in batches (files version 1).
+ if(receipt?.filesVersion!==1)throw new AppError('STORAGE_COPY');
  return withNativeDestination(target.root,async admitted=>{
  await admitted.admit({identity:receipt.destinationIdentity,internalIdentity:receipt.internalIdentity});
  receipt.destinationIdentity??=admitted.identity;receipt.internalIdentity??=admitted.internalIdentity;
@@ -82,22 +84,8 @@ export async function reconcileProjectFiles(source,target,receipt,{controls,rece
    batch.push({path:entry.path,before:entry.after,after:null,replace:false});if(batch.length===batchSize)await flush();
   }
   await flush();
-  if(receipt.filesVersion!==1)await retireLegacyStages(admitted,receipt.id);
   for await(const entry of files.staging.entries()){if(entry.directory||!/^[a-f0-9]{64}\.part$/.test(entry.name))throw new AppError('STORAGE_COPY');const stat=await files.staging.stat(entry.name);await files.staging.remove(entry.name,{identity:stat.identity});}
  }));await admitted.assertNamed();return result;
  });
 }
 
-// Receipts from before batched staging can leave one reserved stream beside a
-// destination file. Retire only this command's exact temporary name.
-async function retireLegacyStages(admitted,id){
- const name='.stream-project-'+id;
- async function remove(directory,top=false){
-  for await(const entry of directory.entries()){
-   if(entry.name===name){const stat=await directory.stat(entry.name);await directory.remove(entry.name,{identity:stat.identity});continue;}
-   if(top){if(entry.name==='.observanda')await remove(admitted.internalDirectory);continue;}
-   if(entry.directory&&!['postgresql','database-transition','project-transfer-files','lab-book-transfer-files'].includes(entry.name)){const child=await directory.directory(entry.name);try{await remove(child);}finally{await child.close();}}
-  }
- }
- await remove(admitted.directory,true);
-}
