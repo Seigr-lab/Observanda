@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {mkdir,copyFile} from 'node:fs/promises';
 import {moduleDashboardFixture} from './module-dashboard-fixture.js';
-import {fixture} from './project-domain-fixture.js';
+import {projectTreeFixture} from './project-tree-fixture.js';
 import {seedModuleCurrent} from './module-current-fixture.js';
 import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
@@ -15,9 +15,13 @@ import {projectCollectionReader} from '../src/project-collection-reader.js';
 import {RecordCollectionPages} from '../src/record-collection-pages.js';
 import {ProjectDomains} from '../src/project-domains.js';
 import {ProjectModuleCommands} from '../src/project-module-commands.js';
-import {referenceOriginKey} from '../src/research-reference-namespace.js';
-import {retainRecordOrigin} from '../src/record-owner-provenance.js';
-import {requireRecordOwnerTransfers} from '../src/catalogue-format.js';
+import {RecordOwnerTransfer} from '../src/record-owner-transfer.js';
+import {LabBookDirectory} from '../src/lab-book-directory.js';
+import {LabBookCreation} from '../src/lab-book-creation.js';
+import {LabBookStorage} from '../src/lab-book-storage.js';
+import {readAccess,verifyAccess} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
+import {sampleNotebook} from '../src/sample.js';
 import {workspaceFile} from '../src/storage.js';
 import {backupCatalogue} from '../src/postgres.js';
 import {verifyCatalogueArchive} from '../src/research-catalogue.js';
@@ -75,40 +79,53 @@ test('incoming links compose qualified summaries, preserve source independence a
  for(const code of ['CATALOGUE_DAMAGED','EIO']){t.mock.method(ProjectSessionOwner.prototype,'use',async()=>{throw Object.assign(Error('Synthetic source failure'),{code});});await assert.rejects(read(),{code});t.mock.restoreAll();}
 });
 
-test('incoming adopted research links require per-record witnesses and survive archive reopening',{timeout:180000},async t=>{
- const f=await fixture(t);await new ProjectModuleCommands(f.storage,f.book.id).initialize();const prior=randomUUID(),former=[randomUUID(),randomUUID()],foreign=randomUUID(),recordId=f.book.entries[0].id,target={workspaceId:f.book.id,type:'record',id:recordId};
- const original={...target,workspaceId:prior},both=calculation(randomUUID(),[target,original]),retained=calculation(randomUUID(),[original],'Retained calculation'),unrelated=calculation(randomUUID(),[{...target,workspaceId:foreign}],'Unrelated calculation');
- const transferred=former.map((workspaceId,index)=>calculation(randomUUID(),[{...target,workspaceId}],'Transferred calculation '+index));
- await seedModuleCurrent(f.storage,f.book.id,[both,retained,...transferred,unrelated]);
- await f.storage.withLock(()=>f.storage.catalogue(async store=>{await store.putObject('project:research-migration',{version:1,projectId:f.projectId,namespaceId:f.book.id,sourceNamespace:prior});await store.putObject(referenceOriginKey({kind:'record',id:recordId}),{version:1,projectId:f.projectId,namespaceId:f.book.id,sourceNamespace:prior,kind:'record',id:recordId});}));
+test('incoming research links from transferred former addresses require per-record witnesses and survive archive reopening',{timeout:360000},async t=>{
+ // Former addresses come only from completed record-owner transfers: the record
+ // moves from the first lab book through a third one into the selected book, and a
+ // sibling record moves in from a fourth book that never held the target record.
+ const f=await projectTreeFixture(t),directory=new LabBookDirectory(f.registry),[origin,selected]=f.books,project=f.projects[0],parent=new ProjectStorage(project.root,project.projectId,project.key);
+ for(const book of f.books)await directory.register(book.projectId,book);
+ const book=async title=>{
+  const {book:value}=await new LabBookCreation(parent,f.deviceStore).create({id:randomUUID(),username:'',password:'Protected observations 456!',book:{id:randomUUID(),projectId:project.projectId,title}});
+  const key=await verifyAccess(await readAccess(value.root),'','Protected observations 456!',{deviceStore:f.deviceStore});t.after(()=>clearVault(key));
+  await directory.register(project.projectId,value);return {...value,projectId:project.projectId,key};
+ };
+ const [through,elsewhere]=[await book('Intermediate observations'),await book('Unrelated observations')];
+ const open=value=>new LabBookStorage(value.root,value.labBookId,value.key),owner=value=>({projectId:value.projectId,labBookId:value.labBookId,workspaceId:value.namespaceId});
+ const move=async(from,to,id)=>{
+  const source=open(from),member=await source.catalogue(async store=>store.member(await store.snapshot(),id));
+  const result=await new RecordOwnerTransfer(source,open(to),{registry:f.registry,sourceOwner:owner(from),targetOwner:owner(to)}).start({id:randomUUID(),workspaceId:from.namespaceId,recordId:id,sourceNotebookId:from.labBookId,expectedStorageRevision:member.revision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId});
+  assert.equal(result.phase,'complete');
+ };
+ const recordId=origin.before.book.entries[0].id,sibling={...sampleNotebook().entries[0],id:randomUUID(),notebookId:elsewhere.labBookId,title:'Unrelated sibling'};
+ await open(elsewhere).update(value=>{value.entries=[sibling];return value;});
+ await move(origin,through,recordId);await move(through,selected,recordId);await move(elsewhere,selected,sibling.id);
+ const storage=open(selected),prior=origin.namespaceId,former=through.namespaceId,foreign=elsewhere.namespaceId,target={workspaceId:selected.namespaceId,type:'record',id:recordId};
+ await new ProjectModuleCommands(storage,selected.namespaceId).initialize();
+ const original={...target,workspaceId:prior},both=calculation(randomUUID(),[target,original]),retained=calculation(randomUUID(),[original],'Retained calculation'),transferred=calculation(randomUUID(),[{...target,workspaceId:former}],'Transferred calculation');
+ // The fourth book's namespace is a former address of the sibling only.
+ const unrelated=calculation(randomUUID(),[{...target,workspaceId:foreign}],'Unrelated calculation');
+ await seedModuleCurrent(storage,selected.namespaceId,[both,retained,transferred,unrelated]);
  const pages=new RecordCollectionPages(),client={};t.after(()=>pages.clear());
- const read=(storage=f.storage,values={},options={})=>moduleReferenceIncoming(pages,client,{workspaceId:f.book.id,target,types:['calculation'],limit:1,cursor:null,...values},{collectionWorkspaceId:f.book.id,visit:(consume)=>consume(storage,{workspaceId:f.book.id,projectId:f.projectId,labBookId:null}),resolveTarget:(_target,consume)=>storage.catalogue(store=>consume(storage,target,{store})),...options});
- const first=await read();assert.equal(first.total,2);assert.equal((await read(f.storage,{cursor:first.nextCursor})).items.length,1);assert.equal((await read(f.storage,{target:original})).total,2);
- const descriptor=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),root=path.join(f.workspace.root,'archive','project');await mkdir(path.join(root,'.observanda'),{recursive:true});
- for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(root,file));
- const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,root,{connection:db});}finally{await db.close();}
- const copied=new ProjectStorage(root,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(descriptor));await copied.outline();
- t.mock.method(f.storage,'catalogue',()=>{throw Error('Portable query consulted original storage');});t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Incoming portable query read originals');});
- assert.equal((await read(copied)).total,2);t.mock.restoreAll();
- // Exercise the identity-specific origin reader independently of transfer
- // execution. The archive above retains its existing migration-witness scope.
- await f.storage.withLock(()=>f.storage.catalogue(async store=>{
-  await requireRecordOwnerTransfers(store.db);
-  for(const workspaceId of former)await retainRecordOrigin(store,{kind:'record',id:recordId,transferId:randomUUID(),sourceOwner:{workspaceId,projectId:null,labBookId:null}});
-  // The same namespace on another identity is not authority for this record.
-  await retainRecordOrigin(store,{kind:'record',id:f.book.entries[1].id,transferId:randomUUID(),sourceOwner:{workspaceId:foreign,projectId:null,labBookId:null}});
- }));
- await assert.rejects(read(f.storage,{cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
- const expanded=await read(),linked=[...expanded.items];let current=expanded;assert.equal(expanded.total,4);
- while(current.nextCursor){current=await read(f.storage,{cursor:current.nextCursor});linked.push(...current.items);}
- assert.deepEqual(new Set(linked.map(row=>row.reference.id)),new Set([both.id,retained.id,...transferred.map(row=>row.id)]));assert.equal(linked.length,4);
- await assert.rejects(read(f.storage,{query:'Transferred',cursor:expanded.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
- await f.storage.withLock(()=>f.storage.catalogue(store=>store.deleteObject(referenceOriginKey({kind:'record',id:recordId}))));
- await assert.rejects(read(f.storage,{cursor:expanded.nextCursor}),{code:'RECORD_QUERY_CURSOR'});assert.equal((await read()).total,3);
+ const read=(from=storage,values={},options={})=>moduleReferenceIncoming(pages,client,{workspaceId:selected.namespaceId,target,types:['calculation'],limit:1,cursor:null,...values},{collectionWorkspaceId:selected.namespaceId,visit:(consume)=>consume(from,{workspaceId:selected.namespaceId,projectId:selected.projectId,labBookId:selected.labBookId}),resolveTarget:(_target,consume)=>from.catalogue(store=>consume(from,target,{store})),...options});
+ const first=await read(),linked=[...first.items];let current=first;assert.equal(first.total,3);
+ while(current.nextCursor){current=await read(storage,{cursor:current.nextCursor});linked.push(...current.items);}
+ assert.deepEqual(new Set(linked.map(row=>row.reference.id)),new Set([both.id,retained.id,transferred.id]));assert.equal(linked.length,3);
+ assert.equal((await read(storage,{target:original})).total,3);
+ await assert.rejects(read(storage,{query:'Transferred',cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
+ const descriptor=await storage.readFile(await workspaceFile(storage.root),'utf8'),root=path.join(f.root,'archive','book');await mkdir(path.join(root,'.observanda'),{recursive:true});
+ for(const file of [path.basename(await workspaceFile(storage.root)),'.observanda/access.json'])await copyFile(path.join(storage.root,file),path.join(root,file));
+ const db=await storage.openCatalogue();try{await backupCatalogue(storage.root,root,{connection:db});}finally{await db.close();}
+ const copied=new LabBookStorage(root,selected.labBookId,selected.key);await verifyCatalogueArchive(copied,JSON.parse(descriptor));await copied.outline();
+ t.mock.method(storage,'catalogue',()=>{throw Error('Portable query consulted original storage');});t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Incoming portable query read originals');});
+ assert.equal((await read(copied)).total,3);t.mock.restoreAll();
+ // Losing one identity witness removes only that former address.
+ await storage.withLock(()=>storage.catalogue(store=>store.deleteObject('record:reference-origin:record:'+recordId+':'+prior)));
+ await assert.rejects(read(storage,{cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});assert.equal((await read()).total,2);
  const abort=new AbortController(),references=ModuleCatalogue.prototype.references,count=pages.sessions.size;let observed=false;
  t.mock.method(ModuleCatalogue.prototype,'references',async function(...args){const result=await references.apply(this,args);observed=true;abort.abort();return result;});
  t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Cancelled lookup opened an original');});t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Cancelled lookup opened a research body');});
- await assert.rejects(read(f.storage,{}, {signal:abort.signal}),{name:'AbortError'});assert.equal(observed,true);assert.equal(pages.sessions.size,count);
+ await assert.rejects(read(storage,{}, {signal:abort.signal}),{name:'AbortError'});assert.equal(observed,true);assert.equal(pages.sessions.size,count);
 });
 
 test('foreign resource identities cannot acquire implicit local movement or BOM backlinks',async()=>{

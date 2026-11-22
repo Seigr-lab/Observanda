@@ -1,5 +1,4 @@
 import {cataloguePrefixExists} from './postgres-indexes.js';
-import {reviewScopeNamespace} from './project-review-origin.js';
 // Record review discovery is independent of packet bodies and signed responses.
 // Membership is append-only, committed with its request and global review index.
 import {ObjectIndex,validIndexRef} from './object-index.js';
@@ -21,7 +20,7 @@ export class ReviewScopeIndex{
  }
  async save(root,ids){await this.store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',slot,this.store.encode('state',slot,{version:1,indexHash:reviewHash(ids),root}));}
  async add(root,summary,ordinal,{persist=true}={}){
-  const revision=reviewMembership(summary),workspaceId=await reviewScopeNamespace(this.store,summary);
+  const revision=reviewMembership(summary),workspaceId=summary.workspaceId;
   for(const record of summary.records)root=await this.tree.change(root,prefix(workspaceId,record.id)+String(ordinal).padStart(9,'0')+'/'+summary.id,revision);
   if(persist)await this.tree.flush(root);return root;
  }
@@ -51,7 +50,7 @@ export class ReviewScopeIndex{
    const id=index.ids[ordinal],raw=await this.store.object('metadata:.observanda/reviews/summaries/'+id+'.json');let summary;
    try{summary=JSON.parse(raw?.text);}catch{fail();}
    if(summary?.id!==id||!uuid(summary.workspaceId)||!Array.isArray(summary.records)||!summary.records.length||summary.records.length>50||!summary.records.every(r=>uuid(r?.id))||!unique(summary.records.map(r=>r.id)))fail();
-   const expected=reviewMembership(summary),workspaceId=await reviewScopeNamespace(this.store,summary);
+   const expected=reviewMembership(summary),workspaceId=summary.workspaceId;
    for(const record of summary.records){
     const row=await this.tree.find(head,prefix(workspaceId,record.id)+String(ordinal).padStart(9,'0')+'/'+id);
     if(row?.revision!==expected)fail();count++;

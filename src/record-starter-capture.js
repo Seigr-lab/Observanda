@@ -1,4 +1,3 @@
-import {starterRequestMatches} from './project-starter-receipts.js';
 import {RecordStarterEditing} from './record-starter-editing.js';
 import {RecordStarterSource} from './record-starter-source.js';
 import {STARTER_ROOT} from './record-starters.js';
@@ -16,7 +15,7 @@ export class RecordStarterCapture extends RecordStarterEditing{
  async begin(c){
   this.check(c,['recordId','snapshotId','body']);if(!researchId(c.recordId)||!revisionId(c.snapshotId)||typeof c.body!=='boolean')fail();
   return this.workspace.withLock(async()=>{
-   await this.context(c.workspaceId);const file=root+'/'+c.id+'.json',request=packageDigest(c),prior=await this.object(file);if(prior){if(!await starterRequestMatches(this.workspace,c,prior,'request',file))throw new AppError('STARTER_CHANGED');return {received:prior.received};}
+   await this.context(c.workspaceId);const file=root+'/'+c.id+'.json',request=packageDigest(c),prior=await this.object(file);if(prior){if(request!==prior.request)throw new AppError('STARTER_CHANGED');return {received:prior.received};}
    if(await this.object(STARTER_ROOT+'/headers/'+c.id+'.json'))throw new AppError('STARTER_CHANGED');
    const target={workspaceId:c.workspaceId,recordId:c.recordId,snapshotId:c.snapshotId},source=await new RecordStarterSource(this.workspace).prepare({...target,body:c.body,sections:[]});
    await this.workspace.catalogue(store=>requireStarterWriting(store.db,source.draft));const blocks=new StarterValueBlocks(this.workspace),document=new RecordDocument(blocks,await blocks.tree().retain(source.draft));
@@ -26,7 +25,7 @@ export class RecordStarterCapture extends RecordStarterEditing{
  async append(c){
   this.check(c,['index','sections']);if(!Number.isSafeInteger(c.index)||c.index<0||!Array.isArray(c.sections)||!c.sections.length||c.sections.length>20||c.sections.some(s=>!starterKeys(s,['id','body','position'])||!researchId(s.id)||typeof s.body!=='boolean'||!Number.isSafeInteger(s.position)||s.position<0))fail();
   return this.workspace.withLock(async()=>{
-   await this.context(c.workspaceId);const file=root+'/'+c.id+'.json',state=await this.object(file),receiptFile=root+'/'+c.id+'/'+c.index+'.json',request=packageDigest(c),receipt=await this.object(receiptFile);if(receipt){if(!await starterRequestMatches(this.workspace,c,receipt,'request',receiptFile))throw new AppError('STARTER_CHANGED');return {received:receipt.received};}
+   await this.context(c.workspaceId);const file=root+'/'+c.id+'.json',state=await this.object(file),receiptFile=root+'/'+c.id+'/'+c.index+'.json',request=packageDigest(c),receipt=await this.object(receiptFile);if(receipt){if(request!==receipt.request)throw new AppError('STARTER_CHANGED');return {received:receipt.received};}
    if(!state||state.finished||state.received!==c.index)throw new AppError('STARTER_CHANGED');
    if(c.sections.some((s,i)=>s.position<=(i?c.sections[i-1].position:state.last)))fail();
    const source=new RecordStarterSource(this.workspace);

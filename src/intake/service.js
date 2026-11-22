@@ -1,5 +1,4 @@
 import {readRecordOwnerMetadata,readRecordOwnerAuditMetadata} from '../record-owner-audit-metadata.js';
-import {projectIntakeTarget} from '../project-intake-origin.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AppError} from '../errors.js';
@@ -37,7 +36,9 @@ export class LocalIntake{
    const origin=await readRecordOwnerAuditMetadata(this.workspace,this.file(manifest.id),{recordId:manifest.recordId,limit:8*1024*1024});
    if(origin){const proposal=JSON.parse(origin.text);if(proposal.state!=='completed'||!proposal.receipt||proposal.pin!==intakeHash(manifest)||proposal.manifest.workspaceId!==manifest.workspaceId)throw new AppError('CATALOGUE_DAMAGED');return {...manifest,workspaceId:origin.targetOwner.workspaceId};}
   }
-  return projectIntakeTarget(this.workspace,manifest);
+  if(!this.workspace.projectId)return manifest;
+  const namespaceId=await this.workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
+  if(manifest.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');return manifest;
  }
  async bind(command,{checkRevision=true,fullRecord=false}={}){
   const {workspaceId,recordId,expectedRevision}=await this.executionManifest(command);

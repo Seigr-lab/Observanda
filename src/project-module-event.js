@@ -1,12 +1,14 @@
 // Persist one prepared module event inside the caller's existing owner transaction.
-import {projectModuleDomainReceiptMatches} from './project-module-domain-receipts.js';
 import {moduleEventHash} from './project-module-identities.js';
 import {moduleDomain} from './modules/domains.js';
 import {admitModuleChanges} from './modules/command-capacity.js';
 import {AppError} from './errors.js';
 export async function replayProjectModuleEvent({owner,identities,federation,plan,command,fingerprint,receipt}){
  const events=await identities.fragments(receipt),baseRevisions=Object.fromEntries([...federation.owners].map(([domain,o])=>[domain,o.head.revision]));
- if(receipt.primary!==plan.primary||receipt.write.join()!==plan.write.join()||!await projectModuleDomainReceiptMatches(identities.research,command,receipt,events,fingerprint)||receipt.fingerprint===fingerprint&&receipt.read.join()!==plan.read.join())throw new AppError('MODULE_REPLAY');
+ if(receipt.primary!==plan.primary||receipt.write.join()!==plan.write.join())throw new AppError('MODULE_REPLAY');
+ // Every receipt written since alpha.29 carries no conversion origin.
+ if(receipt.fingerprint!==fingerprint)throw new AppError(receipt.originHash===null?'MODULE_REPLAY':'CATALOGUE_DAMAGED');
+ if(receipt.read.join()!==plan.read.join())throw new AppError('MODULE_REPLAY');
  const entities=[];for(const {event} of events){owner.validateEvent(event);for(const e of event.changes){const current=await federation.selected(federation.head,e.id);if(!current)throw new AppError('CATALOGUE_DAMAGED');owner.validateEntity(current);entities.push(current);}}
  return {workspaceId:command.workspaceId,baseRevisions,revisions:{...baseRevisions},entities,changedIds:entities.map(e=>e.id),replayed:true};
 }

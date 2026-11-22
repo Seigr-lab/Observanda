@@ -6,7 +6,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
 import {PublicationOwnerIdentities} from '../src/publication-owner-identities.js';
-import {recordReferenceNamespaces,withRecordReferenceNamespaces,referenceOriginKey} from '../src/research-reference-namespace.js';
+import {recordReferenceNamespaces,withRecordReferenceNamespaces} from '../src/research-reference-namespace.js';
 import {AppError} from '../src/errors.js';
 import {researchId} from '../src/web/research-reference.js';
 test('public identities preserve local destinations and distinguish independent copies',()=>{
@@ -51,16 +51,14 @@ test('capture namespace facts stay inside one current reader and an empty origin
  const other=namespaceStore();await withRecordReferenceNamespaces(other,async resolve=>assert.deepEqual(await resolve({workspaceId:other.current,id:recordId}),[other.current]));assert.equal(other.calls.snapshots,1);
 });
 
-test('capture namespace reuse preserves exact transferred and migrated identity proofs',async()=>{
- const current=id(),prior=id(),migrated=id(),projectId=id(),recordId=id(),unrelated=id(),row=originRow(recordId,current,prior),objects=new Map([
-  ['record:reference-origin:record:'+recordId+':'+prior,row],
-  ['project:research-migration',{version:1,projectId,namespaceId:current,sourceNamespace:migrated}],
-  [referenceOriginKey({kind:'record',id:recordId}),{version:1,projectId,namespaceId:current,sourceNamespace:migrated,kind:'record',id:recordId}]
+test('capture namespace reuse preserves exact transferred identity proofs',async()=>{
+ const current=id(),prior=id(),foreign=id(),projectId=id(),recordId=id(),unrelated=id(),row=originRow(recordId,current,prior),objects=new Map([
+  ['record:reference-origin:record:'+recordId+':'+prior,row]
  ]),store=namespaceStore({current,projectId,objects});
- const refs=[{workspaceId:current,id:recordId},{workspaceId:prior,id:recordId},{workspaceId:current,id:unrelated},{workspaceId:migrated,id:unrelated}];
+ const refs=[{workspaceId:current,id:recordId},{workspaceId:prior,id:recordId},{workspaceId:current,id:unrelated},{workspaceId:foreign,id:unrelated}];
  const expected=[];for(const ref of refs)expected.push(await recordReferenceNamespaces(namespaceStore({current,projectId,objects}),ref));
  await withRecordReferenceNamespaces(store,async resolve=>{for(const [index,ref] of refs.entries())assert.deepEqual(await resolve(ref),expected[index]);});
- assert.deepEqual(expected,[[current,migrated,prior],[current,migrated,prior],[current],[migrated]]);assert.equal(store.calls.pages,1);assert.equal(store.calls.identities,3);
+ assert.deepEqual(expected,[[current,prior],[current,prior],[current],[foreign]]);assert.equal(store.calls.pages,1);assert.equal(store.calls.identities,3);
  objects.set('record:reference-origin:record:'+recordId+':'+prior,{...row,namespaceId:id()});
  await assert.rejects(withRecordReferenceNamespaces(store,resolve=>resolve(refs[0])),{code:'CATALOGUE_DAMAGED'});
 });

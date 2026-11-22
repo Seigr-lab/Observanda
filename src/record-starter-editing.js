@@ -1,4 +1,3 @@
-import {starterRequestMatches} from './project-starter-receipts.js';
 import {RecordStarters,STARTER_ROOT} from './record-starters.js';
 import {RecordDocument} from './record-document.js';
 import {retainStarterDocument} from './record-starter-documents.js';
@@ -52,7 +51,7 @@ export class RecordStarterEditing extends RecordStarters{
   if(!starterKeys(command,['workspaceId','id','expectedRevision','commandId','operation','position','value'])||!researchId(command.workspaceId)||!researchId(command.id)||!researchId(command.commandId)||!revisionId(command.expectedRevision)||!natural(command.position)||!['details','body','section','insert','remove','move','tag-add','tag-remove'].includes(command.operation))fail();
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    await this.context(command.workspaceId);const receiptFile=STARTER_ROOT+'/commands/'+command.id+'/'+command.commandId+'.json',request=packageDigest(command),receipt=await this.object(receiptFile);
-   if(receipt){if(!await starterRequestMatches(this.workspace,command,receipt,'request',receiptFile))throw new AppError('STARTER_CHANGED');return receipt.result;}
+   if(receipt){if(packageDigest(command)!==receipt.request)throw new AppError('STARTER_CHANGED');return receipt.result;}
    const header=await this.header(command.id);if(header.revision!==command.expectedRevision)throw new AppError('STARTER_CHANGED');if(header.status!=='active')throw new AppError('STARTER_ARCHIVED');
    await requireStarterDocuments(store.db);let document=await this.draftDocument(header,{mutable:true});const {operation,position,value}=command;
    const valid=changes=>validStarter({...empty,...changes},{portable:false});

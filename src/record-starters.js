@@ -1,4 +1,3 @@
-import {starterRequestMatches} from './project-starter-receipts.js';
 import {AppError} from './errors.js';
 import {MetadataFeed} from './metadata-feed.js';
 import {researchId} from './web/research-reference.js';
@@ -74,7 +73,7 @@ export class RecordStarters{
   check(c,['workspaceId','id','release','recordId','notebookId']);identifier(c.id);identifier(c.recordId);identifier(c.notebookId);if(!revisionId(c.release))throw new AppError('INVALID');
   return this.workspace.withLock(async()=>{
    const metadata=await this.context(c.workspaceId),file=ROOT+'/uses/'+c.recordId+'.json',prior=await this.object(file),commandHash=packageDigest(c);
-   if(prior){if(!await starterRequestMatches(this.workspace,c,prior,'commandHash',file))throw new AppError('STARTER_CHANGED');return {recordId:c.recordId};}
+   if(prior){if(packageDigest(c)!==prior.commandHash)throw new AppError('STARTER_CHANGED');return {recordId:c.recordId};}
    if((await this.header(c.id)).status==='archived')throw new AppError('STARTER_ARCHIVED');
    if(!metadata.notebooks.some(n=>n.id===c.notebookId))throw new AppError('NOT_FOUND');
    const release=await this.releaseDocument({workspaceId:c.workspaceId,id:c.id,release:c.release}),created=await createStarterRecord(this.workspace,release,c);

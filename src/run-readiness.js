@@ -1,5 +1,4 @@
 import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
-import {projectRunRequestMatches} from './project-run-receipt-origin.js';
 // Completion evidence is private metadata linked to an exact record revision.
 // It summarizes existing owners and never creates a second narrative record.
 import {randomUUID} from 'node:crypto';
@@ -44,7 +43,7 @@ export class RunReadiness{
   const {record,revision,documentRevision}=await this.target(command);
   if(!researchId(command.id)||!receiptKinds.includes(command.kind))throw new AppError('INTAKE_INVALID');
   const prior=await this.receiptStore(record.id).getLocked(command.id),request=intakeHash(command);
-  if(prior){if(!await projectRunRequestMatches(this.workspace,command,prior))throw new AppError('INTAKE_CHANGED');return prior;}
+  if(prior){if(prior.request!==intakeHash(command))throw new AppError('INTAKE_CHANGED');return prior;}
   if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');
   await this.materials.index.ensureLocked();const evidenceRevision=await runEvidenceRevision(this.workspace,record.id);
   if(command.expectedEvidenceRevision!==undefined&&command.expectedEvidenceRevision!==evidenceRevision)throw new AppError('INTAKE_CHANGED');

@@ -1,6 +1,5 @@
 import {validRetainedFigureLanguage} from './retained-figure-localization.js';
 import {ReviewStaging} from './review-staging.js';
-import {assertProjectReviewPacket} from './project-review-origin.js';
 import {requestValue,responseValue,validateReviewPacket} from './review-contract.js';
 import {ExchangeParts} from './collaboration/exchange-parts.js';
 import {readExchange,writeExchange} from './collaboration/exchange-stream.js';
@@ -23,8 +22,8 @@ export class Reviews{
   if(summary)await this.workspace.catalogue(store=>new ReviewScopeIndex(store).append(v,summary,id=>readReviewSummary(this.workspace,id,key=>this.packet(key))));
   await this.workspace.writeMetadata(root+'index.json',JSON.stringify(v));
  }
- async packet(id){requireValue(uuid(id),'Review identity');const raw=await this.workspace.readMetadata(root+id+'.json',1800000);requireValue(!!raw,'Review unavailable');const packet=validateReviewPacket(JSON.parse(raw));await assertProjectReviewPacket(this.workspace,packet);return packet;}
- async writePacket(p){validateReviewPacket(p);await assertProjectReviewPacket(this.workspace,p);await this.workspace.writeMetadata(root+p.request.value.id+'.json',JSON.stringify(p));return writeReviewSummary(this.workspace,p);}
+ async packet(id){requireValue(uuid(id),'Review identity');const raw=await this.workspace.readMetadata(root+id+'.json',1800000);requireValue(!!raw,'Review unavailable');return validateReviewPacket(JSON.parse(raw));}
+ async writePacket(p){validateReviewPacket(p);await this.workspace.writeMetadata(root+p.request.value.id+'.json',JSON.stringify(p));return writeReviewSummary(this.workspace,p);}
  async run(operation,data,options={}){
   requireValue(reviewOperations.includes(operation),'Review operation');
   const execute=()=>this.runValue(operation,data,options);

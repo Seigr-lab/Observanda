@@ -1,7 +1,6 @@
 import {catalogueIndexedCount} from './postgres-indexes.js';
 // Bidirectional audit: every retained original/receipt has a route, and no
 // directory row survives without its authoritative domain member/receipt.
-import {projectModuleOriginEvent} from './project-module-domain-receipts.js';
 import {ProjectModuleIdentities,moduleIdentityPrefix} from './project-module-identities.js';
 import {ModuleCatalogue} from './modules/catalogue.js';
 import {withScratch} from './scratch-work.js';
@@ -16,7 +15,7 @@ export async function verifyProjectModuleIdentities(research,registry,inspect){
    for await(const member of catalogue.members(head)){const route=await identities.read('entity',member.id);if(route?.domain!==domain)damaged();count++;}
    for await(const row of catalogue.store.db.rows('SELECT command_id,ordinal,payload FROM module_events ORDER BY ordinal',[],{batchSize:1})){
     const receipt=await identities.read('command',row.command_id);if(!receipt?.fragments.some(f=>f.domain===domain&&f.ordinal===row.ordinal))damaged();
-    if(await work.add(row.command_id)){const fragments=await identities.fragments(receipt);await projectModuleOriginEvent(research,receipt,fragments);count++;}
+    if(await work.add(row.command_id)){await identities.fragments(receipt);if(receipt.originHash!==null)damaged();count++;}
    }
   }
   const actual=await catalogueIndexedCount(research.db,'state',moduleIdentityPrefix);if(actual!==count)damaged();

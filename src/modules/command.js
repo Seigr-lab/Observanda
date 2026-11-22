@@ -1,4 +1,3 @@
-import {moduleReceiptMatches} from '../project-module-receipts.js';
 import {AppError} from '../errors.js';
 import {ModuleCatalogue} from './catalogue.js';
 import {prepareModuleCommand} from './prepare-command.js';
@@ -14,7 +13,7 @@ export async function executeModuleCommand(owner,store,research,command,fingerpr
   return {data:await catalogue.read(book.id,{history:false}),changedIds,replayed};
  }
  if(receipt){
-  owner.validateEvent(receipt);if(!await moduleReceiptMatches(store,command,receipt,fingerprint))throw new AppError('MODULE_REPLAY');
+  owner.validateEvent(receipt);if(receipt.fingerprint!==fingerprint)throw new AppError('MODULE_REPLAY');
   // Retry acknowledges the earlier command but returns current versions, so a
   // later independent edit is never replaced with the receipt's old body.
   const entities=[];for(const e of receipt.changes){const current=await catalogue.selected(head,e.id);if(!current)throw new AppError('CATALOGUE_DAMAGED');owner.validateEntity(current);entities.push(current);}

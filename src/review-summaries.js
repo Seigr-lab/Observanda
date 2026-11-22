@@ -1,4 +1,3 @@
-import {reviewScopeNamespace} from './project-review-origin.js';
 import {ReviewScopeIndex,reviewMembership} from './review-scope-index.js';
 import {reviewHash} from './security/review-exchange.js';
 import {AppError} from './errors.js';
@@ -47,13 +46,13 @@ export async function reviewPage(workspace,index,command,readPacket,records){
    for(const pointer of selected.items){
     const value=await readReviewSummary(workspace,pointer.id,readPacket,{cache:false});
     // A foreign workspace cannot witness a local record with a matching UUID.
-    const namespaceId=await reviewScopeNamespace(store,value);namespaces.set(value.id,namespaceId);
+    const namespaceId=value.workspaceId;namespaces.set(value.id,namespaceId);
     if(namespaceId!==workspaceId||!value.records.some(r=>r.id===recordId)||reviewMembership(value)!==pointer.revision)throw new AppError('CATALOGUE_DAMAGED');
     items.push({...value,records:value.records.filter(r=>r.id===recordId),decisions:value.decisions.filter(d=>d.id===recordId)});
    }
   }
   if(offset>0&&offset>=total)throw new AppError('CONFLICT');
-  const local=new Set();for(const item of items)if((namespaces.has(item.id)?namespaces.get(item.id):await reviewScopeNamespace(store,item))===workspaceId)local.add(item.id);
+  const local=new Set();for(const item of items)if((namespaces.has(item.id)?namespaces.get(item.id):item.workspaceId)===workspaceId)local.add(item.id);
   const current=await records.current(workspaceId,items.filter(i=>local.has(i.id)).flatMap(i=>i.records.map(r=>r.id)));
   for(const item of items){
    item.contact=index.contacts.find(c=>reviewHash(c.contact)===item.contact)?.name??null;
