@@ -4,7 +4,6 @@ import {workspaceProjectPlacements,legacyWorkspaceProjectDestination} from './wo
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertProjectRelocationsSettled} from './project-membership.js';
 import {ProjectBookCopy} from './project-book-copy.js';
-import {copyProjectAdoptions,reconcileCopiedProjectConversions} from './workspace-project-conversion-copy.js';
 import {retainCopiedProjectCommands} from './workspace-project-continuations.js';
 import {readAccess} from './access.js';
 // A workspace copy includes its registered independent owners. File copying
@@ -98,15 +97,10 @@ export class WorkspaceProjectCopy {
     const copy=encryption?(retainedPlan,settings)=>encryptedCopy(retainedPlan,encryption.access,encryption.vault,this.source.vault,settings):copyWorkspace;
     return recovery.run({...plan,projectRoots:this.projectRoots},this.directory,async checkpoint=>copy({...checkpoint.state.plan,projectRoots:this.projectRoots},{
       ...rest,recovery:checkpoint,vault:this.source.vault,
-      beforeSnapshot:async()=>{await copyProjectAdoptions(this.source,this.directory);if(beforeSnapshot)await beforeSnapshot();},
-      afterSnapshotVerified:async destination=>{
-        checkpoint.state.adoptions=await copyProjectAdoptions(this.source,this.directory);
-        if(afterSnapshotVerified)await afterSnapshotVerified(destination);
-      },
+      beforeSnapshot:async()=>{if(beforeSnapshot)await beforeSnapshot();},
+      afterSnapshotVerified:async destination=>{if(afterSnapshotVerified)await afterSnapshotVerified(destination);},
       beforePublish:async target=>{
         await this.copyProjects(target,checkpoint,{portable,finish:async()=>{
-          const adoptions=checkpoint.state.adoptions??await copyProjectAdoptions(this.source,this.directory);
-          await reconcileCopiedProjectConversions(target,this.registry.workspaceId,adoptions,checkpoint.state.id,{checkpoint:this.checkpoint});
           await retainCopiedProjectCommands(target,checkpoint.state.id,{checkpoint:this.checkpoint});
         }});
         if(beforePublish)await beforePublish(target);

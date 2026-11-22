@@ -17,7 +17,6 @@ import {copyProjectLocation,projectTransferReceipt} from './project-transfer.js'
 import {withProjectLifecycle} from './project-lifecycle.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {backupCatalogue} from './postgres.js';
-import {validateNativeCopyAdoptions,reconcileNativeCopiedProjectConversions} from './workspace-project-conversion-copy.js';
 import {retainCopiedProjectCommands} from './workspace-project-continuations.js';
 import {operationStage,operationAdvance,operationItem,operationTransfer} from './operation-progress.js';
 const within=(parent,child)=>{const r=path.relative(parent,child);return r===''||r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r);};
@@ -75,7 +74,7 @@ export class NativeWorkspaceProjectCopy{
   const {beforePublish,beforeSnapshot,afterSnapshotVerified,encryption:ignored,...rest}=options,copy=encryption?(saved,settings)=>encryptedCopy(saved,encryption.access,encryption.vault,this.source.vault,settings):copyWorkspace;
   return withWorkspaceCopyDirectory(this.source,this.directory,view=>recovery.run(plan,this.directory,checkpoint=>copy(checkpoint.state.plan,{
    ...rest,recovery:checkpoint,vault:this.source.vault,excludeProject:workspaceCopyExclusion(view,this.source.root),
-   beforeSnapshot:async()=>{await validateNativeCopyAdoptions(this.source,this.directory,{current:true});if(beforeSnapshot)await beforeSnapshot();},
+   beforeSnapshot:async()=>{if(beforeSnapshot)await beforeSnapshot();},
    afterSnapshotVerified:async destination=>{if(afterSnapshotVerified)await afterSnapshotVerified(destination);},
    beforePublish:async target=>{await this.copyProjects(target,checkpoint,{portable});if(beforePublish)await beforePublish(target);}
   })));
@@ -98,7 +97,7 @@ export class NativeWorkspaceProjectCopy{
   const db=await target.openCatalogue({detached:true});try{
    await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ');const store=target.catalogueStore(db);
    await target.inspectCatalogue(store,async()=>{
-    await validateNativeCopyAdoptions(target,pin);const directory=new NativeOwnerDirectory(store,{kind:'projects',ownerId:pin.head.ownerId}),current=await directory.head({required:true});
+    const directory=new NativeOwnerDirectory(store,{kind:'projects',ownerId:pin.head.ownerId}),current=await directory.head({required:true});
     await withWorkspaceCopyDirectory(this.source,pin,async view=>{
      // Staging entries is encrypted scratch; no growing array enters the receipt.
      const {withScratch}=await import('./scratch-work.js');await withScratch(async staged=>{
@@ -107,7 +106,7 @@ export class NativeWorkspaceProjectCopy{
       const expected=await directory.applyBatch(pin.head,changes()),expectedRevision=digest(serialize(expected));if(current.revision!==pin.revision&&current.revision!==expectedRevision)throw new AppError('CONFLICT');await directory.publish(expected);
      });
     });
-    await reconcileNativeCopiedProjectConversions(target,pin,recovery.state.id,{checkpoint:owner.checkpoint});await retainCopiedProjectCommands(target,recovery.state.id,{checkpoint:owner.checkpoint});
+    await retainCopiedProjectCommands(target,recovery.state.id,{checkpoint:owner.checkpoint});
     const descriptor=JSON.parse(await target.readFile(await workspaceFile(target.root),'utf8'));await store.verify(descriptor);await db.run('COMMIT');await backupCatalogue(target.root,target.root,{connection:db});
    });
   }catch(error){await db.run('ROLLBACK').catch(()=>{});throw error;}finally{await db.close();}
