@@ -9,10 +9,10 @@ import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {catalogueFormat,catalogueRequiresCalculationPolicies,catalogueRequiresDomains} from '../src/catalogue-format.js';
 import {verifiedCatalogueObjects} from '../src/catalogue-object-verification.js';
 import {serialize} from '../src/storage-format.js';
-import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 
 const detached=AsyncLocalStorage.snapshot();
-const policyCommand=f=>{const command=calculation(f);command.payload.data={...command.payload.data,engine:3,policy:defaultCalculationPolicy()};return command;};
+// Every saved calculation declares its calculation policy.
+const policyCommand=f=>calculation(f);
 const format=f=>f.storage.catalogue(store=>catalogueFormat(store.db));
 async function heldDomain(f,options,operation){
  let entered,release,expired=false;

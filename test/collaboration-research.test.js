@@ -26,6 +26,7 @@ import {workspaceJobs} from '../src/workspace-jobs.js';
 import {WorkspaceFonts} from '../src/workspace-fonts.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {withStagingAuthority} from '../src/staging-reservations.js';
 import {testServer} from './device-fixture.js';
 
@@ -185,8 +186,8 @@ test('returned evidence preserves exact bytes and dataset values and is independ
  const upload=async(owner,recordId,name,bytes)=>{const session=await owner.startImport({recordId,name,size:bytes.length,provenance:'Synthetic instrument capture'});await owner.appendImport(session.id,0,[bytes]);return owner.finishImport(session.id);};
  const artifact=await upload(materials,recordId,'capture.csv',bytes),column=(name,representation)=>({name,representation,radix:10,unit:'',missing:[],time:{kind:'none',reference:'',resolution:'',uncertainty:''}}),dataset=await materials.dataset({recordId,title:'Exact observations',artifact,columns:[column('counter','integer'),column('reading','decimal')]});
  const aggregated=await materials.dataset({recordId,title:'Retained grouped readings',aggregation:{version:1,source:dataset,keys:[0],values:[{column:1,operation:'median',name:'Median'}],missing:'skip',note:''}});
- const source=blankAnalysisSource(dataset);source.columns.value=0;
- const comparisonCommand={recordId,title:'Exact retained comparison',tool:'Synthetic comparison',version:'1',method:{...blankAnalysisMethod(),unavailable:'No external implementation in this synthetic fixture.',uncertainty:'Not measured.',limitations:'Synthetic qualification only.'},comparison:{version:1,sources:[source],ordering:'source',expected:null}},comparison=await materials.comparisons.save(comparisonCommand);
+ const source=blankAnalysisSource({...dataset,workspaceId:(await materials.workspace.outline()).metadata.id});source.columns.value=0;
+ const comparisonCommand={recordId,title:'Exact retained comparison',tool:'Synthetic comparison',version:'1',method:{...blankAnalysisMethod(),unavailable:'No external implementation in this synthetic fixture.',uncertainty:'Not measured.',limitations:'Synthetic qualification only.'},comparison:{version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources:[source],ordering:'source',expected:null}},comparison=await materials.comparisons.save(comparisonCommand);
  const offer=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),incoming=await f.sb.receive(await f.sa.outgoing(offer.id)),destination=path.join(f.directory,'evidence-copy');await f.sb.acceptCopy(incoming.id,destination);
  const access=await readAccess(destination),vault=await verifyAccess(access,'','',{deviceStore:f.member.deviceStore});f.vaults.push(vault);const ws=new Workspace(destination,vault),copied=new ResearchMaterials(ws);
  assert.deepEqual(await contentBuffer((await copied.artifact(artifact)).content),bytes);assert.deepEqual(await Array.fromAsync(copied.iterateDataset(dataset)),await Array.fromAsync(materials.iterateDataset(dataset)));

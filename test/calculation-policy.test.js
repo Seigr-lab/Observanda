@@ -5,9 +5,9 @@ import {defaultCalculationPolicy,validCalculationPolicy,checkpointHasCalculation
 import {validateTool} from '../src/modules/tools.js';
 const options=(changes={})=>({engine:3,policy:{...defaultCalculationPolicy(),...changes}});
 test('saved precision policies isolate approximate arithmetic, display rounding and exact expressions',()=>{
- const historical=calculateDetailed('sqrt(2)',{engine:2}),down=options({displayDigits:5,rounding:'floor'}),up=options({displayDigits:5,rounding:'ceiling'});
+ const down=options({displayDigits:5,rounding:'floor'}),up=options({displayDigits:5,rounding:'ceiling'});
  assert.equal(calculate('sqrt(2)',down),'1.4142');assert.equal(calculate('sqrt(2)',up),'1.4143');assert.equal(calculate('-sqrt(2)',down),'-1.4143');
- assert.equal(calculate('-sqrt(2)',up),'-1.4142');assert.deepEqual(calculateDetailed('sqrt(2)',{engine:2}),historical);
+ assert.equal(calculate('-sqrt(2)',up),'-1.4142');
  const high=options({workingDigits:100,displayDigits:90});assert.ok(calculate('sqrt(2)',high).length>85);
  assert.equal(calculate('1/3',down),'1/3');assert.equal(calculate('1e100+1-1e100',down),'1');assert.equal(calculate('round(-1.5)',options({rounding:'half-even'})),'-2');
  const answer=calculateDetailed('sqrt(2)',up);assert.deepEqual(answer.approximation,{engine:3,...up.policy});assert.equal(calculate('sqrt(2)',down),'1.4142');
@@ -32,7 +32,7 @@ test('spreadsheet dependencies retain working values independently of display po
 test('saved contracts reject silent version changes while unavailable pinned libraries stay inspectable',()=>{
  const data={name:'Retained precision',links:[],engine:3,policy:defaultCalculationPolicy(),cells:[['=sqrt(2)']],original:null};validateTool('sheet',data);
  data.policy.library.version='99.0.0';validateTool('sheet',data);assert.throws(()=>spreadsheet(data.cells,data),/library version is unavailable/);
- assert.throws(()=>validateTool('sheet',{...data,engine:2}));assert.throws(()=>calculate('1',{engine:2,policy:defaultCalculationPolicy()}),/historical/);
+ assert.throws(()=>validateTool('sheet',{...data,engine:2}));assert.throws(()=>calculate('1',{engine:2,policy:defaultCalculationPolicy()}),/Unsupported/);
  const invalid=defaultCalculationPolicy();invalid.displayDigits=65;assert.equal(validCalculationPolicy(invalid),false);
  for(const key of ['workingDigits','displayDigits']){const p=defaultCalculationPolicy();p[key]=257;assert.equal(validCalculationPolicy(p),false);}
  for(const [key,value] of [['maxBits',65537],['maxOperations',50001],['maxMilliseconds',5001]]){const p=defaultCalculationPolicy();p.resources[key]=value;assert.equal(validCalculationPolicy(p),false);}

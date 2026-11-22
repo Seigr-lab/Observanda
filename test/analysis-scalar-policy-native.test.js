@@ -27,9 +27,9 @@ test('policy comparisons retain exact full values and expected matches through i
  const dataset=await m.dataset({recordId,title:'Declared comparison source',artifact,columns},{signal:t.signal}),ref={...dataset,workspaceId:book.id},source=blankAnalysisSource(ref);Object.assign(source.columns,{value:1,lower:2,upper:3});
  const command={recordId,id:randomUUID(),title:'Retained policy comparison',tool:'Declared source values',version:'fixture',method:{...blankAnalysisMethod(),unavailable:'No external tool',uncertainty:'Exact retained integer spellings',limitations:'Synthetic two-row fixture'},comparison:{version:3,resourcePolicy:policy(),sources:[source],ordering:'source',expected:{dataset:ref,key:0,actualKey:0,value:1,source:0,rationale:'Compare the exact pinned source to itself'}}};
  stage('Declared source created.');
- const legacy={...command.comparison,version:2};delete legacy.resourcePolicy;await assert.rejects(m.comparisons.prepare({...command,comparison:legacy},{signal:t.signal}),{code:'ANALYSIS_SCALAR_POLICY'});
+ const legacy={...command.comparison,version:2};delete legacy.resourcePolicy;await assert.rejects(m.comparisons.prepare({...command,comparison:legacy},{signal:t.signal}),{code:'ANALYSIS_INVALID'});
  await assert.rejects(m.comparisons.prepare({...command,comparison:{...command.comparison,resourcePolicy:policy({maxBits:64})}},{signal:t.signal}),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(await m.current(command.id),null);
- stage('Legacy admission and policy refusal leave no result.');
+ stage('Earlier comparison versions and policy refusal leave no result.');
  const jobId=randomUUID(),controller=new AbortController();let checkpoint=false;
  const writePage=fn=>f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,fn));
  await assert.rejects(m.comparisons.prepare(command,{jobId,signal:controller.signal,writePage,progress:async()=>{checkpoint=true;controller.abort();controller.signal.throwIfAborted();}}),{name:'AbortError'});

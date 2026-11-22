@@ -1,7 +1,11 @@
 import {readDelimitedTable} from '../src/web/tabular-data.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {calculate,convertBase,spreadsheet} from '../src/tools/math.js';
+import * as math from '../src/tools/math.js';
+import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+// Scalar tools calculate with the policy engine that saved worksheets use.
+const policyEngine=(options={})=>({engine:3,policy:defaultCalculationPolicy(),...options});
+const calculate=(expression,options)=>math.calculate(expression,policyEngine(options)),convertBase=(digits,from,to)=>math.convertBase(digits,from,to,policyEngine()),spreadsheet=cells=>math.spreadsheet(cells,policyEngine());
 import {formula,reaction} from '../src/web/tools/stoichiometry.js';
 import {chemicalPreview} from '../src/tools/chemistry.js';
 import {validateTool} from '../src/modules/tools.js';
@@ -29,7 +33,7 @@ test('timeline combines source selections without duplicates and retains partial
  const book=sampleNotebook(),child=randomUUID();book.projects.push({id:child,parentId:book.projects[0].id});book.notebooks.push({id:randomUUID(),projectId:child});book.entries[1].notebookId=book.notebooks[1].id;book.entries[2].occurredOn={kind:'unknown'};const d={projects:[book.projects[0].id],books:[book.notebooks[0].id],descendants:true,from:'',to:'',query:'',status:'',descending:false};assert.equal(timelineRecords(book,d).length,3);assert.equal(timelineRecords(book,d).at(-1).id,book.entries[2].id);d.from='2026-09-20';assert.equal(timelineRecords(book,d).length,1);d.books=[];d.descendants=false;d.from='';assert.equal(timelineRecords(book,d).length,2);
 });
 test('tool validation rejects excess data and corrupted originals',()=>{
- const base={name:'Sheet',links:[],engine:1,cells:[['1']],original:null};validateTool('sheet',base);assert.throws(()=>validateTool('sheet',{...base,cells:[[1]]}));assert.throws(()=>validateTool('chemical',{name:'x',links:[],engine:1,format:'smiles',source:'CCO',original:{name:'x.smi',size:3,bytes:'Q0NP',sha256:'0'.repeat(64)}}));
+ const base={name:'Sheet',links:[],engine:3,policy:defaultCalculationPolicy(),cells:[['1']],original:null};validateTool('sheet',base);assert.throws(()=>validateTool('sheet',{...base,cells:[[1]]}));assert.throws(()=>validateTool('chemical',{name:'x',links:[],engine:1,format:'smiles',source:'CCO',original:{name:'x.smi',size:3,bytes:'Q0NP',sha256:'0'.repeat(64)}}));
 });
 
 test('spreadsheet imports retain empty row positions and literal exact numeric strings',()=>{const source='1,9007199254740993\r\n\r\n3,0042\r\n';const table=readDelimitedTable(source,{header:false,preserveEmptyRows:true});assert.deepEqual(table.rows.map(r=>r.cells),[['1','9007199254740993'],['',''],['3','0042']]);assert.deepEqual(table.rows.map(r=>r.line),[1,2,3]);assert.equal(readDelimitedTable(source,{header:false}).rows.length,2);assert.deepEqual(readDelimitedTable('0042\n\n9007199254740993\n',{header:false,preserveEmptyRows:true,minColumns:1}).rows.map(r=>r.cells),[['0042'],[''],['9007199254740993']]);});

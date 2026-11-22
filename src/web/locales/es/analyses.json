@@ -171,8 +171,6 @@
   "observationsHidden": "Ninguna observación coincide con esta vista.",
   "resourcePolicy": "Límites de recursos de comparación",
   "resourceHelp": "Cada observación y comparación de valores esperados utiliza estos límites guardados para la interpretación exacta, comprobaciones de límites y márgenes. Las declaraciones de entrada también conservan sus propios límites. Superar cualquiera de ellos detiene la preparación sin sustituir resultados anteriores.",
-  "resourceLegacy": "Esta comparación conserva su interpretación anterior. Activa los límites declarados para utilizar fuentes con sus propias políticas escalares en una revisión nueva.",
-  "resourceEnable": "Activar límites de recursos de declaraciones",
   "valuePreview": "Vista previa del valor: {value}...",
   "valueComplete": "Mostrar el valor completo ({count} caracteres)",
   "valueCompleteLabel": "Valor conservado completo",

@@ -24,8 +24,9 @@ import {verifyCatalogueArchive} from '../src/research-catalogue.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ProjectSessionOwner} from '../src/project-session-owner.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 const task=(id,links,title='Linked task')=>({id,type:'task',revision:1,createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z',data:{title,description:'Related work',status:'todo',priority:'normal',dueOn:null,assignees:[],checklist:[],dependencies:[],links}});
-const calculation=(id,links,name='Linked calculation')=>({id,type:'calculation',revision:1,createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z',data:{name,links,engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}});
+const calculation=(id,links,name='Linked calculation')=>({id,type:'calculation',revision:1,createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z',data:{name,links,engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}});
 
 test('incoming links compose qualified summaries, preserve source independence and fail on revoked admitted grants',{timeout:240000},async t=>{
  const f=await moduleDashboardFixture(t),app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore}),client={},pages=new RecordCollectionPages();t.after(()=>app.close());t.after(()=>pages.clear());

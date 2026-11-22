@@ -35,7 +35,7 @@ test('rollback removes only its own pending capability and cannot replace a live
 });
 
 test('a different result worker cannot use an originating result grant after revocation',{timeout:90000},async t=>{
- const f=await comparisonFixture(t,{groups:1}),command=structuredClone(f.command);command.comparison.version=2;command.comparison.sources[0].dataset.workspaceId=f.book.id;
+ const f=await comparisonFixture(t,{groups:1}),command=structuredClone(f.command);
  let allowed=true,opened=0,closed=0;const baseline=databaseCapacity().active,owner={workspaceId:f.book.id,projectId:null,labBookId:null},readers=[];
  const sourceAccess=async storage=>{
   opened++;const routes=comparisonRouteWitness({root:null,changes:async function*(){},locate:async()=>owner});readers.push(routes);

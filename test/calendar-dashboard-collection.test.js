@@ -7,6 +7,7 @@ import {defaultPanelConfig} from '../src/web/dashboard-model.js';
 import {CalendarSources} from '../src/calendar/service.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {ProjectDomains} from '../src/project-domains.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 
 test('combined agenda retains separate owners, stable pages and authenticated feed caches',{timeout:240000},async t=>{
  const f=await moduleDashboardFixture(t),app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore}),client={};t.after(()=>app.close());
@@ -31,7 +32,7 @@ test('combined agenda retains separate owners, stable pages and authenticated fe
  let release,started;const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>started=resolve),owner=f.owners[3];
  const writing=new ProjectDomains(owner.storage,owner.workspaceId).run(['calculator'],async()=>{started();await gate;},{write:['calculator']});await ready;
  try{assert.equal((await read({cursor:first.nextCursor})).total,5);}finally{release();await writing;}
- await owner.command('calculation.save',{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}});
+ await owner.command('calculation.save',{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}});
  assert.equal((await read({cursor:first.nextCursor})).total,5);
  await owner.command('calendar.save',{id:f.calendarId,expectedRevision:1,data:{...owner.calendar,name:'Changed calendar'}});await assert.rejects(read({cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
  t.mock.restoreAll();

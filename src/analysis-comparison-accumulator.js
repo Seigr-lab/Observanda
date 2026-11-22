@@ -1,17 +1,17 @@
 import {serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 import {analysisIdentity} from './web/analysis-model.js';
-export const comparisonGroupKey=(o,version=1)=>JSON.stringify([analysisIdentity(o.investigation,version),analysisIdentity(o.run,version),o.condition,o.operation,o.profile,analysisIdentity(o.calibration,version),o.unit,o.membership,o.window,o.windowRelation,o.evidence]);
+export const comparisonGroupKey=o=>JSON.stringify([analysisIdentity(o.investigation),analysisIdentity(o.run),o.condition,o.operation,o.profile,analysisIdentity(o.calibration),o.unit,o.membership,o.window,o.windowRelation,o.evidence]);
 const groupFields=o=>Object.fromEntries(['investigation','run','condition','operation','profile','calibration','unit','membership','window','windowRelation','evidence'].map(k=>[k,o[k]]));
 const counts=()=>({correct:0,mismatched:0,unresolved:0,unavailable:0,excluded:0});
 // Calculation and owner-only integrity use the same deterministic accumulator.
 // Integrity supplies retained observations, not another read of source datasets.
 export function comparisonAccumulator(index,state,comparison){
- const update=(table,key,change,count,filters)=>index.update(table,key,previous=>{const value=change(previous);if(comparison.version===3&&Buffer.byteLength(serialize({table,key,value,ordinal:count}))>1048576)throw new AppError('ANALYSIS_LIMIT');return value;},count,filters);
+ const update=(table,key,change,count,filters)=>index.update(table,key,previous=>{const value=change(previous);if(Buffer.byteLength(serialize({table,key,value,ordinal:count}))>1048576)throw new AppError('ANALYSIS_LIMIT');return value;},count,filters);
  async function append(o){
   for(const name of ['condition','operation','profile','window'])if(o[name].length>300)throw new AppError('ANALYSIS_LIMIT');
-  const s=state.summary,key=comparisonGroupKey(o,comparison.version);
-  if(o.run){const identity=comparison.version>=2?state.summary.sourceIdentities[o.source].run:o.run,run=comparison.version>=2?JSON.stringify([identity.workspaceId,identity.kind,identity.id]):identity.id;if(!await index.state('runs',run)){await index.state('runs',run,true);s.runs++;}}else s.unknownRunRows++;
+  const s=state.summary,key=comparisonGroupKey(o);
+  if(o.run){const identity=state.summary.sourceIdentities[o.source].run,run=JSON.stringify([identity.workspaceId,identity.kind,identity.id]);if(!await index.state('runs',run)){await index.state('runs',run,true);s.runs++;}}else s.unknownRunRows++;
   s[o.evidence][o.category]++;s.rows++;
   if(await update('groups',key,previous=>{
    const group=previous??{key,...groupFields(o),rows:0,categories:counts(),boundaries:{unknown:0,below:0,above:0,'on-boundary':0,inside:0},assessed:0,successful:0};
@@ -21,7 +21,6 @@ export function comparisonAccumulator(index,state,comparison){
   },s.counts.groups))s.counts.groups++;
   if(o.available){
    const canonical=o.exact?o.exact.numerator+'/'+o.exact.denominator:o.value,identity=JSON.stringify([key,canonical,o.category]);
-   if(comparison.version!==3&&canonical.length>8192)throw new AppError('ANALYSIS_LIMIT');
    if(await update('distribution',identity,previous=>{const value=previous??{group:key,value:o.value,exact:o.exact,category:o.category,count:0,locator:o.locator};value.count++;return value;},s.counts.distribution,index.filters('distribution',o.category,key)))s.counts.distribution++;
   }
   if(comparison.ordering==='source'){

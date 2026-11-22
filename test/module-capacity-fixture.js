@@ -1,6 +1,7 @@
 import {digest} from '../src/storage-format.js';
 import {MODULE_BYTES} from '../src/modules/capacity.js';
 import {moduleEntityBytes} from '../src/modules/catalogue.js';
+import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 // Largest permitted cell JSON and retained source, with three-byte UTF-8 text.
 // Character, row, column and source-byte limits remain the actual tool limits.
 export function largestSheet(){
@@ -8,7 +9,7 @@ export function largestSheet(){
  let remaining=600000-JSON.stringify(cells).length;
  for(const row of cells){const count=Math.min(2000-row[0].length,remaining);row[0]+='界'.repeat(count);remaining-=count;if(!remaining)break;}
  const bytes=Buffer.alloc(262144,97);
- return {name:'Largest supported sheet',engine:1,links:[],cells,original:{name:'retained.csv',size:bytes.length,sha256:digest(bytes),bytes:bytes.toString('base64')}};
+ return {name:'Largest supported sheet',engine:3,policy:defaultCalculationPolicy(),links:[],cells,original:{name:'retained.csv',size:bytes.length,sha256:digest(bytes),bytes:bytes.toString('base64')}};
 }
 export function largeCategory({nearLimit=false}={}){
  const choice=i=>String(i).padStart(10,'0')+'x'.repeat(150);

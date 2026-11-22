@@ -3,10 +3,10 @@ import {readFile} from 'node:fs/promises';
 async function fixture(page,options={}){
  await page.context().route('https://comparison.test/**',async route=>{const path=new URL(route.request().url()).pathname;if(path==='/')return route.fulfill({contentType:'text/html',body:'<dialog id="dialog"></dialog>'});return route.fulfill({contentType:path.endsWith('.json')?'application/json':'text/javascript',body:await readFile(new URL('../../src/web'+path,import.meta.url),'utf8')});});
  await page.goto('https://comparison.test/');await page.evaluate(async options=>{
-  const {analysisComparisonUI}=await import('/analysis-comparison-ui.js'),{blankAnalysisMethod,blankAnalysisSource,ANALYSIS_CATEGORIES}=await import('/analysis-model.js'),id=()=>crypto.randomUUID();window.state={book:{id:id(),title:'Result owner'},projectOwner:null,storage:{contextId:id(),researchStorage:'catalogue',researchFormatVersion:21}};window.refs={first:{workspaceId:state.book.id,kind:'analysis',id:id(),revision:'a'.repeat(64)},second:{workspaceId:state.book.id,kind:'analysis',id:id(),revision:'b'.repeat(64)}};
+  const {analysisComparisonUI}=await import('/analysis-comparison-ui.js'),{blankAnalysisMethod,blankAnalysisSource,ANALYSIS_CATEGORIES}=await import('/analysis-model.js'),{defaultDatasetResourcePolicy}=await import('/dataset-resource-policy.js'),id=()=>crypto.randomUUID();window.state={book:{id:id(),title:'Result owner'},projectOwner:null,storage:{contextId:id(),researchStorage:'catalogue',researchFormatVersion:21}};window.refs={first:{workspaceId:state.book.id,kind:'analysis',id:id(),revision:'a'.repeat(64)},second:{workspaceId:state.book.id,kind:'analysis',id:id(),revision:'b'.repeat(64)}};
   window.dataset={workspaceId:state.book.id,kind:'dataset',id:id(),revision:'c'.repeat(64)};window.replacement={...dataset,id:id(),revision:'d'.repeat(64)};window.mode='ready';window.release=null;window.errors=[];window.prompts=0;window.commands=[];window.sourceRefs=Array.from({length:options.sourceCount??1},(_,i)=>({...dataset,id:i?id():dataset.id,label:'Readings '+(i+1)}));window.expectedDataset={...dataset,id:id(),label:'Expected readings'};
   const esc=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),dialog=document.getElementById('dialog');dialog.showModal();
-  const documentFor=ref=>{const source=blankAnalysisSource({...dataset,label:'Original readings'});source.columns.value=0;source.columns.status=1;return {title:ref.id===refs.first.id?'First comparison':'Second comparison',content:{tool:'Fixture method',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic method',uncertainty:'Unknown',limitations:'Synthetic observations'},comparison:{version:2,sources:sourceRefs.map(dataset=>({...structuredClone(source),dataset})),ordering:'unknown',expected:options.expected?{dataset:expectedDataset,value:0,key:1,actualKey:1,source:options.sourceIndex??0,rationale:'Authored matching rule'}:null},summary:{...(options.approximate?{computation:{version:1,kind:'approximate-inputs'}}:{}),rows:0,runs:0,unknownRunRows:0,raw:Object.fromEntries(ANALYSIS_CATEGORIES.map(k=>[k,0])),aggregate:Object.fromEntries(ANALYSIS_CATEGORIES.map(k=>[k,0]))}}};};
+  const documentFor=ref=>{const source=blankAnalysisSource({...dataset,label:'Original readings'});source.columns.value=0;source.columns.status=1;return {title:ref.id===refs.first.id?'First comparison':'Second comparison',content:{tool:'Fixture method',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic method',uncertainty:'Unknown',limitations:'Synthetic observations'},comparison:{version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources:sourceRefs.map(dataset=>({...structuredClone(source),dataset})),ordering:'unknown',expected:options.expected?{dataset:expectedDataset,value:0,key:1,actualKey:1,source:options.sourceIndex??0,rationale:'Authored matching rule'}:null},summary:{...(options.approximate?{computation:{version:1,kind:'approximate-inputs'}}:{}),rows:0,runs:0,unknownRunRows:0,raw:Object.fromEntries(ANALYSIS_CATEGORIES.map(k=>[k,0])),aggregate:Object.fromEntries(ANALYSIS_CATEGORIES.map(k=>[k,0]))}}};};
   window.ui=analysisComparisonUI({state,access:async run=>{try{return await run();}catch(error){if(error.code==='ACCESS_LOCKED')prompts++;throw error;}},esc,field:(label,control)=>'<label>'+label+control+'</label>',frame:(title,body,actions)=>{dialog.innerHTML='<h2>'+title+'</h2><form id="material-form">'+body+'</form>'+actions;},guard(){},owner:()=>id(),inspect(){},watchJob(){},notify:message=>errors.push(message),measurements:{sourceButton:()=>''},api:async(path,body)=>{
    const owner={workspaceId:state.book.id,projectId:null,labBookId:null};if(path.endsWith('source-items'))return {workspaceId:state.book.id,sourceId:state.book.id,owner,items:[{reference:replacement,title:'Updated readings'}],next:null,changed:false,scanned:1};if(path.endsWith('source-resolve'))return {workspaceId:state.book.id,reference:replacement,owner,title:'Updated readings'};throw Error('Unexpected '+path);
   },call:async(name,data)=>{
@@ -51,12 +51,8 @@ test('reselecting the same immutable dataset preserves its valid mappings',async
 });
 
 
-test('comparison limits require an explicit legacy upgrade and retain incomplete edits across source changes',async({page})=>{
+test('comparison limits retain incomplete edits across source changes',async({page})=>{
  await fixture(page);await page.evaluate(()=>ui.action('comparison-edit',{}));
- await expect(page.locator('[data-dataset-resource-policy]')).toHaveCount(0);
- await page.evaluate(()=>ui.action('comparison-save',{disabled:false}));
- expect(await page.evaluate(()=>commands[0].comparison.version)).toBe(2);
- await page.evaluate(async()=>{await ui.open(refs.first);await ui.action('comparison-edit',{});await ui.action('comparison-enable-policy',{});});
  const policy=page.locator('[data-comparison-policy]');await policy.locator('summary').click();
  await page.locator('[data-dataset-resource="maxScalarCharacters"]').fill('');
  await page.evaluate(()=>ui.action('comparison-add',{}));
@@ -64,14 +60,12 @@ test('comparison limits require an explicit legacy upgrade and retain incomplete
  await page.evaluate(()=>ui.action('comparison-remove',{dataset:{index:'1'}}));
  await expect(page.locator('[data-dataset-resource="maxScalarCharacters"]')).toHaveValue('');
  const error=await page.evaluate(async()=>{try{await ui.action('comparison-save',{disabled:false});return null;}catch(error){return error.message;}});
- expect(error).toContain('whole number');expect(await page.evaluate(()=>commands.length)).toBe(1);
+ expect(error).toContain('whole number');expect(await page.evaluate(()=>commands.length)).toBe(0);
  await page.locator('[data-comparison-policy] summary').click();
  await page.locator('[data-dataset-resource="maxScalarCharacters"]').fill('12000');
  await page.locator('[data-dataset-resource="maxExponent"]').fill('12000');
  await page.evaluate(()=>ui.action('comparison-save',{disabled:false}));
- expect(await page.evaluate(()=>commands[1].comparison)).toEqual(expect.objectContaining({version:3,resourcePolicy:expect.objectContaining({resources:expect.objectContaining({maxScalarCharacters:12000,maxExponent:12000})}),sources:expect.arrayContaining([expect.objectContaining({dataset:expect.objectContaining({workspaceId:await page.evaluate(()=>state.book.id)})})])}));
- await page.evaluate(()=>ui.open(refs.first));await page.evaluate(()=>ui.action('comparison-edit',{}));
- await expect(page.locator('[data-dataset-resource-policy]')).toHaveCount(0);
+ expect(await page.evaluate(()=>commands[0].comparison)).toEqual(expect.objectContaining({version:3,resourcePolicy:expect.objectContaining({resources:expect.objectContaining({maxScalarCharacters:12000,maxExponent:12000})}),sources:expect.arrayContaining([expect.objectContaining({dataset:expect.objectContaining({workspaceId:await page.evaluate(()=>state.book.id)})})])}));
 });
 
 test('new comparisons expose collapsed operation limits without changing source selection',async({page})=>{

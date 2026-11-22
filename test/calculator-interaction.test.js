@@ -1,6 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {calculate,calculationPreview,convertBase} from '../src/tools/math.js';
+import * as math from '../src/tools/math.js';
+import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+// Scalar tools calculate with the policy engine that saved worksheets use.
+const policyEngine=(options={})=>({engine:3,policy:defaultCalculationPolicy(),...options});
+const calculate=(expression,options)=>math.calculate(expression,policyEngine(options)),calculationPreview=expression=>math.calculationPreview(expression,policyEngine()),convertBase=(digits,from,to)=>math.convertBase(digits,from,to,policyEngine());
 import {editExpression,statisticExpression,normalizeSymbols,validWorksheet,nextArgument} from '../src/web/tools/calculator-model.js';
 test('calculator controls edit the selection or preceding operand while retaining editable arguments',()=>{
  let edit=editExpression('',0,0,'function','sin');assert.deepEqual(edit,{value:'sin()',start:4,end:4});edit=editExpression(edit.value,edit.start,edit.end,'insert','30');assert.equal(edit.value,'sin(30)');assert.equal(calculate(edit.value,{angle:'deg'}),'0.5');

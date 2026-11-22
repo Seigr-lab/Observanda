@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {comparisonFixture} from './analysis-comparison-fixture.js';
+import {comparisonFixture,localSourceAccess} from './analysis-comparison-fixture.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {enqueueComparison} from '../src/dataset-jobs.js';
@@ -30,13 +30,14 @@ test('retained comparisons exceed former group, distribution and transition tota
 });
 
 test('comparison checkpoints roll back failed batches and resume under a fresh worker lease',async t=>{
- const f=await comparisonFixture(t,{groups:35}),{queue,worker}=workspaceJobs(f.workspace);t.after(()=>worker.stop());const id=randomUUID();
- await enqueueComparison(f.m,queue,f.command,id);const first=await queue.claim(),command=first.input.command;let writes=0;
+ const f=await comparisonFixture(t,{groups:35}),{queue,worker,comparisonAccess}=workspaceJobs(f.workspace);t.after(()=>worker.stop());const id=randomUUID();
+ await enqueueComparison(f.m,queue,f.command,id,{sourceAccess:localSourceAccess,comparisonAccess});const first=await queue.claim(),command=first.input.command;let writes=0;
  const file='.observanda/materials/comparison-work/'+id+'.json';
  await assert.rejects(f.m.comparisons.prepare(command,{jobId:id,writePage:fn=>queue.transaction(async()=>{await queue.held(id,first.lease.token);await fn();if(++writes===2)throw new AppError('STORAGE_FULL');})}),{code:'STORAGE_FULL'});
  const checkpoint=JSON.parse(await f.workspace.readMetadata(file,1048576));assert.equal(checkpoint.summary.rows,32);assert.equal(await f.m.current(id),null);
  await queue.release(id,first.lease.token,{error:new AppError('STORAGE_FULL')});await queue.control(id,'retry');const next=await queue.claim(),fresh=new ResearchMaterials(f.workspace);
- const prepared=await fresh.comparisons.prepare(command,{jobId:id,writePage:fn=>queue.transaction(async()=>{await queue.held(id,next.lease.token);return fn();}),progress:p=>queue.pulse(id,next.lease.token,p)});
+ // The fresh lease prepares through the job's own definition, as the worker does, so its commit has the reader it opened.
+ const prepared=await queue.definitions['analysis.compare'].prepare(next,{progress:p=>queue.pulse(id,next.lease.token,p)});
  assert.equal(prepared.content.summary.rows,105);assert.equal(prepared.content.summary.counts.distribution,105);
  await assert.rejects(queue.complete(id,first.lease.token,prepared),{code:'JOB_LEASE'});
  const completed=await queue.complete(id,next.lease.token,prepared);assert.equal(await f.workspace.readMetadata(file,1048576),null);
@@ -44,13 +45,11 @@ test('comparison checkpoints roll back failed batches and resume under a fresh w
  await fresh.verify();
 });
 
-test('legacy embedded comparisons remain inspectable and verification never writes research metadata',async t=>{
- const f=await comparisonFixture(t,{groups:2}),legacy=await f.m.comparisons.prepareLegacy(f.command),ref=await f.workspace.withLock(()=>f.m.comparisons.commit(f.command,legacy));
- assert.equal((await f.m.comparisons.page({ref,view:'distribution'})).items.length,6);assert.equal((await f.m.comparisons.page({ref,view:'groups'})).items.length,2);
+test('retained comparisons stay inspectable and verification never writes research metadata',async t=>{
+ const f=await comparisonFixture(t,{groups:2});
  const indexed=await f.m.comparisons.save(f.command),write=f.workspace.writeMetadata;f.workspace.writeMetadata=()=>{throw Error('Verification wrote workspace metadata');};
  try{
-  await f.m.verify();assert.equal((await f.m.comparisons.page({ref:indexed,view:'transitions'})).items.length,4);
-  for(const view of ['groups','distribution','transitions'])assert.deepEqual((await f.m.comparisons.page({ref:indexed,view})).items.map(({groupDetails,...value})=>value),legacy.content.summary[view]);
+  await f.m.verify();assert.equal((await f.m.comparisons.page({ref:indexed,view:'transitions'})).items.length,4);assert.equal((await f.m.comparisons.page({ref:indexed,view:'groups'})).items.length,2);
   // Comparison inspection and verification do not depend on rebuilding the
   // optional discovery index when opening an older retained workspace.
   await f.workspace.withLock(()=>f.workspace.removeMetadata('.observanda/materials/index/state.json'));

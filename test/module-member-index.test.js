@@ -12,10 +12,11 @@ import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {ModuleReader} from '../src/modules/reader.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {seedModuleCurrent,legacyModuleHead} from './module-current-fixture.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 async function fixture(t,count){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-members-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Calculation '+i,links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}));
+ const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Calculation '+i,links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}));
  await seedModuleCurrent(f.workspace,book.id,entities);return {...f,book,entities};
 }
 for(const count of [65,650])test('module membership reads and updates one authenticated path at '+count+' items',async t=>{

@@ -11,6 +11,7 @@ import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 export async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-domains-')),vaults=[];
  const runtime=new WorkspaceDatabases({directory:path.join(root,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);
@@ -26,5 +27,5 @@ export async function fixture(t){
  const receivingWorkspace=async()=>{if(!receiver){const receiverAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(root,'receiver-device')})),receiverVault=takeCreatedVault(receiverAccess);vaults.push(receiverVault);const receiverRoot=path.join(root,'Receiving workspace');await initializeLocation(receiverRoot,createNotebook('Receiving workspace',''),receiverAccess,receiverVault);receiver=new Workspace(receiverRoot,receiverVault);}await receiver.outline();return receiver.root;};
  return {root,runtime,book,projectId,vault,storage,domains,workspace,receivingWorkspace};
 }
-export const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
+export const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 export const calendar=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calendar.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calendar',projectId:f.projectId,color:'#123456',archived:false}}});

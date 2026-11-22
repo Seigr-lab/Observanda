@@ -7,7 +7,6 @@ import {enqueueDataset} from './dataset-jobs.js';
 import {jobSummary} from './jobs.js';
 import {captureCalculatorResultRecipe,evaluateCalculatorRecipe} from './calculator-result-evaluation.js';
 import {CALCULATOR_RECIPE_TOOL,validCalculatorSource,validCalculatorRecipe,validCalculatorResult,isCalculatorRecipe} from './web/calculator-result-model.js';
-import {defaultColumn} from './web/dataset-schema.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId,revisionText} from './web/revision-model.js';
 import {materialReference,materialReferenceKey} from './web/material-reference.js';
@@ -17,7 +16,6 @@ const title=v=>typeof v==='string'&&v.trim()&&v.length<=300;
 const validIntent=v=>exact(v,['recordId','title','id','expectedRevision'])&&researchId(v.recordId)&&title(v.title)&&researchId(v.id)&&(v.expectedRevision===null||revisionId(v.expectedRevision));
 const intentFor=c=>({recordId:c.recordId,title:c.title,id:c.resultId??c.jobId,expectedRevision:c.resultRevision??null});
 const capturedCommand=(doc,ref)=>({...doc.content.capture.intent,calculatorResult:{version:doc.content.recipe.version,recipe:materialReference(ref)}});
-const column=()=>({...defaultColumn({label:'Result'}),representation:'rational',quantity:{origin:'derived',conversion:null,calibration:null}});
 export class CalculatorResults{
  constructor(materials,{enqueue=enqueueDataset}={}){this.materials=materials;this.enqueue=enqueue;}
  async read(ref){const doc=await this.materials.read(ref);if(doc.kind!=='analysis'||!exact(doc.content,['tool','version','parameters','inputs','recipe','capture'])||!isCalculatorRecipe(doc.content)||!validCalculatorRecipe(doc.content.recipe)||doc.content.parameters!==doc.content.recipe.expression||!exact(doc.content.capture,['id','fingerprint','intent'])||!researchId(doc.content.capture.id)||!revisionId(doc.content.capture.fingerprint)||!validIntent(doc.content.capture.intent)||doc.content.capture.intent.recordId!==doc.recordId||!Array.isArray(doc.content.inputs)||doc.content.inputs.length!==0)fail();return doc;}
@@ -29,11 +27,8 @@ export class CalculatorResults{
  }
  async preview(command){const doc=await this.validate(command),value=evaluateCalculatorRecipe(doc.content.recipe);return {columns:['Result'],rows:[{cells:[value.structured?{format:'domain-preview',text:value.result.slice(0,4096),complete:value.result.length<=4096}:value.spelling],valueKinds:['string'],excluded:null}],columnOffset:0,columnCount:1,nextColumn:null};}
  async prepare(command,{signal,writePage,progress}={}){
-  const doc=await this.validate(command);signal?.throwIfAborted();const result=evaluateCalculatorRecipe(doc.content.recipe),recipe=materialReference(command.calculatorResult.recipe);
-  if(doc.content.recipe.version>=2)return this.prepareStructured(command,doc,result,{signal,writePage,progress});
-  async function* rows(){yield {columns:['Result'],sourceMapping:{format:'calculator-result',version:1}};yield {order:1,locator:{format:'calculator-result',version:1},cells:[result.spelling],valueKinds:['string'],cellSources:[[{ref:recipe,selector:{kind:'whole'}}]],excluded:null};}
-  const prepared=await this.materials.prepareDatasetRows(command,{signal,writePage,progress,source:{doc:{id:doc.id}},rows:rows(),calculatedColumns:[column()],inputReferences:[recipe]});
-  return {...prepared,content:{...prepared.content,calculatorResult:structuredClone(command.calculatorResult),algorithm:'observanda-calculator-result',algorithmVersion:1}};
+  const doc=await this.validate(command);signal?.throwIfAborted();const result=evaluateCalculatorRecipe(doc.content.recipe);
+  return this.prepareStructured(command,doc,result,{signal,writePage,progress});
  }
  async prepareStructured(command,doc,result,options){return this.materials.workspace.withCatalogueConnections(()=>withDatasetPreparationWrites(this.materials,options,async materials=>{
   const recipe=materialReference(command.calculatorResult.recipe),column=calculatorResultColumn(doc.content.recipe,result,recipe),version=doc.content.recipe.version,write=fn=>fn();
@@ -67,7 +62,7 @@ export class CalculatorResults{
   if(isCalculatorRecipe(doc.content)){await this.read({kind:doc.kind,id:doc.id,revision:digest(revisionText(doc))});evaluateCalculatorRecipe(doc.content.recipe);return;}
   if(doc.kind!=='dataset'||!validCalculatorResult(doc.content.calculatorResult)||doc.content.algorithm!=='observanda-calculator-result'||doc.content.algorithmVersion!==doc.content.calculatorResult.version||doc.content.rowCount!==1||doc.content.includedRowCount!==1)fail('CATALOGUE_DAMAGED');
   const recipe=await this.read(doc.content.calculatorResult.recipe),expected=evaluateCalculatorRecipe(recipe.content.recipe),schema=await this.materials.retainedSchemaPage(doc,{offset:0,limit:2}),page=await this.materials.retainedDatasetPage(doc,0,{columns:[0]});
-  if(doc.content.calculatorResult.version!==recipe.content.recipe.version||recipe.recordId!==doc.recordId||doc.id!==recipe.content.capture.intent.id||doc.title!==recipe.content.capture.intent.title||(doc.previous??null)!==recipe.content.capture.intent.expectedRevision||schema.total!==1||revisionText(schema.items[0])!==revisionText(recipe.content.recipe.version>=2?calculatorResultColumn(recipe.content.recipe,expected,doc.content.calculatorResult.recipe):column())||page.rows.length!==1||page.rows[0].excluded||page.rows[0].valueKinds[0]!=='string')fail('CATALOGUE_DAMAGED');
+  if(doc.content.calculatorResult.version!==recipe.content.recipe.version||recipe.recordId!==doc.recordId||doc.id!==recipe.content.capture.intent.id||doc.title!==recipe.content.capture.intent.title||(doc.previous??null)!==recipe.content.capture.intent.expectedRevision||schema.total!==1||revisionText(schema.items[0])!==revisionText(calculatorResultColumn(recipe.content.recipe,expected,doc.content.calculatorResult.recipe))||page.rows.length!==1||page.rows[0].excluded||page.rows[0].valueKinds[0]!=='string')fail('CATALOGUE_DAMAGED');
   const cell=page.rows[0].cells[0];
   if(expected.structured){validateDomainValue(this.materials,cell,schema.items[0].domain);await verifyDomainValue(this.materials,cell);let index=0;for await(const part of this.materials.sequences.items(cell.components)){const expectedPart=expected.structured.components[index++];if(!expectedPart||await calculatorResultText(this.materials,part.spelling,expectedPart.numerator.length+expectedPart.denominator.length+1)!==expectedPart.numerator+'/'+expectedPart.denominator)fail('CATALOGUE_DAMAGED');}if(index!==expected.structured.components.length)fail('CATALOGUE_DAMAGED');}
   else if(await calculatorResultText(this.materials,cell,expected.spelling.length)!==expected.spelling)fail('CATALOGUE_DAMAGED');

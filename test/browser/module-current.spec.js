@@ -13,11 +13,12 @@ import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {seedModuleCurrent} from '../module-current-fixture.js';
+import {defaultCalculationPolicy,defaultStructuredCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
 for(const count of [65,650])test('spreadsheet pages and edits load selected originals at '+count+' saved items',async({page})=>{
  test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-browser-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
  const recordLink={workspaceId:book.id,type:'record',id:book.entries[0].id};
- const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'sheet',revision:1,createdAt:now,updatedAt:now,data:{name:'Sheet '+String(i).padStart(3,'0'),links:[recordLink],engine:1,cells:Array.from({length:150},()=>Array(5).fill('Private literal '.repeat(7))),original:null}}));
- const reference={id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Reference calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}};
+ const entities=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'sheet',revision:1,createdAt:now,updatedAt:now,data:{name:'Sheet '+String(i).padStart(3,'0'),links:[recordLink],engine:3,policy:defaultCalculationPolicy(),cells:Array.from({length:150},()=>Array(5).fill('Private literal '.repeat(7))),original:null}}));
+ const reference={id:randomUUID(),type:'calculation',revision:1,createdAt:now,updatedAt:now,data:{name:'Reference calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}};
  await seedModuleCurrent(f.workspace,book.id,[...entities,reference]);
  const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['spreadsheet','scientific-calculator'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),original={read:ModuleCatalogue.prototype.read,selected:ModuleCatalogue.prototype.selected},loaded=[],requests=[],errors=[],sizes=[];

@@ -95,7 +95,10 @@ test('BOM and inventory changes roll back together and replay complete participa
 });
 
 test('concurrent command identity collision commits once across otherwise independent owners', {timeout:120000},async t=>{
- const f=await setup(t),a=calculation(f),b={...calendar(f),commandId:a.commandId},original=ProjectModuleIdentities.prototype.claim,barrier=gate();let arrivals=0;
+ const f=await setup(t);
+ // A first calculator save admits its catalogue features; this test covers identity collisions only.
+ await f.commands.execute(calculation(f));
+ const a=calculation(f),b={...calendar(f),commandId:a.commandId},original=ProjectModuleIdentities.prototype.claim,barrier=gate();let arrivals=0;
  ProjectModuleIdentities.prototype.claim=async function(kind,id,...args){if(kind==='command'&&id===a.commandId){if(++arrivals===2)barrier.release();await barrier.hold;}return original.call(this,kind,id,...args);};
  let results;try{results=await Promise.allSettled([f.commands.execute(a),f.commands.execute(b)]);}finally{ProjectModuleIdentities.prototype.claim=original;}
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.deepEqual(results.filter(r=>r.status==='rejected').map(r=>r.reason.code),['MODULE_REPLAY']);await verify(f);

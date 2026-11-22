@@ -34,6 +34,7 @@ import {seedModuleCurrent} from './module-current-fixture.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 import {attachAsEarlierVersion} from './fixtures/earlier-nested-project.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 
 async function fixture(t,{publishingOptions,diagnostics,nestedB=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-http-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let app;
@@ -370,7 +371,7 @@ test('HTTP legacy project references use indexed owners and retain project autho
 test('HTTP domain commands and summary reads bypass unrelated writers and keep credentials scoped',async t=>{
  const f=await fixture(t),{ProjectModuleCommands}=await import('../src/project-module-commands.js'),{ProjectDomains}=await import('../src/project-domains.js');
  await new ProjectModuleCommands(f.a.storage,f.a.book.id).initialize();await new ProjectModuleCommands(f.b.storage,f.b.book.id).initialize();
- const command={workspaceId:f.a.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'HTTP owned calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'6*7',digits:'',fromBase:10,toBase:16}}};
+ const command={workspaceId:f.a.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'HTTP owned calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'6*7',digits:'',fromBase:10,toBase:16}}};
  const db=await f.a.storage.openCatalogue();await db.run('BEGIN');await db.lock();
  try{
   const saved=await result(await f.project(f.a,'modules/command',command));assert.deepEqual(saved.revisions,{calculator:1});assert.equal(saved.replayed,false);

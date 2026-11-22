@@ -3,7 +3,7 @@ import {chemicalPreview} from './chemistry.js';
 import {chemistryTranslator} from './chemistry-localization.js';
 self.onmessage=({data})=>{try{
  if(data.kind==='calculator'&&data.value.mode!=='bases'&&data.value.expression.split(/\r?\n/).filter(v=>v.trim()).length>100)throw Error('Use up to 100 expressions in one worksheet.');
- const options=data.kind==='chemical'?null:{engine:data.value.engine??1,policy:data.value.policy};if([3,4].includes(options?.engine))options.runtime=calculationRuntime(options);
+ const options=data.kind==='chemical'?null:{engine:data.value.engine,policy:data.value.policy};if(options)options.runtime=calculationRuntime(options);
  let result;if(data.kind==='calculator-sheet'){
   const value=data.value,rows=value.expression.split(/\r?\n/);if(rows.length>100||value.expression.length>20000)throw Error('Use up to 100 expressions in one worksheet.');
   result=value.mode==='bases'?convertBase(value.digits,Number(value.fromBase),Number(value.toBase),options):rows.map(expression=>{if(!expression.trim())return {expression,empty:true};try{return {expression,...calculateDetailed(expression,{...options,angle:value.angle}),tex:calculationPreview(expression,options)};}catch(e){return {expression,error:e.message,...(e.code?{errorCode:e.code}:{})};}});

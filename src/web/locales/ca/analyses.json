@@ -171,8 +171,6 @@
   "observationsHidden": "Cap observació coincideix amb aquesta vista.",
   "resourcePolicy": "Límits de recursos de comparació",
   "resourceHelp": "Cada comparació d'observacions i valors esperats utilitza aquests límits guardats per a la interpretació exacta, les comprovacions de límits i els marges. Les declaracions d'entrada també conserven els seus propis límits. Superar qualsevol dels límits atura la preparació sense substituir els resultats anteriors.",
-  "resourceLegacy": "Aquesta comparació conserva la seva interpretació anterior. Activa els límits declarats per utilitzar fonts amb les seves pròpies polítiques escalars en una revisió nova.",
-  "resourceEnable": "Activa els límits de recursos de les declaracions",
   "valuePreview": "Previsualització del valor: {value}...",
   "valueComplete": "Mostra el valor complet ({count} caràcters)",
   "valueCompleteLabel": "Valor conservat complet",

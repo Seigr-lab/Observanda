@@ -14,6 +14,7 @@ import {createComparisonInputReader} from '../src/comparison-input-reader.js';
 import {analysisDependencyState} from '../src/analysis-dependencies.js';
 import {blankAnalysisMethod,blankAnalysisSource,addressedComparisonInputs,validComparison,analysisIdentity} from '../src/web/analysis-model.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {recordRevision,ResearchRecords} from '../src/research.js';
 import {AppError} from '../src/errors.js';
 import {withWorkspaceMetadataBatch} from '../src/metadata-batch.js';
@@ -44,24 +45,24 @@ async function fixture(t,{rows=3}={}){
  };
  const inputs=createComparisonInputReader(output.m,{workspaceId:output.book.id,access}),comparison=new AnalysisComparisons(output.m,{inputs});t.after(()=>inputs.close());
  const sources=[first,second].map(owner=>{const source=blankAnalysisSource(addressed(owner.dataset,owner));source.run=owner.run;source.columns.value=1;source.columns.status=2;return source;});
- const command={recordId:output.recordId,title:'Across retained owners',tool:'Synthetic readings',version:'1',...addressedComparisonInputs({method:{...blankAnalysisMethod(),unavailable:'No external tool.',uncertainty:'Unspecified instrument uncertainty.',limitations:'Synthetic data.'},comparison:{version:1,sources,ordering:'source',expected:{dataset:addressed(second.dataset,second),source:0,actualKey:0,key:0,value:1,rationale:'Compare corresponding retained rows.'}}},output.book.id)};
+ const command={recordId:output.recordId,title:'Across retained owners',tool:'Synthetic readings',version:'1',...addressedComparisonInputs({method:{...blankAnalysisMethod(),unavailable:'No external tool.',uncertainty:'Unspecified instrument uncertainty.',limitations:'Synthetic data.'},comparison:{version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources,ordering:'source',expected:{dataset:addressed(second.dataset,second),source:0,actualKey:0,key:0,value:1,rationale:'Compare corresponding retained rows.'}}},output.book.id)};
  return {output,first,second,owners,inputs,comparison,command,visits,access,get active(){return active;},get closed(){return closed;},set allowed(value){allowed=value;}};
 }
 
-test('new comparison identities require namespaces without changing historical identity or source documents',()=>{
+test('comparison identities require namespaces without changing source documents',()=>{
  const a={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},one=blankAnalysisSource({...a,workspaceId:randomUUID()}),two=blankAnalysisSource({...a,workspaceId:randomUUID()});one.columns.value=two.columns.value=0;
- const comparison={version:1,sources:[one,two],ordering:'source',expected:null},method={...blankAnalysisMethod(),references:{toolSource:a,decoder:null,calibration:null},parameters:[{name:'Input',value:'1',unit:'',reference:a,reason:''}]},original=structuredClone({method,comparison}),workspaceId=randomUUID();
+ const comparison={version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources:[one,two],ordering:'source',expected:null},method={...blankAnalysisMethod(),references:{toolSource:a,decoder:null,calibration:null},parameters:[{name:'Input',value:'1',unit:'',reference:a,reason:''}]},original=structuredClone({method,comparison}),workspaceId=randomUUID();
  const next=addressedComparisonInputs({method,comparison},workspaceId);
- assert.deepEqual({method,comparison},original);assert.equal(validComparison(comparison),false);assert.equal(validComparison(next.comparison),true);
+ assert.deepEqual({method,comparison},original);assert.equal(validComparison(next.comparison),true);assert.equal(next.comparison.version,3);
  assert.equal(next.method.references.toolSource.workspaceId,workspaceId);assert.equal(next.method.parameters[0].reference.workspaceId,workspaceId);assert.equal(next.comparison.sources[0].dataset.workspaceId,one.dataset.workspaceId);
- assert.equal(analysisIdentity(one.dataset),analysisIdentity(two.dataset));assert.notEqual(analysisIdentity(one.dataset,2),analysisIdentity(two.dataset,2));
+ assert.notEqual(analysisIdentity(one.dataset),analysisIdentity(two.dataset));
  delete next.comparison.sources[1].dataset.workspaceId;assert.equal(validComparison(next.comparison),false);
 });
 
 test('addressed comparisons read exact source pages and record history without writing or pinning foreign owners',async t=>{
  const f=await fixture(t),firstDoc=await f.first.m.read(f.first.dataset);
- const {datasetFormat,pageIndex,schemaIndex,...legacyContent}=firstDoc.content;
- const pages=await Array.fromAsync(f.first.m.sequences.items(pageIndex)),legacy=await f.first.workspace.withLock(()=>f.first.m.commit({kind:'dataset',recordId:f.first.recordId,title:'Earlier retained format',content:{...legacyContent,pages,columns:f.first.columns}}));
+ // A second dataset of the same run, in the format every release since alpha.29 writes.
+ const second=await f.first.workspace.withLock(()=>f.first.m.commit({kind:'dataset',recordId:f.first.recordId,title:'Second retained dataset',content:firstDoc.content}));assert.notEqual(second.revision,f.first.dataset.revision);
  const revisedRecord={...f.first.book.entries[0],title:'Later description of the same run'};
  await new ResearchRecords(f.first.workspace,{}).save({workspaceId:f.first.book.id,changes:[{id:f.first.recordId,expectedRevision:f.first.run.revision,record:revisedRecord}]},{compact:true});
  const revisedRun={...f.first.run,revision:await f.first.workspace.catalogue(async store=>(await materialRecordSummary(store,await store.member(await store.snapshot(),f.first.recordId))).revision)};assert.notEqual(revisedRun.revision,f.first.run.revision);
@@ -73,19 +74,19 @@ test('addressed comparisons read exact source pages and record history without w
  const writes=[];for(const source of [f.first,f.second]){t.mock.method(source.workspace,'writeMetadata',()=>{writes.push(source.book.id);assert.fail('Foreign metadata write');});t.mock.method(source.workspace,'withLock',()=>assert.fail('Foreign writer acquisition'));}
  t.mock.method(MaterialIndex.prototype,'ensure',()=>assert.fail('Read-only input must not initialize an index'));
  const nested=await Array.fromAsync(f.inputs.inputs(addressed(indexed,f.first)));assert.equal(nested.length,70);assert.equal(nested[0].workspaceId,f.first.book.id);assert.equal(nested[69].workspaceId,f.second.book.id);
- const legacyDoc=await f.inputs.read(addressed(legacy,f.first));assert.deepEqual(await f.inputs.datasetColumns(legacyDoc),f.first.columns);assert.equal((await Array.fromAsync(f.inputs.iterateDataset(addressed(legacy,f.first)))).length,3);
+ const secondDoc=await f.inputs.read(addressed(second,f.first));assert.deepEqual(await f.inputs.datasetColumns(secondDoc),f.first.columns);assert.equal((await Array.fromAsync(f.inputs.iterateDataset(addressed(second,f.first)))).length,3);
  const inputRefs=await Array.fromAsync(f.inputs.inputs(addressed(f.first.dataset,f.first)));assert.ok(inputRefs.some(r=>r.id===f.first.artifact.id&&r.workspaceId===f.first.book.id));
  const both=await Promise.all([f.inputs.read(addressed(f.first.dataset,f.first)),f.inputs.read(addressed(f.second.dataset,f.second))]);
  assert.equal(both[0].id,both[1].id);assert.notEqual(both[0].content.inputs[0].revision,both[1].content.inputs[0].revision);
  const [a,b]=await Promise.all(both.map(doc=>f.inputs.retainedDatasetPage(doc,0)));assert.equal(a.rows[0].cells[1],'0');assert.equal(b.rows[0].cells[1],'10');
  assert.throws(()=>f.inputs.datasetPageCount(structuredClone(both[0])),{code:'MATERIAL_INVALID'});
  const ref=await f.comparison.save(f.command,{writePage:fn=>{assert.equal(f.active,0,'A source read cannot span an output transaction');return f.output.workspace.withLock(()=>withWorkspaceMetadataBatch(f.output.workspace,fn));}}),doc=await f.output.m.read(ref);
- assert.equal(doc.content.summary.algorithmVersion,'3');assert.equal(doc.content.summary.runs,2);assert.equal(doc.content.summary.counts.groups,2);assert.equal(doc.content.summary.verification.mismatched,3);
+ assert.equal(doc.content.summary.algorithmVersion,'4');assert.equal(doc.content.summary.runs,2);assert.equal(doc.content.summary.counts.groups,2);assert.equal(doc.content.summary.verification.mismatched,3);
  const groups=(await f.output.m.comparisons.page({ref,view:'groups'})).items;assert.deepEqual(new Set(groups.map(g=>g.run.workspaceId)),new Set([f.first.book.id,f.second.book.id]));
  await f.comparison.verify(f.command,doc.content.summary);
- const earlier=f.command.comparison.sources[0],sameRun=await f.comparison.prepare({...f.command,comparison:{...f.command.comparison,sources:[earlier,{...earlier,dataset:addressed(legacy,f.first),run:revisedRun}],expected:null}},{retained:true});
+ const earlier=f.command.comparison.sources[0],sameRun=await f.comparison.prepare({...f.command,comparison:{...f.command.comparison,sources:[earlier,{...earlier,dataset:addressed(second,f.first),run:revisedRun}],expected:null}},{retained:true});
  assert.equal(sameRun.content.summary.runs,1,'Different retained descriptions do not create a second run');assert.equal(sameRun.content.summary.counts.groups,2,'Revision-specific groups remain distinct');
- await assert.rejects(f.comparison.verify(f.command,{...doc.content.summary,algorithmVersion:'2'}),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(f.comparison.verify(f.command,{...doc.content.summary,algorithmVersion:'3'}),{code:'CATALOGUE_DAMAGED'});
  const readMetadata=f.second.workspace.readMetadata;f.second.workspace.readMetadata=function(name,...args){return name.startsWith('.observanda/materials/tables/')?Promise.resolve('[]'):readMetadata.call(this,name,...args);};
  try{await assert.rejects(f.inputs.retainedDatasetPage(both[1],0),{code:'MATERIAL_MISSING'});}finally{f.second.workspace.readMetadata=readMetadata;}
  for(const source of [f.first,f.second])assert.equal(await source.workspace.readMetadata('.observanda/materials/records/'+source.run.id+'/'+source.run.revision+'.json',16777216),null);
@@ -98,9 +99,9 @@ test('addressed comparisons read exact source pages and record history without w
 test('source access loss fences checkpoint and commit; a new reader resumes only the exact qualified command',async t=>{
  const f=await fixture(t,{rows:35}),id=randomUUID(),command={...f.command,id},file='.observanda/materials/comparison-work/'+id+'.json';let batches=0;
  await assert.rejects(f.comparison.prepare(command,{jobId:id,writePage:fn=>f.output.workspace.withLock(()=>withWorkspaceMetadataBatch(f.output.workspace,async()=>{if(++batches===2)f.allowed=false;return fn();}))}),{code:'ACCESS_LOCKED'});
- const checkpoint=JSON.parse(await f.output.workspace.readMetadata(file,1048576));assert.equal(checkpoint.summary.rows,32);assert.equal(checkpoint.summary.algorithmVersion,'3');assert.equal(await f.output.m.current(id),null);
+ const checkpoint=JSON.parse(await f.output.workspace.readMetadata(file,1048576));assert.equal(checkpoint.summary.rows,32);assert.equal(checkpoint.summary.algorithmVersion,'4');assert.equal(await f.output.m.current(id),null);
  f.allowed=true;await f.inputs.close();const inputs=createComparisonInputReader(f.output.m,{workspaceId:f.output.book.id,access:{...f.access}}),comparison=new AnalysisComparisons(f.output.m,{inputs});t.after(()=>inputs.close());
- await assert.rejects(comparison.prepare({...command,comparison:{...command.comparison,version:1}},{jobId:id}),{code:'MATERIAL_CHANGED'});
+ await assert.rejects(comparison.prepare({...command,comparison:{...command.comparison,ordering:'unknown'}},{jobId:id}),{code:'MATERIAL_CHANGED'});
  const prepared=await comparison.prepare(command,{jobId:id});assert.equal(prepared.content.summary.rows,70);
  f.allowed=false;await assert.rejects(f.output.workspace.withLock(()=>comparison.commit(command,prepared)),{code:'ACCESS_LOCKED'});assert.equal(await f.output.m.current(id),null);
  f.allowed=true;const ref=await f.output.workspace.withLock(()=>comparison.commit(command,prepared));assert.equal(await f.output.workspace.readMetadata(file,1048576),null);assert.equal((await f.output.m.read(ref)).content.summary.rows,70);
@@ -160,8 +161,10 @@ test('owned comparison integrity preserves long retained context and exact margi
  const value='7'.repeat(3999)+'/'+'9'.repeat(4000),lower='0.'+'0'.repeat(8000)+'1e-8192',sequence='Retained context \t'+'.'.repeat(20000),text=['Value,Lower,Sequence,State',[value,lower,sequence,'correct'].join(',')].join('\n'),bytes=Buffer.from(text),recordId=book.entries[0].id;
  const upload=await materials.startImport({recordId,name:'exact-context.csv',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact=await materials.finishImport(upload.id);
  const columns=['Value','Lower','Sequence','State'].map(label=>defaultColumn({label}));columns[0].representation='rational';columns[1].representation='decimal';
+ // Values far longer than plain cells are kept as policy-bound scalars, under the same limits the comparison declares.
+ const limits={...defaultDatasetResourcePolicy(),resources:{maxBits:262144,maxOperations:1000000,maxMilliseconds:30000,maxScalarCharacters:65536,maxExponent:65536}};for(const index of [0,1])columns[index].resourcePolicy=structuredClone(limits);
  const dataset=await materials.dataset({recordId,title:'Exact retained context',artifact,columns}),source=blankAnalysisSource({...dataset,workspaceId:book.id});source.columns.value=0;source.columns.lower=1;source.columns.sequence=2;source.columns.status=3;
- const command={recordId,title:'Exact context comparison',tool:'Synthetic bounds',version:'1',...addressedComparisonInputs({method:{...blankAnalysisMethod(),unavailable:'No external tool.',uncertainty:'Exact synthetic values.',limitations:'Synthetic data.'},comparison:{version:1,sources:[source],ordering:'source',expected:null}},book.id)},inputs=createComparisonInputReader(materials,{workspaceId:book.id}),comparison=new AnalysisComparisons(materials,{inputs});t.after(()=>inputs.close());
+ const command={recordId,title:'Exact context comparison',tool:'Synthetic bounds',version:'1',...addressedComparisonInputs({method:{...blankAnalysisMethod(),unavailable:'No external tool.',uncertainty:'Exact synthetic values.',limitations:'Synthetic data.'},comparison:{version:3,resourcePolicy:{...defaultDatasetResourcePolicy(),resources:{maxBits:262144,maxOperations:1000000,maxMilliseconds:30000,maxScalarCharacters:65536,maxExponent:65536}},sources:[source],ordering:'source',expected:null}},book.id)},inputs=createComparisonInputReader(materials,{workspaceId:book.id}),comparison=new AnalysisComparisons(materials,{inputs});t.after(()=>inputs.close());
  const ref=await comparison.save(command),doc=await materials.read(ref),row=(await materials.comparisons.page({ref,view:'all'})).items[0];
  assert.equal(row.sequence,sequence);assert.ok(row.margin.numerator.length>16384);assert.ok(row.margin.denominator.length>16384);assert.equal(row.boundary,'inside');
  assert.equal((await materials.comparisons.verifyIntegrity(doc)).rows,1);await comparison.verify(command,doc.content.summary);

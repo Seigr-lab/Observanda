@@ -27,7 +27,7 @@ test('ordinary scalar functions, units and precision retain the previous scalar 
  for(const expression of ['sqrt(2)','sin(1)','25 degC to degF','2 cm to m']){const old=calculateDetailed(expression,{engine:3,policy:defaultCalculationPolicy()}),next=calculate(expression);assert.equal(next.result,old.result);assert.equal(next.approximation.engine,4);assert.equal(next.approximation.version,2);assert.equal(next.structured,undefined);}
  assert.deepEqual(calculate('1/3').exact,{numerator:'1',denominator:'3'});assert.equal(calculate('1e100+1-1e100').result,'1');assert.equal(convertBase('0.2',6,10,options()),'1/3');
  assert.throws(()=>spreadsheet([['=i']],options()),{code:'CALCULATION_STRUCTURED_UNSUPPORTED'});
- for(const engine of [1,2,3])assert.throws(()=>calculateDetailed('[1,2]',{engine,...(engine===3?{policy:defaultCalculationPolicy()}:{})}),/Only numbers/);
+ assert.throws(()=>calculateDetailed('[1,2]',{engine:3,policy:defaultCalculationPolicy()}),/Only numbers/);for(const engine of [1,2])assert.throws(()=>calculateDetailed('[1,2]',{engine}),/Unsupported/);
  assert.throws(()=>calculateDetailed('1',{engine:3,policy:defaultStructuredCalculationPolicy()}),{code:'CALCULATION_POLICY_INVALID'});assert.throws(()=>calculateDetailed('1',{engine:4,policy:defaultCalculationPolicy()}),{code:'CALCULATION_POLICY_INVALID'});
 });
 

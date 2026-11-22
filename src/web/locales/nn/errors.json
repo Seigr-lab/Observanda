@@ -419,7 +419,6 @@
   "CALCULATOR_RESULT_EXACT": "Bevar eit uavhengig eksakt skalar-, vektor-, matrise- eller komplekst uttrykk, eller ei endeleg reell numerisk tilnærming frå motor 4. Einingar, tilordningar, uavklarte namn og ustøtta resultat kan ikkje bevarast.",
   "CALCULATOR_RESULT_LIBRARY": "Bibliotekversjonen som denne utrekninga er låst til, er ikkje tilgjengeleg. Behald den bevarte oppskrifta, eller lagre ei ny utrekning med ein tilgjengeleg motor.",
   "CALCULATOR_RESULT_RESOURCE": "Den lagra utrekninga overskrid dei erklærte ressursgrensene. Sjå gjennom den lagra policyen før du prøver på nytt; ingen resultat vart bevarte.",
-  "ANALYSIS_SCALAR_POLICY": "Rediger denne samanlikninga og vel Aktiver ressursgrenser for erklæringar før du bruker kjelder med lagra skalargrenser. Tidlegare resultat er framleis tilgjengelege.",
   "MEASUREMENT_CLOCK_SYNCHRONIZATION": "Vel kompatible erklærte koordinatar for medgått tid eller ekstern klokke og ein fullstendig synkroniseringsmodell. Dekod rå teljarar før synkronisering og erklær eventuelle nullstillingsområde uttrykkeleg.",
   "MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR": "Vel fullstendige observasjonspar frå dei fastlåste kjelde- og referansedatasetta. Tilordninga må ha ein positiv rate; segmenterte modellar treng minst to ordna anker i kvart segment.",
   "MEASUREMENT_CLOCK_SYNCHRONIZATION_RANGE": "Denne verdien er utanfor det erklærte gyldigheitsområdet til modellen. Sjå gjennom den fastlåste modellen eller vel uttrykkeleg å bevare fråverande verdiar utanfor området.",

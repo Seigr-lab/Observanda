@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {researchJobDefinitions} from '../src/research-jobs.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {AnalysisComparisons} from '../src/analysis-comparisons.js';
+import {randomUUID} from 'node:crypto';
 
 for(const supplied of [true,false])test('research jobs use renewing admitted checkpoints: '+(supplied?'worker':'direct'),async t=>{
  let writes=0,checked=0;
@@ -16,7 +17,8 @@ for(const supplied of [true,false])test('research jobs use renewing admitted che
  t.mock.method(AnalysisComparisons.prototype,'references',()=>[]);
  t.mock.method(ResearchMaterials.prototype,'cleanAttempts',async()=>{});
  t.mock.method(ResearchMaterials.prototype,'prepareImport',async()=> 'prepared');
- const workspace={outline:async()=>({metadata:{id:'workspace'}})},definitions=researchJobDefinitions(workspace,()=>queue),job={id:'job',lease:{token:'lease'},input:{command:{comparison:{version:1}}}};
+ const access={use:async()=>{},verify:async()=>{},close:async()=>{}},comparisonAccess={take:()=>async()=>access};
+ const workspace={outline:async()=>({metadata:{id:randomUUID()}})},definitions=researchJobDefinitions(workspace,()=>queue,{comparisonAccess}),job={id:'job',lease:{token:'lease'},input:{command:{comparison:{version:3}}}};
  for(const type of ['dataset.prepare','figure.calculate','analysis.compare','evidence.finalize'])assert.equal(await definitions[type].prepare(job,supplied?{write}:{}),'prepared');
  assert.equal(writes,supplied?5:0);assert.equal(checked,supplied?0:5);
 });

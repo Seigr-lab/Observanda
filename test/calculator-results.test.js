@@ -14,7 +14,7 @@ import {captureCalculatorRecipe,captureCalculatorResultRecipe,evaluateCalculator
 import {calculatorResultClient} from '../src/web/calculator-result-client.js';
 import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 import {projectApiRoute} from '../src/web/project-context.js';
-const entity=(expression='1/3',engine=3)=>({id:id(),type:'calculation',revision:2,createdAt:'2026-01-01T00:00:00.000Z',updatedAt:'2026-01-02T00:00:00.000Z',data:{name:'Exact result',links:[],engine,...(engine===3?{policy:defaultCalculationPolicy()}:{}),mode:'expression',angle:'rad',expression,digits:'',fromBase:10,toBase:6}});
+const entity=(expression='1/3')=>({id:id(),type:'calculation',revision:2,createdAt:'2026-01-01T00:00:00.000Z',updatedAt:'2026-01-02T00:00:00.000Z',data:{name:'Exact result',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression,digits:'',fromBase:10,toBase:6}});
 const source=e=>({workspaceId:id(),type:'calculation',id:e.id,revision:e.revision});
 const ref=kind=>({kind,id:id(),revision:'a'.repeat(64)});
 const setup=()=>{const e=entity(),draft={id:e.id,type:e.type,expectedRevision:e.revision,base:structuredClone(e.data),data:structuredClone(e.data)},state={page:'module',moduleId:'scientific-calculator',modulePath:'calculation/'+e.id,book:{id:id()},storage:{contextId:id()},projectOwner:{projectId:id()}};return {draft,state};};
@@ -32,8 +32,8 @@ test('capture retains exact computational value and the authenticated source rev
 test('independent expression scope refuses dependent names, assignments, units and approximation without substituting cached results',()=>{
  for(const expression of ['ans+1','A1+1','x+1','x=2','sqrt(2)','2 cm to m','pi']){const e=entity(expression);assert.throws(()=>evaluateCalculatorRecipe(captureCalculatorRecipe(source(e),e,0)),{code:'CALCULATOR_RESULT_EXACT'},expression);}
  const e=entity('x=2\nx+1');assert.throws(()=>evaluateCalculatorRecipe(captureCalculatorRecipe(source(e),e,1)),{code:'CALCULATOR_RESULT_EXACT'});
- const legacy=entity('1/3',1);assert.throws(()=>captureCalculatorRecipe(source(legacy),legacy,0),{code:'CALCULATOR_RESULT_EXACT'});
- const historical=entity('9007199254740993+1',2);assert.equal(evaluateCalculatorRecipe(captureCalculatorRecipe(source(historical),historical,0)).spelling,'9007199254740994/1');
+ const scalar=entity('9007199254740993+1');assert.equal(evaluateCalculatorRecipe(captureCalculatorRecipe(source(scalar),scalar,0)).spelling,'9007199254740994/1');
+ const earlier=entity('1/3');earlier.data.engine=3;assert.throws(()=>captureCalculatorRecipe(source(earlier),earlier,0));
 });
 
 test('saved budgets and pinned library refuse explicitly while a new captured policy can admit the exact operation',()=>{
@@ -76,7 +76,7 @@ test('source and destination authority are rechecked at recipe commit with no pa
 
 test('interruption after capture resumes the exact immutable recipe without rereading a changed or locked source',async()=>{
  const f=serviceFixture();f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});assert.equal(f.heads.has(f.command.recipeId),true);assert.equal(f.heads.has(f.command.jobId),false);assert.equal(f.jobs.size,0);
- f.e.data.expression='2/3';f.e.revision++;f.sourceRevoked=true;f.interrupt=false;const restarted=new CalculatorResults(f.materials,{enqueue:f.service.enqueue}),recipe=f.heads.get(f.command.recipeId),receipt=await restarted.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe});assert.deepEqual(f.jobs.get(f.command.jobId).input.command,{recordId:f.command.recordId,title:f.command.title,id:f.command.jobId,expectedRevision:null,calculatorResult:{version:1,recipe}});assert.equal(evaluateCalculatorRecipe((await f.materials.read(receipt.recipe)).content.recipe).spelling,'1/3');assert.equal(f.readCount,1);assert.equal(f.heads.has(f.command.jobId),false);
+ f.e.data.expression='2/3';f.e.revision++;f.sourceRevoked=true;f.interrupt=false;const restarted=new CalculatorResults(f.materials,{enqueue:f.service.enqueue}),recipe=f.heads.get(f.command.recipeId),receipt=await restarted.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe});assert.deepEqual(f.jobs.get(f.command.jobId).input.command,{recordId:f.command.recordId,title:f.command.title,id:f.command.jobId,expectedRevision:null,calculatorResult:{version:2,recipe}});assert.equal(evaluateCalculatorRecipe((await f.materials.read(receipt.recipe)).content.recipe).spelling,'1/3');assert.equal(f.readCount,1);assert.equal(f.heads.has(f.command.jobId),false);
  f.jobs.get(f.command.jobId).state='cancelled';const replay=await f.service.retain(f.queue,f.command,{readSource:()=>assert.fail('No source read on replay')});assert.equal(replay.job.state,'cancelled');assert.equal(replay.job.result,null);assert.equal(f.heads.has(f.command.jobId),false);await assert.rejects(f.service.retain(f.queue,{...f.command,title:'Changed replay'},{readSource:f.readSource}),{code:'MODULE_REPLAY'});
  f.writable=false;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'ACCESS_DENIED'});
 });
@@ -87,7 +87,7 @@ test('verification reports unavailable pinned computation without misclassifying
 
 
 test('captured result admission and resume reject altered public dataset intents and job scopes',async()=>{
- const f=serviceFixture();f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});const recipe=f.heads.get(f.command.recipeId),doc=await f.materials.read(recipe),input={...doc.content.capture.intent,calculatorResult:{version:1,recipe}};await f.service.validate(input);f.materials.assertOwner=async()=>{};
+ const f=serviceFixture();f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});const recipe=f.heads.get(f.command.recipeId),doc=await f.materials.read(recipe),input={...doc.content.capture.intent,calculatorResult:{version:2,recipe}};await f.service.validate(input);f.materials.assertOwner=async()=>{};
  for(const change of [{title:'Different result'},{id:id()},{expectedRevision:'b'.repeat(64)},{recordId:id()}]){
   const command={...input,...change};await assert.rejects(f.service.validate(command),{code:'CALCULATOR_RESULT_INVALID'});
   f.jobs.set(f.command.jobId,{id:f.command.jobId,type:'dataset.prepare',scope:f.command.recordId,state:'queued',input:{command}});await assert.rejects(f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe}),{code:'MODULE_REPLAY'});
@@ -96,7 +96,7 @@ test('captured result admission and resume reject altered public dataset intents
 });
 
 
-test('recipe2 captures only exact structured values under its own engine and policy while old recipes stay scalar',async()=>{
+test('recipe2 captures only exact structured values under its own engine and policy',async()=>{
  const e=entity('[1/3,9007199254740993+1]');e.data.engine=4;e.data.policy=defaultStructuredCalculationPolicy();const recipe=captureCalculatorRecipe(source(e),e,0),result=evaluateCalculatorRecipe(recipe);assert.equal(recipe.version,2);assert.deepEqual(recipe.structuredEngine,{name:'observanda-exact-structured',version:1});assert.deepEqual(result.structured,{version:1,codec:'vector',shape:[2],components:[{numerator:'1',denominator:'3'},{numerator:'9007199254740994',denominator:'1'}]});
  assert.ok(validCalculatorRecipe(recipe));for(const altered of [{version:1},{engine:3},{policy:defaultCalculationPolicy()},{structuredEngine:{name:'observanda-exact-structured',version:2}}])assert.ok(!validCalculatorRecipe({...recipe,...altered}));
  assert.throws(()=>validateTool('calculation',{...e.data,engine:3}));assert.throws(()=>validateTool('calculation',{...e.data,policy:defaultCalculationPolicy()}));assert.throws(()=>validateTool('sheet',{name:'No implicit sheet upgrade',links:[],engine:4,policy:e.data.policy,cells:[['1']],original:null}));
@@ -106,7 +106,7 @@ test('recipe2 captures only exact structured values under its own engine and pol
 });
 
 
-test('recipe3 captures complete approximate decimals independently of display while historical recipes remain exact',()=>{
+test('recipe3 captures complete approximate decimals independently of display',()=>{
  const e=entity('sqrt(2)');e.data.engine=4;e.data.policy=defaultStructuredCalculationPolicy();e.data.policy.displayDigits=3;
  const recipe=captureCalculatorResultRecipe(source(e),e,0),value=evaluateCalculatorRecipe(recipe),pinned=ref('analysis');assert.equal(recipe.version,3);assert.equal(validCalculatorRecipe(recipe),true);assert.equal(value.spelling,'1.414213562373095048801688724209698078569671875376948073176679738');
  const column=calculatorResultColumn(recipe,value,pinned);assert.equal(column.representation,'decimal');assert.deepEqual(column.computation,{version:1,kind:'approximate',recipe:pinned});assert.equal(column.resourcePolicy.resources.maxExponent,0);
@@ -114,7 +114,6 @@ test('recipe3 captures complete approximate decimals independently of display wh
  for(const expression of ['sin(-0)','exp(1000)']){e.data.expression=expression;const captured=captureCalculatorResultRecipe(source(e),e,0),result=evaluateCalculatorRecipe(captured),definition=calculatorResultColumn(captured,result,pinned);assert.equal(result.spelling,expression==='sin(-0)'?'-0':result.spelling);assert.equal(definition.resourcePolicy.resources.maxExponent,expression==='sin(-0)'?0:434);}
  e.data.expression='1/3';assert.equal(captureCalculatorResultRecipe(source(e),e,0).version,2);assert.throws(()=>evaluateCalculatorRecipe({...recipe,expression:'1/3'}),{code:'CALCULATOR_RESULT_EXACT'});
  for(const expression of ['2 cm to m','sqrt(-2)','exp(1e100)']){e.data.expression=expression;assert.throws(()=>captureCalculatorResultRecipe(source(e),e,0),{code:'CALCULATOR_RESULT_EXACT'});}
- const old=entity('sqrt(2)');assert.throws(()=>captureCalculatorResultRecipe(source(old),old,0),{code:'CALCULATOR_RESULT_EXACT'});
 });
 
 test('approximate capture refuses its full representation budget before persisting and recovers pinned recipe3 without source grants',async()=>{

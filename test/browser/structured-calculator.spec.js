@@ -11,7 +11,7 @@ import {ProjectModuleCommands} from '../../src/project-module-commands.js';
 import {ProjectModuleReader} from '../../src/project-module-reader.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
-import {defaultCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
+import {defaultStructuredCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {domainValuePage} from '../../src/measurement-domain-storage.js';
 import {openEvidence} from './record-editor-helper.js';
@@ -19,10 +19,10 @@ import {openEvidence} from './record-editor-helper.js';
 test('upgrade a scalar calculator explicitly, retain exact structured results and repeat their pinned recipes',async({page},info)=>{
  test.setTimeout(180000);page.setDefaultTimeout(15000);
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-structured-calculator-ui-')),book=sampleNotebook(),record=book.entries[0];record.title='Structured result destination';
- const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),sourceId=randomUUID(),policy=defaultCalculationPolicy(),errors=[];policy.displayDigits=5;policy.rounding='ceiling';let app;
+ const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),sourceId=randomUUID(),policy=defaultStructuredCalculationPolicy(),errors=[];policy.displayDigits=5;policy.rounding='ceiling';let app;
  try{
   const dashboard=defaultDashboard();dashboard.views[0].panels=[];dashboard.enabledModules=['scientific-calculator'];await writeWorkspaceDashboard(f.workspace,dashboard,(await readWorkspaceDashboard(f.workspace)).etag);
-  const commands=new ProjectModuleCommands(f.workspace,book.id);await commands.initialize();await commands.execute({workspaceId:book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:sourceId,expectedRevision:null,data:{name:'Pinned matrix calculation',links:[],engine:3,policy,mode:'expression',angle:'rad',expression:'sqrt(2)',digits:'',fromBase:10,toBase:6}}});
+  const commands=new ProjectModuleCommands(f.workspace,book.id);await commands.initialize();await commands.execute({workspaceId:book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:sourceId,expectedRevision:null,data:{name:'Pinned matrix calculation',links:[],engine:4,policy,mode:'expression',angle:'rad',expression:'sqrt(2)',digits:'',fromBase:10,toBase:6}}});
   app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));
   const main=page.locator('main'),input=name=>main.getByLabel(name,{exact:true}),button=name=>main.getByRole('button',{name,exact:true}),result=page.locator('dialog[data-calculator-result]'),dialog=page.locator('#dialog'),sourceURL=app.origin+'/#/modules/scientific-calculator/calculation/'+sourceId;
   const openPolicy=async()=>{if(!await input('Working significant digits').isVisible())await main.locator('[data-calculation-policy-panel] summary').click();};
@@ -31,7 +31,7 @@ test('upgrade a scalar calculator explicitly, retain exact structured results an
   const dataset=async title=>(await materials.list({recordId:record.id,kind:'dataset'})).items.find(item=>item.title===title);
   const components=async ref=>{const doc=await materials.read(ref),row=(await materials.retainedDatasetPage(doc,0,{columns:[0]})).rows[0];return (await domainValuePage(materials,row.cells[0],{resolve:true})).items.map(item=>item.exact);};
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await page.goto(sourceURL);await expect(input('Expression 1')).toHaveValue('sqrt(2)');await expect(input('Result 1')).toContainText('1.4143');
-  await button('Use exact vectors, matrices and complex values').click();await openPolicy();await expect(input('Displayed significant digits')).toHaveValue('5');await expect(input('Approximate rounding')).toHaveValue('ceiling');await expect(input('Structured component limit')).toHaveValue('256');await expect(input('Result 1')).toContainText('1.4143');
+  await openPolicy();await expect(input('Displayed significant digits')).toHaveValue('5');await expect(input('Approximate rounding')).toHaveValue('ceiling');await expect(input('Structured component limit')).toHaveValue('256');await expect(input('Result 1')).toContainText('1.4143');
   await input('Expression 1').fill('[1,2]+[1,2,3]');await expect(input('Result 1')).toHaveAttribute('role','alert');await expect(input('Expression 1')).toHaveValue('[1,2]+[1,2,3]');expect((await materials.list({recordId:record.id,kind:'dataset'})).items).toEqual([]);
   const expression='matmul([[1,2],[3,4]],[[5,6],[7,8]])';await input('Structured component limit').fill('1');await input('Expression 1').fill(expression);await expect(input('Result 1')).toHaveAttribute('role','alert');await input('Structured component limit').fill('256');await expect(input('Result 1')).not.toHaveAttribute('role','alert');await expect(input('Result 1')).toContainText('19');await expect(input('Result 1')).toContainText('50');await input('Complete result character limit').fill('64');await expect(input('Result 1')).toHaveAttribute('role','alert');await input('Complete result character limit').fill('65536');await expect(input('Result 1')).not.toHaveAttribute('role','alert');await expect(input('Result 1')).toContainText('50');
   await save();const saved=(await new ProjectModuleReader(f.workspace,book.id).selected({workspaceId:book.id,id:sourceId})).entity;expect(saved.data.engine).toBe(4);expect(saved.data.policy.version).toBe(2);expect(saved.data.policy.displayDigits).toBe(5);expect(saved.data.policy.rounding).toBe('ceiling');await retain();

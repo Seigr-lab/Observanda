@@ -2,7 +2,7 @@
 // worker errors, saved calculations, code identifiers and numeric tokens stay
 // unchanged; an unfamiliar library diagnostic remains available verbatim.
 import messages from '../locales/en/calculator.json' with {type:'json'};
-const policyKeys={CALCULATION_POLICY_LEGACY:'policyLegacyError',CALCULATION_POLICY_INVALID:'invalidPolicy',CALCULATION_LIBRARY_UNAVAILABLE:'policyLibraryError',CALCULATION_REAL_RESULT:'policyRealError',CALCULATION_STRUCTURED_SHAPE:'structuredShapeError',CALCULATION_STRUCTURED_UNSUPPORTED:'structuredUnsupportedError',CALCULATION_STRUCTURED_RESOURCE:'structuredResourceError',CALCULATION_STRUCTURED_ZERO_DIVISOR:'structuredZeroDivisorError'};
+const policyKeys={CALCULATION_POLICY_INVALID:'invalidPolicy',CALCULATION_LIBRARY_UNAVAILABLE:'policyLibraryError',CALCULATION_REAL_RESULT:'policyRealError',CALCULATION_STRUCTURED_SHAPE:'structuredShapeError',CALCULATION_STRUCTURED_UNSUPPORTED:'structuredUnsupportedError',CALCULATION_STRUCTURED_RESOURCE:'structuredResourceError',CALCULATION_STRUCTURED_ZERO_DIVISOR:'structuredZeroDivisorError'};
 const literals=new Map(Object.entries(messages).filter(([key,value])=>key.startsWith('mathError')&&typeof value==='string'&&!/\{[a-zA-Z]\w*\}/.test(value)).map(([key,value])=>[value,key]));
 literals.set('Number of decimals in function round must be an integer','mathErrorRounding');
 const matchers=[

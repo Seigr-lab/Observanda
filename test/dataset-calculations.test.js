@@ -12,6 +12,7 @@ import {defaultColumn} from '../src/web/dataset-schema.js';
 import {clearVault} from '../src/encryption.js';
 import {DatasetCalculations} from '../src/dataset-calculations.js';
 import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {enqueueDataset} from '../src/dataset-jobs.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {calculateStep,validOperand} from '../src/web/dataset-calculation-model.js';
@@ -95,8 +96,8 @@ test('numerical joins match exact values across bases, reject ambiguous equivale
  c.joins[0].dataset=await f.dataset('Key,Baseline\n6,2',[col('Key','integer','ms'),col('Baseline','integer')]);await assert.rejects(f.m.dataset({recordId:f.recordId,title:'Units are not inferred',calculation:c}),{code:'DATASET_JOIN_MISSING'});await f.m.verify();
 });
 test('comparison observations and distributions become datasets and calculated jobs fence cancellation and retry',async t=>{
- const f=await fixture(t),source=await f.dataset('key,value\na,9007199254740993\nb,9007199254740993',[col('key'),col('value','integer')]),s=blankAnalysisSource(source);s.columns.value=1;
- const comparison=await f.m.comparisons.save({recordId:f.recordId,title:'Comparison',tool:'fixture',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic test source',uncertainty:'Unknown',limitations:'Synthetic qualification only'},comparison:{version:1,sources:[s],ordering:'source',expected:null}}),c=recipe(comparison);
+ const f=await fixture(t),source=await f.dataset('key,value\na,9007199254740993\nb,9007199254740993',[col('key'),col('value','integer')]),s=blankAnalysisSource({...source,workspaceId:(await f.workspace.outline()).metadata.id});s.columns.value=1;
+ const comparison=await f.m.comparisons.save({recordId:f.recordId,title:'Comparison',tool:'fixture',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic test source',uncertainty:'Unknown',limitations:'Synthetic qualification only'},comparison:{version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources:[s],ordering:'source',expected:null}}),c=recipe(comparison);
  for(const view of ['observations','distribution','transitions']){c.view=view;const ref=await f.m.dataset({recordId:f.recordId,title:view,calculation:c}),data=await f.m.datasetPage(ref);if(view==='observations')assert.equal(data.rows[0].cells[0],'9007199254740993/1');if(view==='distribution')assert.equal(data.rows[0].cells[3],'2');}
  c.view='observations';const {queue,worker}=workspaceJobs(f.workspace);t.after(()=>worker.stop());const id=randomUUID(),command={recordId:f.recordId,title:'Queued calculation',calculation:c};
  await enqueueDataset(f.m,queue,command,id);const first=await queue.claim(),prepared=await queue.definition(first).prepare(first,{});await queue.control(id,'cancel');await assert.rejects(queue.complete(id,first.lease.token,prepared),{code:'JOB_CANCELLED'});await queue.release(id,first.lease.token);assert.equal(await f.m.current(id),null);

@@ -16,7 +16,7 @@ test('approximate computation retains all working digits independently of displa
 test('signed computational zero survives display formatting and JSON transport',()=>{
  const negative=calculateDetailed('sin(-0)',options()),positive=calculateDetailed('sin(0)',options());assert.equal(negative.result,'0');assert.equal(positive.result,'0');assert.equal(negative.computation.spelling,'-0');assert.equal(positive.computation.spelling,'0');assert.deepEqual(JSON.parse(JSON.stringify(negative.computation)),negative.computation);
  assert.equal(calculateDetailed('1/3',options()).computation,undefined);assert.equal(calculateDetailed('[1/3,2]',options()).computation,undefined);
- for(const engine of [1,2,3]){const settings={engine,...(engine===3?{policy:defaultCalculationPolicy()}:{})};assert.equal(calculateDetailed('sqrt(2)',settings).computation,undefined);}
+ assert.equal(calculateDetailed('sqrt(2)',{engine:3,policy:defaultCalculationPolicy()}).computation,undefined);
 });
 
 test('Units and JavaScript numbers cannot acquire a BigNumber computation payload',()=>{

@@ -18,6 +18,7 @@ import {workspaceModules} from '../src/modules/index.js';
 import {executeModuleCommand} from '../src/modules/command.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
 import {moduleCommandFingerprint} from '../src/modules/command-fingerprint.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 const detached=AsyncLocalStorage.snapshot();
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-project-domains-')),vaults=[];
@@ -30,7 +31,7 @@ async function fixture(t){
  const storage=await initializeProjectLocation(path.join(home,'project'),projectId,book,access,vault),domains=new ProjectDomains(storage,book.id);
  return {root,runtime,book,projectId,access,vault,storage,domains,workspace};
 }
-const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
+const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 const calendar=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calendar.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calendar',projectId:f.projectId,color:'#123456',archived:false}}});
 async function command(f,domain,value){return f.domains.run([domain],get=>executeModuleCommand(workspaceModules(f.storage),get(domain),{book:f.book},value,moduleCommandFingerprint(value),{compact:true}),{write:[domain]});}
 async function verifyDomain(f,store){const owner=workspaceModules(f.storage);return new ModuleCatalogue(store).verify(f.book.id,{entity:entity=>{store.assertModuleType(entity.type);owner.validateEntity(entity);},event:event=>{for(const entity of event.changes)store.assertModuleType(entity.type);owner.validateEvent(event);},constraints:source=>owner.validateSource(source)});}
@@ -132,7 +133,10 @@ test('independent module schemas survive archived and rekeyed project copies wit
  const copyRoot=path.join(f.workspace.root,'archive-copy');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(copyRoot,file));
  const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,copyRoot,{connection:db});}finally{await db.close();}
- const header=JSON.parse((await readFile(path.join(copyRoot,CATALOGUE_ARCHIVE),'utf8')).split(String.fromCharCode(10))[0]);assert.deepEqual(header,{format:'observanda-postgresql-archive',version:4,catalogueVersion:22,domains:['calculator','calendars']});
+ const header=JSON.parse((await readFile(path.join(copyRoot,CATALOGUE_ARCHIVE),'utf8')).split(String.fromCharCode(10))[0]);
+ // A structured calculator admits configuration documents, so the archive records that generation.
+ const sourceGeneration=await f.storage.catalogue(store=>catalogueFormat(store.db));
+ assert.deepEqual(header,{format:'observanda-postgresql-archive',version:15,catalogueVersion:Number(sourceGeneration),domains:['calculator','calendars']});
  const copied=new ProjectStorage(copyRoot,f.projectId,f.vault);assert.deepEqual(await copied.read(),before);await verifyCatalogueArchive(copied,JSON.parse(descriptor));assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(f.storage.root)).id);
  const copyContext={...f,storage:copied,domains:new ProjectDomains(copied,f.book.id)};assert.equal((await command(copyContext,'calculator',saved)).replayed,true);assert.equal((await command(copyContext,'calendars',scheduled)).replayed,true);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'fresh-device')})),vault=takeCreatedVault(access);

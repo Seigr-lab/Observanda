@@ -9,9 +9,10 @@ test('native scientific library loads only on first calculation and preserves ex
   import {createRequire} from 'node:module';
   const require=createRequire(import.meta.url),loaded=()=>Object.keys(require.cache).some(name=>/[\\\\/]mathjs[\\\\/]/.test(name));
   const native=await import('./src/tools/math-node.js');assert.equal(loaded(),false);
-  const first=native.calculateDetailed('1/3');assert.equal(loaded(),true);assert.deepEqual(first.exact,{numerator:'1',denominator:'3'});
+  const {defaultCalculationPolicy}=await import('./src/web/tools/calculation-policy.js'),options=()=>({engine:3,policy:defaultCalculationPolicy()});
+  const first=native.calculateDetailed('1/3',options());assert.equal(loaded(),true);assert.deepEqual(first.exact,{numerator:'1',denominator:'3'});
   const browser=await import('./src/tools/math.js');
-  for(const expression of ['1/3','sqrt(2)','sin(0)','2^64'])assert.deepEqual(native.calculateDetailed(expression),browser.calculateDetailed(expression));
+  for(const expression of ['1/3','sqrt(2)','sin(0)','2^64'])assert.deepEqual(native.calculateDetailed(expression,options()),browser.calculateDetailed(expression,options()));
   assert.equal(loaded(),true);console.log('passed');
  `],{cwd:process.cwd(),windowsHide:true});assert.equal(stdout.trim(),'passed');
 });

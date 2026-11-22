@@ -16,7 +16,7 @@ import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
-import {defaultCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
+import {defaultStructuredCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {openEvidence} from './record-editor-helper.js';
 
@@ -27,8 +27,8 @@ test('retain a selected project calculation in another owner, preserve earlier e
   const rootBook=sampleNotebook();rootBook.entries[0].title='Result destination';const record=rootBook.entries[0],f=await encryptedFixture(directory,rootBook);vaults.push(f.vault);
   const settings=defaultDashboard();settings.views[0].panels=[];settings.enabledModules=['scientific-calculator'];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
   const book=sampleNotebook();book.title=book.projects[0].title='Calculation source';const projectId=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
-  const project=await initializeProjectLocation(path.join(f.workspace.root,book.title),projectId,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(project,{expected:(await registry.read()).revision});const commands=new ProjectModuleCommands(project,book.id);await commands.initialize();const sourceId=randomUUID(),policy=defaultCalculationPolicy();policy.displayDigits=1;
-  await commands.execute({workspaceId:book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:sourceId,expectedRevision:null,data:{name:'Scalar source',links:[],engine:3,policy,mode:'expression',angle:'rad',expression:'1/3',digits:'',fromBase:10,toBase:6}}});
+  const project=await initializeProjectLocation(path.join(f.workspace.root,book.title),projectId,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(project,{expected:(await registry.read()).revision});const commands=new ProjectModuleCommands(project,book.id);await commands.initialize();const sourceId=randomUUID(),policy=defaultStructuredCalculationPolicy();policy.displayDigits=1;
+  await commands.execute({workspaceId:book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:sourceId,expectedRevision:null,data:{name:'Scalar source',links:[],engine:4,policy,mode:'expression',angle:'rad',expression:'1/3',digits:'',fromBase:10,toBase:6}}});
   const materials=new ResearchMaterials(f.workspace);app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('/calculator-retain'))captures.push({path:new URL(request.url()).pathname,body:request.postDataJSON()});});
   const main=page.locator('main'),result=page.locator('dialog[data-calculator-result]'),dialog=page.locator('#dialog'),sourceURL=app.origin+'/#/owners/'+projectId+'/modules/scientific-calculator/calculation/'+sourceId;
   const retain=async()=>{

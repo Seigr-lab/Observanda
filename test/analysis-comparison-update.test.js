@@ -12,8 +12,8 @@ const observation=row=>({source:0,page:0,row,investigation:null,run:null,calibra
 async function priorFile(index,table,key){return prefix+(await index.tree.find({root:index.root},'lookup/'+table+'/'+digest(key))).revision+'.json';}
 
 test('accumulation authenticates each existing group, distribution and transition once and preserves all indexed views',async()=>{
- for(const version of [1,2,3]){
-  const f=fixture(),s=state(),append=comparisonAccumulator(f.index,s,{version,ordering:'source'});await append(observation(0));await append(observation(1));const old=await f.index.flush(),key=comparisonGroupKey(observation(0),version),distribution=JSON.stringify([key,'7/1','correct']),transition=JSON.stringify([JSON.stringify([0,key]),'correct','correct']),files=await Promise.all([['groups',key],['distribution',distribution],['transitions',transition]].map(([table,id])=>priorFile(f.index,table,id)));
+ {
+  const f=fixture(),s=state(),append=comparisonAccumulator(f.index,s,{version:3,ordering:'source'});await append(observation(0));await append(observation(1));const old=await f.index.flush(),key=comparisonGroupKey(observation(0)),distribution=JSON.stringify([key,'7/1','correct']),transition=JSON.stringify([JSON.stringify([0,key]),'correct','correct']),files=await Promise.all([['groups',key],['distribution',distribution],['transitions',transition]].map(([table,id])=>priorFile(f.index,table,id)));
   f.reads.clear();await append(observation(2));for(const file of files)assert.equal(f.reads.get(file),1,'Prior payload must be authenticated once: '+file);
   const root=await f.index.flush(),current=new ComparisonIndex(f.sequences,root),previous=new ComparisonIndex(f.sequences,old);assert.deepEqual(s.summary.counts,{groups:1,distribution:1,transitions:1,observations:3});assert.equal(s.summary.raw.correct,3);assert.deepEqual(s.last,{source:0,page:0,row:2,count:3});
   const group=(await current.page('groups')).items[0];assert.equal(group.rows,3);assert.equal(group.assessed,3);assert.equal(group.successful,3);assert.equal(group.boundaries.inside,3);assert.equal((await previous.page('groups')).items[0].rows,2);

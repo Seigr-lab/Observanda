@@ -23,8 +23,9 @@ import {ProjectModuleDrafts} from '../../src/project-module-drafts.js';
 import {ProjectModuleReader} from '../../src/project-module-reader.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {defaultStructuredCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
 
-const calculation=name=>({name,links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(16)',digits:'',fromBase:10,toBase:6});
+const calculation=name=>({name,links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(16)',digits:'',fromBase:10,toBase:6});
 async function fixture(page,{password=''}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-references-ui-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],errors=[],requests=[];
  let app;

@@ -31,11 +31,11 @@ function fixture(){
  return {m,workspaceId,recordId,objects,docs,dataset,command};
 }
 
-test('versioned comparison policies preserve addressed identity and refuse legacy policy input even without rows',async()=>{
+test('versioned comparison policies preserve addressed identity and refuse earlier comparison versions even without rows',async()=>{
  const f=fixture(),ref=await f.dataset([column('Value',{})],[]),command=f.command(ref),old={...command.comparison,version:2};delete old.resourcePolicy;
  assert.equal(validComparison(command.comparison),true);assert.equal(!!validComparison({...command.comparison,resourcePolicy:undefined}),false);assert.equal(validComparison({...old,resourcePolicy:policy()}),false);
  assert.equal(addressedComparisonInputs(command,f.workspaceId).comparison.version,3);
- await assert.rejects(f.m.comparisons.validate({...command,comparison:old}),{code:'ANALYSIS_SCALAR_POLICY'});
+ await assert.rejects(f.m.comparisons.validate({...command,comparison:old}),{code:'ANALYSIS_INVALID'});
  await f.m.comparisons.validate(command);assert.equal((await f.m.comparisons.prepare(command,{writePage:fn=>fn()})).content.summary.algorithmVersion,'4');
 });
 
@@ -92,14 +92,6 @@ test('canonical and margin formatting obey the saved scalar character limit rath
  await assert.rejects(Array.fromAsync(analysisObservations(f.m,command.comparison)),{code:'DATASET_CALCULATION_RESOURCE'});
  const lower={...decimal,name:'Lower'},margin=await f.dataset([decimal,lower],[['0','-1e9000']]),bounded=f.command(margin,{maxScalarCharacters:8192,maxExponent:12000});bounded.comparison.sources[0].columns.lower=1;
  await assert.rejects(Array.fromAsync(analysisObservations(f.m,bounded.comparison)),{code:'DATASET_CALCULATION_RESOURCE'});
-});
-
-
-test('historical comparisons keep lexical fallback and page-scoped reading for legacy untyped inputs',async()=>{
- const f=fixture(),ref=await f.dataset([column('Legacy')],[['not-a-number']]),command=f.command(ref);delete command.comparison.resourcePolicy;command.comparison.version=2;command.comparison.expected={dataset:ref,source:0,key:0,actualKey:0,value:0,rationale:'Historical lexical interpretation'};
- f.m.comparisonRow=()=>assert.fail('Legacy comparisons must keep their existing page-scoped reads');
- const rows=await Array.fromAsync(analysisObservations(f.m,command.comparison));assert.equal(rows[0].exact,null);assert.equal((await f.m.comparisons.verifyExpected(command.comparison)).correct,1);
- const prepared=await f.m.comparisons.prepare(command,{writePage:fn=>fn()});assert.equal(prepared.content.summary.algorithmVersion,'3');assert.equal(prepared.content.summary.verification.version,'1');
 });
 
 

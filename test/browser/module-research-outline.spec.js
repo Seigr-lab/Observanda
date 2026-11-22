@@ -18,6 +18,7 @@ import {ProjectModuleDrafts} from '../../src/project-module-drafts.js';
 import {ProjectDraftCatalogue} from '../../src/project-draft-catalogue.js';
 import {navigate} from './preferences-helper.js';
 import {setTimeout as delay} from 'node:timers/promises';
+import {defaultStructuredCalculationPolicy} from '../../src/web/tools/calculation-policy.js';
 
 async function fixture(page,count){
  page.setDefaultTimeout(15000);
@@ -35,7 +36,7 @@ test('recovery pages preserve unfinished calculations, retry failed navigation a
  test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main'),drafts=new ProjectModuleDrafts(f.workspace,f.book.id),ids=[],original=ProjectDraftCatalogue.prototype.objectValue,loaded=[];
  try{
   for(let i=0;i<25;i++){
-   const id=randomUUID();ids.push(id);await drafts.write({workspaceId:f.book.id,moduleId:'scientific-calculator',id,etag:null,drafts:[{id:randomUUID(),type:'calculation',expectedRevision:null,base:null,data:{name:'Recovered calculation '+i,links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}]});
+   const id=randomUUID();ids.push(id);await drafts.write({workspaceId:f.book.id,moduleId:'scientific-calculator',id,etag:null,drafts:[{id:randomUUID(),type:'calculation',expectedRevision:null,base:null,data:{name:'Recovered calculation '+i,links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}]});
   }
   ProjectDraftCatalogue.prototype.objectValue=function(id,...args){if(ids.some(item=>id==='metadata:.observanda/module-drafts/'+item+'.json'))loaded.push(id);return original.call(this,id,...args);};
   const lists=[];page.on('response',async response=>{if(new URL(response.url()).pathname==='/api/modules/drafts/list'&&response.ok())lists.push(await response.json());});
@@ -80,7 +81,7 @@ test('navigation retains an unfinished item after a lost checkpoint reply and re
 test('module history pages open one original, retain drafts and recover failed navigation',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main'),id=randomUUID(),modules=workspaceModules(f.workspace);
  const save=async revision=>{
-  const command={workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:revision||null,data:{name:'Calculation revision '+(revision+1),links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}};
+  const command={workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:revision||null,data:{name:'Calculation revision '+(revision+1),links:[],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}};
   // This second writer can overlap the browser's automatic draft checkpoint.
   // Retry only lock contention, retaining the same idempotency key.
   for(let attempt=0;;attempt++)try{return await modules.execute(command);}catch(error){if(error.code!=='LOCKED'||attempt===9)throw error;await delay(100);}
@@ -168,7 +169,7 @@ test('BOM research selection accepts a newly saved record without reading its or
 });
 
 test('invalid and missing record labels retain saved module links and allow recovery',async({page})=>{
- test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),id=randomUUID(),record=f.book.entries[0],data={name:'Linked calculation',links:[{workspaceId:f.book.id,type:'record',id:record.id}],engine:1,mode:'expression',angle:'rad',expression:'2+2',digits:'',fromBase:10,toBase:6};
+ test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),id=randomUUID(),record=f.book.entries[0],data={name:'Linked calculation',links:[{workspaceId:f.book.id,type:'record',id:record.id}],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'expression',angle:'rad',expression:'2+2',digits:'',fromBase:10,toBase:6};
  try{
   await workspaceModules(f.workspace).execute({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:null,data}});
   await page.context().route('**/api/modules/references/labels',async route=>{const payload=route.request().postDataJSON();await route.fulfill({json:{workspaceId:payload.workspaceId,etag:payload.etag,items:[null]}});},{times:1});

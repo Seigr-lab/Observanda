@@ -25,6 +25,7 @@ import {createComparisonSourceAccess} from '../src/comparison-source-access.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {AnalysisComparisons} from '../src/analysis-comparisons.js';
 import {TestDeviceStore} from './device-fixture.js';
 async function result(response,status=200){const value=await response.json();assert.equal(response.status,status,JSON.stringify(value));return value;}
@@ -64,7 +65,7 @@ test('retained comparison sources are read-only, client-bound and survive the in
  mark('prepare retained dataset');
  const bytes=Buffer.from('Reading,State\n2,correct\n3,mismatched\n'),upload=await source.startImport({recordId,name:'readings.csv',size:bytes.length});await source.appendImport(upload.id,0,[bytes]);const artifact=await source.finishImport(upload.id),columns=['Reading','State'].map(label=>defaultColumn({label}));columns[0].representation='integer';
  const dataset=await source.dataset({recordId,title:'Retained source readings',artifact,columns}),reference={...dataset,workspaceId:f.a.namespaceId},selected=blankAnalysisSource(reference);Object.assign(selected.columns,{value:0,status:1});
- const command={workspaceId:f.b.namespaceId,recordId,title:'Independent comparison',tool:'Synthetic qualification',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic qualification input.',uncertainty:'Unknown.',limitations:'No scientific inference.'},comparison:{version:2,sources:[selected],ordering:'source',expected:null}};
+ const command={workspaceId:f.b.namespaceId,recordId,title:'Independent comparison',tool:'Synthetic qualification',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic qualification input.',uncertainty:'Unknown.',limitations:'No scientific inference.'},comparison:{version:3,resourcePolicy:defaultDatasetResourcePolicy(),sources:[selected],ordering:'source',expected:null}};
  const metadataBefore=await f.selected.catalogue(async store=>{const result=[];for await(const id of store.objectIdEntries('metadata:'))result.push(id);return result;});
  mark('discover source owners');
  const ensure=t.mock.method(MaterialIndex.prototype,'ensure',()=>{throw Error('Source discovery must not initialize indexes');});
@@ -80,7 +81,7 @@ test('retained comparison sources are read-only, client-bound and survive the in
  try{await result(await f.call(prefix+'source-resolve',{workspaceId:f.b.namespaceId,ref:reference}));}finally{release();await writer;}
  mark('first comparison');
  const admitted=await result(await f.call(prefix+'comparison',command),202),first=await completed(f.call,prefix,admitted.job.id);assert.equal(first.state,'completed',JSON.stringify(first));
- const retained=await output.read(first.result);assert.equal(retained.content.comparison.version,2);assert.equal(retained.content.summary.rows,2);
+ const retained=await output.read(first.result);assert.equal(retained.content.comparison.version,3);assert.equal(retained.content.summary.rows,2);
  assert.deepEqual((await result(await f.call(prefix+'analysis-status',{ref:first.result}))).items,[]);
  const overview=await result(await f.call(prefix+'overview',{recordId}));assert.equal(overview.items.find(item=>item.id===first.result.id).dependencyStatus,'unchecked');
  assert.equal((await result(await f.call(prefix+'dependency-review',{recordId,refs:[first.result]}))).items[0].dependencyStatus,'checked');

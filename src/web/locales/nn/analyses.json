@@ -171,8 +171,6 @@
   "observationsHidden": "Ingen observasjonar samsvarar med denne visinga.",
   "resourcePolicy": "Ressursgrenser for samanlikning",
   "resourceHelp": "Kvar samanlikning av observasjonar og forventa verdiar bruker desse lagra grensene for eksakt tolking, grensekontrollar og marginar. Inndataerklæringar bevarer òg sine eigne grenser. Å overskride ei av grensene stoppar klargjeringa utan å erstatte tidlegare resultat.",
-  "resourceLegacy": "Denne samanlikninga bevarer den tidlegare tolkinga si. Aktiver erklærte grenser for å bruke kjelder med eigne skalarpolicyar i ein ny revisjon.",
-  "resourceEnable": "Aktiver ressursgrenser for erklæringar",
   "valuePreview": "Verdiførehandsvising: {value}...",
   "valueComplete": "Vis heile verdien ({count} teikn)",
   "valueCompleteLabel": "Fullstendig bevart verdi",

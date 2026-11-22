@@ -13,6 +13,7 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {clearVault} from '../src/encryption.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {blankBOM,bomLine} from '../src/web/modules/bom-model.js';
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 
 async function fixture(t,count,{sections=0}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-research-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -27,7 +28,7 @@ async function fixture(t,count,{sections=0}={}){
  return {...f,book,store,command,loaded};
 }
 for(const count of [40,400])test('module commands and draft recovery never read '+count+' research bodies or scan membership',async t=>{
- const f=await fixture(t,count),id=randomUUID(),data={name:'Exact bases',links:[{workspaceId:f.book.id,type:'record',id:f.book.entries[0].id}],engine:1,mode:'bases',angle:'rad',expression:'',digits:'9007199254740993',fromBase:10,toBase:6};
+ const f=await fixture(t,count),id=randomUUID(),data={name:'Exact bases',links:[{workspaceId:f.book.id,type:'record',id:f.book.entries[0].id}],engine:4,policy:defaultStructuredCalculationPolicy(),mode:'bases',angle:'rad',expression:'',digits:'9007199254740993',fromBase:10,toBase:6};
  const first={id,expectedRevision:null,data},commandId=randomUUID();
  const saved=await f.command('calculation.save',first,commandId);assert.equal((await f.command('calculation.save',first,commandId)).replayed,true);
  assert.equal((await f.store.current()).entities.length,1);
