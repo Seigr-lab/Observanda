@@ -11,7 +11,8 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
 import {encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 
 const receipt=(revision,evidenceRevision,index)=>({id:randomUUID(),kind:'validation',recordRevision:revision,evidenceRevision,recordedAt:new Date(Date.UTC(2020,0,1)+index*1000).toISOString(),statement:'Declared inspection scope. '.repeat(70),declared:true});
@@ -40,6 +41,6 @@ test('legacy receipt conversion and failed appends commit atomically without los
  const next=receipt(f.manifest.expectedRevision,hash('evidence'),2);t.mock.method(f.ws,'writeMetadata',async function(name,text){await write.call(this,name,text);if(name===store.marker)throw Error('Interrupted receipt append');});await assert.rejects(f.ws.withLock(()=>store.appendLocked(next)),/Interrupted receipt append/);f.ws.writeMetadata.mock.restore();assert.equal(await store.get(next.id),null);assert.equal((await store.page()).total,2);
  await f.ws.withLock(()=>store.appendLocked(next));assert.deepEqual(await f.ws.withLock(()=>store.appendLocked(next)),next);assert.equal((await store.page()).total,3);await assert.rejects(f.ws.withLock(()=>store.appendLocked({...next,statement:'Different request'})),{code:'INTAKE_CHANGED'});
  await f.ws.catalogue(()=>verifyRunReceiptStores(f.ws));
- const access=await createAccess('','Receipt recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key-receipts'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RunReceiptStore(workspace,f.record.id);assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),Math.max(format,9));assert.deepEqual(await restored.page(),await store.page());
+ const access=await createWorkspaceAccess('','Receipt recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key-receipts'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RunReceiptStore(workspace,f.record.id);assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),Math.max(format,9));assert.deepEqual(await restored.page(),await store.page());
  await f.ws.withLock(()=>f.ws.removeMetadata(store.feed.order+'/'+store.feed.key({id:next.id,createdAt:next.recordedAt})));await assert.rejects(f.ws.catalogue(()=>verifyRunReceiptStores(f.ws)),{code:'CATALOGUE_DAMAGED'});
 });

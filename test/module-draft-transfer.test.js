@@ -16,7 +16,8 @@ import {DRAFT_CHUNK_BYTES} from '../src/web/modules/draft-protocol.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-transfer-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
@@ -77,7 +78,7 @@ test('checkpoint and transfer receipt roll back together on disk full, abort and
 });
 
 test('interrupted chunks resume from ordinary and fresh-key copies with pinned bases',async t=>{
- const f=await fixture(t),staged=await stage(f),access=await createAccess('','transfer recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const f=await fixture(t),staged=await stage(f),access=await createWorkspaceAccess('','transfer recovery password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'ordinary'),{vault:f.vault}),{vault:f.vault});
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(ordinary,f.vault),new Workspace(fresh,vault)]){

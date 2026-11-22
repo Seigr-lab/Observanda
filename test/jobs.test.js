@@ -13,7 +13,8 @@ import os from 'node:os';
 import {Workspace,digest} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 import {AppError} from '../src/errors.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
@@ -23,7 +24,7 @@ import {jobSummary} from '../src/jobs.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-jobs-')),root=path.join(directory,'workspace');
- const a=await createAccess('','synthetic worker password'),vault=takeCreatedVault(a);await initializeLocation(root,sampleNotebook(),a,vault);
+ const a=await createWorkspaceAccess('','synthetic worker password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(a);await initializeLocation(root,sampleNotebook(),a,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),{queue,worker}=workspaceJobs(workspace),book=(await workspace.read()).book;
  t.after(async()=>{await worker.stop();await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,root,vault,workspace,materials,queue,worker,recordId:book.entries[0].id};
@@ -159,7 +160,7 @@ test('a killed process leaves a recoverable lease and encrypted staged bytes for
 
 test('queued imports and completed jobs survive verified backup and rekeyed restore without duplicate artifacts',async t=>{
  const f=await fixture(t),u=await uploaded(f),backup=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const accessRecord=await createAccess('','different worker password'),key=takeCreatedVault(accessRecord);t.after(()=>clearVault(key));
+ const accessRecord=await createWorkspaceAccess('','different worker password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),key=takeCreatedVault(accessRecord);t.after(()=>clearVault(key));
  const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'rekeyed'),{vault:f.vault}),accessRecord,key,f.vault);
  for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
   const workspace=new Workspace(root,vault),r=workspaceJobs(workspace);r.worker.start();

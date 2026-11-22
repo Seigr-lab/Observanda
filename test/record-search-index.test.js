@@ -6,7 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault,encrypted} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -153,7 +154,7 @@ test('failed indexing rolls back; ordinary and fresh-key restore preserve search
  const q=query('field'),first=await list(f,q,null,2);
  const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new RecordQuery(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.list({workspaceId:f.book.id,query:q,cursor:first.nextCursor,limit:2})).records,(await list(f,q,first.nextCursor,2)).records);
- const access=await createAccess('','synthetic portable search key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic portable search key',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const target=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault),newWorkspace=new Workspace(target,vault),newQuery=new RecordQuery(newWorkspace);
  assert.equal((await newQuery.list({workspaceId:f.book.id,query:query('zirconium')})).records[0].id,base.book.entries[0].id);
  assert.deepEqual(await newWorkspace.catalogue(s=>s.read(base.etag)),base);

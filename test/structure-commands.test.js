@@ -11,7 +11,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {RecordSearchIndex} from '../src/record-search-index.js';
@@ -190,7 +191,7 @@ test('ordinary and fresh-key restore preserve structure changes, deleted history
  const f=await fixture(t,8),source=f.base.book.notebooks[0];
  await command(f,f.base,'delete-notebook',{id:source.id,records:'delete',destinationId:null,confirmed:true});
  const saved=await f.ws.read(),copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','synthetic structure restore secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic structure restore secret',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const rekeyed=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[copy,f.vault],[rekeyed,vault]]){
   const ws=new Workspace(root,key);assert.deepEqual(await ws.read(),saved);assert.deepEqual(await ws.catalogue(s=>s.read(f.base.etag)),f.base);

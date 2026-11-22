@@ -10,7 +10,8 @@ import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.j
 import {RecordBlockStore} from '../src/record-block-store.js';
 import {withRecordDocument} from '../src/record-document.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
 
@@ -42,7 +43,7 @@ test('a selected record move preserves dense research, original scope history, e
  await values.save({...target,expectedRevision:base.revision,value:{value:'Continued in the destination'}});
  assert.deepEqual(await f.moves.move(command),moved);assert.equal((await values.read(target)).value.value,'Continued in the destination');
  await assert.rejects(f.moves.move({...command,notebookId:randomUUID()}),{code:'CONFLICT'});
- const access=await createAccess('','synthetic location recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic location recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const root=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault);
  await recovered.catalogue(store=>store.verify(catalogueDescriptor(f.book)));assert.deepEqual(await new RecordLocation(recovered).move(command),moved);
  const page=await new RecordContent(recovered).read({workspaceId:f.book.id,recordId:record.id,pagedHeader:true,offset:72});assert.deepEqual(page.sections.values[0],record.sections[72]);assert.equal(page.header.notebookId,f.notebook.id);

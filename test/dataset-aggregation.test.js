@@ -13,7 +13,8 @@ import {retainedTable} from '../src/retained-tables.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 import {enqueueDataset} from '../src/dataset-jobs.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
@@ -37,7 +38,7 @@ test('aggregation checkpoint values cross metadata pages without changing Unicod
  await work.put('group:0',value);await work.save(state);
  const reopened=await new AggregationWork(new ResearchMaterials(f.workspace),command,{jobId:id}).open(1);
  assert.deepEqual(await reopened.get('group:0'),value);const detached=await reopened.get('group:0');detached.cells[0]='changed';assert.deepEqual(await reopened.get('group:0'),value);
- const access=await createAccess('','Large intermediate recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','Large intermediate recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'large-value-restore'),{vault:f.vault}),access,vault,f.vault);
  const restored=await new AggregationWork(new ResearchMaterials(new Workspace(destination,vault)),command,{jobId:id}).open(1);
  assert.deepEqual(await restored.get('group:0'),value);
@@ -77,7 +78,7 @@ test('failed checkpoint writes retain the preceding aggregation root through fre
  f.workspace.writeMetadata=async(name,value)=>{const result=await write(name,value);if(name===file&&++checkpoints===2)throw new AppError('STORAGE_FULL');return result;};
  try{await assert.rejects(f.m.prepareDataset(command,{jobId:id}),{code:'STORAGE_FULL'});}finally{f.workspace.writeMetadata=write;}
  const checkpoint=JSON.parse(await f.workspace.readMetadata(file,1048576));assert.equal(checkpoint.order,128);assert.equal(await f.m.current(id),null);
- const access=await createAccess('','Aggregation checkpoint recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','Aggregation checkpoint recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'checkpoint-restore'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(destination,vault),restored=new ResearchMaterials(workspace);
  const prepared=await restored.prepareDataset(command,{jobId:id}),ref=await workspace.withLock(()=>restored.commitDataset(command,prepared));
  assert.deepEqual((await restored.datasetPage(ref)).rows.map(r=>r.cells),[['0','192/1'],['1','383/2'],['2','385/2']]);
@@ -199,5 +200,5 @@ test('aggregation v3 preserves source-owned exact keys, long cells, refused comm
  const passthrough={...legacy,keys:[2],keySemantics:['lexical'],values:[{column:1,operation:'count',name:'Count'}]},counted=await f.m.dataset({recordId:f.recordId,title:'Complete lexical count',aggregation:passthrough},{signal:t.signal}),countedRow=(await f.m.datasetPage(counted)).rows[0];assert.equal(countedRow.cells[0].format,'dataset-cell');assert.equal(countedRow.cells[1],'4');assert.equal((await f.m.readDatasetCell(countedRow.cells[0],{offset:4096,limit:1024})).text,label.slice(4096));
  const table=await retainedTable(f.m,{ref:counted,selection:{columns:'all',offset:0,count:null,includeExcluded:true},version:3}),{retainedTableHTML}=await import('../src/publication-retained-tables.js');let html='';for await(const part of retainedTableHTML(f.m,{source:counted,table},{signal:t.signal}))html+=part;assert.ok(html.includes(label));assert.equal(html.includes('[object Object]'),false);
  await verifyAggregationPolicy(f.m,doc,{signal:t.signal});const forged=Object.create(f.m);forged.retainedDatasetPage=async(selected,page,options)=>{const value=await f.m.retainedDatasetPage(selected,page,options);if(selected.id===doc.id){value.rows=structuredClone(value.rows);value.rows[0].cells[1]='1/1';}return value;};await assert.rejects(verifyAggregationPolicy(forged,doc,{signal:t.signal}),{code:'MATERIAL_MISSING'});await assert.rejects(verifyAggregationPolicy(f.m,{...doc,content:{...doc.content,aggregation:{...a,resourcePolicy:low}}},{signal:t.signal}),{code:'DATASET_CALCULATION_RESOURCE'});t.diagnostic('Long lexical/count export and exact replay/refusal passed.');
- const access=await createAccess('','Aggregation policy recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'policy-recovery'),{vault:f.vault}),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(destination,vault));await restored.verify({signal:t.signal});assert.deepEqual((await restored.datasetPage(result)).rows,rows);assert.deepEqual((await inspect(restored,result,1)).aggregation,provenance.aggregation);assert.equal((await restored.read(counted)).content.aggregation.version,1);assert.deepEqual((await restored.read(result)).content.aggregation,a);assert.equal((await restored.readDatasetCell((await restored.datasetPage(counted)).rows[0].cells[0],{offset:4096,limit:1024})).text,label.slice(4096));t.diagnostic('Fresh-key copy, full verification and historical lexical recipe reopening passed.');
+ const access=await createWorkspaceAccess('','Aggregation policy recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'policy-recovery'),{vault:f.vault}),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(destination,vault));await restored.verify({signal:t.signal});assert.deepEqual((await restored.datasetPage(result)).rows,rows);assert.deepEqual((await inspect(restored,result,1)).aggregation,provenance.aggregation);assert.equal((await restored.read(counted)).content.aggregation.version,1);assert.deepEqual((await restored.read(result)).content.aggregation,a);assert.equal((await restored.readDatasetCell((await restored.datasetPage(counted)).rows[0].cells[0],{offset:4096,limit:1024})).text,label.slice(4096));t.diagnostic('Fresh-key copy, full verification and historical lexical recipe reopening passed.');
 });

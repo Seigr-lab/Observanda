@@ -12,7 +12,8 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {MAX_BYTES} from '../src/model.js';
 
 test('near-limit record checkpoints pin one base and survive concurrency, failed writes and both recovery modes',async t=>{
@@ -37,7 +38,7 @@ test('near-limit record checkpoints pin one base and survive concurrency, failed
  await assert.rejects(drafts.write({...command,expectedRevision:saved.revision,changes:[{...change,record:{...change.record,title:'Failed checkpoint'}}]}),{code:'ENOSPC'});t.mock.restoreAll();assert.equal((await drafts.read(command.id)).revision,saved.revision);
  await assert.rejects(drafts.write({...command,expectedRevision:saved.revision,changes:[{...change,record:{...base,id:randomUUID()}}]}),{code:'RECORD_HISTORY_MISSING'});
  const next=await drafts.write({...command,expectedRevision:saved.revision,changes:[{...change,record:{...change.record,title:'Newer checkpoint'}}]});await assert.rejects(drafts.write(command),{code:'DRAFT_CHANGED'});
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','fresh record draft recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','fresh record draft recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){const restored=await new ResearchDrafts(ws).read(command.id);assert.equal(restored.revision,next.revision);assert.deepEqual(restored.draft.changes[0].base,base);assert.equal(restored.draft.changes[0].record.title,'Newer checkpoint');}
  // Missing pinned history never turns a recoverable comparison into a new record.

@@ -13,7 +13,8 @@ import {withDraftDocument} from '../src/record-draft-document.js';
 import {validResultStatement} from '../src/web/result-statements.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {retainedTable} from '../src/retained-tables.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -55,6 +56,6 @@ test('unfinished selected results recover under a new key, verify scope and roll
  const f=await figureValueFixture({large:true});t.after(f.close);forbid(t);assert.ok(Buffer.byteLength(JSON.stringify(f.record))>2*1024*1024);
  const item={...statement(),kind:'figure',figureId:''},base=await f.values.read(target(f,item.id)),drafts=new RecordValueDrafts(f.workspace),command={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:base.field,revision:base.revision,storageRevision:base.storageRevision},value:{value:item}},receipt=await drafts.write(command),lookup={workspaceId:f.book.id,id:command.id,expectedRevision:receipt.revision};assert.deepEqual(await drafts.write(command),receipt);
  const draft=(await new ResearchDrafts(f.workspace).read(command.id,{header:true})).draft;await f.workspace.withLock(()=>f.workspace.catalogue(store=>withDraftDocument(store,draft,async doc=>{const changed=await new RecordDocument(doc.blocks,doc.root,{mutable:true}).replace(['sections','72','body'],'Outside selected value');await changed.blocks.flush();await assert.rejects(verifyRecordValueDraft(store,{...draft,document:{...draft.document,root:changed.root}}),{code:'CATALOGUE_DAMAGED'});} )));
- const access=await createAccess('','synthetic result recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);assert.deepEqual(recovered.value,command.value);
+ const access=await createWorkspaceAccess('','synthetic result recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);assert.deepEqual(recovered.value,command.value);
  const values=new RecordValues(workspace),value={...item,figureId:f.record.figures[0].id},saveCommand={...target(f,item.id),expectedRevision:base.revision,value:{value}},etag=(await workspace.outline()).etag,finish=ResearchCatalogue.prototype.finishRecordChanges;t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);throw Error('Interrupted result commit');});await assert.rejects(values.save(saveCommand),/Interrupted result commit/);ResearchCatalogue.prototype.finishRecordChanges.mock.restore();assert.equal((await workspace.outline()).etag,etag);await values.save(saveCommand);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));assert.equal((await read(f,['results'])).statements.length,1);
 });

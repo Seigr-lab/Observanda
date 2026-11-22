@@ -10,7 +10,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {ObjectIndex} from '../src/object-index.js';
@@ -140,7 +141,7 @@ test('fresh-key backup retains exact snapshot roots, histories and state without
  const current=await f.ws.read(),history=new RecordHistory(f.ws,{}),command={workspaceId:current.book.id,recordId:current.book.entries[0].id};
  const first=await history.list({...command,limit:1});
  const before=await f.ws.catalogue(async store=>({snapshot:await store.snapshot(),state:await store.db.all('SELECT slot,payload FROM state ORDER BY slot')}));
- const access=await createAccess('','fresh backup synthetic password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh backup synthetic password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const restore=forbidAssembly();let target,ordinary;
  try{
   target=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
@@ -165,7 +166,7 @@ test('fresh-key backup retains exact snapshot roots, histories and state without
 });
 
 test('failed rekey leaves source unchanged and an incomplete destination cannot activate',async t=>{
- const f=await fixture(t),before=await catalogueStamp(f.ws.root),access=await createAccess('','interrupted backup synthetic password'),vault=takeCreatedVault(access);
+ const f=await fixture(t),before=await catalogueStamp(f.ws.root),access=await createWorkspaceAccess('','interrupted backup synthetic password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);
  t.after(()=>clearVault(vault));const encode=ResearchCatalogue.prototype.encode;
  ResearchCatalogue.prototype.encode=function(table,id,value){if(this.workspace.vault.id===vault.id&&table==='state')throw Object.assign(Error('Synthetic disk full'),{code:'ENOSPC'});return encode.call(this,table,id,value);};
  const destination=path.join(f.directory,'interrupted');

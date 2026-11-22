@@ -12,7 +12,8 @@ import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {RecordHistory} from '../src/record-history.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 const contents=({cursor,nextCursor,...result})=>({...result,hasCursor:!!cursor,hasNext:!!nextCursor});
 
 test('retained reference history continues without scanning all references or loading unselected bodies',async t=>{
@@ -85,7 +86,7 @@ test('legacy retained history needs no read-time rewrite and changed-token failu
  assert.equal(await ws.catalogue(store=>store.objectIdentity('metadata:.observanda/materials/records/'+record.id+'/'+recordRevision(candidate)+'.json')),null);
  const tail=await history.list({...command,cursor:first.nextCursor});assert.equal(tail.total,2);assert.equal(tail.versions[0].title,retained.title);
  await ws.withLock(()=>materials.retainRecord(candidate));await assert.rejects(history.list({...command,cursor:first.nextCursor}),{code:'RECORD_HISTORY_CURSOR'});
- const access=await createAccess('','new history recovery password'),nextVault=takeCreatedVault(access);t.after(()=>clearVault(nextVault));
+ const access=await createWorkspaceAccess('','new history recovery password',new TestDeviceStore({file:path.join(directory,'device.key')})),nextVault=takeCreatedVault(access);t.after(()=>clearVault(nextVault));
  const copied=await encryptedCopy(await copyPlan(ws.root,path.join(directory,'fresh-key'),{vault}),access,nextVault,vault),restored=new RecordHistory(new Workspace(copied,nextVault),{});
  const before=await history.list({...command,limit:20}),after=await restored.list({...command,limit:20});assert.deepEqual(contents(after),contents(before));
  const row=await ws.catalogue(store=>store.db.get('SELECT payload FROM state WHERE slot=$1',slot)),damaged=Buffer.from(row.payload);damaged[damaged.length-1]^=1;

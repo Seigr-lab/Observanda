@@ -8,7 +8,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 
 test('copy progress measures files, archive rows and verified revisions while preserving copied research',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-progress-')),f=await encryptedFixture(directory,sampleNotebook());
@@ -24,7 +25,7 @@ test('copy progress measures files, archive rows and verified revisions while pr
  }
  for(const stage of ['verify-evidence','verify-collaboration'])assert.ok(events.some(e=>e.stage===stage),stage);
  assert.ok(events.some(e=>e.stage==='verify-snapshots'&&e.activity.objects>0));
- const next=await createAccess('','fresh synthetic progress password'),vault=takeCreatedVault(next);t.after(()=>clearVault(vault));const rekey=[];
+ const next=await createWorkspaceAccess('','fresh synthetic progress password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(next);t.after(()=>clearVault(vault));const rekey=[];
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),next,vault,f.vault,{onProgress:e=>rekey.push(e)});
  assert.deepEqual((await new Workspace(fresh,vault).read()).book,before.book);assert.ok(rekey.some(e=>e.stage==='rekey-table'&&e.completed>0));
 });

@@ -8,7 +8,8 @@ import {StructureCommands} from '../src/structure-commands.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
 import {clearVault} from '../src/encryption.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {encryptedCopy,copyPlan} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
@@ -52,7 +53,7 @@ test('invalid identities roll back, moved records keep their bodies and an encry
   await store.verify(catalogueDescriptor(current.metadata));
  });
  await assert.rejects(f.service.execute('structure',{etag:f.etag,response:'outline',change:bad}),{code:'CONFLICT'});
- const access=await createAccess('','synthetic structure recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic structure recovery secret',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(location,vault);
  const outline=await restored.outline();assert.equal(outline.etag,saved.etag);
  const renamed=await new StructureCommands(restored).execute('structure',{etag:outline.etag,response:'outline',change:{kind:'notebook',value:{...outline.metadata.notebooks[0],title:'Continued after recovery'}}});

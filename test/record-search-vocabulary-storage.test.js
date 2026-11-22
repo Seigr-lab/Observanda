@@ -7,7 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {RecordValues} from '../src/record-values.js';
 import {RecordQuery} from '../src/record-query.js';
 import {recordBrowse,recordSearchText} from '../src/web/record-query.js';
@@ -82,7 +83,7 @@ test('selected text saves use retained vocabulary and recover exact searches thr
   await store.verifySnapshot(undefined,book.id);
  });
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=19');await search(f.workspace,book.id,'zirconium');})),{code:'CATALOGUE_DAMAGED'});
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','Synthetic search recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','Synthetic search recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(copy,f.vault),new Workspace(fresh,vault)]){
   assert.equal((await search(workspace,book.id,'zirconium 🌿')).total,1);assert.equal((await search(workspace,book.id,'quartz')).total,1);await workspace.catalogue(store=>store.verifySnapshot(undefined,book.id));

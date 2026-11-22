@@ -13,7 +13,8 @@ import {Workspace,digest} from '../src/storage.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {fileFingerprint} from '../src/web/evidence-fingerprint.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {contentBuffer} from '../src/file-content.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
@@ -100,7 +101,7 @@ test('64 MiB originals, distinct identical acquisitions, empty files and same-re
  assert.equal((await f.m.intakes.page({id:other.batch.id})).items[0].reused,false);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));await restored.verify();
  assert.equal((await restored.artifact(members[1])).content.sha256,digest(bytes));
- const access=await createAccess('','fresh evidence file set password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh evidence file set password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault),rekeyed=new ResearchMaterials(new Workspace(fresh,vault));
  await rekeyed.verify();assert.deepEqual(await contentBuffer((await rekeyed.artifact(members[1])).content),bytes);
 });
@@ -191,7 +192,7 @@ test('cancel/retry and fresh-key recovery retain staged originals; altered manif
  await f.queue.control(batch.id,'retry');const job=await f.queue.claim(),controller=new AbortController();
  await assert.rejects(f.queue.definition(job).prepare(job,{signal:controller.signal,progress:async p=>{if(p.stage==='Verified files')controller.abort();}}),{name:'AbortError'});
  await f.queue.release(job.id,job.lease.token,{paused:true});await f.m.verify();
- const access=await createAccess('','restored staged evidence key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','restored staged evidence key',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'resumed'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(fresh,vault),m=new ResearchMaterials(workspace),jobs=workspaceJobs(workspace);t.after(()=>jobs.worker.stop());
  const g={...f,workspace,m,...jobs};const done=await finish(g,batch.id);const members=(await m.referencePage(done.result)).items;
  assert.equal(members.length,2);for(const member of members)assert.deepEqual(await contentBuffer((await m.artifact(member)).content),bytes);

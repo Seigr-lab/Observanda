@@ -14,7 +14,8 @@ import {seedModuleCurrent} from './module-current-fixture.js';
 import {ModuleReader} from '../src/modules/reader.js';
 import {Workspace} from '../src/storage.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 
 for(const count of [65,650])test('inventory queries include all ledger facts while opening only a page of '+count+' item originals',async t=>{
@@ -55,7 +56,7 @@ test('inventory filter facts survive ordinary and fresh-key restore, support old
  const selected=ModuleCatalogue.prototype.selected,loaded=[];t.mock.method(ModuleCatalogue.prototype,'selected',async function(head,id){loaded.push(id);return selected.call(this,head,id);});
  assert.deepEqual((await reader.list(query)).items.map(i=>i.id),[category.id]);assert.deepEqual((await reader.list(scope)).items.map(i=>i.id),[transfer.id]);assert.deepEqual(loaded,[]);
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','Synthetic inventory restore key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','Synthetic inventory restore key',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[backup,f.vault],[fresh,vault]]){
   const workspace=new Workspace(root,key);await workspace.outline();const restored=new ModuleReader(workspace);loaded.length=0;

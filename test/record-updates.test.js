@@ -15,7 +15,8 @@ import {recordUpdateReader} from '../src/web/record-update-reader.js';
 import {applyRecordPatch} from '../src/web/record-patch.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 
 async function fixture(t,count=65,{large=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-updates-')),book=sampleNotebook(),seed=book.entries[2];
@@ -88,7 +89,7 @@ test('large originals travel alone; malformed, cross-workspace, cancelled and da
 test('partial updates survive ordinary and fresh-key backup without mutable read sessions',async t=>{
  const f=await fixture(t),saved=await changeAll(f),first=await f.reader.changes({workspaceId:f.base.book.id,baseEtag:f.base.etag});
  const normal=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','record update copy password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','record update copy password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  assert.deepEqual(applyRecordPatch(f.base.book,f.base.etag,recordRevisions(f.base.book),await consume(new WorkspaceReader(new Workspace(normal,f.vault)),first)).book,saved.book);
  // A fresh key rejects the old capability; restarting the same pinned delta

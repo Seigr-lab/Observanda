@@ -13,7 +13,8 @@ import {reviewHash} from '../src/security/review-exchange.js';
 import {performance} from 'node:perf_hooks';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {ReviewScopeIndex} from '../src/review-scope-index.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
@@ -170,7 +171,7 @@ test('empty review browsing leaves no index and indexed reviews survive ordinary
  const payload=f.payload([{id:recordId,revision:recordRevision(f.book.entries[0])}]);
  await f.run('create',payload);
  const expected=await f.run('list',{recordId}),parent=path.dirname(f.a.workspace.root);
- const access=await createAccess('','synthetic restored review password'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic restored review password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(access);
  t.after(()=>clearVault(vault));
  const ordinary=await copyWorkspace(await copyPlan(f.a.workspace.root,path.join(parent,'ordinary'),{vault:f.a.vault}),{vault:f.a.vault});
  const fresh=await encryptedCopy(await copyPlan(f.a.workspace.root,path.join(parent,'fresh'),{vault:f.a.vault}),access,vault,f.a.vault);

@@ -15,7 +15,8 @@ import {RecordValueDrafts} from '../src/record-value-drafts.js';
 import {RecordContent} from '../src/record-content.js';
 import {createFigure,createSeries} from '../src/web/figure-model.js';
 import {catalogueFormat,catalogueRequiresRetainedFigures} from '../src/catalogue-format.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 const collect=async stream=>{let result='';for await(const chunk of stream)result+=chunk;return result;};
@@ -36,7 +37,7 @@ test('retained figure requests, selected record drafts and fresh-key recovery pr
  const draftId=randomUUID(),drafts=new RecordValueDrafts(workspace),draft=await drafts.write({id:draftId,workspaceId:book.id,recordId:record.id,expectedRevision:null,selection:{field:target.field,revision:selected.revision,storageRevision:selected.storageRevision},value:{value:{...attached,title:'Pending display title'}}});
  await values.save({...target,expectedRevision:selected.revision,value:{value:{...attached,title:'Current display title'}}});assert.equal((await retainedFigureRequest(materials,currentSelector)).header.title,'Current display title');assert.equal((await retainedFigureRequest(materials,exactSelector)).header.title,figure.title);
  const exported=await retainedFigureRequest(materials,{...exactSelector,format:'json'},{exporting:true,download:async({chunks})=>JSON.parse(await collect(chunks))});assert.deepEqual(exported.series,figure.series);
- const access=await createAccess('','synthetic retained figure recovery');recoveredVault=takeCreatedVault(access);const root=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'recovered'),{vault}),access,recoveredVault,vault),recovered=new Workspace(root,recoveredVault),restored=new ResearchMaterials(recovered);
+ const access=await createWorkspaceAccess('','synthetic retained figure recovery',new TestDeviceStore({file:path.join(directory,'device.key')}));recoveredVault=takeCreatedVault(access);const root=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'recovered'),{vault}),access,recoveredVault,vault),recovered=new Workspace(root,recoveredVault),restored=new ResearchMaterials(recovered);
  assert.deepEqual((await new RecordValueDrafts(recovered).read({id:draftId,workspaceId:book.id,expectedRevision:draft.revision})).value.value,{...attached,title:'Pending display title'});
  const result=await retainedFigureRequest(restored,{...exactSelector,format:'json'},{exporting:true,download:async({chunks})=>JSON.parse(await collect(chunks))});assert.deepEqual(result,exported);await recovered.catalogue(store=>store.verifySnapshot(undefined,book.id));await restored.verify();
 });

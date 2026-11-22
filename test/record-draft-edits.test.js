@@ -9,7 +9,8 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {RecordValues} from '../src/record-values.js';
 import {withRecordDocument} from '../src/record-document.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -92,7 +93,7 @@ test('checkpoint edit rollback, backup and new-record recovery retain the unfini
  await assert.rejects(edit(review,plan,'title',{value:'Unacknowledged'}),/Interrupted edit/);ResearchCatalogue.prototype.putObject.mock.restore();
  assert.equal(await f.workspace.catalogue(s=>catalogueFormat(s.db)),before);assert.equal((await review.editRead({...target(plan),field:'title'})).value.value,'');
  await edit(review,plan,'title',{value:'Recovered new record'});plan=await review.prepare(prepare(f,draft));
- const access=await createAccess('','edited checkpoint recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','edited checkpoint recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.equal(await workspace.catalogue(s=>catalogueFormat(s.db)),before);assert.deepEqual(await restored.prepare(prepare(f,draft)),plan);await restored.apply(target(plan));await workspace.catalogue(s=>verifyRecordDraftReviews(s));
  assert.equal((await review.editRead({...target(plan),field:'title'})).value.value,'Recovered new record');

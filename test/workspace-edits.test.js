@@ -10,7 +10,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
 import {RecordSearchIndex} from '../src/record-search-index.js';
@@ -84,7 +85,7 @@ test('mixed publication selections and deletion commit together and restore with
  const publication=copiesText(await recordCopies(saved.book,f.ws));assert.ok(publication.includes(saved.book.entries[0].title));assert.ok(!publication.includes('A revised interpretation'));assert.ok(!publication.includes(removed.id));
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(saved.book)));
  const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','synthetic authoring restore secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic authoring restore secret',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[backup,f.vault],[fresh,vault]]){
   const ws=new Workspace(root,key);assert.deepEqual(await ws.read(),saved);

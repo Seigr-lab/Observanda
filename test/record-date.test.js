@@ -17,7 +17,8 @@ import {reconcileRecords} from '../src/web/record-merge.js';
 import {recordRevisionComparison} from '../src/web/record-revision-view.js';
 import {escapeHTML} from '../src/publication.js';
 import {recordCopies,copiesText} from './fixtures/record-copies.js';
-import {createAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,verifyAccess,readAccess} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {clearVault} from '../src/encryption.js';
 import {createRun} from '../src/web/record-workflow.js';
@@ -68,7 +69,7 @@ test('date conflict decisions keep an entire declaration together and history pr
  const comparison=recordRevisionComparison(mine,stored,escapeHTML);assert.match(comparison,/Estimated: February 2024/);assert.match(comparison,/2024-02-10 to 2024-03-03/);assert.ok(!comparison.includes('[object Object]'));
 });
 test('encrypted save, incomplete draft, exact pins, history and verified workspace copies retain date declarations',async()=>{
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-dates-')),root=path.join(parent,'source'),access=await createAccess('','synthetic date password'),vault=takeCreatedVault(access);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-dates-')),root=path.join(parent,'source'),deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('','synthetic date password',deviceStore),vault=takeCreatedVault(access);
  let restoredVault;
  try{
   await initializeLocation(root,sampleNotebook(),access,vault);
@@ -85,7 +86,7 @@ test('encrypted save, incomplete draft, exact pins, history and verified workspa
   const history=new RecordHistory(ws,media),command={workspaceId:saved.book.id,recordId:original.id},listing=await history.list(command),old=listing.versions.find(v=>v.revision===recordRevision(original));
   assert.equal((await history.read({...command,...old})).record.occurredOn,original.occurredOn);
   const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination,{vault}),{vault});
-  restoredVault=await verifyAccess(await readAccess(destination),'','synthetic date password');
+  restoredVault=await verifyAccess(await readAccess(destination),'','synthetic date password',{deviceStore});
   const restored=new Workspace(destination,restoredVault);assert.deepEqual((await restored.read()).book.entries[0].occurredOn,approx);
   assert.deepEqual((await new ResearchDrafts(restored).read(id)).draft.changes[0].record.occurredOn,draft.occurredOn);
   assert.equal((await new ResearchMaterials(restored).read(pin)).occurredOn,original.occurredOn);

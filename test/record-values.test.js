@@ -18,7 +18,8 @@ import {recordRevision} from '../src/research.js';
 import {withDraftDocument} from '../src/record-draft-document.js';
 import {RunReadiness} from '../src/run-readiness.js';
 import {runEvidenceRevision} from '../src/run-receipts.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {RecordQueryDocuments} from '../src/record-query-documents.js';
@@ -79,7 +80,7 @@ test('selected details retain incomplete drafts, reject scope tampering and surv
   await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:tampered.root}}),{code:'CATALOGUE_DAMAGED'});
  })));
  const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','synthetic selected-value copy'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic selected-value copy',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(copied,f.vault),new Workspace(fresh,vault)])assert.deepEqual((await new RecordValueDrafts(workspace).read(lookup)).value,command.value);
 });

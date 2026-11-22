@@ -14,7 +14,8 @@ import {withRecordDocument} from '../src/record-document.js';
 import {verifyResearchDrafts} from '../src/research-draft-verification.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
 const media={get:async()=>{throw Error('Unexpected media');}},target=plan=>({id:plan.id,workspaceId:plan.workspaceId,expectedRevision:plan.revision});
@@ -30,7 +31,7 @@ test('legacy batches page records, retain the remaining drafts and resume after 
  forbid(t);let plan=await review.prepare({...read,position:6});assert.equal(plan.newRecord,true);assert.equal((await review.content({...target(plan),offset:0})).body,records[6].body);
  const receipt=await review.apply(target(plan));assert.deepEqual(await review.apply(target(plan)),receipt);assert.deepEqual(await review.prepare({...read,position:6}),{...plan,saved:receipt});
  page=await review.records(pageCommand(f,draft,4));assert.equal(page.items[2].recovered,true);assert.ok(await new ResearchDrafts(f.workspace).read(draft.draft.id,{expand:false,header:true}));ResearchCatalogue.prototype.record.mock.restore();
- const access=await createAccess('','legacy checkpoint backup'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const access=await createWorkspaceAccess('','legacy checkpoint backup',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.equal((await restored.records(pageCommand(f,draft,4))).items[2].recovered,true);forbid(t);
  for(let position=0;position<6;position++){plan=await restored.prepare({...read,position});await restored.apply(target(plan));if(position<5)assert.ok(await new ResearchDrafts(workspace).read(draft.draft.id,{expand:false,header:true}));}
  assert.equal(await new ResearchDrafts(workspace).read(draft.draft.id,{header:true}),null);assert.deepEqual(await restored.apply(target(plan)),(await restored.apply(target(plan))));ResearchCatalogue.prototype.record.mock.restore();

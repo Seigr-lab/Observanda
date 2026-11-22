@@ -10,7 +10,8 @@ import {RecordValueDrafts,verifyRecordValueDraft} from '../src/record-value-draf
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {withRecordDocument,RecordDocument} from '../src/record-document.js';
 import {withDraftDocument} from '../src/record-draft-document.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -41,7 +42,7 @@ test('figure checkpoints on heavy records recover with a new key and reject edit
    const changed=await new RecordDocument(doc.blocks,doc.root,{mutable:true}).replace(path,value);await changed.blocks.flush();await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:changed.root}}),{code:'CATALOGUE_DAMAGED'});
   }
  })));
- const access=await createAccess('','synthetic figure recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
+ const access=await createWorkspaceAccess('','synthetic figure recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
  assert.deepEqual(recovered.value,command.value);assert.deepEqual(recovered.definition.linkedFigureIds,base.definition.linkedFigureIds);recovered.value.value.title='Recovered comparison';recovered.value.value.panels[1].figure.series[0].points[1].y=42;
  await new RecordValues(workspace).save({...f.target(value.id),expectedRevision:base.revision,value:recovered.value});await workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async doc=>{assert.equal(doc.blocks.scopeId,f.record.notebookId);assert.deepEqual((await doc.field(['figures','8'])).value,recovered.value.value);for(let i=0;i<73;i++)assert.deepEqual((await doc.field(['sections',String(i)])).value,f.record.sections[i]);});await store.verifySnapshot(undefined,f.book.id);});
 });

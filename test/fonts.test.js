@@ -11,7 +11,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {woffFixture} from './font-fixture.js';
 import {assertPublicFiles} from '../src/privacy.js';
@@ -40,7 +41,7 @@ test('bundled editions match original hashes and actual variable axes, weights a
  assert.equal(fontStack('url(https://remote.example/font)'),undefined);
 });
 test('custom variable fonts survive encrypted backup; only publicly used font bytes reach a website copy',async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-fonts-')),root=path.join(directory,'workspace'),access=await createAccess('','Synthetic font test password'),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-fonts-')),root=path.join(directory,'workspace'),access=await createWorkspaceAccess('','Synthetic font test password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),fonts=new WorkspaceFonts(ws),original=await bytes();
  const added=await fonts.import(original);assert.equal(added.embed,false);assert.equal((await fonts.import(original)).id,added.id);assert.equal((await fonts.list()).length,1);assert.deepEqual((await fonts.get(added.id)).bytes,original);
  // A shared record's writing set in the added font carries the font with its website copy.

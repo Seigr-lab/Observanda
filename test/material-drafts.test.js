@@ -11,7 +11,8 @@ import {MetadataFeed} from '../src/metadata-feed.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace,digest,serialize} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 async function fixture(t,count=4){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-draft-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),book=(await f.workspace.read()).book,record=book.entries[0],refs=[];
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
@@ -45,7 +46,7 @@ test('collections exceed 500 exact inputs with bounded roots, recover after rest
  assert.ok(status.changed.some(i=>i.id===ref.id));assert.equal(status.changed.length,20);assert.equal(status.changedCount,611);
  assert.equal((await m.drafts.list(f.recordId)).items.length,0);
  await m.verify();
- const access=await createAccess('','fresh pinned references key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh pinned references key',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const backup=await encryptedCopy(await copyPlan(ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(backup,vault));
  assert.deepEqual(await restored.referencePage(ref,{offset:600}),page);await restored.verify();
  // A removed immutable branch cannot be silently treated as an empty collection.

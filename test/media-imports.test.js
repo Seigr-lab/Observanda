@@ -5,7 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -18,7 +19,7 @@ import {AppError} from '../src/errors.js';
 import {convertPublicationRecord} from '../src/publication-conversion-render.js';
 const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><!-- private original note --><circle cx="16" cy="16" r="12" fill="teal"/></svg>');
 async function fixture(t){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-jobs-')),root=path.join(directory,'workspace'),access=await createAccess('','media test password'),vault=takeCreatedVault(access);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-media-jobs-')),root=path.join(directory,'workspace'),access=await createWorkspaceAccess('','media test password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);
  await initializeLocation(root,sampleNotebook(),access,vault);const workspace=new Workspace(root,vault),imports=new MediaImports(workspace),jobs=workspaceJobs(workspace);
  t.after(async()=>{await jobs.worker.stop();await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  return {directory,root,vault,workspace,imports,...jobs};
@@ -63,7 +64,7 @@ test('cancel and retry, including after backup and rekey, reuse the retained ori
  const ready=new Promise(resolve=>entered=resolve);definition.prepare=async(job,options)=>{entered();await delay(30000,null,{signal:options.signal});return prepare(job,options);};
  f.worker.start();await ready;await f.queue.control(u.s.id,'cancel');f.worker.cancel(u.s.id);assert.equal((await finished(f.queue,u.s.id)).state,'cancelled');await f.worker.stop();
  assert.deepEqual(await contentBuffer((await f.imports.original(u.s.id)).content),svg);
- const access=await createAccess('','new media password'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
+ const access=await createWorkspaceAccess('','new media password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),key=takeCreatedVault(access);t.after(()=>clearVault(key));
  const copy=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'restored'),{vault:f.vault}),access,key,f.vault),workspace=new Workspace(copy,key),other=workspaceJobs(workspace);
  await other.queue.control(u.s.id,'retry');other.worker.start();let done;try{done=await finished(other.queue,u.s.id);}finally{await other.worker.stop();}assert.equal(done.state,'completed');assert.equal(done.attempt,2);
  const backup=await copyWorkspace(await copyPlan(copy,path.join(f.directory,'backup'),{vault:key}),{vault:key});

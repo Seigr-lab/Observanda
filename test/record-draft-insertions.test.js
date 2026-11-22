@@ -9,7 +9,8 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {withRecordDocument} from '../src/record-document.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -24,7 +25,7 @@ test('large new-record drafts recover atomically with indexed ownership, origina
  const draft=await retainedDraft(f.workspace,f.book.id,null,record);assert.ok(draft.draft.content.bytes>2*1024*1024);forbid(t);
  const review=new RecordDraftReview(f.workspace,media),plan=await review.prepare(prepare(f,draft));assert.equal(plan.count,0);assert.equal(plan.newRecord,true);
  const before=await f.workspace.outline(),finish=ResearchCatalogue.prototype.finishRecordChanges;t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);throw Error('Interrupted insertion');});await assert.rejects(review.apply(target(plan)),/Interrupted insertion/);ResearchCatalogue.prototype.finishRecordChanges.mock.restore();assert.equal((await f.workspace.outline()).etag,before.etag);assert.ok(await new ResearchDrafts(f.workspace).read(draft.draft.id,{header:true}));
- const access=await createAccess('','new draft recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const access=await createWorkspaceAccess('','new draft recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.deepEqual(await restored.prepare(prepare(f,draft)),plan);const saved=await restored.apply(target(plan));assert.deepEqual(await restored.apply(target(plan)),saved);assert.equal(await new ResearchDrafts(workspace).read(draft.draft.id,{header:true}),null);
  await workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,record.id);assert.equal(snapshot.count,2);assert.equal(snapshot.nextPosition,2);assert.equal(row.position,1);assert.ok(row.collections);await withRecordDocument(store,row.id,row.revision,async doc=>{assert.equal((await doc.field(['sections','81','id'])).value,record.sections[81].id);assert.equal((await doc.field(['body'])).value,record.body);});await store.verifySnapshot(undefined,f.book.id);await verifyRecordDraftReviews(store);});
  assert.equal(await f.workspace.catalogue(async store=>store.member(await store.snapshot(),record.id)),null);

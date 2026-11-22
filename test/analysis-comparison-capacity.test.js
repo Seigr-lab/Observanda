@@ -9,7 +9,8 @@ import {withWorkspaceMetadataBatch} from '../src/metadata-batch.js';
 import {AppError} from '../src/errors.js';
 import path from 'node:path';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
 
@@ -63,7 +64,7 @@ test('a cancelled comparison resumes from an encrypted restored checkpoint and r
  const f=await comparisonFixture(t,{groups:15}),id=randomUUID(),file='.observanda/materials/comparison-work/'+id+'.json',controller=new AbortController();
  await assert.rejects(f.m.comparisons.prepare(f.command,{jobId:id,signal:controller.signal,progress:p=>{if(p.done===32)controller.abort();}}),{name:'AbortError'});
  const checkpoint=JSON.parse(await f.workspace.readMetadata(file,1048576));assert.equal(checkpoint.summary.rows,32);
- const access=await createAccess('','comparison recovery qualification'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','comparison recovery qualification',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(destination,vault),restored=new ResearchMaterials(workspace);
  const next=await restored.comparisons.prepare(f.command,{jobId:id}),ref=await workspace.withLock(()=>restored.comparisons.commit(f.command,next));
  assert.equal(next.content.summary.rows,45);assert.equal(next.content.summary.raw.mismatched,15);assert.equal(await workspace.readMetadata(file,1048576),null);

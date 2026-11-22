@@ -7,7 +7,8 @@ import path from 'node:path';
 import {sampleNotebook} from '../src/sample.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {encryptedCopy,copyPlan} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {ResearchCatalogue,catalogueDescriptor} from '../src/research-catalogue.js';
@@ -63,7 +64,7 @@ test('heavy notebook moves retain every block, scope key, history and portable r
  // Other, small historical records may use their original compatibility reader.
  ResearchCatalogue.prototype.record.mock.restore();
  t.mock.method(ResearchCatalogue.prototype,'record',function(id,...args){if(id===record.id)throw Error('Recovery reconstructed the heavy record');return original.call(this,id,...args);});
- const access=await createAccess('','synthetic moved-record recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic moved-record recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(copied,vault);
  await recovered.catalogue(store=>store.verify(catalogueDescriptor(book)));
  assert.equal((await new RecordValues(recovered).read(target)).value.value,'Authoring after the move');

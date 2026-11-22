@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile,writeFile,unlink,rename,lstat} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
 import {initializeLocation,copyPlan,copyWorkspace,inspectLocation} from '../src/locations.js';
@@ -14,7 +15,7 @@ import {contentBuffer} from '../src/file-content.js';
 
 test('a verified backup requires the recorded evidence bytes and received upload chunks',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-backup-evidence-')),root=path.join(directory,'source');
- const access=await createAccess('','synthetic evidence integrity'),vault=takeCreatedVault(access),book=sampleNotebook();
+ const access=await createWorkspaceAccess('','synthetic evidence integrity',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),book=sampleNotebook();
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(root,book,access,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),bytes=Buffer.alloc(1024*1024,0xa7);

@@ -11,7 +11,8 @@ import {databaseConfiguration,databaseStatus,CATALOGUE_FILE,CATALOGUE_ARCHIVE,op
 import {DiskCapacity} from '../src/disk-capacity.js';
 import {Workspace} from '../src/storage.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {safeError} from '../src/errors.js';
@@ -20,7 +21,7 @@ import {catalogueObjectPrefixCount,objectPrefixUpper,catalogueIndexedCount,catal
 
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-pg-contract-'));
- const access=await createAccess('','synthetic PostgreSQL password'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic PostgreSQL password',new TestDeviceStore({file:path.join(root,'device.key')})),vault=takeCreatedVault(access);
  t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});
  const source=path.join(root,'source');await initializeLocation(source,sampleNotebook(),access,vault);
  return {root,source,vault,ws:new Workspace(source,vault)};

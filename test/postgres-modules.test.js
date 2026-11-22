@@ -10,7 +10,8 @@ import {mkdtemp,rm,access} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
 import {workspaceModules} from '../src/modules/index.js';
@@ -20,7 +21,7 @@ import {recordRevision} from '../src/research.js';
 import {clearVault} from '../src/encryption.js';
 import {databaseCapacity,openCatalogue} from '../src/postgres.js';
 async function fixture(t){
- const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-module-sql-')),root=path.join(parent,'workspace'),a=await createAccess('','synthetic module password'),vault=takeCreatedVault(a);
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-module-sql-')),root=path.join(parent,'workspace'),a=await createWorkspaceAccess('','synthetic module password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(a);
  await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),book=(await ws.read()).book,store=workspaceModules(ws);
  t.after(async()=>{await clearVault(vault);await rm(parent,{recursive:true,force:true});});
  return {parent,root,vault,ws,book,store,command:(action,payload)=>({workspaceId:book.id,commandId:randomUUID(),action,payload})};
@@ -43,7 +44,7 @@ test('module receipts, laboratory records and metadata retain identity through o
  await f.ws.withLock(()=>f.ws.writeMetadata('.observanda/qualification.json','changed metadata'));
  await assert.rejects(copyWorkspace(plan,{vault:f.vault}),{code:'CONFLICT'});
  const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'backup'),{vault:f.vault}),{vault:f.vault});
- const a=await createAccess('','different synthetic password'),key=takeCreatedVault(a);t.after(()=>clearVault(key));
+ const a=await createWorkspaceAccess('','different synthetic password',new TestDeviceStore({file:path.join(f.parent,'device.key')})),key=takeCreatedVault(a);t.after(()=>clearVault(key));
  const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed'),{vault:f.vault}),a,key,f.vault);
  for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
   const ws=new Workspace(root,vault),store=workspaceModules(ws);assert.deepEqual(await store.current(),before);assert.deepEqual(await new Laboratory(root,vault).read(),labBefore);
@@ -104,7 +105,7 @@ test('calculation policy revisions remain reproducible after copy and fresh-key 
  const second=f.command('calculation.save',{id,expectedRevision:1,data:narrower});await f.store.execute(second);
  const sheet=f.command('sheet.save',{id:randomUUID(),expectedRevision:null,data:{name:'Dependent exact values',links:[],engine:3,policy:defaultCalculationPolicy(),cells:[['=1/3','=A1*3'],['=1e100+1','=A2-1e100']],original:null}});await f.store.execute(sheet);
  const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'copy'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','separate synthetic arithmetic password'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
+ const access=await createWorkspaceAccess('','separate synthetic arithmetic password',new TestDeviceStore({file:path.join(f.parent,'device.key')})),key=takeCreatedVault(access);t.after(()=>clearVault(key));
  const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed'),{vault:f.vault}),access,key,f.vault);
  for(const [root,vault] of [[f.root,f.vault],[backup,f.vault],[rekeyed,key]]){
   const ws=new Workspace(root,vault),store=workspaceModules(ws),history=new ModuleHistory(ws);

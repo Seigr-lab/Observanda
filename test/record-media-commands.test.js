@@ -12,7 +12,8 @@ import {withRecordDocument} from '../src/record-document.js';
 import {FileContent} from '../src/file-content.js';
 import {digest} from '../src/storage-format.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
 import {MediaStore} from '../src/media.js';
@@ -48,7 +49,7 @@ test('reader media intake exceeds thirty attachments on a heavy record, composes
   await store.verifySnapshot(undefined,f.book.id);
  });
  await commands.run(command(f,shared.id));assert.equal((await f.values.read(f.target(shared.id))).value.value.share,false);
- const access=await createAccess('','synthetic media association recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic media association recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault),reopened=await new RecordContent(recovered).read({...target,windows:{attachments:30}});
  assert.equal(reopened.collections.attachments.total,32);assert.deepEqual(reopened.header.attachments.map(item=>item.id),[asset.id,shared.id]);
  assert.equal((await new RecordContent(recovered).read({...target,snapshotId:prior})).collections.attachments.total,31);

@@ -11,7 +11,8 @@ import {clearVault} from '../src/encryption.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {ModuleHistory} from '../src/modules/history.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 for(const count of [75,750])test('module history retains '+count+' full revisions with bounded current reads, pages and audit memory',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-module-growth-')),f=await encryptedFixture(directory,sampleNotebook()),modules=workspaceModules(f.workspace),workspaceId=(await f.workspace.outline()).metadata.id,id=randomUUID(),history=new ModuleHistory(f.workspace);
@@ -29,7 +30,7 @@ for(const count of [75,750])test('module history retains '+count+' full revision
   const retainedBytes=await moduleDomainStore(f.workspace,workspaceId,'tasks',async store=>Number((await store.db.get('SELECT sum(octet_length(payload))::text AS bytes FROM module_events')).bytes));
   if(count===750)assert.ok(retainedBytes>64*1024*1024);
   start=performance.now();const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
-  const access=await createAccess('','Synthetic rekeyed module history'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
+  const access=await createWorkspaceAccess('','Synthetic rekeyed module history',new TestDeviceStore({file:path.join(directory,'device.key')})),key=takeCreatedVault(access);t.after(()=>clearVault(key));
   const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'rekeyed'),{vault:f.vault}),access,key,f.vault),restoreMs=performance.now()-start;assert.ok(restoreMs<120000);
   for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
    const ws=new Workspace(root,vault),h=new ModuleHistory(ws);assert.deepEqual((await h.page({id})).items.map(v=>v.revision),Array.from({length:20},(_,i)=>count+1-i));

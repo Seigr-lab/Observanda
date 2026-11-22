@@ -7,7 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -19,7 +20,7 @@ import {applyRecordPatch} from '../src/web/record-patch.js';
 
 async function fixture(t,count=45){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-history-pages-')),root=path.join(directory,'workspace');
- const access=await createAccess('','synthetic history paging password'),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
+ const access=await createWorkspaceAccess('','synthetic history paging password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
  book.entries[0].title='Take 0';book.entries[0].body='Private unabridged source material. '.repeat(500);
  await initializeLocation(root,book,access,vault);
  const ws=new Workspace(root,vault),history=new RecordHistory(ws,{}),service=new ResearchRecords(ws,{}),initial=await ws.read();

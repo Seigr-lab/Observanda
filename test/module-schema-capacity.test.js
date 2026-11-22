@@ -18,7 +18,8 @@ import {moduleCurrentBytes,moduleEntityBytes} from '../src/modules/catalogue.js'
 import {MODULE_BYTES} from '../src/modules/capacity.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 
 test('schema near the 64 MiB single-command boundary can be edited and recovered',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-schema-capacity-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largeCategory({nearLimit:true}),id=randomUUID();
@@ -36,7 +37,7 @@ test('schema near the 64 MiB single-command boundary can be edited and recovered
  const oversized={...data,fields:[{...data.fields[0],choices:[...data.fields[0].choices,...Array.from({length:100},(_,i)=>'over_'+String(i).padStart(5,'0')+'y'.repeat(150))]},...data.fields.slice(1)]};
  await assert.rejects(modules.execute(command(2,oversized),{compact:true}),{code:'LIMIT'});
  assert.equal((await new ModuleReader(f.workspace).selected({workspaceId:book.id,id})).entity.revision,2);
- const copyStarted=performance.now(),ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','large schema copy password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const copyStarted=performance.now(),ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','large schema copy password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(ordinary,f.vault),new Workspace(fresh,vault)]){
   const checkpoint=await moduleDraftOwners(workspace,book.id,'resources').drafts.read(recovered.draft.id);assert.equal(checkpoint.etag,recovered.etag);assert.deepEqual(checkpoint.draft,recovered.draft);

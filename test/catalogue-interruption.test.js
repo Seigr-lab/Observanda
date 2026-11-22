@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm,unlink,access,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -14,7 +15,7 @@ import {interruptWorkspace as interrupt} from './fixtures/interrupt-workspace.js
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-activation-crash-'));
- const access=await createAccess('','synthetic recovery password'),vault=takeCreatedVault(access),source=path.join(directory,'source');
+ const access=await createWorkspaceAccess('','synthetic recovery password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),source=path.join(directory,'source');
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(source,sampleNotebook(),access,vault);
  const workspace=new Workspace(source,vault),before=await workspace.read();

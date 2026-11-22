@@ -4,7 +4,8 @@ import {mkdtemp,rm,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace,digest} from '../src/storage.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
@@ -17,7 +18,7 @@ import {recordCopies,copiesText} from './fixtures/record-copies.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-associations-')),book=upgradeNotebook(sampleNotebook());
- const access=await createAccess('','synthetic association password'),vault=takeCreatedVault(access),root=path.join(directory,'workspace');
+ const access=await createWorkspaceAccess('','synthetic association password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),root=path.join(directory,'workspace');
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  await initializeLocation(root,book,access,vault);const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace);
  return {directory,book,workspace,materials,vault};

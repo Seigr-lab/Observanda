@@ -10,7 +10,8 @@ import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {seedSampleAnalysis,sampleDecimal} from './sample-analysis-fixture.js';
 const instant='2026-10-01T00:00:00.000Z';
 function corpus(samples,analyses=samples*2,events=samples*8){
@@ -39,7 +40,7 @@ test('sample-analysis store qualifies 65 and 650 samples through save, review, r
   await assert.rejects(f.service.change({action:'submit',etag:opened.etag,expectedRecordRevision:opened.recordRevisions[id],id}),{code:'LAB_STALE'});
   const current=await f.service.read(),backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
   assert.deepEqual(await new Laboratory(backup,f.vault).read(),current);
-  const access=await createAccess('','fresh sample-analysis key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+  const access=await createWorkspaceAccess('','fresh sample-analysis key',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
   const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
   assert.deepEqual(await new Laboratory(fresh,vault).read(),current);assert.match(await new Laboratory(fresh,vault).report(id,approved.etag,[],{retained:true}),/<td>0\.125<\/td>/);
   t.diagnostic(JSON.stringify({samples:count,analyses:source.analyses.length,events:source.events.length,bytes:Buffer.byteLength(serialize(source)),readMs:Math.round(readMs),editMs:Math.round(editMs)}));

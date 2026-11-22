@@ -16,7 +16,8 @@ import {selectedJSON} from '../src/migration/content.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {importOrder} from '../src/migration/import-plan.js';
 import {initialMapping,mappedId} from '../src/migration/import-model.js';
@@ -272,7 +273,7 @@ test('an interrupted commit rolls back records and receipts; staged work survive
  const restored=new Workspace(copy,f.vault),service=new MigrationImport(restored);await service.commit({...f.command,review:review.review});
  assert.equal((await restored.read()).book.entries.length,before.book.entries.length+4);assert.equal((await f.workspace.read()).etag,before.etag);
  const imported=(await restored.read()).book.entries.find(r=>r.title==='morning-one'),provenance=await service.provenance({workspaceId:f.book.id,recordId:imported.id});assert.equal(provenance.items[0].source.dates[0].value,'2026-04');
- const access=await createAccess('','Synthetic import restore key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','Synthetic import restore key',new TestDeviceStore({file:path.join(path.dirname(f.source),'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(restored.root,path.join(path.dirname(f.workspace.root),'fresh'),{vault:f.vault}),access,vault,f.vault),freshWorkspace=new Workspace(fresh,vault);
  assert.deepEqual(await freshWorkspace.read(),await restored.read());assert.equal((await new MigrationImport(freshWorkspace).provenance({workspaceId:f.book.id,recordId:imported.id})).items.length,1);
 });

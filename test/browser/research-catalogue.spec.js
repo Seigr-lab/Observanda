@@ -6,10 +6,10 @@ import os from 'node:os';
 import {Workspace} from '../../src/storage.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
-import {createAccess,takeCreatedVault} from '../../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
 import {clearVault} from '../../src/encryption.js';
 import {initializeLocation,workspaceManifest} from '../../src/locations.js';
-import {testServer} from '../device-fixture.js';
+import {testServer,TestDeviceStore} from '../device-fixture.js';
 import {preferences} from './preferences-helper.js';
 import {randomUUID} from 'node:crypto';
 import {ResearchRecords,recordRevision} from '../../src/research.js';
@@ -20,7 +20,7 @@ import {SnapshotIndex} from '../../src/snapshot-index.js';
 test('an older open editor saves alongside new and deleted records and retains typing during the reply',async({page})=>{
  test.setTimeout(90000);
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-old-editor-ui-')),root=path.join(parent,'workspace');
- const accessHeader=await createAccess('','synthetic concurrent editor password'),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
+ const accessHeader=await createWorkspaceAccess('','synthetic concurrent editor password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
  for(const record of book.entries)record.attachments=[];
  await initializeLocation(root,book,accessHeader,vault);
  const workspace=new Workspace(root,vault),service=new ResearchRecords(workspace,{}),base=await workspace.read();
@@ -75,7 +75,7 @@ test('an older open editor saves alongside new and deleted records and retains t
 test('default transactional workspace saves, reopens in the same folder and restores record history',async({page})=>{
  test.setTimeout(60000);
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-catalogue-ui-')),root=path.join(parent,'workspace');
- const access=await createAccess('','synthetic catalogue browser password'),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
+ const access=await createWorkspaceAccess('','synthetic catalogue browser password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(access),book=upgradeNotebook(sampleNotebook());
  book.entries[0].attachments=[];book.entries[0].title='Initial creative take';
  await initializeLocation(root,book,access,vault);
  const workspace=new Workspace(root,vault),options={root,port:0,preferencesFile:path.join(parent,'preferences.json')};
@@ -143,7 +143,7 @@ test('default transactional workspace saves, reopens in the same folder and rest
 
 test('encrypted PostgreSQL copies are verified, opened and edited independently through Storage',async({page})=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-pg-copy-ui-')),root=path.join(parent,'original'),destination=path.join(parent,'copy');
- const accessHeader=await createAccess('','synthetic PostgreSQL browser password'),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
+ const accessHeader=await createWorkspaceAccess('','synthetic PostgreSQL browser password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
  book.entries[0].attachments=[];await initializeLocation(root,book,accessHeader,vault);
  const original=new Workspace(root,vault),before=await original.read(),app=await testServer({root,port:0,preferencesFile:path.join(parent,'preferences.json')});
  try{
@@ -187,7 +187,7 @@ test('record history pages are usable by keyboard, remain stable across saves an
  test.setTimeout(60000);
  const {ResearchRecords,recordRevision}=await import('../../src/research.js');
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-history-pages-ui-')),root=path.join(parent,'workspace');
- const accessHeader=await createAccess('','synthetic history browser password'),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
+ const accessHeader=await createWorkspaceAccess('','synthetic history browser password',new TestDeviceStore({file:path.join(parent,'device.key')})),vault=takeCreatedVault(accessHeader),book=upgradeNotebook(sampleNotebook());
  book.entries[0].title='Material study 0';book.entries[0].attachments=[];
  await initializeLocation(root,book,accessHeader,vault);
  const workspace=new Workspace(root,vault),service=new ResearchRecords(workspace,{});let saved=await workspace.read(),record=saved.book.entries[0],etag=saved.etag;

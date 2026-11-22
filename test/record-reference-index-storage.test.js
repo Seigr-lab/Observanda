@@ -7,7 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../src/sample.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {RecordWriting} from '../src/record-writing.js';
@@ -30,7 +31,7 @@ test('selected reference edits preserve duplicate backlinks, verify every index 
  const base=await writing.read(where),command={...where,expectedRevision:base.revision,value:{body:'Removed the first mention'}},first=await writing.save(command);assert.deepEqual(await writing.save(command),first);RecordValueTree.prototype.page.mock.restore();
  const linked=workspace=>new RecordQuery(workspace).list({workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:'',browse:recordBrowse()},relatedTo:{workspaceId:book.id,id:target.id}});
  assert.deepEqual((await linked(f.workspace)).records.map(value=>value.id),[record.id]);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','Reference contribution recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','Reference contribution recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [f.workspace,new Workspace(copy,f.vault),new Workspace(fresh,vault)]){assert.equal((await linked(workspace)).total,1);await workspace.catalogue(async store=>{await store.verifySnapshot(before,book.id);await store.verifySnapshot(first.etag,book.id);});}
  // Small records must audit their auxiliary index, even without member blocks.
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{

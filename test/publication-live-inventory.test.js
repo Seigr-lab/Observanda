@@ -8,7 +8,8 @@ import {digest,serialize} from '../src/storage-format.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {WebsiteFileStore} from '../src/website-file-store.js';
@@ -54,7 +55,7 @@ test('inventory preparation preserves removals, fences changes and survives fres
  await workspace.withLock(async()=>{await workspace.writeMetadata(pendingFile,serialize({version:1,journal:{liveInventory:stale}}));await workspace.writeMetadata(pendingNode,'{}');});
  await assert.rejects(verifyDeploymentInventories(workspace),{code:'MATERIAL_MISSING'});
  await workspace.withLock(async()=>{await workspace.writeMetadata(pendingNode,pendingBytes);await workspace.removeMetadata(pendingFile);});
- const access=await createAccess('','synthetic inventory recovery'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic inventory recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);
  try{
   const destination=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(destination,vault);
   assert.deepEqual(await deploymentInventory(restored,key),current);await verifyDeploymentInventories(restored);

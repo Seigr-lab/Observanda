@@ -15,7 +15,8 @@ import {RecordValues} from '../src/record-values.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {retainedFigureRequest} from '../src/retained-figures.js';
 import {validRetainedFigure} from '../src/web/retained-figure-model.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {catalogueFormat,catalogueRequiresFigureAuthoring} from '../src/catalogue-format.js';
@@ -54,7 +55,7 @@ test('manual figure checkpoints preserve incomplete data through recovery and sa
  const pending=await drafts.start({id:secondId,workspaceId:book.id,recordId:record.id,selection:nextSelection,expectedRevision:null,operationId:randomUUID(),create:null});
  const changed=await drafts.change({id:secondId,workspaceId:book.id,recordId:record.id,selection:nextSelection,expectedRevision:pending.revision,operationId:randomUUID(),operation:{type:'patch',collection:'points',plotId,id:point.id,patch:{x:null}}});
  assert.notEqual(changed.revision,pending.revision);assert.notEqual(incomplete.revision,changed.revision);
- const access=await createAccess('','synthetic figure draft recovery');recoveredVault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic figure draft recovery',new TestDeviceStore({file:path.join(directory,'device.key')}));recoveredVault=takeCreatedVault(access);
  const root=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'recovered'),{vault}),access,recoveredVault,vault),recovered=new Workspace(root,recoveredVault);
  const restored=await new RecordValueDrafts(recovered).read({id:secondId,workspaceId:book.id,expectedRevision:changed.revision});assert.deepEqual(restored.value,changed.value);
  const pendingPoints=await new RecordFigureDrafts(recovered).read({id:secondId,workspaceId:book.id,expectedRevision:changed.revision,operation:'window',selection:{collection:'points',plotId,limit:1}});assert.equal(pendingPoints.items[0].value.x,null);

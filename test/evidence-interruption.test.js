@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readdir,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace,digest} from '../src/storage.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
@@ -18,7 +19,7 @@ import {interruptWorkspace} from './fixtures/interrupt-workspace.js';
 
 test('a killed evidence upload can be backed up and resumed without copying unfinished bytes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-evidence-crash-')),root=path.join(directory,'source');
- const access=await createAccess('','synthetic upload recovery'),vault=takeCreatedVault(access),book=sampleNotebook();
+ const access=await createWorkspaceAccess('','synthetic upload recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access),book=sampleNotebook();
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(root,book,access,vault);
  const workspace=new Workspace(root,vault),materials=new ResearchMaterials(workspace),original=Buffer.alloc(EVIDENCE_CHUNK+8192,0x5a);

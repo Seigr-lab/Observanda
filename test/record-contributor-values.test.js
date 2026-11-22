@@ -16,7 +16,8 @@ import {RecordContent} from '../src/record-content.js';
 import {RecordMemberCollections,memberCollectionCount} from '../src/record-member-collections.js';
 import {withRecordDocument,RecordDocument} from '../src/record-document.js';
 import {withDraftDocument} from '../src/record-draft-document.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
@@ -66,7 +67,7 @@ test('contributor checkpoints retain incomplete additions and deletions on a hea
   const tampered=await new RecordDocument(document.blocks,document.root,{mutable:true}).replace(['contributors','0','role'],'Unselected change');await tampered.blocks.flush();
   await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:tampered.root}}),{code:'CATALOGUE_DAMAGED'});
  })));
- const access=await createAccess('','synthetic contributor recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic contributor recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),drafts=new RecordValueDrafts(workspace),values=new RecordValues(workspace);
  for(let i=0;i<lookups.length;i++)assert.deepEqual((await drafts.read(lookups[i])).value,[removal,addition][i].value);
  const recovered=await drafts.read(lookups[0]);assert.deepEqual(recovered.definition.original,{name:last.name,role:'Exact retained measurements'});

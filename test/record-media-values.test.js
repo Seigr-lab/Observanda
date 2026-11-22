@@ -11,7 +11,8 @@ import {RecordQueryDocuments} from '../src/record-query-documents.js';
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {withRecordDocument,RecordDocument} from '../src/record-document.js';
 import {withDraftDocument} from '../src/record-draft-document.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -36,7 +37,7 @@ test('media descriptions compose by attachment, retain old revisions and update 
  await f.workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id),[query]=await Array.fromAsync(new RecordQueryDocuments(store).read([row],snapshot.metadata,{search:false,cards:true,publication:true,inventory:true}));assert.equal(query.publicationCard.attachments[0].caption,a.caption);assert.deepEqual(query.publication.attachments.map(item=>item.share),[true,false,false,false,false,false,false,false,true]);assert.deepEqual(query.editionInventory.choice.attachments,[f.record.attachments[0].id,f.record.attachments[8].id]);publication.entries[0].attachments=await withRecordDocument(store,row.id,row.revision,async document=>(await document.field(['attachments'])).value);await store.verifySnapshot(undefined,f.book.id);});
  const {html}=await convertPublicationRecord(f.workspace,publication,publication.entries.find(item=>item.id===f.record.id));
  assert.match(html,/Reviewed image/);assert.match(html,/A green rectangle/);assert.match(html,/Reviewed video/);assert.ok(html.includes('data-media-id="'+f.record.attachments[8].id+'"'));assert.ok(!html.includes(f.record.attachments[1].id));
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','Filtered media recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','Filtered media recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [f.workspace,new Workspace(copy,f.vault),new Workspace(fresh,vault)])await workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id),source={revision:row.queryRevision,slot:'record-query:'+row.id+':'+row.queryRevision},found=await store.db.get('SELECT payload FROM state WHERE slot=$1',source.slot);
@@ -62,7 +63,7 @@ test('media detail checkpoints survive fresh-key recovery on a heavy record and 
    const changed=await new RecordDocument(document.blocks,document.root,{mutable:true}).replace(path,value);await changed.blocks.flush();await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:changed.root}}),{code:'CATALOGUE_DAMAGED'});
   }
  })));
- const access=await createAccess('','synthetic media recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','synthetic media recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
  assert.deepEqual(recovered.value,command.value);assert.equal(recovered.definition.mediaKind,'video');await new RecordValues(workspace).save({...f.target(last.id),expectedRevision:base.revision,value:recovered.value});
  await workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async document=>{

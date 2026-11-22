@@ -19,7 +19,8 @@ import {RecordValueDrafts,verifyRecordValueDraft} from '../src/record-value-draf
 import {ResearchDrafts} from '../src/research-drafts.js';
 import {withRecordDocument,RecordDocument} from '../src/record-document.js';
 import {withDraftDocument} from '../src/record-draft-document.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -76,7 +77,7 @@ test('unfinished run facts on heavy records recover with a new key and prove the
    const changed=await new RecordDocument(doc.blocks,doc.root,{mutable:true}).replace(path,value);await changed.blocks.flush();await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:changed.root}}),{code:'CATALOGUE_DAMAGED'});
   }
  })));
- const access=await createAccess('','synthetic attempt recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
+ const access=await createWorkspaceAccess('','synthetic attempt recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
  assert.deepEqual(recovered.value,command.value);recovered.value.value.applicability='Later acquisition';for(const input of recovered.value.value.inputs)input.hash='a'.repeat(64);
  await new RecordValues(workspace).save({...target(f,'preparation',p.id),expectedRevision:base.revision,value:recovered.value});await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));assert.equal(await read(f,['attempt']),undefined);
 });

@@ -15,7 +15,8 @@ import {StarterValueBlocks} from '../src/record-starter-documents.js';
 import {openStarterStream} from '../src/record-starter-stream.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
 const password='separate template test password',sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const blueprint=count=>({name:'Wide native template',title:'Next declared experiment',type:'experiment',body:'Reviewed instructions',tags:['precision'],sections:Array.from({length:count},(_,i)=>({title:'Section '+(i+1),body:'Instruction '+i+' '+('exact measurement '.repeat(700))}))});
@@ -72,7 +73,7 @@ test('legacy roots upgrade atomically, remain exact and survive fresh-key recove
  await f.owner.change(command);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),21);assert.deepEqual(await f.owner.release(target),release);
  const old=await f.owner.export({...target,password}),oldBytes=Buffer.from(old.encoded,'base64'),oldTarget=await upload(f,oldBytes);assert.equal((await f.owner.review({...oldTarget,password})).fingerprint,revision);assert.equal((await f.owner.packageView({...oldTarget,offset:0})).sections.total,2);
  const partial=Buffer.alloc(180000,73),partialId=randomUUID(),part={workspaceId:f.workspaceId,uploadId:partialId};await f.owner.upload({...part,bytes:partial.length,sha256:sha(partial)});await f.owner.uploadPart({...part,index:0,encoded:partial.subarray(0,128*1024).toString('base64')});
- const access=await createAccess('','fresh template recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.dir,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new RecordStarterTransfer(new Workspace(root,vault));await verifyRecordStarters(restored.workspace);
+ const access=await createWorkspaceAccess('','fresh template recovery password',new TestDeviceStore({file:path.join(f.dir,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.dir,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new RecordStarterTransfer(new Workspace(root,vault));await verifyRecordStarters(restored.workspace);
  assert.equal((await restored.upload({...part,uploadId:randomUUID(),bytes:partial.length,sha256:sha(partial)})).received,1);assert.deepEqual(await restored.release(target),release);
  const pointer=JSON.parse(await restored.workspace.readMetadata('.observanda/record-starters/drafts/'+saved.id+'.json',4096));await restored.workspace.withLock(()=>restored.workspace.removeMetadata('.observanda/record-starter-values/value/'+pointer.root+'.json'));await assert.rejects(verifyRecordStarters(restored.workspace),{code:'CATALOGUE_DAMAGED'});
 });

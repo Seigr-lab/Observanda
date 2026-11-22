@@ -17,7 +17,8 @@ import {RecordContent} from '../src/record-content.js';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {admitParts} from '../src/collaboration/research-package.js';
@@ -62,7 +63,7 @@ test('retained pointers roll back failed admission and survive fresh-key backup'
  const f=await fixture(t),canonical=await revision(f.workspace,f.record.id),before=await f.workspace.catalogue(store=>catalogueFormat(store.db)),write=f.workspace.writeMetadata.bind(f.workspace);
  t.mock.method(f.workspace,'writeMetadata',async(...args)=>{await write(...args);throw Error('Injected pointer write failure');});await assert.rejects(f.materials.pinRecord(f.record.id,canonical),/Injected/);f.workspace.writeMetadata.mock.restore();assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),before);assert.equal(await f.workspace.readMetadata(file({id:f.record.id,revision:canonical}),4096),null);
  const ref=await f.materials.pinRecord(f.record.id,canonical);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),Math.max(before,8));
- const access=await createAccess('','retained reference recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(copied,vault),materials=new ResearchMaterials(restored);await materials.verify();assert.equal((await new RetainedRecordDocuments(restored).read({ref})).previous.header.title,f.record.title);
+ const access=await createWorkspaceAccess('','retained reference recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(copied,vault),materials=new ResearchMaterials(restored);await materials.verify();assert.equal((await new RetainedRecordDocuments(restored).read({ref})).previous.header.title,f.record.title);
  const original=await restored.readMetadata(file(ref),4096),pointer=JSON.parse(original);pointer.revision='a'.repeat(64);await restored.withLock(()=>restored.writeMetadata(file(ref),JSON.stringify(pointer)));await assert.rejects(materials.checkReference(ref),{code:'MATERIAL_MISSING'});
 });
 

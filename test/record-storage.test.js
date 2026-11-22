@@ -7,7 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {clearVault,seal} from '../src/encryption.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
@@ -28,7 +29,7 @@ const runFacts=()=>{const p=preparation();return {version:1,preparations:[p],eve
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-storage-upgrade-')),root=path.join(directory,'source');
- const access=await createAccess('','synthetic storage upgrade password'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic storage upgrade password',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);
  await initializeLocation(root,upgradeNotebook(sampleNotebook()),access,vault);
  const workspace=new Workspace(root,vault),base=await workspace.read(),record=structuredClone(base.book.entries[0]);
  record.attachments=[];record.figures=[];record.sections=Array.from({length:257},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Exact notes '+i+' '+('α🔬 '.repeat(100))}));
@@ -96,7 +97,7 @@ for(const indexed of [false,true])test(`normal and fresh-key backups retain ${in
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const header=JSON.parse((await readFile(path.join(backup,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.format,'observanda-postgresql-archive');assert.equal(header.catalogueVersion,generation.valueOf());
  const restored=new Workspace(backup,f.vault);assert.deepEqual(await restored.read(),expected);assert.deepEqual(await workspaceRevisions(restored),history);
- const access=await createAccess('','different synthetic recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','different synthetic recovery password',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const target=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault),fresh=new Workspace(target,vault);
  assert.deepEqual(await fresh.read(),expected);assert.deepEqual(await workspaceRevisions(fresh),history);assert.equal((await manifest(fresh,second)).value.root,root);
  await fresh.catalogue(async store=>{assert.ok(sameCatalogueGeneration(await catalogueFormat(store.db),generation));assert.deepEqual(await store.record(first.id,storageVersion(first)),first);await store.verify(catalogueDescriptor(expected.book));

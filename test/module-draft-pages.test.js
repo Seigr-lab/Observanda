@@ -14,7 +14,8 @@ import {ModuleDrafts} from '../src/modules/drafts.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {openCatalogue} from '../src/postgres.js';
 const source='metadata:.observanda/module-drafts/',summary='metadata:.observanda/module-draft-list/',moduleId='scientific-calculator';
 async function fixture(t,count=14){
@@ -97,7 +98,7 @@ test('older module checkpoints remain readable during a write and build their in
  assert.deepEqual((await f.drafts.list(moduleId)).drafts,before.drafts);
  const selected=await f.drafts.read(before.drafts[0].id);
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','fresh module recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh module recovery secret',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
   const drafts=moduleDraftOwners(workspace,f.book.id,moduleId).drafts,page=await drafts.list(moduleId);assert.deepEqual(page.drafts,before.drafts);assert.deepEqual((await drafts.read(selected.draft.id)).draft,selected.draft);

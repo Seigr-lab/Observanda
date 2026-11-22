@@ -17,7 +17,8 @@ import {RecordHistory} from '../src/record-history.js';
 import {StructureCommands} from '../src/structure-commands.js';
 import {validateRecordScope} from '../src/web/record-scope.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 import {pinnedQueryResults} from '../src/pinned-query-result.js';
 import {RecordHistoryIndex} from '../src/record-history-index.js';
@@ -73,7 +74,7 @@ test('normal authoring, filtered browsing, structure and recovery exceed the old
   const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryCopyMs=Math.round(performance.now()-copyAt);
   process.stdout.write(JSON.stringify({copies,...recovery})+'\n');
   assert.ok(recovery.ordinaryCopyMs<180000,JSON.stringify(recovery));
-  const access=await createAccess('','synthetic authoring growth recovery'),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
+  const access=await createWorkspaceAccess('','synthetic authoring growth recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
   const freshAt=performance.now(),fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh-key'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyCopyMs=Math.round(performance.now()-freshAt);
   process.stdout.write(JSON.stringify({copies,...recovery})+'\n');
   assert.ok(recovery.freshKeyCopyMs<180000,JSON.stringify(recovery));

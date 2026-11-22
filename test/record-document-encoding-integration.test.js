@@ -18,7 +18,8 @@ import {catalogueDescriptor} from '../src/research-catalogue.js';
 import {retainedRecordDisplay} from '../src/record-history-display.js';
 import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import {ResearchMaterials} from '../src/research-materials.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
@@ -73,7 +74,7 @@ test('one native audit shares exact encodings across snapshots, history and reta
   }))));assert.deepEqual(counts,[{storage:2,content:2}]);
  });
  await t.test('fresh-key archive recovery preserves original and canonical identities and retained references',async()=>{
-  const access=await createAccess('','Encoding audit recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+  const access=await createWorkspaceAccess('','Encoding audit recovery',new TestDeviceStore({file:path.join(directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
   const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'backup'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(copied,vault);
   assert.deepEqual((await originals(restored,record.id)).sort((a,b)=>a.revision.localeCompare(b.revision)),sources.toSorted((a,b)=>a.revision.localeCompare(b.revision)));
   for(const ref of references)await new RetainedRecordDocuments(restored).check(ref);

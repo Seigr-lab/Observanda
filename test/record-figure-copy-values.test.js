@@ -10,7 +10,8 @@ import {ResearchDrafts} from '../src/research-drafts.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {createComposition} from '../src/web/figure-composition.js';
 import {catalogueFormat} from '../src/catalogue-format.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
@@ -39,7 +40,7 @@ test('panel copy drafts recover with fresh keys and commit retained results atom
  assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),Math.max(15,priorFormat));
  assert.deepEqual((await drafts.read({workspaceId:f.book.id,id:draft.id,expectedRevision:checkpoint.revision})).value,value);
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=14');await new ResearchDrafts(f.workspace).read(draft.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});
- const access=await createAccess('','Synthetic copied panel recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','Synthetic copied panel recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault),recovery=new RecordValueDrafts(recovered),header=await new ResearchDrafts(recovered).read(draft.id,{header:true});
  const restored=await recovery.read({workspaceId:f.book.id,id:draft.id,expectedRevision:header.revision});assert.deepEqual(restored.value,value);
  const command={...target,field:base.field,expectedRevision:base.revision,value},values=new RecordValues(recovered),write=recovered.writeMetadata.bind(recovered),before=(await recovered.outline()).etag;

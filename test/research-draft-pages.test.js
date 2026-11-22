@@ -14,7 +14,8 @@ import {recordRevision} from '../src/research.js';
 import {ObjectIndex} from '../src/object-index.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 const source='metadata:.observanda/drafts/';
 async function fixture(t,count=14){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-draft-pages-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book);
@@ -91,7 +92,7 @@ test('older checkpoints build summaries transactionally and remain recoverable a
  await f.drafts.write(commands[0]);assert.notEqual(await f.workspace.readMetadata('.observanda/draft-list.json',1024),null);
  for(const command of commands)assert.equal((await f.drafts.read(command.id)).revision,command.expectedRevision);
  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
- const access=await createAccess('','fresh recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh recovery secret',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
   const store=new ResearchDrafts(ws),page=await store.list();assert.deepEqual(page.drafts,before.drafts);

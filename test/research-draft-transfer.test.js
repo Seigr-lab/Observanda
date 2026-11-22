@@ -14,7 +14,8 @@ import {recordRevision} from '../src/research.js';
 import {digest,Workspace} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {writeRecordCheckpoint,readRecordCheckpoint} from '../src/web/record-draft-transfer.js';
 import {RECORD_DRAFT_CHUNK_BYTES as SIZE} from '../src/web/record-draft-protocol.js';
 import {ResearchDraftContent} from '../src/research-draft-content.js';
@@ -50,7 +51,7 @@ test('large checkpoints use bounded authenticated requests, preserve base histor
  assert.deepEqual(last.sections.values,f.command.changes[0].record.sections.slice(40));assert.equal(last.sections.total,42);assert.equal(last.body,null);assert.deepEqual(selected,['Observation 40','Observation 41']);assert.deepEqual(reads,[]);
  await assert.rejects(content.read({id:f.command.id,workspaceId:f.book.id,expectedRevision:'0'.repeat(64),offset:40}),{code:'DRAFT_CHANGED'});
  const recovered=await readRecordCheckpoint(api,f.command.id);assert.deepEqual(recovered.draft.changes[0].record,f.command.changes[0].record);assert.deepEqual(recovered.draft.changes[0].base,f.base);assert.deepEqual(reads,[f.base.id]);t.mock.restoreAll();
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','record blocks recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createWorkspaceAccess('','record blocks recovery',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
   const result=await readRecordCheckpoint(apiFor(ws),f.command.id);assert.equal(result.revision,saved.revision);assert.deepEqual(result.draft.changes,recovered.draft.changes);

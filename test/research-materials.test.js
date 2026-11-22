@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {Workspace,digest} from '../src/storage.js';
-import {createAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook,validateNotebook} from '../src/model.js';
@@ -37,7 +38,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  run2.sections=[{id:randomUUID(),title:'Acquisition',body:'Recovery incomplete. Software checks do not establish a physical run.'}];
  conclusion.body='One completed attempt and one incomplete recovery. This does not establish repeat reliability. Supporting captures are not publicly available.';conclusion.share=true;
  book.entries=[method,run1,run2,conclusion];validateNotebook(book);
- const access=await createAccess('','synthetic adoption password'),vault=takeCreatedVault(access);
+ const deviceStore=new TestDeviceStore({file:path.join(parent,'device.key')}),access=await createWorkspaceAccess('','synthetic adoption password',deviceStore),vault=takeCreatedVault(access);
  await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),store=new ResearchMaterials(ws);
  const pinned=await store.pinRecord(method.id,recordRevision(method));
  const target={workspaceId:book.id,kind:'record',id:method.id,revision:pinned.revision};
@@ -126,7 +127,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  assert.ok(copies.some(copy=>/<figure|<svg/.test(copy.text)));
 
  const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup,{vault}),{vault});
- const restoredVault=await verifyAccess(await readAccess(backup),'','synthetic adoption password');
+ const restoredVault=await verifyAccess(await readAccess(backup),'','synthetic adoption password',{deviceStore});
  const restored=new ResearchMaterials(new Workspace(backup,restoredVault)),verified=await restored.verify();assert.ok(verified.originalBytes>=64*EVIDENCE_CHUNK+csv.length);
  assert.equal((await restored.read(pinned)).body,method.body);assert.equal((await restored.datasetRows(dataset))[0].cells[3],large);
  assert.deepEqual(await contentBuffer((await restored.artifact(tableArtifact)).content),csv);

@@ -18,7 +18,8 @@ import {FileContent} from '../src/file-content.js';
 import {OwnedFileContent} from '../src/owned-file-content.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 const mapping={format:'json',rowsPath:'/measurements',fields:[{name:'Counter',path:'/counter'},{name:'Senary',path:'/native'},{name:'Reading',path:'/reading'}]};
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-dataset-jobs-')),book=sampleNotebook(),f=await encryptedFixture(directory,book);
@@ -177,7 +178,7 @@ test('wide schemas page independently, edits span pages, and unchanged retained 
  assert.deepEqual(await restored.schemaPage(next,{offset:32}),await f.materials.schemaPage(next,{offset:32}));
  assert.deepEqual((await restored.datasetPage(original,2)).rows,(await f.materials.datasetPage(original,2)).rows);
  await restored.verify();
- const access=await createAccess('','fresh dataset test key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const access=await createWorkspaceAccess('','fresh dataset test key',new TestDeviceStore({file:path.join(f.directory,'device.key')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'rekeyed'),{vault:f.vault}),access,vault,f.vault),fresh=new ResearchMaterials(new Workspace(rekeyed,vault));
  assert.deepEqual(await fresh.schemaPage(next,{offset:32}),await f.materials.schemaPage(next,{offset:32}));
  assert.deepEqual((await fresh.datasetPage(original,2)).rows,(await f.materials.datasetPage(original,2)).rows);await fresh.verify();

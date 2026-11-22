@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {Workspace} from '../src/storage.js';
 import {initializeLocation} from '../src/locations.js';
 import {sampleNotebook} from '../src/sample.js';
@@ -13,7 +14,7 @@ import {RecordBlockStore,rekeyRecordBlock,RECORD_BLOCK_PREFIX} from '../src/reco
 
 async function fixture(t){
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-record-block-')),book=upgradeNotebook(sampleNotebook());
- const access=await createAccess('','synthetic block password'),vault=takeCreatedVault(access);
+ const access=await createWorkspaceAccess('','synthetic block password',new TestDeviceStore({file:path.join(root+'.device','device.key')})),vault=takeCreatedVault(access);
  await initializeLocation(root,book,access,vault);const workspace=new Workspace(root,vault);
  t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});return {workspace,book};
 }
